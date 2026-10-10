@@ -30,6 +30,21 @@ Calc has five kinds of token:
 | operator | one of `+-*/^()=` | `*` |
 | whitespace | `\s+` | discarded |
 
+The patterns are written in regular-expression (regex) notation. Each symbol has a fixed meaning:
+
+| Notation | Matches |
+|---|---|
+| `\d` | one decimal digit |
+| `\w` | one word character: letter, digit or `_` |
+| `\s` | one whitespace character |
+| `[A-Za-z_]` | one character from the set: here a letter or `_` |
+| `+` | the item before it, one or more times |
+| `*` | the item before it, zero or more times |
+| `{n}` | the item before it, exactly n times |
+| `( )` | groups items into one item |
+
+A vertical bar between two patterns means "either one": `let` or `in` is written with a bar between them. So `[A-Za-z_]\w*` reads "a letter or underscore, then any number of word characters".
+
 Every one of these is a **regular expression**. That is no accident: token shapes are almost always **regular languages**, the class of patterns that a finite automaton can recognise using a fixed amount of memory. Nesting, like matching brackets, is *not* regular. That is the parser's problem, not the lexer's.
 
 ## A working lexer for Calc
@@ -113,7 +128,7 @@ How does a regex actually run? The classic route, used by lexer generators such 
 
 ### 1. Regex to NFA (Thompson's construction)
 
-Each piece of regex syntax becomes a small **nondeterministic finite automaton** fragment, glued together with ε (empty) transitions. NFA simulation tracks a set of possible states. Thompson construction is linear in the expanded basic regex; counted repetitions may first need expansion.
+Each piece of regex syntax becomes a small **nondeterministic finite automaton** fragment, glued together with ε transitions. ε (the Greek letter epsilon) stands for the empty string, so an ε transition is a move the automaton can make without reading any character. NFA simulation tracks a set of possible states. Thompson construction is linear in the expanded basic regex; counted repetitions may first need expansion.
 
 ### 2. NFA to DFA (subset construction)
 
@@ -137,7 +152,7 @@ State B accepts both IN and NAME. Rule order breaks the tie, so `in` is a keywor
 
 ### 3. Minimise
 
-Hopcroft's algorithm merges states that behave identically, producing a minimal equivalent DFA while preserving token labels/priorities. A fixed DFA scans a candidate in linear time, but a maximal-munch lexer may revisit characters after backing up to its last accepting state. Token rules must bound that backup to guarantee overall O(n).
+Hopcroft's algorithm merges states that behave identically, producing a minimal equivalent DFA while preserving token labels/priorities. A fixed DFA scans a candidate in linear time, but a maximal-munch lexer may revisit characters after backing up to its last accepting state. Token rules must bound that backup to guarantee overall O(n) time, where n is the number of characters in the input and O(n) means the work grows at most in proportion to n.
 
 ### The DFA as code
 
@@ -194,9 +209,35 @@ Each branch is a DFA state; each inner `while` loop is a state with a self-trans
 
 ## Why DFAs can be a trap, and why backtracking is worse
 
-The subset construction can blow up. A DFA for "the *n*th character from the end is `a`", written `(a|b)*a(a|b){n-1}`, needs 2ⁿ states, because it must remember the last *n* characters. Real token patterns are simple, so lexers rarely hit this.
+The subset construction can blow up. The classic example is the language "the third character from the end is `a`", over the two letters `a` and `b`, or in general "the nth character from the end". Its regex is `(a|b)*a(a|b){n-1}`: any run of `a`s and `b`s, then one `a`, then exactly n − 1 more letters. An NFA can *guess* which `a` is the one that matters, so it needs only a few states. A DFA cannot guess: it must remember the last n characters it has read, because any of them might turn out to be the one n from the end.
 
-General-purpose regex engines in Python, Perl, Java and JavaScript take a different approach: **backtracking**. It supports features like back-references, but some patterns take exponential time. Matching `(a+)+$` against `"aaa…ab"` makes Python's `re` try every way of splitting the `a`s; each extra `a` roughly doubles the time. This class of bug, **ReDoS**, has taken down production services. Engines like Google's RE2 and Rust's `regex` crate use automata-based techniques that avoid this exponential backtracking for supported syntax. A single search is linear in input length for a fixed pattern; regex size and repeated-search APIs also affect bounds.
+```formula
+S_DFA = 2^n
+S_NFA = n + 1
+where
+S_DFA: the number of states in the smallest DFA for the language
+S_NFA: the number of states in the simple NFA for the same language
+n: how far from the end the required `a` must be (n = 3 means the third character from the end)
+2^n: 2 multiplied by itself n times: each of the last n characters is one of 2 letters, and every different history needs its own state
+In words: each extra position the DFA must remember doubles its number of states, while the NFA grows by only one state.
+```
+
+For n = 3 the DFA needs 2 × 2 × 2 = 8 states against the NFA's 4; for n = 20 it needs 1,048,576. Real token patterns are simple, so lexers rarely hit this.
+
+General-purpose regex engines in Python, Perl, Java and JavaScript take a different approach: **backtracking**. It supports features like back-references (`\1`, "match the same text that group 1 matched"), but some patterns take exponential time. Matching `(a+)+$` (one or more groups of one or more `a`s, then `$`, the end of the input) against `"aaa…ab"` fails because of the final `b`, and before Python's `re` can report the failure it tries every way of splitting the `a`s into groups:
+
+```formula
+W = 2^{k−1}
+W = 2^{29} ≈ 5.4 × 10^8   when k = 30
+where
+W: the number of ways to split a run of `a`s into one or more non-empty groups; a backtracking engine may try each one before giving up
+k: the number of `a` characters in the input
+2^{k−1}: 2 multiplied by itself k − 1 times: each of the k − 1 gaps between neighbouring `a`s either is or is not a group boundary
+≈: approximately equal to
+In words: every extra `a` doubles the number of splits to try, so the matching time grows exponentially with the input length.
+```
+
+So 30 `a`s already mean over half a billion splits, and each extra `a` roughly doubles the time. This class of bug, **ReDoS**, has taken down production services. Engines like Google's RE2 and Rust's `regex` crate use automata-based techniques that avoid this exponential backtracking for supported syntax. A single search is linear in input length for a fixed pattern; regex size and repeated-search APIs also affect bounds.
 
 > [!note] Our regex lexer is safe
 > Calc's simple alternatives and disjoint starting classes avoid catastrophic ambiguity; its repeats can still backtrack internally. Nested ambiguous repetition is one source of trouble, not the only one.

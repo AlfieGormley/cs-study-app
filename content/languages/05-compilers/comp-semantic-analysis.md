@@ -33,7 +33,7 @@ Calc's abstract syntax tree omits redundant grammar structure such as brackets. 
 
 ### Calc's AST
 
-Calc's AST is five Python dataclasses. Each node also records the position of the token it came from, so later errors can point at the source.
+Calc's AST is five Python classes declared with `@dataclass`. Each node also records the position of the token it came from, so later errors can point at the source.
 
 ```python
 from dataclasses import dataclass, field
@@ -123,7 +123,7 @@ Notice how `Let` creates a *new* dictionary `{**env, name: v}` rather than modif
 
 ### The visitor pattern
 
-One alternative to pattern matching is the visitor pattern: each node class has an `accept(visitor)` method that calls `visitor.visitBinOp(self)` and so on. javac exposes TreeVisitor APIs. Clang's RecursiveASTVisitor is a template-based traversal framework using static dispatch, rather than requiring this exact virtual accept implementation. In Python you can get the same effect by dispatching on the class name, which is what Calc's checker does:
+One alternative to pattern matching is the visitor pattern: each node class has an `accept(visitor)` method that calls `visitor.visitBinOp(self)` and so on. javac exposes TreeVisitor APIs. Clang's RecursiveASTVisitor is a template-based traversal framework using calls resolved at compile time, rather than requiring this exact virtual accept implementation. In Python you can get the same effect by choosing the method from the class name, which is what Calc's checker does:
 
 ```python
     def check(self, node):
@@ -232,6 +232,8 @@ The division check only catches a *literal* zero. `1 / (2 - 2)` passes, because 
 
 ### Two ways to build the table
 
+The table below uses Big O notation for lookup cost. O(depth) means the number of dictionary probes grows in proportion to the nesting depth, the number of scopes currently on the stack, because lookup may have to try every scope from the innermost outwards. O(1) means the cost stays the same however deep the nesting is. "Expected" is there because a hash probe is fast on average but can occasionally be slower.
+
 | Design | Lookup | Used by |
 |---|---|---|
 | Stack of dicts | O(depth) expected hash probes | Teaching implementation |
@@ -256,7 +258,7 @@ print(f.get_locals())   # ('a', 'b')
 print(f.get_globals())  # ('x',)
 ```
 
-Because `a` and `b` are known locals, CPython compiles them to `LOAD_FAST` and `STORE_FAST` (3.14's `dis` shows variants such as `LOAD_FAST_BORROW`), which index a fixed array of slots exactly like Calc's, while `x` uses `LOAD_GLOBAL`, a dictionary lookup. The same compile-time decision explains a classic surprise:
+Because `a` and `b` are known locals, CPython compiles them to `LOAD_FAST` and `STORE_FAST` (3.14's `dis` shows versions such as `LOAD_FAST_BORROW`), which index a fixed array of slots exactly like Calc's, while `x` uses `LOAD_GLOBAL`, a dictionary lookup. The same compile-time decision explains a classic surprise:
 
 ```python
 x = 1

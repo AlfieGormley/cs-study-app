@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. The restricted lexer in this question is a finite automaton: it has a fixed number of states and no stack.\n2. To check `((((...))))` you must count how many brackets are open. For depth *n* you need at least *n* distinct states.\n3. Since depth is unbounded, no finite automaton can do it: the language of balanced brackets is not regular.\n4. So the lexer just emits `(` and `)` tokens and the parser, which has a call stack, matches them.",
+    "workedExample": "1. The restricted lexer in this question is a finite automaton: it has a fixed number of states and no stack.\n2. To check `((((...))))` you must count how many brackets are open. Brackets nested 10 deep need at least 10 distinct states (one per possible count of open brackets), 1,000 deep need 1,000, and so on.\n3. Since depth is unbounded, no finite automaton can do it: the language of balanced brackets is not regular.\n4. So the lexer just emits `(` and `)` tokens and the parser, which has a call stack, matches them.",
     "link": {
       "title": "Scanning — Crafting Interpreters",
       "url": "https://craftinginterpreters.com/scanning.html"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Position 0: `a` is an identifier.\n2. Position 1: the candidate operators are `+`, `++` and `+=`. The text is `++`, so the longest valid token is `++`.\n3. Position 3: only `+` remains before `b`, so emit `+`.\n4. Position 4: `b`.\n\nTokens: `a ++ + b`, which parses as `(a++) + b`. The same rule makes `x---y` into `x -- - y`. Note `a+++++b` lexes as `a ++ ++ + b`, which is a C constraint violation: the second postfix increment requires a modifiable lvalue, which (a++) is not even though `a++ + ++b` would have been valid: the lexer does not consider what the parser needs.",
+    "workedExample": "1. Position 0: `a` is an identifier.\n2. Position 1: the candidate operators are `+`, `++` and `+=`. The text is `++`, so the longest valid token is `++`.\n3. Position 3: only `+` remains before `b`, so emit `+`.\n4. Position 4: `b`.\n\nTokens: `a ++ + b`, which parses as `(a++) + b`. The same rule makes `x---y` into `x -- - y`. Note `a+++++b` lexes as `a ++ ++ + b`, which is a C constraint violation: the second postfix increment needs a modifiable lvalue (something that can be assigned to), and `a++` is not one. Yet `a++ + ++b` would have been valid: the lexer does not consider what the parser needs.",
     "link": {
       "title": "Maximal munch — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Maximal_munch"
@@ -187,7 +187,7 @@
     "options": [
       {
         "text": "With a fixed DFA and bounded backup per token, total scanning work is O(n)",
-        "explanation": "Correct. Each character is one table lookup (state, char) -> next state. Maximal-munch backup must be bounded by the token rules; arbitrary rules can cause repeated rescanning."
+        "explanation": "Correct. Here n is the number of input characters, and O(n) means the work grows at most in proportion to n. Each character is one table lookup (state, char) -> next state. Maximal-munch backup must be bounded by the token rules; arbitrary rules can cause repeated rescanning."
       },
       {
         "text": "It can support back-references such as `(a+)b\\1`",
@@ -195,7 +195,7 @@
       },
       {
         "text": "Its number of states can, in the worst case, be exponential in the size of the regex",
-        "explanation": "Correct. The subset construction can create one DFA state per subset of NFA states. `(a|b)*a(a|b){n-1}` needs 2ⁿ states."
+        "explanation": "Correct. The subset construction can create one DFA state per subset of NFA states. `(a|b)*a(a|b){n-1}` (\"the nth character from the end is `a`\") needs 2ⁿ states, which is 8 states for n = 3."
       },
       {
         "text": "Each DFA state may correspond to a set of NFA states",
@@ -207,7 +207,7 @@
       2,
       3
     ],
-    "workedExample": "Check each claim against how the automaton is built:\n\n1. **Linear time.** A DFA has one transition per (state, character), so each forward transition is constant-time; the stated bounded-backup condition is also necessary for this total bound. True.\n2. **Back-references.** `\\1` must match whatever group 1 matched, which may be arbitrarily long. A finite automaton cannot store that. False.\n3. **State explosion.** Subset construction makes DFA states from subsets of NFA states; there are 2^k subsets of k NFA states. Real token patterns rarely hit this, but the worst case is exponential. True.\n4. **States are sets.** That is the definition of the construction. True.",
+    "workedExample": "Check each claim against how the automaton is built:\n\n1. **Linear time.** A DFA has one transition per (state, character), so each forward transition is constant-time; the stated bounded-backup condition is also necessary for this total bound. True.\n2. **Back-references.** `\\1` must match whatever group 1 matched, which may be arbitrarily long. A finite automaton cannot store that. False.\n3. **State explosion.** Subset construction makes DFA states from subsets of NFA states. True: real token patterns rarely hit this, but the worst case is exponential (see the count below).\n4. **States are sets.** That is the definition of the construction. True.\n\nThe worst case for claim 3 is one DFA state per possible subset:\n\n```formula\nD ≤ 2^k\nwhere\nD: the number of DFA states the subset construction can create\nk: the number of states in the NFA\n2^k: the number of different subsets of k states: each NFA state is either in a subset or not, 2 choices k times\n≤: less than or equal to\nIn words: a DFA built this way can have at most one state per subset of NFA states, which is exponential in the NFA's size.\n```",
     "link": {
       "title": "Powerset construction — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Powerset_construction"
@@ -267,7 +267,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Inside the loop, `\\w+` can take 1, 2, ... letters, and `\\s?` can match nothing, so consecutive letters can be divided into groups in many ways: `ab` can be `(ab)` or `(a)(b)`.\n2. A string of n letters has 2ⁿ⁻¹ ways to split into groups.\n3. The `!` at the end matches neither `\\w` nor `\\s`, so `fullmatch` fails. A backtracking engine must try every split before it can report failure.\n4. 2³⁹ ≈ 5.5 × 10¹¹ partitions. The original timing artifact is absent, so exact seconds and hours are omitted.\n\nFixes: rewrite as `(?:\\w+(?:\\s\\w+)*\\s?)?` (preserves empty input and an optional trailing space character while requiring separators between repeated word groups), or use RE2/Rust `regex`, which avoid exponential backtracking for supported patterns; single-search complexity also depends on pattern size. This is ReDoS.",
+    "workedExample": "1. Inside the loop, `\\w+` can take 1, 2, ... letters, and `\\s?` can match nothing, so consecutive letters can be divided into groups in many ways: `ab` can be `(ab)` or `(a)(b)`.\n2. The `!` at the end matches neither `\\w` nor `\\s`, so `fullmatch` fails. A backtracking engine must try every split before it can report failure.\n3. Count the splits:\n\n```formula\nW = 2^{n−1}\nW = 2^{39} ≈ 5.5 × 10^{11}\nwhere\nW: the number of ways to split the letters into consecutive non-empty groups\nn: the number of letters, here 40\n2^{n−1}: 2 multiplied by itself n − 1 times: each of the n − 1 gaps between letters is either a group boundary or not\n≈: approximately equal to\nIn words: each extra letter doubles the splits, so 40 letters give over half a trillion.\n```\n\nExact timings depend on the machine, so none are given here.\n\nFixes: rewrite as `(?:\\w+(?:\\s\\w+)*\\s?)?` (preserves empty input and an optional trailing space character while requiring separators between repeated word groups), or use RE2/Rust `regex`, which avoid exponential backtracking for supported patterns; single-search complexity also depends on pattern size. This is ReDoS.",
     "link": {
       "title": "Regular Expression Matching Can Be Simple And Fast — Russ Cox",
       "url": "https://swtch.com/~rsc/regexp/regexp1.html"
@@ -297,7 +297,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Generalise: \"the *n*th character from the end is `a`\" is `(a|b)*a(a|b){n-1}`. Here n = 3.\n2. After reading any prefix, the DFA must know the last 3 characters, because the future input decides which of them ends up 3rd from the end.\n3. Any two different 3-character histories can be told apart by some suffix, so none can be merged.\n4. Number of histories: 2 × 2 × 2 = 8.\n\nThe NFA has about n + 1 = 4 states. This is the classic example of exponential blow-up in subset construction.",
+    "workedExample": "1. Generalise: \"the *n*th character from the end is `a`\" is `(a|b)*a(a|b){n-1}`. Here n = 3.\n2. After reading any prefix, the DFA must know the last 3 characters, because the future input decides which of them ends up 3rd from the end.\n3. Any two different 3-character histories can be told apart by some suffix, so none can be merged.\n4. Count the histories, and compare with the NFA:\n\n```formula\nS_DFA = 2^n = 2 × 2 × 2 = 8\nS_NFA = n + 1 = 4\nwhere\nS_DFA: the number of states in the smallest DFA\nS_NFA: the number of states in the simple NFA, which guesses where the final `a` is\nn: how far from the end the `a` must be, here 3\n2^n: 2 multiplied by itself n times: 2 possible letters for each of the last n positions\nIn words: the DFA needs one state per possible 3-letter history; the NFA needs only one state per position.\n```\n\nThis is the classic example of exponential blow-up in subset construction.",
     "link": {
       "title": "Powerset construction — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Powerset_construction"

@@ -106,7 +106,7 @@ The two `x`s become two different operands. Converting an imperative program to 
 
 ### Branches and phi functions
 
-Calc has no `if`, but real languages do, and that is where SSA needs a new idea. Code is split into **basic blocks** (straight-line sequences with one entry and one exit), linked into a **control-flow graph** (CFG):
+Calc has no `if`, but real languages do, and that is where SSA needs a new idea. Code is split into **basic blocks** (straight-line sequences with one entry and one exit), linked into a **control-flow graph**:
 
 ```
         entry: c == 0?
@@ -117,7 +117,19 @@ Calc has no `if`, but real languages do, and that is where SSA needs a new idea.
         ret y3 + 1
 ```
 
-At `end`, `y` could be either version. A **phi function** (φ) selects the value according to which edge control arrived along. Here is real LLVM IR from `clang -O1` for that C function (lightly trimmed: attributes removed, long lines wrapped):
+At `end`, `y` could be either version. A **phi function** (φ, the Greek letter phi) selects the value according to which edge control arrived along:
+
+```formula
+y_3 = φ(y_1, y_2)
+where
+y_3: the new SSA name for y in the merge block `end`
+y_1: the version of y computed in the `then` block
+y_2: the version of y computed in the `else` block
+φ: the phi function: not a calculation, but a choice: it yields y_1 if control arrived from `then` and y_2 if it arrived from `else`
+In words: at a merge point, y_3 is whichever version of y was produced on the path the program actually took.
+```
+
+A phi has one argument for each incoming edge. For example, if `c` is 0 the program takes the `else` branch, so y_3 is y_2, the result of `h(x)`. Phis only ever appear at the start of a block where paths merge. Here is real LLVM IR from `clang -O1` for that C function (lightly trimmed: attributes removed, long lines wrapped):
 
 ```
 define i32 @f(i32 %x, i32 %c) {
@@ -139,7 +151,7 @@ if.end:
 }
 ```
 
-Where do phis go? Cytron's algorithm uses **iterated dominance frontiers** of definition blocks: the blocks where one path from the assignment meets a path that bypasses it. In practice, front ends like Clang emit simple loads and stores to stack slots, and LLVM's `mem2reg` pass promotes them to SSA registers and inserts the phis. Phi nodes are IR operations. Lowering can introduce edge-specific parallel copies, requiring cycle resolution and sometimes edge splitting; coalescing can eliminate copies.
+Where do phis go? Cytron's algorithm uses **iterated dominance frontiers** of definition blocks: the blocks where one path from the assignment meets a path that bypasses it. In practice, front ends like Clang emit simple loads and stores to stack slots, and LLVM's `mem2reg` pass promotes them to SSA registers and inserts the phis. Phi nodes are IR operations. Lowering can introduce edge-specific parallel copies, requiring cycle resolution and sometimes splitting critical edges; coalescing can eliminate copies.
 
 ## Optimisations
 
@@ -150,7 +162,7 @@ Calc's optimiser has four passes. Each takes `(code, result)` and returns a new 
 If both operands are known constants, compute the answer now and remember it for later instructions:
 
 ```python
-def fold(op, a, b):
+def fold_const(op, a, b):
     """Compute a op b now, or None if it is
     unsafe to do at compile time."""
     if op == "/" and b == 0:
@@ -177,7 +189,7 @@ def const_fold(code, result):
         if ins.op == "neg":
             v = -args[0]
         else:
-            v = fold(ins.op, *args)
+            v = fold_const(ins.op, *args)
         if v is None:
             out.append(Ins(ins.dest, ins.op,
                            args))
@@ -186,11 +198,55 @@ def const_fold(code, result):
     return out, known.get(result, result)
 ```
 
-`fold` is where correctness lives. Folding `1 / 0` would crash the *compiler*, and the program must instead fail when it runs. And folding `2 ^ 1000000` would make the compiler build a 300,000-digit number for a value that might never be used. Compilers need explicit resource budgets. This example bounds folded powers; it is not a complete resource-limit policy for all arithmetic.
+`fold_const` is where correctness lives. Folding `1 / 0` would crash the *compiler*, and the program must instead fail when it runs. And folding `2 ^ 1000000` would make the compiler build a number about 300,000 digits long for a value that might never be used. The digit count of a power follows from logarithms:
+
+```formula
+D = ⌊b × log_10(a)⌋ + 1
+D = ⌊1000000 × 0.3010299957⌋ + 1
+D = 301029 + 1 = 301030
+where
+D: the number of decimal digits in a raised to the power b
+a: the base, here 2
+b: the exponent, here 1,000,000
+log_10: the base-10 logarithm: log_10(a) is the power 10 must be raised to to give a; log_10(2) ≈ 0.30103
+⌊ ⌋: floor: round down to the nearest whole number
+≈: approximately equal to
+In words: each factor of 2 adds about 0.3 of a decimal digit, so a million of them make a number 301,030 digits long.
+```
+
+`fold_const` avoids this by estimating the size of the answer *before* computing it. That is what its `bits * b > 4096` test does:
+
+```formula
+B_r ≤ B_a × b   when b ≥ 1
+B_a × b ≤ 4096
+where
+B_r: the number of bits (binary digits) in the result, a raised to the power b
+B_a: the number of bits in a, as Python's `abs(a).bit_length()` gives, counted as at least 1
+a: the base of the power
+b: the exponent, which `fold_const` also requires to be between 0 and 64
+4096: `fold_const`'s size budget in bits; a number below 2^4096 has at most 1,234 decimal digits
+≤: less than or equal to
+≥: greater than or equal to (for b = 0 the answer is 1, which still needs one bit)
+In words: a raised to the power b is b copies of a multiplied together, and a product of b numbers of B_a bits each has at most B_a × b bits, so `fold_const` only evaluates powers whose estimate fits the 4,096-bit budget.
+```
+
+For example, `3 ^ 64` has B_a = 2 (3 is `11` in binary), so the estimate is 2 × 64 = 128 bits (the true result has 102), which is within budget, so it is computed at compile time; `2 ^ 1000000` fails the 0 to 64 exponent check and stays as a runtime instruction. Compilers need explicit resource budgets. This example bounds folded powers; it is not a complete resource-limit policy for all arithmetic.
 
 ### 2. Algebraic simplification
 
-Some operations are known without knowing both operands: `x + 0` is `x`, `x * 1` is `x`, `x - x` is 0, `x * 0` is 0. The `identity` function holds the rules, and `simplify` replaces the instruction with the shortcut, recording an alias so later uses see through it.
+Some operations are known without knowing both operands:
+
+```formula
+x + 0 = x
+x × 1 = x
+x − x = 0
+x × 0 = 0
+where
+x: any Calc integer, whether or not its value is known at compile time
+In words: adding zero or multiplying by one changes nothing, and a value minus itself, or anything times zero, is always zero.
+```
+
+So in Calc's IR, `t2 = t1 + 0` can be replaced by `t1` without knowing what `t1` is. The `identity` function holds the rules, and `simplify` replaces the instruction with the shortcut, recording an alias so later uses see through it.
 
 These rules are valid for Calc's unbounded integers. For floating point, some are not generally valid: `x * 0` is `NaN` when `x` is infinity, and `x - x` is `NaN` for `NaN`. Compilers need proofs or suitable floating-point permissions for transformations that change observable results; fast-math is one way to grant such permissions.
 
@@ -217,7 +273,18 @@ def cse(code, result):
     return out, alias.get(result, result)
 ```
 
-This is **local value numbering**. Sorting the operands of commutative operators makes `x + y` and `y + x` the same key:
+This is **local value numbering**. An operator is **commutative** when swapping its operands never changes the answer:
+
+```formula
+a + b = b + a
+a × b = b × a
+where
+a: any integer value
+b: any integer value
+In words: for + and ×, operand order does not matter, so the optimiser may put the operands in a fixed order before comparing them.
+```
+
+Subtraction and division are not commutative (`5 - 3` is 2 but `3 - 5` is -2), so `cse` leaves their order alone. Sorting the operands of commutative operators makes `x + y` and `y + x` the same key:
 
 ```
 (x + y) * (y + x)      optimised
@@ -244,7 +311,7 @@ def dce(code, result):
     return out, result
 ```
 
-Here is the trap predicate for Calc's defined arithmetic errors. Host resource exhaustion is outside this teaching model:
+Here is the trap check for Calc's defined arithmetic errors. Host resource exhaustion is outside this teaching model:
 
 ```python
 def may_trap(ins):
@@ -313,7 +380,17 @@ result: ret y
 
 CSE in round 1 created `t2 - t2`, which only `simplify` can remove, so a second round was needed. Real compilers may run individual transformations to local fixed points, while using a carefully tuned outer pipeline (LLVM's `-O2` pipeline runs some passes, such as `instcombine`, several times), because compile time matters too.
 
-Our passes also have blind spots. `let t = x * 2 in t + t - t` stays as three instructions, because seeing that `(t + t) - t` is `t` needs **reassociation**, which we have not written.
+Our passes also have blind spots. `let t = x * 2 in t + t - t` stays as three instructions, because seeing that `(t + t) - t` is `t` needs **reassociation**, which we have not written. Reassociation regroups a chain of operations so that terms can cancel:
+
+```formula
+(t + t) − t = t + (t − t)
+t + (t − t) = t + 0 = t
+where
+t: any Calc integer value
+In words: for integers, regrouping lets t − t cancel to 0, and t + 0 is just t.
+```
+
+The regrouping step is always valid for Calc's unbounded integers, but not for floating point, as the pitfalls below show.
 
 ## What else real optimisers do
 
@@ -328,10 +405,25 @@ Our passes also have blind spots. `let t = x * 2 in t + t - t` stays as three in
 
 **Inlining** is often called the most important, because it exposes everything else: once a small function's body sits in its caller, its parameters may be constants. **SCCP** (sparse conditional constant propagation, Wegman and Zadeck) propagates constants and deletes branches that can never be taken. **GVN** (global value numbering) is CSE across basic blocks. **LICM** (loop-invariant code motion) moves computations that do not change out of loops.
 
+**Strength reduction** replaces an expensive operation with a cheaper equivalent. The classic case is multiplying by a power of two, which is the same as a left shift (`<<`):
+
+```formula
+x × 2^k = x << k
+x × 8 = x × 2^3 = x << 3
+where
+x: an integer value
+k: how many places the bits move, a whole number from 0 upwards
+2^k: 2 multiplied by itself k times
+<<: left shift: move every bit of the left operand k places towards the more significant end, filling the gap with zeros
+In words: shifting left by k places doubles the value k times, so ×2 is a shift by 1 and ×8 a shift by 3.
+```
+
+For machine integers the shift matches the multiplication whenever the result fits in the register.
+
 ## Pitfalls
 
 - **Floating point is not real arithmetic.** In Python, `(0.1 + 0.2) + 0.3` is `0.6000000000000001` while `0.1 + (0.2 + 0.3)` is `0.6`. A compiler that reassociates floats changes results, so a transformation needs suitable permissions or a proof that observable results are preserved.
-- **Compile-time blow-up.** Constant folding, inlining and loop unrolling can all make the compiler slow or huge. Every such pass needs limits, like `fold`'s exponent cap.
+- **Compile-time blow-up.** Constant folding, inlining and loop unrolling can all make the compiler slow or huge. Every such pass needs limits, like `fold_const`'s exponent cap.
 - **Undefined behaviour cuts both ways.** It lets C compilers optimise aggressively, and it is why "the compiler deleted my null check" is a real bug report.
 - **Optimisers have bugs.** Csmith, a random C program generator from the University of Utah, found hundreds of bugs in GCC and LLVM by comparing optimised and unoptimised builds. The original claimed 40,000-program Calc test harness is absent, so that result is not retained. This lesson supplies excerpts; identity, simplify and display helpers must be supplied to assemble the complete demonstration. Audit execution coverage is recorded separately.
 
@@ -340,7 +432,7 @@ Our passes also have blind spots. `let t = x * 2 in t + t - t` stays as three in
 - Three-address code gives every intermediate value a name; SSA makes each name assigned exactly once, so facts about a value hold wherever it is used.
 - Branches need phi functions to merge values; construction can use iterated dominance frontiers; lowering resolves their edge-dependent value selection.
 - Constant folding, algebraic simplification, CSE and DCE feed each other, so pass order and repetition matter.
-- Optimisations must preserve behaviour, including errors: preserve observable errors and side effects; unreachable or provably unobservable operations may be removed.
+- Optimisations must preserve behaviour, including errors: preserve observable errors and side effects; operations that can never run, or are provably unobservable, may be removed.
 
 ## Further reading
 - [Static single-assignment form — Wikipedia](https://en.wikipedia.org/wiki/Static_single-assignment_form)

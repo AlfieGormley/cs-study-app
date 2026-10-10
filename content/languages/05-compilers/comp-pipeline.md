@@ -32,7 +32,20 @@ The stages are usually grouped into three parts:
 | Middle end | IR, optimisation | Mostly shared; language semantics and target costs still matter |
 | Back end | codegen, reg. alloc | Target machine |
 
-That split is the reason the middle exists at all. With M languages and N machines, writing a compiler for every pair takes M × N compilers. With a shared **intermediate representation** (IR), you write M front ends and N back ends: M + N. This explains the modular architecture of **LLVM**, although runtimes, ABIs and language-specific work remain: Clang (C/C++), rustc, Swift and Julia all emit LLVM IR, and LLVM's back ends turn that into x86-64, ARM64, RISC-V, WebAssembly and more.
+That split is the reason the middle exists at all. Suppose you must support several source languages on several machines. Writing a separate compiler for every language–machine pair *multiplies* the work; a shared **intermediate representation** (IR), a common in-between form that every front end produces and every back end consumes, only *adds* it:
+
+```formula
+C_direct = M × N
+C_shared = M + N
+where
+C_direct: the number of separate compilers needed when each one goes straight from one source language to one machine
+C_shared: the number of pieces needed with a shared IR: one front end per language plus one back end per machine (the single shared optimiser is not counted)
+M: the number of source languages, such as C, Rust and Swift
+N: the number of target machines (CPU architectures), such as x86-64 and ARM64
+In words: without a shared IR every language must be paired with every machine; with one, each language and each machine is written only once.
+```
+
+For example, 4 languages and 5 machines need 4 × 5 = 20 direct compilers, but only 4 + 5 = 9 pieces with a shared IR, and adding a sixth machine costs one new back end instead of four new compilers. The count is idealised: runtimes, ABIs (the rules for how compiled code calls functions and lays out data on a platform) and language-specific work remain. This explains the modular architecture of **LLVM**: Clang (C/C++), rustc, Swift and Julia all emit LLVM IR, and LLVM's back ends turn that into x86-64, ARM64, RISC-V, WebAssembly and more.
 
 ## Meet Calc, our running example
 
@@ -45,9 +58,9 @@ let a = 3 in let b = a * a in b - a
 ```
 
 - Integers, `+ - * /`, unary minus and brackets.
-- `/` is floor division, like Python's `//`.
+- `/` is floor division, like Python's `//`: it divides and then rounds *down*, so `7 / 2` is 3 and `-7 / 2` is -4.
 - `let NAME = e1 in e2` evaluates `e1`, binds it to `NAME`, then evaluates `e2`. The name is only visible inside `e2`.
-- Later lessons add ^ (power), accepting nonnegative integer exponents; negative exponents raise ArithmeticError, and 0^0 is 1. This keeps successful results integral.
+- Later lessons add `^` (power, so `2 ^ 3` is 2 × 2 × 2 = 8), accepting nonnegative integer exponents; negative exponents raise `ArithmeticError`, and `0 ^ 0` is 1. This keeps successful results integral.
 
 Small as it is, Calc needs a lexer, a parser that respects precedence, a scope-aware checker, an optimiser and a code generator. The lessons present teaching excerpts; some depend on helper classes and wrapper code shown elsewhere or omitted. This review records which assembled examples were executed, rather than claiming every excerpt is standalone.
 
@@ -98,7 +111,7 @@ t2 = 2 * t1
 ret t2
 ```
 
-An optimiser notices that both operations have constant inputs and **folds** them at compile time:
+An optimiser notices that both operations have constant inputs and computes them at compile time, which is called **constant folding**:
 
 ```
 ret 14
@@ -119,7 +132,7 @@ MUL        stack: [14]
 A native back end would instead emit machine instructions and decide which CPU registers hold which values.
 
 > [!tip] Real compilers do the same
-> Run `python3 -c "import dis; dis.dis('2 * (3 + 4)')"`. CPython 3.14 includes a LOAD_SMALL_INT loading14, with surrounding bookkeeping/return instructions: its compiler folded the constant, exactly as above. Older versions print `LOAD_CONST 14`.
+> Run `python3 -c "import dis; dis.dis('2 * (3 + 4)')"`. CPython 3.14 shows a `LOAD_SMALL_INT 14` instruction, with surrounding bookkeeping/return instructions: its compiler folded the constant, exactly as above. Older versions print `LOAD_CONST 14`.
 
 ## Compilers, interpreters and everything between
 
@@ -167,7 +180,7 @@ Modern tools such as Clang and rustc invest heavily in error messages: precise p
 ## Key takeaways
 - A compiler translates representations; an interpreter executes them. Compile-time evaluation and JIT compilation can combine these activities. Real systems usually mix the two.
 - The pipeline is lex, parse, check, IR plus optimisation, then code generation.
-- A shared IR turns M × N language-machine pairs into M + N pieces, which is how LLVM supports many languages and targets.
+- A shared IR turns one compiler per language–machine pair (the counts multiply) into one front end per language plus one back end per machine (the counts add), which is how LLVM supports many languages and targets.
 - Each stage catches different errors; some errors cannot be found until runtime.
 - Calc, our running example, goes `2 * (3 + 4)` to tokens, to a tree, to IR, and to bytecode or simply `14`.
 

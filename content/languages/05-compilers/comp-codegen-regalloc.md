@@ -66,6 +66,23 @@ RET          -> 24
 
 The VM must reserve enough stack, so compilers compute the **maximum stack depth** statically. The JVM stores it in every method as `max_stack`, and CPython stores `co_stacksize`. Calc's `max_stack` just tracks each instruction's effect: `PUSH` and `LOAD` add one, binary operators remove one, `STORE` removes one.
 
+```formula
+d_0 = 0
+d_i = d_{i−1} + e_i
+D_max = max(d_i for all i)
+where
+d_0: the stack depth before the first instruction: the stack starts empty
+d_i: the stack depth after instruction number i, counted in values
+i: the instruction number, counting from 1 for the first instruction
+d_{i−1}: the depth just before instruction i
+e_i: instruction i's effect on the depth: +1 for PUSH and LOAD, −1 for a binary operator, STORE or RET, and 0 for NEG (it pops one value and pushes one)
+D_max: the maximum stack depth: how many stack slots the VM must reserve
+max: the largest of the listed values
+In words: start from an empty stack, add each instruction's effect in turn, and remember the deepest point reached.
+```
+
+For the program above, the depths after each instruction are 1, 0, 1, 2, 1, 2, 1 and finally 0 after `RET`, so D_max is 2: the VM needs room for only two values.
+
 Tree shape matters. `((1+2)+3)+4` needs a depth of 2, while `1+(2+(3+4))` needs 4, because every left operand waits on the stack while the right side is computed. The same idea, for registers, is Sethi–Ullman numbering below.
 
 Stack code is compact and trivial to generate, which is why it is popular for portable bytecode. The bytecode records an evaluation order, but implementations can cache stack values in hardware registers or optimize the instruction sequence.
@@ -103,11 +120,24 @@ Inputs are defined at -1 (they arrive before the first instruction) and the resu
  4  ret t5
 ```
 
-At most **two** values are live at any point. `y` dies at instruction 0 and `x` at instruction 2, so their registers can be reused. In this idealized model, MaxLive is the number of freely interchangeable registers needed without spills, allowing a dying operand register to hold the result. Real targets impose additional operand, register-class and ABI constraints.
+At most **two** values are live at any point. `y` dies at instruction 0 and `x` at instruction 2, so their registers can be reused. The peak has a name, **MaxLive**:
+
+```formula
+MaxLive = max(L_p for all p)
+MaxLive = max(2, 2, 2, 2, 1) = 2
+where
+MaxLive: the largest number of values live at the same time, anywhere in the code
+L_p: the number of values live just after point p (the "live after it" column)
+p: a point in the code: after the inputs arrive (−1), or after instruction 0, 1, 2 or 3
+max: the largest of the listed values
+In words: count the live values at every point and take the biggest count; here it never exceeds two.
+```
+
+In this idealized model, MaxLive is the number of freely interchangeable registers needed without spills, allowing a dying operand register to hold the result. Real targets impose additional operand, register-class and ABI constraints.
 
 ### Linear scan
 
-**Linear scan** (Poletto and Sarkar, 1999) walks the live ranges in order of start, handing out free registers and taking them back when a range ends:
+**Linear-scan register allocation** (Poletto and Sarkar, 1999), or linear scan for short, walks the live ranges in order of start, handing out free registers and taking them back when a range ends:
 
 ```python
 def linear_scan(code, result, params, k):
@@ -172,7 +202,43 @@ ret r0
 
 ### Graph colouring
 
-Once code has branches and loops, live ranges stop being simple intervals: a value can be live in one branch and dead in another. The classic general approach (Chaitin, 1981) builds an **interference graph** with a node per value and an edge between any two values that are live at the same time. Allocating k registers is then **k-colouring** the graph so that no edge joins two nodes of the same colour.
+Once code has branches and loops, live ranges stop being simple intervals: a value can be live in one branch and dead in another. Liveness is then computed for each basic block with the standard data-flow equations:
+
+```formula
+L_out(B) = ∪ L_in(S)   for all S in succ(B)
+L_in(B) = use(B) ∪ (L_out(B) − def(B))
+where
+B: a basic block: a straight-line run of instructions with one entry and one exit
+L_out(B): the set of values live as control leaves B
+L_in(B): the set of values live as control enters B
+S: a successor of B: a block that control can go to straight after B
+succ(B): the set of B's successors
+use(B): the values B reads before it assigns them
+def(B): the values B assigns
+∪: union: everything that is in either set
+−: set difference: the left set with the members of the right set removed
+In words: a value is live leaving a block if any block that can come next needs it, and live entering a block if the block reads it, or if it is live leaving and the block does not overwrite it.
+```
+
+The equations are solved by repeating them over every block until no set changes (a fixed point); loops are why more than one round can be needed. For example, if `x` is read only in the `then` branch of an `if`, it is in L_in(then) but not in L_in(else), and it is in L_out of the block before the branch, because one of its successors needs it.
+
+The classic general approach (Chaitin, 1981) builds an **interference graph** with a node per value and an edge between any two values that are live at the same time. Allocating k registers is then **k-colouring** the graph so that no edge joins two nodes of the same colour:
+
+```formula
+c(u) ≠ c(v)   for all (u, v) ∈ E
+c(v) ∈ {1, 2, …, k}
+where
+c: the colouring: c(v) is the register (colour) given to value v
+u: a value, which is a node of the interference graph
+v: another value, joined to u by an edge
+E: the set of edges: pairs of values that are live at the same time
+k: the number of available registers
+≠: is not equal to
+∈: is a member of
+{ }: curly braces list the members of a set
+…: "and so on" up to k
+In words: every value gets one of the k registers, and two values that are live at the same time never get the same one.
+```
 
 ```
   a ── b         k = 2: impossible,
@@ -181,9 +247,21 @@ Once code has branches and loops, live ranges stop being simple intervals: a val
   c    d
 ```
 
-General k-colourability for k at least 3 is NP-complete, so allocators use Chaitin's heuristic: repeatedly remove a node with fewer than k neighbours (it can always be coloured later), pushing it on a stack. If every node has k or more neighbours, choose one to spill. Then pop nodes and give each a colour its neighbours do not use. Briggs' refinement (1994) defers the spill decision, because a node with k neighbours may still be colourable if two neighbours share a colour.
+General k-colourability for k at least 3 is NP-complete, so register allocators use Chaitin's heuristic: repeatedly remove a node with fewer than k neighbours (it can always be coloured later), pushing it on a stack. The removal test is:
 
-**Coalescing** is the other half: if the IR says b = a, assigning compatible noninterfering values the same register removes the copy. Conservative coalescing also checks whether merging could make allocation harder. This is how phi functions from SSA mostly vanish.
+```formula
+deg(v) < k
+where
+deg(v): the degree of node v: how many neighbours (interfering values) it still has in the graph
+v: the node being considered for removal
+k: the number of registers
+<: is less than
+In words: a node with fewer neighbours than there are registers is safe to set aside: even if every neighbour takes a different register, at least one is left over for it.
+```
+
+If every node has k or more neighbours, choose one to spill. Then pop nodes and give each a colour its neighbours do not use. Briggs' refinement (1994) defers the spill decision, because a node with k neighbours may still be colourable if two neighbours share a colour.
+
+**Coalescing** is the other half: if the IR says `b = a`, assigning compatible noninterfering values the same register removes the copy. Conservative coalescing also checks whether merging could make allocation harder. This is how phi functions from SSA mostly vanish.
 
 | Approach | Design emphasis |
 |---|---|
@@ -211,6 +289,25 @@ def sethi_ullman(node):
                 return a + 1
             return max(a, b)
 ```
+
+The same rule, written as a formula:
+
+```formula
+R_leaf = 1
+R_n = max(R_L, R_R)   if R_L ≠ R_R
+R_n = R_L + 1         if R_L = R_R
+where
+R_leaf: the registers needed to evaluate a leaf, a number or a variable: just the one that holds it
+R_n: the registers needed to evaluate operator node n and both its operands
+n: a binary operator node, such as a `+` or `*`
+R_L: the registers needed by n's left subtree
+R_R: the registers needed by n's right subtree
+max: the larger of the two values
+≠: is not equal to
+In words: if the two sides need different numbers of registers, the bigger need wins; only a tie costs one extra register.
+```
+
+A unary minus needs the same as its operand. Worked through: `a+b` and `c+d` each join two leaves (1 and 1, a tie), so each needs 2; `(a+b)*(c+d)` joins 2 and 2, another tie, so it needs 3. In `a+(b+(c+d))`, `c+d` needs 2, `b+(c+d)` joins 1 and 2 and needs 2, and the outer `+` joins 1 and 2 and still needs 2.
 
 When reordering preserves effects and exception behavior, evaluate the subtree needing more registers first; its result then occupies one register while the smaller side uses the rest. Only when both sides need the same number does the total go up by one. So `(a+b)*(c+d)` needs 3, while `a+(b+(c+d))` needs only 2, *if* the compiler evaluates `c+d` first. Evaluating strictly left to right would hold `a`, `b` and `c` while computing `c+d`: four registers. (This version counts a leaf as one register; machines with memory or immediate operands can count a right-hand leaf as zero.)
 
@@ -246,14 +343,38 @@ Several decisions are visible:
 - **Common subexpressions.** `x + y` is computed once, as in our CSE.
 - **`lea` as an adder.** x86's address-calculation instruction computes `rsi + rdi` into a fresh register without overwriting either input, unlike the traditional two-operand x86 add encoding.
 - **Strength reduction.** `x * 8` becomes a shift: `shl edi, 3` on x86, and on ARM64 the shift is folded *into* the subtraction (`w0, lsl #3`), removing the separate multiply instruction; this does not imply zero execution cost.
-- **Calling convention.** On x86-64 Linux (System V ABI), the first six eligible scalar integer arguments arrive in `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9` and the result returns in `rax`. On ARM64 arguments arrive in `x0` to `x7` (`w0`, `w1` are their 32-bit halves) and the result goes in `x0`. The allocator works around these fixed registers.
+- **Calling convention.** On x86-64 Linux (System V ABI), the first six eligible scalar integer arguments arrive in `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9` and the result returns in `rax`. On ARM64 arguments arrive in `x0` to `x7` (`w0`, `w1` are their 32-bit halves) and the result goes in `x0`. The register allocator works around these fixed registers.
+
+The shift amount in the strength reduction comes from writing 8 as a power of two:
+
+```formula
+x × 8 = x × 2^3 = x << 3
+where
+x: the integer being multiplied, the first argument, which arrives in `edi`
+2^3: 2 × 2 × 2, which is 8
+<<: left shift: move every bit 3 places towards the more significant end, filling the gap with zeros
+In words: multiplying by 8 is the same as shifting left by 3 places, which is what `shl edi, 3` does.
+```
 
 Selecting instructions is often framed as **tree tiling**: each machine instruction is a "tile" that covers a pattern of IR nodes (`lea` covers `a + b*8 + c`), and the selector covers the tree with the cheapest set of tiles. LLVM's SelectionDAG and GlobalISel, and GCC's machine descriptions, are pattern-matching engines for exactly this. At -O0, compilers still allocate registers, but commonly retain stack locations and extra loads for debugging. Exact assembly depends on compiler, target and options. The C example assumes inputs whose signed arithmetic is defined.
 
 > [!example] Floor versus truncation
 > C's `x / 2` on signed `int` rounds towards zero, so Clang emits a shift *plus* a correction for negative numbers (`shr`, `add`, `sar` on x86). Calc's `/` is floor division, which is exactly what an arithmetic right shift computes, so a Calc value known to fit the signed machine word could use sar. Arbitrarily large Calc integers require more machinery. Language semantics shape the machine code.
 
-Calling conventions also split registers into **caller-saved** (the callee may overwrite them, so the caller must save any live values before a call) and **callee-saved** (a function that uses them must restore them: `rbx`, `rbp` and `r12` to `r15` on x86-64 System V). An allocator may choose callee-saved registers for values live across calls, balancing their save/restore cost against other options.
+The difference shows up only for negative odd numbers:
+
+```formula
+⌊−7 / 2⌋ = ⌊−3.5⌋ = −4
+trunc(−7 / 2) = trunc(−3.5) = −3
+−7 >> 1 = −4
+where
+⌊ ⌋: floor: round down, towards negative infinity; this is Calc's / and Python's //
+trunc: truncation: drop the fractional part, rounding towards zero; this is C's / on integers
+>>: arithmetic right shift: move every bit one place towards the less significant end, copying the sign bit into the gap; x86's `sar`
+In words: shifting right by one place halves and rounds down, which matches floor division but is one too low for C's truncating division of a negative odd number.
+```
+
+Calling conventions also split registers into **caller-saved** (the callee may overwrite them, so the caller must save any live values before a call) and **callee-saved** (a function that uses them must restore them: `rbx`, `rbp` and `r12` to `r15` on x86-64 System V). A register allocator may choose callee-saved registers for values live across calls, balancing their save/restore cost against other options.
 
 ## Pitfalls
 
@@ -265,7 +386,7 @@ Calling conventions also split registers into **caller-saved** (the callee may o
 ## Key takeaways
 - Stack-machine code is a post-order walk of the tree; the compiler records the maximum stack depth so the VM can reserve it.
 - Register allocation maps unlimited temporaries onto a few registers; two values may share one only if their live ranges do not overlap.
-- Linear scan efficiently processes intervals; its spill-free interval result does not guarantee optimal spill costs. Graph-based allocators model interference explicitly.
+- Linear scan efficiently processes intervals; its spill-free interval result does not guarantee optimal spill costs. Graph-based register allocators model interference explicitly.
 - When registers run out, values are spilled to the stack; choosing which value to spill is the key heuristic.
 - Instruction selection exploits the target: `lea`, shifted operands and strength reduction, all constrained by the calling convention.
 

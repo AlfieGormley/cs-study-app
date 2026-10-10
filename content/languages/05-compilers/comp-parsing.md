@@ -21,6 +21,8 @@ expr ::= expr "+" expr
        | NUM
 ```
 
+Reading the notation: `::=` means "can be made of", the vertical bar separates alternatives ("or"), text in quotes is a literal token that must appear exactly, and a capitalised name like `NUM` is a token kind from the lexer. So the first line says "an `expr` can be an `expr`, then a `+` token, then another `expr`".
+
 A token sequence is syntactically admitted by that grammar if you can **derive** it from the start symbol by repeatedly replacing nonterminals. That derivation, drawn as a tree, is the **parse tree**.
 
 Grammars can express nesting, which regular expressions cannot. The rule `"(" expr ")"` refers to itself, so brackets can nest to any depth. This is the power the lexer lacked.
@@ -40,7 +42,7 @@ The grammar above is **ambiguous**: `1 + 2 * 3` has two parse trees.
 
 Both are valid derivations. A compiler cannot pick one at random, so we rewrite the grammar to encode **precedence** (which operator binds tighter) and **associativity** (which way a chain like `10 - 4 - 3` groups).
 
-The classic fix uses one nonterminal per precedence level, written in **EBNF** where `{ ... }` means "zero or more":
+The classic fix uses one nonterminal per precedence level, written in **EBNF** (extended BNF). Here `=` plays the role of `::=`, `{ ... }` means "zero or more repetitions of what is inside", and round brackets group alternatives, so `("+" | "-")` means "a `+` or a `-`":
 
 ```
 expr   = term { ("+" | "-") term }
@@ -178,7 +180,19 @@ The single line `nxt = prec + 1` versus `nxt = prec` controls associativity. Tra
   left = (2 ^ (3 ^ 2))      = 512
 ```
 
-For a left-associative operator, the recursive call demands a *stronger* operator, so a second `-` is left for the outer loop. For `^`, the recursive call accepts the same level, so the second `^` is swallowed on the right. Maths convention, and Python's `**`, make power right-associative: `2 ^ 3 ^ 2` is 2⁹ = 512, not 8² = 64.
+For a left-associative operator, the recursive call demands a *stronger* operator, so a second `-` is left for the outer loop. For `^`, the recursive call accepts the same level, so the second `^` is swallowed on the right. Maths convention, and Python's `**`, make power right-associative, and the two groupings give very different answers:
+
+```formula
+2 ^ (3 ^ 2) = 2^9 = 512
+(2 ^ 3) ^ 2 = 8^2 = 64
+where
+^: "raised to the power": the left number multiplied by itself as many times as the right number says, so 3 ^ 2 = 3 × 3 = 9 and 2 ^ 3 = 2 × 2 × 2 = 8
+2^9: 2 raised to the power 9 (nine 2s multiplied together)
+8^2: 8 raised to the power 2, which is 8 × 8
+In words: right associativity works out the top exponent first, so `2 ^ 3 ^ 2` means 2 to the power 9, which is 512, not 8 squared, which is 64.
+```
+
+So `2 ^ 3 ^ 2` in Calc is 512.
 
 ### Unary minus and let
 
@@ -212,7 +226,15 @@ Parsing the operand with `expr(3)` lets `^` bind tighter than unary minus, so `-
 
 ## Bottom-up: LR parsing
 
-Recursive descent is **top-down**: it starts from `expr` and predicts what comes next. **LR** parsers work **bottom-up**: they read tokens onto a stack (**shift**) and, when the top of the stack matches the right-hand side of a rule, replace it with the rule's nonterminal (**reduce**). Using the left-recursive grammar `E → E + T | T`, `T → T * F | F`, `F → NUM`:
+Recursive descent is **top-down**: it starts from `expr` and predicts what comes next. **LR** parsers work **bottom-up**: they read tokens onto a stack (**shift**) and, when the top of the stack matches the right-hand side of a rule, replace it with the rule's nonterminal (**reduce**). The trace below uses the left-recursive grammar written in arrow notation, where `→` means "can be built from" and `|` separates alternatives. E stands for expression, T for term and F for factor:
+
+```
+E → E + T | T
+T → T * F | F
+F → NUM
+```
+
+In the trace, `$` is an end-of-input marker, so the parser can tell when the tokens run out:
 
 ```
 stack      input      action
@@ -232,7 +254,7 @@ E+T        $          reduce E->E+T
 E          $          accept
 ```
 
-The key moment is `E+T` with `*` next. Reducing `E+T` to `E` would compute `2 + 3` first, which is wrong. The parser's lookahead says *shift*, so `3 * 4` is grouped first. A generator such as **yacc** or **GNU Bison** precomputes these decisions into a table from the grammar (usually LALR(1), a compact LR variant).
+The key moment is `E+T` with `*` next. Reducing `E+T` to `E` would compute `2 + 3` first, which is wrong. The parser's lookahead says *shift*, so `3 * 4` is grouped first. A generator such as **yacc** or **GNU Bison** precomputes these decisions into a table from the grammar (usually **LALR(1)**, look-ahead LR with one token of lookahead: a compact form of LR).
 
 When a generated parse table has multiple possible actions for a state/lookahead, the generator reports a **conflict**. The famous one is the **dangling else**: in `if a if b s1 else s2`, does `else` belong to the inner or outer `if`? Bison reports a shift/reduce conflict and, by default, shifts, attaching `else` to the nearest `if`, which is what C and Java specify.
 
@@ -265,7 +287,7 @@ SyntaxError: unexpected 'EOF' at 8
 SyntaxError: expected IN, got 'x' at 10
 ```
 
-One production technique is **panic mode** recovery: on an error, skip tokens until a **synchronising token** such as `;` or `}`, then carry on, so one compile reports many independent errors. Hand-written parsers can also make guesses ("did you forget a `)`?"), one reason compilers abandon generators.
+One production technique is **panic-mode recovery**: on an error, skip tokens until a **synchronising token** such as `;` or `}`, then carry on, so one compile reports many independent errors. Hand-written parsers can also make guesses ("did you forget a `)`?"), one reason compilers abandon generators.
 
 ## Pitfalls
 

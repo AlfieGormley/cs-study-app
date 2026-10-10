@@ -84,9 +84,9 @@ pc  instruction  stack     slots
 
 The work per instruction is now small and predictable: fetch, decode, execute. The names are gone, replaced by `slots[0]`. Production bytecode can use compact contiguous storage. This Python list instead stores references to tuples, so it is not a packed byte array.
 
-### Dispatch: switch, computed goto, tail calls
+### Opcode dispatch: switch, computed goto, tail calls
 
-In a C VM, the loop is usually a big `switch (opcode)`. The compiler may implement this with a shared indirect jump, a decision tree or other code. Dispatch cost depends on the resulting code and branch predictor. **Computed goto** (a GCC/Clang extension) puts a separate `goto *labels[next_op]` at the end of each handler. Separate handler dispatch sites can help a predictor exploit patterns like "after `LOAD` usually comes `MUL`". CPython uses computed gotos when the C compiler supports them. Python 3.14 adds an optional build where each opcode handler is a small C function that **tail-calls** the next; with Clang 19 or newer, the Python 3.14 release notes report a preliminary 3–5% geometric-mean improvement on pyperformance over the Clang-19 baseline, depending on platform and architecture.
+In a C VM, the loop is usually a big `switch (opcode)`. The compiler may implement this with a shared indirect jump, a decision tree or other code. Opcode dispatch cost depends on the resulting code and branch predictor. **Computed goto** (a GCC/Clang extension) puts a separate `goto *labels[next_op]` at the end of each handler. Separate per-handler jumps can help a predictor exploit patterns like "after `LOAD` usually comes `MUL`". CPython uses computed gotos when the C compiler supports them. Python 3.14 adds an optional build where each opcode handler is a small C function that **tail-calls** the next; with Clang 19 or newer, the Python 3.14 release notes report a preliminary 3–5% geometric-mean improvement on pyperformance over the Clang-19 baseline, depending on platform and architecture.
 
 ### Stack versus register VMs
 
@@ -96,7 +96,7 @@ In a C VM, the loop is usually a big `switch (opcode)`. The compiler may impleme
 | .NET CIL, Wasm | Stack | same idea |
 | Lua 5, Dalvik | Register | `ADD r2, r0, r1` |
 
-Register VMs have "virtual registers", which are slots in the current frame. Each instruction is larger, but you need fewer of them, and fewer instructions means fewer dispatches. The Lua 5.0 designers reported that switching from a stack VM to a register VM made Lua noticeably faster. Stack bytecode is more compact and simpler to generate, which suits code shipped over a network, like JVM class files and WebAssembly.
+Register VMs have "virtual registers", which are slots in the current frame. Each instruction is larger, but you need fewer of them, and fewer instructions means fewer trips round the dispatch loop. The Lua 5.0 designers reported that switching from a stack VM to a register VM made Lua noticeably faster. Stack bytecode is more compact and simpler to generate, which suits code shipped over a network, like JVM class files and WebAssembly.
 
 ## What CPython actually does
 
@@ -152,8 +152,21 @@ def jit(tree):
 
 `let` becomes an assignment expression inside a tuple, using the checker's slot numbers as variable names (`s0`, `s1`) so shadowed names never collide. `jit(parse("let x = 5 in x * x - 1"))` builds `lambda: (s0 := 5, ((s0 * s0) - 1))[1]`, and calling it returns 24. The original claimed 18,000-program test artifact is absent, so that result is omitted. Comparisons must account for check rejecting literal-zero division before either bytecode or JIT execution.
 
-No reproducible artifact accompanies the original timing table, so its microsecond values and speed ratios are omitted. Benchmark the complete implementations on a stated workload and runtime before claiming a speedup. Flattening and slot resolution can reduce interpreter work; the toy JIT delegates execution to CPython bytecode, removing our Python-level dispatch loop. CPython instructions here are bytecode instructions, not native CPU instructions.
-The cost: compiling through jit can cost more than interpreting a short program once, because it invokes CPython's whole compiler. It only pays off if the program runs many times. That trade-off, compile time against run time, is the central problem of every JIT.
+No reproducible artifact accompanies the original timing table, so its microsecond values and speed ratios are omitted. Benchmark the complete implementations on a stated workload and runtime before claiming a speedup. Flattening and slot resolution can reduce interpreter work; the toy JIT hands execution over to CPython bytecode, removing our Python-level dispatch loop. CPython instructions here are bytecode instructions, not native CPU instructions.
+The cost: compiling through jit can cost more than interpreting a short program once, because it invokes CPython's whole compiler. It only pays off if the program runs many times. That trade-off, compile time against run time, is the central problem of every JIT, and it can be written down:
+
+```formula
+n_even = C / (t_i − t_c)
+where
+n_even: the break-even number of runs: after this many, compiling has paid for itself
+C: the one-off cost of compiling, in microseconds (µs)
+t_i: the time for one interpreted run, in µs
+t_c: the time for one run of the compiled code, in µs
+µs: microseconds, millionths of a second
+In words: divide the one-off compile cost by the time each compiled run saves; run the code more often than that and compiling wins.
+```
+
+For illustration only (these are made-up numbers, not measurements of Calc): if compiling costs 900 µs, an interpreted run takes 5 µs and a compiled run 0.5 µs, each run saves 4.5 µs and compiling pays for itself after 900 / 4.5 = 200 runs. The model assumes every run saves the same amount and ignores memory use; real JITs estimate it with counters rather than computing it exactly.
 
 ## How production JITs win
 
@@ -192,7 +205,7 @@ A function called once but containing a loop of a billion iterations may never r
 
 ### Tracing JITs
 
-**PyPy** and **LuaJIT** compile *traces* rather than functions: they record the exact path taken through a hot loop, including across calls, and compile that straight-line path with guards wherever execution could diverge. This is excellent for loop-heavy code. PyPy is a *meta-tracing* JIT: it traces the interpreter (written in RPython) running your program, allowing a reusable JIT framework rather than a separately hand-written Python-specific optimizing JIT; PyPy still has Python parsing and bytecode compilation. CPython's own experimental JIT (PEP 744, in 3.13) uses **copy-and-patch**: it stitches together precompiled machine-code templates for each micro-op, which is cheap to build and maintain. The 3.14 macOS and Windows installers include it, off by default (`PYTHON_JIT=1` enables it), and the docs describe its effect as anywhere from about 10% slower to 20% faster.
+**PyPy** and **LuaJIT** compile *traces* rather than functions: they record the exact path taken through a hot loop, including across calls, and compile that straight-line path with guards wherever execution could leave that path. This is excellent for loop-heavy code. PyPy is a *meta-tracing* JIT: it traces the interpreter (written in RPython) running your program, allowing a reusable JIT framework rather than a separately hand-written Python-specific optimizing JIT; PyPy still has Python parsing and bytecode compilation. CPython's own experimental JIT (PEP 744, in 3.13) uses **copy-and-patch**: it stitches together precompiled machine-code templates for each micro-op, which is cheap to build and maintain. The 3.14 macOS and Windows installers include it, off by default (`PYTHON_JIT=1` enables it), and the docs describe its effect as anywhere from about 10% slower to 20% faster.
 
 ## Trade-offs
 
@@ -202,6 +215,8 @@ A function called once but containing a loop of a billion iterations may never r
 | Peak speed | Very good | Very good, uses profiles |
 | Memory | Depends on artifact/runtime | Compiler and code cache add costs |
 | Security | W^X easy | Needs writable code |
+
+W^X ("write XOR execute") is a memory-protection policy: a page of memory may be writable or executable, but never both at once.
 
 - **Warm-up.** Steady-state benchmarks separate warm-up from measurement; startup-focused benchmarks must include it. A short-lived command-line tool may finish before any code gets hot, which is why Java added ahead-of-time options and class-data sharing.
 - **Security.** JIT code must be written and then executed. Platforms may enforce W^X policies that separate writing from executing generated code. JITs use platform-specific mechanisms; Apple provides MAP_JIT and associated permissions/protection APIs. JIT bugs are also a rich source of browser exploits, which is why browsers offer JIT-less modes.
@@ -216,7 +231,7 @@ A function called once but containing a loop of a billion iterations may never r
 
 ## Key takeaways
 - Tree-walkers can be simple; bytecode VMs flatten the tree, resolve names to slots, and run a tight dispatch loop.
-- Dispatch cost matters: computed goto and tail-call dispatch can help on suitable implementations; register VMs can express operations with fewer dispatches.
+- Dispatch overhead matters: computed goto and tail-calling interpreters can help on suitable implementations; register VMs can express operations in fewer trips round the dispatch loop.
 - CPython 3.11+ specialises instructions to the types it observes and de-specialises when they change.
 - JITs trade compile time for run time, so they tier up: interpreter, baseline compiler, then optimiser for hot code.
 - Profiling, inline caches, speculation with deoptimisation and on-stack replacement are what make dynamic languages fast.

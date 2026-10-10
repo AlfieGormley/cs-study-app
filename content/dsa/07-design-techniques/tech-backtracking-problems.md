@@ -30,7 +30,7 @@ where
 N_any: placements choosing any 8 of the 64 squares
 C(64, 8): "64 choose 8", the number of ways to pick 8 squares from 64 when order doesn't matter
 N_row: placements with exactly one queen in each row (8 column choices for each of 8 rows)
-8^8: 8 multiplied by itself 8 times
+8^8: 8 copies of 8 multiplied together
 N_perm: placements with one queen per row and per column (each row takes a different column)
 8!: 8 factorial, 8 × 7 × … × 1
 In words: one queen per row cuts 4.4 billion candidates to 16.8 million, and one per column as well cuts them to 40,320.
@@ -270,7 +270,7 @@ P: the number of paths the search may explore, an upper bound
 R: the number of rows in the grid
 C: the number of columns in the grid
 L: the length of the word, in letters (at least 2 for the first line)
-3^{L − 2}: 3 multiplied by itself L − 2 times
+3^{L − 2}: L − 2 copies of 3 multiplied together
 O: Big-O, grows no faster than this up to a constant factor
 ≤: at most
 In words: R × C starting cells, 4 choices for the first step and at most 3 for each later one; a 3 × 4 grid and a 10-letter word allow at most about 315,000 paths.

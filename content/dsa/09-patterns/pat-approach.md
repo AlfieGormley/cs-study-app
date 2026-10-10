@@ -144,7 +144,7 @@ n! = n × (n − 1) × … × 2 × 1
 where
 n: the number of elements in the input
 n!: "n factorial", the number of different orders (permutations) of n distinct items
-2^n: 2 multiplied by itself n times, the number of subsets of n items (each item is either in or out)
+2^n: n copies of 2 multiplied together, the number of subsets of n items (each item is either in or out)
 …: "and so on", continuing the same pattern
 In words: factorial counts orderings and grows fastest of all; 2^n counts in-or-out choices and doubles with every extra item.
 ```

@@ -52,7 +52,7 @@ O(1): at most a constant amount of work, however large n is
 In words: binary search does a constant amount of work and then searches one half; merge sort sorts both halves and then does a linear merge.
 ```
 
-Some common recurrences and their solutions (the first column is T(n), shorthand for "T(n) = this expression"; 2^n is 2 multiplied by itself n times):
+Some common recurrences and their solutions (the first column is T(n), shorthand for "T(n) = this expression"; 2^n is n copies of 2 multiplied together):
 
 | Recurrence | Example | Solution |
 |---|---|---|
@@ -115,7 +115,7 @@ W_k: the total work on level k
 k: the level number, 0 at the root
 3^k: the number of calls on level k (it triples each level)
 n / 2^k: the input size of each call on level k
-(3/2)^k: 1.5 multiplied by itself k times
+(3/2)^k: k copies of 1.5 multiplied together
 leaves: the number of calls at the bottom level, size 1
 log_2(n): the base-2 logarithm of n, the depth of the tree
 log_2(3): the base-2 logarithm of 3, about 1.585
@@ -333,8 +333,8 @@ T(n) = 2^n − 1 = Θ(2^n)
 where
 T(n): the number of steps (for Towers of Hanoi, the number of disc moves)
 n: the input size (the number of discs)
-2^{n−1}: 2 multiplied by itself n − 1 times, the number of calls on the deepest level
-2^n: 2 multiplied by itself n times
+2^{n−1}: n − 1 copies of 2 multiplied together, the number of calls on the deepest level
+2^n: n copies of 2 multiplied together
 …: "and so on", doubling each time
 Θ: Big-Theta, exactly this rate up to constants
 In words: two calls each one size smaller makes the call count double on every one of n levels.

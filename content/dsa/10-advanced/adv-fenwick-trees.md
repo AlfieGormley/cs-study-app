@@ -372,7 +372,7 @@ n: the number of elements, a million here
 v_max: the largest value one element can hold, 10,000 here
 S_max: the largest total any prefix sum can reach
 L_32: the largest value a signed 32-bit integer can hold, 2,147,483,647
-2^31: 2 multiplied by itself 31 times
+2^31: 31 copies of 2 multiplied together
 ≈: approximately equal to
 In words: a million values of up to 10,000 can total ten billion, nearly five times more than a 32-bit signed integer can store.
 ```

@@ -146,7 +146,7 @@ where
 h: the height of the tree, in edges; level d (depth d) holds at most 2^d nodes, so levels 0 to h can hold 1, 2, 4, … nodes
 N_max: the largest number of nodes a binary tree of height h can hold
 n: the number of nodes actually in the tree (at least 1)
-2^h: 2 multiplied by itself h times, so 2^3 = 2 × 2 × 2 = 8
+2^h: h copies of 2 multiplied together, so 2^3 = 2 × 2 × 2 = 8
 …: "and so on": the doubling terms continue up to the last one shown
 log_2(n): the base-2 logarithm of n: the power you must raise 2 to in order to get n, so log_2(8) = 3 and log_2(1000000) ≈ 19.93
 ⌊ ⌋: floor: round down to the whole number below, so ⌊19.93⌋ = 19
@@ -274,7 +274,7 @@ i_h: the index of the deepest node in the chain
 i_3: the index of the chain node at depth 3 (the fourth node)
 h: the height of the chain, in edges
 A: the length the array must have (one more than the last index used)
-2^(k+1): 2 multiplied by itself k + 1 times
+2^(k+1): k + 1 copies of 2 multiplied together
 In words: each step right roughly doubles the index, so a right-only chain of height h needs an array of 2^(h+1) − 1 slots although it holds only h + 1 nodes.
 ```
 

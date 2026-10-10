@@ -130,7 +130,7 @@ k_i = 13 = 1 + 2 + 4 + 6
 where
 k_i: how many copies of item i are available
 t: how many power-of-two bundles fit (1, 2, 4, ... up to 2^{t − 1})
-2^{t − 1}: 2 multiplied by itself t − 1 times, the largest power-of-two bundle
+2^{t − 1}: t − 1 copies of 2 multiplied together, the largest power-of-two bundle
 r: the remainder bundle, whatever is left after the powers of two (0 up to 2^t − 1)
 bundles: the number of 0/1 items produced for item i
 log_2(k_i + 1): the base-2 logarithm of k_i + 1, roughly how many times you can halve it
@@ -221,7 +221,7 @@ b: the number of bits needed to write W in binary
 W: the capacity, a positive whole number
 log_2(W): the base-2 logarithm of W, the power you raise 2 to in order to get W
 ⌊x⌋: floor, x rounded down to a whole number
-2^b: 2 multiplied by itself b times
+2^b: b copies of 2 multiplied together
 T: the running time of the table algorithm
 n: the number of items
 O(...): Big-O, growing at most in proportion to the expression inside
@@ -252,7 +252,7 @@ T(40) ≈ 2^20 × 20 ≈ 10^6 × 20 = 2 × 10^7
 where
 T: the running time, in basic steps
 n: the number of items
-2^{n/2}: 2 multiplied by itself n/2 times, the number of subsets of one half of the items
+2^{n/2}: n/2 copies of 2 multiplied together, the number of subsets of one half of the items
 O(...): Big-O, growing at most in proportion to the expression inside
 ≈: approximately equal to
 In words: each half has only 2^(n/2) subsets, and sorting plus binary search adds about a factor of n, so the work never depends on W.

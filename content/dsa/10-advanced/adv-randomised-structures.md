@@ -40,7 +40,7 @@ where
 m: any level number we ask about
 p: the promotion probability, the chance of heads on each flip; 1/2 in the example, 1/4 in Redis
 P(ℓ ≥ m): the probability that the key reaches level m or higher
-p^{m − 1}: p multiplied by itself m − 1 times, one factor per heads needed
+p^{m − 1}: m − 1 copies of p multiplied together, one factor per heads needed
 E[ℓ]: the expected (long-run average) level of a key
 H: the number of levels the whole list typically has
 n: the number of keys in the skip list
@@ -152,7 +152,7 @@ N_cap: the expected total when no node may exceed L levels
 n: the number of keys
 p: the promotion probability
 L: the level cap (32 in the code above)
-p^L: p multiplied by itself L times
+p^L: L copies of p multiplied together
 ≈: approximately equal to
 In words: each key holds on average 1/(1 − p) pointers, so 2 per key at p = 1/2 and about 1.33 per key at p = 1/4; a cap trims a tiny amount off that.
 ```
@@ -169,7 +169,7 @@ N_top: the expected number of nodes that would want to reach the top (capped) le
 n: the number of keys
 p: the promotion probability, 1/4 in the second line
 L: the level cap, 32 in the second line
-p^{L − 1}: p multiplied by itself L − 1 times
+p^{L − 1}: L − 1 copies of p multiplied together
 ≈: approximately equal to
 In words: with 32 levels at p = 1/4, you would need billions of billions of keys before the top level gets crowded.
 ```
@@ -420,7 +420,7 @@ where
 N_runs: the number of equally likely sequences of random draws
 N_perm: the number of possible orderings (permutations)
 n: the number of items, 3 in the example
-n^n: n multiplied by itself n times, because each of n steps picks from all n positions
+n^n: n copies of n multiplied together, because each of n steps picks from all n positions
 n!: n factorial, 1 × 2 × … × n
 In words: 27 equally likely runs cannot be shared evenly among 6 orderings, so some orderings must come up more often.
 ```

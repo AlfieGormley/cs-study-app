@@ -34,7 +34,7 @@ a: a nonnegative integer
 k: the shift distance, a nonnegative whole number of bit positions
 <<: left shift: move every bit k places towards the high end, filling with zeros
 >>: right shift: move every bit k places towards the low end, dropping the bits that fall off
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 ⌊ ⌋: floor, rounding down to the nearest whole number
 In words: shifting left by k multiplies by 2 to the k, and shifting right by k divides by 2 to the k and throws away the remainder, just as moving a decimal number one place multiplies or divides by 10; 0011 shifted left 2 is 1100.
 ```
@@ -283,7 +283,7 @@ n = 3: V = 27 − 8 = 19
 where
 V: the total number of loop visits, summed over all 2^n masks
 n: the number of bits (items)
-3^n: 3 multiplied by itself n times, the number of (mask, submask) pairs including empty submasks
+3^n: n copies of 3 multiplied together, the number of (mask, submask) pairs including empty submasks
 2^n: the number of masks, each of which has one empty submask that the loop skips
 In words: three choices per bit give 3^n pairs, and dropping the empty submask of each of the 2^n masks leaves 3^n − 2^n visits; for 3 bits, 19.
 ```

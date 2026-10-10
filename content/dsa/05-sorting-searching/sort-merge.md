@@ -118,7 +118,7 @@ T(n) = Θ(n × log n)
 where
 W_k: the total work done on level k of the recursion tree
 k: the level number, 0 at the root
-2^k: 2 multiplied by itself k times: the number of subproblems on level k, which doubles each level
+2^k: k copies of 2 multiplied together: the number of subproblems on level k, which doubles each level
 n / 2^k: the size of each subproblem on level k
 c: the per-element merging cost
 n: the number of elements

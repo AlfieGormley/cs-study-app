@@ -196,7 +196,7 @@ where
 W: the number of nodes on the last (widest) level of a perfect binary tree
 h: the height of the tree in edges; the last level is at depth h
 n: the total number of nodes in the perfect tree
-2^h: 2 multiplied by itself h times
+2^h: h copies of 2 multiplied together
 In words: in a perfect binary tree the bottom level holds (n + 1)/2 nodes, just over half the tree, and BFS's queue fills with all of them.
 ```
 

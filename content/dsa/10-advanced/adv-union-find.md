@@ -67,7 +67,7 @@ d ≤ log_2(1,000,000) ≈ 19.9
 where
 d: the depth of an element: how many parent steps it is below its root
 n: the total number of elements in the structure
-2^d: 2 multiplied by itself d times; the smallest its tree's size can be after it has been pushed down d times
+2^d: d copies of 2 multiplied together; the smallest its tree's size can be after it has been pushed down d times
 log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n
 ≤: is at most
 ≈: approximately equal to

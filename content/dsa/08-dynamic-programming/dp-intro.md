@@ -94,7 +94,7 @@ where
 calls(n): the number of calls made by the naive fib(n)
 c: a constant that does not depend on n (about 1.45 here, which is 2 × φ / √5)
 φ: phi, the golden ratio, about 1.618
-φ^n: φ multiplied by itself n times
+φ^n: n copies of φ multiplied together
 n: the Fibonacci position asked for
 √(5): the square root of 5, about 2.236
 ≈: approximately equal to

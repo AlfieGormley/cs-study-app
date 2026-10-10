@@ -107,7 +107,7 @@ e: Euler's number, about 2.718
 ^: "to the power of"
 ≈: approximately equal to
 %: per cent, parts per hundred; 0.0082 = 0.82%
-In words: a bit is set with probability about 0.503, and a false positive needs all 7 of the query's bits set, so 0.503 multiplied by itself 7 times: about 0.8%, or 1 query in 120.
+In words: a bit is set with probability about 0.503, and a false positive needs all 7 of the query's bits set, so 7 copies of 0.503 multiplied together: about 0.8%, or 1 query in 120.
 ```
 
 These are model estimates for large filters with good hashes; small filters and correlated hash positions can do slightly worse.

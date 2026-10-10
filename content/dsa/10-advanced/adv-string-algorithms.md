@@ -247,7 +247,7 @@ H[j]: the hash of the first j characters of s
 i, j: the start (included) and end (excluded) positions of a substring
 s[i..j): the substring from position i up to but not including j
 B: the base
-B^{j−i}: B multiplied by itself j − i times (precomputed for every power)
+B^{j−i}: j − i copies of B multiplied together (precomputed for every power)
 M: the prime modulus
 mod: the remainder after dividing by M, taken as 0 to M − 1
 h: the hash of the substring

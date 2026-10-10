@@ -98,7 +98,7 @@ N_sub = 2^40 ≈ 1.1 × 10^12
 where
 N_sub: the number of subsets of n distinct elements (including the empty set and the whole set)
 n: the number of distinct elements (or distinguished positions)
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 W: the total work to generate and copy every subset
 O: Big-O, grows no faster than this up to a constant factor
 10^12: one trillion (a 1 followed by 12 zeros)

@@ -209,10 +209,10 @@ Why exponent bases do matter: dividing one exponential by another leaves an expo
 4^n = (2^2)^n = 2^{2 × n}
 4^n / 2^n = 2^n
 where
-3^n: 3 multiplied by itself n times
-2^n: 2 multiplied by itself n times
-4^n: 4 multiplied by itself n times
-1.5^n: 1.5 multiplied by itself n times, which grows without limit
+3^n: n copies of 3 multiplied together
+2^n: n copies of 2 multiplied together
+4^n: n copies of 4 multiplied together
+1.5^n: n copies of 1.5 multiplied together, which grows without limit
 n: the input size
 In words: the ratio of two exponentials with different bases keeps growing, so no constant c can cover it and the faster one is not Big-O of the slower one.
 ```

@@ -99,7 +99,7 @@ v: any node
 P(v): the parent of v
 A_0(v): the ancestor 2^0 = 1 level above v, which is simply its parent
 k: the table level, from 0 up to K − 1
-A_k(v): the ancestor of v that is 2^k levels above it (2 multiplied by itself k times: 1, 2, 4, 8, …)
+A_k(v): the ancestor of v that is 2^k levels above it (k copies of 2 multiplied together: 1, 2, 4, 8, …)
 A_{k−1}(v): the ancestor 2^(k−1) levels above v, from the previous level of the table
 K: the number of table levels needed so that a jump can cover any depth
 n: the number of nodes

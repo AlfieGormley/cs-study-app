@@ -93,7 +93,7 @@ h: the height of the tree, in edges
 F(k): the k-th Fibonacci number, with F(1) = F(2) = 1 and each later one the sum of the two before (1, 1, 2, 3, 5, 8, …)
 k: a position in the Fibonacci sequence
 φ: phi, the golden ratio (1 + √5) / 2 ≈ 1.618, the factor by which Fibonacci numbers grow each step
-φ^(h+3): φ multiplied by itself h + 3 times; dividing by √5 (about 2.236) gives roughly 1.89 × 1.618^h
+φ^(h+3): h + 3 copies of φ multiplied together; dividing by √5 (about 2.236) gives roughly 1.89 × 1.618^h
 h_max: the greatest height an AVL tree with n nodes can have
 n: the number of nodes (keys) in the tree
 log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n; log_2(10^6) ≈ 19.93

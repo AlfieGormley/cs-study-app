@@ -18,7 +18,7 @@ subsets = 2^n
 where
 subsets: the number of different sets (bitmasks) that can be formed from the items
 n: the number of items
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 ≈: approximately equal to
 In words: every item doubles the number of possible sets, because each existing set can either include it or not.
 ```
@@ -177,7 +177,7 @@ pairs = 3^n
 where
 pairs: the number of (mask, submask) pairs, where every bit of the submask is also set in the mask
 n: the number of items (bits)
-3^n: 3 multiplied by itself n times
+3^n: n copies of 3 multiplied together
 In words: each item independently has three options: in the submask, in the mask but not the submask, or outside the mask.
 ```
 

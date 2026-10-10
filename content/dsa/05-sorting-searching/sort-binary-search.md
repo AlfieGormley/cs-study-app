@@ -22,7 +22,7 @@ where
 r_k: how many elements are still in range after k steps
 n: the number of elements in the sorted array; a billion (10^9) in the last line
 k: the number of steps (probes) taken so far
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n, which is how many halvings take n down to 1
 ⇒: "which happens when"
 ≈: approximately equal to
@@ -139,7 +139,7 @@ where
 s_max: the largest value a 32-bit signed integer can hold
 lo: the low index of the search range; here 1.1 billion
 hi: the high index of the search range; here 1.2 billion
-2^31: 2 multiplied by itself 31 times
+2^31: 31 copies of 2 multiplied together
 10^9: ten to the power 9, a billion
 ≤: less than or equal to
 >: greater than

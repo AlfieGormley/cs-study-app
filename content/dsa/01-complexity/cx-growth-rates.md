@@ -96,7 +96,7 @@ A **logarithm** answers "how many times do I multiply 2 by itself to reach n?", 
 log_2(1024) = 10
 log_2(2^k) = k
 where
-2^k: 2 raised to the power k: 2 multiplied by itself k times, so 2^3 = 2 × 2 × 2 = 8
+2^k: 2 raised to the power k: k copies of 2 multiplied together, so 2^3 = 2 × 2 × 2 = 8
 log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n; it grows very slowly (log_2 of a million is about 20)
 k: any number used as a power
 n: here, any positive number
@@ -117,7 +117,7 @@ f(n): the number of operations an algorithm with this growth rate does on an inp
 n: the input size, a whole number of items
 log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n (log_2(1000) ≈ 9.97)
 n^2: n squared, n multiplied by itself
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 10^4: ten to the power 4, which is 10,000
 ≈: approximately equal to (rounded)
 In words: each row of the table below is one choice of f; the table shows how many operations each one needs at three input sizes.
@@ -189,7 +189,7 @@ where
 N: the largest input the old machine can handle in the time budget
 N_new: the largest input the 10-times-faster machine can handle in the same time
 √(10): the square root of 10, the number that multiplied by itself gives 10, about 3.16
-2^N: 2 multiplied by itself N times
+2^N: N copies of 2 multiplied together
 log_2(10): the base-2 logarithm of 10, the power you raise 2 to in order to get 10, about 3.32
 ≈: approximately equal to (rounded)
 In words: for quadratic work, 10 times the speed buys only √10 ≈ 3.16 times the input; for exponential work, it buys only about 3 more items.
@@ -217,7 +217,7 @@ N: the value of the number being tested, for example 1,000,003
 b: the input size: how many bits (binary digits) it takes to write N down
 log_2(N): the base-2 logarithm of N, the power you raise 2 to in order to get N
 ⌊x⌋: floor: round x down to the nearest whole number
-2^b: 2 multiplied by itself b times
+2^b: b copies of 2 multiplied together
 ≈: approximately equal to; a 64-bit number can be as large as 2^64 − 1, about 1.8 × 10^19
 In words: adding one bit doubles the largest value you can write, so a loop that runs once per unit of value runs about 2^b times: exponential in the number of bits.
 ```

@@ -70,8 +70,8 @@ a = T(n) / n < 3
 where
 copies: the total number of element copies over all resizes
 k: the number of the last resize, so 2^k is the largest power of 2 below n
-2^k: 2 multiplied by itself k times
-2^{k+1}: 2 multiplied by itself k + 1 times
+2^k: k copies of 2 multiplied together
+2^{k+1}: k + 1 copies of 2 multiplied together
 n: the number of appends
 T(n): the total cost of n appends: n writes plus all the copies
 a: the amortised cost per append

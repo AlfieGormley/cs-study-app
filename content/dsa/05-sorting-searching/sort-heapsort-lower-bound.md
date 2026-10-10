@@ -200,7 +200,7 @@ where
 h: the height of the decision tree, which is the worst-case number of comparisons; a whole number
 L: the number of leaves in the tree
 n!: n factorial, n × (n − 1) × … × 2 × 1: the number of possible orderings of n distinct elements (3! = 6)
-2^h: 2 multiplied by itself h times, the most leaves a binary tree of height h can have
+2^h: h copies of 2 multiplied together, the most leaves a binary tree of height h can have
 log_2: the base-2 logarithm, which undoes "2 to the power": log_2(8) = 3
 n: the number of elements being sorted; 3 in the example lines
 ⌈ ⌉: the ceiling: round up to the next whole number
@@ -218,7 +218,7 @@ log_2(n!) = Ω(n × log n)
 where
 n!: n factorial, the product n × (n − 1) × … × 1
 n: the number of elements
-(n / 2)^{n/2}: n/2 multiplied by itself n/2 times
+(n / 2)^{n/2}: n/2 copies of n/2 multiplied together
 log_2: the base-2 logarithm
 log: the logarithm (the base does not matter inside Ω)
 Ω: Big Omega: grows at least this fast, up to a constant factor
@@ -286,7 +286,7 @@ C_w: the most comparisons top-down merge sort makes on any input of n elements
 n: the number of elements, a million (10^6)
 log_2(n): the base-2 logarithm of n, about 19.93 here
 ⌈ ⌉: the ceiling: round up to a whole number, so ⌈19.93⌉ = 20
-2^20: 2 multiplied by itself 20 times, 1,048,576
+2^20: 20 copies of 2 multiplied together, 1,048,576
 log_2(n!): the minimum worst-case comparisons any comparison sort needs, about 18.49 million here
 r: the ratio of merge sort's worst case to that minimum
 10^6: ten to the power 6, a million; 10^7 is ten million

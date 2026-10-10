@@ -207,7 +207,7 @@ W_k(u, v) = (A^k)[u][v]
 where
 A: the adjacency matrix: entry [u][v] is 1 if there is an edge u→v, else 0
 k: a walk length, in edges (1, 2, 3, …)
-A^k: A multiplied by itself k times (matrix multiplication)
+A^k: k copies of A multiplied together (matrix multiplication)
 u: the start vertex (a row of the matrix)
 v: the end vertex (a column)
 W_k(u, v): the number of different walks of exactly k edges from u to v

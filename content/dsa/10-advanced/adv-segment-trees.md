@@ -85,7 +85,7 @@ n: the number of elements in the array
 h: the height of the tree: the number of levels below the root
 log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n
 ⌈ ⌉: ceiling: round up to the nearest whole number
-2^h: 2 multiplied by itself h times, the number of slots on the bottom level
+2^h: h copies of 2 multiplied together, the number of slots on the bottom level
 slots: the highest array index a node can use, plus one
 ≤: is at most
 <: is less than

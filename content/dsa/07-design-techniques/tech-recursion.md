@@ -147,7 +147,7 @@ C(n): the total number of calls that fib(n) makes, including itself
 n: the argument passed to fib
 F(n): the nth Fibonacci number (F(0) = 0, F(1) = 1, each later one the sum of the previous two)
 φ: phi, the golden ratio, (1 + √5) / 2 ≈ 1.618
-φ^n: φ multiplied by itself n times
+φ^n: n copies of φ multiplied together
 Θ: Big-Theta, grows at exactly this rate up to a constant factor (here C(n) is about 1.45 × φ^n)
 In words: the call count follows the Fibonacci pattern itself, so each extra 1 on the argument multiplies the work by about 1.6.
 ```

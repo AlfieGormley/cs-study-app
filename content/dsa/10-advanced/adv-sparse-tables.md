@@ -38,7 +38,7 @@ a: the input array, which never changes
 a[i]: the element of a at index i, counting from 0
 i: the start index of a block
 k: the row number; row k holds blocks of length 2^k
-2^k: 2 multiplied by itself k times, the block length in row k (2^0 = 1)
+2^k: k copies of 2 multiplied together, the block length in row k (2^0 = 1)
 T[k][i]: the table entry for row k, index i: the minimum of a[i] through a[i + 2^k − 1]
 h: the half-block length, 2 to the power k − 1
 min(x, y): the smaller of x and y
@@ -111,7 +111,7 @@ l: the left end of the query range (an index, inclusive)
 r: the right end of the query range (an index, inclusive)
 L: the length of the range, in elements
 k: the row to use: the largest whole number with 2^k ≤ L
-2^k: 2 multiplied by itself k times, the length of each of the two blocks
+2^k: k copies of 2 multiplied together, the length of each of the two blocks
 T[k][i]: the sparse-table entry: the minimum of the length-2^k block starting at index i
 q: the answer, the minimum of a[l] through a[r]
 log_2(L): the base-2 logarithm of L
@@ -376,7 +376,7 @@ B_k: how many blocks in row k contain the changed element
 K: the top row number
 B: the total number of entries that must be recomputed
 n: the array length
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 log_2(n): the base-2 logarithm of n
 ⌊ ⌋: floor: round down to the nearest whole number
 ≤: is at most

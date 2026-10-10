@@ -67,8 +67,8 @@ k: the level number, 0 at the root (the first call)
 a: the number of subproblems per call
 b: the shrink factor per level
 n: the original input size
-a^k: a multiplied by itself k times
-b^k: b multiplied by itself k times
+a^k: k copies of a multiplied together
+b^k: k copies of b multiplied together
 In words: going down one level multiplies the number of calls by a and divides each call's input size by b.
 ```
 
@@ -207,7 +207,7 @@ x^n = (x^{⌊n/2⌋})^2 × x  if n mod 2 = 1
 where
 x: the base, the number being raised to a power
 n: the exponent, a whole number of at least 0
-x^n: x multiplied by itself n times (x^0 = 1)
+x^n: n copies of x multiplied together (x^0 = 1)
 mod: the remainder after division (Python's %); n mod 2 is 0 when n is even and 1 when n is odd
 (…)^2: squaring: the bracketed value multiplied by itself
 ⌊n/2⌋: the floor of n / 2: halve n and round down to a whole number (Python's n // 2); ⌊7/2⌋ = 3

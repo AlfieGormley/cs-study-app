@@ -24,7 +24,7 @@ r: the assumed speed, 10^8 (a hundred million) operations per second
 In words: divide the operation count by the speed; anything that comes out near 1 second or less fits the budget.
 ```
 
-In the table, n! is n factorial (n × (n − 1) × … × 1), 2^n is 2 multiplied by itself n times, and log n is the base-2 logarithm of n:
+In the table, n! is n factorial (n × (n − 1) × … × 1), 2^n is n copies of 2 multiplied together, and log n is the base-2 logarithm of n:
 
 | Largest n (about 1 s) | Affordable complexity |
 |---|---|
@@ -46,7 +46,7 @@ The table comes straight from the arithmetic:
 10^6 × log_2(10^6) ≈ 2 × 10^7
 where
 11!: 11 factorial, 11 × 10 × … × 1 = 39,916,800
-2^25: 2 multiplied by itself 25 times, 33,554,432
+2^25: 25 copies of 2 multiplied together, 33,554,432
 500^3: 500 × 500 × 500
 log_2(10^6): the base-2 logarithm of a million, about 19.9
 ≈: approximately equal to
@@ -139,7 +139,7 @@ T(n): the measured running time at input size n, in seconds (s)
 c: an unknown constant (machine speed, language, implementation), which cancels in the ratio
 n: the input size
 k: the exponent being estimated
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 ratio: the measured T(2n) / T(n)
 log_2: the base-2 logarithm: log_2(x) is the power you raise 2 to in order to get x
 ≈: approximately equal to

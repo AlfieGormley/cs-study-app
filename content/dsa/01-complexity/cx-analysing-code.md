@@ -88,7 +88,7 @@ where
 i: the loop variable, which doubles every pass, so after k passes it equals 2^k
 k: the number of loop iterations; the loop stops at the first k with 2^k ≥ n
 n: the input size, the value the loop counts up to
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 log_2(n): the base-2 logarithm of n, the power you raise 2 to in order to get n
 ⌈x⌉: ceiling: round x up to the next whole number
 ≥: greater than or equal to
@@ -140,8 +140,8 @@ n = 100:  W = 1 + … + 64 = 127
 where
 W: the total number of work() calls
 k: the number of the last outer pass; on that pass i = 2^k, the largest power of 2 below n
-2^k: 2 multiplied by itself k times
-2^{k+1}: 2 multiplied by itself k + 1 times
+2^k: k copies of 2 multiplied together
+2^{k+1}: k + 1 copies of 2 multiplied together
 n: the input size
 …: "and so on"
 In words: each power of 2 is one more than the sum of all the smaller ones, so the whole sum is just under twice the last term, and the last term is less than n.
@@ -234,7 +234,7 @@ calls(n): the total number of calls made by fib(n), counting the first one
 F(n): the n-th Fibonacci number: 0, 1, 1, 2, 3, 5, 8, … (each is the sum of the two before; F(0) = 0, F(1) = 1, F(6) = 8)
 n: the argument passed to fib
 φ: phi, the golden ratio, about 1.618
-φ^n: φ multiplied by itself n times
+φ^n: n copies of φ multiplied together
 √5: the square root of 5, about 2.236
 Θ: Big-Theta: grows at exactly this rate, up to a constant factor
 ≈: approximately equal to

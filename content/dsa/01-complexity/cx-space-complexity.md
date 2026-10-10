@@ -104,7 +104,7 @@ time(n): the number of calls naive fib(n) makes, which sets its running time
 space(n): the maximum number of stack frames alive at once, which sets its memory use
 n: the argument passed to fib, which is also the depth of the deepest path in the recursion tree
 φ: phi, the golden ratio, about 1.618
-φ^n: φ multiplied by itself n times
+φ^n: n copies of φ multiplied together
 Θ: Big-Theta: grows at exactly this rate, up to a constant factor
 ≈: approximately equal to
 In words: naive Fibonacci takes exponential time but only linear space, because each finished branch hands its stack frames back before the next branch starts.
@@ -160,7 +160,7 @@ s_k: the size of the partition handled at recursion depth k
 s_{k+1}: the size handled one level deeper
 k: the recursion depth (0 for the first call)
 n: the number of items being sorted
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 depth: the maximum number of quicksort frames on the stack at once
 log_2(n): the base-2 logarithm of n, the number of halvings that take n down to 1
 ≤: less than or equal to

@@ -65,7 +65,7 @@ g ≈ 2 × log_2(500) ≈ 2 × 9 = 18
 where
 p_j: the position (offset from the start of the run) checked on probe number j: 1, 3, 7, 15, …
 j: the probe number, 1, 2, 3, …
-2^j: 2 multiplied by itself j times
+2^j: j copies of 2 multiplied together
 g: the comparisons galloping needs to find where the other run's next element belongs
 m: how many elements the winning run can copy in one block; 500 in the example below
 log_2(m): the base-2 logarithm of m: how many doublings it takes to reach m (log_2(500) ≈ 9)
@@ -179,7 +179,7 @@ d: the difference the comparator returns; its sign is meant to say which is larg
 a: the first value compared; here 2,000,000,000
 b: the second value compared; here −2,000,000,000
 d_max: the largest value a 32-bit signed Java int can hold, 2,147,483,647
-2^31: 2 multiplied by itself 31 times
+2^31: 31 copies of 2 multiplied together
 10^9: ten to the power 9, a billion
 ≈: approximately equal to
 In words: the real difference, 4 billion, is bigger than an int can hold, so it wraps to a negative number and the comparator claims a < b.

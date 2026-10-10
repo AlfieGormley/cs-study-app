@@ -60,7 +60,7 @@ M = 16 GiB ≈ 17.2 GB
 where
 k: the number of possible key values: a 32-bit integer can take 2^32 values
 M: the memory the counter array needs
-2^32: 2 multiplied by itself 32 times, 4,294,967,296
+2^32: 32 copies of 2 multiplied together, 4,294,967,296
 B: bytes; each counter here is a 4-byte integer
 GiB: gibibyte, 2^30 = 1,073,741,824 bytes
 GB: gigabyte, 1,000,000,000 bytes

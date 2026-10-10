@@ -41,7 +41,7 @@ N_rows = 2^3 = 8   for n = 3
 where
 N_rows: the number of rows in the truth table, one per input combination
 n: the number of inputs (Boolean variables)
-2^n: 2 multiplied by itself n times. Each input can be 0 or 1, and every new input doubles the number of combinations
+2^n: n copies of 2 multiplied together. Each input can be 0 or 1, and every new input doubles the number of combinations
 In words: a truth table for n inputs has 2^n rows, so three inputs need 8 rows and four need 16.
 ```
 
@@ -351,7 +351,7 @@ N_f = 2^{2^4} = 2^16 = 65536    for n = 4
 where
 N_f: the number of different Boolean functions of n inputs
 n: the number of inputs
-2^n: the number of truth-table rows (2 multiplied by itself n times)
+2^n: the number of truth-table rows (n copies of 2 multiplied together)
 2^{2^n}: 2 raised to the number of rows: each row's output is a free 0-or-1 choice
 In words: two inputs give 16 different functions (AND, OR, XOR, NAND and 12 more); four inputs already give 65,536.
 ```

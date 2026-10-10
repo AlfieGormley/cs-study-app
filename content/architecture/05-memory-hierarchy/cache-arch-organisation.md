@@ -45,7 +45,7 @@ A memory line maps to exactly **one set**, but may sit in **any way** within tha
 
 ## Splitting the address
 
-For this conventional byte-addressed, modulo-indexed model, the address is split into three fields. Mappings that hash or skew the address need different indexing rules. For an address of *m* bits:
+For this conventional byte-addressed, modulo-indexed model, the address is split into three fields. Mappings that hash or scramble the address need different indexing rules. For an address of *m* bits:
 
 ```
  |<-------------- m bits -------------->|

@@ -60,7 +60,7 @@ N_inputs = 2^3 = 8   for k = 3
 where
 N_inputs: the number of data inputs the mux chooses between
 k: the number of select lines
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 In words: each extra select line doubles the number of inputs, so an 8-to-1 mux needs 3 select lines and a 32-to-1 mux needs 5.
 ```
 
@@ -367,7 +367,7 @@ An ALU computes several operations in parallel on the same operands and uses a m
 
 ### The flags
 
-Our teaching ALU reports N/Z/C/V-style status flags. Architectures such as ARM use these; other ISAs, including base RISC-V, use different comparison mechanisms without such an architectural flag register:
+Our teaching ALU reports N/Z/C/V-style condition flags. Architectures such as ARM use these; other ISAs, including base RISC-V, use different comparison mechanisms without such an architectural flag register:
 
 | Flag | Meaning | Computed as |
 |---|---|---|

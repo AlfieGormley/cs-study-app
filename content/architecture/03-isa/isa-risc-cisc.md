@@ -15,7 +15,7 @@ An instruction is a number. The previous lesson's toy machine put the operation 
 **RISC** (reduced instruction set computer) grew from research in the 1970s and 1980s, including IBM's 801, Berkeley RISC (which led to SPARC) and Stanford MIPS. Their measurements showed compilers mostly used simple instructions anyway. So they designed ISAs that were:
 
 - **Load/store**: ordinary ALU operations use registers/immediates, with separate memory-transfer instructions. Atomic read-modify-write instructions are an important extension.
-- **Fixed-length**: often a 32-bit base encoding, simplifying boundary detection; compressed extensions are exceptions.
+- **Fixed-length encoding**: often a 32-bit base encoding, simplifying boundary detection; compressed extensions are exceptions.
 - **Register-rich**: typically a relatively large register file, reducing register spills; exact counts vary by ISA.
 - **Regular**: few formats, so the hardware is simple and easy to pipeline.
 

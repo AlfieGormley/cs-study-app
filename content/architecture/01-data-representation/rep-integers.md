@@ -14,7 +14,7 @@ Lesson 1 read a row of bits as a non-negative number. That is an **unsigned inte
 where
 x: a value an n-bit unsigned integer can hold
 n: the number of bits, here 8
-2^n: 2 multiplied by itself n times: the number of different bit patterns
+2^n: n copies of 2 multiplied together: the number of different bit patterns
 ≤: less than or equal to
 In words: the smallest unsigned value is 0 (all bits 0) and the largest is one less than the number of patterns (all bits 1), because one pattern is used up by zero.
 ```
@@ -62,7 +62,7 @@ where
 x: the signed value that the n bits represent
 n: the number of bits (8 for an 8-bit integer)
 d_{n−1}: the top bit, also called the sign bit: 0 or 1
-2^{n−1}: the weight of the top bit, 2 multiplied by itself n − 1 times; 128 for 8 bits, but subtracted instead of added
+2^{n−1}: the weight of the top bit, n − 1 copies of 2 multiplied together; 128 for 8 bits, but subtracted instead of added
 Σ: "add up" the term after it for every bit position i from 0 to n − 2, that is, every bit except the top one
 d_i: the bit (0 or 1) in position i
 i: the bit position, counted from 0 at the right
@@ -106,7 +106,7 @@ The most negative value has only the top bit set; the most positive has every bi
 where
 x: a value an n-bit two's complement integer can hold
 n: the number of bits
-2^{n−1}: 2 multiplied by itself n − 1 times: half the number of bit patterns (128 for 8 bits)
+2^{n−1}: n − 1 copies of 2 multiplied together: half the number of bit patterns (128 for 8 bits)
 ≤: less than or equal to
 In words: half of the patterns are negative and the other half are zero and the positive numbers, so the range runs from minus half the pattern count up to one less than half.
 ```

@@ -24,7 +24,7 @@ NVIDIA groups execution resources into **streaming multiprocessors** (SMs). SM c
 
 ## The programming model
 
-In CUDA you write a **GPU kernel**: a function that describes what *one* thread does. You then launch it over a **CUDA grid** of **thread blocks**.
+In CUDA you write a **GPU kernel**: a function that describes what *one* thread does. You then launch it over a **CUDA grid** of **CUDA blocks** (thread blocks).
 
 ```cpp
 #include <stddef.h>

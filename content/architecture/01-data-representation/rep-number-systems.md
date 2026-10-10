@@ -36,7 +36,7 @@ N: the value of the number
 d_i: the digit in position i; a whole number from 0 up to one less than the base
 i: the position number, counted from 0 at the right-hand end
 b: the base (radix): how many different digits the system has; 10 for decimal, 2 for binary, 16 for hexadecimal, 8 for octal
-b^i: b to the power i, meaning b multiplied by itself i times; b^0 is 1
+b^i: b to the power i, meaning i copies of b multiplied together; b^0 is 1
 In words: multiply every digit by the base raised to the power of its position, then add all the products.
 ```
 
@@ -60,7 +60,7 @@ N: the value of the bit pattern 10110101 read as an unsigned binary number (no s
 Σ: "add up" the term after it for every bit position i
 d_i: the bit (0 or 1) in position i
 i: the bit position, from 0 at the right to 7 at the left
-2^i: 2 multiplied by itself i times: the weight of position i, so 2^7 = 128 and 2^0 = 1
+2^i: i copies of 2 multiplied together: the weight of position i, so 2^7 = 128 and 2^0 = 1
 In words: add the weights of the positions that hold a 1; positions holding a 0 add nothing.
 ```
 
@@ -78,7 +78,7 @@ P = 2^n
 where
 P: the number of different bit patterns, and so the number of different values, that n bits can hold
 n: the number of bits
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 In words: n bits can be set in 2 to the power n different ways, so 8 bits give 256 patterns and 32 bits about 4.3 billion.
 ```
 

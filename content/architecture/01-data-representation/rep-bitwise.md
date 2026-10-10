@@ -90,7 +90,7 @@ M = 2^5 − 1 = 31 = 0b11111
 where
 M: a mask whose low n bits are 1 and every bit above them 0; in Python it is written (1 << n) - 1
 n: how many low bits the mask covers (not negative), here 5
-2^n: 2 multiplied by itself n times; written 1 << n in code
+2^n: n copies of 2 multiplied together; written 1 << n in code
 0b11111: the binary literal for five 1-bits (0b marks binary in Python and C23)
 In words: one less than 2 to the power n is a run of n ones, which keeps exactly the low n bits when AND-ed.
 ```
@@ -108,7 +108,7 @@ where
 <<: left shift: move every bit k places towards the top and fill the bottom k places with 0s
 x: the unsigned value being shifted
 k: the number of places to shift
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 In words: shifting left by k places multiplies by 2 to the power k, as long as no 1 bit falls off the top.
 ```
 
@@ -141,7 +141,7 @@ where
 >>: arithmetic right shift by k places: move every bit k places down, filling the top with copies of the sign bit
 x: a signed integer, here −17
 k: the number of places shifted, here 1
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 ⌊ ⌋: floor: round down to the next whole number, towards negative infinity, so ⌊−8.5⌋ = −9
 trunc: truncation: drop the fractional part, rounding towards zero; this is what C's integer / does (C99 and later)
 In words: for negative numbers the shift rounds down (−9) while division rounds towards zero (−8); for non-negative numbers both give the same answer.

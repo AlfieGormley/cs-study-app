@@ -206,7 +206,7 @@ Notice branches cost more than loads here. That is why branch prediction gets an
 ## Key takeaways
 - Structural hazards can be handled by stalling or providing more resources, such as separate instruction and data caches.
 - RAW data hazards are handled by forwarding results from pipeline registers straight to the ALU, which removes most stalls.
-- An immediate EX-stage load consumer costs one stall in this model; compilers schedule independent instructions into that slot.
+- A load followed directly by an instruction that needs its result in EX costs one stall in this model; compilers schedule independent instructions into that slot.
 - WAR and WAW are name dependences; they don't matter in an in-order 5-stage pipeline but do in out-of-order cores.
 - Control hazards cost cycles proportional to how late the branch resolves; predicting, resolving early, and (historically) delay slots reduce them.
 - In this model, CPI is 1 plus the average stall cycles per instruction; each hazard type contributes its frequency times the probability it stalls times its penalty.

@@ -46,7 +46,7 @@ N_literals = 4 − 2 = 2   for n = 4, k = 2
 where
 N_cells: the number of cells in a valid group (1, 2, 4, 8 or 16)
 k: how many variables the group eliminates
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 n: the number of input variables in the map
 N_literals: the number of literals (variables, plain or complemented) left in the group's product term
 In words: in a 4-variable map, a group of 4 cells (k = 2) leaves a 2-literal term, a pair leaves 3 literals and a group of 8 leaves just 1.

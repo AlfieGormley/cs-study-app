@@ -6,7 +6,7 @@ minutes: 15
 summary: Two ideas that make concurrent code checkable - structured concurrency, where tasks cannot outlive the block that started them, and Rust's ownership rules plus Send and Sync, which turn data races into compile errors.
 ---
 
-Every model so far has left two problems to the programmer's discipline. **Lifetimes**: a goroutine or `create_task` can outlive the code that started it, so tasks leak and errors vanish (lessons 2 and 4). **Sharing**: nothing stops two threads touching the same data unsafely (lesson 1), unless isolation rules or synchronization APIs prevent unsafe sharing.
+Every model so far has left two problems to the programmer's discipline. **Task lifetimes**: a goroutine or `create_task` can outlive the code that started it, so tasks leak and errors vanish (lessons 2 and 4). **Sharing**: nothing stops two threads touching the same data unsafely (lesson 1), unless isolation rules or synchronization APIs prevent unsafe sharing.
 
 This lesson covers two approaches to these problems. **Structured concurrency** ties every task's lifetime to a lexical block. **Rust** keeps shared memory but makes the compiler prove there are no data races.
 
@@ -102,7 +102,7 @@ try (var scope =
 
 Rust's ownership rules were designed for memory safety, but they also rule out data races. At any moment a value can have **either**:
 
-- shared references &T (which prevent ordinary mutation but can allow synchronized interior mutability), **or**
+- shared references `&T` (which prevent ordinary mutation but can allow synchronized interior mutability), **or**
 - exactly one mutable reference `&mut T`.
 
 A data race needs two accesses to the same memory, at least one a write, at the same time. Borrowing plus Send/Sync rules prevent unsynchronized conflicting access in safe Rust, assuming sound unsafe implementations underneath:
@@ -136,7 +136,7 @@ They are **auto traits**: the compiler implements them for a struct automaticall
 
 - `Rc` updates its reference count without atomic instructions; `Arc` uses atomic ones.
 - `RefCell` tracks borrows at run time with a plain counter, so two threads sharing one could both "borrow mutably".
-- Mutex<T> is Sync when T is Send, even if T is not Sync, because the lock ensures only one thread reaches the `T` at a time.
+- `Mutex<T>` is `Sync` when `T` is `Send`, even if `T` is not `Sync`, because the lock ensures only one thread reaches the `T` at a time.
 - A `MutexGuard` must be dropped (unlocking the mutex) on the thread that locked it, so it cannot be sent away.
 
 `thread::spawn` requires its closure to be `Send + 'static`, so the compiler checks every captured value:
@@ -178,7 +178,7 @@ fn main() {
 // prints 4000
 ```
 
-Compare lesson 1. There the lock and the counter were separate variables, linked only by convention. Here the counter lives **inside** the `Mutex`, and concurrent shared access uses a lock guard; exclusive access to the mutex itself also permits safe get_mut or consuming into_inner without locking. Forgetting the lock is not a bug you can write. The lock is released when the guard is dropped, at the end of the statement here.
+Compare lesson 1. There the lock and the counter were separate variables, linked only by convention. Here the counter lives **inside** the `Mutex`, and concurrent shared access uses a lock guard; exclusive access to the mutex itself also permits safe `get_mut` or consuming `into_inner` without locking. Forgetting the lock is not a bug you can write. The lock is released when the guard is dropped, at the end of the statement here.
 
 `lock()` returns a `Result` because of **poisoning**: if poisoning detects an unwinding panic while the guard is held, later lock calls return a poison error unless it is cleared; detection is advisory and has exceptions, warning that the data may be half-updated.
 
@@ -201,7 +201,7 @@ println!("{a} {b} {v:?}");
 
 The compiler checks the borrows exactly as for ordinary code: each thread has shared borrows of a different half of `v` and the only mutable borrow of its own result variable. Point both threads at `a` and it is the E0499 error from earlier. Structured lifetimes permit these non-static borrows; unscoped threads are also checked, with stricter lifetime requirements.
 
-Async Rust is less settled. `tokio::spawn` requires `'static + Send` futures, like `thread::spawn`. A sound "scoped spawn" for async is hard because a future can be dropped or leaked (`mem::forget` is safe Rust) without running to completion, so nothing guarantees the scope waits. Crates like `tokio::task::JoinSet` give partial structure: dropping the set requests task abortion but does not await cleanup; already-running spawn_blocking tasks cannot generally be aborted.
+Async Rust is less settled. `tokio::spawn` requires `'static + Send` futures, like `thread::spawn`. A sound "scoped spawn" for async is hard because a future can be dropped or leaked (`mem::forget` is safe Rust) without running to completion, so nothing guarantees the scope waits. Crates like `tokio::task::JoinSet` give partial structure: dropping the set requests task abortion but does not await cleanup; already-running `spawn_blocking` tasks cannot generally be aborted.
 
 ### What Rust does not prevent
 
@@ -230,9 +230,9 @@ Structured concurrency is orthogonal: it can be layered on any of them (TaskGrou
 ## Key takeaways
 - Structured concurrency: tasks cannot outlive their scope. The scope waits for children, cancels siblings on failure and propagates errors.
 - Python 3.11's `TaskGroup` raises an `ExceptionGroup` (caught with `except*`); `gather` can leave tasks running after an error.
-- Java's StructuredTaskScope has been in preview since JDK 21; JEP 543, checked on 2026-10-05, proposes finalization for JDK 28; Kotlin and Swift have structured scopes built in.
+- Java's `StructuredTaskScope` has been in preview since JDK 21; JEP 543, checked on 2026-10-05, proposes making it a final, permanent API in JDK 28; Kotlin and Swift have structured scopes built in.
 - Rust: aliasing XOR mutation, plus `Send` (can move to a thread) and `Sync` (`&T` is `Send`), make data races a compile error.
-- Rc is not Send or Sync; RefCell can be moved when its contents are Send but cannot be shared as Sync; `Arc<Mutex<T>>` puts the data inside the lock.
+- `Rc` is not `Send` or `Sync`; `RefCell` can be moved when its contents are `Send` but cannot be shared as `Sync`; `Arc<Mutex<T>>` puts the data inside the lock.
 - Scoped threads (Rust 1.63) let threads borrow locals because they are joined before the scope ends.
 - Rust does not prevent deadlocks, logic races or leaks.
 

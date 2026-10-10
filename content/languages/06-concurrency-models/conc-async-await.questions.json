@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. `await fetch(u1)` suspends `main` until the first response arrives: ~1 s.\n2. Only then does line 2 run and start the second fetch: another ~1 s.\n3. Same for the third: total ~3 s.\n4. The concurrent version:\n\n```python\na, b, c = await asyncio.gather(\n    fetch(u1), fetch(u2), fetch(u3))\n```\n\nAll three are in flight together, so it takes ~1 s.",
+    "workedExample": "1. `await fetch(u1)` suspends `main` until the first response arrives: ~1 s.\n2. Only then does line 2 run and start the second fetch: another ~1 s.\n3. Same for the third: total ~3 s.\n4. The concurrent version:\n\n```python\na, b, c = await asyncio.gather(\n    fetch(u1), fetch(u2), fetch(u3))\n```\n\nAll three are in flight together, so it takes ~1 s:\n\n```formula\nT_seq = d_1 + d_2 + d_3\nT_seq = 1 s + 1 s + 1 s = 3 s\nT_conc ≈ max(d_1, d_2, d_3) = 1 s\nwhere\nT_seq: total time with three awaits in a row, in seconds (s)\nT_conc: total time when all three are started first, as with `gather`, in seconds (s)\nd_1, d_2, d_3: the network wait of each fetch, about 1 s each\nmax: the largest of the values listed\n≈: approximately equal to\ns: seconds\nIn words: awaiting one at a time costs the sum of the waits; overlapping them costs about the longest single wait.\n```",
     "link": {
       "title": "Coroutines and Tasks — Python asyncio docs",
       "url": "https://docs.python.org/3/library/asyncio-task.html"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. One worker = one event loop = one thread.\n2. Each request calls a 200 ms blocking query. During it, the loop cannot run anything else.\n3. If 20 requests arrive together, they run one after another: the last completes after about 20 × 200 ms = 4 s, including its own query; queue waiting alone is about 3.8 s.\n4. Cheap endpoints on the same worker sit in the same queue, so they suffer too.\n5. Fix: make the wait yield (async driver), or move it off the loop thread (`to_thread`, a thread pool, or a sync endpoint, which FastAPI runs in a threadpool).",
+    "workedExample": "1. One worker = one event loop = one thread.\n2. Each request calls a 200 ms blocking query. During it, the loop cannot run anything else.\n3. If 20 requests arrive together, they run one after another, so the last one waits for the 19 ahead of it (worked out below).\n4. Cheap endpoints on the same worker sit in the same queue, so they suffer too.\n5. Fix: make the wait yield (async driver), or move it off the loop thread (`to_thread`, a thread pool, or a sync endpoint, which FastAPI runs in a threadpool).\n\n```formula\nT_last = n × t_q\nT_last = 20 × 200 ms = 4,000 ms = 4 s\nW_last = (n − 1) × t_q\nW_last = 19 × 200 ms = 3,800 ms = 3.8 s\nwhere\nT_last: when the last request finishes, measured from arrival\nW_last: how long the last request only queues\nn: the number of requests arriving together, 20\nt_q: the blocking query time per request, 200 ms\nms: milliseconds; 1,000 ms = 1 s\ns: seconds\nIn words: twenty 200 ms blocking queries in a row finish the last one after 4 s, 3.8 s of it spent just waiting its turn.\n```",
     "link": {
       "title": "Developing with asyncio — Python docs",
       "url": "https://docs.python.org/3/library/asyncio-dev.html"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Task 1: `100 >= 80` true. `await audit_log` suspends it.\n2. Task 2: `100 >= 80` true (nothing has subtracted yet). Suspends.\n3. Task 1 resumes: `balance = 20`.\n4. Task 2 resumes: `balance = -60`.\n\nThe check and the act are separated by an `await`, so they are not atomic. Fixes: hold an `asyncio.Lock` across check and act, or keep check-and-update together and separately define failure/retry behavior for logging.",
+    "workedExample": "1. Task 1: `100 >= 80` true. `await audit_log` suspends it.\n2. Task 2: `100 >= 80` true (nothing has subtracted yet). Suspends.\n3. Task 1 resumes: `balance = 20`.\n4. Task 2 resumes: `balance = -60`.\n\n```formula\nB_final = B_0 − a − a\nB_final = 100 − 80 − 80 = −60\nwhere\nB_final: the balance after both withdrawals\nB_0: the starting balance, 100\na: the amount each task withdraws, 80\nIn words: both tasks passed the check against 100, so both subtract 80.\n```\n\nThe check and the act are separated by an `await`, so they are not atomic. Fixes: hold an `asyncio.Lock` across check and act, or keep check-and-update together and separately define failure/retry behavior for logging.",
     "link": {
       "title": "Synchronization Primitives — Python asyncio docs",
       "url": "https://docs.python.org/3/library/asyncio-sync.html"

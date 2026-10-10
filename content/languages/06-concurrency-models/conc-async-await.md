@@ -81,6 +81,27 @@ asyncio.run(main())
 
 The first half takes two seconds: `await` means "pause *this* coroutine until the result is ready", so the second fetch does not start until the first finishes. `async` does not make code concurrent on its own; you have to start several things before awaiting them. `asyncio.gather` (or `asyncio.create_task`, or a `TaskGroup`, see lesson 6) does that.
 
+The two timings follow a simple rule. Awaiting one after another adds the waits up; starting them all first lets the waits overlap, so the total is roughly the longest single wait:
+
+```formula
+T_seq = d_1 + d_2 + … + d_n
+T_conc ≈ max(d_1, d_2, …, d_n)
+T_seq = 1 s + 1 s = 2 s
+T_conc ≈ max(1 s, 1 s, 1 s) = 1 s
+where
+T_seq: the total time when each await finishes before the next one starts, in seconds (s)
+T_conc: the total time when all the operations are started first and then awaited together, in seconds (s)
+d_1, d_2, d_n: how long the first, second and last operation spends waiting, in seconds (s); here each fetch waits 1 s, with two fetches in the sequential half of the example and three in the `gather` half
+n: how many operations there are
+…: and so on, for every operation in between
+max: the largest of the values listed
+≈: approximately equal to; a little scheduling overhead is added on top
+s: seconds
+In words: sequential awaits cost the sum of the waits, while overlapped awaits cost about the longest single wait.
+```
+
+So ten 1-second fetches take about 10 seconds awaited one by one, and about 1 second with `gather`. The rule only holds while the waits are genuinely idle time (network, timers, disk). It breaks down when a task does CPU work or blocks the thread, when the far end limits how many requests it serves at once, or when a connection pool caps how many can run.
+
 Tasks can interleave at suspension points:
 
 ```python
@@ -142,7 +163,9 @@ async def bad():
 # gather(bad(), bad()) takes ~2s, not 1s
 ```
 
-Fixes: use the async version (`asyncio.sleep`, `aiohttp`, `httpx`), push blocking work to a thread with `await asyncio.to_thread(f)`, or push CPU work to a process pool. In Node, use worker threads for CPU work. asyncio debug mode logs slow callbacks using loop.slow_callback_duration, whose default is 100 ms.
+Because `time.sleep` holds the thread, the two waits cannot overlap: the total is the sum, 1 s + 1 s = 2 s, rather than the longest single wait of 1 s.
+
+Fixes: use the async version (`asyncio.sleep`, `aiohttp`, `httpx`), push blocking work to a thread with `await asyncio.to_thread(f)`, or push CPU work to a process pool. In Node, use worker threads for CPU work. asyncio debug mode logs slow callbacks using `loop.slow_callback_duration`, whose default is 100 ms (0.1 seconds).
 
 ### Forgetting `await`
 
@@ -172,7 +195,19 @@ async def withdraw(amount):
 # -> balance == -60
 ```
 
-Both tasks check `100 >= 80` before either subtracts. Use an `asyncio.Lock` around the whole operation, or do no awaiting between check and act.
+Both tasks check `100 >= 80` before either subtracts, so both subtractions happen:
+
+```formula
+B_final = B_0 − a − a
+B_final = 100 − 80 − 80 = −60
+where
+B_final: the balance after both withdrawals have finished
+B_0: the starting balance, 100 (any currency unit)
+a: the amount each task withdraws, 80
+In words: both tasks passed the check against the old balance of 100, so both subtract 80, leaving −60 instead of refusing the second withdrawal.
+```
+
+Had the check and the subtraction run with no `await` between them, the second task would have seen a balance of 20, failed the check and left the balance at 20. Use an `asyncio.Lock` around the whole operation, or do no awaiting between check and act.
 
 ### Lost and silent tasks
 

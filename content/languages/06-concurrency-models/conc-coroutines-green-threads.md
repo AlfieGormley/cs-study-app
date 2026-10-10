@@ -137,25 +137,43 @@ M:N  (Go, Erlang, Java virtual threads)
      K1   K2       a few OS threads
 ```
 
+Read each label as a ratio of user threads to OS threads. In 1:1, every user thread gets its own OS thread. In M:1, many user threads (M of them) share one OS thread. In M:N, M user threads are spread over N OS threads, where M is usually far larger than N: a Go server might run 100,000 goroutines on 8 OS threads. (This M is just a count; Go's scheduler, below, uses the letter M for something else.)
+
 M:1 is simple but cannot use more than one core, and one blocking system call freezes everything. Early JVMs on Solaris shipped green threads like this and abandoned them for 1:1 native threads. M:N gets both cheap threads and multicore, at the cost of a sophisticated runtime.
 
 ### Go: goroutines
 
 `go f()` starts a **goroutine**. The runtime uses a small initial stack, with a 2 KiB minimum in the cited implementation that grows on demand: when a function's prologue finds too little room, the runtime allocates a stack twice the size and copies the old one over, fixing up pointers. Large counts are possible, but memory, retained state and work per goroutine still limit scale.
 
+Because each growth doubles the stack, a goroutine's stack size after a few growths is the starting size times a power of two:
+
+```formula
+S_k = S_0 × 2^k
+S_k = 2 KiB × 2^3 = 16 KiB   for k = 3
+where
+S_k: the goroutine's stack size after it has been grown k times, in kibibytes (KiB)
+S_0: the initial stack size, 2 KiB in the cited implementation
+k: the number of times the stack has been grown; each growth doubles it
+2^k: 2 multiplied by itself k times (2^3 = 2 × 2 × 2 = 8)
+KiB: kibibyte, 1,024 bytes
+In words: each growth doubles the stack, so three growths take a 2 KiB stack to 16 KiB, and a deeply recursive goroutine reaches 1 MiB after nine growths.
+```
+
+Doubling keeps the number of copies small: reaching 1 MiB (1,024 KiB) takes only nine growths, because 2 KiB doubled nine times is 1,024 KiB. Growth is not one-way: the garbage collector can shrink a stack that is mostly unused. A goroutine that never calls deeply keeps its small stack, which is why the starting size, not the maximum, decides how many goroutines fit in memory.
+
 The scheduler uses three structures, usually written **G, M, P**:
 
 - **G**: a goroutine (its stack and state).
-- **M**: an OS thread ("machine").
+- **M**: an OS thread ("machine"), not the M of M:N above.
 - **P**: a processor slot with a local run queue. There are `GOMAXPROCS` of them, with defaults based on available logical CPUs and, since Go 1.25 on Linux, container CPU limits; defaults can update as constraints change.
 
-An M must hold a P to run Gs. An idle P **steals** half the run queue of a busy one. When a goroutine reads a socket that has no data, the runtime registers it with the **netpoller** (epoll/kqueue) and parks the G; the M runs something else. When a goroutine enters a genuinely blocking system call, the M stays blocked with it, but a monitor thread (`sysmon`) hands the P to another M so the other goroutines keep running.
+An M must hold a P to run Gs. An idle P **steals** half the run queue of a busy one. When a goroutine reads a socket that has no data, the runtime adds it to the **netpoller** (epoll/kqueue) and parks the G; the M runs something else. When a goroutine enters a genuinely blocking system call, the M stays blocked with it, but a monitor thread (`sysmon`) hands the P to another M so the other goroutines keep running.
 
-Scheduling is effectively **pre-emptive**. Before Go 1.14, pre-emption relied heavily on cooperative safe points such as function prologues, so a tight loop like `for {}` could stall the garbage collector. Go 1.14 added asynchronous pre-emption on supported platforms, including a signal-based implementation on Unix.
+Scheduling is effectively **pre-emptive**. Before Go 1.14, pre-emption relied heavily on cooperative safe points such as function prologues, so a tight loop like `for {}` could stall the garbage collector. Go 1.14 added asynchronous pre-emption on supported platforms, implemented on Unix by sending the thread a signal.
 
 ### Erlang: processes
 
-Erlang's lightweight **processes** are green threads with their own small heap each (a few hundred words to start). The BEAM VM pre-empts by counting **reductions**, roughly function calls: each process gets a budget of a few thousand, then goes to the back of the queue. Reduction accounting limits ordinary Erlang execution, but long-running native functions can still block a scheduler unless designed to yield or use dirty schedulers. Lesson 5 covers what Erlang does with them.
+Erlang's lightweight **processes** are green threads with their own small heap each (a few hundred words to start). The BEAM VM pre-empts by counting **Erlang reductions**, units of work roughly equal to function calls: each process gets a budget of a few thousand, then goes to the back of the queue. Reduction accounting limits ordinary Erlang execution, but long-running native functions can still block a scheduler unless designed to yield or use dirty schedulers. Lesson 5 covers what Erlang does with them.
 
 ### Java: virtual threads
 
@@ -201,7 +219,7 @@ Hidden switch points are a double-edged sword. With `await`, you can see every p
 - **Stackless** coroutines (Python, JS, Rust, C#, Kotlin) compile to state machines: cheap, but only the top frame can suspend, which causes function colouring.
 - **Stackful** coroutines (Lua, greenlet, Go) have their own stack, so a call at any depth can suspend.
 - **Green threads** are runtime-scheduled threads. M:N runtimes (Go, Erlang, Java virtual threads) give cheap threads and multicore.
-- Go: small growable stacks (a cited minimum of 2 KiB), G-M-P scheduler, work stealing, netpoller, signal-based pre-emption since 1.14.
+- Go: small growable stacks (a cited minimum of 2 KiB), G-M-P scheduler, work stealing, netpoller, asynchronous pre-emption since 1.14.
 - Green threads need every blocking call to go through the runtime; otherwise one call blocks the carrier (pinning, unpatched C code).
 
 ## Further reading

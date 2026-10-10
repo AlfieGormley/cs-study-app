@@ -17,7 +17,7 @@ Go popularized a CSP-inspired channel style. Its slogan, from *Effective Go*, is
 In a relay, runners do not grab the baton off a shared table whenever they like. Each one runs their own leg independently, and the only interaction is the **hand-off**, where both runners must be in the zone at the same moment. Whoever holds the baton owns it.
 
 - Each runner is a **process** (in Go, a goroutine).
-- The hand-off zone is a **channel**.
+- The hand-off zone is a **CSP channel**.
 - The baton is the data. Passing it passes **ownership**: after sending a pointer, the sender should stop touching what it points to.
 
 ## Channels in Go
@@ -124,7 +124,7 @@ for a != nil || b != nil {
 
 ## Pipelines
 
-CSP's natural shape is a **pipeline**: stages connected by channels, each stage a goroutine that receives, transforms and sends.
+CSP's natural shape is a **channel pipeline**: stages connected by channels, each stage a goroutine that receives, transforms and sends.
 
 ```go
 func gen(ns ...int) <-chan int {
@@ -197,7 +197,18 @@ for r := range results {
 fmt.Println(sum)    // 30
 ```
 
-The order in which results arrive varies from run to run, but the sum is always 2 + 4 + 6 + 8 + 10 = 30. Notice who closes what: the feeder closes `jobs`; a separate goroutine closes `results` only after *every* worker has finished, because three workers share one output and none of them may close it alone.
+The order in which results arrive varies from run to run, but the sum does not, because addition gives the same total in any order:
+
+```formula
+S = 2 × 1 + 2 × 2 + 2 × 3 + 2 × 4 + 2 × 5
+S = 2 + 4 + 6 + 8 + 10 = 30
+where
+S: the value of `sum` printed once `results` is closed and drained
+2: the factor each worker applies to its job number (`j * 2`)
+In words: jobs 1 to 5 are each doubled by whichever worker takes them, and the five results add up to 30 whatever order they arrive in.
+```
+
+Notice who closes what: the feeder closes `jobs`; a separate goroutine closes `results` only after *every* worker has finished, because three workers share one output and none of them may close it alone.
 
 ## The classic leak
 
@@ -214,6 +225,27 @@ func first(urls []string) string {
 ```
 
 For a nonempty input, this receives the first response successfully handed off; scheduling can affect which fetch wins. Empty input blocks forever, so a production API must define that case. But the other goroutines then try to send on an unbuffered channel that nobody will ever read. They block forever, holding their stacks and whatever `fetch` allocated. Call `first` once per request and memory grows without bound. The runtime does not detect it: the process as a whole is not deadlocked.
+
+The growth is easy to estimate. Every call leaks all but one of its senders, and each leaked goroutine keeps at least its starting stack:
+
+```formula
+L = (u − 1) × r
+L = (4 − 1) × 1,000,000 = 3,000,000
+M ≥ L × S_0
+M ≥ 3,000,000 × 2 KiB ≈ 6.1 GB
+where
+L: the number of leaked goroutines after r calls
+u: the number of URLs passed to each call, here 4
+r: the number of calls to `first`, here an illustrative 1,000,000 (a busy service can reach that in a day)
+M: the memory held by the leaked goroutines, in gigabytes (GB)
+S_0: the minimum stack per goroutine, 2 KiB
+KiB: kibibyte, 1,024 bytes
+≥: at least; the real figure is higher, because whatever each `fetch` returned is also kept alive
+GB: gigabyte, 1,000,000,000 bytes
+In words: four URLs per call leak three goroutines per call, so a million calls strand three million goroutines and at least 6 GB of stack.
+```
+
+The estimate assumes every call gets at least one response and that no sender ever finishes another way; it is a lower bound, since it ignores the heap data each stuck goroutine still references.
 
 Fixes: give the channel room for every sender (`make(chan string, len(urls))`) so sends never block, or arrange cancellation after the first result, make each sender select on ctx.Done(), and pass that context into fetch so outstanding I/O can stop. Uber's `goleak` package checks tests for leftover goroutines.
 
@@ -238,14 +270,14 @@ Channel and mutex costs depend on contention and workload; channel implementatio
 - **occam** (1983), designed for the Inmos transputer, was CSP almost verbatim.
 - Rob Pike's Newsqueak, Alef and Limbo led directly to Go's channels.
 - **Clojure core.async** and **Kotlin** channels bring CSP to the JVM, the latter on coroutines.
-- Rust has `std::sync::mpsc` and the `crossbeam` crate. Python queue.Queue(maxsize=n) and asyncio.Queue provide bounded queues for positive n; maxsize=0 means unbounded, unlike Go's unbuffered channel. Their close/shutdown and acknowledgement APIs differ.
+- Rust has `std::sync::mpsc` and the `crossbeam` crate. Python's `queue.Queue(maxsize=n)` and `asyncio.Queue` provide bounded queues when the capacity `n` is positive; `maxsize=0` means unbounded, unlike Go's unbuffered channel. Their close/shutdown and acknowledgement APIs differ.
 
 In this Go-style comparison, channels are explicit communication endpoints and unbuffered sends rendezvous. Historical CSP formalisms vary; anonymous processes versus named channels is not a universal definition of CSP.
 
 ## Key takeaways
 - CSP: sequential processes that share nothing and interact only through channels. Go's version is goroutines plus `chan`.
 - Unbuffered channels are a rendezvous and a happens-before edge; buffered channels block only when full or empty, giving backpressure.
-- A designated owner closes after all sends finish. Closed channels drain buffered values before returning zero with ok == false; nil channels block forever, which disables a `select` case.
+- A designated owner closes after all sends finish. Closed channels drain buffered values before returning zero with `ok == false`; nil channels block forever, which disables a `select` case.
 - `select` waits on several channels, picks randomly among ready cases, and is how you add timeouts and cancellation.
 - Pipelines and worker pools are the main patterns. Plan who closes each channel.
 - Go detects only total deadlock. A goroutine blocked forever on an abandoned channel is a silent leak.

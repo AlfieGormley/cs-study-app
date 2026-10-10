@@ -18,7 +18,7 @@ When an actor processes a message, it may do only three things:
 2. **Create** new actors.
 3. Decide how to handle the **next** message (change its state or behaviour).
 
-Common actor implementations serialize message handling; reentrant variants can interleave requests while retaining serialized execution turns. Inside an actor the code is sequential, with no locks, because no one else can touch its state. Concurrency exists only *between* actors.
+Common actor implementations serialize message handling; reentrant implementations can interleave requests while retaining serialized execution turns. Inside an actor the code is sequential, with no locks, because no one else can touch its state. Concurrency exists only *between* actors.
 
 ```
   sender A --msg--+
@@ -86,8 +86,8 @@ One error-handling style is to recover locally with checks and exception handler
 
 This works because of isolation. Ordinary isolated Erlang terms are not shared writable memory. A process can still have changed external state or called unsafe native code before crashing; restarting does not undo those effects. Two primitives connect processes:
 
-- A **link** is bidirectional. If one linked process dies abnormally, an exit signal kills the other too, unless it **traps exits**, in which case it receives `{'EXIT', Pid, Reason}` as an ordinary message.
-- A **monitor** is one-way. The watcher receives `{'DOWN', Ref, process, Pid, Reason}` and is not killed.
+- An **Erlang link** is bidirectional. If one linked process dies abnormally, an exit signal kills the other too, unless it **traps exits**, in which case it receives `{'EXIT', Pid, Reason}` as an ordinary message.
+- An **Erlang monitor** is one-way. The watcher receives `{'DOWN', Ref, process, Pid, Reason}` and is not killed.
 
 ### Supervisors
 
@@ -101,7 +101,20 @@ A **supervisor** is a process that traps exits from its children and uses restar
 
 Use `one_for_one` for independent workers, `one_for_all` when children only make sense together, and `rest_for_one` when later children depend on earlier ones (a connection pool started before the workers that use it).
 
-A supervisor also has a **restart intensity**: if more than *MaxR* restarts happen within *MaxT* seconds, it gives up, kills its children and exits itself, escalating the failure to *its* supervisor. Erlang's defaults are 1 restart in 5 seconds; Elixir's are 3 in 5. Supervisors nest into a **supervision tree**, so a fault is retried locally first and only spreads upward if restarting does not fix it.
+A supervisor also has a **restart intensity**: a limit on how often it will restart children before deciding that restarting is not working. It is set by two numbers, a maximum restart count and a time window, and the supervisor gives up as soon as this condition holds:
+
+```formula
+n_R > MaxR
+n_R = 2 > MaxR = 1
+where
+n_R: the number of restarts the supervisor has made during the last MaxT seconds, a sliding window that ends now
+MaxR: the maximum number of restarts allowed in that window (Erlang's `intensity` setting); the default is 1 in Erlang and 3 in Elixir
+MaxT: the length of the window, in seconds (Erlang's `period` setting); the default is 5 seconds in both
+>: is greater than
+In words: if the restarts inside the window exceed the allowed maximum, the supervisor stops restarting, kills its remaining children and exits, escalating the failure to its own supervisor.
+```
+
+The second line is the worked case with Erlang's defaults: a child that crashes twice within 5 seconds needs a second restart, and 2 is more than the 1 allowed, so the supervisor gives up. With Elixir's defaults the same supervisor would tolerate 3 restarts in 5 seconds and give up on the fourth. Restarts older than the window stop counting, so an occasional crash every few minutes never trips the limit. Supervisors nest into a **supervision tree**, so a fault is retried locally first and only spreads upward if restarting does not fix it.
 
 ```elixir
 children = [
@@ -139,7 +152,7 @@ It is transparent in syntax, not in physics. Across a network, messages can be l
 
 For request/reply, the **ask** pattern sends a message containing a temporary reply-to address and returns a `Future` that fails after a timeout. Akka has supervision too, with a different default: in Akka Typed a failing actor is **stopped**, and you opt in to restarts by wrapping its behaviour in `Behaviors.supervise(...)`. In 2022 Akka moved to the Business Source Licence; the Apache-licensed fork is **Apache Pekko**.
 
-**Microsoft Orleans** (.NET, used for Halo's online services) introduced **virtual actors**, called *grains*. A grain is addressed by an ID and always exists logically: the runtime activates it on some server when the first message arrives and deactivates it when idle. Applications normally obtain grain references by ID and let the runtime manage activation; developers still design persistence and failure recovery, and by default each processes one request at a time. Orleans popularised the pattern for stateful cloud services; Akka's *cluster sharding* and Dapr's actors offer similar ideas.
+**Microsoft Orleans** (.NET, used for Halo's online services) introduced **virtual actors**, called *Orleans grains*. An Orleans grain is addressed by an ID and always exists logically: the runtime activates it on some server when the first message arrives and deactivates it when idle. Applications normally obtain grain references by ID and let the runtime manage activation; developers still design persistence and failure recovery, and by default each processes one request at a time. Orleans popularised the pattern for stateful cloud services; Akka's *cluster sharding* and Dapr's actors offer similar ideas.
 
 ## Where actors hurt
 
@@ -147,6 +160,23 @@ For request/reply, the **ask** pattern sends a message containing a temporary re
 - **Deadlock still exists.** If actor A `call`s B while B `call`s A, both wait for a reply that never comes. With default gen_server call timeouts and unhandled failures, a timeout or peer exit can terminate a participant; exact timing and exit reasons depend on the race.
 - **Ordering is local.** If A tells B and C, and B then tells C, C can receive B's message before A's.
 - **A hot actor is a bottleneck.** A single actor is sequential, so a hot actor (one counter for the whole system) is a bottleneck.
+
+How fast an unbounded mailbox fills is simple arithmetic: it grows by the difference between the rate messages arrive and the rate the actor handles them.
+
+```formula
+Q = (λ − μ) × t
+Q = (50,000/s − 30,000/s) × 60 s
+Q = 20,000/s × 60 s = 1,200,000
+where
+Q: the number of messages waiting in the mailbox after t seconds, starting from empty
+λ: lambda, the arrival rate: messages sent to the actor per second (/s)
+μ: mu, the service rate: messages the actor finishes handling per second (/s)
+t: how long the overload lasts, in seconds (s)
+s: seconds
+In words: while messages arrive faster than the actor can handle them, the backlog grows by the difference every second, and it never shrinks until arrivals slow below the handling rate.
+```
+
+For example, a logger receiving 50,000 events a second but writing only 30,000 a second is 1.2 million messages behind after one minute, and every one of those messages occupies memory. The formula only applies while messages arrive faster than they are handled; once arrivals fall below the handling rate, the backlog shrinks by the difference each second instead.
 
 ## Actors vs CSP
 

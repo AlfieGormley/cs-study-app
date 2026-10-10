@@ -181,7 +181,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Four goroutines start; each will send once.\n2. `first` receives one value and returns. `ch` is now unreachable from `first`, but three goroutines still hold it.\n3. Each blocks on `ch <- ...` forever: there is no receiver and the channel is unbuffered.\n4. 3 leaked goroutines per request × millions of requests = unbounded growth (stacks plus whatever `fetch` returned).\n5. With `make(chan string, 4)` every send completes into the buffer, the goroutines exit, and the channel is collected.",
+    "workedExample": "1. Four goroutines start; each will send once.\n2. `first` receives one value and returns. `ch` is now unreachable from `first`, but three goroutines still hold it.\n3. Each blocks on `ch <- ...` forever: there is no receiver and the channel is unbuffered.\n4. Three leaked goroutines per request, over millions of requests, is unbounded growth: stacks plus whatever `fetch` returned (estimate below).\n5. With `make(chan string, 4)` every send completes into the buffer, the goroutines exit, and the channel is collected.\n\n```formula\nL = (u − 1) × r\nL = (4 − 1) × 1,000,000\nL = 3,000,000\nM ≥ 3,000,000 × 2 KiB ≈ 6.1 GB\nwhere\nL: leaked goroutines after r calls\nu: URLs per call, 4\nr: calls to `first`, an illustrative 1,000,000\nM: memory the leaked goroutines hold\n≥: at least; their `fetch` results add more\nKiB: kibibyte, 1,024 bytes; 2 KiB is the minimum goroutine stack\nGB: gigabyte, 1,000,000,000 bytes\nIn words: each call strands three goroutines, so a million calls hold three million stacks, at least 6 GB.\n```",
     "link": {
       "title": "Go Concurrency Patterns: Pipelines and cancellation — The Go Blog",
       "url": "https://go.dev/blog/pipelines"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. `gen` emits 1, 2, then closes.\n2. First `add1` emits 2, 3, then closes when its input closes.\n3. Second `add1` emits 3, 4, then closes.\n4. `main` ranges over the last channel: `s = 3 + 4 = 7`, and the loop ends at the close.\n\n```\ngen -1,2-> add1 -2,3-> add1 -3,4-> main\n```",
+    "workedExample": "1. `gen` emits 1, 2, then closes.\n2. First `add1` emits 2, 3, then closes when its input closes.\n3. Second `add1` emits 3, 4, then closes.\n4. `main` ranges over the last channel, adding each value to `s`, and the loop ends at the close.\n\n```formula\ns = (x_1 + 2 × a) + (x_2 + 2 × a)\ns = (1 + 2 × 1) + (2 + 2 × 1)\ns = 3 + 4 = 7\nwhere\ns: the total `main` prints\nx_1, x_2: the two values `gen` emits, 1 and 2\na: the amount one `add1` stage adds, 1\n2: the number of `add1` stages each value passes through\nIn words: each input gains 2 from two stages, so 1 and 2 become 3 and 4, which sum to 7.\n```\n\n```\ngen -1,2-> add1 -2,3-> add1 -3,4-> main\n```",
     "link": {
       "title": "Go Concurrency Patterns: Pipelines and cancellation — The Go Blog",
       "url": "https://go.dev/blog/pipelines"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Closed channel: every receive succeeds immediately with zero value and `ok == false`.\n2. So the `a` case is *always* ready.\n3. `select` with a ready case never blocks; `continue` loops straight back.\n4. Result: a hot loop that burns a core while waiting for `b`.\n5. Fix: `if !ok { a = nil; continue }`. A receive on a nil channel is never ready, so `select` now blocks on `b` alone. Loop while `a != nil || b != nil`.",
+    "workedExample": "1. Closed channel: every receive succeeds immediately with zero value and `ok == false`.\n2. So the `a` case is *always* ready.\n3. `select` with a ready case never blocks; `continue` loops straight back.\n4. Result: a busy loop that burns a core while waiting for `b`.\n5. Fix: `if !ok { a = nil; continue }`. A receive on a nil channel is never ready, so `select` now blocks on `b` alone. Loop while `a != nil || b != nil`.",
     "link": {
       "title": "The Go Programming Language Specification: Select statements",
       "url": "https://go.dev/ref/spec#Select_statements"

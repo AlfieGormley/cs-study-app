@@ -56,7 +56,22 @@ for t in ts: t.join()
 print(counter)
 ```
 
-You would hope for 4000. It can print less than 4000. sleep(0) increases opportunities for interleaving but does not guarantee a lost update or a different result on every run.
+You would hope for 4000: every increment that survives adds exactly one, so the right answer is the number of threads times the increments each makes. Every update that gets overwritten takes one off that total:
+
+```formula
+C_expected = T × k
+C_expected = 4 × 1000 = 4000
+C_printed = C_expected − L
+where
+C_expected: the final value of the counter if no update is ever lost
+T: the number of threads, here 4
+k: the number of increments each thread performs, here 1,000
+C_printed: the value the program actually prints
+L: the number of lost updates: increments whose effect was wiped out because another thread wrote back a value computed from an older read
+In words: four threads adding one a thousand times each should leave 4,000, and every lost update makes the printed number one smaller.
+```
+
+For example, if 37 increments are lost on one run, the program prints 3,963. So it can print less than 4000, and the shortfall varies: `time.sleep(0)` increases opportunities for interleaving but does not guarantee a lost update or a different result on every run.
 
 The problem is that "add one" is really three steps: **read, modify, write**. If two threads interleave those steps, one update overwrites the other:
 
@@ -69,7 +84,7 @@ write 8                           8
                   (one lost)
 ```
 
-Even counter += 1 is conceptually read-modify-write; its exact CPython bytecode and interruption points depend on version and operand behavior. It often *happens* to give the right answer on a GIL build, but nothing guarantees it. Java can lose updates without synchronization. In C, a data race on a non-atomic counter is undefined behavior, so enumerating load/store interleavings is not a complete language-level model.
+Even `counter += 1` is conceptually read-modify-write; its exact CPython bytecode and interruption points depend on version and operand behavior. It often *happens* to give the right answer on a GIL build, but nothing guarantees it. Java can lose updates without synchronization. In C, a data race on a non-atomic counter is undefined behavior, so enumerating load/store interleavings is not a complete language-level model.
 
 > [!note] Race condition vs data race
 > A **race condition** is any bug where the result depends on timing, like the lost update. A **data race** is narrower: potentially concurrent conflicting accesses lack the required happens-before ordering, with language-specific atomic-access exceptions. They need not occur at exactly the same physical instant. Languages define the second precisely, because it decides whether your program has any meaning at all.
@@ -104,7 +119,7 @@ C++ has `std::atomic<int>`, Go has `sync/atomic`, Rust has `AtomicUsize`. Python
 
 ## Visibility: the bug that is not about interleaving
 
-Locks are not only about taking turns. They are also about **visibility**: making one thread's writes visible to another.
+Locks are not only about taking turns. They are also about **memory visibility**: making one thread's writes visible to another.
 
 ```java
 class Worker {
@@ -164,7 +179,7 @@ The rest of this module is, in a sense, a tour of escape routes. Single-thread e
 ## Key takeaways
 - Threads share the heap; each has its own stack. Sharing is fast but coordination is the programmer's job.
 - `x += 1` is read-modify-write, not atomic. Interleaving loses updates; use a lock or an atomic.
-- Locks provide **mutual exclusion** and **visibility**. Without them, compilers and CPUs may hide or reorder writes.
+- Locks provide **mutual exclusion** and **memory visibility**. Without them, compilers and CPUs may hide or reorder writes.
 - A memory model defines **happens-before**. Java and Go provide DRF-SC; C++ also requires suitable synchronization restrictions for the simple SC model.
 - Data races are undefined behaviour in C/C++, subject to weaker guarantees in Java, and prevented by safe Rust under sound implementation assumptions.
 - CPython's GIL stops CPU-bound threads running in parallel but does not make your code race-free; a free-threaded build now exists.

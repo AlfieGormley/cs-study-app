@@ -228,7 +228,7 @@
       },
       {
         "text": "The second crash within 5 seconds exceeds the limit, so the supervisor terminates its children and exits, escalating to its own supervisor",
-        "explanation": "Correct. More than MaxR restarts within MaxT seconds makes the supervisor give up and pass the failure upward."
+        "explanation": "Correct. More restarts than the allowed maximum (1) within the period (5 seconds) makes the supervisor give up and pass the failure upward."
       },
       {
         "text": "The supervisor waits 5 seconds between restarts",
@@ -240,7 +240,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Crash 1 at t = 0.1 s: restarts in window = 1, allowed (1 ≤ MaxR = 1).\n2. Crash 2 at t ≈ 0.2 s: this would be the 2nd restart within 5 s, more than MaxR.\n3. The supervisor kills its remaining children and exits with reason `shutdown`.\n4. Its parent supervisor sees a child exit and applies *its* strategy and intensity.\n5. If the bug persists, the failure climbs the tree until the application stops: a loud, visible failure instead of a silent busy loop.",
+    "workedExample": "1. Crash 1 at about 0.1 s: one restart in the window, which is allowed.\n2. Crash 2 at about 0.2 s: this would be the second restart within 5 s, more than the maximum (the check is below).\n3. The supervisor kills its remaining children and exits with reason `shutdown`.\n4. Its parent supervisor sees a child exit and applies *its* strategy and intensity.\n5. If the bug persists, the failure climbs the tree until the application stops: a loud, visible failure instead of a silent busy loop.\n\n```formula\nn_1 = 1 ≤ MaxR = 1\nn_2 = 2 > MaxR = 1\nwhere\nn_1: restarts in the last 5 s after crash 1\nn_2: restarts in the last 5 s after crash 2\nMaxR: the most restarts allowed per window: 1 by default in Erlang\n≤: is at most (still allowed)\n>: is greater than (limit exceeded)\nIn words: the first restart fits the budget of one per 5 seconds; the second exceeds it, so the supervisor gives up.\n```",
     "link": {
       "title": "supervisor — Erlang stdlib documentation",
       "url": "https://www.erlang.org/doc/apps/stdlib/supervisor.html"
@@ -270,7 +270,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Say events arrive at 50,000/s and the logger handles 30,000/s.\n2. The mailbox grows by 20,000 messages per second, all retained by the logger's message queue (which can store messages off heap).\n3. Nothing pushes back: local send completion is not an acknowledgement that the logger processed the event.\n4. Options:\n   - `gen_server:call` makes each handler wait for its event to be accepted, capping the rate.\n   - Batch writes so the logger's throughput rises.\n   - Drop or sample when the queue is long (Erlang's own `logger` has overload protection that does this).\n   - Shard across several loggers.",
+    "workedExample": "1. Say events arrive at 50,000/s and the logger handles 30,000/s.\n2. The mailbox grows by the difference, 20,000 messages per second (worked out below), all retained by the logger's message queue (which can store messages off heap).\n3. Nothing pushes back: local send completion is not an acknowledgement that the logger processed the event.\n4. Options:\n   - `gen_server:call` makes each handler wait for its event to be accepted, capping the rate.\n   - Batch writes so the logger's throughput rises.\n   - Drop or sample when the queue is long (Erlang's own `logger` has built-in protection that does this when it falls behind).\n   - Shard across several loggers.\n\n```formula\ng = λ − μ\ng = 50,000/s − 30,000/s = 20,000/s\nQ = g × t\nQ = 20,000/s × 60 s = 1,200,000\nwhere\ng: how fast the mailbox grows, in messages per second (/s)\nλ: lambda, the arrival rate, 50,000 events per second\nμ: mu, the logger's handling rate, 30,000 per second\nQ: messages queued after t seconds\nt: how long the spike lasts, here an illustrative 60 s\ns: seconds\nIn words: arrivals outrun handling by 20,000 a second, so one minute leaves 1.2 million messages queued in memory.\n```",
     "link": {
       "title": "Concurrent Programming — Erlang system documentation",
       "url": "https://www.erlang.org/doc/system/conc_prog.html"

@@ -8,7 +8,7 @@ summary: How one instruction can process 4, 8 or 16 values at once with SSE, AVX
 
 Adding two arrays of a million floats takes a million additions. A scalar core does them one per instruction. But the adder hardware is cheap compared with the cost of fetching, decoding and scheduling an instruction. So CPU designers asked: why not make one instruction do *several* additions?
 
-That is **SIMD** (single instruction, multiple data). Registers become wide **vectors** holding several values, called **lanes**, and one instruction operates on all lanes at once.
+That is **SIMD** (single instruction, multiple data). Each register becomes a wide **vector register** holding several values side by side, called **SIMD lanes**, and one instruction operates on all lanes at once.
 
 ```
 256-bit AVX register: 8 x float32
@@ -28,9 +28,22 @@ One instruction, eight results. The possible speedup depends on instruction thro
 | AVX / AVX2 | 256 bits | AVX2 adds many 256-bit integer operations |
 | AVX-512 | Up to 512 bits | Feature subsets differ; also supports masking |
 | NEON / Advanced SIMD | 128 bits | Arm implementations that support this extension |
-| SVE / SVE2 | 128–2048 bits | In 128-bit increments; target support required |
+| SVE / SVE2 | 128–2048 bits | A power of two (128, 256, 512, 1024 or 2048); early specifications allowed any multiple of 128. Target support required |
 
-How many lanes you get depends on element size:
+How many lanes you get depends on how wide the register is and how wide each element is:
+
+```formula
+L = W_reg / W_elem
+L = 256 bits / 32 bits = 8
+where
+L: the number of lanes: how many elements one vector register holds side by side
+W_reg: the width of the vector register, in bits; 128, 256 or 512 on x86
+W_elem: the width of one element, in bits: 32 for float32, 64 for float64, 8 for int8
+bits: binary digits, the unit of register and element width
+In words: a register holds as many elements as fit in its width, so a 256-bit AVX register holds eight 32-bit floats.
+```
+
+The full table:
 
 | Width | float32 | float64 | int8 |
 |---|---|---|---|
@@ -38,15 +51,59 @@ How many lanes you get depends on element size:
 | 256 | 8 | 4 | 32 |
 | 512 | 16 | 8 | 64 |
 
-Some notable details:
+**FMA** (fused multiply-add) is one instruction that multiplies two numbers and adds a third, rounding only once at the end:
 
-- **FMA** computes `a × b + c` with one rounding. Counting a multiply and add as two FLOPs can double the arithmetic rate *if* FMA has the same lane count and sustained issue rate as the compared add-only instructions.
+```formula
+d = a × b + c
+where
+d: the result written to each lane
+a: the first number being multiplied
+b: the second number being multiplied
+c: the number added to the product
+In words: multiply two values and add a third in one step, with a single rounding instead of one after the multiply and another after the add.
+```
+
+Counting the multiply and the add as two FLOPs (floating-point operations) can double the arithmetic rate *if* FMA has the same lane count and sustained issue rate as the compared add-only instructions.
+
+Some other notable details:
 - **AVX-512** provides eight mask registers (`k0`–`k7`); ordinary EVEX writemasking uses `k1`–`k7`, with a zero mask-field encoding meaning no writemask. Masked operations can help with loop tails and conditionals.
 - **SVE** permits vector-length-agnostic programs: correctly written code can adapt to different supported vector lengths without recompilation. Merely using SVE does not make every algorithm independent of vector length.
 
 ### Peak throughput
 
-A hypothetical core sustaining two 256-bit float32 FMAs per cycle delivers 2 × 8 × 2 = **32 FLOPs per cycle**. At a sustained 3 GHz that is 96 GFLOP/s. A hypothetical scalar baseline sustaining one add per cycle delivers 3 GFLOP/s; this compares different operations and assumes the stated throughput. Real peak and useful performance require target-specific instruction and memory measurements.
+A chip's theoretical peak arithmetic rate multiplies four things together: how many cores it has, how fast each clock ticks, how many vector instructions each core can start per cycle, and how much arithmetic each of those instructions does:
+
+```formula
+F_cyc = N_u × L × F_op
+F_peak = N_c × f_clk × F_cyc
+where
+F_cyc: floating-point operations (FLOPs) one core can complete per clock cycle
+N_u: the number of vector arithmetic units in a core that can each start an instruction every cycle
+L: the number of lanes per vector instruction
+F_op: FLOPs per lane per instruction: 2 for an FMA (a multiply and an add), 1 for a plain add or multiply
+F_peak: the peak rate of the whole chip, in FLOPs per second (FLOP/s)
+N_c: the number of CPU cores
+f_clk: the sustained clock frequency, in hertz (Hz), that is cycles per second
+In words: peak FLOP rate is cores times cycles per second times the FLOPs each core can do per cycle, and that last figure is units times lanes times FLOPs per instruction.
+```
+
+A hypothetical single core sustaining two 256-bit float32 FMAs per cycle at 3 GHz:
+
+```formula
+F_cyc = 2 × 8 × 2 = 32
+F_peak = 1 × 3 × 10^9 Hz × 32 FLOP
+F_peak = 96 × 10^9 FLOP/s = 96 GFLOP/s
+where
+F_cyc: FLOPs per cycle per core: 2 FMA units × 8 float32 lanes × 2 FLOPs per FMA
+F_peak: the peak rate, in FLOPs per second
+Hz: hertz, one cycle per second; 3 GHz is 3 × 10^9 Hz
+FLOP: one floating-point operation
+FLOP/s: floating-point operations per second
+GFLOP/s: gigaFLOPs per second, 10^9 FLOP/s
+In words: 32 FLOPs per cycle at 3 billion cycles a second is 96 billion FLOPs a second.
+```
+
+A hypothetical scalar baseline sustaining one add per cycle delivers 3 GFLOP/s; this compares different operations and assumes the stated throughput. Real peak and useful performance require target-specific instruction and memory measurements.
 
 ## Writing SIMD by hand: intrinsics
 
@@ -72,7 +129,24 @@ void add(float *a, const float *b,
 
 Precondition: each pointer provides at least n valid floats; the output range does not overlap either input range. The two read-only input ranges may overlap. Compile for an AVX-capable execution environment. These explicit intrinsics do not insert a scalar fallback for unsafe overlap.
 
-Note the two loops. The main loop handles eight elements per iteration; the **tail** loop handles the leftover n mod 8 elements. `loadu` means "unaligned load"; its performance depends on the target, alignment, cache-line and page boundaries.
+Note the two loops. The main loop handles eight elements per iteration; the **tail loop** handles whatever is left over when n is not a multiple of 8:
+
+```formula
+N_vec = ⌊n / 8⌋
+N_tail = n mod 8
+N_vec = ⌊1003 / 8⌋ = 125
+N_tail = 1003 mod 8 = 3
+where
+n: the number of array elements; 1003 in the example
+N_vec: the number of main-loop iterations, each handling 8 elements
+N_tail: the number of elements the scalar tail loop handles, from 0 to 7
+⌊ ⌋: floor: round down to a whole number
+mod: the remainder after whole-number division (1003 = 125 × 8 + 3)
+8: the lane count of a 256-bit AVX register holding 32-bit floats
+In words: 1,003 floats need 125 full eight-lane iterations, and the tail loop finishes the last 3 one at a time.
+```
+
+`loadu` means "unaligned load"; its performance depends on the target, alignment, cache-line and page boundaries.
 
 The NEON version looks the same with different names: `float32x4_t`, `vld1q_f32`, `vaddq_f32`, `vst1q_f32`, four lanes at a time.
 
@@ -84,7 +158,7 @@ Ask the compiler what it did: `-fopt-info-vec-missed` (GCC) or `-Rpass-missed=lo
 
 ### What blocks vectorisation
 
-**1. Possible aliasing.** In a scalar array-add loop, if `a` overlaps `b` shifted by one element, one iteration may feed the next. A compiler needs a safe transformation, potentially using a runtime overlap check. The manual kernel above instead requires disjoint output. C's `restrict` can express exclusive access to modified objects through the relevant pointer; two read-only inputs may still alias:
+**1. Possible aliasing.** In a scalar array-add loop, if `a` overlaps `b` shifted by one element, one iteration may feed the next. A compiler needs a safe transformation, potentially using a runtime overlap check. The manual compute kernel above instead requires disjoint output. C's `restrict` can express exclusive access to modified objects through the relevant pointer; two read-only inputs may still alias:
 
 ```c
 void add(float *restrict a,
@@ -112,7 +186,7 @@ for (i = 0; i < n; i++)
 
 Simple conditionals vectorise well. Complicated ones, or ones calling functions, usually do not.
 
-**5. Non-contiguous memory.** Contiguous access is convenient for vector loads. Strided or indexed access may use scalar loads, wider loads with shuffles, or **gather** instructions when supported. Relative cost depends on the target, addresses and cache behaviour.
+**5. Non-contiguous memory.** Contiguous access is convenient for vector loads. Strided or indexed access may use scalar loads, wider loads with shuffles, or **gather instructions** when supported. Relative cost depends on the target, addresses and cache behaviour.
 
 ### Data layout: structure of arrays
 
@@ -127,7 +201,7 @@ To update all `x` coordinates, AoS needs strided access; **structure of arrays**
 
 ## SIMD in the real world
 
-Numeric libraries can combine compiled loops, CPU dispatch and SIMD. NumPy supports baseline and dispatch kernels selected for supported CPU features; use of a SIMD path depends on the operation, dtype, layout, build and runtime environment. Avoiding Python interpreter overhead is a separate benefit.
+Numeric libraries can combine compiled loops, CPU dispatch and SIMD. NumPy supports baseline and dispatch compute kernels selected for supported CPU features; use of a SIMD path depends on the operation, dtype, layout, build and runtime environment. Avoiding Python interpreter overhead is a separate benefit.
 
 ```python
 import numpy as np

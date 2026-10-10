@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Lanes = register width / element width.\n\n```\n256 / 32 = 8 float32\n256 / 64 = 4 float64\n256 / 8  = 32 int8\n```\n\nSo one `vaddps` on `ymm` registers performs 8 single-precision additions.",
+    "workedExample": "The lane count is the register width divided by the element width:\n\n```formula\nL = W_reg / W_elem\nL = 256 bits / 32 bits = 8\nwhere\nL: the number of lanes: elements held side by side in one register\nW_reg: the register width, in bits; 256 for a ymm register\nW_elem: the element width, in bits; 32 for a float32\nbits: binary digits\nIn words: eight 32-bit floats fill a 256-bit register.\n```\n\nThe same register holds 256 / 64 = 4 float64 values or 256 / 8 = 32 int8 values. So one `vaddps` on `ymm` registers performs 8 single-precision additions.",
     "link": {
       "title": "Advanced Vector Extensions — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Advanced_Vector_Extensions"
@@ -33,7 +33,7 @@
     "id": "par-simd-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "A vectorised loop processes 8 elements per iteration. The compiler also emits a second, scalar loop after it. What is that second loop for?",
+    "prompt": "A vectorised loop over n array elements processes 8 elements per iteration. The compiler also emits a second, scalar loop after it. What is that second loop for?",
     "options": [
       {
         "text": "To check the vector results are correct",
@@ -41,7 +41,7 @@
       },
       {
         "text": "To handle the leftover elements when n is not a multiple of 8",
-        "explanation": "Correct. This is the tail (or remainder, or epilogue) loop. With n = 1003 it runs 3 times."
+        "explanation": "Correct. This is the tail loop, also called a remainder loop or epilogue loop. With n = 1003 it runs 3 times."
       },
       {
         "text": "To process elements whose addresses are unaligned",
@@ -49,11 +49,11 @@
       },
       {
         "text": "It is dead code left over from optimisation",
-        "explanation": "It is essential: without it, the last n mod 8 elements would never be computed."
+        "explanation": "It is essential: without it, the last few elements (the remainder when n is divided by 8) would never be computed."
       }
     ],
     "answer": 1,
-    "workedExample": "The vector loop runs while at least 8 elements remain:\n\n```\n/* vector: 8 at a time */\nfor (; n - i >= 8; i += 8) ...\n/* tail: leftovers */\nfor (; i < n; i++) ...\n```\n\nThe tail mops up the remainder. AVX-512 mask registers and ARM SVE predicates let compilers instead run one final masked vector iteration with only some lanes switched on.",
+    "workedExample": "The vector loop runs while at least 8 elements remain:\n\n```c\n/* vector: 8 at a time */\nfor (; n - i >= 8; i += 8) ...\n/* tail: leftovers */\nfor (; i < n; i++) ...\n```\n\nThe tail mops up the remainder:\n\n```formula\nN_tail = n mod 8\nN_tail = 1003 mod 8 = 3\nwhere\nN_tail: the number of elements the scalar tail loop handles, 0 to 7\nn: the number of array elements; 1003 in the example\nmod: the remainder after whole-number division (1003 = 125 × 8 + 3)\nIn words: whatever does not fill a final group of eight is left to the tail loop.\n```\n\nAVX-512 mask registers and ARM SVE predicates let compilers instead run one final masked vector iteration with only some lanes switched on.",
     "link": {
       "title": "Single instruction, multiple data — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Single_instruction,_multiple_data"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Peak FLOPs per cycle = units × lanes × FLOPs per instruction.\n\n```\nadd only: 2 units x 8 lanes x 1 = 16\nwith FMA: 2 units x 8 lanes x 2 = 32\n```\n\nMatrix multiply and dot products are naturally multiply-then-add, so they can use FMA for almost every operation.",
+    "workedExample": "Peak FLOPs per cycle multiply the number of units, the lanes per instruction and the FLOPs each lane does:\n\n```formula\nF_cyc = N_u × L × F_op\nF_add = 2 × 8 × 1 = 16\nF_fma = 2 × 8 × 2 = 32\nwhere\nF_cyc: floating-point operations (FLOPs) per clock cycle\nN_u: vector units that can each start an instruction every cycle; 2 here\nL: lanes per instruction; 8 float32 lanes in 256 bits\nF_op: FLOPs per lane per instruction: 1 for an add, 2 for an FMA (multiply and add)\nF_add: FLOPs per cycle using adds only\nF_fma: FLOPs per cycle using FMAs\nIn words: the same instruction rate with twice the work per instruction doubles the peak.\n```\n\nMatrix multiply and dot products are naturally multiply-then-add, so they can use FMA for almost every operation.",
     "link": {
       "title": "Advanced Vector Extensions — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Advanced_Vector_Extensions"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Build it up:\n\n```\nlanes    = 512 / 32    = 16\nper FMA  = 16 x 2      = 32 FLOP\nper core = 2 x 32      = 64 FLOP/cyc\nchip     = 4 x 64      = 256 FLOP/cyc\npeak     = 256 x 2.5e9 = 640 GFLOP/s\n```\n\nThis is an arithmetic ceiling. Approaching it requires enough independent FMAs and data supply while sustaining the stated clock; other instructions may issue concurrently.",
+    "workedExample": "Build it up from one lane to the whole chip:\n\n```formula\nL = 512 / 32 = 16\nF_cyc = N_u × L × F_op\nF_cyc = 2 × 16 × 2 = 64\nF_peak = N_c × f_clk × F_cyc\nF_peak = 4 × 2.5 × 10^9 Hz × 64\nF_peak = 640 × 10^9 FLOP/s\nwhere\nL: float32 lanes in a 512-bit register\nF_cyc: FLOPs per cycle per core\nN_u: FMA units per core; 2\nF_op: FLOPs per FMA lane; 2 (multiply and add)\nF_peak: the chip's peak, in FLOPs per second\nN_c: the number of cores; 4\nf_clk: the clock frequency, in hertz (Hz); 2.5 GHz = 2.5 × 10^9 Hz\nHz: hertz, cycles per second\nFLOP/s: floating-point operations per second; 640 × 10^9 FLOP/s = 640 GFLOP/s\nIn words: 64 FLOPs per cycle per core, times 4 cores, times 2.5 billion cycles a second, is 640 GFLOP/s.\n```\n\nThis is an arithmetic ceiling. Approaching it requires enough independent FMAs and data supply while sustaining the stated clock; other instructions may issue concurrently.",
     "link": {
       "title": "Advanced Vector Extensions — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Advanced_Vector_Extensions"
@@ -181,7 +181,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Compare the orders:\n\n```\nscalar: ((((x0+x1)+x2)+x3)+...)\nvector: lane k sums x[k], x[k+8], ...\n        then add 8 partial sums\n```\n\nMathematically identical, but each floating-point addition rounds, so a different order can give a substantially different result. A tiny example: (1e20 + −1e20) + 1 = 1, but 1e20 + (−1e20 + 1) = 0 in float32. Any reassociation must be allowed by the numerical contract.",
+    "workedExample": "Compare the orders:\n\n```formula\ns_seq = ((x[0] + x[1]) + x[2]) + …\nP_k = x[k] + x[k + 8] + x[k + 16] + …\ns_vec = Σ P_k   for k = 0 to 7\nwhere\ns_seq: the scalar sum, added strictly left to right\nx: the array being summed; x[0] is its first element\nP_k: the partial sum kept in lane k\nk: the lane number, 0 to 7\ns_vec: the vectorised sum: the eight partial sums added at the end\nΣ: sum of: add up the terms for every listed value of k\n…: and so on, to the end of the array\nIn words: the vector version adds the same numbers in a different order, eight interleaved running totals combined at the end.\n```\n\nMathematically identical, but each floating-point addition rounds, so a different order can give a substantially different result. A tiny example: (1e20 + −1e20) + 1 = 1, but 1e20 + (−1e20 + 1) = 0 in float32. Any reassociation must be allowed by the numerical contract.",
     "link": {
       "title": "Auto-vectorization in LLVM",
       "url": "https://llvm.org/docs/Vectorizers.html"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Why aliasing matters:\n\n1. Suppose a == b + 1.\n2. Then a[i] = b[i] * 2 writes b[i+1].\n3. Iteration i + 1 must read that new value. Loading 8 of b at once would read stale values.\n\nWith `float *restrict a, float *restrict b` you promise no overlap, so vectorising is safe. (Compilers sometimes emit a runtime overlap check instead, but the promise must be true for every call; adding it to an overlapping call introduces undefined behaviour.)",
+    "workedExample": "Why aliasing matters:\n\n1. Suppose `a == b + 1`.\n2. Then `a[i] = b[i] * 2` writes `b[i+1]`.\n3. Iteration i + 1 must read that new value. Loading 8 of b at once would read stale values.\n\nWith `float *restrict a, float *restrict b` you promise no overlap, so vectorising is safe. (Compilers sometimes emit a runtime overlap check instead, but the promise must be true for every call; adding it to an overlapping call introduces undefined behaviour.)",
     "link": {
       "title": "Automatic vectorization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Automatic_vectorization"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Divide with remainder:\n\n```\n1003 // 8 = 125  vector iterations\n1003 %  8 = 3    tail iterations\n125 x 8 + 3 = 1003  check\n```\n\nWith `for (; n - i >= 8; i += 8)`, the last vector iteration starts at i = 992 (992 + 8 = 1000 ≤ 1003). Then i = 1000, and 1008 > 1003, so the tail handles 1000, 1001, 1002.",
+    "workedExample": "Divide with remainder:\n\n```formula\nN_vec = ⌊n / 8⌋ = ⌊1003 / 8⌋ = 125\nN_tail = n mod 8 = 1003 mod 8 = 3\n125 × 8 + 3 = 1003\nwhere\nn: the number of elements; 1003\nN_vec: the number of vector iterations, 8 elements each\nN_tail: the number of scalar tail iterations\n⌊ ⌋: floor: round down to a whole number\nmod: the remainder after whole-number division\nIn words: 125 full groups of eight cover 1,000 elements, and the tail does the last 3.\n```\n\nWith `for (; n - i >= 8; i += 8)`, the last vector iteration starts at `i = 992` (992 + 8 = 1000, which is at most 1003). Then `i = 1000`, and 1008 is more than 1003, so the tail handles 1000, 1001, 1002.",
     "link": {
       "title": "Single instruction, multiple data — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Single_instruction,_multiple_data"
@@ -251,7 +251,7 @@
     "id": "par-simd-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "For disjoint cold arrays of 100 million float32 values, an AVX2 array-add kernel is only 1.1× faster than the scalar version. Measurements show both runs nearly saturate sustained DRAM bandwidth and neither has a substantial frequency drop. What best explains the small gain?",
+    "prompt": "For disjoint cold arrays of 100 million float32 values, an AVX2 array-add compute kernel is only 1.1× faster than the scalar version. Measurements show both runs nearly saturate sustained DRAM bandwidth and neither has a substantial frequency drop. What best explains the small gain?",
     "options": [
       {
         "text": "Memory bandwidth limits the loop: each element requires two input loads and an output store, potentially plus write-allocation traffic",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Useful traffic is 12 bytes per element. In a cold write-back/write-allocate model with a read-for-ownership and eventual output writeback, count 16 DRAM bytes per element instead. At a hypothetical sustained 50 GB/s, 1.6 GB requires at least 32 ms and bounds useful additions at 3.125 GFLOP/s. This is a traffic bound, not proof that an arbitrary scalar loop reaches it; the prompt supplies the bandwidth measurements. Non-temporal stores or existing cached output can change the model.",
+    "workedExample": "Count bytes, then divide by bandwidth:\n\n```formula\nD = 10^8 × 16 B = 1.6 × 10^9 B\nt_min = D / R\nt_min = 1.6 × 10^9 B / (50 × 10^9 B/s)\nt_min = 0.032 s = 32 ms\nP_max = 10^8 FLOP / 0.032 s\nP_max ≈ 3.125 × 10^9 FLOP/s\nwhere\nD: total DRAM traffic, in bytes (B): 100 million elements × 16 bytes each (4 + 4 read, 4 read-for-ownership, 4 written back)\nt_min: the shortest possible run time at full bandwidth, in seconds (s)\nR: the sustained bandwidth; a hypothetical 50 GB/s = 50 × 10^9 B/s\nP_max: the highest useful addition rate this traffic allows\nB: byte\ns: second\nms: millisecond, 0.001 s\nFLOP: one floating-point operation (one addition here)\n≈: approximately equal to\nIn words: moving 1.6 GB at 50 GB/s takes at least 32 ms whatever the arithmetic does, which caps the loop at about 3 billion additions a second.\n```\n\nUseful traffic is only 12 bytes per element; the extra 4 is the write-allocate read. This is a traffic bound, not proof that an arbitrary scalar loop reaches it; the prompt supplies the bandwidth measurements. Non-temporal stores or existing cached output can change the model.",
     "link": {
       "title": "Single instruction, multiple data — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Single_instruction,_multiple_data"
@@ -289,7 +289,7 @@
       },
       {
         "text": "Build for a baseline such as x86-64 (SSE2) and add runtime dispatch, so hot functions are also compiled for AVX2 and selected after checking all required CPU and OS register-state features",
-        "explanation": "Correct. A supported multiversioning or dispatch mechanism can select a compatible kernel while the rest of the binary retains its baseline requirements."
+        "explanation": "Correct. A supported multiversioning or dispatch mechanism can select a compatible compute kernel while the rest of the binary retains its baseline requirements."
       },
       {
         "text": "Use `-march=native` on your build machine",
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Compile baseline code for the oldest supported environment and specialised kernels separately. Dispatch only after checking every required extension and OS-enabled register state; AVX requires more than its CPUID feature bit. Test both fallback and accelerated paths. Feature-level names and -march targets may include instructions beyond AVX2 alone.",
+    "workedExample": "Compile baseline code for the oldest supported environment and specialised compute kernels separately. Dispatch only after checking every required extension and OS-enabled register state; AVX requires more than its CPUID feature bit. Test both fallback and accelerated paths. Feature-level names and -march targets may include instructions beyond AVX2 alone.",
     "link": {
       "title": "Advanced Vector Extensions — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Advanced_Vector_Extensions"
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Amdahl's law applies to any partial speedup:\n\n```\nS = 1 / ((1 - f) + f / k)\n  = 1 / (0.3 + 0.7 / 8)\n  = 1 / (0.3 + 0.0875)\n  = 1 / 0.3875\n  ~ 2.58\n```\n\nEven infinite vector width would only give 1 / 0.3 ≈ 3.3×. To go further, look at the remaining 30%.",
+    "workedExample": "Amdahl's law applies to any partial speedup:\n\n```formula\nS = 1 / ((1 − f) + f / k)\nS = 1 / (0.3 + 0.7 / 8)\nS = 1 / (0.3 + 0.0875) = 1 / 0.3875\nS ≈ 2.58\nwhere\nS: the overall speedup of the program\nf: the fraction of time in the vectorised loop; 0.7\nk: how many times faster the loop becomes; 8\n≈: approximately equal to\nIn words: an 8× faster loop that is 70% of the time makes the whole program only about 2.6× faster.\n```\n\nEven infinite vector width would only give 1 / 0.3 ≈ 3.3×. To go further, look at the remaining 30%.",
     "link": {
       "title": "Single instruction, multiple data — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Single_instruction,_multiple_data"

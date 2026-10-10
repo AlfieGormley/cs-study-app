@@ -21,7 +21,7 @@ x = 1          y = 1
 r1 = y         r2 = x
 ```
 
-Under SC, at least one store must come first in the interleaving, so at least one thread must see a 1. The possible outcomes are (r1, r2) = (0, 1), (1, 0) or (1, 1). **(0, 0) is impossible.**
+Under SC, at least one store must come first in the interleaving, so at least one thread must see a 1. The possible outcomes for `(r1, r2)` are `(0, 1)`, `(1, 0)` or `(1, 1)`. **`(0, 0)` is impossible.**
 
 The x86-TSO model permits (0, 0) for the ordinary-memory accesses described below. A particular experiment need not observe every permitted outcome; failure to observe it does not prove SC.
 
@@ -68,7 +68,7 @@ What forces order on ARM:
 - **Barriers.** For the relevant observers in the inner-shareable domain, `DMB ISH` orders the required earlier and later data accesses; it is not an instruction barrier or a general cache flush. `DMB ISHST` orders stores with stores; `DMB ISHLD` orders loads with later loads and stores.
 - **Acquire and release instructions.** `LDAR` (load-acquire) prevents later accesses moving before it. `STLR` (store-release) prevents earlier accesses moving after it. FEAT_LRCPC provides `LDAPR`, an RCpc acquire with weaker ordering in some patterns than `LDAR`; instruction availability and performance depend on the target.
 
-The classic victim is **message passing** (MP):
+The classic victim is the **message-passing litmus test** (MP):
 
 ```
 data = flag = 0
@@ -77,7 +77,7 @@ data = 42        r1 = flag
 flag = 1         r2 = data
 ```
 
-Can Thread 2 see r1 = 1 and r2 = 0, that is, the flag set but the data stale? On x86, no: stores leave in order, and loads are not reordered with loads. On ARM, yes: either the two stores or the two loads may be reordered. These are machine-level litmus tests. Using unsynchronised ordinary shared C/C++ objects would already be a data race and undefined behaviour on either target.
+Can Thread 2 end with `r1 == 1` and `r2 == 0`, that is, the flag set but the data stale? On x86, no: stores leave in order, and loads are not reordered with loads. On ARM, yes: either the two stores or the two loads may be reordered. These are machine-level litmus tests. Using unsynchronised ordinary shared C/C++ objects would already be a data race and undefined behaviour on either target.
 
 ### Multi-copy atomicity
 
@@ -133,7 +133,7 @@ Illustrative compiler mappings for naturally aligned, lock-free 32-bit atomics o
 | store seq_cst | `xchg` | `stlr` |
 | seq_cst fetch_add, result used | `lock xadd` | `ldaddal` with LSE, or exclusive loop |
 
-For such x86 loads/stores, acquire/release may need no extra hardware instruction beyond MOV, but still constrain compiler transformations and carry ordinary memory-access costs. A common seq_cst-store mapping uses memory XCHG or MOV followed by MFENCE. AArch64 mappings using STLR followed by LDAR provide stronger ordering than the minimum language release/acquire requirement; this does not make all atomics cheap. LSE atomics require target support; other mappings use exclusive-load/store loops or library helpers.
+For such x86 loads/stores, acquire/release may need no extra hardware instruction beyond MOV, but still constrain compiler transformations and still incur ordinary memory-access costs. A common seq_cst-store mapping uses memory XCHG or MOV followed by MFENCE. AArch64 mappings using STLR followed by LDAR provide stronger ordering than the minimum language release/acquire requirement; this does not make all atomics cheap. LSE atomics require target support; other mappings use exclusive-load/store loops or library helpers.
 
 > [!warning] Acquire/release does not by itself forbid store buffering
 > At the C/C++ language level, both acquire loads in SB may read the initial zeros, so neither reads from the other thread’s release store. There is no synchronises-with edge connecting the threads, and (0, 0) remains permitted. A particular target mapping may be stronger and forbid it. Making all four operations seq_cst is one sufficient solution; correctly placed seq_cst fences or a suitable lock protocol are alternatives. A hardware fence alone does not repair a C/C++ data race on ordinary objects.
@@ -153,7 +153,7 @@ For such x86 loads/stores, acquire/release may need no extra hardware instructio
 - Coherence orders writes to one address; the consistency model orders accesses to different addresses.
 - SC is an observable ordering model. Letting a later load bypass an earlier buffered store can produce non-SC outcomes.
 - x86-TSO allows only store → load reordering, so the store-buffering test can return (0, 0). MFENCE or a locked instruction prevents it.
-- ARMv8 allows all four reorderings for independent addresses; use dependencies, DMB, or LDAR/STLR to impose order. Message-passing code that works on x86 can fail on ARM.
+- ARMv8 allows all four reorderings for independent addresses; use dependencies, DMB, or LDAR/STLR to impose order. Publishing data through a flag, as in the MP test, can work on x86 and fail on ARM.
 - In C/C++, data races are undefined behaviour. Race-free code using mutexes and seq_cst operations, without weaker synchronisation, has the DRF-SC guarantee. A correct release/acquire protocol can publish data; acquire/release alone does not exclude SB.
 
 ## Further reading

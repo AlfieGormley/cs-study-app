@@ -36,7 +36,7 @@ Timing tells you *how long*. It does not tell you *why*.
 
 ## Level 2: hardware performance counters
 
-Many processors provide a **performance monitoring unit** (PMU) for events such as cycles, retired instructions and cache or branch events. Linux `perf` can access supported events when permissions and the execution environment allow it. Available events, semantics and overhead depend on the processor, kernel, virtualisation and configuration; counters are not universally accessible.
+Many processors provide a **performance monitoring unit** (PMU) for events such as cycles, retired instructions and cache or branch events. Linux `perf` can access supported events when permissions and the execution environment allow it. Available events, semantics and overhead depend on the processor, operating-system kernel, virtualisation and configuration; counters are not universally accessible.
 
 ### Counting with `perf stat`
 
@@ -52,10 +52,19 @@ $ perf stat -e cycles,instructions,\
    1.35 s elapsed
 ```
 
-(Illustrative numbers.) The most useful single derived figure is **IPC**, instructions per cycle:
+(Illustrative numbers.) The most useful single derived figure is **IPC**, instructions per cycle: how many instructions the core retired (finished for good) on an average clock cycle. Its reciprocal, **CPI** (cycles per instruction), says the same thing the other way up.
 
-```
-IPC = 2.808e9 / 4.012e9 = 0.70
+```formula
+IPC = N_ins / N_cyc
+IPC = 2.808 × 10^9 / (4.012 × 10^9) ≈ 0.70
+CPI = 1 / IPC ≈ 1.43
+where
+IPC: instructions per cycle, a plain ratio
+N_ins: the number of instructions retired during the run; 2.808 billion here
+N_cyc: the number of core clock cycles during the run; 4.012 billion here
+CPI: cycles per instruction, the reciprocal of IPC
+≈: approximately equal to
+In words: the core finished about 0.7 instructions per clock cycle on average, or about 1.4 cycles per instruction.
 ```
 
 IPC below a core’s maximum retirement width does not identify the cause. Serial arithmetic dependencies, long-latency execution units, instruction-to-micro-op expansion, memory delays, frontend limits and speculation can all contribute. Architectural instructions are not identical to issue slots. Even high IPC can reflect unnecessary work; measure useful completed results.
@@ -77,14 +86,14 @@ Backend bound splits further into *memory bound* and *core bound*. On supported 
 
 ### Finding hot spots with `perf record`
 
-Counting aggregates events; **sampling** associates selected events with locations in the program. For example:
+Counting aggregates events; **sampling profiling** associates selected events with locations in the program. For example:
 
 ```
 $ perf record -g ./app
 $ perf report
 ```
 
-Choose and record the event and sampling settings. Samples taken from cycles are weighted toward cycles, not necessarily wall time, and the default event can depend on availability. Call-stack quality requires suitable unwinding support, symbols and build configuration. Overhead and statistical precision depend on frequency, event support and workload; sample locations may skid from the causative instruction.
+Choose and record the event and sampling settings. Samples taken from cycles are weighted toward cycles, not necessarily wall time, and the default event can depend on availability. Call-stack quality requires suitable unwinding support, symbols and build configuration. Overhead and statistical precision depend on frequency, event support and workload; sample locations may suffer **sampling skid**, landing a few instructions after the one that caused the event.
 
 Brendan Gregg’s **flame graphs** show aggregated stack samples. Rectangle width represents inclusive sample weight; stack depth is vertical and horizontal ordering is **not a timeline**. The selected event determines what that weight means. A supported Linux build of Python 3.12 or later can expose Python names to `perf` with `python -X perf`; check its build and profiling prerequisites.
 
@@ -94,21 +103,33 @@ Counters say what the hardware did. They do not say how far you are from what it
 
 ### Arithmetic intensity
 
-The key property of a kernel is its **arithmetic intensity** (AI): floating-point operations performed per byte moved to or from main memory.
+The key property of a compute kernel is its **arithmetic intensity** (AI): floating-point operations performed per byte moved to or from main memory.
 
-```
-AI = FLOPs / bytes of DRAM traffic
+```formula
+AI = F / D
+where
+AI: arithmetic intensity, in FLOPs per byte (FLOP/byte)
+F: the number of floating-point operations (FLOPs) the compute kernel performs
+D: the number of bytes the compute kernel moves to or from main memory (DRAM)
+In words: intensity is how much arithmetic a compute kernel does for every byte it has to fetch or store.
 ```
 
-A machine has two limits: peak compute `P` (FLOP/s) and memory bandwidth `B` (bytes/s). A kernel can go no faster than either allows:
+A machine has two limits: its peak compute rate and its memory bandwidth. A compute kernel can go no faster than either allows. Bandwidth times intensity is the FLOP rate the memory system can feed:
 
-```
-performance <= min(P, AI x B)
+```formula
+P_att = min(P, AI × B)
+where
+P_att: attainable performance: the most FLOPs per second the compute kernel can reach on this machine, in GFLOP/s
+P: the machine's peak compute rate, in GFLOP/s (10^9 FLOPs per second)
+AI: the compute kernel's arithmetic intensity, in FLOP/byte
+B: the machine's memory bandwidth, in GB/s (10^9 bytes per second)
+min: the smaller of its two inputs
+In words: a compute kernel is capped either by how fast the chip can do arithmetic or by how fast memory can deliver the bytes that arithmetic needs, whichever is lower.
 ```
 
 Plotted on log–log axes, that is a sloped line (bandwidth-limited) meeting a flat line (compute-limited): a roof.
 
-For example, at P = 1,000 GFLOP/s and B = 100 GB/s:
+For example, on a machine with a 1,000 GFLOP/s peak and 100 GB/s of bandwidth:
 
 | AI (FLOP/byte) | Bandwidth ceiling (GFLOP/s) | Combined roof (GFLOP/s) |
 |---|---|---|
@@ -118,17 +139,53 @@ For example, at P = 1,000 GFLOP/s and B = 100 GB/s:
 | 10 | 1,000 | 1,000 |
 | 100 | 10,000 | 1,000 |
 
-The corner is the **ridge point**, `P / B`. To its left, bandwidth is the lower of these two ceilings; to its right, arithmetic throughput is lower. At the ridge they are equal. An actual kernel may run below both because of dependencies, latency, limited concurrency or other resource ceilings. Position alone does not prove its observed bottleneck.
+The corner is the **ridge point**: the intensity at which the two ceilings meet.
+
+```formula
+AI_r = P / B
+AI_r = 1,000 GFLOP/s / (100 GB/s)
+AI_r = 10 FLOP/byte
+where
+AI_r: the ridge-point intensity, in FLOP/byte
+P: peak compute rate; 1,000 GFLOP/s here
+B: memory bandwidth; 100 GB/s here
+GFLOP/s: 10^9 floating-point operations per second
+GB/s: gigabytes per second, 10^9 bytes per second
+FLOP: one floating-point operation
+byte: 8 bits
+In words: this machine needs at least 10 FLOPs per byte fetched before memory stops being the limit.
+```
+
+To its left, bandwidth is the lower of these two ceilings; to its right, arithmetic throughput is lower. At the ridge they are equal. An actual compute kernel may run below both because of dependencies, latency, limited concurrency or other resource ceilings. Position alone does not prove its observed bottleneck.
 
 ### Worked example
 
-Take a machine with P = 1,000 GFLOP/s and B = 100 GB/s, so the ridge is at 10 FLOP/byte. Consider three kernels on 8-byte doubles:
+Take the same machine: a 1,000 GFLOP/s peak and 100 GB/s of bandwidth, so the ridge is at 10 FLOP/byte. Consider three compute kernels on 8-byte doubles:
 
-Use a cold streaming model with disjoint arrays, 8-byte doubles, write-back/write-allocate caches, full-line utilisation and eventual dirty-line writeback. Exclude non-temporal stores and traffic-elimination optimisations unless stated.
+Use a cold streaming model with disjoint arrays, 8-byte doubles, write-back caches with write-allocate, full-line utilisation and eventual dirty-line writeback. Exclude non-temporal stores and traffic-elimination optimisations unless stated.
 
-- **Vector add** `c[i] = a[i] + b[i]`: one FLOP; 16 input bytes, 8 bytes of output read-for-ownership and 8 bytes of eventual output writeback per element. AI = 1/32.
-- **DAXPY** `y[i] = a * x[i] + y[i]`: count two FLOPs per multiply-add. Reading x and y plus writing y back moves 24 bytes per element in this model, so AI = 1/12.
-- **Matrix multiply**: conventionally count 2n³ FLOPs, treating each MAC as two. Idealised traffic of one read each for A and B and one write for C is 24n² bytes, giving AI = n/12. This deliberately excludes write allocation and assumes enough reuse; it is not achievable for arbitrary n with fixed cache capacity.
+- **Vector add** `c[i] = a[i] + b[i]`: one FLOP per element. It reads 16 input bytes, plus 8 bytes of output read-for-ownership (the cache fetches the output line before writing it) and 8 bytes of eventual output writeback: 32 bytes per element.
+- **DAXPY** (double-precision a times x plus y) `y[i] = a * x[i] + y[i]`: count two FLOPs per multiply-add. Reading x and y plus writing y back moves 24 bytes per element in this model.
+- **Matrix multiply** of two square matrices: conventionally count two FLOPs per MAC operation. Idealised traffic is one read each of the two inputs and one write of the output. This deliberately excludes write allocation and assumes enough reuse; it is not achievable for arbitrary sizes with fixed cache capacity.
+
+```formula
+AI_add = 1 / 32 ≈ 0.031 FLOP/byte
+AI_ax = 2 / 24 ≈ 0.083 FLOP/byte
+F_mm = 2 × n^3
+D_mm = 3 × 8 × n^2 = 24 × n^2
+AI_mm = 2 × n^3 / (24 × n^2) = n / 12
+where
+AI_add: the intensity of vector add: 1 FLOP per 32 bytes
+AI_ax: the intensity of DAXPY: 2 FLOPs per 24 bytes
+F_mm: the FLOPs in an n × n matrix multiply: n^3 multiply-adds, each counted as two
+D_mm: the ideal matrix-multiply traffic in bytes: three n × n matrices of 8-byte doubles, each moved once
+AI_mm: the ideal matrix-multiply intensity, in FLOP/byte
+n: the matrix size (rows = columns)
+FLOP: one floating-point operation
+byte: 8 bits
+≈: approximately equal to
+In words: streaming compute kernels do well under one FLOP per byte, while matrix multiply's ideal intensity grows with the matrix size, about 83 FLOP/byte for 1,000 × 1,000.
+```
 
 ```python
 def attainable(ai, peak, bw):
@@ -157,18 +214,37 @@ The vector-add bound is about 0.3125% of the assumed compute peak under this tra
 
 ### Using the roofline
 
-1. **Plot the kernel.** Measure its FLOPs and DRAM bytes (with counters, or tools such as Intel Advisor or NVIDIA Nsight Compute, which draw rooflines for you) and its achieved GFLOP/s.
+1. **Plot the compute kernel.** Measure its FLOPs and DRAM bytes (with counters, or tools such as Intel Advisor or NVIDIA Nsight Compute, which draw rooflines for you) and its achieved GFLOP/s.
 2. **Find the roof above it.** That is your ceiling for this algorithm.
 3. **Investigate the gap.** If measured bandwidth is saturated, reduce traffic or improve useful reuse. If arithmetic resources are limiting, investigate instruction choice and independent work. SIMD, threads or fusion can affect several resources; smaller types and FMA must satisfy numerical requirements. Measure again after a change.
 
-Real rooflines add lower **ceilings**: peak without SIMD, peak without FMA, bandwidth from a single core. They also add rooflines per memory level (L1, L2, L3, DRAM), because a kernel's AI against DRAM can be much higher than against L1.
+Real rooflines add lower **roofline ceilings**: peak without SIMD, peak without FMA, bandwidth from a single core. They also add rooflines per memory level (L1, L2, L3, DRAM), because a compute kernel's AI against DRAM can be much higher than against L1.
 
 > [!tip] Calibrate a consistent bandwidth model
 > Measure bandwidth using a relevant access pattern, for example STREAM. STREAM reports useful array bytes, which may differ from physical DRAM bytes because of write allocation. Use the same byte convention for AI and B; do not multiply a physical-traffic intensity by an incompatible useful-bandwidth figure. A compute ceiling also requires the actual sustained instruction issue rate and clock, not just a count of FMA units.
 
 ### Concurrency and memory bandwidth
 
-Little’s law relates average data in flight to byte throughput times average residence time. At a hypothetical 100 GB/s and 100 ns, that is 10,000 bytes or 156.25 average 64-byte requests; at least 157 whole request slots would be needed to accommodate that amount simultaneously. A core’s demand queues, prefetchers and lower-level memory resources affect available concurrency. Some workloads saturate bandwidth with one core; others require several. No universal L1 miss-buffer count or core threshold applies.
+Little’s law, from queueing theory, says the average amount of data in flight equals byte throughput times average residence time. At a hypothetical 100 GB/s and 100 ns:
+
+```formula
+D = R × t_res
+D = 100 × 10^9 B/s × 100 × 10^-9 s
+D = 10,000 B
+N_req = D / L_line = 10,000 B / 64 B
+N_req = 156.25
+where
+D: the average bytes in flight: requested but not yet delivered, in bytes (B)
+R: the sustained bandwidth, in bytes per second (B/s); 100 GB/s here
+t_res: the average time each request is outstanding, in seconds (s); 100 ns here
+N_req: the average number of 64-byte line requests in flight
+L_line: the size of one request, a 64-byte cache line
+B: byte, 8 bits
+s: second; 1 ns = 10^-9 s
+In words: to sustain 100 GB/s when each request takes 100 ns, about 10 KB, or 156 cache-line requests, must be in flight at once.
+```
+
+So at least 157 whole request slots would be needed to accommodate that amount simultaneously. A core’s demand queues, prefetchers and lower-level memory resources affect available concurrency. Some workloads saturate bandwidth with one core; others require several. No universal L1 miss-buffer count or core threshold applies.
 
 ## Pitfalls
 

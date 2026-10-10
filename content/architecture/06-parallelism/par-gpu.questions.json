@@ -3,7 +3,7 @@
     "id": "par-gpu-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "On NVIDIA GPUs, what is a **warp**?",
+    "prompt": "On NVIDIA GPUs, what is a **GPU warp**?",
     "options": [
       {
         "text": "A group of 32 logical threads whose instructions are issued to active subsets under the SIMT execution model",
@@ -18,12 +18,12 @@
         "explanation": "A CUDA core is one FP32 arithmetic unit. A warp is a group of threads, not a piece of hardware."
       },
       {
-        "text": "The full set of blocks launched by a kernel",
+        "text": "The full set of blocks launched by a GPU kernel",
         "explanation": "That is the grid."
       }
     ],
     "answer": 0,
-    "workedExample": "The hierarchy, from big to small:\n\n```\ngrid   all blocks of one launch\nblock  <= 1024 threads, one SM\nwarp   32 threads; active subsets\nthread one index, own registers\n```\n\nThe block size you choose is split into warps: 256 threads per block makes 8 warps. Choosing a block size that is not a multiple of 32 wastes lanes in the last warp.",
+    "workedExample": "The hierarchy, from big to small:\n\n```\ngrid   all blocks of one launch\nblock  <= 1024 threads, one SM\nwarp   32 threads; active subsets\nthread one index, own registers\n```\n\nThe thread-block size you choose is split into warps: 256 threads per block makes 8 warps. Choosing a thread-block size that is not a multiple of 32 wastes lanes in the last warp.",
     "link": {
       "title": "CUDA C++ Programming Guide — NVIDIA",
       "url": "https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html"
@@ -63,7 +63,7 @@
     "id": "par-gpu-q3",
     "level": "basic",
     "type": "single",
-    "prompt": "In a kernel launched with `blockDim.x = 256`, what global index `i = blockIdx.x * blockDim.x + threadIdx.x` does thread 10 of block 3 compute?",
+    "prompt": "In a GPU kernel launched with `blockDim.x = 256`, what global index `i = blockIdx.x * blockDim.x + threadIdx.x` does thread 10 of block 3 compute?",
     "options": [
       {
         "text": "266",
@@ -75,15 +75,15 @@
       },
       {
         "text": "2,570",
-        "explanation": "This multiplies the thread index by the block size, which is backwards."
+        "explanation": "This multiplies the thread index by the threads-per-block count, which is backwards."
       },
       {
         "text": "13",
-        "explanation": "This adds the block and thread indices without scaling by the block size."
+        "explanation": "This adds the block and thread indices without scaling by the threads-per-block count."
       }
     ],
     "answer": 1,
-    "workedExample": "Blocks are laid out one after another:\n\n```\nblock 0: i = 0   .. 255\nblock 1: i = 256 .. 511\nblock 2: i = 512 .. 767\nblock 3: i = 768 .. 1023\n```\n\nThread 10 of block 3 is 768 + 10 = **778**. Local threads 0 to 31 of that block have global indices 768 to 799 and form one warp, and they read consecutive elements, so the access is coalesced.",
+    "workedExample": "Blocks are laid out one after another:\n\n```\nblock 0: i = 0   .. 255\nblock 1: i = 256 .. 511\nblock 2: i = 512 .. 767\nblock 3: i = 768 .. 1023\n```\n\nSo thread 10 of block 3 is:\n\n```formula\ni = b × N_b + t\ni = 3 × 256 + 10 = 768 + 10 = 778\nwhere\ni: the global index\nb: the block index (blockIdx.x); 3\nN_b: threads per block (blockDim.x); 256\nt: the thread index within the block (threadIdx.x); 10\nIn words: skip three whole blocks of 256 threads, then count 10 more.\n```\n\nThe answer is **778**. Local threads 0 to 31 of that block have global indices 768 to 799 and form one warp, and they read consecutive elements, so the access is coalesced.",
     "link": {
       "title": "CUDA C++ Programming Guide — NVIDIA",
       "url": "https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html"
@@ -109,11 +109,11 @@
       },
       {
         "text": "About 160 cycles: both paths run one after the other with lanes masked",
-        "explanation": "Correct. Divergence serialises the paths. Each runs at 50% lane utilisation."
+        "explanation": "Correct. Divergence runs the paths one after the other. Each runs at 50% lane utilisation."
       }
     ],
     "answer": 3,
-    "workedExample": "Step through what the warp does:\n\n1. Evaluate the condition per lane: mask = even lanes.\n2. Run the `if` body (100 cycles) with odd lanes masked off.\n3. Invert the mask and run the `else` body (60 cycles).\n4. Reconverge.\n\nTotal ≈ 100 + 60 = **160 cycles**. If the condition were uniform per warp, for example `(threadIdx.x / 32) % 2`, each warp would take only its own path: 100 or 60 cycles.",
+    "workedExample": "Step through what the warp does:\n\n1. Evaluate the condition per lane: mask = even lanes.\n2. Run the `if` body (100 cycles) with odd lanes masked off.\n3. Invert the mask and run the `else` body (60 cycles).\n4. Reconverge.\n\n```formula\nt_warp ≈ t_if + t_else\nt_warp ≈ 100 + 60 = 160\nwhere\nt_warp: the time the warp spends on the if/else, in clock cycles\nt_if: the time of the if path; 100 cycles\nt_else: the time of the else path; 60 cycles\n≈: approximately equal to (control overhead ignored)\nIn words: a divergent warp runs both paths one after the other, so their times add.\n```\n\nTotal ≈ **160 cycles**. If the condition were uniform per warp, for example `(threadIdx.x / 32) % 2`, each warp would take only its own path: 100 or 60 cycles.",
     "link": {
       "title": "Single instruction, multiple threads — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Single_instruction,_multiple_threads"
@@ -123,7 +123,7 @@
     "id": "par-gpu-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An SM has 65,536 32-bit registers and supports at most 64 resident warps (2,048 threads). Your kernel uses 128 registers per thread. Ignoring block/allocation granularity and all other limits, what is the maximum occupancy?",
+    "prompt": "An SM has 65,536 32-bit registers and supports at most 64 resident warps (2,048 threads). Your GPU kernel uses 128 registers per thread. Ignoring block/allocation granularity and all other limits, what is the maximum occupancy?",
     "options": [
       {
         "text": "100%",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Compute how many threads the register file can hold:\n\n```\nthreads = 65536 / 128 = 512\nwarps   = 512 / 32    = 16\nocc.    = 16 / 64     = 25%\n```\n\nIs 25% bad? For a memory-bound kernel it may be, because fewer warps means less latency hiding. For a compute-bound kernel that uses those registers to keep tiles in fast storage, it can be optimal. Measure rather than chase 100%.",
+    "workedExample": "Compute how many threads the register file can hold, then convert to warps:\n\n```formula\nN_t = R_SM / r = 65,536 / 128 = 512\nW_res = N_t / 32 = 512 / 32 = 16\nO = W_res / W_max = 16 / 64 = 0.25\nwhere\nN_t: the most threads the register file can hold\nR_SM: 32-bit registers in the SM; 65,536\nr: registers per thread; 128\nW_res: resident warps (32 threads each)\nO: occupancy (0.25 is 25%)\nW_max: the SM's warp limit; 64\nIn words: 128 registers per thread leave room for only 16 of the 64 possible warps.\n```\n\nIs 25% bad? For a memory-bound GPU kernel it may be, because fewer warps means less latency hiding. For a compute-bound GPU kernel that uses those registers to keep tiles in fast storage, it can be optimal. Measure rather than chase 100%.",
     "link": {
       "title": "CUDA C++ Best Practices Guide — NVIDIA",
       "url": "https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Threads access offsets 0, 16, 32, …, 496. The last float ends at byte 499. Sixteen aligned sectors cover those accesses, so useful/requested bytes = 128 / 512 = 25%. Cache hits and reuse can change actual DRAM traffic. Layout or cooperative loading may improve utilisation, but loading extra unwanted fields alone does not eliminate their transfer cost.",
+    "workedExample": "Thread k reads the float at byte offset 16 × k (4 floats × 4 bytes), so the threads touch offsets 0, 16, 32, …, 496. The last float ends at byte 499, so sixteen aligned 32-byte sectors cover the accesses.\n\n```formula\nN_use = 32 × 4 B = 128 B\nN_sec = 16 × 32 B = 512 B\nU = N_use / N_sec = 128 / 512 = 0.25\nwhere\nN_use: useful bytes: 32 threads × one 4-byte float\nN_sec: bytes in the requested sectors\nU: utilisation (0.25 is 25%)\nB: byte\nIn words: each 32-byte sector holds two of the wanted floats, so a quarter of the fetched bytes are used.\n```\n\nCache hits and reuse can change actual DRAM traffic. Layout or cooperative loading may improve utilisation, but loading extra unwanted fields alone does not eliminate their transfer cost.",
     "link": {
       "title": "How to access global memory efficiently — NVIDIA",
       "url": "https://developer.nvidia.com/blog/how-access-global-memory-efficiently-cuda-c-kernels/"
@@ -183,11 +183,11 @@
     "id": "par-gpu-q7",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "For ordinary CUDA blocks without thread-block clusters or cooperative cross-block facilities, which statements are true? Use linear thread IDs and correctly participating barriers. Select all that apply.",
+    "prompt": "For ordinary CUDA blocks without thread-block clusters or cooperative cross-block facilities, which statements are true? Use linear thread indices and correctly participating barriers. Select all that apply.",
     "options": [
       {
         "text": "All threads of a block run on the same SM",
-        "explanation": "Correct. This is why they can share the SM's shared memory."
+        "explanation": "Correct. This is why they can share the SM's GPU shared memory."
       },
       {
         "text": "Threads in the same block can synchronise with `__syncthreads()`",
@@ -195,10 +195,10 @@
       },
       {
         "text": "Blocks of the same grid can be relied on to run in a fixed order",
-        "explanation": "False. Blocks may run in any order, concurrently or one after another; correct code must not depend on order."
+        "explanation": "False. Blocks may run in any order, concurrently or one after another; correct code must never depend on order."
       },
       {
-        "text": "Threads in different blocks can read each other's shared memory",
+        "text": "Threads in different blocks can read each other's GPU shared memory",
         "explanation": "False in this scope. Cluster distributed shared memory is a separate supported facility with explicit synchronisation and lifetime requirements."
       },
       {
@@ -211,7 +211,7 @@
       1,
       4
     ],
-    "workedExample": "Correct choices: a block executes on one SM; its participating threads can use a block-wide barrier; consecutive linear IDs form warps. Ordinary blocks have no fixed execution order and cannot directly read each other’s block-local shared memory. Thread-block clusters extend the latter rule under an additional API contract.",
+    "workedExample": "Correct choices: a block executes on one SM; its participating threads can use a block-wide barrier; consecutive linear IDs form warps. Ordinary blocks have no fixed execution order and cannot directly read each other’s block-local GPU shared memory. Thread-block clusters extend the latter rule under an additional API contract.",
     "link": {
       "title": "CUDA C++ Programming Guide — NVIDIA",
       "url": "https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html"
@@ -221,14 +221,14 @@
     "id": "par-gpu-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You launch `saxpy` for n = 1,000,000 elements with 256 threads per block, using `blocks = (n + 255) / 256`. How many blocks are launched, and why does the kernel need `if (i < n)`?",
+    "prompt": "You launch `saxpy` for 1,000,000 elements (`n`) with 256 threads per block, using `blocks = (n + 255) / 256`. How many blocks are launched, and why does the GPU kernel need `if (i < n)`?",
     "options": [
       {
         "text": "3,906 blocks; the guard is only for safety and never triggers",
         "explanation": "3,906 × 256 = 999,936, which leaves 64 elements unprocessed. Integer division rounds down; the + 255 rounds up."
       },
       {
-        "text": "3,907 blocks; the last block has 3,907 × 256 − 1,000,000 = 192 surplus threads that must not write out of bounds",
+        "text": "3,907 blocks; the last block has 3,907 × 256 − 1,000,000 = 192 surplus threads that must never write out of bounds",
         "explanation": "Correct. Rounding up guarantees coverage; the guard stops the extra threads touching memory past the end."
       },
       {
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Calculate:\n\n```\n(1000000 + 255) // 256 = 3907\n3907 x 256 = 1000192 threads\nsurplus    = 192 threads\n```\n\nThose 192 threads compute i ≥ n. Without the guard they would read and write past the end of the arrays. It is the GPU version of a SIMD tail loop.",
+    "workedExample": "Calculate:\n\n```formula\nN_blk = ⌈n / N_b⌉\nN_blk = ⌈1,000,000 / 256⌉\nN_blk = ⌈3,906.25⌉ = 3,907\nN_x = N_blk × N_b − n\nN_x = 1,000,192 − 1,000,000 = 192\nwhere\nN_blk: the number of blocks launched\nn: the number of elements; 1,000,000\nN_b: threads per block; 256\n⌈ ⌉: ceiling: round up to a whole number (what (n + 255) / 256 does in integer arithmetic)\nN_x: the surplus threads with no element to process\nIn words: 3,907 blocks are needed to cover every element, which launches 192 more threads than there are elements.\n```\n\nThose 192 threads compute an index at or beyond n. Without the guard they would read and write past the end of the arrays. It is the GPU version of a SIMD tail loop.",
     "link": {
       "title": "CUDA C++ Programming Guide — NVIDIA",
       "url": "https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html"
@@ -251,7 +251,7 @@
     "id": "par-gpu-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A job processes 4 GB of input and produces 4 GB of output. On the CPU it takes 0.2 s. On the GPU the kernel takes 5 ms, but data starts and ends in host memory and crosses a PCIe link sustaining about 25 GB/s each way, used one direction at a time. Assume transfers and computation do not overlap and omit any further overhead. Is offloading worthwhile?",
+    "prompt": "A job processes 4 GB of input and produces 4 GB of output. On the CPU it takes 0.2 s. On the GPU the GPU kernel takes 5 ms, but data starts and ends in host memory and crosses a PCIe link sustaining about 25 GB/s each way, used one direction at a time. Assume transfers and computation do not overlap and omit any further overhead. Is offloading worthwhile?",
     "options": [
       {
         "text": "Yes: 5 ms is 40× faster than 0.2 s",
@@ -263,7 +263,7 @@
       },
       {
         "text": "It depends only on the GPU's FLOP rate",
-        "explanation": "The measured kernel time is already given. A FLOP ceiling alone would not determine it, and transfer costs must also be counted."
+        "explanation": "The measured GPU kernel time is already given. A FLOP ceiling alone would not determine it, and transfer costs must also be counted."
       },
       {
         "text": "No: transfers take about 0.32 s, so the GPU path is about 0.325 s versus 0.2 s on the CPU",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Total GPU time = copy in + kernel + copy out:\n\n```\nin   : 4 GB / 25 GB/s = 0.16 s\nrun  :                  0.005 s\nout  : 4 GB / 25 GB/s = 0.16 s\ntotal:                  0.325 s\n```\n\nThe kernel is 40× faster but only about 1.5% of the GPU path. This is Amdahl's law again. Real systems keep data resident on the GPU (deep-learning frameworks keep weights and activations there), overlap copies with compute using streams, or use faster interconnects.",
+    "workedExample": "Total GPU time is copy in, plus GPU kernel, plus copy out:\n\n```formula\nt_in = 4 GB / (25 GB/s) = 0.16 s\nt_out = 4 GB / (25 GB/s) = 0.16 s\nt_gpu = t_in + t_k + t_out\nt_gpu = 0.16 + 0.005 + 0.16 = 0.325 s\nwhere\nt_in: time to copy the input over PCIe, in seconds (s)\nt_out: time to copy the output back, in seconds (s)\nt_k: the GPU kernel time; 5 ms = 0.005 s\nt_gpu: the total GPU path time\nGB: gigabyte, 10^9 bytes\nGB/s: gigabytes per second\ns: second\nIn words: the copies take 0.32 s, far more than the 0.005 s GPU kernel, so the GPU path is slower than the 0.2 s CPU run.\n```\n\nThe GPU kernel is 40× faster but only about 1.5% of the GPU path. This is Amdahl's law again. Real systems keep data resident on the GPU (deep-learning frameworks keep weights and activations there), overlap copies with compute using streams, or use faster interconnects.",
     "link": {
       "title": "CUDA C++ Best Practices Guide — NVIDIA",
       "url": "https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html"
@@ -281,19 +281,19 @@
     "id": "par-gpu-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "A transpose kernel loads a 32 × 32 tile of floats into `__shared__ float tile[32][32]` and then each warp reads a *column*: thread k reads `tile[k][c]`. Shared memory has 32 banks, each 4 bytes wide. What happens, and what is the usual fix?",
+    "prompt": "A transpose GPU kernel loads a 32 × 32 tile of floats into `__shared__ float tile[32][32]` and then each warp reads a *column*: thread k reads `tile[k][c]`. GPU shared memory has 32 banks, each 4 bytes wide. What happens, and what is the usual fix?",
     "options": [
       {
-        "text": "No problem: shared memory has no access restrictions",
-        "explanation": "Shared memory is banked; simultaneous accesses to different addresses in one bank serialise."
+        "text": "No problem: GPU shared memory has no access restrictions",
+        "explanation": "GPU shared memory is banked; simultaneous accesses to different addresses in one bank are handled one after another."
       },
       {
         "text": "A 32-way bank conflict, because every element in a column lies in the same bank; pad the array to `tile[32][33]`",
         "explanation": "Correct. Each row is 32 floats = 128 bytes, so column elements are 128 bytes apart and map to the same bank. One float of padding shifts each row by one bank."
       },
       {
-        "text": "Uncoalesced global memory access; use a larger block size",
-        "explanation": "The tile is already in shared memory; coalescing concerns global memory. The issue here is banks."
+        "text": "Uncoalesced global memory access; use a larger thread-block size",
+        "explanation": "The tile is already in GPU shared memory; coalescing concerns global memory. The issue here is banks."
       },
       {
         "text": "A 2-way bank conflict; use `double` instead of `float`",
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Bank of a 4-byte word = (address / 4) mod 32.\n\n```\ntile[k][c] index = 32k + c\nbank = (32k + c) mod 32 = c\n```\n\nEvery thread k gets bank c: all 32 accesses hit one bank and serialise into 32 passes. With padding to 33 columns:\n\n```\nindex = 33k + c\nbank  = (33k + c) mod 32\n      = (k + c) mod 32\n```\n\nNow each thread hits a different bank: one pass. The cost is 32 wasted floats per tile.",
+    "workedExample": "```formula\nm = (a / 4) mod 32\nm_32 = (32 × k + c) mod 32 = c\nm_33 = (33 × k + c) mod 32\nm_33 = (k + c) mod 32\nwhere\nm: the bank of the 4-byte word at byte address a, 0 to 31\na: the byte address in GPU shared memory\n32: the number of banks\nmod: the remainder after whole-number division\nk: the row read by thread k of the warp\nc: the column being read, the same for all threads\nm_32: the bank of tile[k][c] with 32-float rows\nm_33: the bank of tile[k][c] with rows padded to 33 floats\nIn words: with 32-float rows every thread lands in bank c; padding each row by one float moves each row one bank along.\n```\n\nWithout padding, all 32 accesses hit one bank and are handled one after another in 32 passes. With padding, each thread hits a different bank: one pass. The cost is 32 wasted floats per tile.",
     "link": {
       "title": "Using shared memory in CUDA — NVIDIA",
       "url": "https://developer.nvidia.com/blog/using-shared-memory-cuda-cc/"
@@ -331,7 +331,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Average bytes in flight = 2e12 B/s × 500e-9 s = 1e6 B = 1 MB. If a hypothetical 108-SM device shared this load evenly, the average would be about 9,259 bytes per SM, or 72.34 requests of 128 bytes. This is a steady-state average, not a required occupancy at every instant. The kernel needs enough independent requests and resources; high warp occupancy is only one possible contributor.",
+    "workedExample": "```formula\nD = R × t_res\nD = 2 × 10^12 B/s × 500 × 10^-9 s\nD = 10^6 B = 1 MB\nwhere\nD: average bytes in flight, in bytes (B)\nR: throughput; 2 TB/s = 2 × 10^12 B/s\nt_res: average residence time; 500 ns = 500 × 10^-9 s\nB: byte\ns: second\nMB: megabyte, 10^6 bytes (decimal)\nIn words: 2 TB/s with requests outstanding for 500 ns means about 1 MB in flight on average.\n```\n\nIf a hypothetical 108-SM device shared this load evenly, the average would be about 9,259 bytes per SM, or 72.34 requests of 128 bytes. This is a steady-state average, not a required occupancy at every instant. The GPU kernel needs enough independent requests and resources; high warp occupancy is only one possible contributor.",
     "link": {
       "title": "CUDA C++ Best Practices Guide — NVIDIA",
       "url": "https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/index.html"

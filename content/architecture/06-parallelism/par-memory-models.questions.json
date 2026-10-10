@@ -93,7 +93,7 @@
     "id": "par-memory-models-q4",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "Two threads run this x86 assembly-level code, with `x` and `y` initially 0. Assume aligned, same-size ordinary accesses to distinct coherent write-back locations, with no other writers or fences. Which final values of (r1, r2) are permitted by x86-TSO? Select all that apply.\n\n```\nThread 1      Thread 2\nx = 1         y = 1\nr1 = y        r2 = x\n```",
+    "prompt": "Two threads run this x86 assembly-level code, with `x` and `y` initially 0. Assume aligned, same-size ordinary accesses to distinct coherent write-back memory locations, with no other writers or fences. Which final values of (r1, r2) are permitted by x86-TSO? Select all that apply.\n\n```\nThread 1      Thread 2\nx = 1         y = 1\nr1 = y        r2 = x\n```",
     "options": [
       {
         "text": "(0, 1)",
@@ -128,7 +128,7 @@
     "id": "par-memory-models-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Assume a single machine-level publication using aligned, same-size accesses to distinct initially-zero coherent write-back/Normal-memory locations, with no other writers, barriers or dependencies. A producer writes `data = 42` then `flag = 1` with plain stores; a consumer reads `flag`, then `data`, with plain loads (assume the compiler emits them exactly in this order). The consumer sees `flag == 1`. On which hardware might it still read `data == 0`?",
+    "prompt": "Assume a single machine-level publication using aligned, same-size accesses to distinct initially-zero coherent write-back memory (Arm Normal-memory) locations, with no other writers, barriers or dependencies. A producer writes `data = 42` then `flag = 1` with plain stores; a consumer reads `flag`, then `data`, with plain loads (assume the compiler emits them exactly in this order). The consumer sees `flag == 1`. On which hardware might it still read `data == 0`?",
     "options": [
       {
         "text": "Neither x86 nor ARM: once the flag is visible, so is the data",
@@ -208,7 +208,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Compare what each ordering needs with what TSO gives:\n\n- Release: earlier loads and stores must not move after the store. TSO already guarantees this, so `mov` works.\n- Seq_cst: additionally, all seq_cst operations form one total order. A seq_cst store followed by a seq_cst load must not be reordered, but TSO allows store → load reordering.\n\nSo the compiler uses a locked instruction (`xchg`, or `mov` plus `mfence`), which waits for the store buffer to drain.",
+    "workedExample": "Compare what each ordering needs with what TSO gives:\n\n- Release: earlier loads and stores may never move after the store. TSO already guarantees this, so `mov` works.\n- Seq_cst: additionally, all seq_cst operations form one total order. A seq_cst store followed by a seq_cst load may never be reordered, but TSO allows store → load reordering.\n\nSo the compiler uses a locked instruction (`xchg`, or `mov` plus `mfence`), which waits for the store buffer to drain.",
     "link": {
       "title": "std::memory_order — cppreference",
       "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
@@ -276,7 +276,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Peterson's lock is a store-buffering pattern:\n\n```\nT0: flag[0]=1; turn=1\n    read flag[1]\nT1: flag[1]=1; turn=0\n    read flag[0]\n```\n\n1. Both threads' stores sit in their store buffers.\n2. Each reads the other's flag from memory and sees 0.\n3. Both conclude the other is not interested and enter.\n\nThe missing ordering is store → load, the one relaxation TSO has. `MFENCE` (or a locked instruction, or seq_cst atomics in C11) restores it.",
+    "workedExample": "Peterson's lock is a store-buffering pattern:\n\n```\nT0: flag[0]=1; turn=1\n    read flag[1]\nT1: flag[1]=1; turn=0\n    read flag[0]\n```\n\n1. Both threads' stores sit in their store buffers.\n2. Each reads the other's flag from memory and sees 0.\n3. Both conclude the other does not want the lock, and both enter.\n\nThe missing ordering is store → load, the one relaxation TSO has. `MFENCE` (or a locked instruction, or seq_cst atomics in C11) restores it.",
     "link": {
       "title": "Memory reordering caught in the act — Preshing",
       "url": "https://preshing.com/20120515/memory-reordering-caught-in-the-act/"
@@ -286,7 +286,7 @@
     "id": "par-memory-models-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "In the store-buffering test, a developer makes both stores `memory_order_release` and both loads `memory_order_acquire`. Is the outcome r1 = r2 = 0 still allowed by the C++ memory model?\n\n```\nT1: x.store(1, rel)\n    r1 = y.load(acq)\nT2: y.store(1, rel)\n    r2 = x.load(acq)\n```",
+    "prompt": "In the store-buffering test, a developer makes both stores `memory_order_release` and both loads `memory_order_acquire`. Is the outcome `r1 == 0 && r2 == 0` still allowed by the C++ memory model?\n\n```\nT1: x.store(1, rel)\n    r1 = y.load(acq)\nT2: y.store(1, rel)\n    r2 = x.load(acq)\n```",
     "options": [
       {
         "text": "No: acquire and release together act as a full fence",

@@ -95,7 +95,7 @@ T = ⌈log_2(1,000)⌉ = ⌈9.97⌉ = 10
 where
 T: the number of commits you must test (build and check)
 N: the number of candidate commits between the known good and known bad revisions; here 1,000
-2^T: 2 multiplied by itself T times: the number of candidates that T halvings can tell apart
+2^T: T copies of 2 multiplied together: the number of candidates that T halvings can tell apart
 log_2: the logarithm to base 2: log_2(N) is the power you must raise 2 to in order to get N, which is the number of halvings that shrink N to 1
 ≥: greater than or equal to
 ≈: approximately equal to

@@ -183,7 +183,7 @@ C_max = 2^10 = 1024
 where
 C_max: the largest possible number of distinct on/off combinations of the toggles, each a separate configuration that could need testing
 n: the number of independent feature toggles, each simply on or off; here 10
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 In words: each extra independent toggle doubles the number of possible configurations, so 10 long-lived toggles allow up to 1024.
 ```
 

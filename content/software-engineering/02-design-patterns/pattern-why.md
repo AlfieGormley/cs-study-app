@@ -80,7 +80,7 @@ where
 N_inherit: the number of concrete subclasses needed when every combination of one channel and a set of features gets its own class (a plain count, no unit)
 c: the number of channels, such as email, SMS and Slack; here 3
 f: the number of optional features, such as retry, logging and rate limiting, each of which can be on or off independently; here 3
-2^f: 2 multiplied by itself f times; it counts the possible on/off feature sets, including the set with no features at all (2^3 = 2 × 2 × 2 = 8)
+2^f: f copies of 2 multiplied together; it counts the possible on/off feature sets, including the set with no features at all (2^3 = 2 × 2 × 2 = 8)
 In words: each channel needs one subclass for every possible set of features, so the class count doubles every time you add a feature.
 ```
 

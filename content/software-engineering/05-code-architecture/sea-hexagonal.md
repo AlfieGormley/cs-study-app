@@ -205,7 +205,7 @@ Two later variants describe the same idea with concentric circles.
    source dependencies point inwards
 ```
 
-Martin states the **Dependency Rule**: source code dependencies can only point inwards. Nothing in an inner circle may name anything in an outer one: no function, class, variable or data format.
+Martin states **the Dependency Rule**: source code dependencies can only point inwards. Nothing in an inner circle may name anything in an outer one: no function, class, variable or data format.
 
 | Name | Centre | Emphasis |
 |---|---|---|

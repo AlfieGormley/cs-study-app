@@ -379,7 +379,7 @@ You need huge numbers of small objects, and most of their state is identical. St
 
 ### In Python
 
-CPython already does this. Small integers from -5 to 256 are cached, and `sys.intern()` returns a canonical interned string; keep and use that return value. It does not rewrite existing references to equal non-interned strings. You can build your own with a cache:
+CPython already does this. Its small-integer cache holds one shared object for each integer from -5 to 256, and `sys.intern()` returns a canonical interned string; keep and use that return value. It does not rewrite existing references to equal non-interned strings. You can build your own with a cache:
 
 ```python
 from functools import lru_cache

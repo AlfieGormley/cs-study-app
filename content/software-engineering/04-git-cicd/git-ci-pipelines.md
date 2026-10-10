@@ -165,7 +165,7 @@ where
 P_red: the probability that a run on correct code goes red because at least one test flaked, from 0 (never) to 1 (always)
 p: the probability that one test flakes in one run; here 0.5 % = 0.005
 N: the number of tests in the run; here 200
-^: raise to a power: (1 − p)^N multiplies the pass chance of one test by itself N times, which is the chance that all N pass
+^: raise to a power: (1 − p)^N multiplies together N copies of the pass chance of one test, which is the chance that all N pass
 ≈: approximately equal to
 In words: one minus the chance that every test passes; with 200 tests that each flake once in 200 runs, nearly two runs in three go red on good code.
 ```

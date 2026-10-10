@@ -12,7 +12,7 @@ A test suite is only useful if people trust it. Two things destroy that trust. *
 
 A **flaky test** passes and fails on the same code. Google's testing blog reported in 2016 that about 1.5% of all its test runs produced a flaky result, that almost 16% of its tests showed some flakiness, and that about 84% of the pass-to-fail transitions its CI observed involved a flaky test. Those figures describe that 2016 Google dataset. A transition involving a flaky test does not itself establish that no new product bug exists.
 
-The damage compounds. A full run is clean only if *every* test passes. When tests flake independently of each other, the chance of that is the per-test pass chance multiplied by itself once per test:
+The damage compounds. A full run is clean only if *every* test passes. When tests flake independently of each other, the chance of that is one copy of the per-test pass chance for each test, all multiplied together:
 
 ```formula
 P_clean = (1 − p)^n

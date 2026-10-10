@@ -141,7 +141,7 @@ where
 N: the most on/off combinations (configurations) the flags allow
 n: the number of independent Boolean (on/off) feature flags affecting the same behaviour
 2: the two states of each flag, on and off; each state of one flag can pair with every combination of the others
-^: raise to a power: 2^n means 2 multiplied by itself n times
+^: raise to a power: 2^n means n copies of 2 multiplied together
 In words: every extra flag doubles the possible configurations, so 10 flags already allow 1,024 and 20 allow over a million.
 ```
 

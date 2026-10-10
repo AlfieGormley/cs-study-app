@@ -77,6 +77,8 @@ Say what you skipped in your report.
 - Matching is whole-word, longest phrase first.
 - **Acronyms (all-capital aliases such as `DAC`, `REST`) and single capital letters in any script (`Δ`, `Σ`, `C`)
   match exact case only**, so "PA" (public address) and "Pa" (pascal) can both exist, and "Δ" never captures "δ".
+  All-caps phrases (`NOT IN`, `MUST NOT`, `GROUP BY`) are exact-case too, so they never capture everyday "not in".
+  Don't add lowercase forms of such phrases as aliases.
 - Everything else is case-insensitive.
 
 Add an alias for every form the lessons use:

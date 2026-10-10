@@ -17,7 +17,7 @@ At any moment a CPU core runs in one of (at least) two modes:
 - **User mode**: privileged instructions fault. Only pages marked user-accessible can be touched.
 - **Kernel mode**: privileged operations are available, but mappings, memory protections, hardware rules and any hypervisor still constrain accesses.
 
-The only ways from user mode into kernel mode are events the hardware routes to **addresses the kernel chose in advance**. User code can't jump into the middle of the kernel. It can only knock on doors whose locations the kernel registered at boot.
+The only ways from user mode into kernel mode are events the hardware directs to **addresses the kernel chose in advance**. User code can't jump into the middle of the kernel. It can only knock on doors whose locations the kernel registered at boot.
 
 This idea is called **limited direct execution**. Run the program directly on the CPU at full speed (direct execution), but limit what it can do, and make sure the kernel regains control when needed.
 

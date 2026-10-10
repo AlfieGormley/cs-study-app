@@ -201,7 +201,7 @@ n = ⌈S / B_blk⌉
 n = 2^40 B / 2^27 B = 2^13 = 8,192
 where
 n: the number of HDFS blocks the file is split into
-S: the file size; here 1 TiB = 2^40 bytes (2^40 means 2 multiplied by itself 40 times)
+S: the file size; here 1 TiB = 2^40 bytes (2^40 means 40 copies of 2 multiplied together)
 B_blk: the HDFS block size; here 128 MiB = 2^27 bytes
 ⌈ ⌉: the ceiling: round up, because a part-filled last block is still a block
 B: byte

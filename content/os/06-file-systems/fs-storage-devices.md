@@ -137,7 +137,7 @@ T = (2^40 B / 2^12 B) × 4 B
 T = 2^28 × 4 B = 2^30 B = 1 GiB
 where
 T: the size of the mapping table, in bytes (B)
-C: the flash capacity being mapped; here 1 TiB = 2^40 bytes (2^40 means 2 multiplied by itself 40 times; 2^10 = 1,024)
+C: the flash capacity being mapped; here 1 TiB = 2^40 bytes (2^40 means 40 copies of 2 multiplied together; 2^10 = 1,024)
 U: the mapping unit, the amount of data one entry describes; here 4 KiB = 2^12 bytes
 e: the size of one entry; here 4 bytes, enough to name a physical page
 B: byte

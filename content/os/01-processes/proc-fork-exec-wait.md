@@ -54,7 +54,7 @@ P = 2^3 = 2 × 2 × 2 = 8
 where
 P: the number of processes after the forks, including the original
 n: the number of fork calls every process executes one after another, here 3
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 In words: n forks in a row turn one process into 2 to the power n processes.
 ```
 

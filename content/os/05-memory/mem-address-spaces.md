@@ -28,7 +28,7 @@ N = 2^n
 where
 N: the number of different bytes an address can name, which is the size of the address space in bytes
 n: the number of bits in the address
-2^n: 2 multiplied by itself n times; for example 2^10 = 1,024 and 2^4 = 16. Multiplying powers of two adds their exponents: 2^4 × 2^30 = 2^34
+2^n: n copies of 2 multiplied together; for example 2^10 = 1,024 and 2^4 = 16. Multiplying powers of two adds their exponents: 2^4 × 2^30 = 2^34
 B: byte, 8 bits; each address names one byte
 GiB: gibibyte, 2^30 bytes (1,073,741,824 B)
 TiB: tebibyte, 2^40 bytes, or 1,024 GiB
@@ -256,7 +256,7 @@ where
 PA: the 20-bit physical address
 seg: the 16-bit value in a segment register
 off: the 16-bit offset within the segment
-2^20: 2 multiplied by itself 20 times, the number of addresses 20 bits can name
+2^20: 20 copies of 2 multiplied together, the number of addresses 20 bits can name
 B: byte
 MiB: mebibyte, 2^20 bytes
 In words: multiplying the segment value by 16 shifts it left by 4 bits, and adding the 16-bit offset gives a 20-bit address, enough to reach 1 MiB.

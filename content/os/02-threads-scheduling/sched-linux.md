@@ -6,7 +6,7 @@ minutes: 15
 summary: How Linux actually picks the next thread - scheduling classes, CFS's virtual runtime and weights, nice values, the EEVDF scheduler that replaced CFS in 6.6, and the SCHED_FIFO, SCHED_RR and SCHED_DEADLINE real-time policies.
 ---
 
-The previous lesson's MLFQ guesses which jobs are interactive and rewards them. Linux took a different route in 2007: stop guessing, and divide the CPU **fairly**, in proportion to a weight. That idea, the Completely Fair Scheduler (CFS), ran almost every Linux machine for 16 years. In 2023 its core was replaced by **EEVDF**, which keeps the fairness and adds an explicit notion of latency.
+The previous lesson's MLFQ guesses which jobs are interactive and rewards them. Linux took a different route in 2007: stop guessing, and divide the CPU **fairly**, in proportion to a weight. That idea, the Completely Fair Scheduler (CFS), ran almost every Linux machine for 16 years. In 2023 its central algorithm was replaced by **EEVDF**, which keeps the fairness and adds an explicit notion of latency.
 
 Real-time work sits above all of this, in strict-priority classes that the fair scheduler never overrides.
 
@@ -87,7 +87,7 @@ w ≈ 1024 / 1.25^{−5} ≈ 1024 × 3.05 ≈ 3125
 where
 w: the task's weight, a plain number with no unit
 n: the task's nice value, from −20 to 19
-1.25^n: 1.25 multiplied by itself n times (for a negative n, divide by it instead)
+1.25^n: 1.25 raised to the power n (a negative n gives 1 divided by 1.25 raised to the power −n)
 ≈: approximately equal to; the real table is rounded and differs slightly
 In words: each nice step up divides the weight by about 1.25, and each step down multiplies it by about 1.25.
 ```
@@ -246,7 +246,7 @@ B now waits for A to catch up before it is eligible again, so neither gets more 
 
 In the checked Linux 6.12 source the unscaled base slice is 0.75 ms; the default logarithmic scaling gives 3 ms at eight or more CPUs. Tunables and later kernels can differ. Since Linux 6.12 a normal task can request its own slice, between 0.1 ms and 100 ms, through the `sched_runtime` field of `sched_setattr()`.
 
-Lag also needs care for sleepers. A task that sleeps with negative lag shouldn't erase its debt by sleeping briefly. Current kernels keep such a task on the queue in a "deferred dequeue" state so its lag decays, rather than simply resetting it.
+Lag also needs care for sleepers. A task that sleeps with negative lag shouldn't wipe out its debt by sleeping briefly. Current kernels keep such a task on the queue in a "deferred dequeue" state so its lag decays, rather than simply resetting it.
 
 > [!note] Is CFS gone?
 > The name lingers: the fair class still lives in `kernel/sched/fair.c`, and many docs and tools still say CFS. Weights, nice, vruntime, group scheduling and CFS bandwidth control all carried over. What changed is how the next task is chosen and how preemption is decided.

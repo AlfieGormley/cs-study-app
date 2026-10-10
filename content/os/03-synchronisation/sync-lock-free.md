@@ -123,7 +123,7 @@ U_wrap = 2^16 = 65536
 where
 U_wrap: the number of successful updates after which the tag is back at its starting value
 b: the number of bits in the tag; 16 in the example line
-2^b: 2 raised to the power b, meaning 2 multiplied by itself b times
+2^b: 2 raised to the power b, meaning b copies of 2 multiplied together
 In words: each extra tag bit doubles the number of updates before the tag repeats.
 ```
 

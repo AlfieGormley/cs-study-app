@@ -185,7 +185,7 @@ Lookups search from the top down. Writes follow three rules:
 3. **Delete** a lower file: overlayfs creates a **whiteout** in upperdir (for example, a 0/0 character device or a supported zero-size file with a whiteout xattr) that hides it. A deleted directory that is recreated is marked **opaque** with an extended attribute.
 
 > [!warning] Copy-up pitfalls
-> Copy-up is file-level, so a small change to a large lower file can be expensive; physical copying/allocation depends on sparse and clone support. Write-heavy data often belongs on suitable persistent storage outside the image overlay. Docker-managed volumes and bind mounts are distinct storage choices, not synonyms. Also, deleting a file in a later layer does not reclaim space: the bytes still live in the lower layer.
+> Copy-up is file-level, so a small change to a large lower file can be expensive; physical copying/allocation depends on sparse-file and reflink support. Write-heavy data often belongs on suitable persistent storage outside the image overlay. Docker-managed volumes and bind mounts are distinct storage choices, not synonyms. Also, deleting a file in a later layer does not reclaim space: the bytes still live in the lower layer.
 
 ## Putting it together
 

@@ -44,7 +44,7 @@ PA = PFN × P + off
 where
 P: the page size in bytes; 4 KiB = 4,096 on x86-64
 k: the number of offset bits; 12 for 4 KiB pages, because 2^12 = 4,096
-2^k: 2 multiplied by itself k times
+2^k: k copies of 2 multiplied together
 VA: the virtual address
 VPN: the virtual page number: which page the address falls in
 off: the offset: how far into the page, from 0 to P − 1
@@ -238,7 +238,7 @@ where
 i: the index into one level's table, from 0 to 511
 VA: the virtual address, here 0x7ffd4a3b2c18
 s: the bit position where that level's field starts: 39, 30, 21 or 12
-2^s: 2 multiplied by itself s times; dividing by it discards the s bits below the field
+2^s: s copies of 2 multiplied together; dividing by it discards the s bits below the field
 ⌊ ⌋: floor: round down to a whole number
 mod: the remainder after division; mod 512 keeps the lowest 9 bits, because 512 = 2^9
 i_PML4: the index into the top-level PML4 table

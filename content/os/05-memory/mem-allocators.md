@@ -168,7 +168,7 @@ For a compatible dynamically linked program, an installed allocator can sometime
 > No benchmark record accompanies this lesson, so comparative RSS, latency and cross-thread-free rankings are omitted. Measure representative workloads, retention and contention before selecting an allocator.
 
 > [!note] Python has its own layer
-> In a standard GIL-enabled build using **pymalloc**, small allocations of up to 512 bytes use pools in larger arenas, with larger requests falling back to raw allocation. Build/runtime settings matter: free-threaded CPython uses mimalloc. Extension modules can also allocate directly, so not every Python object allocation follows pymalloc.
+> In a standard GIL-enabled build using **pymalloc**, small allocations of up to 512 bytes use pools in larger arenas, with larger requests falling back to raw allocation. Build/runtime settings matter: free-threaded CPython uses mimalloc. C extensions can also allocate directly, so not every Python object allocation follows pymalloc.
 
 ## The kernel: the buddy allocator
 
@@ -182,7 +182,7 @@ k = ⌈log_2(N)⌉
 where
 S_k: the size of a block of order k
 k: the order of a block: the block holds 2^k pages
-2^k: 2 multiplied by itself k times (2^0 = 1)
+2^k: k copies of 2 multiplied together (2^0 = 1)
 P: the base page size; 4 KiB in this lesson's examples
 S_0: the smallest block, one page
 S_10: the block at order 10

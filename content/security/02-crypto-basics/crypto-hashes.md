@@ -23,13 +23,33 @@ Notice that changing one letter (`c` to `d`) changed the whole digest. This is t
 
 ## The three security properties
 
-A function that just compresses data (like CRC32) is not enough. A cryptographic hash must resist three kinds of attack. Let `H` be the hash and `n` the digest length in bits. The table gives generic classical work estimates for an ideal hash and suitably unconstrained inputs, not guarantees for weak input dictionaries or every long-message construction.
+A function that just compresses data (like CRC32) is not enough. A cryptographic hash must resist three kinds of attack. To compare them we need some notation, and a way to count an attacker's work: the number of hash computations a generic attack needs against an ideal hash.
+
+```formula
+h = H(m)
+W_pre ≈ 2^n
+W_2nd ≈ 2^n
+W_coll ≈ 2^(n/2)
+where
+H: the hash function, for example SHA-256
+m: a message: any input the hash accepts
+h: the digest that H outputs for m, n bits long
+n: the digest length in bits: 256 for SHA-256, 160 for SHA-1, 128 for MD5
+W_pre: the work to find a preimage: any message whose digest equals a given h, counted in hash computations
+W_2nd: the work to find a second preimage: a different message with the same digest as a given one
+W_coll: the work to find a collision: any two different messages with equal digests
+2^n: 2 multiplied by itself n times, which is the number of possible digests
+≈: approximately equal to
+In words: hitting one particular digest takes about 2^n tries, but finding any two inputs that clash takes only about 2^(n/2), its square root.
+```
+
+For SHA-256 that is about 2^256 hash computations for a preimage but about 2^128 for a collision. These are generic classical work estimates for an ideal hash and suitably unconstrained inputs, not guarantees for weak input dictionaries or every long-message construction.
 
 | Property | Attacker's task | Ideal cost |
 |---|---|---|
-| Preimage | Given `h`, find any `m` with `H(m) = h` | 2^n |
-| Second preimage | Given `m1`, find `m2 ≠ m1` with the same hash | 2^n |
-| Collision | Find any pair `m1 ≠ m2` with equal hashes | 2^(n/2) |
+| Preimage | Given a digest, find any input that hashes to it | 2^n |
+| Second preimage | Given one input, find a different input with the same hash | 2^n |
+| Collision | Find any two different inputs with equal hashes | 2^(n/2) |
 
 **Preimage resistance** (one-wayness) means you can't run the hash backwards. **Second-preimage resistance** means that, given a specific document, you can't craft a different one with the same fingerprint. **Collision resistance** means you can't find *any* two inputs that clash, even ones you choose freely.
 
@@ -41,7 +61,38 @@ Collision search has the lower generic work bound for a fixed digest size. These
 
 Why is the collision cost only 2^(n/2)? This is the **birthday paradox**. Under a simplified model of independent, uniformly distributed birthdays over 365 days, 23 people give a 50.7% chance of a shared birthday, even though there are 365 possible days. You are not looking for a match with one particular day; you are comparing every pair, and the number of pairs grows with the square of the number of people.
 
-For independent uniform `n`-bit outputs, the approximately 50% collision point is `sqrt(2 ln 2) × 2^(n/2) ≈ 1.1774 × 2^(n/2)`. The expected first-collision count instead approaches `sqrt(pi/2) × 2^(n/2) ≈ 1.2533 × 2^(n/2)`.
+With q items spread uniformly over N possible values, there are q × (q − 1) / 2 pairs, and each pair matches with chance 1/N. That gives a good approximation for the chance of at least one match:
+
+```formula
+p ≈ 1 − e^(−q × (q − 1) / (2 × N))
+p ≈ 1 − e^(−23 × 22 / 730) ≈ 0.50
+where
+p: the probability that at least two of the q items share a value, from 0 to 1
+q: the number of items: people, or hashed messages
+N: the number of equally likely values: 365 birthdays, or 2^n digests
+e: Euler's number, about 2.71828, the base of natural exponentials
+≈: approximately equal to
+In words: the chance of a clash depends on the number of pairs, which grows with the square of q, so it reaches a coin-flip once q is around the square root of N.
+```
+
+With 23 people and 365 days the approximation gives 0.500 (the exact figure is 0.507). Solving for p = 1/2 with N = 2^n digests gives the collision points for an ideal n-bit hash:
+
+```formula
+q_50 ≈ √(2 × ln(2)) × 2^(n/2)
+q_50 ≈ 1.1774 × 2^(n/2)
+q_mean ≈ √(π / 2) × 2^(n/2)
+q_mean ≈ 1.2533 × 2^(n/2)
+where
+q_50: the number of random hashes at which the chance of a collision reaches 50%
+q_mean: the average number of hashes computed until the first collision
+n: the digest length in bits
+2^(n/2): the square root of the number of possible digests, 2^n
+ln: the natural logarithm (logarithm to base e ≈ 2.71828); ln(2) ≈ 0.693
+π: pi, about 3.14159
+√: square root
+≈: approximately equal to
+In words: a collision among random n-bit digests is a coin-flip after about 1.18 × 2^(n/2) hashes and arrives on average after about 1.25 × 2^(n/2).
+```
 
 ```python
 import hashlib, itertools
@@ -56,9 +107,35 @@ for i in itertools.count():
     seen[h] = i
 ```
 
-Truncating SHA-256 to 24 bits gives 2^24 ≈ 16.8 million possible outputs, yet this finds a collision after 8,865 inputs, because the loop starts at zero (printing `4163 8864`). The uniform-output model predicts a 50% point near 4,823 and a mean near 5,134. This particular deterministic input sequence always prints the same pair; changing the sequence can change the first collision.
+Truncating SHA-256 to 24 bits gives 2^24 ≈ 16.8 million possible outputs, yet this finds a collision after 8,865 inputs, because the loop starts at zero (printing `4163 8864`). The uniform-output model predicts:
 
-The practical rule: **an n-bit hash gives at most n/2 bits of collision security**. SHA-256 gives 128-bit collision resistance, which is the standard modern target. A 128-bit hash such as MD5 offered only 64 bits even before it was broken, which is within reach of a determined attacker.
+```formula
+q_50 ≈ 1.1774 × 2^12 ≈ 4823
+q_mean ≈ 1.2533 × 2^12 ≈ 5134
+where
+q_50: the number of hashes at which a collision becomes a 50% chance
+q_mean: the average number of hashes until the first collision
+2^12: 4096, which is 2^(n/2) for an n = 24-bit digest
+≈: approximately equal to
+In words: for a 24-bit digest, a collision is expected after roughly five thousand hashes, not sixteen million.
+```
+
+So 8,865 is a somewhat unlucky but unremarkable run. This particular deterministic input sequence always prints the same pair; changing the sequence can change the first collision.
+
+The practical rule: **an n-bit hash gives at most n/2 bits of collision security**.
+
+```formula
+s_coll = n / 2
+s_coll = 256 / 2 = 128 bits
+s_coll = 128 / 2 = 64 bits
+where
+s_coll: the collision security level in bits: a collision costs about 2^s_coll hash computations
+n: the digest length in bits: 256 for SHA-256, 128 for MD5
+bits: the unit; each extra bit of security doubles the attacker's work
+In words: halve the digest length to get the collision security, so SHA-256 gives 128 bits and MD5 never gave more than 64.
+```
+
+SHA-256 gives 128-bit collision resistance, which is the standard modern target. A 128-bit hash such as MD5 offered only 64 bits even before it was broken, which is within reach of a determined attacker.
 
 ## How the common hashes are built
 
@@ -72,7 +149,24 @@ IV -> [f] -> [f] -> [f] -> digest
        M1     M2     M3 (+ padding)
 ```
 
-For MD5, SHA-1, SHA-256 and SHA-512, the digest exposes the final chaining state. This does not apply equally to truncated variants such as SHA-384 and SHA-512/256. So given `H(m)` and the length of `m`, anyone can carry on hashing and compute `H(m || padding || extra)` without knowing `m`. This is a **length-extension attack**. It doesn't break the hash's three properties, but it breaks naive constructions such as `SHA256(secret || message)` used as an authentication code. The next lesson shows how HMAC avoids it.
+For MD5, SHA-1, SHA-256 and SHA-512, the digest exposes the final chaining state. This does not apply equally to truncated variants such as SHA-384 and SHA-512/256. So anyone who sees the digest can carry on hashing from where it stopped. This is a **length-extension attack**. It doesn't break the hash's three properties, but it breaks naive constructions that hash a secret key followed by the message and use the result as an authentication code:
+
+```formula
+t = H(k ‖ m)
+t′ = H(k ‖ m ‖ p ‖ x)
+where
+H: a full-state Merkle–Damgård hash such as SHA-256
+k: the secret key, which the attacker never learns
+m: the message the server authenticated, for example `amount=10`
+t: the tag the server sends, which is also the hash's final internal state
+p: the padding the hash appended after k ‖ m; it depends only on their total length, which the attacker can guess
+x: extra data the attacker chooses, for example `&amount=1000`
+t′: a valid tag for the longer message m ‖ p ‖ x, computed by restarting the hash from state t
+‖: concatenation: joining byte strings end to end
+In words: because the digest is the whole internal state, an attacker holding t can keep hashing from where the server stopped and get a valid tag for an extended message, without knowing k.
+```
+
+The attacker only has to guess the length of k (trying a few values is cheap), and the forged message contains the padding bytes p in the middle, which many parsers ignore. The next lesson shows how HMAC avoids it.
 
 ### Sponge (SHA-3)
 
@@ -109,10 +203,23 @@ For MD5, SHA-1, SHA-256 and SHA-512, the digest exposes the final chaining state
 ## Pitfalls
 
 - **Hashing passwords with a fast hash.** SHA-256 is designed to be fast. Attack speed depends on hardware, candidate distribution and implementation; plain SHA-256 provides no tunable password-hardening cost. Use a slow, salted password hash (lesson 6).
-- **Using a hash as a MAC.** `H(key || message)` is vulnerable to length extension with SHA-256. Use HMAC.
+- **Using a hash as a MAC.** Hashing a secret key followed by the message is vulnerable to length extension with SHA-256. Use HMAC.
 - **Hashing low-entropy data to "anonymise" it.** Hashing a predictable identifier can permit dictionary recovery or linkage. A bounded phone-number format may be enumerable; all possible email addresses are not necessarily a small enumerable set.
 - **Non-cryptographic hashes for security.** CRC32, MurmurHash and xxHash are great for hash tables and checksums against accidental corruption, but they offer no resistance to a deliberate attacker.
-- **Ambiguous concatenation.** `H("ab" + "c")` equals `H("a" + "bc")`. When hashing several fields, encode lengths or use a structured format so different inputs can't produce the same byte string.
+- **Ambiguous concatenation.** Hashing the fields "ab" and "c" gives the same digest as hashing "a" and "bc". When hashing several fields, encode lengths or use a structured format so different inputs can't produce the same byte string.
+
+Why, and how a length prefix fixes it:
+
+```formula
+H("ab" ‖ "c") = H("a" ‖ "bc")
+H(2 ‖ "ab" ‖ 1 ‖ "c")
+≠ H(1 ‖ "a" ‖ 2 ‖ "bc")
+where
+H: the hash function
+‖: concatenation: joining byte strings end to end, with no separator
+≠: is not equal to
+In words: plain concatenation turns both field pairs into the same bytes "abc", so they hash identically; writing each field's length before it makes the byte strings, and so the digests, differ.
+```
 
 ```python
 import hashlib

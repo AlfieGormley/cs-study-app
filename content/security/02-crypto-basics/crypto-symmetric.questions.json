@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. ECB splits the data into 16-byte blocks and computes `C_i = AES_k(P_i)` independently.\n2. Both records start with the same 16-byte block `country=GB;tier=`.\n3. Same key, same input block, so `AES_k` gives the same output: the first ciphertext blocks match.\n4. The eavesdropper can't read the block, but learns *these two records share a prefix*. With enough records they can map out common values, just like the ECB penguin image.\n\nA mode with a random IV or nonce (CBC, CTR, GCM) makes the two ciphertexts look unrelated.",
+    "workedExample": "ECB splits the data into 16-byte blocks and encrypts each one independently:\n\n```formula\nC_i = E_k(P_i)\nwhere\nC_i: the i-th ciphertext block, 16 bytes\nP_i: the i-th plaintext block, 16 bytes\ni: the block number: 1, 2, 3, …\nE_k: one AES block encryption under the secret key k\nk: the secret key, the same for every block and every record\nIn words: each ciphertext block depends only on its own plaintext block and the key, never on its position or on other blocks.\n```\n\n1. Both records start with the same 16-byte block `country=GB;tier=`.\n2. Same key, same input block, so E_k gives the same output: the first ciphertext blocks match.\n3. The eavesdropper can't read the block, but learns *these two records share a prefix*. With enough records they can map out common values, just like the ECB penguin image.\n\nA mode with a random IV or nonce (CBC, CTR, GCM) makes the two ciphertexts look unrelated.",
     "link": {
       "title": "Block cipher mode of operation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Encryption alone answers \"can an attacker read it?\" Properly used CBC with unpredictable IVs is intended to protect against passive observers.\n2. It does not answer \"can an attacker change it?\" Flipping bit `j` of ciphertext block `C1` flips bit `j` of plaintext block `P2` (and scrambles `P1`).\n3. Worse, if your server reacts differently to bad padding, the attacker gets a padding oracle and may recover plaintext through repeated adaptive queries.\n4. The fix is authenticated encryption: AES-GCM or ChaCha20-Poly1305, which rejects any modified ciphertext before returning plaintext.",
+    "workedExample": "CBC decrypts each block, then XORs it with the previous ciphertext block:\n\n```formula\nP_2 = D_k(C_2) ⊕ C_1\nwhere\nP_2: the second plaintext block\nC_1, C_2: the first and second ciphertext blocks, which an attacker can alter in transit\nD_k: one AES block decryption under the secret key k\nk: the secret key\n⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match\nIn words: the second plaintext block is the decrypted second ciphertext block XORed with the first ciphertext block, so changing a bit of C_1 changes the same bit of P_2.\n```\n\n1. Encryption alone answers \"can an attacker read it?\" Properly used CBC with unpredictable IVs is intended to protect against passive observers.\n2. It does not answer \"can an attacker change it?\" Flipping any bit of C_1 flips the same bit of P_2 (and scrambles P_1, which passes through D_k).\n3. Worse, if your server reacts differently to bad padding, the attacker gets a padding oracle and may recover plaintext through repeated adaptive queries.\n4. The fix is authenticated encryption: AES-GCM or ChaCha20-Poly1305, which rejects any modified ciphertext before returning plaintext.",
     "link": {
       "title": "Authenticated encryption (AEAD) — cryptography.io",
       "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"
@@ -97,15 +97,15 @@
     "options": [
       {
         "text": "`0x15`",
-        "explanation": "That is `C1 XOR C2`, which equals `P1 XOR P2`. You still need to XOR in the known `P1` to isolate `P2`."
+        "explanation": "That is the XOR of the two ciphertext bytes, which equals the XOR of the two plaintext bytes. You still need to XOR in the known first plaintext byte to isolate the second."
       },
       {
         "text": "`A` (`0x41`)",
-        "explanation": "Reusing a nonce doesn't make the plaintexts equal; it makes their XOR computable. P2 differs from P1 here."
+        "explanation": "Reusing a nonce doesn't make the plaintexts equal; it makes their XOR computable. The second plaintext differs from the first here."
       },
       {
         "text": "`T` (`0x54`)",
-        "explanation": "Correct. The keystream cancels: `P2 = C1 XOR C2 XOR P1 = 0x5A XOR 0x4F XOR 0x41 = 0x54`, which is `T`."
+        "explanation": "Correct. The keystream cancels, leaving:\n\n```formula\nP_2 = C_1 ⊕ C_2 ⊕ P_1\nP_2 = 0x5A ⊕ 0x4F ⊕ 0x41 = 0x54\nwhere\nP_1, P_2: the first bytes of the two plaintexts\nC_1, C_2: the first bytes of the two ciphertexts\n0x5A, 0x4F, 0x41, 0x54: byte values in hexadecimal (base 16, marked by 0x)\n⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match\nIn words: XOR both ciphertext bytes with the known plaintext byte and the shared keystream drops out, leaving 0x54, the letter T.\n```"
       },
       {
         "text": "It can't be found without the key",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "In CTR mode `C = P XOR K`, where `K` is the keystream from `AES_k(nonce||counter)`. Same key and nonce means the same `K`.\n\n```\nK  = C1 XOR P1\n   = 0x5A XOR 0x41 = 0x1B\nP2 = C2 XOR K\n   = 0x4F XOR 0x1B = 0x54\n   = 'T'\n```\n\nEquivalently `C1 XOR C2 = P1 XOR P2 = 0x15`, then `0x15 XOR 0x41 = 0x54`. With more known or guessable text (headers, JSON keys) the attacker may recover additional corresponding bytes; the XOR alone does not uniquely determine both complete messages.",
+    "workedExample": "In CTR mode each ciphertext byte is a plaintext byte XORed with a keystream byte, and the keystream depends only on the key, nonce and counter. Same key and nonce means the same keystream byte K at the start of both messages:\n\n```formula\nK = C_1 ⊕ P_1\nK = 0x5A ⊕ 0x41 = 0x1B\nP_2 = C_2 ⊕ K\nP_2 = 0x4F ⊕ 0x1B = 0x54\nwhere\nK: the shared first keystream byte (from AES-encrypting the nonce and counter under the key)\nC_1, C_2: the captured first ciphertext bytes, 0x5A and 0x4F\nP_1: the known first plaintext byte, 'A' = 0x41\nP_2: the unknown first plaintext byte of the second message\n0x5A, 0x41, 0x1B, 0x4F, 0x54: byte values in hexadecimal (base 16, marked by 0x)\n⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match\nIn words: the known plaintext reveals the keystream byte, and that same keystream byte unlocks the other message: 0x54 is the ASCII letter T.\n```\n\nEquivalently, C_1 ⊕ C_2 = P_1 ⊕ P_2 = 0x15, and 0x15 ⊕ 0x41 = 0x54. With more known or guessable text (headers, JSON keys) the attacker may recover additional corresponding bytes; the XOR alone does not uniquely determine both complete messages.",
     "link": {
       "title": "Block cipher mode of operation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation"
@@ -130,8 +130,8 @@
         "explanation": "XORing with `0x37` would turn `'1'` (`0x31`) into `0x06`, a control character. You need the difference between old and new bytes."
       },
       {
-        "text": "`0x06`, which is `'1' XOR '7'`",
-        "explanation": "Correct. Ciphertext bit flips pass straight through to the plaintext in CTR mode, so XORing with `0x31 XOR 0x37 = 0x06` turns `1` into `7`."
+        "text": "`0x06`, the XOR of `'1'` and `'7'`",
+        "explanation": "Correct. Ciphertext bit flips pass straight through to the plaintext in CTR mode, so XORing that byte with `0x06` (the XOR of `0x31` and `0x37`) turns `1` into `7`."
       },
       {
         "text": "Nothing works: they need the key to change any byte",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. CTR decryption is `P = C XOR K`. If the attacker replaces `C` with `C XOR D`, decryption gives `P XOR D`.\n2. They want `P XOR D = '7'` where `P = '1'`.\n3. So `D = '1' XOR '7'`:\n\n```\n'1' = 0x31 = 0011 0001\n'7' = 0x37 = 0011 0111\nXOR = 0x06 = 0000 0110\n```\n\n4. XOR byte 7 of the ciphertext (0-based, `amount=` is 7 chars) with `0x06`. The server decrypts `amount=700`.\n\nWith AES-GCM, the tag check fails and decryption raises an error instead.",
+    "workedExample": "CTR decryption XORs each ciphertext byte with a keystream byte. If the attacker XORs a difference into the ciphertext, the same difference lands in the plaintext:\n\n```formula\nP′ = (C ⊕ D) ⊕ K = P ⊕ D\nD = '1' ⊕ '7'\nD = 0x31 ⊕ 0x37 = 0x06\nwhere\nC: the ciphertext byte under the '1'\nK: the keystream byte at that position, unknown to the attacker\nP: the original plaintext byte, '1' = 0x31\nD: the difference the attacker XORs in\nP′: the byte the server decrypts after the change, which should become '7' = 0x37\n0x31, 0x37, 0x06: byte values in hexadecimal (base 16, marked by 0x)\n⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match\nIn words: choose D as the XOR of the old and wanted characters, and P ⊕ D turns '1' into '7' without the key.\n```\n\nIn binary:\n\n```\n'1' = 0x31 = 0011 0001\n'7' = 0x37 = 0011 0111\nXOR = 0x06 = 0000 0110\n```\n\nXOR byte 7 of the ciphertext (counting from 0: `amount=` is 7 characters) with `0x06`. The server decrypts `amount=700`.\n\nWith AES-GCM, the tag check fails and decryption raises an error instead.",
     "link": {
       "title": "Authenticated encryption (AEAD) — cryptography.io",
       "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"
@@ -181,7 +181,7 @@
       2,
       4
     ],
-    "workedExample": "Go through each claim against how GCM is built (CTR encryption plus a GHASH tag):\n\n1. Nonce uniqueness: CTR keystream depends on key and nonce, so repeating it repeats the keystream. **True.**\n2. AAD: it feeds into the tag only. **False**: it's authenticated, not secret.\n3. Tampering: decryption recomputes the tag; any mismatch raises `InvalidTag`. **True.**\n4. Nonce secrecy: not required, it travels with the message. **False.**\n5. Length: `len(ct) = len(pt) + 16`. **True.** For example `pay Bob 10` (10 bytes) gives 26 bytes.",
+    "workedExample": "Go through each claim against how GCM is built (CTR encryption plus a GHASH tag):\n\n1. Nonce uniqueness: CTR keystream depends on key and nonce, so repeating it repeats the keystream. **True.**\n2. AAD: it feeds into the tag only. **False**: it's authenticated, not secret.\n3. Tampering: decryption recomputes the tag; any mismatch raises `InvalidTag`. **True.**\n4. Nonce secrecy: not required, it travels with the message. **False.**\n5. Length: the output is the plaintext length plus the tag (formula below). **True.**\n\n```formula\nL_out = L_in + 16\nL_out = 10 + 16 = 26 bytes\nwhere\nL_out: the length of the encrypt() output (ciphertext plus tag), in bytes\nL_in: the plaintext length, in bytes; `pay Bob 10` is 10\n16: the tag length: 128 bits = 16 bytes\nbytes: the unit of data; one byte is 8 bits\nIn words: GCM adds no padding, so the output is exactly the plaintext length plus a 16-byte tag.\n```",
     "link": {
       "title": "NIST SP 800-38D: GCM and GMAC",
       "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. `n` is 12 bytes (the standard 96-bit GCM nonce).\n2. GCM is a stream-style mode, so the ciphertext is exactly as long as the plaintext: 100 bytes.\n3. `encrypt` appends a 16-byte tag: `len(ct) = 116`.\n4. The key size (128 vs 256 bits) doesn't change the output length.\n5. `len(n + ct) = 12 + 116 = 128`.\n\nPrepending the nonce is a common way to store it, since it only has to be unique, not secret.",
+    "workedExample": "1. `n` is 12 bytes (the standard 96-bit GCM nonce).\n2. GCM is a stream-style mode, so the ciphertext is exactly as long as the plaintext: 100 bytes.\n3. `encrypt` appends a 16-byte tag: `len(ct) = 116`.\n4. The key size (128 vs 256 bits) doesn't change the output length.\n5. The print adds the 12-byte nonce in front:\n\n```formula\nL_total = L_nonce + L_pt + L_tag\nL_total = 12 + 100 + 16 = 128 bytes\nwhere\nL_total: the printed length, len(n + ct), in bytes\nL_nonce: the nonce length: 12 bytes (96 bits)\nL_pt: the plaintext length, 100 bytes; GCM ciphertext is the same length\nL_tag: the authentication tag length: 16 bytes (128 bits)\nbytes: the unit of data; one byte is 8 bits\nIn words: nonce plus ciphertext plus tag gives 128 bytes; the key size plays no part.\n```\n\nPrepending the nonce is a common way to store it, since it only has to be unique, not secret.",
     "link": {
       "title": "Authenticated encryption (AEAD) — cryptography.io",
       "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. With random `b`-bit nonces, the birthday bound means collisions become likely around `2^(b/2)` messages: `2^48` for 96 bits.\n2. NIST SP 800-38D is more conservative and limits random-nonce GCM to `2^32` invocations per key, keeping the collision chance below about `2^-32`.\n3. `2^32 ≈ 4.29 × 10^9`. At `2 × 10^7` per day:\n\n```\n4.29e9 / 2e7 ≈ 215 days\n```\n\n4. A repeated nonce leaks the overlapping plaintext XOR and may enable GHASH-key recovery and forgeries.\n5. Fixes: rotate keys well before the limit, use a coordinated per-key counter that cannot repeat across restarts or workers, or use XChaCha20-Poly1305 (192-bit random nonces, still no nonce reuse) or AES-GCM-SIV (nonce-misuse resistant).",
+    "workedExample": "Two numbers matter: how likely a random-nonce collision is, and how long until the key reaches NIST's limit.\n\n1. With random 96-bit nonces, the birthday bound says collisions become likely around 2^48 messages, the square root of the 2^96 possible nonces.\n2. NIST SP 800-38D is more conservative and limits random-nonce GCM to 2^32 invocations per key, keeping the collision chance below about 2^−32:\n\n```formula\np_coll ≈ q^2 / 2^(b+1)\np_coll ≈ (2^32)^2 / 2^97 = 2^−33\nwhere\np_coll: the probability that at least two messages share a nonce, from 0 to 1\nq: the number of messages under one key, here NIST's cap of 2^32\nb: the nonce length in bits, 96\n≈: approximately equal to (good while p_coll is small)\nIn words: the collision chance grows with the square of the message count; at 2^32 messages it is about 2^−33, one in 8.6 billion.\n```\n\n3. Now the time to reach the cap:\n\n```formula\nt_limit = 2^32 / r\nt_limit ≈ 4.29 × 10^9 / (2 × 10^7)\nt_limit ≈ 215 days\nwhere\nt_limit: the time until the key has encrypted 2^32 messages, in days\n2^32: NIST's cap on random-nonce GCM messages per key, about 4.29 × 10^9\nr: the encryption rate under this key: 2 × 10^7 (20 million) messages per day\ndays: the unit of time used here\n≈: approximately equal to\nIn words: at 20 million messages a day, one key passes the 2^32-message limit after about seven months.\n```\n\n4. A repeated nonce leaks the overlapping plaintext XOR and may enable GHASH-key recovery and forgeries.\n5. Fixes: rotate keys well before the limit, use a coordinated per-key counter that cannot repeat across restarts or workers, or use XChaCha20-Poly1305 (192-bit random nonces, still no nonce reuse) or AES-GCM-SIV (nonce-misuse resistant).",
     "link": {
       "title": "NIST SP 800-38D: GCM and GMAC",
       "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
@@ -285,11 +285,11 @@
     "options": [
       {
         "text": "The XOR of the two plaintexts is revealed",
-        "explanation": "Correct. GCM encrypts with CTR mode, so the same keystream is applied to both messages and cancels out in `C1 XOR C2`."
+        "explanation": "Correct. GCM encrypts with CTR mode, so the same keystream is applied to both messages and cancels out when the two ciphertexts are XORed together."
       },
       {
         "text": "The attacker may recover GHASH-key candidates and forge valid tags",
-        "explanation": "Correct. Repeated-nonce tag equations can constrain H. Whether they uniquely recover it depends on the messages, tag length and observations; the integrity risk is severe."
+        "explanation": "Correct. Repeated-nonce tag equations can constrain H, the GHASH authentication key. Whether they uniquely recover it depends on the messages, tag length and observations; the integrity risk is severe."
       },
       {
         "text": "The AES key itself is directly recovered",
@@ -308,7 +308,7 @@
       0,
       1
     ],
-    "workedExample": "1. The repeated CTR keystream cancels: C1 XOR C2 = P1 XOR P2 over the overlap. This reveals a relationship, not necessarily both plaintexts.\n2. With full tags, XORing repeated-nonce tag equations cancels their common mask and gives an equation in H. It may have multiple candidates; identical authenticated inputs add no new equation.\n3. Suitable observations can enable recovery and forgery. Knowing H and one valid record also exposes that nonce's tag mask.\n4. This does not directly recover the AES key or decrypt records under other nonces.\n5. Replace the compromised key and fix nonce allocation; using AES-GCM-SIV still requires observing its limits.",
+    "workedExample": "GCM encrypts with CTR mode, so a repeated nonce means a repeated keystream K:\n\n```formula\nC_1 ⊕ C_2 = (P_1 ⊕ K) ⊕ (P_2 ⊕ K)\nC_1 ⊕ C_2 = P_1 ⊕ P_2\nwhere\nC_1, C_2: the two ciphertexts encrypted under the same key and nonce\nP_1, P_2: the two plaintexts\nK: the shared keystream\n⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match\nIn words: the keystream appears twice and cancels, leaving the XOR of the two plaintexts for anyone who sees both ciphertexts.\n```\n\n1. This reveals a relationship over the overlapping length, not necessarily both plaintexts.\n2. With full tags, XORing repeated-nonce tag equations cancels their common mask and gives an equation in H, the GHASH authentication key (derived from the AES key). It may have multiple candidates; identical authenticated inputs add no new equation.\n3. Suitable observations can enable recovery and forgery. Knowing H and one valid record also exposes that nonce's tag mask.\n4. This does not directly recover the AES key or decrypt records under other nonces.\n5. Replace the compromised key and fix nonce allocation; using AES-GCM-SIV still requires observing its limits.",
     "link": {
       "title": "NIST SP 800-38D: GCM and GMAC",
       "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"

@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. A MAC proves \"a key holder produced these bytes\". It says nothing about *when*.\n2. Replay sends the exact same bytes and tag, so verification succeeds.\n3. Add freshness to the signed data: `tag = HMAC(k, timestamp || '.' || body)`.\n4. Reject timestamps outside a window (say 5 minutes), so old captures die quickly.\n5. Within the window, record processed event IDs and skip duplicates. This also handles legitimate retries.",
+    "workedExample": "1. A MAC proves \"a key holder produced these bytes\". It says nothing about *when*.\n2. Replay sends the exact same bytes and tag, so verification succeeds.\n3. Add freshness to the signed data, and check it on receipt:\n\n```formula\nt = HMAC(K, T ‖ \".\" ‖ b)\n|T_now − T| ≤ 300 s\nwhere\nt: the tag sent in the signature header\nHMAC: HMAC-SHA256, the keyed MAC\nK: the webhook secret shared by sender and receiver\nT: the timestamp the sender put in the signed data, in seconds since 1 January 1970 (Unix time)\nb: the raw request body\nT_now: the receiver's current time, in the same units\n|x|: the absolute value of x: its size ignoring the sign, so early and late both count\n≤: is at most\ns: seconds; 300 s is a 5-minute window\n‖: concatenation: joining byte strings end to end\nIn words: sign the timestamp together with the body, so it can't be changed, and accept only messages whose timestamp is within five minutes of now.\n```\n\n4. Rejecting timestamps outside the window means old captures die quickly.\n5. Within the window, record processed event IDs and skip duplicates. This also handles legitimate retries.",
     "link": {
       "title": "Stripe: webhook signatures and replay handling",
       "url": "https://docs.stripe.com/webhooks"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "The full tag space has 16^32 = 2^128 possibilities. In the stipulated prefix oracle, up to 16 candidate choices at each of 32 positions gives roughly 512 choices. Real measurements can require many repetitions or may not expose this signal at all. This arithmetic is not a network timing-attack benchmark.",
+    "workedExample": "Compare a position-by-position search with a blind search of the whole tag space:\n\n```formula\nG_timing ≤ 32 × 16 = 512\nG_brute = 16^32 = 2^128\nwhere\nG_timing: candidate choices when the oracle confirms each character separately\nG_brute: the number of possible 32-character hex tags, searched blind\n16: the number of possible hex characters (0–9, a–f) at each position; each encodes 4 bits\n32: the number of characters in the tag\n≤: is at most\nIn words: confirming one character at a time turns a 2^128 search into at most 512 choices.\n```\n\nReal measurements can require many repetitions or may not expose this signal at all. This arithmetic is not a network timing-attack benchmark.",
     "link": {
       "title": "hmac — Python documentation",
       "url": "https://docs.python.org/3/library/hmac.html"
@@ -254,24 +254,24 @@
     "prompt": "Assume suitable random independent keys, fresh unpredictable CBC IVs, unambiguous encoding and required replay controls. Which encryption/MAC composition best protects ciphertext and IV integrity before decryption?",
     "options": [
       {
-        "text": "`ct = CBC(k1, pt)`, then `tag = HMAC(k2, iv || ct)`; on receipt, verify the tag before decrypting",
+        "text": "Encrypt with CBC under `k1`, then HMAC the IV and ciphertext under `k2`; on receipt, verify the tag before decrypting",
         "explanation": "Correct. Encrypt-then-MAC with separate keys, covering the IV, and verifying first so tampered data is never decrypted."
       },
       {
-        "text": "`tag = HMAC(k, pt)`, then encrypt `pt || tag` with CBC under the same key `k`",
+        "text": "HMAC the plaintext under `k`, then CBC-encrypt the plaintext and tag together under the same key `k`",
         "explanation": "This is MAC-then-encrypt with one key. The receiver must decrypt and check padding before the MAC, which is what padding-oracle and Lucky Thirteen attacks exploit."
       },
       {
-        "text": "`ct = CBC(k1, pt)` and `tag = HMAC(k2, pt)`, send both",
+        "text": "CBC-encrypt the plaintext under `k1` and HMAC the plaintext under `k2`; send both",
         "explanation": "Encrypt-and-MAC: the tag over plaintext is deterministic, so it reveals when two messages are equal, and decryption still happens before verification."
       },
       {
-        "text": "`ct = CBC(k1, pt)`, `tag = HMAC(k2, ct)` but leave the IV out of the MAC",
+        "text": "CBC-encrypt under `k1` and HMAC the ciphertext under `k2`, but leave the IV out of the MAC",
         "explanation": "The IV affects the first plaintext block. Leaving it unauthenticated lets an attacker flip bits in block 1 without detection."
       }
     ],
     "answer": 0,
-    "workedExample": "Encrypt with a suitable fresh unpredictable CBC IV and key k1. Authenticate the IV, ciphertext and relevant context using independent k2 and an unambiguous encoding. Reject invalid tags before decryption. Replay and key-management requirements remain separate. Prefer a maintained AEAD implementation when available.",
+    "workedExample": "Encrypt-then-MAC with separate keys, covering the IV:\n\n```formula\nC = CBC_{K1}(IV, P)\nt = HMAC(K2, IV ‖ C)\nwhere\nC: the ciphertext\nCBC_{K1}: AES in CBC mode under the encryption key K1\nK1, K2: two independent random keys, one for encryption and one for the MAC (k1 and k2 in the options)\nIV: the fresh, unpredictable initialisation vector for this message\nP: the plaintext\nt: the tag sent with the IV and ciphertext\nHMAC: HMAC-SHA256\n‖: concatenation: joining byte strings end to end\nIn words: encrypt first, then MAC everything the receiver will use to decrypt; the receiver recomputes t and rejects the message before decrypting if it doesn't match.\n```\n\nAuthenticate any other relevant context with an unambiguous encoding too. Replay and key-management requirements remain separate. Prefer a maintained AEAD implementation when available.",
     "link": {
       "title": "Authenticated encryption — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Authenticated_encryption"
@@ -281,7 +281,7 @@
     "id": "crypto-macs-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "An API signs requests as `SHA256(secret || params)`. An attacker sees one request and its tag but not the secret. To append `&admin=true` with a valid tag via length extension, which of these do they **not** need?",
+    "prompt": "An API signs requests by hashing a secret followed by the request parameters:\n\n```formula\nt = SHA256(s ‖ m)\nwhere\nt: the tag sent with the request\nSHA256: the SHA-256 hash function\ns: the server's secret\nm: the request parameters\n‖: concatenation: joining byte strings end to end\nIn words: the tag is the SHA-256 hash of the secret with the parameters appended.\n```\n\nAn attacker sees one request and its tag but not the secret. To append `&admin=true` with a valid tag via length extension, which of these do they **not** need?",
     "options": [
       {
         "text": "The original tag",
@@ -289,7 +289,7 @@
       },
       {
         "text": "The original params",
-        "explanation": "They need these to build the forged message `params || padding || extra`, which the server will recompute over."
+        "explanation": "They need these to build the forged message (the params, then SHA-256's padding, then the extra text), which the server will recompute over."
       },
       {
         "text": "The secret's length (or a few guesses at it)",
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. SHA-256 processes `secret || params || pad1` and outputs its internal state `T`.\n2. The attacker sets their own SHA-256 state to `T`.\n3. They continue hashing `extra = &admin=true` with final padding computed for total length `len(secret) + len(params) + len(pad1) + len(extra)`.\n4. Inputs needed: `T`, `params`, and `len(secret)` (guessable).\n5. They send `params || pad1 || extra` and the new tag. The server computes `SHA256(secret || that)` and gets the same value.\n\nHMAC's outer hash stops step 2 from giving a valid final tag.",
+    "workedExample": "SHA-256 outputs its whole internal state, so the tag is a point the attacker can resume hashing from:\n\n```formula\nT = H(s ‖ m)\nT′ = H(s ‖ m ‖ p_1 ‖ x)\nL = L_s + L_m + L_p1 + L_x\nwhere\nT: the original tag, equal to SHA-256's internal state after processing s ‖ m ‖ p_1\nH: SHA-256\ns: the secret, never learned\nm: the original params\np_1: the padding SHA-256 added after s ‖ m; it depends only on their total length\nx: the extra text, `&admin=true`\nT′: the forged tag, computed by loading T as the state and hashing x plus its final padding\nL: the total length that x's final padding must encode, in bytes\nL_s, L_m, L_p1, L_x: the lengths in bytes of s, m, p_1 and x; only L_s is unknown, and it can be guessed\n‖: concatenation: joining byte strings end to end\nIn words: starting from the published tag, the attacker hashes on through the extra text and gets exactly what the server will compute for the longer message, without the secret.\n```\n\n1. The attacker sets their own SHA-256 state to T.\n2. They continue hashing x with final padding for total length L.\n3. Inputs needed: T, m and the length of s (guessable).\n4. They send m ‖ p_1 ‖ x with T′. The server hashes s followed by that and gets the same value.\n\nHMAC's outer hash stops this from giving a valid final tag.",
     "link": {
       "title": "Flickr API signature forgery (Duong and Rizzo, 2009)",
       "url": "https://vnhacker.blogspot.com/2009/09/flickrs-api-signature-forgery.html"
@@ -331,7 +331,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Each independent guess succeeds with probability 2^-32, so mean waiting time is 2^32 attempts. At 1,000/s this is about 49.7 days; the 50% success time is shorter, about 34.5 days. This assumes the same accepted context and no expiry or rate limit. Choose tag length and lifetime from the forgery budget; a random server-side token also requires sufficient entropy and request limits.",
+    "workedExample": "Each independent guess succeeds with probability 2^−32, so the expected number of attempts is 2^32:\n\n```formula\nt_mean = 2^32 / r\nt_mean ≈ 4.29 × 10^9 / 1000\nt_mean ≈ 4.29 × 10^6 s\nt_mean ≈ 49.7 days\nt_50 = ln(2) × t_mean ≈ 34.5 days\nwhere\nt_mean: the expected (average) time until the first successful forgery\nt_50: the time by which success has a 50% chance\n2^32: the number of possible 32-bit tags, about 4.29 × 10^9; also the expected number of guesses\nr: the guess rate, 1,000 verification attempts per second\nln: the natural logarithm; ln(2) ≈ 0.693\ns: seconds; one day is 86,400 s\ndays: the unit of the results\n≈: approximately equal to\nIn words: a 32-bit tag falls to blind guessing in about seven weeks on average, and has a 50% chance of falling within about five weeks, at a thousand guesses a second.\n```\n\nThis assumes the same accepted context and no expiry or rate limit. Choose tag length and lifetime from the forgery budget; a random server-side token also requires sufficient entropy and request limits.",
     "link": {
       "title": "HMAC — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/HMAC"
@@ -348,7 +348,7 @@
         "explanation": "Correct. HMAC is the standard construction; its nested design defeats length extension and it has a security proof."
       },
       {
-        "text": "`SHA256(k || msg)`",
+        "text": "SHA-256 of `k` with the message appended",
         "explanation": "Vulnerable to length extension: anyone who sees one tag can compute tags for extended messages without `k`."
       },
       {
@@ -360,7 +360,7 @@
         "explanation": "Correct. KMAC is NIST's standard keyed mode of SHA-3 (SP 800-185)."
       },
       {
-        "text": "Sending `SHA256(msg)` alongside the message",
+        "text": "Sending the message's plain SHA-256 hash alongside it",
         "explanation": "No key is involved, so an attacker who changes the message simply recomputes the hash."
       }
     ],
@@ -369,7 +369,7 @@
       2,
       3
     ],
-    "workedExample": "HMAC-SHA256, keyed BLAKE2b and KMAC256 are specified keyed constructions. SHA256(k || msg) admits length extension, and SHA256(msg) has no authentication key. Needing a key and resisting extension are necessary considerations here, not a general proof that any other candidate MAC is sound.",
+    "workedExample": "HMAC-SHA256, keyed BLAKE2b and KMAC256 are specified keyed constructions. Hashing k followed by the message admits length extension, and a plain hash of the message has no authentication key. Needing a key and resisting extension are necessary considerations here, not a general proof that any other candidate MAC is sound.",
     "link": {
       "title": "Message authentication code — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Message_authentication_code"

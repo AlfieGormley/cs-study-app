@@ -28,7 +28,7 @@ The core ingredients are:
 - **Sequence**: statement two runs after statement one, and order matters.
 - **Control flow**: `if`, loops and jumps decide which statement runs next.
 
-**Procedural** programming (C, Pascal, early Python scripts) is imperative code organised into procedures. **Structured** programming, pushed by Edsger Dijkstra's 1968 letter *Go To Statement Considered Harmful*, restricts control flow to sequence, selection (`if`) and iteration (loops). The Böhm–Jacopini theorem (1966) showed those three are enough to express any computable function, so `goto` is never strictly necessary.
+**Procedural programming** (C, Pascal, early Python scripts) is imperative code organised into procedures. **Structured programming**, pushed by Edsger Dijkstra's 1968 letter *Go To Statement Considered Harmful*, restricts control flow to sequence, selection (`if`) and iteration (loops). The Böhm–Jacopini theorem (1966) showed those three are enough to express any computable function, so `goto` is never strictly necessary.
 
 Here is an imperative solution to a small task: *sum the squares of the even numbers in a list*.
 
@@ -130,7 +130,19 @@ React compares the new description with the previous one and computes DOM update
 > [!tip] Declarative interface, imperative engine
 > Declarative systems are almost always built on imperative code. The SQL planner, React's reconciler and Kubernetes controllers are imperative programs. The paradigm describes the interface you work with, not what happens all the way down.
 
-A useful goal of desired-state operations is **idempotence** under stable inputs and provider behavior: applying the same declaration twice gives the same result as applying it once. Running "ensure 3 replicas" ten times still leaves 3 replicas. Running "start 3 containers" ten times leaves 30.
+A useful goal of desired-state operations is **idempotence** under stable inputs and provider behavior: applying the same declaration twice gives the same result as applying it once. Written as a formula, an operation is idempotent when:
+
+```formula
+f(f(s)) = f(s)
+where
+f: an operation applied to a system, such as "ensure 3 replicas exist"
+s: the state of the system before the operation, such as how many replicas are running
+f(s): the state after applying the operation once
+f(f(s)): the state after applying it a second time, straight after the first
+In words: an operation is idempotent when doing it again changes nothing more than doing it once did.
+```
+
+Running "ensure 3 replicas" ten times still leaves 3 replicas: from 0 running, the first run gives 3 and every later run finds 3 and does nothing. Running "start 3 containers" ten times leaves 30, because each run adds 3 more (0, then 3, then 6, ...), so applying it twice does not give the same state as applying it once. The idea only holds while nothing else changes the system between runs.
 
 ## It's a spectrum
 
@@ -150,6 +162,19 @@ Declarative code is usually shorter, has fewer places for bugs to hide (no off-b
 
 > [!warning] An ORM's N+1 trap
 > ORMs let you write `for order in orders: print(order.customer.name)`, which looks like simple attribute access. Each `.customer` may fire a separate query, so 1,000 orders cause 1,001 round trips. The declarative-looking code hid an imperative cost. Eager loading with an appropriate join or batch query can avoid those per-object queries.
+
+The name "N+1" comes from counting the queries: one to load the list, then one more per item in it.
+
+```formula
+Q = 1 + N
+Q = 1 + 1000 = 1001
+where
+Q: the total number of database queries (round trips) the loop makes
+N: the number of orders loaded, here 1,000
+In words: one query fetches the orders, then each order triggers one extra query for its customer.
+```
+
+At even 1 ms per round trip, 1,001 queries spend about a second just waiting on the database. Eager loading brings the count down to 1 or 2 queries however many orders there are.
 
 ## Key takeaways
 - Imperative code describes *how*: a sequence of state-changing commands, mirroring the von Neumann machine.

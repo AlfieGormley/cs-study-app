@@ -149,11 +149,11 @@ A cyclic `deps` makes `TopologicalSorter` raise `CycleError`: the same check as 
 - **Build systems**: Make, Bazel and others rebuild only targets downstream of changed files.
 - **Visual languages**: LabVIEW (lab instruments) and Simulink (control systems) are programmed by wiring boxes together.
 - **Synchronous dataflow**: Lustre and its industrial descendant SCADE are used for safety-critical avionics and rail software, where timing must be provable.
-- **Data processing**: Apache Beam, Flink and Spark build dataflow graphs of transformations and distribute them across a cluster. TensorFlow 1.x had you build a graph first, then run it.
+- **Data processing**: Apache Beam, Apache Flink and Apache Spark build dataflow graphs of transformations and distribute them across a cluster. TensorFlow 1.x had you build a graph first, then run it.
 
 ### Reactive programming
 
-**Reactive** UI frameworks apply dataflow to user interfaces. In **signals**-based libraries (SolidJS, Preact Signals, Angular signals, Vue's refs), a value declares what it is computed from, and the runtime tracks dependencies and updates only what's affected.
+**Reactive** UI frameworks apply dataflow to user interfaces. In libraries based on **reactive signals** (SolidJS, Preact Signals, Angular signals, Vue's refs), a value declares what it is computed from, and the runtime tracks dependencies and updates only what's affected.
 
 ```javascript
 // Preact Signals-style API

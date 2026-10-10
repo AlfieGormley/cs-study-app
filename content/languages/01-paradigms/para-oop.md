@@ -114,7 +114,7 @@ The **Liskov substitution principle** (Barbara Liskov, 1987) says a subtype must
 
 ## Composition
 
-**Composition** builds objects out of other objects: a `Car` *has an* `Engine`. Instead of inheriting behaviour, an object holds a reference to a helper and **delegates** to it.
+**Object composition** builds objects out of other objects: a `Car` *has an* `Engine`. Instead of inheriting behaviour, an object holds a reference to a helper and passes calls on to it, which is called **delegation**.
 
 ```java
 class CountingSet<E> {
@@ -134,14 +134,14 @@ class CountingSet<E> {
 }
 ```
 
-Now `inner.addAll` calls `inner`'s own `add`, not ours, so the count is correct. The wrapper depends only on `Set`'s public behaviour. You may substitute another Set implementation only if its contract suits callers: TreeSet requires an ordering and has different null and equality/ordering considerations. (In practice you would also `implements Set<E>` and forward the remaining methods, which is the **decorator** pattern.)
+Now `inner.addAll` calls `inner`'s own `add`, not ours, so the count is correct. The wrapper depends only on `Set`'s public behaviour. You may substitute another Set implementation only if its contract suits callers: TreeSet requires an ordering and has different null and equality/ordering considerations. (In practice you would also `implements Set<E>` and forward the remaining methods, which is the **decorator pattern**.)
 
 The *Design Patterns* book (Gamma, Helm, Johnson and Vlissides, 1994) summed it up as "favour object composition over class inheritance". The rule of thumb:
 
 - Use inheritance for a genuine **is-a** relationship where the subtype honours the parent's contract, ideally when the parent was designed for extension.
 - Use composition for **has-a** or **uses-a** relationships, and whenever you just want to reuse code.
 
-Many newer languages lean this way. **Go** has no inheritance at all: it offers struct embedding (automatic delegation) and interfaces. **Rust** has traits but no inheritance between structs.
+Many newer languages lean this way. The **Go language** has no inheritance at all: it offers struct embedding (automatic delegation) and interfaces. **Rust** has traits but no inheritance between structs.
 
 ## Polymorphism
 

@@ -27,9 +27,9 @@ The **scope** of a binding is the region of program text where the name refers t
 
 ## Lexical vs dynamic scope
 
-With **lexical** (static) scope, a name refers to the binding in the nearest enclosing block *in the source code*. You can work it out by reading the program. Almost every modern language works this way: C, Java, Python, JavaScript, Rust, Haskell.
+With **lexical scope** (also called static scope), a name refers to the binding in the nearest enclosing block *in the source code*. You can work it out by reading the program. Almost every modern language works this way: C, Java, Python, JavaScript, Rust, Haskell.
 
-With **dynamic** scope, a name refers to the most recent binding *on the call stack* at run time. Early Lisps worked this way, Emacs Lisp did by default for decades, and so does Bash:
+With **dynamic scope**, a name refers to the most recent binding *on the call stack* at run time. Early Lisps worked this way, Emacs Lisp did by default for decades, and so does Bash:
 
 ```bash
 x=global
@@ -42,7 +42,7 @@ show   # prints: global
 
 `show` has no `x` of its own. Under dynamic scope it sees whichever `x` its *caller* had. Under lexical scope it would always print `global`, because that's the `x` visible where `show` was written.
 
-Dynamic scope is occasionally handy (a "current output stream" every function picks up), but it makes code hard to reason about: a function's behaviour depends on who called it. Scheme (1975) showed lexical scope could work in Lisp, and the industry followed. Languages that want the dynamic behaviour now opt in explicitly: Common Lisp's special variables, Perl's `local`, Python's `contextvars`, React's context.
+Dynamic scope is occasionally handy (a "current output stream" every function picks up), but it makes code hard to reason about: a function's behaviour depends on who called it. Scheme (1975) showed lexical scope could work in Lisp, and the industry followed. Languages that want the dynamic behaviour now ask for it explicitly: Common Lisp's special variables, Perl's `local`, Python's `contextvars`, React's context.
 
 ## Python's scope rules
 
@@ -103,7 +103,7 @@ print(c())   # 3
 
 ### Python closures capture bindings
 
-In Python and ordinary JavaScript closures, references to lexical bindings persist; other languages offer capture by value or reference. This distinction is and the source of a famous bug:
+In Python and ordinary JavaScript closures, references to lexical bindings persist; other languages offer capture by value or reference. This distinction is the source of a famous bug:
 
 ```python
 fs = [lambda: i for i in range(3)]
@@ -146,7 +146,7 @@ inc --> [code] + [env] --> cell: n = 3
                            (on the heap)
 ```
 
-- **CPython** stores captured variables in *cell* objects. You can see them: `c.__closure__[0].cell_contents` is `3`. Both the outer function and every closure share the same cell, which is how `nonlocal` writes are visible.
+- **CPython** stores captured variables in **cell objects**. You can see them: `c.__closure__[0].cell_contents` is `3`. Both the outer function and every closure share the same cell, which is how `nonlocal` writes are visible.
 - **Lua** uses *upvalues*: they point into the stack while the outer function runs and are moved ("closed") to the heap when it returns.
 - **C** has no closures. Callbacks take a function pointer plus a `void *` context argument, which is a closure built by hand.
 - **Rust** and **C++** make capture explicit. A C++ lambda says `[x]` (copy) or `[&x]` (reference); a reference that outlives `x` is undefined behaviour. Safe Rust rejects escaping borrows that outlive their referents. A `move` closure captures by value, moving or copying its captures; moving a borrowed reference does not extend the referent’s lifetime.
@@ -159,7 +159,7 @@ When you call `f(expr)`, an **evaluation strategy** decides when `expr` is evalu
 
 ### Strict: evaluate arguments first
 
-Most languages are **strict** (applicative order): argument expressions are evaluated to values before the call; this does not recursively force lazy objects or traverse referenced data. Within strict languages, the question is what gets passed:
+Most languages use **strict evaluation** (applicative order): argument expressions are evaluated to values before the call; this does not recursively force lazy objects or traverse referenced data. Within strict languages, the question is what gets passed:
 
 - **Call by value** (C and Java, including Java reference values): the function gets a copy. Assigning to the parameter can't affect the caller.
 - **Call by reference** (C++ `int&`, C# `ref`, Pascal `var`): the parameter is an alias for the caller's variable. Assigning to it changes the caller's variable.
@@ -226,8 +226,8 @@ Laziness has costs. Unevaluated expressions ("thunks") use memory, and it's hard
 - Lexical scope resolves names from the source text; dynamic scope from the call stack. Almost all modern languages are lexical, and opt into dynamic behaviour explicitly.
 - Python uses LEGB and decides scope per function at compile time, so a later assignment makes a name local everywhere in that function.
 - Capture rules depend on language: Python shares cells, while C++ and Rust also capture by value. Escaping environments often use heap storage, but storage and lifetime depend on implementation and ownership.
-- Python and JavaScript share object references; Java is pass-by-value, including copied reference values. Mutating a shared object can be visible, but rebinding a parameter does not rebind the caller’s variable.
-- Strict evaluation evaluates arguments first; call by name re-evaluates on each use; call by need (laziness) evaluates at most once.
+- Python and JavaScript share object references; Java is pass-by-value, including copied reference values. Mutating an object that both names refer to can be visible, but rebinding a parameter does not rebind the caller’s variable.
+- Strict evaluation evaluates arguments first; call by name re-evaluates on each use; call by need (laziness) evaluates no more than once.
 
 ## Further reading
 - [Scope (computer science) — Wikipedia](https://en.wikipedia.org/wiki/Scope_(computer_science))

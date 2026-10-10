@@ -36,11 +36,11 @@ Gerard Meszaros's *xUnit Test Patterns* gave us the standard names. "Mock" is of
 
 Some concrete examples:
 
-- **Dummy**: a `logger` argument you pass `None` or `Mock()` for because this code path never logs.
-- **Stub**: a rates service that always returns `1.17` for GBP to EUR.
-- **Spy**: a mailer that records every `send()` so the test can check one email went out.
-- **Mock**: an object that fails the test if `charge()` is not called exactly once with `(card, 10)`.
-- **Fake**: an in-memory dictionary that behaves like your user repository, including enforcing unique emails.
+- **Dummy object**: a `logger` argument you pass `None` or `Mock()` for because this code path never logs.
+- **Test stub**: a rates service that always returns `1.17` for GBP to EUR.
+- **Test spy**: a mailer that records every `send()` so the test can check one email went out.
+- **Mock object**: an object that fails the test if `charge()` is not called exactly once with `(card, 10)`.
+- **Fake object**: an in-memory dictionary that behaves like your user repository, including enforcing unique emails.
 
 ## Doubles in Python: `unittest.mock`
 
@@ -153,7 +153,7 @@ fake("4242")      # TypeError: missing
 
 ## Fakes: the underrated double
 
-A **fake** is a real, working implementation that takes a shortcut, usually keeping data in memory.
+A **fake object** (usually just called a fake) is a real, working implementation that takes a shortcut, usually keeping data in memory.
 
 ```python
 class InMemoryUsers:

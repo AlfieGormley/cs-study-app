@@ -106,6 +106,24 @@ Mike Cohn popularised the **test pyramid** in *Succeeding with Agile* (2009). Th
 
 The pyramid is a heuristic about cost, not a law. Google's testing blog suggested a 70/20/10 split (unit/integration/E2E) as a first guess in 2015, and *Software Engineering at Google* describes aiming for roughly 80/15/5 by test count. Treat these as rough starting points, not targets to hit.
 
+A split like 70/20/10 is a share of the total number of tests. To turn it into counts for a suite, multiply each share by the total:
+
+```formula
+N_unit = r_unit × N
+N_unit = 0.70 × 1,000 = 700
+N_int = 0.20 × 1,000 = 200
+N_e2e = 0.10 × 1,000 = 100
+where
+N: the total number of automated tests in the suite, here 1,000
+r_unit: the share of all tests that are unit tests, written as a fraction: 0.70 means 70 %
+N_unit: the number of unit tests
+N_int: the number of integration tests; 0.20 is the integration share (20 %)
+N_e2e: the number of end-to-end (E2E) tests; 0.10 is the E2E share (10 %)
+In words: in a 1,000-test suite, a 70/20/10 split means about 700 unit tests, 200 integration tests and 100 end-to-end tests.
+```
+
+With the 80/15/5 split instead, the same 1,000 tests become 800, 150 and 50. These shares count tests, not time: one E2E test can take as long as thousands of unit tests, so even 5 % of E2E tests can dominate how long the suite takes to run.
+
 Two principles behind the shape are more useful than any ratio:
 
 1. **Push each check as low as it can go.** If the rounding rule in `apply_discount` can be tested with a unit test, do not test it through a browser.
@@ -132,7 +150,7 @@ Symptoms: the suite takes an hour, fails randomly, and engineers re-run it until
 The pyramid was drawn for monoliths with lots of business logic. Other shapes suit other systems:
 
 - **Testing trophy** (Kent C. Dodds, for front ends): static analysis at the base and a big middle of integration tests that render components with their real children, because that is where UI bugs live.
-- **Testing honeycomb** (Spotify, for microservices): mostly integration tests per service, since a typical microservice has little logic of its own and most of its risk is in talking to its database and neighbours.
+- **Testing honeycomb** (Spotify, for microservices): mostly integration tests per service, since Spotify found a microservice's biggest complexity is not inside it but in how it talks to its database and other services.
 
 The common thread is the same: pick the cheapest test that would catch the bug you are worried about.
 

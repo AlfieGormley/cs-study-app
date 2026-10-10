@@ -137,7 +137,7 @@ Limits and criticisms:
 
 Example-based tests check specific inputs you chose. Their blind spot is the inputs you didn't think of. **Property-based testing** flips this: you state a rule that must hold for *all* inputs, and a library generates hundreds of inputs trying to break it.
 
-The idea comes from Haskell's **QuickCheck** (Claessen and Hughes, 2000). In Python, **Hypothesis** is a third-party library; install it separately.
+The idea comes from Haskell's **QuickCheck** (Claessen and Hughes, 2000). In Python, the **Hypothesis library** provides it; it is third-party, so install it separately.
 
 ### A bug examples miss
 
@@ -200,7 +200,7 @@ With an example database enabled, Hypothesis saves useful failing inputs and reu
 
 ### Strategies
 
-A **strategy** describes how to generate values:
+A **Hypothesis strategy** describes how to generate values:
 
 - `st.integers(min_value=0)`, `st.floats(allow_nan=False)`, `st.text()`, `st.booleans()`
 - `st.lists(st.integers(), max_size=50)`, `st.dictionaries(...)`, `st.tuples(...)`
@@ -218,6 +218,21 @@ A **strategy** describes how to generate values:
 | Invariant | sort keeps length and items |
 | Idempotence | `f(f(x)) == f(x)` |
 | Metamorphic | add a filter: results shrink |
+
+The first and fourth rows are mathematical statements about functions. Written as maths, they say what must hold for every generated input:
+
+```formula
+decode(encode(x)) = x   for all x
+f(f(x)) = f(x)   for all x
+where
+x: any input the generator produces, for example a string or a list
+encode: a function that converts a value into another form, such as Python value to JSON text
+decode: the function that reverses encode, such as JSON text back to a Python value
+f: the function under test, for example one that trims spaces from both ends of a string
+In words: decoding what you encoded gives back the original, and applying an idempotent function a second time changes nothing.
+```
+
+For example, trimming `"  hi "` gives `"hi"`, and trimming `"hi"` again still gives `"hi"`, so trimming is idempotent. Doubling a number is not: 3 becomes 6, then 12. The round-trip rule holds only for inputs the encoder represents faithfully and that compare equal to themselves. The float `NaN` ("not a number") fails the second condition: it is not equal even to itself, so the decoded copy never compares equal to the original, and such inputs are usually excluded from the strategy.
 
 The **oracle** pattern used for `merge` is particularly strong: a simple, obviously correct implementation (here `sorted`) checks a fast, clever one.
 

@@ -40,9 +40,9 @@ class UserRepo:
         return row[0] if row else None
 ```
 
-### Keep tests isolated with rollbacks
+### Keep tests isolated with transaction rollback
 
-Creating a fresh database per test is slow. A standard pattern is one connection for the whole module (or session) plus a transaction per test that is **rolled back** afterwards:
+Creating a fresh database per test is slow. A standard pattern is one connection for the whole module (or session) plus a transaction per test that is undone afterwards with a **transaction rollback**:
 
 ```python
 @pytest.fixture(scope="module")
@@ -79,7 +79,7 @@ def test_isolated(repo):
 All three pass. Remove the `rollback()` and two of them fail: `test_unique_email` hits the row left by the first test on its *first* insert, and `test_isolated` finds a user that should not exist.
 
 > [!warning] Rollback isolation has holes
-> If the code under test calls `commit()` itself, the rollback cannot undo it. Neither can it undo side effects outside the database (files, queues, emails). Code that manages its own transactions needs explicit cleanup, such as truncating tables after each test.
+> If the code under test calls `commit()` itself, the transaction rollback cannot undo it. Neither can it undo side effects outside the database (files, queues, emails). Code that manages its own transactions needs explicit cleanup, such as truncating tables after each test.
 
 ### Use the same engine as production
 
@@ -166,8 +166,8 @@ The stub encoded Orders' *belief* about Users, and nothing checked that belief. 
 
 A **contract** is a precise description of the requests a consumer will send and the parts of the responses it relies on. It is tested from both sides:
 
-1. **Consumer side**: the consumer's tests run against a mock provider that records the interactions they need. This produces the contract.
-2. **Provider side**: the provider's CI replays every contract against the real provider and checks each response satisfies it.
+1. On the consumer side (the **contract consumer**), the consumer's tests run against a mock provider that records the interactions they need. This produces the contract.
+2. On the provider side (the **contract provider**), the provider's CI replays every contract against the real provider and checks each response satisfies it.
 
 The idea in miniature:
 

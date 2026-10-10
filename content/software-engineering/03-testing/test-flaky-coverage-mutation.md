@@ -12,7 +12,24 @@ A test suite is only useful if people trust it. Two things destroy that trust. *
 
 A **flaky test** passes and fails on the same code. Google's testing blog reported in 2016 that about 1.5% of all its test runs produced a flaky result, that almost 16% of its tests showed some flakiness, and that about 84% of the pass-to-fail transitions its CI observed involved a flaky test. Those figures describe that 2016 Google dataset. A transition involving a flaky test does not itself establish that no new product bug exists.
 
-The damage compounds. If each of 200 tests independently flakes 0.5% of the time, the chance a full run is clean is `0.995^200`, about 37%. Most builds go red for no reason, so people hit "re-run" by reflex and real failures slip through with the noise.
+The damage compounds. A full run is clean only if *every* test passes. When tests flake independently of each other, the chance of that is the per-test pass chance multiplied by itself once per test:
+
+```formula
+P_clean = (1 − p)^n
+P_clean = (1 − 0.005)^200
+P_clean = 0.995^200 ≈ 0.37
+P_red = 1 − P_clean ≈ 0.63
+where
+P_clean: the probability that a full run has no spurious failure, from 0 (never) to 1 (always)
+p: the probability that one test fails spuriously on a run; here 0.5 % = 0.005
+n: the number of tests in the suite, here 200
+^: raise to a power: 0.995^200 means 200 copies of 0.995 multiplied together
+P_red: the probability that at least one test fails spuriously, so the build goes red on correct code
+≈: approximately equal to (rounded)
+In words: if each of 200 tests flakes 0.5 % of the time, only about 37 % of runs are fully green, and about 63 % go red with nothing wrong.
+```
+
+Doubling the suite to 400 such tests drops the clean-run chance to 0.995 to the power 400, about 13 %. The formula assumes the flakes are independent. In practice many share a cause (a slow CI machine, a shared database), so they cluster, but the lesson holds: tiny per-test flake rates add up across a big suite. Most builds go red for no reason, so people hit "re-run" by reflex and real failures slip through with the noise.
 
 ### Common causes
 
@@ -84,7 +101,7 @@ Libraries such as `freezegun` or `time-machine` can freeze the clock for code yo
 
 ## Code coverage
 
-**Coverage** measures which parts of the code ran while the tests ran. In Python the standard tool is **coverage.py** (`pytest --cov` via pytest-cov).
+**Code coverage** measures which parts of the code ran while the tests ran. In Python the standard tool is **coverage.py** (`pytest --cov` via pytest-cov).
 
 ### Line versus branch coverage
 
@@ -101,18 +118,62 @@ def test_free_express():
     assert shipping_cost(60, True) == 10
 ```
 
-Every line runs, so **line (statement) coverage is 100%**. Yet we never tested an order under £50, or a non-express order.
+Every line runs, so **line (statement) coverage is 100%**. Line coverage is the share of executable statements that ran at least once:
 
-**Branch coverage** tracks alternatives between measured source lines; for these two if statements, each has a true and false outcome. It does not necessarily distinguish every short-circuited boolean subexpression. Each `if` has two outcomes, true and false. Our test only took the true side of both. If only the seven-statement function is in shipping.py and a separately measured driver invokes it, coverage.py can report the following. Including the test function or driver in the measured file changes the statement total:
+```formula
+C_line = s_run / s × 100 %
+C_line = 7 / 7 × 100 % = 100 %
+where
+C_line: line (statement) coverage, as a percentage
+s: the number of executable statements in the measured code, here 7 (the def line plus six body lines)
+s_run: how many of those statements ran at least once during the tests, here all 7
+%: per cent, parts per hundred
+In words: all seven statements of shipping_cost ran, so line coverage is 100 %.
+```
+
+Yet we never tested an order under £50, or a non-express order.
+
+**Branch coverage** tracks alternatives between measured source lines; for these two if statements, each has a true and false outcome. It does not necessarily distinguish every short-circuited boolean subexpression. Our test only took the true side of both. If only the seven-statement function is in shipping.py and a separately measured driver invokes it, coverage.py can report the following. Including the test function or driver in the measured file changes the statement total:
 
 ```
 Stmts Miss Branch BrPart Cover Missing
     7    0      4      2   82% 3->5, 5->7
 ```
 
-`3->5` means "line 3's `if` never jumped straight to line 5" (the condition was never false), and similarly for `5->7`. coverage.py computes the total as (statements run + branches taken) over (statements + branches): (7 + 2) / (7 + 4) = 9/11, about 82%.
+`3->5` means "line 3's `if` never jumped straight to line 5" (the condition was never false), and similarly for `5->7`. In branch mode, coverage.py puts statements and branch outcomes into one percentage:
 
-Even full branch coverage doesn't cover every **path**. Two independent `if`s give four paths (under or over £50, times express or not). Two tests, `(60, True)` and `(10, False)`, take all four branches but only two of the four paths. Independent decisions can produce exponentially many paths, and loops can produce unbounded paths. Full path coverage is often infeasible, though finite small regions can be exhaustively exercised.
+```formula
+C = (s_run + b_taken) / (s + b) × 100 %
+C = (7 + 2) / (7 + 4) × 100 %
+C = 9 / 11 × 100 % ≈ 82 %
+where
+C: the combined coverage percentage coverage.py reports in its Cover column when branch measurement is on
+s: the number of executable statements measured, here 7
+s_run: how many of those statements ran, here all 7
+b: the number of possible branch outcomes, here 4: the true and the false outcome of each of the two if statements
+b_taken: how many of those outcomes the tests actually took, here 2 (the true side of each if)
+%: per cent, parts per hundred
+≈: approximately equal to (9/11 is 81.8 %, shown rounded)
+In words: 9 of the 11 statements and branch outcomes were exercised, so the report shows 82 %, even though line coverage alone is 100 %.
+```
+
+Counting branch outcomes alone, the test took 2 of 4, which is 50 %. The combined figure sits between the two because it mixes statements (all run) with branch outcomes (half taken).
+
+Even full branch coverage doesn't cover every **path**, a complete route from the function's entry to its exit. Two independent `if`s give four paths (under or over £50, times express or not). Each extra independent `if` doubles the number of paths but adds only two branch outcomes:
+
+```formula
+N_paths = 2^k
+N_paths = 2^2 = 4
+N_br = 2 × k = 2 × 2 = 4
+where
+k: the number of independent if statements in a row, each without an else-if chain and with no loops; here 2
+N_paths: the number of distinct routes through the code, one for each combination of true and false outcomes
+N_br: the number of branch outcomes, a true and a false for each if
+^: raise to a power: 2^k means k twos multiplied together
+In words: with two ifs there are four paths and four branch outcomes, but with ten ifs there would be 1,024 paths and only 20 branch outcomes.
+```
+
+Two tests, `(60, True)` and `(10, False)`, take all four branch outcomes but only two of the four paths. The formula assumes every combination of outcomes is possible; when conditions depend on each other, some paths are infeasible and the real count is lower. Loops can produce unbounded paths. Full path coverage is often infeasible, though finite small regions can be exhaustively exercised.
 
 ### What coverage tells you, and what it doesn't
 
@@ -140,7 +201,20 @@ The tool makes many small changes to your code, called **mutants**, one at a tim
 - a constant `18` becomes `19` or `17`
 - `return x` becomes `return None`; a condition becomes `True`
 
-If some test fails, the mutant is **killed**: your tests noticed the change. If all tests pass, the mutant **survived**: the suite did not detect that change; it may be a meaningful missed fault, an equivalent change or outside the required behaviour. The **mutation score** is killed mutants divided by total (non-equivalent) mutants.
+If some test fails, the mutant is **killed**: your tests noticed the change. If all tests pass, the mutant **survived**: the suite did not detect that change; it may be a meaningful missed fault, an equivalent change or outside the required behaviour. The **mutation score** summarises a run as the share of mutants your tests killed, leaving out mutants that no test could ever kill (equivalent mutants, covered below):
+
+```formula
+M = K / (T − E) × 100 %
+where
+M: the mutation score, as a percentage; 100 % means every killable mutant was killed
+K: the number of killed mutants (at least one test failed)
+T: the total number of mutants the tool generated
+E: the number of those mutants judged equivalent: they behave exactly like the original, so no test can kill them
+%: per cent, parts per hundred
+In words: the mutation score is killed mutants divided by the killable (non-equivalent) mutants.
+```
+
+Tools cannot generally tell which mutants are equivalent, so until a human marks them, a reported score may divide by all generated mutants and read lower than the true value.
 
 ### A surviving mutant
 
@@ -175,6 +249,18 @@ def test_boundary():
 
 `age > 18` fails on 18, `age >= 19` fails on 18, `age >= 17` fails on 17. This is the boundary-testing advice from lesson 1, discovered mechanically.
 
+Counting only the five mutants in the table, none of which is equivalent, the boundary test moves the mutation score from 40 % to 100 %:
+
+```formula
+M_before = 2 / (5 − 0) × 100 % = 40 %
+M_after = 5 / (5 − 0) × 100 % = 100 %
+where
+M_before: the mutation score with only test_adult and test_child, as a percentage
+M_after: the mutation score once test_boundary is added
+%: per cent, parts per hundred
+In words: before, 2 of the 5 mutants were killed (40 %); after adding the boundary test, all 5 are (100 %), while line coverage was 100 % both times.
+```
+
 ### Equivalent mutants and cost
 
 Some mutants don't change behaviour at all, so no test can kill them. These are **equivalent mutants**:
@@ -192,7 +278,7 @@ Mutation testing is also expensive: each mutant means re-running (part of) the s
 
 Google's approach, described in *State of Mutation Testing at Google* (2018), mutates only lines changed in a code review, skips "arid" lines unlikely to matter (such as logging), and shows a few surviving mutants to the author and reviewer as review comments. That turns an expensive batch metric into targeted, actionable feedback.
 
-Tools: **mutmut** and **cosmic-ray** for Python, **PIT** (Pitest) for the JVM, **Stryker** for JavaScript, C# and Scala.
+Tools: **mutmut** and **Cosmic Ray** for Python, **PIT** (Pitest) for the JVM, **Stryker** for JavaScript, C# and Scala.
 
 ## Putting it together
 

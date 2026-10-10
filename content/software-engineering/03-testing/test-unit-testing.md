@@ -109,7 +109,26 @@ def test_float_approx():
     assert 0.1 + 0.2 == pytest.approx(0.3)
 ```
 
-`0.1 + 0.2` is `0.30000000000000004` in binary floating point. `approx` compares within a tolerance (by default a relative tolerance of one part in a million, with a tiny absolute floor). For money, prefer `decimal.Decimal` or integer pennies in the code itself.
+`0.1 + 0.2` is `0.30000000000000004` in binary floating point. `approx` compares within a tolerance (by default a relative tolerance of one part in a million, with a tiny absolute floor). With the default settings, pytest treats the two numbers as equal when their gap is no bigger than the larger of two allowances:
+
+```formula
+|x − x_exp| ≤ max(r × |x_exp|, t_abs)
+r × |x_exp| = 10^{−6} × 0.3 = 3 × 10^{−7}
+|x − x_exp| ≈ 5.6 × 10^{−17}
+where
+x: the value the code actually produced, here 0.1 + 0.2 = 0.30000000000000004
+x_exp: the expected value passed to approx, here 0.3
+|…|: absolute value: the size of a number with its sign dropped, so |−2| = 2
+r: the relative tolerance, the `rel` argument; default 10^{−6}, one part in a million
+t_abs: the absolute tolerance, the `abs` argument; default 10^{−12}, which matters only when the expected value is very close to 0
+max: the larger of the two values in the brackets
+10^{−6}: ten to the power minus six, 0.000001
+≤: less than or equal to
+≈: approximately equal to (rounded)
+In words: the actual value may differ from the expected one by up to one millionth of the expected value; here the gap is about 5.6 × 10^−17, far below the 3 × 10^−7 allowed, so the test passes.
+```
+
+The absolute floor exists because a relative tolerance shrinks to nothing as the expected value approaches 0: `approx(0.0)` would otherwise demand an exact match. If you pass only `abs=`, the relative tolerance is not used. For money, prefer `decimal.Decimal` or integer pennies in the code itself.
 
 ### Many cases, one test: `parametrize`
 
@@ -123,11 +142,23 @@ def test_slugify(title, slug):
     assert slugify(title) == slug
 ```
 
-pytest generates three separate tests, each reported on its own, so one failing case does not hide the others. Stacking two `parametrize` decorators produces the **cross product**: 3 values × 2 values gives 6 tests.
+pytest generates three separate tests, each reported on its own, so one failing case does not hide the others. Stacking two `parametrize` decorators produces the **cross product**: every value of one list paired with every value of the other.
+
+```formula
+N_tests = n_1 × n_2
+N_tests = 3 × 2 = 6
+where
+N_tests: the number of separate tests pytest generates from one test function
+n_1: the number of values in the first parametrize list, here 3
+n_2: the number of values in the second parametrize list, here 2
+In words: stacked parametrize decorators run every combination, so their list lengths multiply: 3 values × 2 values gives 6 tests.
+```
+
+The counts multiply with each extra decorator, so three stacked lists of 10 values each give 10 × 10 × 10 = 1,000 tests. That is thorough but can make a suite slow; keep stacked lists short.
 
 ### Setup and teardown: fixtures
 
-A **fixture** is a function that provides something a test needs. A test asks for it by naming it as a parameter.
+A **pytest fixture** is a function that provides something a test needs. A test asks for it by naming it as a parameter.
 
 ```python
 @pytest.fixture
@@ -223,7 +254,7 @@ In production code, you remove duplication (DRY: don't repeat yourself). In test
 - **No assertion.** A test that calls code and checks nothing passes as long as no exception escapes. It looks like coverage but verifies almost nothing.
 - **Shared mutable state.** A module-level list or a module-scoped fixture that tests modify makes results depend on order (lesson 6).
 - **Hidden time and randomness.** Code that calls `datetime.now()` or `random()` directly gives different results each run. Pass the clock or the random generator in, so the test can control it.
-- **Over-specified expectations.** Comparing a whole 40-field JSON blob when the test is about one field means 39 unrelated reasons to fail.
+- **Over-specified expectations.** Comparing a whole 40-field JSON document when the test is about one field means 39 unrelated reasons to fail.
 - **Testing the framework.** You do not need to check that Django saves a model; test your logic.
 
 ## Key takeaways

@@ -26,7 +26,7 @@ Each step saves time today and adds a little cost to every future change. The co
 
 ### What it looks like
 
-One class knows and does far too much. `OrderManager` validates input, calculates prices, talks to the database, sends emails, formats PDFs and holds global caches. The *AntiPatterns* book calls it **the Blob**.
+One class knows and does far too much. `OrderManager` validates input, calculates prices, talks to the database, sends emails, formats PDFs and holds global caches. The *AntiPatterns* book names it the **Blob anti-pattern**.
 
 ```
           +--------------+
@@ -92,7 +92,7 @@ Copying a block and tweaking it is the fastest way to get the second variant wor
 The related smell is **shotgun surgery**: one conceptual change (say, adding a currency) requires small edits across many files. It means knowledge about one concept is spread out instead of being in one place.
 
 > [!tip] Rule of three
-> Duplication twice is often fine; abstracting too early guesses at the wrong shape. On the third occurrence, the common shape is usually clear, so extract it then.
+> Duplication twice is often fine; abstracting before then guesses at the wrong shape. On the third occurrence, the common shape is usually clear, so extract it then.
 
 ## Magic numbers and primitive obsession
 

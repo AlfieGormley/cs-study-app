@@ -227,7 +227,7 @@ Making an object from scratch is expensive or complicated, but you have a config
 
 ### In Python
 
-Python's `copy` module is the prototype pattern. `copy.copy()` makes a shallow copy; `copy.deepcopy()` recursively copies supported components, respecting memoisation and class hooks. It can preserve shared objects and returns some objects, including functions and classes, unchanged. Classes customise this with `__copy__` and `__deepcopy__`.
+Python's `copy` module is the prototype pattern. `copy.copy()` makes a shallow copy; `copy.deepcopy()` recursively copies supported components, respecting memoisation and class hooks. It keeps objects that are shared within the copied structure shared in the copy, and returns some objects, including functions and classes, unchanged. Classes customise this with `__copy__` and `__deepcopy__`.
 
 ```python
 import copy
@@ -262,7 +262,7 @@ print("X-Id" in base["headers"])
 
 ### The problem
 
-Exactly one instance of something should exist, with a global access point: a configuration registry, a connection pool, a logging system.
+Exactly one instance of something should exist, reachable from anywhere through one global name: a configuration registry, a connection pool, a logging system.
 
 ### The structure
 

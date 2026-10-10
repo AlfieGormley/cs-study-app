@@ -105,7 +105,7 @@ The whole state machine is visible in one place, can be drawn as a diagram, and 
 
 - The GoF's own example was a **TCP connection** whose `open`, `close` and `acknowledge` behave differently in Established, Listen and Closed states.
 - **`transitions`** (Python) and **Spring Statemachine** (Java) are libraries for declaring state machines.
-- Many real implementations are table- or enum-driven instead: the **h11** HTTP/1.1 library tracks each side's state (IDLE, SEND_BODY, DONE and so on) with explicit transition rules, and asyncio's `Future` moves between PENDING, CANCELLED and FINISHED.
+- Many real implementations are table- or enum-driven instead: the **h11** HTTP/1.1 library tracks the state of each side (IDLE, SEND_BODY, DONE and so on) with explicit transition rules, and asyncio's `Future` moves between PENDING, CANCELLED and FINISHED.
 
 ## Template method
 
@@ -198,7 +198,7 @@ Clients want to walk through a collection without knowing how it's stored (array
 
 ### In Python
 
-Python built this pattern into the language. A `for` loop calls `iter(x)` and then `next()` repeatedly until `StopIteration` is raised. A **generator** writes the iterator for you:
+Python built this pattern into the language. A `for` loop calls `iter(x)` and then `next()` repeatedly until `StopIteration` is raised. A **generator function** (a function containing `yield`) writes the iterator for you:
 
 ```python
 class Tree:
@@ -217,7 +217,7 @@ print(list(t))   # [1, 2, 3, 4]
 
 Each call to `__iter__` returns a fresh generator, so two loops over `t` don't interfere.
 
-The iterator protocol obtains one item per next() call; it does not require lazy construction or constant memory. Streaming can avoid loading the entire input, but memory still depends on buffering, maximum line/page size, retained output and traversal state (O(tree height) for this recursive generator).
+The iterator protocol obtains one item per next() call; it does not require lazy construction or constant memory. Streaming can avoid loading the entire input, but memory still depends on buffering, maximum line/page size, retained output and traversal state. This recursive generator keeps one suspended generator per level of the tree it is currently inside, so its traversal state grows with the tree's height (the number of levels from the root to the deepest node), not with the total number of nodes.
 
 > [!warning] Iterators are single-use
 > An iterator is also iterable; once exhausted it stays exhausted. A re-iterable collection such as a list can supply a fresh iterator for another pass. `g = (x * 2 for x in range(3))` then `list(g)` gives `[0, 2, 4]`, and a second `list(g)` gives `[]`.

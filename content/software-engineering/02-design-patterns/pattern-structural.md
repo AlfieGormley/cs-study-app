@@ -182,6 +182,19 @@ print(r.total())      # 3 (no reload)
 - When the "transparent" stand-in hides behaviour that callers need to know about. A **remote proxy** makes a network call look like a local method call, but networks fail, time out and can have much higher and more variable latency than a local call; the ratio depends on the work and environment. Treating it as local falls for two classic fallacies of distributed computing: "the network is reliable" and "latency is zero".
 - Lazy proxies can cause the **N+1 query problem**: looping over 100 lazily loaded ORM objects triggers 100 separate queries.
 
+The name comes from counting the database round trips. One query fetches the list of N objects; then touching a lazily loaded related object on each of them runs one more query per object:
+
+```formula
+Q = 1 + N
+Q = 1 + 100 = 101
+where
+Q: the total number of database queries the loop sends (a plain count, no unit)
+N: the number of objects in the list, each with one lazily loaded related object that the loop touches; here 100
+In words: one query for the list, plus one hidden query for every item in it, so the query count grows in step with the list.
+```
+
+Each of those queries is a network round trip, so at, say, 1 ms each, 101 queries cost about 0.1 s where 1 or 2 queries (a join, or one batched fetch of all the related rows) would cost a couple of milliseconds. The count assumes nothing is cached or prefetched; ORMs offer eager loading (in Django, `select_related` and `prefetch_related`) precisely to collapse the N extra queries.
+
 ### In real libraries
 
 - **`xmlrpc.client.ServerProxy`**: method calls become XML-RPC requests to a server.
@@ -223,7 +236,7 @@ print(result.stdout.strip())
 
 ### When not to use it
 
-- When the facade becomes a **god object** that every feature is bolted onto. A facade should cover the common path, not everything.
+- When the facade becomes a **god object** that every feature is bolted onto. A facade should cover the common case, not everything.
 - When it hides options that callers genuinely need, forcing them round it in awkward ways.
 
 ### In real libraries
@@ -324,7 +337,20 @@ class Circle:
 print(Circle(3, Ascii()).draw())   # ooo
 ```
 
-Extending the example to 2 shapes gives 2 shapes plus 2 renderers instead of 2 × 2 concrete combinations, and the gap widens as either list grows.
+Why bother? Count the classes. With one subclass per (shape, renderer) pair, the classes multiply; with a bridge, each shape and each renderer is written once, so they add:
+
+```formula
+N_sub = m × n
+N_bridge = m + n
+where
+N_sub: the number of classes when every shape-and-renderer pair is its own subclass (a plain count, no unit)
+N_bridge: the number of classes with a bridge: one per shape plus one per renderer
+m: the number of shapes (abstractions), such as circle and square
+n: the number of renderers (implementations), such as SVG, PNG and ASCII art
+In words: subclassing every pair multiplies the two list lengths; a bridge only adds them.
+```
+
+Extending the example to 2 shapes and 2 renderers gives 2 × 2 = 4 subclasses against 2 + 2 = 4 bridge classes, so at this size there is no saving. With 5 shapes and 4 renderers it is 20 against 9, and the gap widens as either list grows. The formula assumes the two dimensions really are independent: every shape can be drawn by every renderer through the same small renderer interface. If one renderer needs special code for each shape, some of the multiplication comes back.
 
 ### When not to use it
 
@@ -339,7 +365,7 @@ When only one dimension actually varies. Then it's plain composition and needs n
 
 ### The problem
 
-You need huge numbers of small objects, and most of their state is identical. Store the shared (**intrinsic**) state once and pass the varying (**extrinsic**) state in.
+You need huge numbers of small objects, and most of their state is identical. Store the shared state (the **intrinsic state**) once and pass the varying state (the **extrinsic state**) in.
 
 ### The structure
 

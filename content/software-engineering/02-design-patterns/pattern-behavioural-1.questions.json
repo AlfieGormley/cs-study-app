@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Command is about turning a request into a value. What does undo need?\n\n1. A record of what was done, and its arguments.\n2. A way to reverse each action.\n3. An ordered history.\n\nCommand objects provide 1 and 2; a stack of them provides 3. The other scenarios don't need requests to be stored, so other patterns fit better.",
+    "workedExample": "Command is about turning a request into a value. What does undo need?\n\n1. A log of what was done, and its arguments.\n2. A way to reverse each action.\n3. An ordered history.\n\nCommand objects provide 1 and 2; a stack of them provides 3. The other scenarios don't need requests to be stored, so other patterns fit better.",
     "link": {
       "title": "Command pattern — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Command_pattern"
@@ -191,7 +191,7 @@
       },
       {
         "text": "Signals are held by weak reference by default; once `setup()` returns, nothing else references `audit`, so it can be garbage-collected",
-        "explanation": "Correct. `connect(weak=True)` is the default. A local function is only referenced by the signal's weak ref, so it disappears. Define receivers at module level, or pass `weak=False`."
+        "explanation": "Correct. `connect(weak=True)` is the default. A local function is only referenced by the signal's weak reference, so it disappears. Define receivers at module level, or pass `weak=False`."
       },
       {
         "text": "`sender=Order` must be a string",
@@ -203,7 +203,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. `post_save.connect(audit)` stores a **weak** reference by default, to avoid lapsed listeners.\n2. `audit` is a local function; its only strong reference is the local variable in `setup`.\n3. `setup()` returns → no strong references left → `audit` can be collected.\n4. The weak ref goes dead, and Django skips it. No error is raised.\n5. Fix: define `audit` at module level (usually with `@receiver(post_save, sender=Order)`) or pass `weak=False`.\n\nWeak references solve one observer pitfall but introduce this one.",
+    "workedExample": "1. `post_save.connect(audit)` stores a **weak** reference by default, to avoid lapsed listeners.\n2. `audit` is a local function; its only strong reference is the local variable in `setup`.\n3. `setup()` returns → no strong references left → `audit` can be collected.\n4. The weak reference goes dead, and Django skips it. No error is raised.\n5. Fix: define `audit` at module level (usually with `@receiver(post_save, sender=Order)`) or pass `weak=False`.\n\nWeak references solve one observer pitfall but introduce this one.",
     "link": {
       "title": "Signals — Django docs",
       "url": "https://docs.djangoproject.com/en/stable/topics/signals/"
@@ -251,7 +251,7 @@
     "options": [
       {
         "text": "The slow email handler adds latency to every payment request",
-        "explanation": "Correct. Synchronous observers run inside the emitter's call. Push slow, non-critical work like email onto a queue."
+        "explanation": "Correct. Synchronous observers run inside the emitter's call. Push slow, optional work like email onto a queue."
       },
       {
         "text": "If analytics raises an exception, later handlers might not run, depending on how `emit` handles errors",
@@ -271,7 +271,7 @@
       1,
       2
     ],
-    "workedExample": "Sort the handlers by how critical they are:\n\n| Handler | Critical? | Where |\n|---|---|---|\n| Reserve stock | Yes | Explicit call |\n| Email | No, slow | Queue |\n| Analytics | No | Observer |\n\n1. Synchronous emit: total time ≈ sum of handler times, so +800 ms per payment.\n2. A naive `for fn in handlers: fn()` aborts on the first exception.\n3. Use observers for things that may fail independently without breaking the main flow.",
+    "workedExample": "Sort the handlers by how critical they are:\n\n| Handler | Critical? | Where |\n|---|---|---|\n| Reserve stock | Yes | Explicit call |\n| Email | No, slow | Queue |\n| Analytics | No | Observer |\n\nA synchronous `emit` doesn't return until every handler has finished, so the payment request waits for all of them in turn:\n\n```formula\nT_emit = t_email + t_analytics + t_stock\nT_emit ≈ 800 ms + t_analytics + t_stock\nwhere\nT_emit: how long the `emit` call blocks the payment request, in milliseconds (ms)\nt_email: time taken by the receipt-email handler; about 800 ms here\nt_analytics: time taken by the analytics handler, in ms\nt_stock: time taken by the stock-reservation handler, in ms\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: handlers run one after another, so their times add up, and the slow email alone adds about 800 ms to every payment.\n```\n\n1. Move the email to a queue and `emit` stops paying its 800 ms.\n2. A naive `for fn in handlers: fn()` aborts on the first exception.\n3. Use observers for things that may fail on their own without breaking the main flow.",
     "link": {
       "title": "Observer pattern — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Observer_pattern"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Distinguish **local** state (a document in memory) from **external** effects (money moved, email sent).\n2. Local state can be truly reversed.\n3. External effects need a new action that offsets the first: a refund, a cancellation email, a release of stock.\n4. Record both, so the log still tells the truth:\n\n```\n10:01 capture  +£50\n10:03 refund   -£50\n```\n\nThis compensating-action idea is also how sagas handle failures in distributed transactions.",
+    "workedExample": "1. Distinguish **local** state (a document in memory) from **external** effects (money moved, email sent).\n2. Local state can be truly reversed.\n3. External effects need a new action that offsets the first: a refund, a cancellation email, a release of stock.\n4. Record both, so the log still tells the truth:\n\n```\n10:01 capture  +£50\n10:03 refund   -£50\n```\n\nThis compensating-action idea is also how the saga pattern handles failures in distributed transactions.",
     "link": {
       "title": "Command pattern — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Command_pattern"
@@ -319,7 +319,7 @@
       },
       {
         "text": "`[100, 110, 120]`",
-        "explanation": "Correct. Each `partial` freezes its own `pct`. Calling with `base=100` gives 100 × 100 // 100, 100 × 110 // 100 and 100 × 120 // 100."
+        "explanation": "Correct. Each `partial` freezes its own `pct`. Calling each with `base=100` evaluates `100 * 100 // 100`, `100 * 110 // 100` and `100 * 120 // 100`, which give 100, 110 and 120."
       },
       {
         "text": "`[100.0, 110.0, 120.0]`",
@@ -327,7 +327,7 @@
       },
       {
         "text": "A `TypeError`, because `pct` is passed twice",
-        "explanation": "`partial` supplies `pct` as a keyword and the call supplies `base` positionally, so each argument is given exactly once."
+        "explanation": "`partial` supplies `pct` as a keyword and the call supplies `base` positionally, so each argument is given only once."
       }
     ],
     "answer": 1,

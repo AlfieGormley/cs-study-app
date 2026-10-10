@@ -231,7 +231,7 @@ If you don't need undo, a command is often just a function or `functools.partial
 - **Qt's `QUndoCommand` and `QUndoStack`**: commands with `undo()` and `redo()`.
 - **Django migrations**: operations represent schema or data changes. Reversible operations support forwards/backwards execution; some operations or data changes are irreversible, and reversing schema operations need not restore lost data.
 - **`concurrent.futures`**: `executor.submit(fn, *args)` packages a call to run on another thread or process.
-- **Task queues** such as Celery: `send_email.delay(user_id)` serialises a command and puts it on a broker for a worker.
+- **Task queues** such as Celery: `send_email.delay(user_id)` serialises a command and puts it on a message broker for a worker.
 - **Redux actions** describe changes processed by reducers; Redux's store holds the current state and does not inherently persist an action log. **Event sourcing** instead treats the persisted event history as authoritative. Commands request changes; events record facts, so they are not interchangeable.
 
 ## Comparing the three

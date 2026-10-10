@@ -2,13 +2,15 @@
 id: rel-th-normal-forms
 title: Normal forms from 1NF to BCNF
 level: intermediate
-minutes: 16
-summary: Update anomalies and why they happen, 1NF, 2NF, 3NF and BCNF defined through functional dependencies, lossless and dependency-preserving decomposition, and the BCNF and 3NF algorithms worked by hand.
+minutes: 20
+summary: Update anomalies and why they happen, 1NF, 2NF, 3NF and BCNF defined through functional dependencies, lossless-join and dependency-preserving decomposition, and the BCNF and 3NF algorithms worked by hand.
 ---
 
 Normalisation is the process of splitting a badly structured relation into smaller ones so that **each fact is stored once**. When a fact is stored in many rows, the copies can disagree unless additional constraints or coordinated writes keep them consistent.
 
-Each normal form forbids one kind of redundancy, defined precisely with the functional dependencies from the previous lesson. The informal summary, due to Bill Kent (1983), is that every non-key attribute should depend on "the key, the whole key, and nothing but the key".
+Each normal form forbids one kind of redundancy, defined precisely with the functional dependencies (FDs) from the previous lesson. The informal summary, due to Bill Kent (1983), is that every non-key attribute should depend on "the key, the whole key, and nothing but the key".
+
+As in the previous lesson, the arrow → means "functionally determines", a superscript plus (X⁺) is an attribute closure, and letters written together (AB) denote a set of attributes. Each formula card defines them again.
 
 ## The problem: anomalies
 
@@ -24,10 +26,25 @@ oid pid odate  cid cname pname  price qty
 
 The business rules, as FDs:
 
-- `oid → odate, cid` (an order has one date and one customer)
-- `cid → cname`
-- `pid → pname, price` (this shop sets one current price per product)
-- `{oid, pid} → qty`
+```formula
+oid → odate, cid
+cid → cname
+pid → pname, price
+{oid, pid} → qty
+where
+→: functionally determines: rows that agree on the left side must agree on the right side
+oid: the order id
+odate: the order date
+cid: the customer id
+cname: the customer's name
+pid: the product id
+pname: the product's name
+price: the product's current price (this shop sets one current price per product)
+qty: the quantity of that product on that order
+, (on the right of →): both attributes are determined, so oid → odate, cid means oid → {odate, cid}
+{ }: a set of attributes; {oid, pid} means "order and product together"
+In words: an order has one date and one customer; a customer has one name; a product has one name and price; and the quantity belongs to an order and product together.
+```
 
 The only candidate key is `{oid, pid}`. Three kinds of trouble follow.
 
@@ -39,7 +56,7 @@ All three come from FDs whose left side is not a key: the table is storing facts
 
 ## First normal form (1NF)
 
-A relation is in 1NF when every attribute value is **atomic**: a single value from its domain, with no repeating groups.
+A relation is in 1NF when every attribute value is an **atomic value**: a single value from its domain, with no repeating groups.
 
 ```
 Not 1NF
@@ -47,7 +64,7 @@ oid  products
  10  "P1:50, P2:50"
 ```
 
-Ordinary column constraints and joins do not directly represent the individual items; parsing expressions or custom constraints are more complex than storing a row per item. The fix is one row per product per order, as in OrderLine above.
+Ordinary column constraints and joins do not directly represent the individual items; string-splitting expressions or custom constraints are more complex than storing a row per item. The fix is one row per product per order, as in OrderLine above.
 
 > [!note] What counts as atomic?
 > Atomicity is relative to how you use the data. A date has parts, and a Postgres `text[]` or `jsonb` column holds structure, yet both can be fine if the database never needs to query or constrain the inside separately. The practical test: if you need to filter, join or enforce a rule on a part, it should be its own attribute or row. A list of tags you only ever display is fine as an array; a list of order lines is not.
@@ -56,10 +73,32 @@ Ordinary column constraints and joins do not directly represent the individual i
 
 A relation is in 2NF when it is in 1NF and **no non-prime attribute depends on part of a candidate key**. (A **prime** attribute is one that belongs to some candidate key.)
 
-2NF only matters when a key is composite. OrderLine's key is `{oid, pid}`, and:
+```formula
+X ↛ A
+  for every X ⊂ K and every A ∉ P
+where
+K: any candidate key of the relation
+X: a set of attributes that is part of K but not all of it
+⊂: is a proper subset of: inside K, and smaller than K
+A: a single attribute
+P: the set of prime attributes: those that belong to at least one candidate key
+∉: is not a member of; A ∉ P means A is non-prime
+↛: does not functionally determine
+In words: no non-prime attribute may be determined by only part of a candidate key.
+```
 
-- `oid → odate, cid, cname` depends on part of the key.
-- `pid → pname, price` depends on the other part.
+2NF only matters when a key is composite. OrderLine's key is `{oid, pid}`, and each half determines attributes on its own:
+
+```formula
+oid → odate, cid, cname
+pid → pname, price
+where
+→: functionally determines
+oid, pid: the order id and product id, each one half of the key {oid, pid}
+odate, cid, cname: the order date, customer id and customer name (oid reaches cname through cid)
+pname, price: the product's name and current price
+In words: the order id alone fixes the date and customer; the product id alone fixes the product's name and price.
+```
 
 Both are **partial dependencies**. Fix them by moving each one into its own relation:
 
@@ -71,9 +110,40 @@ Line(oid, pid, qty)
 
 ## Third normal form (3NF)
 
-A relation is in 3NF when, for every non-trivial FD X → A that holds in it, **either X is a superkey or A is prime**.
+A relation is in 3NF when, for every non-trivial FD whose right side is a single attribute A, **either the left side X is a superkey or A is prime**:
 
-`Order(oid, odate, cid, cname)` is in 2NF (its key `oid` is a single attribute) but still repeats Ann's name on every order. The cause is a **transitive dependency**: `oid → cid` and `cid → cname`. `cid` is not a superkey of Order and `cname` is not prime, so 3NF is violated. Split again:
+```formula
+for every X → A in F⁺ with A ∉ X:
+  X⁺ = R  or  A ∈ P
+where
+F⁺: every FD that holds on the relation (all FDs implied by the given set F)
+X: the left side, a set of attributes
+A: the right side, a single attribute
+→: functionally determines
+∉: is not a member of; A ∉ X makes the FD non-trivial
+X⁺: the attribute closure of X; X⁺ = R means X is a superkey
+R: the set of all attributes of the relation
+∈: is a member of
+P: the set of prime attributes (those in some candidate key)
+In words: every real dependency either comes from a superkey or points at a key attribute.
+```
+
+`Order(oid, odate, cid, cname)` is in 2NF (its key `oid` is a single attribute) but still repeats Ann's name on every order. The cause is a **transitive dependency**:
+
+```formula
+oid → cid and cid → cname
+cid⁺ = {cid, cname}
+where
+→: functionally determines
+oid: the order id, the key of Order
+cid: the customer id
+cname: the customer's name
+cid⁺: the attribute closure of cid within Order
+{ }: a set of attributes
+In words: the order fixes the customer, and the customer fixes the name, so the name hangs off the key only indirectly. cid reaches just cid and cname, not all of Order, so it is not a superkey.
+```
+
+`cid` is not a superkey of Order and `cname` is not prime, so 3NF is violated. Split again:
 
 ```
 Order(oid, odate, cid)
@@ -85,23 +155,44 @@ Line(oid, pid, qty)
 Now every FD's left side is a key of its relation. Ann's name lives in one row, products can exist before anyone orders them, and deleting an order loses nothing else.
 
 > [!warning] Price is a different fact
-> `pid → current_price` can hold in every database state even when prices change over time. It does not imply `pid → price_paid` across historical order lines. In a real shop, the price charged on an order is a separate fact from the current list price: `{oid, pid} → price_paid`. Store it on `Line`. That is not denormalisation; it is modelling a time-dependent fact correctly. Normalising away the price paid is a classic bug that silently rewrites old invoices.
+> The current price of a product (one per product) can hold in every database state even when prices change over time. It does not imply that the price *paid* on every historical order line equals today's price. In a real shop, the price charged on an order is a separate fact from the current list price, and it belongs to the order and product together: `{oid, pid}` determines `price_paid`. Store it on `Line`. That is not denormalisation; it is modelling a time-dependent fact correctly. Normalising away the price paid is a classic bug that silently alters old invoices.
 
 ## Boyce–Codd normal form (BCNF)
 
-A relation is in BCNF when, for every non-trivial FD X → Y that holds in it, **X is a superkey**. BCNF drops 3NF's escape clause "or A is prime".
+A relation is in BCNF when, for every non-trivial FD that holds in it, **the left side is a superkey**. BCNF drops 3NF's escape clause "or A is prime":
 
-3NF and BCNF differ only when a relation has overlapping candidate keys. The classic example: each teacher teaches one course, and each student has one teacher per course.
-
+```formula
+for every X → Y in F⁺ with Y ⊄ X:
+  X⁺ = R
+where
+F⁺: every FD that holds on the relation
+X, Y: sets of attributes, the left and right sides
+→: functionally determines
+⊄: is not a subset of; Y ⊄ X makes the FD non-trivial
+X⁺: the attribute closure of X
+R: the set of all attributes of the relation
+In words: every real dependency must come from a superkey, with no exceptions.
 ```
-Teaching(student, course, teacher)
-  {student, course} → teacher
-  teacher → course
-Keys: {student, course}, {student, teacher}
+
+3NF and BCNF differ only when a relation has overlapping candidate keys. The classic example: each teacher teaches one course, and each student has one teacher per course. The relation is `Teaching(student, course, teacher)`:
+
+```formula
+{student, course} → teacher
+teacher → course
+K_1 = {student, course}
+K_2 = {student, teacher}
+teacher⁺ = {teacher, course}
+where
+student, course, teacher: the three attributes of Teaching
+→: functionally determines
+{ }: a set of attributes
+K_1, K_2: the two candidate keys; they overlap on student
+teacher⁺: the attribute closure of teacher
+In words: a student and course fix the teacher, and a teacher fixes the course. teacher reaches only itself and course, so it is not a superkey.
 ```
 
-- `teacher → course`: `teacher` is not a superkey, so **BCNF fails**.
-- But `course` is prime (it is in the key `{student, course}`), so **3NF holds**.
+- The FD from `teacher` to `course` has a left side that is not a superkey, so **BCNF fails**.
+- But `course` is prime (it is in the key K_1), so **3NF holds**.
 
 The redundancy is real: "Smith teaches DB" is repeated for every student Smith teaches.
 
@@ -111,11 +202,23 @@ Splitting a relation has two possible costs, and you should check both.
 
 ### Lossless join
 
-A decomposition of R into R1 and R2 is **lossless** if R1 ⋈ R2 always gives back exactly R. If not, the join invents **spurious tuples**. The test for two parts:
+A decomposition of R into R1 and R2 has a **lossless join** if joining the parts always gives back exactly R. If not, the join invents **spurious tuples**. The test for two parts:
 
-> R1 ∩ R2 → R1, or R1 ∩ R2 → R2, must be in F⁺.
+```formula
+R_1 ⋈ R_2 = R
+  when (R_1 ∩ R_2 → R_1) in F⁺
+  or (R_1 ∩ R_2 → R_2) in F⁺
+where
+R: the original relation
+R_1, R_2: the two parts (here also standing for their sets of attributes)
+⋈: natural join: match tuples on the shared attributes
+∩: intersection: the attributes the two parts share
+→: functionally determines
+F⁺: every FD that holds on R
+In words: the split has a lossless join when the shared attributes are a superkey of at least one side.
+```
 
-In words, the shared attributes must be a superkey of at least one side. Split Teaching badly into `(student, course)` and `(course, teacher)`:
+Split Teaching badly into `(student, course)` and `(course, teacher)`:
 
 ```
 student course | course teacher
@@ -123,18 +226,80 @@ Ann     DB     | DB     Smith
 Bob     DB     | DB     Jones
 ```
 
-Joining on `course` produces four rows, including `Ann, DB, Jones`, which never happened. `course` determines neither side, so the split is lossy. Split into `(teacher, course)` and `(student, teacher)` instead: the shared attribute `teacher` determines `course`, so it is lossless.
+Joining on `course` produces four rows, including `Ann, DB, Jones`, which never happened. Then try the split into `(teacher, course)` and `(student, teacher)`:
+
+```formula
+R_1 ∩ R_2 = {course}
+course⁺ = {course}
+R_3 ∩ R_4 = {teacher}
+teacher⁺ = {teacher, course}
+where
+R_1, R_2: the bad split, (student, course) and (course, teacher)
+R_3, R_4: the good split, (teacher, course) and (student, teacher)
+student, course, teacher: the attributes of Teaching
+∩: intersection: the shared attributes
+{ }: a set of attributes
+course⁺, teacher⁺: attribute closures under Teaching's FDs
+In words: in the bad split the shared attribute course determines neither side, so the split is lossy. In the good split teacher determines course, which covers the whole of (teacher, course), so it gives a lossless join.
+```
 
 ### Dependency preservation
 
-A decomposition **preserves dependencies** if the union of the FDs projected onto its parts implies every FD in F. Enforcing those local dependencies then suffices without checking a join; an original FD can follow transitively across several local dependencies rather than literally fit in one part. The lossless BCNF split of Teaching loses `{student, course} → teacher`: no part contains all three attributes, so nothing stops Ann having two DB teachers.
+A decomposition **preserves dependencies** if the FDs that hold inside each part, taken together, imply every FD in F:
+
+```formula
+(F_1 ∪ F_2 ∪ ... ∪ F_n)⁺ = F⁺
+where
+F: the original FDs
+F⁺: every FD implied by F
+n: the number of parts
+F_1, F_2, F_n: the FDs from F⁺ that mention only attributes of part 1, part 2, ..., part n
+...: and so on, for every part in between
+∪: union: all the FDs together
+In words: everything F says can still be checked one table at a time, without joining.
+```
+
+Enforcing those local dependencies then suffices without checking a join; an original FD can follow transitively across several local dependencies rather than literally fit in one part. The lossless-join BCNF split of Teaching loses the FD from `{student, course}` to `teacher`: no part contains all three attributes, so nothing stops Ann having two DB teachers.
 
 ## The BCNF decomposition algorithm
 
-1. If some relation S has a non-trivial FD X → Y with X not a superkey of S, replace S with **X⁺ ∩ S** and **X ∪ (S − X⁺)**.
+1. If some relation S has a non-trivial FD X → Y with X not a superkey of S, replace S with the two parts in the card below.
 2. Repeat until every relation is in BCNF.
 
-Each split shares exactly X, and X determines the whole first part, so every step is lossless. Worked on R(A, B, C, D, E) with F = {A → B, B → C, CD → E}, key AD:
+```formula
+S_1 = X⁺ ∩ S
+S_2 = X ∪ (S − X⁺)
+S_1 ∩ S_2 = X
+where
+S: the relation being split, as a set of attributes
+X: the left side of an FD that violates BCNF in S
+X⁺: the attribute closure of X
+∩: intersection: attributes in both
+∪: union: attributes in either
+−: difference: attributes of S that X does not determine
+S_1: X plus everything in S that X determines
+S_2: X plus everything else in S
+In words: put X with what it determines in one part, and X with the rest in the other.
+```
+
+Each split shares exactly X, and X determines the whole first part, so every step gives a lossless join. Worked on R(A, B, C, D, E) with F = {A → B, B → C, CD → E}, whose key is AD:
+
+```formula
+A⁺ = {A, B, C}
+A⁺ ∩ ABCDE = ABC
+A ∪ (ABCDE − A⁺) = ADE
+B⁺ ∩ ABC = BC
+B ∪ (ABC − B⁺) = AB
+where
+A, B, C, D, E: the attributes of R; R itself is the set ABCDE
+ABCDE, ABC, ADE, BC, AB: sets of attributes written as letters side by side, e.g. ABC = {A, B, C}
+A⁺, B⁺: attribute closures under F = {A → B, B → C, CD → E}; B⁺ = {B, C}
+{ }: a set
+∩, ∪, −: intersection, union and difference of attribute sets
+In words: A → B breaks BCNF (A is not a key), so ABCDE splits into ABC and ADE. Inside ABC, B → C breaks it (B is not a key), so ABC splits into BC and AB. ADE only has AD → E, and AD is its key.
+```
+
+The same steps as a diagram (`->` marks a split, and `A+` is A⁺):
 
 ```
 ABCDE   A -> B violates (A not a key)
@@ -147,7 +312,7 @@ ADE     only AD -> E: AD is its key, ok
 Result: AB, BC, ADE
 ```
 
-All three are in BCNF and the join is lossless, but **CD → E is lost**: C and E never share a relation with D, so checking it needs a join.
+All three are in BCNF and the decomposition is lossless-join, but **CD → E is lost**: C and D never appear together in one relation, so checking it needs a join.
 
 ## The 3NF synthesis algorithm
 
@@ -160,22 +325,29 @@ All three are in BCNF and the join is lossless, but **CD → E is lost**: C and 
 
 Same example. The minimal cover is {A → B, B → C, CD → E}:
 
+```formula
+A → B gives R_1 = AB
+B → C gives R_2 = BC
+CD → E gives R_3 = CDE
+{A, D}⁺ = ABCDE gives R_4 = AD
+where
+A, B, C, D, E: the attributes of R
+→: functionally determines
+CD: the set {C, D}
+R_1, R_2, R_3: one relation per FD of the minimal cover
+AB, BC, CDE, AD, ABCDE: sets of attributes, letters side by side
+{A, D}⁺: the attribute closure of {A, D}; it is everything, so AD is a candidate key
+R_4: the extra relation holding just the key, added because AD is in none of R_1 to R_3
+In words: one table per dependency, plus a table holding a key to tie them together.
 ```
-A -> B    gives AB
-B -> C    gives BC
-CD -> E   gives CDE
-key AD in none of them: add AD
 
-Result: AB, BC, CDE, AD
-```
-
-Every FD lives in one relation, the key relation AD makes the join lossless, and here each part happens to be in BCNF too.
+Result: AB, BC, CDE, AD. Every FD lives in one relation, the key relation AD makes the decomposition lossless-join, and here each part happens to be in BCNF too.
 
 ## Choosing between 3NF and BCNF
 
 | | 3NF | BCNF |
 |---|---|---|
-| Lossless | always | always |
+| Lossless join | always | always |
 | FDs preserved | always | not always |
 | Redundancy | a little possible | none from FDs |
 
@@ -186,13 +358,26 @@ In practice most schemas reach BCNF with no loss, because overlapping candidate 
 
 ## Beyond BCNF, briefly
 
-BCNF removes redundancy caused by FDs, but not all redundancy. If an employee has a set of skills and, independently, a set of languages, storing `(emp, skill, language)` forces every skill to be paired with every language. That is a **multivalued dependency** (emp ↠ skill), and **4NF** splits it into `(emp, skill)` and `(emp, language)`. **5NF** handles join dependencies across three or more parts. Both are rare in practice, but the "independent facts in one table" smell is worth recognising.
+BCNF removes redundancy caused by FDs, but not all redundancy. If an employee has a set of skills and, independently, a set of languages, storing `(emp, skill, language)` forces every skill to be paired with every language. That is a **multivalued dependency**: an employee determines a whole *set* of skills, independently of the other attributes.
+
+```formula
+emp ↠ skill
+emp ↠ language
+where
+emp: the employee
+skill: one of the employee's skills
+language: one of the languages the employee speaks
+↠: multivalued dependency (a double-headed arrow): the left side determines a set of values on the right, and that set does not depend on the remaining attributes
+In words: an employee's skills and languages are two independent lists, so every combination ends up stored.
+```
+
+**4NF** splits it into `(emp, skill)` and `(emp, language)`. **5NF** handles join dependencies across three or more parts. Both are rare in practice, but the "independent facts in one table" smell is worth recognising.
 
 ## Key takeaways
 - Anomalies (update, insertion, deletion) come from FDs whose left side is not a key.
 - 1NF: atomic values. 2NF: no partial dependence of a non-prime attribute on a candidate key. For non-trivial FDs, 3NF requires a superkey determinant or prime right-hand attribute; BCNF requires a superkey determinant.
-- A two-way split is lossless when the shared attributes are a key of one side; otherwise the join creates spurious tuples.
-- BCNF decomposition is always lossless but may lose FDs; 3NF synthesis is always lossless and dependency-preserving.
+- A two-way split has a lossless join when the shared attributes are a key of one side; otherwise the join creates spurious tuples.
+- BCNF decomposition always gives a lossless join but may lose FDs; 3NF synthesis always gives a lossless join and is dependency-preserving.
 - Model time-dependent facts (price paid versus list price) as their own attributes rather than normalising them away.
 
 ## Further reading

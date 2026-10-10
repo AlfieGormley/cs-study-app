@@ -6,7 +6,7 @@ minutes: 13
 summary: When storing redundant data is worth it, the main techniques (copied columns, counters, summary tables, materialised views, star schemas, embedded documents), how to keep copies in sync, and the failure modes.
 ---
 
-Normalisation stores every fact once, which makes writes simple and keeps the data consistent. The price is paid on reads: answering a question may mean joining several tables.
+Normalisation stores every fact once, which makes writes simple and keeps the data consistent. The price is paid on reads: answering a question may require joining several tables.
 
 **Denormalisation** is deliberately storing a fact more than once, or storing something derivable, so that reads get cheaper. It is not the absence of design. A denormalised schema starts from a normalised one and adds controlled redundancy, together with a plan for keeping the copies in agreement.
 
@@ -38,7 +38,7 @@ orders(id, customer_id,
 Every change to `customer.name` must now also update that customer's orders. If one customer has 50,000 orders, a rename becomes a 50,000-row write.
 
 > [!warning] Snapshot or cache?
-> Ask whether the copy should follow the original. The shipping address *on an invoice* should **not** change when the customer moves: it is a historical fact about the order, and storing it is correct normalised design. A copy of the customer's *current* display name **should** follow the original: that is a cache, and true denormalisation. Confusing the two either rewrites history or leaves stale data.
+> Ask whether the copy should follow the original. The shipping address *on an invoice* should **not** change when the customer moves: it is a historical fact about the order, and storing it is correct normalised design. A copy of the customer's *current* display name **should** follow the original: that is a cache, and true denormalisation. Confusing the two either changes history or leaves stale data.
 
 ### 2. Precomputed counts and totals
 
@@ -61,7 +61,7 @@ AFTER INSERT ON comment
 FOR EACH ROW EXECUTE FUNCTION bump_count();
 ```
 
-(A real version also handles `DELETE` and posts moving.) The hidden cost is **contention**. Every comment on a viral post updates the same row, and each `UPDATE` holds that row's lock until its transaction commits, so writers queue behind one another. Remedies: split the counter into N rows and sum them on read (sharded counters), or buffer increments and apply them in batches.
+(A real version also handles `DELETE` and posts moving.) The hidden cost is **contention**. Every comment on a viral post updates the same row, and each `UPDATE` holds that row's lock until its transaction commits, so writers queue behind one another. Remedies: split the counter into several rows (say 16) and sum them on read (sharded counters), or buffer increments and apply them in batches.
 
 ### 3. Summary tables and materialised views
 
@@ -98,11 +98,24 @@ dim_store - fact_sales - dim_product
          dim_customer
 ```
 
-`dim_product` holds product, category and department names in one row, even though category → department is a transitive dependency. The **snowflake** variant normalises dimensions back out. Stars can help when controlled data-loading pipelines keep duplicated dimension attributes consistent; batch loading alone does not prevent update anomalies and queries join one big table to a few small ones, which columnar engines handle well.
+`dim_product` holds product, category and department names in one row, even though that contains a transitive dependency:
+
+```formula
+product → category
+category → department
+where
+→: functionally determines: rows that agree on the left side agree on the right side
+product: the product's id, the key of dim_product
+category: the product's category name
+department: the department the category belongs to
+In words: the product fixes its category, and the category fixes its department, so the department depends on the key only indirectly. A normalised design would move category and department into their own table.
+```
+
+Storing it flat repeats each department name on every product row. The **snowflake schema** variant normalises dimensions back out. Stars can help when controlled data-loading pipelines keep duplicated dimension attributes consistent; batch loading alone does not prevent update anomalies and queries join one big table to a few small ones, which columnar engines handle well.
 
 ### 5. Embedding and single-table design
 
-Document and key-value stores push this furthest. In MongoDB you might embed an order's lines inside the order document. In DynamoDB, which has no joins, a common pattern stores several entity types in one table, keyed so that one query fetches a customer and their recent orders together. AWS's own guidance is to design around your access patterns first, which is denormalisation as the default. The cost is the same as in SQL: duplicated data must be updated in every place, and changing an access pattern can mean rewriting the data.
+Document and key-value stores push this furthest. In MongoDB you might embed an order's lines inside the order document. In DynamoDB, which has no joins, a common pattern stores several entity types in one table, keyed so that one query fetches a customer and their recent orders together. AWS's own guidance is to design around your access patterns first, which is denormalisation as the default. The cost is the same as in SQL: duplicated data must be updated in every place, and changing an access pattern can require rewriting the data.
 
 ### 6. Same-row derived values
 
@@ -128,7 +141,7 @@ Every denormalisation needs an answer to "what updates the copy, and how stale m
 | Batch refresh | minutes+ | stale reads |
 
 - **Application code in the same transaction** is explicit, but every code path that writes the source must remember the copy. One forgotten admin script causes drift.
-- **Enabled triggers** automatically run for their configured events, but uncovered operations or disabled triggers can still leave gaps; but they are invisible to someone reading the application, can cascade, and add lock contention.
+- **Enabled triggers** automatically run for their configured events, but uncovered operations or disabled triggers can still leave gaps; they are also invisible to someone reading the application, can cascade, and add lock contention.
 - **Change data capture** (reading the write-ahead log, for example with Debezium) or a transactional outbox propagates changes asynchronously to other tables, search indexes or services. Writes stay fast, readers see eventual consistency.
 - **Batch rebuilds** (materialised view refresh, nightly jobs) are simple and self-healing, at the cost of staleness.
 

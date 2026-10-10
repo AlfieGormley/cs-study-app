@@ -27,6 +27,8 @@ Student
 +-----+------+------+
 ```
 
+A relation is often written compactly as its name followed by its attributes in brackets: `Student(sid, name, year)`.
+
 | Theory | SQL | Meaning |
 |---|---|---|
 | Relation | Table | A set of tuples |
@@ -35,7 +37,7 @@ Student
 | Domain | Type | Allowed values |
 
 - The **heading** is a set of `(attribute, domain)` pairs, such as `(year, INTEGER)`.
-- A **domain** is the set of values an attribute may take. Codd required values to be **atomic** from the database's point of view (more on that in the normal forms lesson).
+- A **domain** is the set of values an attribute may take. Codd required **atomic values**, indivisible from the database's point of view (more on that in the normal forms lesson).
 - The **degree** (or arity) is the number of attributes: 3 above.
 - The **cardinality** is the number of tuples: 3 above. It changes as rows are inserted; the degree does not.
 
@@ -64,7 +66,7 @@ Because a relation is a mathematical set, three properties follow directly:
 > - SQL has **NULL**, which the original model did not, giving three-valued logic.
 > - Rows have a physical order on disk, but no guaranteed order in results. Postgres can return rows in a different order between two runs of the same query.
 
-Codd later criticised SQL for these departures, and authors such as Chris Date and Hugh Darwen have argued the same for decades. In practice you get close to the model by giving every table a key and writing `DISTINCT` when you mean a set.
+Codd later criticised SQL for these departures, and authors such as Chris Date and Hugh Darwen have argued the same for decades. In practice you get close to the model by giving every table a key and writing `DISTINCT` when you want a set.
 
 ## Keys
 
@@ -72,7 +74,7 @@ A relation has no duplicate tuples, so the full set of attributes always identif
 
 - A **superkey** is any set of attributes whose values are unique across every tuple the relation could legally contain.
 - A **candidate key** is a *minimal* superkey: remove any attribute and it stops being unique.
-- The **primary key** is the candidate key you choose as the main identifier. The others are **alternate keys**, normally enforced in SQL with UNIQUE plus NOT NULL on their attributes.
+- The **primary key** is the candidate key you choose as the main way to identify tuples. The others are **alternate keys**, normally enforced in SQL with UNIQUE plus NOT NULL on their attributes.
 
 Consider `Employee(emp_id, email, name, dept)`:
 

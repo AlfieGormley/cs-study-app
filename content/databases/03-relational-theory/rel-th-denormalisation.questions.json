@@ -11,7 +11,7 @@
       },
       {
         "text": "Keep it: the address on the invoice is a historical fact about that sale, not a copy of the current address, so storing it is correct normalised design",
-        "explanation": "Correct. `invoice_id → ship_address` is its own FD. It must not follow later changes to the customer, so it is not redundant."
+        "explanation": "Correct. The invoice id determines the shipping address: that is its own functional dependency. It must not follow later changes to the customer, so it is not redundant."
       },
       {
         "text": "Keep it, but add a trigger that updates it when the customer's address changes",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Ask: should this value change when the source changes?\n2. Invoice shipping address: **no**. It records where that order went.\n3. So it depends on the invoice (`invoice_id → ship_address`), not on the customer's current state. It is a different fact, not a duplicate.\n4. A true denormalised copy would be something like `orders.customer_display_name`, meant to track the current name.",
+    "workedExample": "1. Ask: should this value change when the source changes?\n2. Invoice shipping address: **no**. It records where that order went.\n3. So it depends on the invoice, not on the customer's current state:\n\n```formula\ninvoice_id → ship_address\nwhere\ninvoice_id: the invoice's key\nship_address: the address the order was shipped to\n→: functionally determines: each invoice has exactly one shipping address\nIn words: the address is a fact about this invoice, fixed when it was issued. It is a different fact from the customer's current address, not a duplicate of it.\n```\n\n4. A true denormalised copy would be something like `orders.customer_display_name`, meant to track the current name.",
     "link": {
       "title": "Denormalization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Denormalization"
@@ -191,11 +191,11 @@
       },
       {
         "text": "Queries join one large fact table to a few small dimensions, which is simple for analysts and efficient for columnar engines",
-        "explanation": "Correct. A flat dimension avoids chains of joins (product → category → department) on every query."
+        "explanation": "Correct. A flat dimension avoids chains of joins (product to category to department) on every query."
       },
       {
         "text": "Star schemas are in BCNF, so they have no redundancy",
-        "explanation": "Dimension tables usually contain transitive dependencies (category → department), so they are not in 3NF, let alone BCNF. That is the deliberate trade."
+        "explanation": "Dimension tables usually contain transitive dependencies (category determines department), so they are not in 3NF, let alone BCNF. That is the deliberate trade."
       },
       {
         "text": "Fact tables must not have foreign keys",
@@ -206,7 +206,7 @@
       0,
       1
     ],
-    "workedExample": "Compare a dimension in each style:\n\n```\nstar:\n dim_product(id, name,\n   category, department)\n\nsnowflake:\n dim_product(id, name, cat_id)\n dim_category(id, name, dept_id)\n dim_department(id, name)\n```\n\nThe star repeats \"Hardware\" for every product in that department. In a batch-loaded, read-heavy warehouse that redundancy is cheap, while saving two joins per query pays off on every report.",
+    "workedExample": "Compare a dimension in each style:\n\n```\nstar:\n dim_product(id, name,\n   category, department)\n\nsnowflake:\n dim_product(id, name, cat_id)\n dim_category(id, name, dept_id)\n dim_department(id, name)\n```\n\nThe star's product dimension contains a transitive dependency:\n\n```formula\nid → category\ncategory → department\nwhere\nid: the product id, the key of dim_product\ncategory: the product's category\ndepartment: the department the category belongs to\n→: functionally determines\nIn words: the department depends on the product only through its category, which is exactly what 3NF forbids and the snowflake schema removes.\n```\n\nThe star repeats \"Hardware\" for every product in that department. In a batch-loaded, read-heavy warehouse that redundancy is cheap, while saving two joins per query pays off on every report.",
     "link": {
       "title": "Star schema — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Star_schema"
@@ -266,7 +266,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Inserts: +1. Deletes: nothing. So count = inserts ≥ real count.\n2. Reconcile:\n\n```sql\nSELECT p.id, p.comment_count,\n  (SELECT COUNT(*) FROM comment c\n   WHERE c.post_id = p.id) AS real\nFROM post p\nWHERE p.comment_count <> (\n  SELECT COUNT(*) FROM comment c\n  WHERE c.post_id = p.id);\n```\n\n3. Fix the cause (an `AFTER DELETE` trigger, and handle `UPDATE` of `post_id`), then backfill with an `UPDATE` from the real counts.\n4. Keep the reconciliation as a scheduled check, because manual fixes and restores cause drift too.",
+    "workedExample": "1. Inserts add 1; deletes change nothing:\n\n```formula\nc_stored = N_ins\nc_real = N_ins − N_del\nc_stored ≥ c_real\nwhere\nc_stored: the value in post.comment_count\nN_ins: comments ever inserted on the post\nN_del: comments deleted directly\nc_real: the true number of comments, COUNT(*)\n≥: is greater than or equal to\nIn words: the stored count is too high by exactly the number of deleted comments.\n```\n2. Reconcile:\n\n```sql\nSELECT p.id, p.comment_count,\n  (SELECT COUNT(*) FROM comment c\n   WHERE c.post_id = p.id) AS real\nFROM post p\nWHERE p.comment_count <> (\n  SELECT COUNT(*) FROM comment c\n  WHERE c.post_id = p.id);\n```\n\n3. Fix the cause (an `AFTER DELETE` trigger, and handle `UPDATE` of `post_id`), then backfill with an `UPDATE` from the real counts.\n4. Keep the reconciliation as a scheduled check, because manual fixes and restores cause drift too.",
     "link": {
       "title": "CREATE TRIGGER — PostgreSQL documentation",
       "url": "https://www.postgresql.org/docs/current/sql-createtrigger.html"
@@ -299,7 +299,7 @@
       0,
       2
     ],
-    "workedExample": "Score each by read/write ratio, how often the source changes, and the cost of staleness:\n\n| Case | Reads ≫ writes | Changes rarely | Stale OK |\n|---|---|---|---|\n| rating | yes | yes | yes |\n| balance | - | no | no |\n| report | yes | batch | yes |\n| email | - | no | no |\n\nDenormalise where all three line up.",
+    "workedExample": "Score each by read/write ratio, how often the source changes, and the cost of staleness:\n\n| Case | Read-heavy | Changes rarely | Stale OK |\n|---|---|---|---|\n| rating | yes | yes | yes |\n| balance | - | no | no |\n| report | yes | batch | yes |\n| email | - | no | no |\n\nDenormalise where all three line up.",
     "link": {
       "title": "Denormalization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Denormalization"

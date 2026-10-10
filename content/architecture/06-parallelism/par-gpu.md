@@ -187,7 +187,7 @@ Higher occupancy can help hide latency when it exposes more useful independent w
 | L1 / L2 caches | Hardware-managed; scope and policy depend on target |
 | Global memory | Addressable across the grid under memory-ordering rules |
 
-On supported architectures, thread-block clusters provide **distributed shared memory**, allowing access to another block’s shared memory within the cluster. Correct cluster synchronisation and storage lifetimes are required; ordinary non-cluster blocks do not get that access.
+On supported architectures, thread-block clusters provide **distributed shared memory**, allowing access to another block’s GPU shared memory within the cluster. Correct cluster synchronisation and storage lifetimes are required; ordinary non-cluster blocks do not get that access.
 
 ### Coalescing
 
@@ -217,7 +217,7 @@ In words: each thread wants 4 bytes but drags in a whole 32-byte sector, so only
 
 That is why GPU code prefers structure-of-arrays layouts and why you transpose data on the way into GPU shared memory.
 
-### Shared memory and bank conflicts
+### GPU shared memory and bank conflicts
 
 GPU shared memory is a programmer-managed scratchpad; its latency advantage depends on the target, access pattern and compared cache/memory path. A classic pattern is **tiling**: each block loads a tile of a matrix into GPU shared memory once, then every thread reuses it many times.
 

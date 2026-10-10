@@ -90,13 +90,13 @@ The **last mile** (or access network) connects homes and businesses to their ISP
 | Technology | Medium | Rate interpretation |
 |---|---|---|
 | ADSL / VDSL2 | copper pair | Profile, line quality, length and deployment determine rate |
-| DOCSIS cable | shared coax segment | Version, spectrum allocation and service plan determine rate |
+| DOCSIS cable | shared coaxial cable | Version, spectrum allocation and service plan determine rate |
 | GPON fibre | shared optical distribution | Common nominal line rates: 2.48832 Gbit/s down / 1.24416 up; not per-home goodput |
 | XGS-PON fibre | shared optical distribution | 10 Gbit/s class (9.95328 Gbit/s nominal each way); shared and before protocol overhead |
 | Fixed wireless, 4G/5G | radio | widely variable |
 
 - **DSL** runs over the telephone pair. VDSL2 rates depend on copper length, line quality, profile and interference; shorter runs can support higher rates.
-- **Cable** (DOCSIS) shares a coax segment among a neighbourhood, so evening peaks can slow everyone; upload is traditionally much lower than download.
+- **Cable** (DOCSIS) shares one coaxial cable network among a neighbourhood, so evening peaks can slow everyone; upload is traditionally much lower than download.
 - **PON fibre** (FTTP) shares one fibre from the exchange among optical network terminals via passive splitters. Split ratios and scheduling vary; a marketed access rate is not necessarily a permanently reserved equal fraction.
 
 > [!note] Contention

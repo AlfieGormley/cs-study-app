@@ -6,7 +6,7 @@ minutes: 16
 summary: A repeatable method for "the network is slow" or "it can't connect", and how to read ping, traceroute, mtr, dig, curl timings, ss and tcpdump, including MTU black holes and loss-limited throughput.
 ---
 
-“The network is down” or “the network is slow” needs a precise symptom before it can guide diagnosis. Good network debugging is mostly method: pin down the symptom, find which layer and which segment it lives in, and test a hypothesis with the right tool.
+“The network is down” or “the network is slow” needs a precise symptom before it can guide diagnosis. Good network debugging is mostly method: pin down the symptom, find which layer and which part of the path it lives in, and test a hypothesis with the right tool.
 
 This lesson gives you the method first, then the tools, then the failure patterns that come up again and again.
 

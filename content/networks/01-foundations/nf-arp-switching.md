@@ -156,7 +156,7 @@ Every non-root switch chooses one **root port**: its port with the lowest total 
 
 ### Step 3: each link picks a designated port
 
-On every link, the end with the lowest cost to the root becomes the **designated port** and forwards for that link (ties again go to the lower bridge ID). In the simple point-to-point topology below, the root ends of inter-switch links are designated. Shared segments and multiple ports attached to one segment need the full port-role rules.
+On every link, the end with the lowest cost to the root becomes the **designated port** and forwards for that link (ties again go to the lower bridge ID). In the simple point-to-point topology below, the root ends of inter-switch links are designated. Shared segments and multiple ports attached to one LAN segment need the full port-role rules.
 
 Any port that is neither root nor designated is **blocked**: it still listens to BPDUs but forwards no data.
 

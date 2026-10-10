@@ -96,7 +96,7 @@ NR specifications define release-specific frequency ranges, with different suppo
 > [!note] Why "5G" on your phone may be mostly 4G
 > A common **NSA option 3** deployment uses LTE/EPC as the master/core with NR as secondary access. **SA option 2** connects NR to the 5G core. “NSA” has broader architectural usage, and a status icon alone does not prove which capabilities are active. Feature availability depends on release, configuration, device and operator support.
 
-ITU IMT-2020 evaluation requirements include a 20 Gbit/s peak downlink data rate and 4 ms eMBB / 1 ms URLLC user-plane latency targets under their defined conditions. The latency measure is one-way radio user-plane latency, not an Internet ping RTT; the peak rate is not a per-user service guarantee. Scheduling, backhaul, core routing, server work and other path segments contribute to application latency.
+ITU IMT-2020 evaluation requirements include a 20 Gbit/s peak downlink data rate and 4 ms eMBB / 1 ms URLLC user-plane latency targets under their defined conditions. The latency measure is one-way radio user-plane latency, not an Internet ping RTT; the peak rate is not a per-user service guarantee. Scheduling, backhaul, core routing, server work and other parts of the path contribute to application latency.
 
 ## Radio power states and application traffic
 

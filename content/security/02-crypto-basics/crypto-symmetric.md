@@ -16,7 +16,7 @@ ciphertext --[ Dec(key) ]--> plaintext
 Symmetric encryption is used for bulk data; public-key operations commonly establish or protect its keys. Hardware AES instructions can accelerate it.
 
 > [!note] Content gap: throughput
-> No reproducible machine, library or benchmark record supports the former per-core throughput figure, so that measurement is omitted. Performance depends on the mode, implementation and workload.
+> No reproducible machine, library or benchmark record supports the former per-core throughput figure, so that measurement is omitted. Performance depends on the mode, the implementation and the size and pattern of the data being encrypted.
 
 One principle runs through the whole field. **Kerckhoffs's principle** says a system must stay secure even if the attacker knows everything about it except the key. So the algorithm is public, and all the secrecy lives in the key. "Nobody knows how our cipher works" is not security.
 

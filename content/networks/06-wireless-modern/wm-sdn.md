@@ -93,7 +93,7 @@ The answer is an **overlay**: a tunnel endpoint, such as a hypervisor, switch or
              host A->B  :4789 VNI=24b
 ```
 
-- The 24-bit **VXLAN Network Identifier** allows about 16 million segments, against 4,094 usable VLAN IDs (the calculation follows this list).
+- The 24-bit **VXLAN Network Identifier** allows about 16 million network segments, against 4,094 usable VLAN IDs (the calculation follows this list).
 - RFC 7348 recommends deriving the outer UDP source port from inner headers to add variation for outer-header ECMP. Actual path use depends on the hash, mapping and traffic.
 - With outer IPv4 without options, UDP, VXLAN and untagged inner Ethernet without inner FCS, the outer IP packet contains **50 bytes in addition to the inner IP packet**: 20 + 8 + 8 + 14. Thus a 1,500-byte underlay IP MTU permits at most 1,450 inner IP bytes under these assumptions (calculation below). Outer Ethernet is outside that IP MTU; tags, outer IPv6 or other encapsulation alter the budget. A tenant MTU of 1,500 instead needs at least 1,550 underlay IP bytes here, not necessarily a 9,000-byte jumbo frame. Getting this wrong produces the classic "small requests work, big ones hang" bug.
 
@@ -105,7 +105,7 @@ N_VLAN = 2^12 − 2 = 4,094
 where
 N_VNI: the number of distinct VXLAN segment identifiers; 2^24 means 2 raised to the power 24, that is 24 twos multiplied together, because the field is 24 bits long
 N_VLAN: the number of usable VLAN IDs; the 12-bit field has 4,096 values, but 0 and 4,095 are reserved
-In words: twelve extra bits multiply the number of isolated segments by about four thousand.
+In words: twelve extra bits multiply the number of isolated network segments by about four thousand.
 ```
 
 The MTU budget adds up every header that sits inside the outer IP packet:

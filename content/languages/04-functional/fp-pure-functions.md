@@ -12,7 +12,7 @@ Many functions in everyday code are not like that. They read a global, write to 
 
 ## What makes a function pure
 
-A function is **pure** when both of these hold:
+A function is **pure** (a **pure function**) when both of these hold:
 
 1. **Same inputs, same output.** The result depends only on the arguments. No dependence on clocks, random state, files or mutable globals that can change between calls; reading a fixed immutable constant is compatible with purity.
 2. **No side effects.** Calling it changes nothing observable outside it: no mutation of arguments or globals, no I/O, no exceptions used as hidden control flow to the outside world.
@@ -55,13 +55,21 @@ def squares(n):
 
 A pure function call is **referentially transparent**: you can replace the call with its result without changing what the program does. If `total([2, 3])` is pure, every occurrence of it can be swapped for `5`.
 
-This is what makes pure code easy to reason about. You can read it like algebra:
+This is what makes pure code easy to reason about. You can read it like algebra, rewriting one expression into an equal one:
 
-```
+```formula
 y = f(x) + f(x)
 z = f(x)
-y = z + z          # reuse a pure result
+y = z + z
+where
+f: a pure function: its result depends only on its argument, and calling it has no side effects
+x: any argument value passed to f
+y: the value of the whole expression
+z: a name for the result of f(x), computed once and then reused
+In words: because f is pure, both calls f(x) give the same value, so you can compute it once, call it z, and write y = z + z without changing what the program means.
 ```
+
+For example, if f squares its argument and x is 3, both versions give y = 9 + 9 = 18; the second just calls f once instead of twice.
 
 If `f` printed something, or incremented a counter, the two lines would behave differently. That one rewrite is the basis of a whole list of practical benefits.
 
@@ -166,7 +174,7 @@ xs = [];        // TypeError: the binding
 
 ### Shallow versus deep
 
-Most language-level immutability is **shallow**. It protects the outer object, not what it contains.
+Most language-level immutability is **shallow**: **shallow immutability** protects the outer object, not what it contains. **Deep immutability** would also protect everything inside it.
 
 ```python
 t = (1, [2, 3])
@@ -239,10 +247,28 @@ With immutable data, aliasing is harmless, which is why functional languages sha
 
 Purity and immutability are not free.
 
-- **Copying.** Naively copying a 1-million-element list to change one item is O(n). Persistent balanced trees and vector tries share unchanged parts and can give O(log n) updates; persistent linked-list indexed updates remain linear.
+- **Copying.** Naively copying a 1-million-element list to change one item is O(n), where n is the number of elements: the work grows in proportion to the size of the list. Persistent balanced trees and vector tries share unchanged parts and can give O(log n) updates; persistent linked-list indexed updates remain linear.
 - **Garbage.** Creating new values constantly means more allocation. Modern generational garbage collectors handle short-lived objects cheaply, but it still matters in hot loops.
 - **Awkward fits.** Some algorithms (in-place quicksort, union-find, graph algorithms over adjacency arrays) are naturally imperative. Haskell offers the `ST` monad for local mutation that stays invisible from outside.
 - **Language support.** In Python and JavaScript immutability is a discipline, not a guarantee. Nothing stops a colleague mutating your "immutable" dict.
+
+The copying cost is the one most worth quantifying. Big-O notation describes how the work for one update grows as the collection grows:
+
+```formula
+W_copy = O(n)
+W_tree = O(log_2(n))
+log_2(1000000) ≈ 20
+where
+W_copy: the work to change one item by naively copying the whole list, counted in elements copied
+W_tree: the work for one update of a persistent balanced tree, counted in nodes copied (one per level on the path from the root to the changed item)
+n: the number of elements in the collection; here 1,000,000
+O(...): Big-O notation: how the work grows as n grows, ignoring constant factors; O(n) means "in proportion to n"
+log_2(n): the base-2 logarithm of n: how many times you can halve n before reaching 1
+≈: approximately equal to
+In words: a naive copy touches all n elements, while a balanced persistent tree copies only about one node per level, roughly log_2(n) of them.
+```
+
+For a million elements that is 1,000,000 element copies versus about 20 node copies. The tree figure assumes the tree stays balanced; a persistent linked list gets no such saving, because changing item i still copies the i cells before it.
 
 > [!tip] Where it pays off most
 > React state hooks compare next and previous state using Object.is; React-Redux useSelector uses strict equality by default. Mutating and returning the same object can suppress the update-driven render; unrelated renders can still occur. Immutable updates make identity a useful change signal.

@@ -78,7 +78,21 @@ That's all a **functor** is: a box type with a sensible `map`. You know several 
 - **Promises**: `p.then(f)` where `f` returns a plain value.
 - **Dictionaries' values**, **trees**, **parsers**: anything where "apply this to what's inside" makes sense.
 
-A lawful functor obeys identity (mapping id preserves the value) and composition (mapping f then g equals mapping g after f). For these container examples, **preserving shape** is a useful intuition. Treat the illustrative Python boxes as values, with pure callbacks and no external mutation. Mapping over a 3-item list gives a 3-item list. Mapping over `Nothing` gives `Nothing`. Mapping the do-nothing function `lambda x: x` gives back the same box. If a "map" quietly dropped elements or turned errors into successes, you couldn't refactor code that uses it safely.
+A lawful functor obeys two **functor laws**, identity and composition:
+
+```formula
+map(id, m) = m
+map(g ∘ f, m) = map(g, map(f, m))
+where
+map: the box type's map operation: apply a function to what's inside and keep the box
+m: any box value, such as Some(3), Nothing or a list
+id: the identity function, which returns its argument unchanged: id(x) = x
+f, g: any two pure functions on the contents
+∘: function composition: (g ∘ f)(x) = g(f(x)), read "g after f"
+In words: mapping the do-nothing function changes nothing, and mapping f and then g in two passes gives the same result as mapping "g after f" in one pass.
+```
+
+For example, mapping "add 1" over [1, 2, 3] gives [2, 3, 4], and mapping "double" over that gives [4, 6, 8]; mapping the single function "add 1, then double" over [1, 2, 3] gives the same [4, 6, 8]. For these container examples, **preserving shape** is a useful intuition. Treat the illustrative Python boxes as values, with pure callbacks and no external mutation. Mapping over a 3-item list gives a 3-item list. Mapping over `Nothing` gives `Nothing`. Mapping the do-nothing function `lambda x: x` gives back the same box. If a "map" quietly dropped elements or turned errors into successes, you couldn't refactor code that uses it safely.
 
 ## Where map runs out
 
@@ -130,7 +144,21 @@ A **monad** provides two operations satisfying the laws below; a box is an intui
 1. **wrap**: put a plain value into a box (`Some(x)`, `[x]`, `Ok(x)`, `Promise.resolve(x)`). Haskell calls it `return` or `pure`.
 2. **flat_map**: run a box-returning function on the contents and keep a single layer of box.
 
-That's it. Every monad is a functor too, because `map(f)` is just `flat_map` followed by wrapping `f`'s result.
+That's it. Every monad is a functor too, because `map(f)` is just `flat_map` followed by wrapping `f`'s result:
+
+```formula
+map(f, m) = m >>= (wrap ∘ f)
+where
+map: the functor operation: apply f to the contents and keep the box
+f: a function that returns a plain value
+m: any box value
+>>=: "bind", Haskell's symbol for flat_map: m >>= g means m.flat_map(g)
+wrap: the monad's operation that puts a plain value into a box (Some, Ok, [x] or Promise.resolve)
+∘: function composition: (wrap ∘ f)(x) = wrap(f(x))
+In words: to map f, flat_map a function that runs f and then boxes its result, so flat_map never sees a nested box.
+```
+
+For example, `Some(3).flat_map(lambda x: Some(x + 1))` gives `Some(4)`, exactly what `Some(3).map(lambda x: x + 1)` gives.
 
 > [!tip] The one-sentence version
 > A monad lets you write a sequence of steps that each return a boxed value, and the box type decides what "and then" means: stop on missing, stop on error, try every option, or wait.
@@ -244,7 +272,7 @@ return data.items.length;
 
 ### Haskell's do-notation
 
-Haskell generalises that trick to **every** monad. `do` blocks are sugar for a chain of `>>=` (bind, i.e. `flat_map`):
+Haskell generalises that trick to **every** monad. `do` blocks (**do-notation**) are syntactic sugar for a chain of `>>=` (bind, i.e. `flat_map`):
 
 ```haskell
 leadEmail uid = do
@@ -263,6 +291,24 @@ There are three "monad laws". You'll rarely write them down, but they're what ma
 1. **Wrapping then chaining does nothing extra.** `Some(x).flat_map(f)` is the same as `f(x)`.
 2. **Chaining with wrap does nothing.** `m.flat_map(Some)` is the same as `m`.
 3. **Grouping doesn't matter.** `m.flat_map(f).flat_map(g)` equals `m.flat_map(lambda x: f(x).flat_map(g))`.
+
+These are usually called **left identity**, **right identity** and **associativity**. In the standard notation:
+
+```formula
+wrap(x) >>= f = f(x)
+m >>= wrap = m
+(m >>= f) >>= g = m >>= (λx. f(x) >>= g)
+where
+>>=: "bind", Haskell's symbol for flat_map: m >>= f means m.flat_map(f)
+wrap: put a plain value into a box (Some, Ok, [x], Promise.resolve; Haskell calls it return or pure)
+x: any plain value
+m: any box value (a monadic value)
+f, g: functions that take a plain value and return a box
+λ: lambda, the Greek letter that marks an anonymous function: λx. e is the function that takes x and returns e, written lambda x: e in Python
+In words: wrapping a value and then binding f is the same as calling f; binding wrap changes nothing; and binding f then g is the same as binding the single combined step "f, then g".
+```
+
+For example, with the lesson's `Maybe` and f = `lambda x: Some(x + 1)`: `Some(2).flat_map(f)` is `Some(3)`, which is exactly `f(2)`, as the first law requires.
 
 Rule 3 is the useful one in practice: it says you can pull a few steps out into a helper function, or inline one, without changing behaviour. It justifies regrouping lawful chains. Refactoring real async code must also preserve cancellation, exception boundaries and observable microtask scheduling.
 

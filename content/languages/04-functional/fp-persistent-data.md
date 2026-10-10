@@ -6,7 +6,19 @@ minutes: 14
 summary: How immutable lists, trees, maps and vectors make cheap "modified copies" by sharing structure, the 32-way tries behind Clojure, Scala and Immutable.js, and the traps where persistence breaks amortised bounds.
 ---
 
-Immutability has an obvious cost. If you can never change a list in place, then "add one element" seems to mean "copy the whole list and add one element". Do that in a loop over a million items and you've written an O(n²) algorithm.
+Immutability has an obvious cost. If you can never change a list in place, then "add one element" seems to mean "copy the whole list and add one element". Do that in a loop over a million items and you've written an O(n²) algorithm, where n is the number of items: each step copies everything added so far.
+
+```formula
+0 + 1 + 2 + ... + (n − 1) = n × (n − 1) / 2
+n × (n − 1) / 2 = O(n^2)
+where
+n: the number of items added, one per loop step
+...: "and so on" for every step in between
+O(n^2): Big-O notation: grows in proportion to n squared (n × n)
+In words: the k-th step copies the k − 1 items already there, and those copies add up to about half of n squared.
+```
+
+For n = 1,000,000 that is about 500 billion item copies (1,000,000 × 999,999 / 2, roughly 5 × 10¹¹).
 
 Efficient persistent collections reduce that cost through sharing. **Persistence** means: every "update" returns a new version, the old version stays valid, and the two **share almost all of their memory**. Only the small part that actually changed is new.
 
@@ -50,7 +62,7 @@ b --> [9|*]--+
 
 Prepending to a list allocates one cell and points it at the old list. It's O(1) time and space, and the old list is untouched. That's why Haskell, Lisp, Erlang and Elixir lists grow at the front.
 
-The costs show up at the other end:
+The costs show up at the other end. In this table n is the list's length and i is the position being read or changed (0 for the first cell). O(1) means a fixed cost however long the list is; O(n) and O(i) mean a cost in proportion to n or i:
 
 | Operation | Cost | Why |
 |---|---|---|
@@ -60,7 +72,7 @@ The costs show up at the other end:
 | Index i | O(i) | walk i pointers |
 | Update at i | O(i) | copy cells 0..i |
 
-Appending must copy every cell, because the last cell's pointer has to change and every cell before it points (indirectly) at that one. For this immutable linked-list path-copying scheme, copy the prefix leading to the change; persistence in general has other implementation techniques.
+Appending must copy every cell, because the last cell's pointer has to change and every cell before it points (indirectly) at that one. For this immutable linked-list path-copying approach, copy the prefix leading to the change; persistence in general has other implementation techniques.
 
 ## Trees: path copying
 
@@ -116,7 +128,20 @@ v2.left is v1.left        # True
 v2.right.right is v1.right.right  # True
 ```
 
-For a **balanced** tree of n keys, the path has about log₂ n nodes. With a million keys that's about 20 new nodes per insert, instead of a million. Both versions remain fully usable, and the extra memory is O(log n) per update.
+For a **balanced tree** (one whose branches all have roughly the same depth) of n keys, the path has about log₂ n nodes:
+
+```formula
+h ≈ log_2(n)
+h ≈ log_2(1000000) ≈ 19.9 ≈ 20
+where
+h: the height of the tree: the number of nodes on a path from the root to a leaf, and so the number of nodes an insert copies
+n: the number of keys in the tree
+log_2(n): the base-2 logarithm of n: how many times you can halve n before reaching 1 (2^20 = 1,048,576)
+≈: approximately equal to
+In words: each level of a balanced binary tree doubles how many keys it can hold, so a million keys needs only about 20 levels.
+```
+
+With a million keys that's about 20 new nodes per insert, instead of a million. Both versions remain fully usable, and the extra memory is O(log n) per update: it grows with the logarithm of n, not with n itself. The figure only holds while the tree stays balanced; a tree built by inserting sorted keys without rebalancing degenerates into a list with height n.
 
 This is how Haskell's `Data.Map` and `Data.Set` (size-balanced binary trees), OCaml's `Map`, and Scala's `TreeMap` work. Rebalancing (rotations in a red-black or AVL tree) only touches nodes near the path, so it stays O(log n).
 
@@ -137,7 +162,32 @@ index 1000 = 0b 00000 11111 01000
                 0      31     8
 ```
 
-Ignoring tail optimization and partially filled roots, the number of array levels is ceil(log₃₂ n):
+Each chunk is one digit of the index written in base 32:
+
+```formula
+i = c_0 × 32^2 + c_1 × 32 + c_2
+1000 = 0 × 1024 + 31 × 32 + 8
+where
+i: the element's index (position) in the vector, here 1000
+c_0, c_1, c_2: the three 5-bit chunks of i, from the top level down to the leaf; each is a whole number from 0 to 31 that picks one of 32 child slots
+32: the branching factor: each node has up to 32 children, and 32 = 2^5, so one chunk is exactly 5 bits
+32^2: 32 × 32 = 1,024
+In words: reading the index 5 bits at a time gives the slot to follow at each level: slot 0 at the top, slot 31 in the middle, slot 8 in the leaf.
+```
+
+Ignoring tail optimization and partially filled roots, the number of array levels is the base-32 logarithm of n, rounded up:
+
+```formula
+L = ⌈log_32(n)⌉
+L = ⌈log_32(1000000)⌉ = ⌈3.99⌉ = 4
+L = ⌈log_32(10^9)⌉ = ⌈5.98⌉ = 6
+where
+L: the number of levels of 32-slot arrays from the root to the elements
+n: the number of elements in the vector
+log_32(n): the base-32 logarithm of n: how many times you can divide n by 32 before reaching 1
+⌈ ⌉: the ceiling: round up to the next whole number
+In words: each level multiplies capacity by 32, so the level count grows extremely slowly: a million elements need 4 levels, a billion need 6.
+```
 
 | Elements | Levels |
 |---|---|
@@ -149,7 +199,25 @@ Ignoring tail optimization and partially filled roots, the number of array level
 
 Six hops for a billion elements is why people call these operations "effectively constant". They are still O(log n), but the base is 32.
 
-Updating index i uses path copying: copy each node on the path (each a 32-slot array) and change one slot. For a million-element vector that's 4 arrays of 32 pointers, about 1 KB at 8 bytes a pointer, versus 8 MB to copy the whole backing array.
+Updating index i uses path copying: copy each node on the path (each a 32-slot array) and change one slot:
+
+```formula
+M_path = L × 32 × 8 B
+M_path = 4 × 32 × 8 B = 1024 B ≈ 1 KB
+M_full = 10^6 × 8 B = 8 × 10^6 B = 8 MB
+where
+M_path: the memory allocated by one path-copying update, in bytes
+M_full: the memory needed to copy a flat array of a million pointers, in bytes
+L: the number of levels on the path, 4 for a million elements
+32: the number of pointer slots in each copied node
+8: the size of one pointer on a 64-bit machine, in bytes
+B: bytes
+KB: kilobyte, about a thousand bytes
+MB: megabyte, a million bytes
+In words: an update copies one 32-pointer node per level, about 1 KB in total, instead of 8 MB for the whole array.
+```
+
+That's about 8,000 times less memory per update (plus small per-object headers, which the formula ignores).
 
 One more trick makes appends fast. The vector keeps its last (up to) 32 elements in a separate **tail** array outside the tree. Most appends just copy that small tail; roughly once per 32 appends, a full tail is pushed into the tree when the next tail starts.
 
@@ -171,7 +239,7 @@ HAMTs are everywhere once you look:
 
 ### Cheap snapshots and undo
 
-Retaining an old root is a cheap snapshot, but keeps its reachable nodes alive. An editor's undo stack is just a list of previous document values. A game can keep the last 60 frames of state for rewind with memory proportional to what changed.
+Retaining an old root is a cheap snapshot, but keeps its reachable nodes alive. An editor's undo stack is just a list of previous document values. A game can keep the last 60 game states for rewind with memory proportional to what changed.
 
 ### O(1) change detection
 
@@ -210,11 +278,36 @@ def pop(q):
 
 Each list is a nested (head, tail) tuple ending in None, as above; the empty queue is (None, None). Both prepend and tail access are O(1).
 
-Used normally, each element is reversed once, so the costs average out to O(1) per operation. That's an **amortised** bound: occasional expensive reverses are paid for by many cheap pushes.
+Used normally, each element is reversed once, so the costs average out to O(1) per operation: a fixed cost however long the queue. That's an **amortised** bound (an **amortised cost**): occasional expensive reverses are paid for by many cheap pushes.
+
+```formula
+T_total ≤ 2 × m
+T_avg = T_total / m ≤ 2
+where
+T_total: the total number of basic steps (one per push, one per element moved by a reverse, one per pop) for a whole sequence of operations on one queue that is always used in its latest version
+m: the number of push and pop operations in the sequence
+T_avg: the average (amortised) cost per operation
+≤: less than or equal to
+In words: each element is pushed once, moved by a reverse at most once and popped once, so the whole sequence costs at most about two steps per operation, however unevenly those steps fall.
+```
+
+For example, 1,000 pushes followed by 1,000 pops cost 1,000 push steps, one 1,000-step reverse and 1,000 pop steps: 3,000 steps for m = 2,000 operations, an average of 1.5.
 
 Persistence breaks the argument. Take a version `q` whose `front` is empty and whose `back` holds n items. If you call `pop(q)` a thousand times (on the *same* old version, which persistence explicitly allows), each call does the full O(n) reverse. The "savings" from cheap pushes were spent once, but the expensive step is replayed every time.
 
-Chris Okasaki's fix, in *Purely Functional Data Structures*, is to combine persistence with **laziness**: arrange lazy memoized work so branches share a suspension created before they diverge. Creating a fresh thunk in each pop would still repeat the reversal. Appropriate invariants recover amortised bounds; incremental rotation and scheduling are additionally needed for worst-case O(1).
+```formula
+T_replay = k × n
+T_replay = 1000 × 1000 = 1000000
+where
+T_replay: the total reversal steps when pop is called k times on the same old version
+k: the number of pops on that one version
+n: the number of items in its back list
+In words: every pop on the old version redoes the full reverse, so the cost is k times n rather than n once.
+```
+
+With n = 1,000 items and k = 1,000 pops, that's a million copies instead of a thousand.
+
+Chris Okasaki's fix, in *Purely Functional Data Structures*, is to combine persistence with **laziness**: arrange lazy memoized work so branches share one thunk (suspended computation) created before they diverge. Creating a fresh thunk in each pop would still repeat the reversal. Appropriate invariants recover amortised bounds; incremental rotation and scheduling are additionally needed for worst-case O(1).
 
 > [!warning] Rule of thumb
 > If a persistent structure's docs say "amortised", check whether that bound holds when old versions are reused. Okasaki-style structures are designed for it; a naive port of a mutable algorithm usually isn't.
@@ -231,7 +324,7 @@ All three rely on the same insight: mutation is safe as long as no one else hold
 
 ### Python's options
 
-In CPython, appending to a nonempty tuple with t + (x,) copies its references in O(n), while the elements themselves remain shared. This preserves the old tuple and is persistent in the semantic sense, but lacks an efficient tree-based update path. For real persistent collections, use a library such as `pyrsistent` (`pvector`, `pmap`, `pset`), or accept copying when the data is small.
+In CPython, appending to a nonempty tuple with t + (x,) copies its references in O(n), where n is the tuple's length, while the elements themselves remain shared. This preserves the old tuple and is persistent in the semantic sense, but lacks an efficient tree-based update path. For real persistent collections, use a library such as `pyrsistent` (`pvector`, `pmap`, `pset`), or accept copying when the data is small.
 
 ## Key takeaways
 - Persistent structures keep old versions valid; structural sharing is a technique for doing so efficiently.

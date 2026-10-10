@@ -41,18 +41,35 @@ To prove termination, identify a well-founded measure that decreases towards a b
 
 In a conventional non-tail-recursive execution, each active call retains a frame or continuation for its pending work. Compilers and runtimes may optimize that representation.
 
-Look at `1 + length(xs[1:])`. After the recursive call returns, there's still work to do: add 1. So every frame must stay alive until the bottom is reached:
+Look at `1 + length(xs[1:])`. After the recursive call returns, there's still work to do: add 1. So every frame must stay alive until the bottom is reached. You can watch this by rewriting each call into its body, step by step:
 
-```
-length([a,b,c])
-= 1 + length([b,c])
-= 1 + (1 + length([c]))
-= 1 + (1 + (1 + length([])))
-= 1 + (1 + (1 + 0))
-= 3
+```formula
+length([a, b, c])
+  = 1 + length([b, c])
+  = 1 + (1 + length([c]))
+  = 1 + (1 + (1 + length([])))
+  = 1 + (1 + (1 + 0))
+  = 3
+where
+length: the recursive function above, which counts a list's elements
+a, b, c: any three list elements (their values don't matter, only how many there are)
+[]: the empty list: the base case, whose length is 0
+In words: each call leaves a pending "1 +" waiting for the call below it, so three pending additions pile up before the expression collapses to 3.
 ```
 
-The expression grows wider as it goes down, then collapses on the way back. A list of *n* items needs *n* frames: O(n) stack space.
+The expression grows wider as it goes down, then collapses on the way back. In general:
+
+```formula
+D(n) = n
+D(n) = O(n)
+where
+D(n): the recursion depth: the most stack frames alive at once while measuring a list of n items
+n: the number of items in the list
+O(n): Big-O notation: grows in proportion to n (each frame has a fixed size, so stack memory does too)
+In words: one pending frame per item, so a list twice as long needs twice as much stack.
+```
+
+So a 500-item list needs about 500 frames at its deepest point, and a 5,000-item list needs about 5,000.
 
 CPython commonly defaults to a recursion limit of **1,000**; inspect sys.getrecursionlimit() in the actual process. Node.js also has a finite recursion limit, but no universal frame count is provided here because it depends on engine, flags and frame shape. Deep list recursion is therefore not portable.
 
@@ -71,7 +88,7 @@ def f(n):
     return g(n + 1)   # tail call
 ```
 
-When a call is in tail position, the current frame has nothing left to do. A language can **reuse** the frame for the callee instead of pushing a new one. This is **tail call optimisation** (TCO), or more precisely **proper tail calls** when the language guarantees it. A tail-recursive function then runs in O(1) stack, exactly like a loop.
+When a call is in tail position, the current frame has nothing left to do. A language can **reuse** the frame for the callee instead of pushing a new one. This is **tail call optimisation** (TCO), or more precisely **proper tail calls** when the language guarantees it. A tail-recursive function then runs in O(1) stack (a fixed amount, however long the input), exactly like a loop.
 
 ### The accumulator pattern
 
@@ -84,12 +101,17 @@ def length(xs, acc=0):
     return length(xs[1:], acc + 1)
 ```
 
-```
-length([a,b,c], 0)
-= length([b,c], 1)
-= length([c], 2)
-= length([], 3)
-= 3
+```formula
+length([a, b, c], 0)
+  = length([b, c], 1)
+  = length([c], 2)
+  = length([], 3)
+  = 3
+where
+length: the accumulator version above; its second argument is the count so far
+a, b, c: any three list elements
+[]: the empty list, where the accumulated count is returned
+In words: nothing is left pending between steps; the count travels forward in the second argument, so each line is the whole remaining computation.
 ```
 
 The pending expression stays the same width; a runtime with TCO can discard the caller. CPython retains the calls, and Python list slicing still copies data.
@@ -116,7 +138,7 @@ The same trick turns factorial, sum, reverse and many folds into loops.
 | C, C++ | Often at `-O2`; not guaranteed |
 
 - **Scheme** made proper tail calls part of the language definition, so a tail-recursive loop is *guaranteed* constant space. Erlang and Elixir servers run forever as tail-recursive loops.
-- **JavaScript** added proper tail calls in ES2015 (strict mode only). WebKit documents JavaScriptCore support. Do not assume portable engine support: verify your target runtime. An exhaustive current engine-support matrix is omitted because it was not reliably established in this review.
+- **JavaScript** added proper tail calls in ES2015 (strict mode only). WebKit documents JavaScriptCore support. Do not assume portable engine support: verify your target runtime. A complete current engine-support matrix is omitted because it was not reliably established in this review.
 - **Python** deliberately does not. Guido van Rossum argued that TCO loses stack traces, and that Python programmers should write loops.
 - **The JVM** has no general tail-call instruction, so Scala and Kotlin compile self-recursive tail calls into loops at compile time. Scala does this automatically (`@tailrec` makes the compiler fail if it can't); Kotlin needs the `tailrec` modifier. Clojure makes you write `recur` so the compiler can check it.
 
@@ -136,7 +158,20 @@ def length(xs):
     return acc
 ```
 
-(Aside: `xs[1:]` copies the list, so this is O(n²) overall. Real code would index or iterate. Python lists are arrays, not linked lists.)
+(Aside: `xs[1:]` copies the rest of the list on every step, so this is O(n²) overall, where n is the list's length. Real code would index or iterate. Python lists are arrays, not linked lists.)
+
+```formula
+(n − 1) + (n − 2) + ... + 1 + 0
+  = n × (n − 1) / 2
+  = O(n^2)
+where
+n: the number of items in the list
+...: "and so on" down to the last terms
+O(n^2): Big-O notation: grows in proportion to n squared (n × n)
+In words: the slices copy n − 1 items, then n − 2, and so on, which adds up to about half of n squared copies.
+```
+
+For a 1,000-item list that's 1,000 × 999 / 2 = 499,500 item copies. Double the list and the copying roughly quadruples.
 
 ### 2. Use an explicit stack
 
@@ -198,7 +233,27 @@ The call tree branches twice at every level:
 fib(1) fib(0)
 ```
 
-`fib(2)` is computed twice, `fib(1)` three times. The number of calls grows like φⁿ (φ ≈ 1.618): `fib(30)` makes about 2.7 million calls. Stack depth is only O(n), but time is exponential.
+`fib(2)` is computed twice, `fib(1)` three times. Counting the calls gives a recurrence (a formula defined in terms of itself) with a known closed form:
+
+```formula
+C(0) = C(1) = 1
+C(n) = 1 + C(n − 1) + C(n − 2)
+C(n) = 2 × F(n + 1) − 1
+C(n) ≈ 1.45 × φ^n
+C(30) = 2 × 1346269 − 1 = 2692537
+where
+C(n): the total number of calls made to evaluate fib(n), counting the first call
+n: the argument passed to fib, a whole number
+F(n): the n-th Fibonacci number: F(0) = 0, F(1) = 1, and each later one is the sum of the two before it (F(31) = 1,346,269)
+φ: phi, the golden ratio, (1 + √5) / 2 ≈ 1.618; consecutive Fibonacci numbers grow by about this factor
+φ^n: φ multiplied by itself n times
+√: square root
+1.45: the constant 2 × φ / √5 ≈ 1.447, which comes from Binet's closed-form formula for Fibonacci numbers
+≈: approximately equal to
+In words: each call costs one call plus the calls of its two children, so the count itself grows like the Fibonacci numbers: about 1.6 times more calls for each step up in n.
+```
+
+So `fib(30)` makes about 2.7 million calls, and `fib(31)` about 1.6 times as many. Stack depth is only O(n), but time is exponential.
 
 Two fixes:
 
@@ -223,7 +278,7 @@ mySum acc (x:xs) = mySum (acc + x) xs
 
 But Haskell doesn't evaluate `acc + x` until something needs it. The accumulator becomes a growing chain of unevaluated additions (**thunks**): `((0 + 1) + 2) + 3 ...`. Evaluating that chain at the end can itself overflow the stack.
 
-The fix is to force the accumulator at each step: `foldl'` from `Data.List`, a bang pattern (`!acc`), or `seq`. For strict finite reductions such as numeric sums, foldl' is commonly the appropriate choice; lazy foldl still has uses and WHNF forcing is not deep evaluation. The next lesson covers laziness in depth.
+The fix is to force the accumulator at each step: `foldl'` from `Data.List`, a bang pattern (`!acc`), or `seq`. For strict finite folds such as numeric sums, foldl' is commonly the appropriate choice; lazy foldl still has uses and WHNF forcing is not deep evaluation. The next lesson covers laziness in depth.
 
 ## Key takeaways
 - Terminating recursion needs progress in a well-founded measure towards a terminating case.

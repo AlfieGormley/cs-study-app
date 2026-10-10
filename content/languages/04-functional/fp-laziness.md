@@ -6,9 +6,9 @@ minutes: 11
 summary: Evaluating only what is needed, when it is needed - thunks, infinite structures, generators in Python and JavaScript, Haskell's call-by-need, and the space leaks and surprises laziness brings.
 ---
 
-Most languages are **strict** (or *eager*): when you call `f(g(x))`, they compute `g(x)` first, then pass the result to `f`. If `f` never uses its argument, the work was wasted.
+Most languages use **strict evaluation** (also called *eager evaluation*): when you call `f(g(x))`, they compute `g(x)` first, then pass the result to `f`. If `f` never uses its argument, the work was wasted.
 
-**Lazy** evaluation flips this. An expression isn't computed when it's written, only when its value is actually needed. If it's never needed, it's never computed.
+**Lazy evaluation** flips this. An expression isn't computed when it's written, only when its value is actually needed. If it's never needed, it's never computed.
 
 You already use laziness every day without thinking of it that way:
 
@@ -17,7 +17,7 @@ if user is not None and user.is_admin:
     ...
 ```
 
-`and` doesn't evaluate `user.is_admin` if `user is not None` is false. That short-circuit is laziness on a small scale. Haskell is non-strict by default, with explicit strictness operations and compiler analysis that can evaluate known-needed work eagerly.
+`and` doesn't evaluate `user.is_admin` if `user is not None` is false. That short-circuit is laziness on a small scale. Haskell uses non-strict evaluation by default, with explicit strictness operations and compiler analysis that can evaluate known-needed work eagerly.
 
 ## Thunks: delaying work
 
@@ -76,6 +76,23 @@ tail fibs   = 1 : 1 : 2 : 3 : ...
 zipWith (+) = 1 : 2 : 3 : 5 : ...
 ```
 
+(In Haskell, `:` puts an element on the front of a list, and `zipWith (+)` adds two lists element by element.) The code is a direct transcription of the mathematical definition of the Fibonacci numbers:
+
+```formula
+F_0 = 0
+F_1 = 1
+F_n = F_{n−1} + F_{n−2}   for n ≥ 2
+where
+F_n: the n-th Fibonacci number, counting from F_0
+F_0, F_1: the two starting values, 0 and 1
+F_{n−1}, F_{n−2}: the two Fibonacci numbers just before F_n
+n: the position in the sequence, a whole number
+≥: greater than or equal to
+In words: after the first two, every Fibonacci number is the sum of the two before it; adding fibs to its own tail (fibs shifted one place) computes exactly those sums.
+```
+
+For example, F_7 = F_6 + F_5 = 8 + 5 = 13, the last value in `take 8 fibs`.
+
 ### Separating producers from consumers
 
 John Hughes's paper *Why Functional Programming Matters* argued that this is the real power of laziness: you can write a **producer** that generates every candidate, and a separate **consumer** that decides how many to take. Neither needs to know about the other.
@@ -91,7 +108,7 @@ Strict languages can also separate producers and consumers using iterators, call
 
 ## Laziness in Python and JavaScript
 
-Neither language is lazy by default, but both have opt-in laziness through **iterators** and **generators**.
+Neither language is lazy by default, but both have opt-in laziness through **iterators** and **generator functions** (generators for short).
 
 ### Python generators
 
@@ -197,7 +214,7 @@ list(read_lines("a.txt"))
 
 The `with` block closes the file on `return`, but the generator hasn't read anything yet. When it finally runs, the file is gone. Fix: `yield from` inside the `with`, or return a list.
 
-Haskell's lazy `readFile` has a similar trap: the file is read on demand, so the handle can stay open far longer than expected, or reading the same file for output can encounter a still-open handle. This is why Haskell has strict and streaming alternatives (`Data.Text.IO`, conduit, pipes).
+Haskell's lazy `readFile` has a similar trap: the file is read on demand, so the handle can stay open far longer than expected, or reading the same file for output can encounter a still-open handle. This is why Haskell has strict and streaming alternatives (`Data.Text.IO`, and the conduit and pipes libraries).
 
 ### One-shot iterators
 

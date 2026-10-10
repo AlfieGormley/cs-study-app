@@ -55,28 +55,84 @@ The loop is written once. Callers say *what* to do to each element, not *how* to
 
 `map(f, xs)` applies `f` to each element and returns the results. For a finite, unchanged input and a total callback, there is one result per input element. Python returns an iterator; JavaScript array map preserves array length, including holes.
 
+```formula
+map(f, [x_1, x_2, ..., x_n])
+  = [f(x_1), f(x_2), ..., f(x_n)]
+where
+map: the higher-order function that applies another function to every element of a list
+f: the function applied to each element
+x_1, x_2, x_n: the list's elements in order: x_1 is the first, x_n the last
+n: the number of elements in the list
+...: "and so on" for every element in between
+In words: map builds a new list of the same length, whose k-th element is f applied to the k-th element of the input.
+```
+
+With f multiplying by 10, the list [1, 2, 3] becomes [10, 20, 30]:
+
 ```
 [1,  2,  3]
- |   |   |   f = x * 10
+ |   |   |   f multiplies by 10
 [10, 20, 30]
 ```
 
 ### filter: keep some elements
 
-`filter(p, xs)` keeps the elements for which the predicate `p` returns true. The output is the **same length or shorter**, and elements are unchanged.
+`filter(p, xs)` keeps the elements for which the **predicate** `p` (a function that answers true or false) returns true. The output is the **same length or shorter**, and elements are unchanged.
+
+```formula
+filter(p, xs) = [x ∈ xs | p(x)]
+len(filter(p, xs)) ≤ len(xs)
+where
+filter: the higher-order function that keeps only the elements that pass a test
+p: the predicate, a function returning true or false for each element
+xs: the input list (read "exes": the plural of x)
+x: one element of xs
+∈: "is an element of"
+|: "such that": keep x only when the condition after the bar holds
+p(x): the predicate's answer for x; x is kept when it is true
+len: the length (number of elements) of a list
+≤: less than or equal to
+In words: filter keeps, in their original order, exactly the elements for which p says true, so the output is never longer than the input.
+```
+
+For example, with p testing "is even", filter turns [1, 2, 3, 4, 5] into [2, 4]: five elements in, two out.
 
 ### reduce (fold): combine into one value
 
-`reduce(f, xs, init)` walks the list carrying an **accumulator**. At each step it computes `acc = f(acc, x)`. The result can be anything: a number, a string, a dict, even another list.
+`reduce(f, xs, init)` walks the list carrying an **accumulator**: a running value that is updated at each step. The result can be anything: a number, a string, a dict, even another list.
 
+```formula
+acc_0 = init
+acc_k = f(acc_{k−1}, x_k)   for 1 ≤ k ≤ n
+reduce(f, xs, init) = acc_n
+where
+reduce: the higher-order function that folds a list into one value (also called fold)
+f: the combining function: takes the accumulator so far and the next element, returns the new accumulator
+xs: the input list, with elements x_1 to x_n
+x_k: the k-th element of the list
+init: the initial value of the accumulator
+acc_0: the accumulator before any element is processed
+acc_k: the accumulator after the first k elements
+acc_{k−1}: the accumulator after the previous element
+acc_n: the final accumulator, which reduce returns
+k: the step number, counting from 1
+n: the number of elements in xs
+≤: less than or equal to
+In words: start with init, then fold each element into the running value with f, from left to right; whatever is left at the end is the answer.
 ```
-reduce(add, [1, 2, 3, 4], 0)
 
-acc=0  -> add(0,1)=1
-acc=1  -> add(1,2)=3
-acc=3  -> add(3,3)=6
-acc=6  -> add(6,4)=10
-result: 10
+Summing [1, 2, 3, 4] from 0 with an addition function add:
+
+```formula
+acc_0 = 0
+acc_1 = add(0, 1) = 1
+acc_2 = add(1, 2) = 3
+acc_3 = add(3, 3) = 6
+acc_4 = add(6, 4) = 10
+where
+add: the two-argument addition function: add(a, b) returns a + b
+acc_0, acc_1, acc_2, acc_3, acc_4: the accumulator after 0, 1, 2, 3 and 4 elements
+In words: reduce(add, [1, 2, 3, 4], 0) adds the elements one at a time to a running total and returns 10.
 ```
 
 `map` and `filter` are both special cases of `reduce`: you can write either as a fold that builds a list. That makes `reduce` the most general and also the hardest to read, so reach for it last.
@@ -120,12 +176,37 @@ xs.filter(x => x % 2 === 0)
 
 ### Left and right folds
 
-A fold can associate from the left or the right. With subtraction the difference shows:
+A fold can associate from the left or the right, meaning it can bracket the steps starting from the left end or from the right end of the list:
 
+```formula
+foldl(f, z, [x_1, x_2, x_3])
+  = f(f(f(z, x_1), x_2), x_3)
+foldr(f, z, [x_1, x_2, x_3])
+  = f(x_1, f(x_2, f(x_3, z)))
+where
+foldl: the left fold: starts from the initial value and combines elements from the left
+foldr: the right fold: brackets from the right, with the initial value at the far right (it is combined with the last element first)
+f: the two-argument combining function
+z: the initial value (the seed)
+x_1, x_2, x_3: the list's three elements, in order
+In words: foldl puts the seed at the far left and brackets to the left; foldr puts the seed at the far right and brackets to the right.
 ```
-foldl (-) 0 [1,2,3] = ((0-1)-2)-3 = -6
-foldr (-) 0 [1,2,3] = 1-(2-(3-0)) =  2
+
+With subtraction the difference shows:
+
+```formula
+foldl(−, 0, [1, 2, 3]) = ((0 − 1) − 2) − 3
+                       = −6
+foldr(−, 0, [1, 2, 3]) = 1 − (2 − (3 − 0))
+                       = 2
+where
+foldl: the left fold, bracketing from the left
+foldr: the right fold, bracketing from the right
+−: subtraction, used here as the combining function
+In words: subtraction gives different answers depending on the bracketing, so the left fold gives −6 and the right fold gives 2.
 ```
+
+With addition both folds would give 6, because addition doesn't care about bracketing (it is *associative*).
 
 JavaScript reduce visits left to right and reduceRight right to left, but both call the callback with the accumulator first. Haskell foldr instead calls f(element, accumulator); for subtraction these conventions produce different results. In Haskell, `foldr` is the natural fold for building lists and for lazy, possibly infinite input; `foldl'` (strict left fold) is the right choice for summing large finite lists.
 
@@ -158,7 +239,22 @@ square = partial(power, exp=2)
 square(7)   # 49
 ```
 
-**Currying** transforms a function of several arguments into a chain of one-argument functions: `f(a, b, c)` becomes `f(a)(b)(c)`.
+**Currying** transforms a function of several arguments into a chain of one-argument functions:
+
+```formula
+f(a, b, c) = f_c(a)(b)(c)
+add(a, b) = a + b
+add_c(1)(41) = 1 + 41 = 42
+where
+f: a function that takes three arguments at once
+f_c: the curried form of f: give it a and it returns a function waiting for b; that returns a function waiting for c, which finally returns the same result as f(a, b, c)
+a, b, c: the arguments, supplied one at a time to f_c
+add: an ordinary two-argument addition function
+add_c: the curried form of add, written in JavaScript as a => b => a + b
+In words: currying turns one call with several arguments into a chain of one-argument calls; supplying only the first argument, as in add_c(1), gives a reusable "add one" function.
+```
+
+In JavaScript, the curried form is just nested arrow functions:
 
 ```javascript
 const add = a => b => a + b;
@@ -170,7 +266,19 @@ Haskell function arrows are right-associative, so ordinary multi-argument defini
 
 ## Composition
 
-**Composition** builds a new function by feeding one function's output into another. In maths, `(f . g)(x) = f(g(x))`.
+**Function composition** builds a new function by feeding one function's output into another. Maths writes it with a small circle, ∘ (Haskell uses a full stop, `.`):
+
+```formula
+(f ∘ g)(x) = f(g(x))
+where
+∘: function composition, read "after": f ∘ g means "f after g"
+f: the function applied second
+g: the function applied first
+x: the input value
+In words: composing f with g makes a new function that runs g on x, then runs f on g's result, so a chain of compositions is read right to left.
+```
+
+For example, if g adds 1 and f doubles, then (f ∘ g)(5) = f(6) = 12, while (g ∘ f)(5) = g(10) = 11: the order matters.
 
 ```haskell
 -- read right to left: words, then
@@ -234,7 +342,7 @@ All three lambdas share one `i`, which is 2 by the time they run. Bind the value
 ## Trade-offs
 
 - **Readability.** Short pipelines of `map`/`filter` are clearer than loops. Deeply nested `reduce` calls with clever accumulators are usually worse. If you need a comment to explain the fold, write a loop.
-- **Performance.** In JavaScript, `xs.filter(...).map(...)` builds an intermediate array per step. Whether allocation matters depends on the workload; a single loop or lazy pipeline can avoid intermediate arrays. Haskell's GHC can often *fuse* such pipelines into one loop.
+- **Performance.** In JavaScript, `xs.filter(...).map(...)` builds an intermediate array per step. Whether allocation matters depends on the workload; a single loop or lazy pipeline can avoid intermediate arrays. Haskell's GHC can often *fuse* such pipelines into one loop (**loop fusion**).
 - **Early exit.** Fully consumed finite eager maps and strict folds normally process all eligible elements; Python map can be partially consumed and lazy Haskell folds can short-circuit. Use `any`/`all` (Python), `some`/`every`/`find` (JS) when you can stop early.
 
 ## Key takeaways

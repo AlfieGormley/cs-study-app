@@ -6,17 +6,31 @@ minutes: 16
 summary: How Perl-style backtracking engines and automaton-based engines like RE2 actually match, why one can take exponential time on a 30-character input, the outages this caused, and how to defend against it.
 ---
 
-Two engines can recognize the same language while doing very different amounts of work. A path-enumerating backtracker can revisit the same state and input position exponentially many times; a set-based simulation merges those repeated situations.
+Two engines can recognise the same language while doing very different amounts of work. A path-enumerating backtracker can revisit the same state and input position exponentially many times; a set-based simulation merges those repeated situations.
 
 ## Matching strategies and guarantees
+
+Costs in this lesson are given in Big O notation in terms of two sizes:
+
+```formula
+W = O(m × (n + 1))
+where
+W: the total work of one search by set simulation, in basic steps
+O( ): Big O: an upper bound on growth that ignores constant factors
+m: the compiled pattern size: roughly the number of NFA states or instructions, including expansions such as counted repetition
+n: the length of the input text, in characters
+In words: set simulation does at most a pattern-sized amount of work per input character, plus one extra round at the start, so doubling the input at most doubles the work.
+```
+
+For example, a 50-instruction pattern over a 1,000,000-character log is at most about 50 × 1,000,001 ≈ 5 × 10⁷ basic steps, times a constant.
 
 | Strategy | Idea | Important limit |
 |---|---|---|
 | Unmemoized backtracking | Try choices depth-first and revisit alternatives after failure | Ambiguous patterns can take exponential time |
 | Thompson/Pike simulation | Merge equivalent active states at each input position | Bounded-out-degree machines use O(m·(n + 1)) work |
-| Lazy DFA | Cache sets of active states and their transitions | Full determinisation can require exponentially many states |
+| Lazy DFA | Caches sets of active states and their transitions | Full determinisation can require exponentially many states |
 
-Here m is compiled pattern size, including expansions such as counted repetition, and n is input length. For a fixed pattern, a documented O(m·n) single-search guarantee is linear in input size.
+For a fixed pattern, m is a constant, so a documented O(m·n) single-search guarantee is linear in input size.
 
 Production libraries combine strategies. Python re, Java's standard engine and default PCRE2 matching use backtracking; RE2, Go regexp and Rust regex provide input-linear single-search guarantees for their supported syntax. A bounded memoized backtracking implementation can also avoid repeated state/position work. Ruby 3.2 added memoization for many patterns; PCRE2 has a separate DFA-style API; GNU grep chooses methods according to options and syntax. Engine names alone do not specify every mode's behavior.
 
@@ -51,27 +65,71 @@ This teaching function requires a supplied delta and accepting state. It has no 
 
 ### Why it explodes
 
-Consider full-string matching `(a+)+` against aⁿb, for n ≥ 1, using an unoptimized path-enumerating backtracker.
+Consider full-string matching `(a+)+` against a run of n a's followed by one b (n at least 1), using an unoptimized path-enumerating backtracker.
 
-aⁿ can be split among the inner `a+` iterations in 2ⁿ⁻¹ ways (choose, for each gap between a's, whether to start a new inner iteration). `aaaa` could be (aaaa), (a)(aaa), (aa)(aa), (a)(a)(aa), and so on. Every split reaches the b and fails. The backtracker tries them all, because it does not remember that it has already been in this NFA state at this input position and failed.
+The run of a's can be split among the inner `a+` iterations in many ways: for each of the gaps between neighbouring a's, choose whether to start a new inner iteration there.
+
+```formula
+g = n − 1
+W_split = 2^{n − 1}
+W_split = 2^3 = 8   for n = 4
+where
+n: the number of a's before the b
+g: the number of gaps between neighbouring a's
+W_split: the number of ways to cut the run of a's into non-empty consecutive pieces
+2^{n − 1}: 2 multiplied by itself n − 1 times: each gap is independently "cut" or "no cut"
+In words: every extra a adds one more gap and doubles the number of splits, so the work of trying them all doubles per character.
+```
+
+`aaaa` could be (aaaa), (a)(aaa), (aa)(aa), (a)(a)(aa), and so on: 8 splits in all. With 30 a's there are 2²⁹, over 500 million. Every split reaches the b and fails. The backtracker tries them all, because it does not remember that it has already been in this NFA state at this input position and failed.
 
 That is the whole problem. The set simulation merges all those paths: it only asks *which states* are reachable after i characters, not *how*.
 
 ## Growth without a timing claim
 
-For a path-enumerating matcher without memoization or simplifying optimizations, (a|aa)* on a failing run has Fibonacci-many decompositions: the first part has length one or two. This grows asymptotically by a factor approaching 1.618 per additional a. It is a count of possible decompositions, not an exact CPU-instruction count or a universal runtime prediction.
+For a path-enumerating matcher without memoization or simplifying optimizations, (a|aa)* on a failing run has Fibonacci-many decompositions: the first part has length one or two.
+
+```formula
+W(n) = W(n − 1) + W(n − 2)
+W(0) = W(1) = 1
+W(n + 1) / W(n) → φ
+φ = (1 + √5) / 2 ≈ 1.618
+where
+n: the number of a's in the run
+W(n): the number of ways to write n as an ordered sum of 1s and 2s, one way per path the backtracker explores
+→: approaches, as n grows larger and larger
+φ: Greek phi: the golden ratio
+√5: the square root of 5, about 2.236
+≈: is approximately equal to
+In words: a run of n a's starts with a part of length 1 (leaving n − 1) or length 2 (leaving n − 2), so the counts follow the Fibonacci numbers 1, 1, 2, 3, 5, 8, …, and each extra a multiplies the count by about 1.618.
+```
+
+For example, four a's have 3 + 2 = 5 decompositions (three for a run of three, plus two for a run of two): aaaa splits as 1+1+1+1, 2+1+1, 1+2+1, 1+1+2 and 2+2. This grows asymptotically by a factor approaching 1.618 per additional a. It is a count of possible decompositions, not an exact CPU-instruction count or a universal runtime prediction.
 
 ## The danger patterns
 
 Exponential blow-up needs **ambiguity**: several different paths through the pattern that consume the same text. Look for:
 
-- **Nested quantifiers**: `(a+)+`, `(a*)*`, `(\w+\s?)*`.
+- **Nested regex quantifiers**: `(a+)+`, `(a*)*`, `(\w+\s?)*`.
 - **Overlapping alternatives under a quantifier**: `(a|a)*`, `(\w|\d)+`, `(.|\s)*`.
 - **Adjacent quantified parts that can match the same characters**: `.*.*=`, `\d+\d+`. On their own these are usually polynomial, but repeated or nested inside another quantifier they compound.
 
 There is also a **polynomial** form, which is less dramatic per character but easier to trigger:
 
-- An unoptimized search for \s+$ on n spaces followed by x can try n starting positions. Scanning the remaining spaces at each position produces a triangular sum n + (n−1) + … + 1, hence quadratic work. Actual engine optimizations and constants determine runtime.
+- An unoptimized search for \s+$ on a run of spaces followed by x tries every space as a starting position, and from each start scans the remaining spaces before failing at the x. That is quadratic work; the sum is worked out below.
+
+```formula
+S = n + (n − 1) + … + 1
+S = n × (n + 1) / 2
+S = 10 × 11 / 2 = 55   for n = 10
+where
+n: the number of spaces before the x
+S: the total number of spaces scanned over all starting positions
+…: the terms in between, counting down by one
+In words: the first start scans n spaces, the next n − 1, and so on down to 1. That triangular sum is about half of n squared, so doubling the spaces roughly quadruples the work.
+```
+
+Actual engine optimizations and constants determine runtime.
 
 ## Real outage
 
@@ -79,20 +137,20 @@ There is also a **polynomial** form, which is less dramatic per character but ea
 > Detailed Stack Overflow outage timings and remediation claims are omitted because its original postmortem could not be retrieved during this review. This is a source-access limitation, not evidence that the event did not happen.
 
 > [!example] Cloudflare, 2 July 2019
-> A new web application firewall rule contained `.*(?:.*=.*)` inside a larger pattern. Deployed globally at once, it drove CPUs serving HTTP traffic to nearly 100% and took down Cloudflare's proxy and CDN for 27 minutes. Cloudflare's write-up shows the simplified `.*.*=.*;` taking 5,353 steps to fail on `x=` followed by 20 x's. Among the follow-ups: switching the WAF to RE2 or Rust's regex engine, "which both have run-time guarantees".
+> A new web application firewall rule contained `.*(?:.*=.*)` inside a larger pattern. Deployed globally at once, it drove CPUs serving HTTP traffic to nearly 100% and took down Cloudflare's proxy and CDN for 27 minutes. Cloudflare's postmortem shows the simplified `.*.*=.*;` taking 5,353 steps to fail on `x=` followed by 20 x's. Among the follow-ups: switching the WAF to RE2 or Rust's regex engine, "which both have run-time guarantees".
 
 The common thread: a pattern that looked fine, an input nobody had tested, and a regex evaluated on a hot path.
 
 ## How automaton engines avoid it
 
-RE2, Go regexp and Rust regex prevent unrestricted repeated exploration for their supported single searches. Implementations can combine several methods, including bounded memoized path exploration. The core ideas:
+RE2, Go regexp and Rust regex prevent unrestricted repeated exploration for their supported single searches. Implementations can combine several methods, including bounded memoized path exploration. The main ideas:
 
-1. **Thompson NFA simulation** (lessons 2 and 3): track the set of active states. O(m) per character.
+1. **Thompson NFA simulation** (lessons 2 and 3): track the set of active states. O(m) per character, where m is the compiled pattern size.
 2. **Pike VM**: the same, but each active state carries its capture-group positions, with a priority order so results match Perl's leftmost-first semantics.
 3. **Lazy DFA**: cache subset-construction states as they are discovered. A cached transition can be followed with a table lookup; the hit rate is workload-dependent. RE2 bounds the cache's memory; if it fills too often, it falls back to the NFA.
-4. **Literal prefilters**: scan for a required literal (say `ERROR` in `ERROR.*timeout`) with fast substring search, and only run the automaton near hits.
+4. **Literal prefilters**: scan for a required fixed string (say `ERROR` in `ERROR.*timeout`) with fast substring search, and only run the automaton near hits.
 
-Go's documentation states the guarantee directly: matching is "guaranteed to run in time linear in the size of the input". Rust's says searches are worst case O(m · n).
+Go's documentation states the guarantee directly: matching is "guaranteed to run in time linear in the size of the input". Rust's says searches are worst case O(m · n), with m the pattern size and n the input length.
 
 ### The price
 
@@ -102,7 +160,7 @@ Features that are not regular, or are expensive to simulate, are left out:
 - **Lookaround** (`(?=...)`, `(?<=...)`) is unsupported in RE2, Go and Rust's `regex`. .NET's NonBacktracking mode also excludes lookarounds and backreferences.
 - **Atomic groups and possessive quantifiers** can change which strings match. They have meaning beyond a particular execution algorithm: PCRE2’s DFA-style matcher supports them with documented semantics. RE2, Go and Rust regex omit this syntax.
 
-Linear time is per search. Rust's documentation notes that iterating over **all** matches can be O(m · n²) in the worst case. And large patterns cost memory: counted repetition of a Unicode class, such as `\w{200}`, compiles to a big automaton, which is why these libraries enforce size limits on compiled patterns.
+Linear time is per search. Rust's documentation notes that iterating over **all** matches can be O(m · n²) in the worst case, where m is the pattern size and n the input length: up to n searches, each linear. And large patterns cost memory: counted repetition of a Unicode class, such as `\w{200}`, compiles to a big automaton, which is why these libraries enforce size limits on compiled patterns.
 
 ## Defences
 
@@ -112,7 +170,7 @@ Linear time is per search. Rust's documentation notes that iterating over **all*
 4. **Bound the input.** Cap field lengths before matching. Reject overlong values rather than validating only a truncated prefix: truncation can hide an invalid suffix.
 5. **Set timeouts** where supported: .NET's `Regex` accepts a match timeout. Python's `re` and Java's `java.util.regex` have none built in, so use a killable process or an execution boundary that actually stops the work on deadline. Timing out a waiting thread does not necessarily stop the underlying match.
 6. **Test with failing inputs.** Long almost-matches (many a's then a wrong character) are what expose backtracking. Static analysers and fuzzers for ReDoS exist for several languages.
-7. **Don't use regex for nested structure.** Formal regular expressions cannot recognize arbitrary nesting. Bounded nesting and richer engine features are different cases; use a suitable parser for general structured formats.
+7. **Don't use regex for nested structure.** Formal regular expressions cannot recognise arbitrary nesting. Bounded nesting and richer engine features are different cases; use a suitable parser for general structured formats.
 
 ## Choosing an engine
 
@@ -124,7 +182,7 @@ Linear time is per search. Rust's documentation notes that iterating over **all*
 - Long almost-matching failures expose many vulnerabilities; success can also require substantial backtracking in other patterns.
 - Ambiguous repetition can cause excessive work in path-enumerating engines. A naive repeated-start search for \s+$ has quadratic work on a failing whitespace run.
 - Cloudflare’s primary postmortem documents a 27-minute regex-related outage in July 2019.
-- RE2, Go and Rust simulate the automaton (set simulation, Pike VM, lazy DFA) for O(m · n) worst case, at the cost of backreferences and lookaround.
+- RE2, Go and Rust simulate the automaton (set simulation, Pike VM, lazy DFA) for O(m · n) worst case, for pattern size m and input length n, at the cost of backreferences and lookaround.
 - Defend with linear-time engines for untrusted input, unambiguous patterns, atomic groups, input length caps and timeouts.
 
 ## Further reading

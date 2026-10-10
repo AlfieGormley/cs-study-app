@@ -67,7 +67,7 @@
     "options": [
       {
         "text": "It lets a server tell browsers which other origins may read its responses, relaxing the same-origin policy",
-        "explanation": "Correct. CORS is an opt-in relaxation: the server grants read access to named origins via response headers."
+        "explanation": "Correct. CORS is a relaxation the server chooses to grant: the server grants read access to named origins via response headers."
       },
       {
         "text": "It protects an API from requests made by scripts on other sites",
@@ -135,11 +135,11 @@
     "options": [
       {
         "text": "Lets the script read the response, since `*` matches every origin",
-        "explanation": "The wildcard is specifically forbidden for credentialed requests. Treating `*` as \"matches everything\" here is the misconception."
+        "explanation": "The CORS wildcard is specifically forbidden for credentialed requests. Treating `*` as \"matches everything\" here is the misconception."
       },
       {
         "text": "Lets the script read the response but strips the cookies",
-        "explanation": "Credentials mode include does not guarantee any eligible cookie exists or is sent. The wildcard fails the CORS credentials-mode check regardless; stripping cookies from an already received response is not the rule."
+        "explanation": "Credentials mode include does not guarantee any eligible cookie exists or is sent. The CORS wildcard fails the CORS credentials-mode check regardless; stripping cookies from an already received response is not the rule."
       },
       {
         "text": "Blocks the response: with credentials, the origin must be named exactly",
@@ -161,7 +161,7 @@
     "id": "web-sop-cors-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An API reflects origins for which the Python suffix check below succeeds, and sends Access-Control-Allow-Credentials: true. Assume the attacker controls the candidate origin and eligible victim credentials are sent. Which untrusted domain passes?\n\n```python\ndef allowed(origin):\n    return origin.endswith(\n        \"example.com\")\n```",
+    "prompt": "An API reflects origins for which the Python suffix check below succeeds, and sends Access-Control-Allow-Credentials: true. Assume the attacker controls the origin being checked and eligible victim credentials are sent. Which untrusted domain passes?\n\n```python\ndef allowed(origin):\n    return origin.endswith(\n        \"example.com\")\n```",
     "options": [
       {
         "text": "`https://example.com.evil.net`",
@@ -169,7 +169,7 @@
       },
       {
         "text": "`https://evilexample.com`",
-        "explanation": "Correct. The suffix comparison accepts that string although its hostname is not example.com or its subdomain. The question assumes attacker control; actual domain registration availability is irrelevant."
+        "explanation": "Correct. The suffix comparison accepts that string although its hostname is not example.com or its subdomain. The question assumes attacker control; whether such a domain can actually be registered is irrelevant."
       },
       {
         "text": "None: `endswith` is a safe suffix check",
@@ -198,7 +198,7 @@
         "explanation": "The browser evaluates them, but the CDN decides which stored copy (with which header) to hand back. That is the problem."
       },
       {
-        "text": "The cache may reuse origin A's allow-origin header for origin B, causing B's CORS check to fail",
+        "text": "The cache may serve origin A's allow-origin header for origin B, causing B's CORS check to fail",
         "explanation": "Correct if the shared cache does not otherwise vary on Origin. Its key may include other dimensions; omission does not imply URL-only caching."
       },
       {
@@ -229,7 +229,7 @@
       },
       {
         "text": "An attacker's page can embed a sandboxed iframe whose requests carry `Origin: null`, so the allowlist effectively trusts any website",
-        "explanation": "Correct as a trust-boundary flaw: distinct opaque origins serialize as null. Exposure of authenticated data additionally requires eligible credentials, suitable CORS credentials permission and a sensitive response."
+        "explanation": "Correct as a trust-boundary flaw: distinct opaque origins serialize as null. Exposing data that needs a login additionally requires eligible credentials, suitable CORS credentials permission and a sensitive response."
       },
       {
         "text": "`null` disables the preflight, so the attacker can send DELETE requests",
@@ -319,15 +319,15 @@
     "id": "web-sop-cors-q11",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Assume a Chromium build whose preflight-cache maximum is 7,200 seconds. A successful preflight advertises Access-Control-Max-Age: 86400. What upper expiry bound follows, allowing earlier eviction?",
+    "prompt": "Assume a Chromium build whose preflight-cache maximum is 7,200 seconds. A successful preflight advertises Access-Control-Max-Age: 86400. What upper expiry bound follows, allowing for the entry being dropped earlier?",
     "options": [
       {
         "text": "24 hours, exactly as requested",
-        "explanation": "The supplied implementation cap is lower than the advertised value, so86400seconds is not the upper expiry bound."
+        "explanation": "The supplied implementation cap is lower than the advertised value, so 86,400 seconds is not the upper expiry bound."
       },
       {
         "text": "Up to 2 hours, because Chromium caps the preflight cache",
-        "explanation": "Correct. min(86400,7200)=7200 seconds, or two hours. Entries can be evicted sooner."
+        "explanation": "Correct. The smaller of 86,400 and 7,200 is 7,200 seconds, or two hours. Entries can be dropped sooner."
       },
       {
         "text": "5 seconds, because large values are ignored",
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "The supplied cap gives min(86400,7200)=7200seconds. Fetch permits an implementation cap and earlier removal; absent or invalid max-age defaults to5seconds in the standard. The checked Chromium source uses two hours, but future versions and other browsers require their own checks. A cached permission avoids an extra preflight only when its key and method/header conditions match.",
+    "workedExample": "The browser keeps a preflight result for the smaller of the server's requested lifetime and its own cap:\n\n```formula\nt_cache = min(t_req, t_cap)\nt_cache = min(86400 s, 7200 s)\nt_cache = 7200 s\nt_cache = 7200 s / 3600 s/h = 2 h\nwhere\nt_cache: the longest time the browser may keep using the cached preflight permission, in seconds (s); the browser may drop it sooner\nt_req: the lifetime the server asked for in Access-Control-Max-Age, in seconds (s); here 86,400 s, which is 24 hours\nt_cap: the browser's own maximum, in seconds (s); here 7,200 s, as stated for this Chromium build\nmin: the minimum function, which returns the smaller of its two inputs\n3600: the number of seconds in one hour\ns: seconds\nh: hours\nIn words: the server asked for a day, but the browser's two-hour cap wins, so the entry lasts at most two hours.\n```\n\nFetch permits an implementation cap and earlier removal; an absent or invalid Access-Control-Max-Age value defaults to 5 seconds in the standard. The checked Chromium source uses two hours, but future versions and other browsers require their own checks. A cached permission avoids an extra preflight only when its key and method/header conditions match.",
     "link": {
       "title": "Access-Control-Max-Age — MDN",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Access-Control-Max-Age"

@@ -42,7 +42,7 @@ evil.example page            bank.example
 The diagram assumes a simple request using `credentials: "include"` and a cookie eligible under SameSite and browser policy; default cross-origin `fetch` omits cookies. Roughly, cross-origin interactions fall into three groups:
 
 - **Writes are usually allowed.** Links, redirects and HTML form submissions can target any origin. This is why CSRF (lesson 3) is possible.
-- **Embedding is usually allowed.** `<img>`, `<script src>`, `<link rel=stylesheet>`, `<video>` and `<iframe>` can load cross-origin resources. Resource type, CORS mode, CSP, CORP/COEP, framing policy and other checks affect loading. Classic scripts differ from module scripts, which require CORS for cross-origin loading. Successful embedding alone does not grant unrestricted response-byte access.
+- **Embedding is usually allowed.** `<img>`, `<script src>`, `<link rel=stylesheet>`, `<video>` and `<iframe>` can load cross-origin resources. The kind of resource, CORS mode, CSP, CORP/COEP, framing policy and other checks affect loading. Classic scripts differ from module scripts, which require CORS for cross-origin loading. Successful embedding alone does not grant unrestricted response-byte access.
 - **Reads are blocked.** Without the applicable permission, script cannot read a cross-origin `fetch` response or iframe DOM. Drawing an image without the required CORS permission can taint a canvas and prevent pixel readback. CORS-approved images can preserve readback.
 
 > [!warning] The SOP is not server-side protection
@@ -50,13 +50,13 @@ The diagram assumes a simple request using `credentials: "include"` and a cookie
 
 ### A note on embedding scripts
 
-`<script src="https://other.example/lib.js">` runs that file *with the including page's origin*. That is why including third-party scripts is a big trust decision: the script can do anything your own code can. It is also why old APIs that returned sensitive data as executable JavaScript (JSONP) leaked it to any site that included them.
+`<script src="https://other.example/lib.js">` runs that file *with the including page's origin*. That is why including third-party scripts is a big trust decision: the script can do anything your own code can. It is also why old APIs that returned sensitive data as runnable JavaScript (JSONP) leaked it to any site that included them.
 
 ## CORS: opting in to cross-origin reads
 
 Modern apps legitimately need cross-origin reads. A single-page app on `https://a.test` calls an API on `https://b.test`. **Cross-Origin Resource Sharing** (CORS) lets the *server* tell the browser which other origins may read its responses.
 
-A browser CORS fetch includes an `Origin` header; not every cross-origin navigation or embedding request does. The server replies with headers saying what it allows:
+A browser CORS fetch includes an Origin request header (such as `Origin: https://a.test`); not every cross-origin navigation or embedding request does. The server replies with headers saying what it allows:
 
 ```
 GET /v1/orders HTTP/1.1
@@ -68,7 +68,7 @@ Access-Control-Allow-Origin: https://a.test
 Vary: Origin
 ```
 
-For a CORS fetch, a matching allow-origin value is necessary to expose the response; `*` works only when credentials mode is not `include`. Credentialed requests also require allow-credentials. CORS failures are exposed as network errors. A required preflight additionally gates sending the actual method/headers; CORS is not server authentication.
+For a CORS fetch, a matching allow-origin value is necessary to expose the response; `*` works only when credentials mode is not `include`. Credentialed requests also require allow-credentials. CORS failures are exposed as network errors. A required preflight additionally gates sending the actual method/headers. CORS does not replace the server authenticating the caller.
 
 ### Simple requests and preflights
 
@@ -93,14 +93,31 @@ Access-Control-Allow-Headers: x-token
 Access-Control-Max-Age: 600
 ```
 
-The actual `DELETE` needs successful preflight permission. Fetch specifies a five-second default when max-age is missing or invalid, with implementation caps and possible earlier eviction. Chromium source currently uses a two-hour maximum; this is version-specific, not guaranteed retention or a cache shared with ordinary HTTP responses.
+The actual `DELETE` needs successful preflight permission. Fetch specifies a five-second default when the Access-Control-Max-Age value is missing or invalid, with implementation caps and entries possibly dropped earlier. Chromium source currently uses a two-hour maximum; this is version-specific, not a guarantee that entries are kept that long or a cache shared with ordinary HTTP responses.
+
+How long can the browser keep using a cached preflight before it must send another `OPTIONS`? The server asks for a lifetime, and the browser applies its own cap. The limit is whichever is smaller:
+
+```formula
+t_cache = min(t_req, t_cap)
+t_cache = min(600 s, 7200 s)
+t_cache = 600 s
+where
+t_cache: the longest time the browser may keep using this cached preflight permission, in seconds (s). It is a maximum: the browser may drop the entry sooner
+t_req: the lifetime the server asked for in Access-Control-Max-Age, in seconds (s); here 600 s (ten minutes). The Fetch Standard uses 5 s when the header is missing or invalid
+t_cap: the browser's own maximum, in seconds (s); 7200 s (two hours) in current Chromium source, and different in other browsers and versions
+min: the minimum function, which returns the smaller of its two inputs
+s: seconds, the unit of time
+In words: the browser keeps the cached permission for the server's requested time or its own cap, whichever is shorter, and possibly less.
+```
+
+So the example above lets the browser skip new preflights for at most ten minutes. Had the server sent 86,400 s (one day), Chromium would still stop at its 7,200 s cap. The cache only helps when a later request matches the same origin, URL, credentials mode and method/header permissions; a different method or header needs a new preflight.
 
 ### Credentials
 
-By default, cross-origin `fetch` does not send cookies. `credentials: "include"` permits eligible cookies, but SameSite rules and browser third-party-cookie policies can still prevent sending them. To expose a credentialed response to JavaScript, the server must also opt in:
+By default, cross-origin `fetch` does not send cookies. `credentials: "include"` permits eligible cookies, but SameSite rules and browser third-party-cookie policies can still prevent sending them. To expose a credentialed response to JavaScript, the server must also explicitly allow it:
 
 - It must send `Access-Control-Allow-Credentials: true`.
-- `Access-Control-Allow-Origin` must name the exact origin. The wildcard `*` is **not allowed** with credentials; the browser rejects the response.
+- `Access-Control-Allow-Origin` must name the exact origin. The CORS wildcard `*` is **not allowed** with credentials; the browser rejects the response.
 
 This rule exists precisely so that nobody can accidentally say "any site may read this user's private data".
 
@@ -188,12 +205,12 @@ Side-channel attacks such as Spectre showed that a page might read memory belong
 You also may see the old `document.domain` trick, where two subdomains both set `document.domain = "example.com"` to become same-origin. It weakens isolation and modern Chrome disables it by default; don't build on it.
 
 > [!note] Evidence limits
-> Browser-specific preflight retention, third-party-cookie policy and legacy origin relaxation vary by version and configuration. A complete browser compatibility matrix and universal exploit-success rates are absent because they were not reliably established. Wire examples are abbreviated; the Flask hooks need an application, authentication, cache policy and preflight handling.
+> How long each browser keeps preflight results, third-party-cookie policy and legacy origin relaxation vary by version and configuration. A complete browser compatibility matrix and universal exploit-success rates are absent because they were not reliably established. Wire examples are abbreviated; the Flask hooks need an application, authentication, cache policy and preflight handling.
 
 ## Key takeaways
 - An origin is scheme + host + port; all three must match. A site (scheme + registrable domain) is a looser idea used for cookies.
 - The SOP mainly blocks cross-origin *reads*. Requests, form posts and embeds still happen, so the server must still authenticate and authorise.
-- CORS controls browser response sharing and preflight permission. It does not replace server authentication, authorisation or CSRF defences.
+- CORS controls browser response sharing and preflight permission. It does not replace authentication and authorisation on the server, or CSRF defences.
 - Non-safelisted CORS requests need preflight permission; cached permission can avoid another OPTIONS exchange.
 - Never reflect arbitrary origins with credentials, never trust `null`, match exactly, and send `Vary: Origin`.
 

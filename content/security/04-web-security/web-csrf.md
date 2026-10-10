@@ -6,7 +6,7 @@ minutes: 13
 summary: Why browsers will happily send your users' cookies on requests that another site started, and the layered defences (tokens, SameSite cookies, Origin and Fetch Metadata checks) that stop it.
 ---
 
-The same-origin policy generally prevents a hostile page reading another origin’s responses, but does not prevent ordinary cross-origin form submissions. **Cross-site request forgery** (CSRF) exploits exactly that gap. The attacker can't see your bank's responses, but they don't need to. They only need the bank to *act* on a request.
+The same-origin policy generally prevents a hostile page reading another origin’s responses, but does not prevent ordinary cross-origin form submissions. **Cross-site request forgery** (CSRF) abuses exactly that gap. The attacker can't see your bank's responses, but they don't need to. They only need the bank to *act* on a request.
 
 ## The attack
 
@@ -43,15 +43,15 @@ The root cause: **possession of the session cookie does not establish user inten
 ### What CSRF can and cannot do
 
 - It can trigger authorised actions when the attacker can construct accepted parameters and the endpoint lacks effective CSRF checks or additional confirmation.
-- In the classic attack it is **blind**: SOP prevents reading the response. A separate CORS flaw, XSS or information leak can change that assumption.
-- Classic authenticated CSRF exploits **ambient credentials** such as cookies sent automatically. An API accepting only a JavaScript-supplied bearer token avoids that mechanism if there is no ambient-authentication alternative. However, **client-side CSRF** can trick the legitimate application’s JavaScript into issuing an authenticated request using attacker-controlled input. Login CSRF also need not start with a logged-in victim.
+- In the classic form it is a **blind attack**: SOP prevents reading the response. A separate CORS flaw, XSS or information leak can change that assumption.
+- Classic authenticated CSRF abuses **ambient credentials** such as cookies sent automatically. An API accepting only a JavaScript-supplied bearer token avoids that mechanism if there is no ambient-authentication alternative. However, **client-side CSRF** can trick the legitimate application’s JavaScript into issuing an authenticated request using attacker-controlled input. Login CSRF also need not start with a logged-in victim.
 
 > [!example] Login CSRF
 > A twist: the attacker logs the victim into the *attacker's* account. The victim then saves a card or searches for something, and the attacker later sees it in their own account history. Login forms need CSRF protection too.
 
 ## Rule zero: GET must be safe
 
-If `GET /transfer?to=attacker&amount=500` moves money, a link the victim clicks (or a redirect) is enough, and SameSite Lax won't help, because Lax still sends cookies on top-level GET navigations (see below). An image request can also trigger an unsafe GET if the browser sends eligible credentials. HTTP defines GET, HEAD and OPTIONS as **safe**: their requested semantics must not perform the user’s state-changing operation. Incidental logging is permitted. Use POST, PUT, PATCH or DELETE for such operations, with CSRF protection.
+If `GET /transfer?to=attacker&amount=500` moves money, a link the victim clicks (or a redirect) is enough, and SameSite Lax won't help, because Lax still sends cookies on top-level GET navigations (see below). An image request can also trigger an unsafe GET if the browser sends eligible credentials. HTTP defines GET, HEAD, OPTIONS and TRACE as **safe methods**: their requested semantics must never perform a state-changing operation for the user. Incidental logging is permitted. Use POST, PUT, PATCH or DELETE for such operations, with CSRF protection.
 
 ## Defence 1: anti-CSRF tokens
 
@@ -61,7 +61,7 @@ The **synchroniser token** pattern gives the legitimate page a secret that the a
 2. Legitimate state-changing forms and JS requests to the protected application include it in a hidden field or custom header. Never send it to an untrusted destination.
 3. On every state-changing request, the server checks the submitted token matches the session's.
 
-The attacker can make the browser send the cookie, but can't read your page to learn the token (the SOP blocks that read), so their forged request fails.
+The attacker can make the browser send the cookie, but can't read your page to learn the token (the SOP blocks that read), so their faked request fails.
 
 Vulnerable:
 
@@ -108,11 +108,29 @@ def check_csrf():
 
 `hmac.compare_digest` avoids content-dependent short-circuit comparison; type or length differences may still affect timing. Its string inputs must be ASCII, so the hook rejects non-ASCII input rather than raising an exception. Django’s generated project enables `CsrfViewMiddleware`; Spring Security enables CSRF protection by default for unsafe methods. Check the framework integration and configuration used by your application.
 
+How big is the token in this hook? `secrets.token_urlsafe(32)` draws 32 random bytes, and each byte is 8 bits:
+
+```formula
+b = n_bytes × 8
+b = 32 × 8
+b = 256 bits
+256 bits ≥ 128 bits
+where
+b: the token's size in bits: how many independent random yes/no choices it contains
+n_bytes: how many random bytes the generator draws; here 32
+8: the number of bits in one byte
+≥: is greater than or equal to
+bits: the unit of information; one bit is a single 0 or 1
+In words: 32 random bytes give a 256-bit token, twice the 128-bit minimum, so no attacker will hit it by trial and error.
+```
+
+The attacker's real route is never trial and error: it is stealing or planting a token, which is what the next section is about. A longer token does nothing against those.
+
 ### Double-submit cookies
 
 If you can't keep server-side session state, the **double-submit** pattern puts the token in a cookie *and* in the request body or header, and checks they match. The attacker can't read the cookie to copy it into the form.
 
-The naive version has a weakness: an attacker who controls any sibling subdomain (or a man-in-the-middle on plain HTTP) may be able to *set* a cookie for your domain, choosing both values. OWASP recommends the **signed** variant: bind a fresh random value and session-specific data into an HMAC with a server secret, and verify the signature as well as the submitted value. A valid token for another session must not work. In browsers enforcing cookie prefixes, `__Host-` forbids `Domain` and requires `Secure` and `Path=/`, preventing a sibling subdomain from planting that named parent-domain cookie. This does not isolate different ports on the same host.
+The naive version has a weakness: an attacker who controls any sibling subdomain (or a man-in-the-middle on plain HTTP) may be able to *set* a cookie for your domain, choosing both values. OWASP recommends the **signed double-submit** variant: bind a fresh random value and session-specific data into an HMAC with a server secret, and verify the HMAC as well as the submitted value. A valid token for another session must never work. In browsers enforcing cookie prefixes, `__Host-` forbids `Domain` and requires `Secure` and `Path=/`, preventing a sibling subdomain from planting that named parent-domain cookie. This does not isolate different ports on the same host.
 
 ## Defence 2: SameSite cookies
 
@@ -120,7 +138,7 @@ The `SameSite` cookie attribute tells the browser not to send a cookie on **cros
 
 The following is a `Set-Cookie` value wrapped for display; join its lines with a space into one HTTP field value.
 
-```
+```http
 sid=abc; Secure; HttpOnly;
 SameSite=Lax; Path=/
 ```
@@ -160,10 +178,10 @@ OWASP recommends explicit CSRF protection in most deployments, with SameSite as 
 
 ## Defence 3: checking where the request came from
 
-Browsers add headers the attacker's page cannot forge:
+Browsers add headers the attacker's page cannot fake:
 
 - **`Origin`** is supplied for many relevant requests, but can be absent or serialise as `null`. Validate an exact trusted origin and define a safe policy for missing/opaque origins, using independent CSRF protection.
-- **`Sec-Fetch-Site`** in supporting browsers reports `same-origin`, `same-site`, `cross-site` or `none` (for example, address-bar or bookmark navigation). Availability depends on the client and context. Arbitrary non-browser clients can forge these headers; they are not authentication.
+- **`Sec-Fetch-Site`** in supporting browsers reports `same-origin`, `same-site`, `cross-site` or `none` (for example, address-bar or bookmark navigation). Whether it is sent depends on the client and context. Arbitrary non-browser clients can fake these headers; they are not authentication.
 
 ```python
 SAFE = {"GET", "HEAD", "OPTIONS"}
@@ -181,7 +199,7 @@ def fetch_metadata():
         abort(403)
 ```
 
-This rejects many cross-site unsafe browser requests, but does not prevent same-origin XSS or client-side CSRF. Keep the token hook active independently, including when metadata is missing or `none`; the metadata policy is an additional filter.
+This rejects many cross-site unsafe browser requests, but does not prevent same-origin XSS or client-side CSRF. Keep the token hook active independently, including when the Fetch Metadata headers are missing or `none`; the metadata policy is an additional filter.
 
 ## JSON APIs
 
@@ -194,7 +212,7 @@ So: check `Content-Type` strictly, or require a custom header such as `X-Request
 
 ## Related: clickjacking
 
-Instead of forging a request, the attacker loads your real page in an invisible iframe and tricks the user into clicking a button on it. Tokens don't help, because the click happens on your genuine page. Prevent this framing with the `Content-Security-Policy` response header containing this policy value:
+Instead of faking a request, the attacker loads your real page in an invisible iframe and tricks the user into clicking a button on it. Tokens don't help, because the click happens on your genuine page. Prevent this framing with the `Content-Security-Policy` response header containing this policy value:
 
 ```
 frame-ancestors 'none'
@@ -207,7 +225,7 @@ frame-ancestors 'none'
 A full browser/version compatibility matrix and live cross-browser attack testing are absent from this lesson. Browser-specific defaults must be checked for the supported clients; examples assume the credential and policy conditions stated above.
 
 ## Key takeaways
-- Classic authenticated CSRF exploits eligible ambient credentials on attacker-triggered requests; SOP normally blocks response reads. Login CSRF and client-side CSRF require attention too.
+- Classic authenticated CSRF abuses eligible ambient credentials on attacker-triggered requests; SOP normally blocks response reads. Login CSRF and client-side CSRF require attention too.
 - Keep GET safe. Protect every state-changing request, including login.
 - Primary defence: framework anti-CSRF tokens (synchroniser, or signed double-submit). Compare in constant time.
 - Set `SameSite=Lax` (or `Strict`) explicitly; it doesn't stop same-site attackers or unsafe GETs.
@@ -218,5 +236,5 @@ A full browser/version compatibility matrix and live cross-browser attack testin
 - [SameSite cookies explained — web.dev](https://web.dev/articles/samesite-cookies-explained)
 - [Set-Cookie: SameSite — MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie)
 - [Protect your resources with Fetch Metadata — web.dev](https://web.dev/articles/fetch-metadata)
-- [Cross Site Request Forgery protection — Django docs](https://docs.djangoproject.com/en/stable/ref/csrf/)
+- [Cross-site request forgery protection — Django docs](https://docs.djangoproject.com/en/stable/ref/csrf/)
 - [Clickjacking Defense Cheat Sheet — OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html)

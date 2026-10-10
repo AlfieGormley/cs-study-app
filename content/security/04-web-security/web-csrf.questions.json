@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "A single click on an attacker's link (or a redirect) triggers it, because `SameSite=Lax` still sends cookies on top-level GET navigations",
-        "explanation": "Correct. GET is supposed to be safe; making it state-changing means ordinary links and redirects trigger it, and Lax cookies are sent on those. With `SameSite=None` cookies, even an image tag would do."
+        "explanation": "Correct. GET is supposed to be safe; making it state-changing means ordinary links and redirects trigger it, and Lax cookies are sent on those. With `SameSite=None` cookies, even an `<img>` element would do."
       },
       {
         "text": "GET requests are always sent without cookies",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. HTTP defines GET as safe: no requested state-changing operation (incidental logging is allowed).\n2. Browsers issue GETs everywhere: images, prefetches, links, previews.\n3. `<img src=...>` cross-site is a subresource, so `Lax` cookies aren't sent; but a link click or a redirect is a top-level navigation, and `Lax` *does* send cookies then.\n4. So a single click on an attacker link deletes the account.\n\nFix: `POST /account/delete` (or `DELETE`) with a CSRF token.",
+    "workedExample": "1. HTTP defines GET as safe: no requested state-changing operation (incidental logging is allowed).\n2. Browsers issue GET requests everywhere: images, prefetches, links, previews.\n3. `<img src=...>` cross-site is a subresource, so `Lax` cookies aren't sent; but a link click or a redirect is a top-level navigation, and `Lax` *does* send cookies then.\n4. So a single click on an attacker link deletes the account.\n\nFix: `POST /account/delete` (or `DELETE`) with a CSRF token.",
     "link": {
       "title": "SameSite cookies explained — web.dev",
       "url": "https://web.dev/articles/samesite-cookies-explained"
@@ -75,7 +75,7 @@
       },
       {
         "text": "The request arrives without the cookie, so the user appears logged out on landing",
-        "explanation": "Correct. The initial cross-site navigation omits the Strict cookie. Do not assume that a browser reload necessarily changes its SameSite classification."
+        "explanation": "Correct. The initial cross-site navigation omits the Strict cookie. Do not assume that a browser reload necessarily changes whether SameSite treats it as cross-site."
       },
       {
         "text": "The cookie is sent only if the link uses HTTPS",
@@ -160,15 +160,15 @@
     "id": "web-csrf-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An SPA's API accepts only an Authorization bearer token held in JS memory, with no alternative ambient authentication. Assume no XSS, token leak or client-side confused-deputy behavior. Can a hostile site's direct cross-site request perform classic authenticated CSRF?",
+    "prompt": "An SPA's API accepts only a bearer token in the Authorization header, held in JS memory,, with no alternative ambient authentication. Assume no XSS, token leak or client-side confused-deputy behavior. Can a hostile site's direct cross-site request perform classic authenticated CSRF?",
     "options": [
       {
         "text": "Yes: any API that changes state needs a CSRF token",
         "explanation": "CSRF tokens defend against *ambient* credentials. Here the credential isn't ambient, so there's nothing for the attacker's page to ride on."
       },
       {
-        "text": "No: the browser never adds the bearer token automatically, so a forged cross-site request arrives unauthenticated",
-        "explanation": "Correct. The attacker's page can't read the token (different origin) and the browser won't attach it, so forged requests fail authentication."
+        "text": "No: the browser never adds the bearer token automatically, so a faked cross-site request arrives unauthenticated",
+        "explanation": "Correct. The attacker's page can't read the token (different origin) and the browser won't attach it, so faked requests fail authentication."
       },
       {
         "text": "No, but only because the API uses JSON",
@@ -198,11 +198,11 @@
       },
       {
         "text": "Reject it under the stated policy: same-site is not the allowed same-origin or none value",
-        "explanation": "Correct. A sibling subdomain can be same-site while being a different origin. The header is a browser request-context signal, not proof of authentication or user intent; non-browser clients can forge it."
+        "explanation": "Correct. A sibling subdomain can be same-site while being a different origin. The header is a browser request-context indicator, not proof of authentication or user intent; non-browser clients can fake it."
       },
       {
         "text": "Reject it: `same-site` is only sent by old browsers",
-        "explanation": "Supporting browsers can report same-site for cross-origin same-site contexts. Missing headers can reflect client or context differences, not just age; redirect history can also affect classification."
+        "explanation": "Supporting browsers can report same-site for cross-origin same-site contexts. Missing headers can reflect client or context differences, not just age; redirect history can also affect which value is reported."
       },
       {
         "text": "Allow it, but only if the method is POST",
@@ -270,7 +270,7 @@
       },
       {
         "text": "Make the token longer (256 bits instead of 128)",
-        "explanation": "The weakness is the attacker *setting* both values, not guessing them. Length doesn't help."
+        "explanation": "The weakness is the attacker *setting* both values, not working them out. Length doesn't help."
       }
     ],
     "answer": [
@@ -278,7 +278,7 @@
       1,
       3
     ],
-    "workedExample": "Cookie injection alone does not let a hostile page set a custom request header through restrictive CORS. Here the server additionally accepts a form token, letting an attacker submit the planted value. Bind the signed token to the authenticated session and random nonce. A browser-enforced __Host- prefix prevents sibling-domain injection of that named cookie. HTTPS plus known/preloaded HSTS addresses network injection, subject to host coverage. HttpOnly would break the stated JS cookie-reading client; making an already-unpredictable token longer does not address injection.",
+    "workedExample": "Cookie injection alone does not let a hostile page set a custom request header through restrictive CORS. Here the server additionally accepts a form token, letting an attacker submit the planted value. Bind the signed double-submit token to the authenticated session and random nonce. A browser-enforced __Host- prefix prevents sibling-domain injection of that named cookie. HTTPS plus known/preloaded HSTS addresses network injection, subject to which hosts it covers. HttpOnly would break the stated JS cookie-reading client; making an already-unpredictable token longer does not address injection.",
     "link": {
       "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
       "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
@@ -308,7 +308,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Under the stated configuration, the newly created cookie is 60 seconds old, inside the assumed 120-second window, and the request is a top-level navigation. The cookie is sent. Explicit SameSite=Lax does not get this default-mode exception. Cookie creation time matters; a later replacement does not necessarily reset it. Maintain independent CSRF protection and check supported-client behavior.",
+    "workedExample": "Compare the cookie's age with the exception window:\n\n```formula\nt_age < t_window\n60 s < 120 s\nwhere\nt_age: how long ago the cookie was created, in seconds (s); here 60 s\nt_window: Chromium's Lax+POST window for cookies with no SameSite attribute, in seconds (s); here 120 s (two minutes)\n<: is less than\ns: seconds\nIn words: the cookie is younger than two minutes, so the exception still applies.\n```\n\nUnder the stated configuration the request is also a top-level navigation, so the cookie is sent. Explicit SameSite=Lax does not get this default-mode exception. Cookie creation time matters; a later replacement does not necessarily reset it. Maintain independent CSRF protection and check supported-client behavior.",
     "link": {
       "title": "SameSite cookies explained — web.dev",
       "url": "https://web.dev/articles/samesite-cookies-explained"
@@ -322,7 +322,7 @@
     "options": [
       {
         "text": "Rotating the CSRF token on every request",
-        "explanation": "The click happens on your genuine page, which includes a valid token. Token rotation doesn't matter."
+        "explanation": "The click happens on your genuine page, which includes a valid token. Rotating the token doesn't matter."
       },
       {
         "text": "`Content-Security-Policy: frame-ancestors 'none'` (and `X-Frame-Options: DENY`)",
@@ -338,7 +338,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Clickjacking isn't a forged request: the user really clicks your real button inside a hidden frame.\n2. The framed page was rendered by your server, so its CSRF token is valid.\n3. Under the question’s assumptions, browser policies permit the session cookie in this iframe. SameSite=None alone does not guarantee this; third-party-cookie restrictions can still block it. (With `Lax` or `Strict` the frame would load logged out, which is one reason those are safer defaults.)\n4. The real control: tell the browser never to render your page in someone else's frame.\n\n```\nframe-ancestors 'none'\n```\n\nOr `'self'` if you frame yourself, or list the partner origins for the widget pages only.",
+    "workedExample": "1. Clickjacking isn't a faked request: the user really clicks your real button inside a hidden frame.\n2. The framed page was rendered by your server, so its CSRF token is valid.\n3. Under the question’s assumptions, browser policies permit the session cookie in this iframe. SameSite=None alone does not guarantee this; third-party-cookie restrictions can still block it. (With `Lax` or `Strict` the frame would load logged out, which is one reason those are safer defaults.)\n4. The real control: tell the browser never to render your page in someone else's frame.\n\n```\nframe-ancestors 'none'\n```\n\nOr `'self'` if you frame yourself, or list the partner origins for the widget pages only.",
     "link": {
       "title": "Clickjacking Defense Cheat Sheet — OWASP",
       "url": "https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html"

@@ -8,7 +8,7 @@ summary: How attacker-controlled text ends up running as script in your users' b
 
 The same-origin policy (lesson 1) protects one origin from another. **Cross-site scripting** (XSS) sidesteps it completely: the attacker gets their script to run *inside your origin*. From there it can do anything your own JavaScript can do: read the page, call your APIs with the user's cookies, change their email address, or show a fake login form on your real domain.
 
-In the OWASP Top10 2025 edition, XSS is covered by **A05 Injection**, because at heart it is the same bug as SQL injection: data is mixed into code without being kept separate.
+In the OWASP Top 10 2025 edition, XSS is covered by **A05 Injection**, because at heart it is the same bug as SQL injection: data is mixed into code without being kept separate.
 
 ## The core bug
 
@@ -24,7 +24,7 @@ def search():
 
 If `q` is `shoes`, the page says "Results for shoes". If `q` contains a `<script>` element, the browser has no way to know that part was meant to be text. It parses it as markup and runs it.
 
-The fix is to **encode** the value for the place it is going, so that special characters become harmless text:
+The fix is **output encoding**: encode the value for the place it is going, so that special characters become harmless text:
 
 ```python
 from markupsafe import escape
@@ -36,11 +36,11 @@ def search():
             f"{escape(q)}</h1>")
 ```
 
-`escape` turns `<` into `&lt;`, `>` into `&gt;`, `&` into `&amp;` and both quote characters into entities. The browser now *displays* the angle brackets instead of parsing them. In practice you'd use a template engine that does this automatically (below).
+`escape` turns `<` into `&lt;`, `>` into `&gt;`, `&` into `&amp;` and both quote characters into HTML entities. The browser now *displays* the angle brackets instead of parsing them. In practice you'd use a template engine that does this automatically (below).
 
 ## Three flavours
 
-Persistence (stored versus reflected) and insertion mechanism (server versus client/DOM) are different axes. Stored data can cause DOM-based XSS too. The table gives common examples, not exclusive categories.
+Where the payload lives (stored versus reflected) and insertion mechanism (server versus client/DOM) are different axes. Stored data can cause DOM-based XSS too. The table gives common examples, not exclusive categories.
 
 | Type | Payload lives in | Inserted by |
 |---|---|---|
@@ -74,7 +74,7 @@ greeting.innerHTML = "Hi " + name;
 greeting.textContent = "Hi " + name;
 ```
 
-A URL fragment is not included in the ordinary HTTP request target. In this example it reaches the sink entirely in the client, so server-side escaping of response values does not fix the flow. A page can explicitly transmit fragments later; server-supplied CSP can also limit execution. Fix the unsafe client sink.
+A URL fragment is not included in the ordinary HTTP request target. In this example it reaches the sink entirely in the client, so escaping response values on the server does not fix the flow. A page can explicitly transmit fragments later; server-supplied CSP can also limit execution. Fix the unsafe client sink.
 
 Common sources and sinks:
 
@@ -99,7 +99,7 @@ The right encoding depends on *where* in the document the value lands. HTML esca
 <style>... HERE      CSS
 ```
 
-- **Ordinary HTML text and safe quoted attributes**: HTML-escape. Event handlers, style, srcdoc and URL values need their own restrictions; quoting alone does not make their semantics safe. Always quote attributes; an unquoted attribute can be broken out of with a space.
+- **Ordinary HTML text and safe quoted attributes**: HTML-escape. Event-handler attributes, style, srcdoc and URL values need their own restrictions; quoting alone does not make their semantics safe. Always quote attributes; an unquoted attribute can be broken out of with a space.
 - **URLs** (`href`, `src`): escaping is not enough. A value starting `javascript:` contains no special HTML characters yet runs code when clicked. Parse the URL and **allowlist schemes** (`https:`, `mailto:`).
 - **Inside `<script>`**: HTML escaping is the wrong encoding. Serialise as JSON with a safe encoder (Jinja's `|tojson` escapes `<`, `>` and `&` so the value cannot close the script tag), or better, put data in a `data-` attribute and read it from JS.
 - **CSS and event-handler attributes**: avoid putting untrusted data there at all.
@@ -152,8 +152,8 @@ How it works:
 1. On every response, the server generates a fresh, unguessable **nonce** (at least 128 bits from a CSPRNG).
 2. Each legitimate script tag carries it: `<script nonce="r4nd0mB64">`.
 3. In a supporting browser, matching nonces permit inline or external script elements. Under this policy, unapproved parser-inserted scripts, inline event handlers and javascript URLs are blocked; strict-dynamic also permits eligible non-parser-inserted external scripts. Trusted-code gadgets or nonce leakage can still defeat the intended boundary.
-4. `'strict-dynamic'` permits eligible non-parser-inserted external scripts and ignores host/scheme allowlists in supporting implementations. Dynamic inline code still needs applicable permission; loaders must not use attacker-controlled URLs.
-5. `object-src 'none'` blocks plugins; `base-uri 'none'` stops an injected `<base>` tag re-pointing relative script URLs.
+4. `'strict-dynamic'` permits eligible non-parser-inserted external scripts and ignores host/scheme allowlists in supporting implementations. Dynamic inline code still needs applicable permission; loaders must never use attacker-controlled URLs.
+5. `object-src 'none'` blocks browser plugins; `base-uri 'none'` stops an injected `<base>` tag re-pointing relative script URLs.
 
 ```python
 import secrets
@@ -175,18 +175,55 @@ def make_nonce():
     g.csp_nonce = secrets.token_urlsafe(16)
 ```
 
-The template must put the same generated value in each intended script element. The shown r4nd0mB64 string is only a placeholder; the Python generator supplies 16 random bytes. Registration must happen before serving requests.
+The template must put the same generated value in each intended script element. The shown r4nd0mB64 string is only a placeholder; the Python code generates 16 random bytes per request. Registration must happen before serving requests.
+
+Why 16 bytes? A nonce only protects you if an attacker cannot guess it, and 128 bits is the usual minimum for an unguessable secret. Each byte holds 8 bits, so:
+
+```formula
+b = n_bytes × 8
+b = 16 × 8
+b = 128 bits
+P_guess = 1 / 2^b
+P_guess = 1 / 2^128
+P_guess ≈ 2.9 × 10^{-39}
+where
+b: the nonce's size in bits: how many independent random yes/no choices it contains
+n_bytes: how many random bytes the generator produces; here 16, from secrets.token_urlsafe(16)
+8: the number of bits in one byte
+P_guess: the probability that a single random guess matches the nonce, between 0 and 1
+2^b: 2 raised to the power b, the number of different possible nonces
+≈: approximately equal to (the result is rounded)
+bits: the unit of information; one bit is a single 0 or 1
+In words: 16 random bytes make a 128-bit nonce, and a single guess is right with probability about 3 in 10 to the power 39, which is effectively never.
+```
+
+The same bytes are then written as text. `token_urlsafe` uses URL-safe Base64, which turns every 3 bytes into 4 characters and drops the `=` padding:
+
+```formula
+n_chars = ⌈4 × n_bytes / 3⌉
+n_chars = ⌈4 × 16 / 3⌉
+n_chars = ⌈21.3⌉
+n_chars = 22
+where
+n_chars: the number of characters in the nonce text that goes in the header and the script tags
+n_bytes: the number of random bytes; here 16
+4 / 3: Base64 writes 4 characters for every 3 bytes, because each character carries 6 bits and 3 × 8 = 4 × 6
+⌈ ⌉: the ceiling: round up to the next whole number, because a part-used character still has to be written
+In words: a 16-byte nonce appears as a 22-character string; the longer string carries no extra randomness.
+```
+
+So the 9-character placeholder in the example is far too short to be real. The randomness comes from the 16 bytes, not from the length of the text.
 
 > [!warning] Common CSP mistakes
 > - A **static nonce** reused on every response is just a password printed on the page. Generate it per response.
 > - Adding unsafe-inline without an effective nonce/hash weakens inline-script protection. Unsafe-eval separately enables string-to-code execution; neither means every other directive disappears.
-> - Reusing cached HTML/header nonce pairs makes that nonce reusable across those responses. Use a suitable hash policy for static content or generate matching fresh headers and HTML per response.
+> - Reusing cached HTML/header nonce pairs makes that nonce reusable across those responses. Use a suitable hash-based CSP for static content or generate matching fresh headers and HTML per response.
 
 Roll out with `Content-Security-Policy-Report-Only` first: the browser does not enforce that report-only policy; configured reporting may deliver violations, so you can find legitimate inline scripts before enforcing.
 
 ### Trusted Types
 
-For DOM XSS, the CSP directive `require-trusted-types-for 'script'` enforces Trusted Types at covered injection sinks in supporting browsers. Without an applicable default policy, ordinary strings passed to innerHTML are rejected. A default policy may instead convert strings. TrustedHTML is only as safe as the policy that creates it; restrict policy creation and audit policies, callers and downstream transformations. Chromium-based browsers have supported it since 2020; check current support in other browsers.
+For DOM XSS, the CSP directive `require-trusted-types-for 'script'` enforces Trusted Types at covered injection sinks in supporting browsers. Without an applicable default Trusted Types policy, ordinary strings passed to innerHTML are rejected. A default policy may instead convert strings. TrustedHTML is only as safe as the policy that creates it; restrict policy creation and audit policies, callers and downstream transformations. Chromium-based browsers have supported it since 2020; check current support in other browsers.
 
 ## Limiting the blast radius
 
@@ -199,7 +236,7 @@ For DOM XSS, the CSP directive `require-trusted-types-for 'script'` enforces Tru
 
 ## Key takeaways
 - XSS lets attacker script run in your origin, defeating the SOP from inside.
-- Stored/reflected describe persistence; DOM-based describes a client-side source-to-sink flow. These categories can overlap, and DOM sources need not be invisible to the server.
+- Stored/reflected describe whether the payload is saved; DOM-based describes a client-side source-to-sink flow. These categories can overlap, and DOM sources need not be invisible to the server.
 - The fix is context-aware encoding: HTML-escape for ordinary HTML text and safe quoted attributes, allowlist URL schemes, JSON-encode for scripts.
 - Use auto-escaping templates and review every escape hatch (`|safe`, `dangerouslySetInnerHTML`, `v-html`). Sanitise with a library when you must allow HTML.
 - A strict nonce-based CSP with `'strict-dynamic'`, plus Trusted Types, is defence in depth, not a replacement for encoding.

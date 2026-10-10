@@ -11,7 +11,7 @@
       },
       {
         "text": "DOM-based XSS",
-        "explanation": "Client-side sink insertion would make it DOM-based too, but this question specifies direct server rendering. Stored versus reflected is a different classification axis."
+        "explanation": "Client-side sink insertion would make it DOM-based too, but this question specifies direct server rendering. Stored versus reflected is a separate way of sorting XSS."
       },
       {
         "text": "Stored XSS",
@@ -37,11 +37,11 @@
     "options": [
       {
         "text": "`<b>Tom & Jerry</b>` unchanged, as it contains no script",
-        "explanation": "Escaping is not script detection. It encodes every special HTML character regardless of whether the content looks dangerous."
+        "explanation": "Escaping does not look for scripts. It encodes every special HTML character regardless of whether the content looks dangerous."
       },
       {
         "text": "`Tom & Jerry`, with the tags stripped",
-        "explanation": "Stripping tags is what a sanitiser might do. Escaping keeps every character but makes it display as text."
+        "explanation": "Stripping tags is what an HTML sanitiser might do. Escaping keeps every character but makes it display as text."
       },
       {
         "text": "`&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;`",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Trace the data flow:\n\n```\nURL  /page#<payload>\n      |  fragment stays in browser\n      v\nlocation.hash (source)\n      |\n      v\nbox.innerHTML (sink) -> parsed as HTML\n```\n\nNo server-rendered value is on this source-to-sink path, so server-side output escaping misses it. Replace the sink:\n\n```javascript\nbox.textContent = t;\n```\n\nOr, if HTML is genuinely needed, `box.innerHTML = DOMPurify.sanitize(t)`.",
+    "workedExample": "Trace the data flow:\n\n```\nURL  /page#<payload>\n      |  fragment stays in browser\n      v\nlocation.hash (source)\n      |\n      v\nbox.innerHTML (sink) -> parsed as HTML\n```\n\nNo server-rendered value is on this source-to-sink path, so output escaping on the server misses it. Replace the sink:\n\n```javascript\nbox.textContent = t;\n```\n\nOr, if HTML is genuinely needed, `box.innerHTML = DOMPurify.sanitize(t)`.",
     "link": {
       "title": "DOM based XSS Prevention Cheat Sheet — OWASP",
       "url": "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"
@@ -173,7 +173,7 @@
       },
       {
         "text": "`<a href={url}>` in JSX where `url` comes from the user",
-        "explanation": "Correct as a URL-policy review point. React19 blocks javascript: URLs in src/href, unlike the older blanket claim. Framework protections do not replace application-specific allowed destinations/schemes or cover every version and custom component."
+        "explanation": "Correct as a URL-policy review point. React 19 blocks javascript: URLs in src/href by replacing them with a URL that only throws an error, unlike the older blanket claim. Framework protections do not replace application-specific allowed destinations/schemes or cover every version and custom component."
       }
     ],
     "answer": [
@@ -208,11 +208,11 @@
       },
       {
         "text": "Static nonces disable `'strict-dynamic'`",
-        "explanation": "The policy doesn't use `'strict-dynamic'`; and the issue is that the attacker can reuse the nonce, not a directive interaction."
+        "explanation": "The policy doesn't use `'strict-dynamic'`; and the issue is that the attacker can copy the nonce, not a directive interaction."
       }
     ],
     "answer": 1,
-    "workedExample": "1. The point of a nonce: only scripts the *server* placed in this response know the value.\n2. With a fixed nonce, the attacker loads any page, sees `nonce=\"abc123\"` and puts it on the script element they inject.\n3. The browser sees a matching nonce and runs it.\n4. Fix: generate a new value per response, e.g. `secrets.token_urlsafe(16)` (128 bits), and make sure CDNs don't cache the HTML containing it.",
+    "workedExample": "1. The point of a nonce: only scripts the *server* placed in this response know the value.\n2. With a fixed nonce, the attacker loads any page, sees `nonce=\"abc123\"` and puts it on the script element they inject.\n3. The browser sees a matching nonce and runs it.\n4. Fix: generate a new value per response, e.g. `secrets.token_urlsafe(16)`, and make sure no CDN caches the HTML containing it.\n\nWhy 16 bytes is enough:\n\n```formula\nb = n_bytes × 8\nb = 16 × 8 = 128 bits\nwhere\nb: the nonce's size in bits\nn_bytes: the number of random bytes; here 16\n8: the number of bits in one byte\nbits: the unit of information; one bit is a single 0 or 1\nIn words: 16 random bytes make a 128-bit nonce, the usual minimum for a secret nobody can guess.\n```\n\nA fresh 128-bit nonce is unguessable. A fixed one of any length is useless, because the attacker simply reads it.",
     "link": {
       "title": "Mitigate XSS with a strict CSP — web.dev",
       "url": "https://web.dev/articles/strict-csp"
@@ -340,7 +340,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Without an applicable default policy, an ordinary string passed to this enforced innerHTML sink throws TypeError. A policy can produce TrustedHTML, but safety depends on its implementation. With DOMPurify loaded, a fragment is:\n\n```javascript\nconst p = trustedTypes.createPolicy(\n  \"app\", {createHTML: s =>\n    DOMPurify.sanitize(s, {\n      RETURN_TRUSTED_TYPE: false\n    })});\nel.innerHTML = p.createHTML(s);\n```\n\nUse a trusted-types policy-name restriction where appropriate and audit policy creation, sanitiser configuration, callers and later transformations. Trusted Types is not automatic sanitisation or proof that only one safe policy exists. Report-only mode observes violations but does not enforce them.",
+    "workedExample": "Without an applicable default Trusted Types policy, an ordinary string passed to this enforced innerHTML sink throws TypeError. A policy can produce TrustedHTML, but safety depends on its implementation. With DOMPurify loaded, a fragment is:\n\n```javascript\nconst p = trustedTypes.createPolicy(\n  \"app\", {createHTML: s =>\n    DOMPurify.sanitize(s, {\n      RETURN_TRUSTED_TYPE: false\n    })});\nel.innerHTML = p.createHTML(s);\n```\n\nUse a trusted-types policy-name restriction where appropriate and audit policy creation, HTML sanitiser configuration, callers and later transformations. Trusted Types is not automatic sanitisation or proof that only one safe policy exists. Report-only mode observes violations but does not enforce them.",
     "link": {
       "title": "Trusted Types API — MDN",
       "url": "https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API"

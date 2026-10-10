@@ -75,8 +75,8 @@ Say what you skipped in your report.
 ## Aliases: make sure the word in the text actually matches
 
 - Matching is whole-word, longest phrase first.
-- **Acronyms (2–7 capitals, e.g. `DAC`, `REST`) match exact case only**, so "PA" (public address) and "Pa"
-  (pascal) can both exist.
+- **Acronyms (all-capital aliases such as `DAC`, `REST`) and single capital letters in any script (`Δ`, `Σ`, `C`)
+  match exact case only**, so "PA" (public address) and "Pa" (pascal) can both exist, and "Δ" never captures "δ".
 - Everything else is case-insensitive.
 
 Add an alias for every form the lessons use:

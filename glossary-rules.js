@@ -1,6 +1,7 @@
 // Shared by the app (glossary.js) and the build (scripts/build.mjs).
 // Acronyms and all-caps names (REST, DAC, SETTINGS, PRIORITY) match their exact case only, so "PA" (public address) and "Pa" (pascal) can coexist.
-export const isAcronym = (alias) => /^[A-Z][A-Z0-9/+._-]{1,15}s?$/.test(alias);
+// So do single capital letters in any script (Δ, Σ, Θ, C), so "Δ" (maximum degree) never captures "δ" (a transition function).
+export const isAcronym = (alias) => /^(?:\p{Lu}|\p{Lu}[\p{Lu}\p{N}/+._-]{1,15}s?)$/u.test(alias);
 export const aliasKey = (alias) => (isAcronym(alias) ? '=' + alias : alias.toLowerCase());
 // Lookup order inside a subject: that subject's module terms (which may shadow a core term), then core terms
 // (glossary-data.js), then other

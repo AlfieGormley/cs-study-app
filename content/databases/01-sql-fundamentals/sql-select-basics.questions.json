@@ -41,7 +41,7 @@
       },
       {
         "text": "Asha, Ben, Dev",
-        "explanation": "Ben is from Leeds but has id 2, so `city = 'Leeds' AND id > 2` is false for him, and he is not in London either."
+        "explanation": "Ben is from Leeds but has id 2, so `city = 'Leeds' AND id > 2` is false for him, and he doesn't live in London either."
       },
       {
         "text": "Asha, Dev",
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Suppose 30 orders share `2026-03-01`, straddling the page boundary.\n2. `ORDER BY ordered_on` says nothing about the order *within* that date. The database may return those 30 in a different order each time, for example after a different plan or a concurrent update.\n3. Page 3 and page 4 are separate queries. If the tied rows shuffle between them, one row can land in both slices and another in neither.\n4. Fix: make the ordering total with a unique column:\n\n```sql\nORDER BY ordered_on, id\nLIMIT 20 OFFSET 40\n```",
+    "workedExample": "1. Suppose 30 orders share `2026-03-01`, straddling the page boundary.\n2. `ORDER BY ordered_on` says nothing about the order *within* that date. The database may return those 30 in a different order each time, for example after a different plan or a concurrent update.\n3. Page 3 and page 4 are separate queries. If the tied rows shuffle between them, one row can land in both slices and another in neither.\n4. Page 4 is `OFFSET 60`, because each page skips the rows of all earlier pages:\n\n```formula\noffset = (p − 1) × s\noffset = (4 − 1) × 20 = 60\nwhere\noffset: rows skipped, the OFFSET value\np: the page number, counting from 1\ns: rows per page, the LIMIT value (20)\nIn words: page 4 starts after the 3 × 20 rows of pages 1 to 3.\n```\n\nThe arithmetic is right; it is the order of tied rows that varies between the two queries.\n\n5. Fix: make the ordering total with a unique column:\n\n```sql\nORDER BY ordered_on, id\nLIMIT 20 OFFSET 40\n```",
     "link": {
       "title": "Sorting rows (ORDER BY) — PostgreSQL documentation",
       "url": "https://www.postgresql.org/docs/current/queries-order.html"
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. `OFFSET 999950` ((page 20,000 − 1) × 50) means: produce the first 999,950 rows in order, throw them away, then return 50.\n2. Even with the primary-key index, that is about a million index entries walked per request, so cost grows linearly with page number.\n3. Keyset pagination asks for \"the 50 rows after the last one I saw\":\n\n```sql\nSELECT id, kind FROM events\nWHERE id < :last_id\nORDER BY id DESC\nLIMIT 50;\n```\n\n4. The database seeks to `:last_id` in the index and reads 50 entries: about the same cost for page 1 and page 20,000.\n5. Trade-off: you can't jump to an arbitrary page number, which is fine for infinite scroll and APIs.",
+    "workedExample": "1. Work out the offset for page 20,000:\n\n```formula\noffset = (p − 1) × s\noffset = (20000 − 1) × 50 = 999950\nrows_read = offset + s = 1000000\nwhere\noffset: rows skipped, the OFFSET value\np: the page number, counting from 1\ns: rows per page, the LIMIT value (50)\nrows_read: rows the database must produce in order to answer\nIn words: the query skips every row on the 19,999 earlier pages, but still has to walk past each one, so it handles a million rows to return 50.\n```\n\nSo `OFFSET 999950` means: produce the first 999,950 rows in order, throw them away, then return 50.\n2. Even with the primary-key index, that is about a million index entries walked per request, so cost grows linearly with page number.\n3. Keyset pagination asks for \"the 50 rows after the last one I saw\":\n\n```sql\nSELECT id, kind FROM events\nWHERE id < :last_id\nORDER BY id DESC\nLIMIT 50;\n```\n\n4. The database seeks to `:last_id` in the index and reads 50 entries: about the same cost for page 1 and page 20,000.\n5. Trade-off: you can't jump to an arbitrary page number, which is fine for infinite scroll and APIs.",
     "link": {
       "title": "Paging through results without OFFSET — Use The Index, Luke",
       "url": "https://use-the-index-luke.com/no-offset"

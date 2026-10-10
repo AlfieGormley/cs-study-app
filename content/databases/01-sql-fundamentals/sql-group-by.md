@@ -8,7 +8,23 @@ summary: Turning rows into totals. COUNT, SUM and AVG, grouping rules, WHERE ver
 
 Most business questions are about totals, not individual rows. How many orders are pending? What has each customer spent? Which category earns the most? **Aggregate functions** collapse many rows into one value, and `GROUP BY` decides which rows get collapsed together.
 
-This lesson uses the same shop schema as the rest of the module. Order totals (quantity × price, summed over each order's items) come out as 101 = £62, 102 = £80, 103 = £41, 104 = £70, 105 = £25 and 106 = £8.
+This lesson uses the same shop schema as the rest of the module. An order's total is worked out from its lines in `order_items`: multiply each line's quantity by its product's price, then add the lines up.
+
+```formula
+T = Σ (q_i × p_i)
+T_101 = 1 × 30 + 4 × 8
+T_101 = 30 + 32 = £62
+where
+T: the total value of one order, in pounds (£)
+Σ: sigma, "the sum of": add up the bracketed value for every line i of the order
+i: one line of the order, a row of order_items
+q_i: the quantity on line i, a whole number of items
+p_i: the price of line i's product, in pounds (£)
+T_101: the total of order 101, which has 1 Kettle at £30 and 4 Mugs at £8
+In words: an order's value is each line's quantity times its price, added up over all the order's lines.
+```
+
+The same sum in SQL is `SUM(oi.qty * p.price)` grouped by order. The totals come out as 101 = £62, 102 = £80, 103 = £41, 104 = £70, 105 = £25 and 106 = £8.
 
 ## Aggregates over the whole table
 
@@ -23,6 +39,20 @@ FROM products;
 | SUM | MIN | MAX | AVG |
 |---|---|---|---|
 | 193 | 8 | 90 | 38.6 |
+
+`SUM` adds the values, `MIN` and `MAX` pick the smallest and largest, and `AVG` is the ordinary mean: the sum divided by how many values there are.
+
+```formula
+mean = (x_1 + x_2 + … + x_n) / n
+mean = (30 + 25 + 40 + 90 + 8) / 5
+mean = 193 / 5 = £38.6
+where
+mean: the arithmetic mean, which is what AVG returns, in pounds (£) here
+x_1, x_2, x_n: the values being averaged, here the five prices in pounds (£)
+…: "and so on": every value between x_2 and x_n is included too
+n: how many values there are; NULLs are left out of both the sum and n (lesson 4)
+In words: the average is the total divided by the number of values, so £38.6 is what each product would cost if the £193 were shared out equally.
+```
 
 ### Three kinds of COUNT
 
@@ -45,7 +75,21 @@ Guest order 106 has a NULL `customer_id`, so `COUNT(customer_id)` skips it. Asha
 
 ### Integer arithmetic
 
-`SUM` of integers is an integer, and dividing two integers truncates. `SUM(qty) / COUNT(*)` over `order_items` is 14 / 9, which gives **1**, while `AVG(qty)` gives 1.555... Use `AVG`, or multiply by `1.0` first.
+`SUM` of integers is an integer, and dividing two integers truncates. `SUM(qty) / COUNT(*)` over `order_items` divides the 14 items by the 9 lines:
+
+```formula
+q = trunc(a / b)
+q = trunc(14 / 9) = trunc(1.555…) = 1
+where
+q: the result of dividing integer a by integer b in SQLite or PostgreSQL
+a: the dividend, here SUM(qty) = 14 items
+b: the divisor, here COUNT(*) = 9 order lines
+trunc: truncate: drop everything after the decimal point, moving towards zero, so trunc(1.9) = 1
+…: the digits carry on repeating (1.5555…)
+In words: when both sides are integers, the answer keeps only the whole-number part, so 14 / 9 gives 1, not 1.56.
+```
+
+`AVG(qty)` gives 1.555... instead. Use `AVG`, or multiply by `1.0` first (`SUM(qty) * 1.0 / COUNT(*)`), so the division is no longer between two integers.
 
 PostgreSQL differs in a useful way here: `AVG` of an integer column returns `numeric`, so you see `38.6000000000000000` rather than SQLite's floating-point `38.6`. `SUM` of an `integer` column returns `bigint`, which widens the range but can still overflow at the 64-bit limit.
 
@@ -104,7 +148,7 @@ GROUP BY customer_id;
 Asha has two orders with different dates. Which `ordered_on` should her row show?
 
 - **PostgreSQL** refuses: `column "orders.ordered_on" must appear in the GROUP BY clause or be used in an aggregate function`.
-- **SQLite** accepts it and picks the value from some row in the group. Here it showed 2026-01-05, but nothing guarantees which one. (MySQL behaves the same unless `ONLY_FULL_GROUP_BY` is on, which it is by default since 5.7.)
+- **SQLite** accepts it and picks the value from some row in the group. Here it showed 2026-01-05, but nothing guarantees which one. (MySQL behaves the same unless `ONLY_FULL_GROUP_BY` is on, which it is by default since 5.7.5.)
 
 SQLite has one documented special case. If the query uses exactly one `MIN()` or `MAX()`, the bare columns come from the row that holds that minimum or maximum. `SELECT category, MAX(price), name ... GROUP BY category` returns Rug for home and Kettle for kitchen. It is convenient, but it is not portable. In PostgreSQL, the standard "row with the max per group" tool is `DISTINCT ON` or a window function (module 2).
 
@@ -149,7 +193,7 @@ Asha (1) spent 62 + 80. Chloe (3) spent 70. Ben's 41 fails the `HAVING`. Dev's o
 
 Recall the logical order from lesson 1: FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY, LIMIT. Two consequences:
 
-1. Put row conditions in `WHERE` to state their intent clearly. Adding `status` to this query's `GROUP BY` changes its groups: a customer with both shipped and pending orders can produce two totals. It is not equivalent to filtering status before grouping by customer. The optimiser may also push eligible `HAVING` predicates down, so logical clause order does not dictate execution cost.
+1. Put row conditions in `WHERE` to state their intent clearly. Adding `status` to this query's `GROUP BY` changes its groups: a customer with both shipped and pending orders can produce two totals. It is not equivalent to filtering status before grouping by customer. The optimiser may also push eligible `HAVING` predicates down, so the logical order of clauses does not dictate execution cost.
 2. `HAVING` runs before `SELECT`, so in PostgreSQL you must repeat the aggregate: `HAVING spent > 50` fails with `column "spent" does not exist`. SQLite accepts the alias. `ORDER BY spent` works in both.
 
 ## Conditional aggregation
@@ -169,6 +213,19 @@ FROM orders;
 | shipped | pending |
 |---|---|
 | 3 | 2 |
+
+The `CASE` form works because summing 1s and 0s is counting. Each row contributes 1 if it meets the condition and 0 if it doesn't:
+
+```formula
+n_s = Σ s_i
+n_s = 1 + 1 + 0 + 1 + 0 + 0 = 3
+where
+n_s: the number of shipped orders
+Σ: sigma, "the sum of": add up s_i over every row i
+i: one row of orders (101 to 106, in order)
+s_i: 1 if row i has status 'shipped', otherwise 0 (what the CASE expression returns)
+In words: adding a 1 for every row that passes the test and a 0 for every row that fails it gives the number of rows that pass.
+```
 
 The `CASE` form works everywhere. The `FILTER` clause is standard SQL and reads better; PostgreSQL has supported it since 9.4 and SQLite since 3.30. This one-pass "pivot" is far cheaper than running a separate query per status.
 
@@ -234,7 +291,19 @@ GROUP BY c.id;
 | Ben | 1 | 1 |
 | Erin | 0 | 0 |
 
-(Chloe and Dev, with one order and no referrals, are left out to save space.) Asha has 2 orders and 2 referrals. The join produces 2 × 2 = 4 rows for her, so both counts say 4. `COUNT(DISTINCT ...)` would happen to fix counts here, but a `SUM` of order values would be doubled, and distinct sums are wrong whenever two real values are equal.
+(Chloe and Dev, with one order and no referrals, are left out to save space.) Asha has 2 orders and 2 referrals. The join produces 2 × 2 = 4 rows for her, so both counts say 4. `COUNT(DISTINCT ...)` would happen to fix counts here, but a `SUM` cannot be repaired that way. Every value from one child table is repeated once per matching row of the other, so the sum is multiplied:
+
+```formula
+S_shown = k × S_true
+S_shown = 2 × 142 = £284
+where
+S_shown: the total the fanned-out query reports for one customer, in pounds (£)
+S_true: the customer's real total, in pounds (£); Asha's order lines add up to £142
+k: how many times each value is repeated, which is the number of matching rows in the other child table (Asha's 2 referrals)
+In words: joining a second child table copies every row of the first once per match, so a sum over the first comes out k times too big.
+```
+
+`SUM(DISTINCT ...)` is no fix either: it would merge two genuinely equal values, such as two different order lines that are each worth £30.
 
 The reliable fix is to **aggregate each relationship separately, then join the results**, using subqueries or CTEs (module 2):
 

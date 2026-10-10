@@ -53,10 +53,37 @@ SELECT 0.1 + 0.2;
 -- 0.30000000000000004
 ```
 
-Binary floating point can't represent most decimal fractions exactly, so rounding errors build up in sums. Store money either as:
+Binary floating point can't represent most decimal fractions exactly. The reason is in how a floating-point number is built: it is a whole number scaled by a power of two.
+
+```formula
+x = m × 2^e
+0.1 = 1 / 10 = 1 / (2 × 5)
+where
+x: any value a binary floating-point number can hold exactly
+m: a whole number, the significand; a 64-bit double has 53 bits for it, so up to about 9 × 10^15
+e: a whole-number exponent, which can be negative (2^−3 = 1/8)
+2^e: two multiplied by itself e times; a negative e means dividing by two that many times
+In words: a float can only store fractions whose denominator (the number below the line) is a power of two, such as 1/2, 3/8 or 5/1024. A tenth has a factor of 5 below the line, so no choice of m and e gives exactly 0.1, and the nearest storable value is used instead.
+```
+
+The stored 0.1 and 0.2 are each a tiny bit off, and their sum lands next to, not on, the stored 0.3. Those small errors build up in sums. Store money either as:
 
 - **integer minor units** (pence): `price_pence INTEGER`, where £10.99 is 1099. This is exact, fast and portable, and it's how payment processors such as Stripe represent amounts.
 - **exact decimals**: PostgreSQL `numeric(10,2)`. This is exact, and `SUM` of it stays exact.
+
+Converting between pounds and pence is a single multiplication, done once, when the application reads a price typed by a person or displays one:
+
+```formula
+P = 100 × L
+P = 100 × 10.99 = 1099
+where
+P: the amount in pence, a whole number, which is what the column stores
+L: the amount in pounds (£), as a person reads it
+100: the number of pence in one pound
+In words: store the amount as a count of the smallest unit, so every sum and comparison works on exact whole numbers.
+```
+
+Three £10.99 items then sum to 1099 + 1099 + 1099 = 3297 pence, exactly £32.97, with no rounding at any step.
 
 Avoid `real`, `float` and `double precision` for money. Also avoid PostgreSQL's `money` type, whose formatting depends on a server locale setting.
 
@@ -137,11 +164,38 @@ Watch case: `'Asha@x.com'` and `'asha@x.com'` are different strings, so both pas
 | PostgreSQL (older) | `serial` / `bigserial` |
 | SQLite | `INTEGER PRIMARY KEY` |
 
-In PostgreSQL, prefer identity columns to `serial`. They are standard SQL, and `ALWAYS` rejects hand-written ids unless the insert says `OVERRIDING SYSTEM VALUE`. That matters because inserting explicit ids into a `serial` or `BY DEFAULT` column doesn't advance the sequence, and a later generated id collides with `duplicate key value violates unique constraint`. Use `bigint` for ids of any table that might grow large. Running out of 32-bit ids (about 2.1 billion) has caused real outages.
+In PostgreSQL, prefer identity columns to `serial`. They are standard SQL, and `ALWAYS` rejects hand-written ids unless the insert says `OVERRIDING SYSTEM VALUE`. That matters because inserting explicit ids into a `serial` or `BY DEFAULT` column doesn't advance the sequence, and a later generated id collides with `duplicate key value violates unique constraint`. Use `bigint` for ids of any table that might grow large. A signed integer column spends one bit on the sign, so its largest value is:
 
-In SQLite, an `INTEGER PRIMARY KEY` column becomes an alias for the table's internal **rowid**. New ids are the current maximum plus one, so deleting the newest row lets its id be **reused**. Delete product 5 and the next insert gets id 5 again. Adding `AUTOINCREMENT` prevents automatic reuse of IDs from previously committed rows, at a small cost. IDs from rolled-back transactions can still be reused, and explicit IDs require separate care. It's only needed when old ids might linger elsewhere, in logs, caches or URLs.
+```formula
+N_max = 2^{b − 1} − 1
+N_32 = 2^31 − 1 = 2,147,483,647
+N_64 = 2^63 − 1 ≈ 9.2 × 10^18
+where
+N_max: the largest value a signed integer of b bits can hold
+b: the number of bits in the type: 32 for PostgreSQL integer, 64 for bigint
+N_32: the limit of a 32-bit integer column, about 2.1 billion
+N_64: the limit of a 64-bit bigint column
+≈: approximately equal to
+In words: each extra bit doubles the range, and one bit is used for the sign, so a 32-bit id runs out after about 2.1 billion values while a 64-bit id effectively never does.
+```
 
-UUIDs make sense when ids are generated outside the database or must not be guessable. Random UUIDv4 values scatter inserts across a B-tree index. Time-ordered UUIDv7 avoids that, and PostgreSQL 18 added a built-in `uuidv7()` function.
+Running out of 32-bit ids has caused real outages. At 1,000 new rows a second, 2.1 billion ids last about 2,147,483,647 / 1,000 ≈ 2.1 million seconds, under 25 days; the same rate would take about 290 million years to exhaust a bigint. Gaps from rolled-back inserts use up ids faster than the row count suggests.
+
+In SQLite, an `INTEGER PRIMARY KEY` column becomes an alias for the table's internal **rowid**. New ids normally follow a simple rule:
+
+```formula
+id_new = max(rowid) + 1
+id_new = 4 + 1 = 5
+where
+id_new: the id SQLite gives the next inserted row when you don't supply one
+max: the largest of a set of values
+rowid: the ids currently in the table; after deleting product 5, the largest is 4
+In words: the next id is one more than the largest id still in the table, so the id of a deleted newest row comes straight back.
+```
+
+(An empty table starts at 1.) So deleting the newest row lets its id be **reused**. Delete product 5 and the next insert gets id 5 again. Adding `AUTOINCREMENT` prevents automatic reuse of IDs from previously committed rows, at a small cost. IDs from rolled-back transactions can still be reused, and explicit IDs require separate care. It's only needed when old ids might linger elsewhere, in logs, caches or URLs.
+
+UUIDs make sense when ids are generated outside the database or must be hard to guess. Random UUIDv4 values scatter inserts across a B-tree index. Time-ordered UUIDv7 avoids that, and PostgreSQL 18 added a built-in `uuidv7()` function.
 
 ## The redesigned schema in PostgreSQL
 
@@ -209,7 +263,7 @@ Use lower-case `snake_case` names. PostgreSQL folds unquoted identifiers to lowe
 
 ### Index your foreign keys
 
-Neither PostgreSQL nor SQLite creates an index on a **referencing** column automatically. (Both index primary keys and UNIQUE columns.) Without the two `CREATE INDEX` lines above, "orders for customer 1" is a full table scan. In SQLite, `EXPLAIN QUERY PLAN` shows `SCAN orders` before the index exists and `SEARCH orders USING INDEX` after. A missing FK index also makes every delete of a parent row scan the child table to check for references. `order_items` needs no separate index on `order_id`, because it's the first column of the primary key.
+Neither PostgreSQL nor SQLite creates a database index on a **referencing** column automatically. (Both index primary keys and UNIQUE columns.) Without the two `CREATE INDEX` lines above, "orders for customer 1" is a full table scan. In SQLite, `EXPLAIN QUERY PLAN` shows `SCAN orders` before the index exists and `SEARCH orders USING INDEX` after. A missing FK index also makes every delete of a parent row scan the child table to check for references. `order_items` needs no separate index on `order_id`, because it's the first column of the primary key.
 
 ## Changing a live schema
 
@@ -217,7 +271,7 @@ Schemas change for as long as the application lives, through **migrations**: ver
 
 ### What SQLite can ALTER
 
-SQLite has long supported `RENAME TO`, `RENAME COLUMN` (3.25), `ADD COLUMN` and `DROP COLUMN` (3.35). Version 3.53 (2026) added `ALTER COLUMN ... SET NOT NULL` and `DROP NOT NULL`, plus adding and dropping named CHECK constraints. Anything else, such as changing a type or adding a foreign key, still means the documented rebuild: create a new table, copy the rows across, drop the old table and rename the new one, all in one transaction.
+SQLite has long supported `RENAME TO`, `RENAME COLUMN` (3.25), `ADD COLUMN`, and `DROP COLUMN` (3.35). Version 3.53.0 (April 2026) added `ALTER COLUMN ... SET NOT NULL` and `DROP NOT NULL`, plus adding and dropping named CHECK constraints. Anything else, such as changing a type or adding a foreign key, still means the documented rebuild: create a new table, copy the rows across, drop the old table and rename the new one, all in one transaction.
 
 For a populated table, adding an ordinary `NOT NULL` column needs a non-NULL value for existing rows, commonly supplied by a default. PostgreSQL can add it without a default to an empty table; SQLite imposes its documented default restriction:
 
@@ -235,7 +289,7 @@ ALTER TABLE customers
 
 Most `ALTER TABLE` forms take an `ACCESS EXCLUSIVE` lock, which blocks reads and writes on that table. Whether that matters depends on how long the lock is held:
 
-- **Fast, metadata only:** adding a nullable column, or (since PostgreSQL 11) adding a column with a non-volatile default such as `'std'` or `now()`. This avoids work proportional to the number of rows, but lock waits and catalogue work still determine the elapsed time.
+- **Fast, metadata only:** adding a nullable column, or (since PostgreSQL 11) adding a column with a non-volatile default such as `'std'` or `now()`. This avoids work that grows with the number of rows, but lock waits and catalogue work still determine the elapsed time.
 - **Slow, rewrites or scans:** changing a column's type, adding a column with a volatile default such as `clock_timestamp()`, or `SET NOT NULL`, which scans every row to check.
 
 Even a fast `ALTER` can cause an outage. If a long-running query holds a lock on the table, the `ALTER` waits for it, and every new query queues behind the `ALTER`. Set `lock_timeout` (for example `SET lock_timeout = '2s'`) so the migration fails fast and can be retried.
@@ -263,7 +317,7 @@ Renaming or dropping a column that running code still uses breaks that code inst
 
 ## Views and DROP
 
-A **view** is a named, stored query:
+A **database view** is a named, stored query:
 
 ```sql
 CREATE VIEW order_totals AS
@@ -281,7 +335,7 @@ GROUP BY oi.order_id;
 
 ## Key takeaways
 - Turn nouns into tables and relationships into foreign keys. Many-to-many needs a junction table with a composite key.
-- Snapshot facts that must not change later, such as the price paid.
+- Snapshot facts that should never change later, such as the price paid.
 - Money is integer pence or `numeric`, never float. Use `timestamptz` in PostgreSQL and zero-padded ISO-8601 text in SQLite.
 - SQLite's type affinity accepts wrong types; use `STRICT` tables.
 - Use surrogate keys (`bigint` identity) with `UNIQUE` on natural keys. SQLite rowids can be reused without `AUTOINCREMENT`.

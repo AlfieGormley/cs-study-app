@@ -55,6 +55,24 @@ WHERE city IS NOT NULL   -- other 4
 
 `NOT U` is U. The short-cuts are worth memorising: `FALSE AND anything` is FALSE, and `TRUE OR anything` is TRUE. In both cases the unknown side can't change the result.
 
+There is a compact way to remember both tables. Give each truth value a number, FALSE = 0, UNKNOWN = ½ and TRUE = 1, and the three operators become simple arithmetic:
+
+```formula
+a AND b = min(a, b)
+a OR b = max(a, b)
+NOT a = 1 − a
+where
+a, b: two truth values written as numbers: FALSE = 0, UNKNOWN = ½, TRUE = 1
+AND: SQL's "both must hold" operator
+OR: SQL's "at least one must hold" operator
+NOT: SQL's negation operator
+min: the smaller of its inputs
+max: the larger of its inputs
+In words: AND gives the weakest of its inputs, OR gives the strongest, and NOT flips a value around the middle, which leaves UNKNOWN where it is.
+```
+
+For example, TRUE AND UNKNOWN is min(1, ½) = ½, which is UNKNOWN, while FALSE AND UNKNOWN is min(0, ½) = 0, FALSE. NOT UNKNOWN is 1 − ½ = ½, still UNKNOWN. This scheme is Kleene's three-valued logic, which is what SQL uses; it holds for AND, OR and NOT, but not for comparisons such as `=`, which simply return UNKNOWN whenever either side is NULL.
+
 ### WHERE keeps only TRUE
 
 This is the rule that turns three-valued logic into missing rows. `WHERE`, `HAVING` and join `ON` conditions keep a row only if the condition is **TRUE**. FALSE and UNKNOWN are both thrown away.
@@ -110,7 +128,7 @@ x <> 1 AND x <> 1 AND x <> 2
 AND x <> 3 AND x <> 4 AND x <> NULL
 ```
 
-For Erin (id 5), every comparison is TRUE except the last, which is UNKNOWN. `TRUE AND UNKNOWN` is UNKNOWN, so `WHERE` drops her. For everyone else one comparison is FALSE. One NULL in the list and `NOT IN` can never be TRUE.
+For Erin (id 5), every comparison is TRUE except the last, which is UNKNOWN. `TRUE AND UNKNOWN` is UNKNOWN, so `WHERE` drops her. For everyone else one comparison is FALSE. An AND chain is only as true as its weakest term, so one NULL in the list means `NOT IN` can never be TRUE.
 
 `IN` has no such problem. `3 IN (1, NULL)` is UNKNOWN, but `1 IN (1, NULL)` is TRUE, so positive matches still work. The trap is specific to the negation.
 
@@ -170,7 +188,21 @@ Chloe falls through both branches to `'?'`. The simple form, `CASE city WHEN NUL
 | `SUM(rating)*1.0/COUNT(*)` | 2.4 |
 | `AVG(COALESCE(rating, 0))` | 2.4 |
 
-`AVG` is 12 / 3: the mean of the ratings we know. Treating unrated products as 0 gives 12 / 5. Neither is wrong, but they answer different questions, so decide which one you mean. Replacing NULL with 0 is a claim that the value is zero, and it is often false.
+The two answers divide the same total by different counts:
+
+```formula
+mean_k = S / n_k = 12 / 3 = 4.0
+mean_z = S / n_all = 12 / 5 = 2.4
+where
+mean_k: the average of the known ratings, what AVG(rating) returns, in stars
+mean_z: the average if every unrated product counted as 0 stars
+S: the sum of the known ratings, 5 + 3 + 4 = 12 stars (SUM skips NULLs)
+n_k: how many ratings are known (not NULL), here 3, which is COUNT(rating)
+n_all: how many products there are, rated or not, here 5, which is COUNT(*)
+In words: AVG divides by the number of known values only, so leaving a value NULL keeps it out of the average, while turning it into 0 pulls the average down.
+```
+
+`AVG` is the mean of the ratings we know. Treating unrated products as 0 gives the lower figure. Neither is wrong, but they answer different questions, so decide which one you mean. Replacing NULL with 0 is a claim that the value is zero, and it is often false.
 
 Recall from the previous lesson that `SUM` over no rows returns NULL, not 0.
 

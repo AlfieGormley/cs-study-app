@@ -83,7 +83,21 @@ WHERE price > (SELECT AVG(price)
                FROM products);
 ```
 
-The average (38.6) is computed from the table as it was before the statement, so Lamp and Rug are doubled and the moving average doesn't change who qualifies.
+The subquery's average is the ordinary mean of the five prices:
+
+```formula
+mean = (x_1 + x_2 + … + x_n) / n
+mean = (30 + 25 + 40 + 90 + 8) / 5
+mean = 193 / 5 = £38.6
+where
+mean: the arithmetic mean, which is what AVG(price) returns, in pounds (£)
+x_1, x_2, x_n: the prices being averaged, in pounds (£)
+…: "and so on": every price between x_2 and x_n is included too
+n: how many prices there are (5); AVG leaves NULLs out of both the sum and n
+In words: the average is the total of the prices divided by how many there are.
+```
+
+It is computed from the table as it was before the statement, so only Lamp (£40) and Rug (£90) are above £38.6 and get doubled. Doubling them would raise the average part-way through, but the statement never sees that changing figure, so it doesn't change who qualifies.
 
 To update using another table, PostgreSQL and SQLite (3.33+) both support `UPDATE ... FROM`. Mark every London customer's orders:
 
@@ -214,7 +228,7 @@ Inside a transaction, the two databases differ after an error:
 - **SQLite**, for the default `ABORT` constraint policy used here, undoes the failed statement. Earlier statements in the transaction remain pending, and `COMMIT` keeps them. Other conflict policies and errors can have different effects.
 - **PostgreSQL** marks the whole transaction as failed. Every further statement errors with `current transaction is aborted, commands ignored until end of transaction block`, and `COMMIT` acts as a `ROLLBACK`. Use a `SAVEPOINT` if you want to recover from an error and carry on.
 
-Application code that catches a constraint error and carries on within the same transaction works in SQLite but not in PostgreSQL.
+Application code that catches a constraint error and carries on within the same transaction works in SQLite but fails in PostgreSQL.
 
 ## Key takeaways
 - Always name columns in `INSERT`. Use multi-row inserts and `RETURNING` to cut round trips.

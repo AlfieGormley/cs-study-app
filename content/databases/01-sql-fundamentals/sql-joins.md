@@ -90,6 +90,20 @@ A **LEFT (OUTER) JOIN** keeps every row of the left table. If a left row has no 
 
 This is the join for questions like "all customers, with their orders if any". It is by far the most common outer join.
 
+You can predict how many rows a LEFT JOIN returns from two counts: the matching pairs, which are exactly the rows the inner join gave, plus one padded row for each left row that matched nothing.
+
+```formula
+n_left = m + u_L
+n_left = 5 + 1 = 6
+where
+n_left: the number of rows the LEFT JOIN returns
+m: the number of matching pairs, the same as the row count of the INNER JOIN with the same ON condition (5 here)
+u_L: the number of left-table rows that match no right-table row; each appears once, padded with NULLs (here 1, Erin)
+In words: a LEFT JOIN returns every inner-join row plus one extra row for each unmatched left row, so it can never return fewer rows than the inner join.
+```
+
+Unmatched rows of the right table (guest order 106) add nothing, because a LEFT JOIN doesn't preserve them.
+
 ## RIGHT and FULL OUTER JOIN
 
 A **RIGHT JOIN** is the mirror image: keep every row of the right table.
@@ -121,6 +135,19 @@ FULL JOIN orders o
 | Dev | 105 |
 | Erin | NULL |
 | NULL | 106 |
+
+A full join adds the unmatched rows of both sides to the matching pairs:
+
+```formula
+n_full = m + u_L + u_R
+n_full = 5 + 1 + 1 = 7
+where
+n_full: the number of rows the FULL OUTER JOIN returns
+m: the number of matching pairs, the inner join's row count (5)
+u_L: left-table rows with no match, padded on the right with NULLs (1, Erin)
+u_R: right-table rows with no match, padded on the left with NULLs (1, order 106)
+In words: a full join is the inner join plus every leftover row from either side, each shown once with NULLs where its partner would be.
+```
 
 Full joins are rarer. They suit reconciliation jobs: "compare yesterday's export with today's and show rows missing from either side".
 
@@ -238,7 +265,19 @@ GROUP BY c.name;
 
 Asha has two orders, but joining to items gives three rows (order 101 has two items). `COUNT(o.id)` says 3.
 
-It gets worse when you join **two independent child tables** to the same parent. Asha has 2 orders and referred 2 customers. Joining both gives 2 × 2 = 4 rows, so both counts come out as 4.
+It gets worse when you join **two independent child tables** to the same parent. Asha has 2 orders and referred 2 customers. Neither child table says which order goes with which referral, so the join pairs every one with every other:
+
+```formula
+r = c_1 × c_2
+r = 2 × 2 = 4
+where
+r: the number of joined rows produced for one parent row (here Asha)
+c_1: how many rows of the first child table match that parent (Asha's 2 orders)
+c_2: how many rows of the second child table match it (her 2 referrals)
+In words: joining two unrelated child tables to one parent multiplies their counts, so every aggregate over that parent sees each child row repeated once per row of the other child.
+```
+
+So both counts come out as 4. With three orders and four referrals it would be 12 rows. With an inner join, a parent with zero rows in either child gives 0 rows and disappears; with LEFT JOINs an unmatched child counts as one NULL-padded row instead.
 
 ```
 Asha x orders(101,102)
@@ -286,9 +325,23 @@ CROSS JOIN products;
 -- 25
 ```
 
-A **cross join** (Cartesian product) pairs every row with every row: 5 customers × 5 products = 25. It is useful on purpose, for example to build a grid of every product for every store or date, which you then LEFT JOIN real sales onto so missing combinations show up as zero.
+A **cross join** (Cartesian product) pairs every row with every row, so its size is the product of the two tables' sizes:
 
-It is dangerous by accident. The old comma syntax `FROM customers c, orders o` is a cross join (30 rows here) until a `WHERE o.customer_id = c.id` turns it into an inner join. Forget the condition on two million-row tables and you have asked for a trillion rows.
+```formula
+n_cross = |A| × |B|
+n_cross = 5 × 5 = 25
+where
+n_cross: the number of rows the cross join returns
+A: the left table (here customers)
+B: the right table (here products)
+|A|: the number of rows in table A; vertical bars around a table name mean "how many rows it has", its cardinality
+|B|: the number of rows in table B
+In words: every row of A is paired once with every row of B, so the result has as many rows as the two row counts multiplied together.
+```
+
+The same product is the most an inner join can ever return: an inner join keeps some of these pairs and drops the rest, so its row count is anywhere from 0 up to |A| × |B|. A cross join is useful on purpose, for example to build a grid of every product for every store or date, which you then LEFT JOIN real sales onto so missing combinations show up as zero.
+
+It is dangerous by accident. The old comma syntax `FROM customers c, orders o` is a cross join (5 × 6 = 30 rows here) until a `WHERE o.customer_id = c.id` turns it into an inner join. Forget the condition on two tables of a million rows each and you have asked for 1,000,000 × 1,000,000 = 1,000,000,000,000 rows: a trillion.
 
 > [!note] SQLite versus PostgreSQL
 > SQLite (and MySQL) accept `JOIN` with no `ON` and treat it as a cross join. PostgreSQL rejects it as a syntax error: an inner or outer join must have `ON`, `USING` or `NATURAL`. Only `CROSS JOIN` may omit a condition. SQLite also treats `CROSS JOIN` as an instruction not to reorder the two tables, which PostgreSQL does not.

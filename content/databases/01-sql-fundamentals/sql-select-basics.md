@@ -156,7 +156,7 @@ WHERE ordered_on >= '2026-02-01'
 
 ## ORDER BY: sorting
 
-**Without `ORDER BY`, row order is not guaranteed.** It often looks stable on a small table, then changes after an index is added, the table grows or the planner picks a parallel plan. If order matters, say so.
+**Without `ORDER BY`, row order is not guaranteed.** It often looks stable on a small table, then changes after a database index is added, the table grows or the planner picks a parallel plan. If order matters, say so.
 
 ```sql
 SELECT name, category, price
@@ -200,6 +200,21 @@ LIMIT 2 OFFSET 1;
 | Lamp | 40 |
 | Kettle | 30 |
 
+Pages of a fixed size are the usual reason to use `OFFSET`. To show a given page, you skip every row on the earlier pages, and the database still has to produce the skipped rows before it can throw them away:
+
+```formula
+offset = (p − 1) × s
+rows_read = offset + s
+where
+offset: how many rows to skip, the number written after OFFSET
+p: the page number asked for, counting from 1
+s: the page size, the number of rows per page (the number written after LIMIT)
+rows_read: how many rows the database must produce, in sorted order, to answer the query
+In words: page p starts after all the rows of the p − 1 earlier pages, and the database reads every one of those skipped rows as well as the page itself.
+```
+
+With 20 rows per page, page 3 is `LIMIT 20 OFFSET 40`: offset = (3 − 1) × 20 = 40, and the database reads 40 + 20 = 60 rows to return 20. Page 1 reads 20 rows, but page 5,000 reads 100,000. The cost grows in step with the page number. This assumes nothing is inserted or deleted between page requests; if rows are, the pages shift.
+
 Two rules:
 
 1. `LIMIT` without a deterministic `ORDER BY` returns an arbitrary set of rows. If two rows tie on the sort key, add a tiebreaker such as `id`, or a page boundary can show one row twice and another never.
@@ -232,7 +247,23 @@ This is the **logical** order. The optimiser may physically do things differentl
 
 ## Arithmetic surprises
 
-`SELECT 7/2` returns `3`, not `3.5`, in both SQLite and PostgreSQL: dividing two integers gives an integer. Write `7/2.0` or `CAST(x AS REAL)` (PostgreSQL: `x::numeric`) when you want a fraction. `7 % 2` is the remainder, 1.
+`SELECT 7/2` returns `3`, not `3.5`, in both SQLite and PostgreSQL: dividing two integers gives an integer. The fractional part is simply dropped, and the `%` operator gives back what was left over:
+
+```formula
+q = trunc(a / b)
+r = a − b × q
+q = trunc(7 / 2) = trunc(3.5) = 3
+r = 7 − 2 × 3 = 1
+where
+q: the quotient, what a / b returns when a and b are both integers
+r: the remainder, what a % b returns
+a: the integer being divided (the dividend), here 7
+b: the integer you divide by (the divisor), here 2; it can't be 0
+trunc: truncate, meaning drop everything after the decimal point, which moves the number towards zero: trunc(3.5) = 3 and trunc(−3.5) = −3
+In words: integer division keeps only the whole number of times b fits into a, and the remainder is what is left over. For positive numbers the remainder is always between 0 and b − 1.
+```
+
+Because the result is truncated rather than rounded, `SELECT 9/10` is 0, not 1. Write `7/2.0` or `CAST(x AS REAL)` (PostgreSQL: `x::numeric`) when you want a fraction: one non-integer operand makes the whole division non-integer.
 
 String concatenation uses `||`: `name || ' (' || city || ')'` gives `Asha (London)`. For Chloe it gives NULL, because anything combined with NULL is NULL. Lesson 4 is all about that.
 

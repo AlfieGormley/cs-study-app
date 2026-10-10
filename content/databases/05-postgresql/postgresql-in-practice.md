@@ -2,11 +2,11 @@
 id: postgresql-in-practice
 title: PostgreSQL in practice
 level: intermediate
-minutes: 25
+minutes: 32
 summary: Build a small Postgres database, reason about concurrent writes, choose indexes and understand the maintenance and recovery work behind a reliable service.
 ---
 
-PostgreSQL, usually called **Postgres**, is an open-source relational database server. SQL is the language you send it; Postgres is the system that stores rows, enforces constraints, coordinates concurrent sessions and recovers after a crash. It also supports JSON documents, extensible types and extensions, but those features do not remove the need to design your data carefully.
+PostgreSQL, usually called **Postgres**, is an open-source relational database server. SQL is the language you send it; Postgres is the system that stores rows, enforces constraints, coordinates concurrent sessions and recovers after a crash. It also supports JSON documents, extensible types and PostgreSQL extensions, but those features do not remove the need to design your data carefully.
 
 This lesson brings the pieces together around a small ticket shop. Read the SQL fundamentals first. The examples use PostgreSQL 18-compatible SQL; plans and timings depend on your data and installation. Run the examples in order in a fresh, disposable database, not an existing application database.
 
@@ -14,9 +14,9 @@ This lesson brings the pieces together around a small ticket shop. Read the SQL 
 
 Your application uses a database driver to connect to the server. `psql` is another client: a terminal for sending SQL and inspecting the results. An ORM is another layer above a driver; it does not replace the database.
 
-A PostgreSQL **cluster** means a collection of databases managed by a server installation. It does not necessarily mean several machines. A connection selects one database. Inside it, schemas such as `public` are namespaces containing tables, functions and other objects. `public.orders` names a table in a schema, not a different database.
+A PostgreSQL **database cluster** means a collection of databases managed by a server installation. It does not necessarily involve several machines. A connection selects one database. Inside it, schemas such as `public` are namespaces containing tables, functions and other objects. `public.orders` names a table in a schema, not a different database.
 
-Postgres normally uses a separate backend process for each client connection. Those processes share memory and coordinate access to storage. Connection pools reuse a bounded number of connections, avoiding a new backend for every web request. Increasing the connection limit is not a substitute for measuring CPU, memory, lock waits and throughput.
+Postgres normally uses a separate backend process for each client connection. Those processes share memory and coordinate access to storage. Connection pools reuse a bounded number of connections, avoiding a new backend process for every web request. Increasing the connection limit is not a substitute for measuring CPU, memory, lock waits and throughput.
 
 A typical request follows this path; responses travel back to the client:
 
@@ -28,7 +28,7 @@ Result returns through the driver
 Connection returns to the pool
 ```
 
-With transaction pooling, the next transaction may use a different backend. Do not assume session settings or temporary objects will persist on the connection your application receives next.
+With transaction pooling, the next transaction may use a different backend process. Do not assume session settings or temporary objects will persist on the connection your application receives next.
 
 To connect to a database that already exists locally:
 
@@ -36,7 +36,7 @@ To connect to a database that already exists locally:
 psql -d postgres_study
 ```
 
-Inside `psql`, `\conninfo` shows the connection, `\dt` lists tables and `\d events` describes a table. SQL statements end with a semicolon; these backslash commands are client commands. Use a non-superuser application role with only the required privileges, and bind user values through driver parameters rather than joining them into SQL strings.
+Inside `psql`, `\conninfo` shows the connection, `\dt` lists tables and `\d events` describes a table. SQL statements end with a semicolon; these backslash commands are client commands. Use a non-superuser application role with only the required database privileges, and bind user values through driver parameters rather than joining them into SQL strings.
 
 ## 2. Model the rules in the database
 
@@ -134,7 +134,7 @@ The application must inspect the update result. If it returns no rows, issue `RO
 
 For a duplicate request key, roll back and then fetch the existing booking, checking that it belongs to the same intended request. Do **not** decrement a seat, use `ON CONFLICT DO NOTHING` for the booking and then commit regardless: the duplicate insert might do nothing while the extra decrement persists. A unique key is a building block for idempotency, not a complete workflow.
 
-Keep transactions short. Do not hold the row lock while waiting for a customer or payment provider. External effects need their own retry and reconciliation design; rolling back SQL does not undo a payment API call.
+Keep transactions short. Do not hold the row lock while waiting for a customer or payment provider. External effects need their own retry and reconciliation design; an SQL rollback does not undo a payment API call.
 
 ## 4. MVCC, snapshots and isolation
 
@@ -190,7 +190,7 @@ ORDER BY created_at DESC
 LIMIT 20;
 ```
 
-`EXPLAIN` estimates a plan; `ANALYZE` here actually executes it. Costs are planner units, not milliseconds. Compare estimated versus actual row counts, inspect repeated loops, and look at buffer activity before changing settings. A shared-buffer read can still be served from the operating system cache, so it is not proof of a physical disk read. Do not add up inclusive timings of parents and children.
+`EXPLAIN` estimates a plan; its `ANALYZE` option actually executes it. Costs are planner units, not milliseconds. Compare estimated versus actual row counts, inspect repeated loops, and look at buffer activity before changing settings. A shared-buffer read can still be served from the operating system cache, so it is not proof of a physical disk read. Do not add up inclusive timings of parents and children.
 
 > [!warning] ANALYZE has two meanings
 > `ANALYZE bookings` updates planner statistics. `EXPLAIN ANALYZE` runs the supplied query and measures execution, including writes if the query modifies data. Use a disposable database for write experiments; even rollback does not undo sequence increments or external side effects.
@@ -218,6 +218,51 @@ Old row versions cannot be removed while a snapshot still needs them. **VACUUM**
 
 **ANALYZE** samples data to update planner statistics. Postgres uses those estimates to choose scan and join strategies. Autovacuum automates vacuum and analyse work; monitor whether it keeps up rather than treating it as optional background noise.
 
+### When does autovacuum vacuum a table?
+
+Autovacuum does not clean a table after every update. It waits until enough dead row versions have built up to make the work worthwhile, and the point at which it acts grows with the table. In PostgreSQL 18 the rule is below; the cap, `autovacuum_vacuum_max_threshold`, is new in version 18.
+
+```formula
+T_vac = min(T_max, T_base + s × N)
+T_vac = min(10^8, 50 + 0.2 × 10^6)
+T_vac = min(10^8, 200050)
+T_vac = 200050 tuples
+where
+T_vac: the vacuum threshold: autovacuum vacuums the table once more rows than this have been updated or deleted since its last vacuum
+min: the minimum function: whichever of its two inputs is smaller
+T_max: autovacuum_vacuum_max_threshold, a cap that stops the threshold growing without limit on huge tables; default 100,000,000 (10^8) tuples
+T_base: autovacuum_vacuum_threshold, a fixed number of changed rows always required, so tiny tables are not vacuumed after every change; default 50 tuples
+s: autovacuum_vacuum_scale_factor, the fraction of the table that may be dead before vacuum starts; default 0.2 (20 %), no unit
+N: the estimated number of rows in the table, kept in pg_class.reltuples and refreshed by VACUUM and ANALYZE; here 1,000,000 (10^6)
+tuples: the unit counted here: row versions, which PostgreSQL calls tuples
+In words: autovacuum waits for 50 changed rows plus a fifth of the table, but never for more than 100 million.
+```
+
+So a 1,000,000-row table is vacuumed once more than about 200,050 of its rows have been updated or deleted since the last vacuum. For anything above a few hundred rows the 20 % term dominates; the fixed 50 only matters for tiny tables. The cap only matters for very large tables: a 1,000,000,000-row table would otherwise wait for 200 million dead rows, but with the cap it is vacuumed after 100 million.
+
+The threshold is checked, not scheduled: by default the autovacuum launcher visits each database about once a minute (`autovacuum_naptime`). Similar rules start a vacuum after many inserts (`autovacuum_vacuum_insert_threshold`, 1,000 rows by default, plus 20 % of the table's not-yet-frozen part) and start ANALYZE (50 rows plus 10 % of the table by default, counting inserts, updates and deletes). A large, busy table often needs a smaller vacuum scale factor of its own, set per table as a storage parameter, for example `ALTER TABLE bookings SET (autovacuum_vacuum_scale_factor = 0.01)`.
+
+### Why transaction IDs force vacuuming
+
+Every transaction that writes is given a **transaction ID** (XID), a 32-bit counter. MVCC compares XIDs to decide whether a row version was written in the past (possibly visible) or the future (invisible). A 32-bit counter has a fixed number of values and the comparison is circular, so only half of them can count as "the past":
+
+```formula
+N_xid = 2^32 = 4294967296 XIDs
+H = N_xid / 2 = 2^31 XIDs
+H = 2147483648 XIDs
+where
+N_xid: the total number of different values a 32-bit transaction ID can hold, about 4.3 billion
+2^32: 2 multiplied by itself 32 times; each of the 32 bits doubles the number of possible values
+H: the comparison horizon: for any XID, how many XIDs count as older than it; the same number count as newer
+2^31: 2 multiplied by itself 31 times, half of 2^32
+XIDs: transaction IDs, the unit counted here; each writing transaction uses one
+In words: any transaction ID can only look about 2.1 billion IDs into the past; anything further back would appear to be in the future.
+```
+
+If a row version kept its original XID while the counter moved more than about 2.1 billion transactions on, it would suddenly look as if it came from the future, and committed data would vanish from queries. This is **transaction ID wraparound**. VACUUM prevents it by **freezing** old row versions: marking them as visible to every transaction, so their XID no longer needs comparing.
+
+Postgres forces an anti-wraparound vacuum on any table whose oldest unfrozen XID is more than `autovacuum_freeze_max_age` transactions old: 200 million by default, under a tenth of the 2.1 billion horizon, leaving a wide safety margin. It launches these even when autovacuum is disabled. If something such as a long-open transaction stops freezing from advancing, the server warns as the limit approaches and eventually refuses to assign new XIDs until vacuum catches up.
+
 In our disposable database you can run:
 
 ```sql
@@ -230,7 +275,7 @@ Run this outside a transaction block. A session left “idle in transaction” c
 
 **Write-ahead logging**, or WAL, records changes before corresponding data pages are written to durable storage. With normal durability settings, commit waits for the required WAL to be flushed; all changed table pages need not already be on disk. Recovery can replay logged changes after a crash. A checkpoint bounds recovery work; it is not a fresh backup.
 
-This simplified local durability sequence assumes synchronous commit and normal storage settings:
+This simplified local durability path assumes synchronous commit and normal storage settings:
 
 ```flow
 Transaction changes buffered pages
@@ -239,31 +284,50 @@ Commit WAL is flushed durably
 Server acknowledges the commit
 ```
 
-Streaming replication sends WAL to a standby. Asynchronous replication can lag: a user may write on the primary and immediately read an older value on a standby. A failover can lose acknowledged transactions that never reached the promoted server. Synchronous replication can wait for a configured standby acknowledgement, trading latency and availability for stronger durability; whether replay is awaited depends on configuration.
+Streaming replication sends WAL to a standby. Asynchronous replication can lag: a user may write on the primary server and immediately read an older value on a standby. A failover can lose acknowledged transactions that never reached the promoted server. Synchronous replication can wait for a configured standby acknowledgement, trading latency and availability for stronger durability; whether replay is awaited depends on configuration.
 
 Replication is not a backup. A mistaken DELETE can propagate to the standby. Protect recovery separately:
 
-- A logical dump with `pg_dump` captures one database in a form that can be restored with PostgreSQL tools. Roles and other cluster-wide objects need separate handling.
-- A physical base backup plus an unbroken archived WAL sequence supports **point-in-time recovery**, for example to just before an accidental deletion.
+- A logical dump with `pg_dump` captures one database in a form that can be restored with PostgreSQL tools. Database roles and other cluster-wide objects need separate handling.
+- A physical base backup plus an unbroken series of archived WAL files supports **point-in-time recovery**, for example to just before an accidental deletion.
 - Test restores into a separate environment and measure recovery time. A successful backup command alone does not prove you can recover.
 
 Choose a recovery point objective (acceptable lost work) and recovery time objective (acceptable downtime). Those requirements determine backup frequency, WAL retention, replica configuration and the restore procedure. A managed provider automates some of this, but you still need to understand its retention and recovery guarantees.
 
 ## 9. A practical troubleshooting order
 
-When a request is slow, first separate time waiting for a connection, waiting for a lock, executing SQL and transferring results. `pg_stat_activity` exposes current sessions and waits; `pg_locks` helps investigate blocking. The optional `pg_stat_statements` extension aggregates query behaviour over time when configured.
+When a request is slow, first separate time waiting for a connection, waiting for a lock, executing SQL and transferring results. `pg_stat_activity` exposes current sessions and waits; `pg_locks` helps investigate blocking. The optional `pg_stat_statements` extension summarises query behaviour over time when configured.
 
 Next, reproduce the query with representative parameters, examine its plan and check statistics. Then consider query shape, indexes, transaction duration and pool size. Avoid tuning memory or connection limits blindly: a per-operation memory allowance can multiply across operations and concurrent sessions.
+
+The main setting behind that warning is `work_mem`: the memory one sort or hash operation may use before it spills to temporary files on disk. It is a per-operation limit, not a per-server one, so a rough maximum multiplies out:
+
+```formula
+M_max ≈ w × k × c
+M_max ≈ 4 MB × 3 × 100
+M_max ≈ 1200 MB
+where
+M_max: a rough worst-case total of the memory used by sort and hash operations across the server, in megabytes (MB)
+≈: approximately equal to; real operations rarely all use their full allowance at once, while hash operations may use more (see w)
+w: work_mem, the memory one sort or hash operation may use before spilling to temporary files; default 4 MB. Hash-based operations may use w × hash_mem_multiplier, which defaults to 2.0, so 8 MB by default
+k: the number of sort and hash operations one query runs at the same time, no unit; here 3
+c: the number of sessions running such queries concurrently, no unit; here 100
+MB: megabytes; PostgreSQL memory settings count 1 MB as 1024 kilobytes (kB)
+In words: query memory can reach the per-operation allowance times the operations in each query times the number of busy sessions.
+```
+
+Raising `work_mem` to 64 MB "to speed up sorts" turns the same workload into about 19,200 MB, nearly 19 GB (18.75 GB counting 1024 MB per GB). That comes on top of `shared_buffers` (the shared page cache, 128 MB by default) and each backend process's own baseline memory. Raise it for one session or role running a known heavy report, or limit concurrency with a connection pool, rather than raising it globally and hoping.
 
 For a slow event booking, a lock wait on one popular event may dominate even when the primary-key lookup is fast. Another index cannot remove the need for competing reservations to coordinate over the same remaining seat count.
 
 ## Key takeaways
 
-- Postgres is a database server; SQL, drivers, pools and ORMs occupy different parts of the stack.
+- Postgres is a database server; SQL, drivers, pools and ORMs occupy different layers of the system.
 - Put invariants in constraints, choose meaningful types and inspect the result of conditional writes.
 - MVCC reduces read/write interference but does not make every concurrent workflow correct. Isolation, locks and whole-transaction retries still matter.
 - Choose indexes for measured query patterns. JSONB complements relational modelling; it does not replace constraints.
 - Vacuum, statistics, WAL, replication and tested backups solve different problems. A replica alone cannot undo a mistaken write.
+- Autovacuum's threshold grows with table size, and freezing must keep every live XID within the 2.1 billion comparison horizon. Per-operation memory such as `work_mem` multiplies across operations and sessions.
 
 ## Further reading
 

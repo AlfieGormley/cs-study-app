@@ -6,7 +6,7 @@ minutes: 16
 summary: How NAT and port translation stretch IPv4, why they break end-to-end connectivity, how STUN, TURN and ICE get around them, and how IPv6 addressing, SLAAC and dual stack work.
 ---
 
-IPv4 has 2³² possible address values (2 multiplied by itself 32 times), about 4.3 billion, with some reserved for special purposes. **NAT** shares or translates address space; **IPv6** provides a much larger address space. They address different aspects of connectivity and coexist in deployed networks.
+IPv4 has 2³² possible address values (32 copies of 2 multiplied together), about 4.3 billion, with some reserved for special purposes. **NAT** shares or translates address space; **IPv6** provides a much larger address space. They address different aspects of connectivity and coexist in deployed networks.
 
 ## Network address translation
 
@@ -144,7 +144,7 @@ N_6 / N_4 = 2^96 ≈ 7.9 × 10^28
 where
 N_4: the number of possible IPv4 address values
 N_6: the number of possible IPv6 address values
-2^32, 2^96, 2^128: 2 multiplied by itself 32, 96 or 128 times
+2^32, 2^96, 2^128: 32, 96 or 128 copies of 2 multiplied together
 10^9, 10^28, 10^38: 1 followed by 9, 28 or 38 zeros; 10^9 is a billion
 ≈: approximately equal to (the result is rounded)
 In words: IPv4 has about 4.3 billion addresses; IPv6 has about 340 undecillion (34 followed by 37 zeros), roughly 79 thousand trillion trillion times as many.
@@ -190,7 +190,7 @@ S = 2^(64 − 48) = 2^16 = 65,536
 where
 S: the number of /64 subnets that fit inside the delegated prefix
 p: the delegated prefix length, for example 56 for a /56; at most 64
-2^8, 2^16: 2 multiplied by itself 8 or 16 times
+2^8, 2^16: 8 or 16 copies of 2 multiplied together
 In words: the bits between the delegated prefix and the /64 boundary number the subnets; 8 such bits give 256 subnets and 16 give 65,536.
 ```
 

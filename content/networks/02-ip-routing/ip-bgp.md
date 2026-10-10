@@ -26,7 +26,7 @@ N_32 = 2^32 = 4,294,967,296
 where
 N_16: the number of values a 16-bit ASN field can encode, from 0 to 65,535
 N_32: the number of values a 32-bit ASN field can encode, from 0 to 4,294,967,295
-2^16, 2^32: 2 multiplied by itself 16 or 32 times
+2^16, 2^32: 16 or 32 copies of 2 multiplied together
 In words: 16 bits allow only about 65 thousand AS numbers, too few for every network on the Internet; 32 bits allow about 4.3 billion. The reserved values 65535 and 4294967295 are the largest number each field size can hold.
 ```
 

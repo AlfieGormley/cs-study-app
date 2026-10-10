@@ -58,7 +58,7 @@ where
 h: the number of host bits: the bits after the prefix
 p: the prefix length, the number after the slash (/26 means p is 26); a whole number from 0 to 32
 N: the number of addresses in the network, including the network and broadcast addresses
-2^h: 2 multiplied by itself h times, so 2^6 = 2 × 2 × 2 × 2 × 2 × 2 = 64
+2^h: h copies of 2 multiplied together, so 2^6 = 2 × 2 × 2 × 2 × 2 × 2 = 64
 In words: an IPv4 address has 32 bits; the prefix uses p of them, and the remaining h bits can take 2^h different patterns, one per address. A /26 has 64 addresses and a /20 has 4,096.
 ```
 
@@ -92,7 +92,7 @@ x_net: the network address's value in the interesting octet
 x_bc: the broadcast address's value in the interesting octet
 H: the number of usable host addresses
 h: the number of host bits, 32 minus the prefix length
-2^h: 2 multiplied by itself h times: the total number of addresses in the subnet
+2^h: h copies of 2 multiplied together: the total number of addresses in the subnet
 In words: the mask tells you the block size; the address rounded down to a whole number of blocks is the network; the last value in that block is the broadcast; and the usable hosts are all the addresses minus those two.
 ```
 
@@ -125,7 +125,7 @@ x_net: the network address's value in the 4th octet
 x_bc: the broadcast address's value in the 4th octet
 h: the number of host bits for a /26
 H: the number of usable host addresses
-2^6: 2 multiplied by itself 6 times, 64
+2^6: 6 copies of 2 multiplied together, 64
 In words: 77 lies in the second 64-wide block, which runs from 64 to 127. Of its 64 addresses, 62 are usable once the network and broadcast addresses are set aside.
 ```
 
@@ -154,7 +154,7 @@ x_net: the network address's value in the 3rd (interesting) octet
 x_bc: the broadcast address's value in the 3rd octet
 h: the number of host bits for a /20: the last 4 bits of the 3rd octet plus all 8 of the 4th
 H: the number of usable host addresses
-2^12: 2 multiplied by itself 12 times, 4,096
+2^12: 12 copies of 2 multiplied together, 4,096
 In words: 45 lies in the block from 32 to 47 of the third octet. Twelve host bits give 4,096 addresses, 4,094 of them usable.
 ```
 
@@ -183,7 +183,7 @@ p = 32 − h = 32 − 7 = 25
 where
 h: the number of host bits; try 1, 2, 3 … and keep the first that fits
 n: the number of hosts the subnet must hold, here 100
-2^h: 2 multiplied by itself h times: the number of addresses with h host bits
+2^h: h copies of 2 multiplied together: the number of addresses with h host bits
 ≥: is at least (greater than or equal to)
 <: is less than, so 6 host bits are too few
 p: the resulting prefix length
@@ -272,7 +272,7 @@ where
 p_agg: the prefix length of the summary route
 p: the prefix length of each block being merged, here 24
 k: how many equal-size, adjacent blocks are merged; must be a power of 2 (2, 4, 8 …), here 4
-log_2(k): the base-2 logarithm of k: how many times 2 must be multiplied by itself to make k, so log_2(4) = 2 and log_2(8) = 3
+log_2(k): the base-2 logarithm of k: how many copies of 2 must be multiplied together to make k, so log_2(4) = 2 and log_2(8) = 3
 In words: four /24s need 2 fewer prefix bits to cover them all, so they combine into one /22, provided the blocks are aligned as explained next.
 ```
 
@@ -292,7 +292,7 @@ The catch is that a summary can attract traffic for addresses that don't exist, 
 
 ## Address exhaustion
 
-IPv4 has 2³² possible address values (2 multiplied by itself 32 times: 4,294,967,296, about 4.3 billion), and special-purpose ranges reduce the pool available for globally unique assignments. Address sharing, transfers and allocation policies address scarcity in different ways; IPv6 provides a much larger address space.
+IPv4 has 2³² possible address values (32 copies of 2 multiplied together: 4,294,967,296, about 4.3 billion), and special-purpose ranges reduce the pool available for globally unique assignments. Address sharing, transfers and allocation policies address scarcity in different ways; IPv6 provides a much larger address space.
 
 > [!note] Content omitted after review
 > Current global route counts, address-market prices and a regional exhaustion/allocation timeline are absent because they require dated measurements and registry-policy evidence not established in this lesson. No universal purchase price or route-memory design is assumed.

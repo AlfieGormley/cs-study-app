@@ -145,7 +145,7 @@ A client leaving cleanly can send **DHCPRELEASE**, but many just disappear and l
 
 Lease length is a trade-off. Short leases (an hour) recycle addresses quickly in busy guest networks but generate more traffic and make the server more critical. Long leases (days) suit stable office networks.
 
-Servers usually hand the same client the same address again where they can, keyed on its MAC or client identifier. **DHCP reservations** associate a stable address with configured client identification, which may be a MAC or a client identifier depending on the server. MAC randomisation or identifier changes can affect that association.
+Servers usually hand the same client the same address again where they can, keyed on its MAC or client identifier. **DHCP reservations** associate a stable address with configured client identification, which may be a MAC or a client identifier depending on the server. MAC randomisation or identifier changes can affect that mapping.
 
 ## Relays: one server for many subnets
 

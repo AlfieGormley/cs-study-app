@@ -161,7 +161,7 @@ where
 i: the bucket number, from 0 (nearest) to 159 (farthest) for 160-bit IDs
 d: the XOR distance from our own ID to a contact
 s: the number of leading bits the contact's ID shares with ours
-^: "to the power of"; 2^i is 2 multiplied by itself i times
+^: "to the power of"; 2^i is i copies of 2 multiplied together
 ≤: is less than or equal to
 <: is less than
 In words: bucket i holds contacts whose first differing bit is bit i counted from the right, so they share the 159 − i bits above it with us.

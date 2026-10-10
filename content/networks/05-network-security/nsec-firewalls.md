@@ -26,7 +26,7 @@ Most rules are written in terms of the **5-tuple**: protocol, source IP, source 
 
 ### Rule order and default policy
 
-The toy filter below uses **top-to-bottom, first-match evaluation**. Real products differ: AWS security groups combine allow rules, while nftables can continue across chains after an accept verdict. Anything that matches no rule gets the **default policy**, which should be *deny*.
+The toy filter below uses **top-to-bottom, first-match evaluation**. Real products differ: AWS security groups combine allow rules, while nftables can continue across chains after an accept verdict. Anything that matches no rule gets **the default policy**, which should be *deny*.
 
 ```python
 from ipaddress import ip_address, ip_network
@@ -62,7 +62,7 @@ Swap rules 1 and 3 and internal SSH breaks too, because the broad deny now match
 
 A **stateless** filter judges each packet alone. That causes a problem with replies. When your web server at port 443 answers a client, the reply goes *to* the client's **ephemeral port**, some random number such as 51,812. A stateless filter needs a rule covering the intended return traffic. For clients anywhere on the internet this often includes a range of destination ephemeral ports; source ports, addresses and protocol flags may further constrain a rule, but do not prove connection state.
 
-A **stateful** firewall keeps a **connection table**. When it sees an allowed outbound SYN, it records the flow. Connection tracking supplies state that filtering rules can match. A known flow is accepted only when the applicable policy permits it:
+A **stateful** firewall keeps **a connection table**. When it sees an allowed outbound SYN, it records the flow. Connection tracking supplies state that filtering rules can match. A known flow is accepted only when the applicable policy permits it:
 
 ```
  conntrack table (simplified)

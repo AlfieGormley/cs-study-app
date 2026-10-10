@@ -269,8 +269,8 @@ Data centres and clouds need far more isolated layer 2 segments than VLANs allow
 N_VLAN = 2^12 − 2 = 4094
 N_VNI = 2^24 = 16777216
 where
-N_VLAN: usable VLAN IDs: a 12-bit field holds 2^12 (2 multiplied by itself 12 times) = 4,096 values, and IDs 0 and 4095 are reserved
-N_VNI: possible VXLAN network identifiers in a 24-bit field: 2 multiplied by itself 24 times
+N_VLAN: usable VLAN IDs: a 12-bit field holds 2^12 (12 copies of 2 multiplied together) = 4,096 values, and IDs 0 and 4095 are reserved
+N_VNI: possible VXLAN network identifiers in a 24-bit field: 24 copies of 2 multiplied together
 In words: a 12-bit VLAN ID allows about four thousand network segments, while VXLAN's 24-bit VNI allows about 16.8 million.
 ```
 

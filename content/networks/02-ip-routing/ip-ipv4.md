@@ -52,7 +52,7 @@ Field by field:
 A few details worth knowing:
 
 - **IHL** (Internet Header Length) counts 4-byte words, not bytes. Options add header bytes and can encounter filtering or slower processing, depending on the option and equipment.
-- **Total Length** is a 16-bit field, so it caps the size of a whole datagram. Basic Ethernet commonly carries 1,500-byte IP packets, but other links, jumbo configurations and encapsulations have different MTUs.
+- The **Total Length field** is 16 bits wide, so it caps the size of a whole datagram. Basic Ethernet commonly carries 1,500-byte IP packets, but other links, jumbo configurations and encapsulations have different MTUs.
 - **Protocol** tells the receiver which handler gets the payload: 1 is ICMP, 6 is TCP, 17 is UDP.
 - **DSCP** (Differentiated Services Code Point) marks traffic classes, for example "expedited forwarding" for voice. **ECN**, when supported by endpoints and the network, permits congestion marking of eligible packets; it does not eliminate all packet drops.
 - The **checksum** covers the header only, not the data. Because every router decrements TTL, a forwarding router must update it, possibly incrementally. IPv6 has no corresponding header checksum.
@@ -76,7 +76,7 @@ The largest datagram follows from the size of the Total Length field. A field of
 L_max = (2^16 − 1) B = 65,535 B
 where
 L_max: the largest value the 16-bit Total Length field can hold, and so the largest possible IPv4 datagram (header plus data), in bytes (B)
-2^16: 2 multiplied by itself 16 times, which is 65,536: the number of different values 16 bits can represent
+2^16: 16 copies of 2 multiplied together, which is 65,536: the number of different values 16 bits can represent
 B: bytes; one byte is 8 bits
 In words: Total Length counts from 0, so its largest value is 65,536 − 1 = 65,535 bytes. In practice the link MTU, usually far smaller, is what limits real packets.
 ```
@@ -257,7 +257,7 @@ t_wrap = 2^16 / r
 t_wrap = 65,536 / 15,000 per s ≈ 4.4 s
 where
 t_wrap: the time before the Identification counter repeats a value, in seconds (s)
-2^16: 2 multiplied by itself 16 times, 65,536: the number of different values the 16-bit Identification field can hold
+2^16: 16 copies of 2 multiplied together, 65,536: the number of different values the 16-bit Identification field can hold
 r: the rate at which the sender sends datagrams to the same destination with the same protocol, in datagrams per second; about 15,000 for 8 KB datagrams at 1 Gbit/s
 ≈: approximately equal to (the result is rounded)
 s: seconds

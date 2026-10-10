@@ -51,7 +51,7 @@ where
 L_default: the default maximum frame payload, in bytes (B), before any SETTINGS change
 L_max: the largest payload length the 24-bit Length field can express, which is also the highest value SETTINGS_MAX_FRAME_SIZE may set
 N_streams: the largest stream identifier the 31-bit field can hold
-^: "to the power of": 2^14 means 2 multiplied by itself 14 times
+^: "to the power of": 2^14 means 14 copies of 2 multiplied together
 B: bytes
 In words: the default frame payload limit is 16 KiB, a peer may raise it to just under 16 MiB, and stream IDs run out after about 2.1 billion.
 ```
@@ -189,7 +189,7 @@ b_2 = 10
 where
 P: the largest value the N-bit prefix can hold, used as the "more bytes follow" marker
 N: the number of prefix bits available in the first byte; here 5
-^: "to the power of": 2^5 means 2 multiplied by itself 5 times, which is 32
+^: "to the power of": 2^5 means 5 copies of 2 multiplied together, which is 32
 r: the remainder still to encode after the prefix is filled
 b_1: the first continuation byte: the low 7 bits of r (26), plus 128 because more bytes follow
 b_2: the last continuation byte: the remaining high part of r (10), with no 128 added because nothing follows
@@ -320,7 +320,7 @@ where
 V_max: the largest value a varint of n bytes can hold
 n: the total length of the varint in bytes: 1, 2, 4 or 8
 V_1, V_2, V_4, V_8: V_max for 1, 2, 4 and 8 bytes
-^: "to the power of": 2^6 means 2 multiplied by itself 6 times; 10^18 is 1 followed by 18 zeros (a quintillion)
+^: "to the power of": 2^6 means 6 copies of 2 multiplied together; 10^18 is 1 followed by 18 zeros (a quintillion)
 ≈: approximately equal to
 In words: a varint of n bytes has 8n bits, two of which give the length, so it holds up to 2 to the power (8n − 2), minus one.
 ```

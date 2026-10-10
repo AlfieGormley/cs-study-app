@@ -30,7 +30,7 @@ n_50 ≈ √(2 × ln(2) × N)
 n_50 ≈ 1.18 × √N = 1.18 × 4096
 n_50 ≈ 4800
 where
-N: the number of possible IVs: 2 multiplied by itself 24 times, because the IV is 24 bits long
+N: the number of possible IVs: 24 copies of 2 multiplied together, because the IV is 24 bits long
 n_50: the number of frames after which the chance of at least one repeated IV reaches 50 %
 √: square root
 ln: the natural logarithm (logarithm to base e ≈ 2.718); ln(2) ≈ 0.693
@@ -184,7 +184,7 @@ t_full: the time to try every possibility
 t_avg: the average time to find a uniformly chosen passphrase: half the full search
 s: seconds; s^−1 means "per second"
 h: hours; 1 h = 3,600 s
-^: "to the power of": 26^8 is 26 multiplied by itself 8 times, and 10^11 is 1 followed by 11 zeros
+^: "to the power of": 26^8 is 8 copies of 26 multiplied together, and 10^11 is 1 followed by 11 zeros
 ≈: approximately equal to (rounded)
 In words: an 8-letter lowercase passphrase has about 210 billion possibilities, which a million guesses a second exhausts in about 58 hours, finding it on average in about 29.
 ```

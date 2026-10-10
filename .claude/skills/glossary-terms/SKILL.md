@@ -97,7 +97,9 @@ So "DAC" can mean digital-to-analogue converter in Synth Building and discretion
 Security. **Don't drop an acronym** because another subject uses it differently. Inside one subject, an alias
 still maps to one entry.
 
-**Multi-word and hyphenated phrases also act as a fallback in other subjects** that don't define them.
+**Multi-word and hyphenated phrases also act as a fallback in other subjects** that don't define them, except
+phrases that start with an article or preposition or end with a preposition ("the stack", "in parallel",
+"multiple of"): those read as ordinary English elsewhere, so they stay inside their own subject.
 Single words link only inside their own subject. Even so:
 - **Ambiguity.** When a word means different things in different subjects ("gate", "filter", "key", "voice",
   "bus", "transformer", "table", "flash", "bounce"), don't use the bare word as an alias. Use precise multi-word

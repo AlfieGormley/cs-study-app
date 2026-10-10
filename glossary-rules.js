@@ -16,6 +16,11 @@ export const aliasKey = (alias) => (isAcronym(alias) ? '=' + alias : alias.toLow
 // never act as a fallback outside their own subject, and neither do single words (see fallsBack).
 // A single word ("depth", "leaf", "patch") means different things in different subjects, so only multi-word or
 // hyphenated aliases ("tree depth", "low-pass filter") act as a fallback in other subjects.
-export const fallsBack = (entry, alias) => !!entry.subject && !isScoped(entry, alias) && /[\s-]/.test(alias.trim());
+// Phrases that start with an article or preposition, or end with a preposition ("the stack", "in parallel",
+// "multiple of"), read as ordinary English in other subjects, so they never act as a fallback.
+const GLUE_START = /^(?:the|a|an|one|in|on|at|of|to|by|for|with|and|or|s)\s/i;
+const GLUE_END = /\s(?:of|to|in|on|at|by|for|with|from)$/i;
+export const fallsBack = (entry, alias) =>
+  !!entry.subject && !isScoped(entry, alias) && /[\s-]/.test(alias.trim()) && !GLUE_START.test(alias.trim()) && !GLUE_END.test(alias.trim());
 export const isScoped = (entry, alias) =>
   !!entry.subject && (isCapsWord(alias) || [...alias].length <= 3 || /[^\p{L}\s'’-]/u.test(alias));

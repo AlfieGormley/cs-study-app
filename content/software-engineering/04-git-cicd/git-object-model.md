@@ -6,7 +6,7 @@ minutes: 12
 summary: Blobs, trees, commits and tags, content addressing, refs and HEAD, the index, packfiles, and how reflogs can recover commits while their objects are retained.
 ---
 
-Most people learn Git as a list of commands. That works until something goes wrong: a rebase eats a commit, a branch "disappears", or a merge produces something nobody expected. At that point the commands stop making sense, because they are thin wrappers around a very simple data model.
+Most people learn Git as a list of commands. That works until something goes wrong: a rebase eats a commit, a branch "disappears", or a merge produces something nobody expected. At that point the commands stop making sense, because they are thin layers over a very simple data model.
 
 Learn the model and nearly every command becomes obvious. Git is two things:
 
@@ -17,7 +17,7 @@ Everything else (branches, merges, rebases, tags, `git log`) is built from those
 
 ## Snapshots, not diffs
 
-Git models committed project state as **snapshots**. This logical model is separate from delta compression used to store or transfer objects. Every commit records the complete state of the project tree at that moment.
+Git models committed project state as **snapshots**. This logical model is separate from delta compression used to store or transfer objects. Every commit stores the complete state of the project tree at that moment.
 
 That sounds wasteful, but it is not. If a file has not changed, the new snapshot simply points at the same stored copy as the previous one. Diffs are computed on demand when you ask for them (`git diff`, `git log -p`); they are not the logical representation of commits. Packfiles can nevertheless store object deltas, as described below.
 
@@ -74,7 +74,24 @@ An **annotated tag** (`git tag -a v1.0 -m "..."`) is a real object with a tagger
 
 ## Content addressing: the hash is the name
 
-In a SHA-1-format repository, an object's name is the SHA-1 hash of a short header followed by its content. For a blob the header is `blob <size>` and a NUL byte. You can reproduce Git's hashes yourself:
+In a SHA-1-format repository, an object's name is the SHA-1 hash of a small header followed by its content. A hash function turns any sequence of bytes into a fixed-size fingerprint; the same bytes always give the same fingerprint, and a one-byte change gives a completely different one. Written as a formula:
+
+```formula
+id = SHA-1(h ‖ c)
+h = t ‖ " " ‖ n ‖ NUL
+where
+id: the object's name (its object ID), written as 40 hexadecimal characters in a SHA-1 repository
+SHA-1: the SHA-1 hash function, which turns any sequence of bytes into a fixed 160-bit (20-byte) fingerprint
+h: the header Git puts in front of the content
+c: the object's content: the file's bytes for a blob, the encoded entry list for a tree, the text of a commit
+t: the object's type, written as text: blob, tree, commit or tag
+n: the size of the content in bytes, written out as decimal digits (6 for "hello" plus a newline)
+NUL: the zero byte (value 0), which marks where the header ends
+‖: concatenation: join two byte sequences end to end, in that order
+In words: Git glues a short "type size" label onto the content and hashes the lot, so the name depends on every byte of the content and on its type.
+```
+
+For a file containing `hello` and a newline, *t* is `blob` and *n* is 6, so Git hashes `blob 6`, a NUL byte, then the six content bytes. You can reproduce Git's hashes yourself:
 
 ```python
 import hashlib
@@ -117,7 +134,7 @@ Content addressing has three big consequences.
 ```
 
 > [!example] `--amend` makes a new commit
-> Run `git commit --amend -m "copy file"` on a commit whose hash is `375494`. The result has a new hash, `a08133`, because the message is part of the hashed content. The old commit `375494` still exists in the object store; the branch simply points somewhere else now.
+> Run `git commit --amend -m "copy file"` on a commit whose hash is `375494`. The result has a new hash, `a08133`, because the message is part of the hashed content. The old commit `375494` still exists in Git's object store; the branch simply points somewhere else now.
 
 ## Refs, branches and HEAD
 
@@ -134,7 +151,7 @@ When you commit, Git writes the new objects, then updates the branch that HEAD p
 
 ### Detached HEAD
 
-`git switch --detach <commit>` (or `git checkout <hash>`) makes HEAD contain a raw hash instead of a branch name. `git status` reports `HEAD detached at 5870310`. New commits made now are not on any branch. Switch away without creating a branch and they become unreachable, which leads us to the safety net.
+`git switch --detach <commit>` (or `git checkout <hash>`) makes HEAD contain a raw hash instead of a branch name. `git status` reports `HEAD detached at 5870310`. New commits made now are not on any branch. Switch away without creating a branch and they become unreachable, which leads us to the reflog.
 
 ### Packed refs
 
@@ -142,12 +159,12 @@ Thousands of tiny ref files are slow, so `git gc` moves them into a single `.git
 
 ## The index (staging area)
 
-Between your working directory and the object store sits the **index**, the file `.git/index`. It is a flat list of paths, modes and blob hashes describing the *next* commit.
+Between your working tree (the files you edit) and Git's object store sits the **Git index**, also called the **staging area**: the file `.git/index`. It is a flat list of paths, modes and blob hashes describing the *next* commit.
 
 - `git add f` applies configured content conversions (such as line-ending or clean filters), stores the resulting blob and records its hash in the index.
 - `git commit` turns the index into tree objects, writes a commit pointing at the root tree, then moves the branch.
 
-So blobs are created at `git add` time, not at commit time. If you `git add` a file and later discard it, the blob lingers until garbage collection.
+So blobs are created at `git add` time, not at commit time. If you `git add` a file and later discard it, that blob lingers until git gc removes it.
 
 ## How objects are stored
 
@@ -157,9 +174,9 @@ Ordinary local object creation usually writes a **loose** object: zlib-compresse
 
 Network transfers (`fetch`, `push`, `clone`) normally transfer packs based on negotiated wants and common history. Negotiation, filtering and transport choices determine the set; it need not equal every and only missing object.
 
-## Reachability, reflog and garbage collection
+## Reachability, reflog and git gc
 
-An object is **reachable** if you can get to it by following pointers from some ref. Garbage collection only deletes unreachable objects, and even then not immediately.
+An object is **reachable** if you can get to it by following pointers from some ref. Git's garbage collection only deletes unreachable objects, and even then not immediately.
 
 When enabled and retained, a **reflog** records local updates to a ref:
 
@@ -181,12 +198,29 @@ SHA-1 is broken for collision resistance: the 2017 **SHAttered** attack produced
 - Since Git 2.13 it uses **SHA-1DC**, a hardened SHA-1 that detects the known collision-attack patterns and refuses them, while producing the same hashes for normal data.
 - Git 2.29 added an experimental **SHA-256** object format (`git init --object-format=sha256`). SHA-256 repositories cannot yet freely exchange objects with SHA-1 ones, and check the intended Git clients and hosting service for SHA-256 interoperability before choosing it.
 
+Why is a SHA-1 object ID 40 characters long, and a SHA-256 one 64? Git prints IDs in hexadecimal (base 16, digits 0–9 then a–f), and each hexadecimal digit carries exactly 4 bits:
+
+```formula
+L = b / 4
+L = 160 / 4 = 40   for SHA-1
+L = 256 / 4 = 64   for SHA-256
+where
+L: the length of an object ID written in hexadecimal, in characters
+b: the hash's output size, in bits: 160 for SHA-1, 256 for SHA-256
+4: the bits held by one hexadecimal digit, which has 16 possible values (16 = 2 × 2 × 2 × 2)
+SHA-1: the original hash function Git uses for object IDs, with a 160-bit (20-byte) output
+SHA-256: a member of the SHA-2 family of hash functions, with a 256-bit (32-byte) output
+In words: a longer hash means a longer printed ID; every 4 bits of hash adds one hex character.
+```
+
+So a SHA-1 ID is 20 raw bytes inside tree objects and 40 characters when printed, and a SHA-256 ID is 32 bytes or 64 characters. Commands accept a shorter unique prefix (`git show 5870310`), which is why abbreviated hashes of 7 or more characters appear throughout this module.
+
 As checked on 2026-10-04, Git's published plan for 3.0 is to make SHA-256 the default for new repositories, along with `main` as the default branch name (Git 2.x still defaults to `master` unless `init.defaultBranch` is set).
 
 ## Common pitfalls
 
 - **Thinking a branch is a series of commits.** A branch is one pointer to one commit. "The commits on a branch" means everything reachable from that pointer.
-- **Committing secrets.** Deleting the file in a later commit does not remove the blob from history. Anyone with a clone has it. Rotate the secret first, then rewrite history if you must (for example with `git filter-repo`).
+- **Committing secrets.** Deleting the file in a later commit does not remove its blob from history. Anyone with a clone has it. Rotate the secret first, then rewrite history if you must (for example with `git filter-repo`).
 - **Huge binaries.** Each distinct version is a blob, and a full clone normally retains reachable versions. Compression, partial/shallow clones and deliberate history removal affect actual disk use and retention. Use Git LFS or keep artefacts out of the repository.
 - **Panicking after a reset.** A retained reflog may recover committed work. It is not a backup and does not recover arbitrary uncommitted changes discarded by a hard reset.
 

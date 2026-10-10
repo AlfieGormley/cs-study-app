@@ -48,7 +48,7 @@ A typical pipeline runs on every push to a pull request and every merge to `main
 Two principles shape the order:
 
 1. **Fail fast.** Run the cheapest, most likely-to-fail checks first. A lint error should not wait behind a 20-minute integration suite.
-2. **Fan out.** Independent jobs (unit tests, scans, docs build) run in parallel; only true dependencies are sequential.
+2. **Run independent jobs in parallel.** Independent jobs (unit tests, scans, docs build) run in parallel; only true dependencies are sequential.
 
 ### A GitHub Actions example
 
@@ -104,12 +104,32 @@ Extreme Programming's **ten-minute build** is still a good target: fast enough t
 Techniques, roughly in order of effort:
 
 1. **Cache dependencies** and build outputs. Key caches on lockfile hashes so they invalidate correctly.
-2. **Parallelise and shard.** Split a test suite across machines.
+2. **Parallelise and shard.** Split a test suite into test shards that run on separate machines.
 3. **Run only what changed.** Monorepo build tools (Bazel, Nx, Pants, Turborepo) compute which targets are affected by a change and skip the rest.
 4. **Push slow tests later.** Run end-to-end suites after merge or on a schedule, not on every push, as long as failures are acted on.
 
+How much does sharding help? Splitting a suite into test shards divides the test time but not the setup each CI runner must do first, and you pay for every runner for the whole wait:
+
+```formula
+t_wall = N × t_test / S + t_setup
+t_wall = 2400 × 0.5 s / 8 + 60 s
+t_wall = 150 s + 60 s = 210 s = 3.5 min
+C = S × t_wall
+C = 8 × 210 s = 1680 s = 28 min
+where
+t_wall: the wall-clock time of the test stage, the time a developer actually waits, in seconds (s)
+N: the number of tests in the suite
+t_test: the average time one test takes, in seconds (s)
+S: the number of shards: CI runners the suite is split evenly across, all starting together
+t_setup: the time each runner spends getting ready (checkout, installing dependencies) before testing, in seconds (s)
+C: the total compute you pay for, in runner-minutes: every runner is busy for the whole of t_wall
+s: seconds
+min: minutes; 1 min = 60 s
+In words: more shards shrink the waiting time towards the fixed setup time, while the compute bill grows because every runner pays the setup.
+```
+
 > [!example] Sharding arithmetic
-> A suite of 2,400 tests averages 0.5 s each: 1,200 s, or 20 minutes, on one runner. Split across 8 shards it is about 150 s of test time per shard. Add around 60 s of setup per runner and the wall-clock time is roughly 3.5 minutes, at the price of 8 × 210 s = 28 runner-minutes instead of 21. You trade compute for feedback time, usually a good deal.
+> A suite of 2,400 tests averaging 0.5 s each takes 1,200 s, or 20 minutes, on one runner; with 60 s of setup that is 1,260 s, or 21 runner-minutes. Split across 8 shards the wait drops to about 3.5 minutes, at the price of 28 runner-minutes instead of 21. You trade compute for feedback time, usually a good deal. The sum assumes even shards: one slow test file can make one shard much longer than the rest, so balance shards by measured duration.
 
 ## The test pyramid
 
@@ -133,7 +153,24 @@ Lots of fast unit tests, fewer integration tests, and a thin layer of end-to-end
 
 A **flaky** test passes and fails on the same code. Google reported in 2016 that about **1.5% of all test runs** gave a flaky result, that almost **16% of tests** had some flakiness, and that about **84% of pass-to-fail transitions** they observed involved a flaky test.
 
-That last number is the real damage: many transitions involved tests known to be flaky. This does not establish that most red builds were false positives: intermittent failures can expose real races or other defects. Common causes are timing (`sleep(1)` and hope), test order dependence, shared state, real network calls and unseeded randomness.
+That last number is the real damage: many transitions involved tests known to be flaky. This does not establish that most red builds were false alarms: intermittent failures can expose real races or other defects. Typical causes are timing (`sleep(1)` and hope), test order dependence, shared state, real network calls and unseeded randomness.
+
+Why does a small flake rate per test hurt so much? A run goes red if *any* test flakes, so with many tests the chances compound. If each test flakes independently:
+
+```formula
+P_red = 1 − (1 − p)^N
+P_red = 1 − (1 − 0.005)^200
+P_red = 1 − 0.995^200 ≈ 1 − 0.37 = 0.63
+where
+P_red: the probability that a run on correct code goes red because at least one test flaked, from 0 (never) to 1 (always)
+p: the probability that one test flakes in one run; here 0.5 % = 0.005
+N: the number of tests in the run; here 200
+^: raise to a power: (1 − p)^N multiplies the pass chance of one test by itself N times, which is the chance that all N pass
+≈: approximately equal to
+In words: one minus the chance that every test passes; with 200 tests that each flake once in 200 runs, nearly two runs in three go red on good code.
+```
+
+Even a 0.1 % flake rate per test leaves about 18 % of 200-test runs red. Real flakes are not perfectly independent, so treat this as a model of how the risk compounds, not a prediction.
 
 What to do:
 
@@ -162,7 +199,7 @@ If A renamed a function that B calls, `main` is now broken even though both PRs 
 
 ## Build once, deploy many
 
-The pipeline should produce **one immutable artefact per commit** (a container image, wheel or binary), associated with the source revision and identified by an immutable digest, and every later stage should deploy that exact artifact. A SHA-shaped image tag is still mutable unless registry policy prevents replacement. Rebuilding for staging and again for production means production runs something that was never tested.
+The pipeline should produce **one immutable artefact per commit** (a container image, Python wheel or binary), associated with the source revision and identified by an immutable digest, and every later stage should deploy that exact artifact. A SHA-shaped image tag is still mutable unless registry policy prevents replacement. Rebuilding for staging and again for production means production runs something that was never tested.
 
 Supporting practices:
 

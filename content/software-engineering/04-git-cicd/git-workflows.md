@@ -132,8 +132,23 @@ def checkout(cart, user):
 
 **Branch by abstraction.** To replace a large component (say, an ORM), introduce an interface in front of it, move callers onto the interface, build the new implementation behind it step by step, switch over, then delete the old one. Every step is a small, releasable commit on trunk.
 
+Every flag is a fork in the code's behaviour, and forks multiply. With independent on/off flags, each extra flag can double the number of combinations the code might run in:
+
+```formula
+N = 2^n
+N = 2^10 = 1024
+where
+N: the most on/off combinations (configurations) the flags allow
+n: the number of independent Boolean (on/off) feature flags affecting the same behaviour
+2: the two states of each flag, on and off; each state of one flag can pair with every combination of the others
+^: raise to a power: 2^n means 2 multiplied by itself n times
+In words: every extra flag doubles the possible configurations, so 10 flags already allow 1,024 and 20 allow over a million.
+```
+
+This is an upper bound: constraints and paths that can never be on together reduce the combinations that can actually happen, and teams test the ones that matter rather than all of them. But the trend is why old flags must go.
+
 > [!warning] Flags are debt
-> n independent Boolean flags permit up to 2^n configurations; constraints and mutually exclusive paths can reduce the reachable behavior combinations. Give each flag an owner and an expiry date, and delete it once the feature is fully launched. Stale flags cause real incidents: The SEC's account of Knight Capital's 2012 incident reports losses exceeding $460 million and describes a repurposed old flag that reactivated dead code on one server.
+> Give each flag an owner and an expiry date, and delete it once the feature is fully launched. Stale flags cause real incidents: The SEC's account of Knight Capital's 2012 incident reports losses exceeding $460 million and describes a repurposed old flag that reactivated dead code on one server.
 
 ### Release branches in trunk-based development
 

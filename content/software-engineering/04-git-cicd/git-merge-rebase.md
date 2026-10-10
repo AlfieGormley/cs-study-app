@@ -25,7 +25,7 @@ In this simple history there is one **merge base**, the best common ancestor of 
  merge base of main and feat = B
 ```
 
-Git compares three snapshots: the base (B), "ours" (E, the branch you are on) and "theirs" (D). That is why it is called a **three-way merge**. Complex histories can have multiple best bases; recursive strategies can combine them into a virtual base. A line changed on only one side takes that side's version. A line changed differently on both sides is a **conflict**.
+Git compares three snapshots: the base (B), "ours" (E, the branch you are on) and "theirs" (D). That is why it is called a **three-way merge**. Complex histories can have multiple best bases; the recursive strategy can combine them into a virtual base. A line changed on only one side takes that side's version. A line changed differently on both sides is a **merge conflict**.
 
 ## Fast-forward merges
 
@@ -167,6 +167,24 @@ Platforms such as GitHub and GitLab offer **squash and merge**: all the branch's
 - History on `main` is linear with one commit per pull request, which is easy to read, bisect and revert.
 - The branch's individual commits are not ancestors of `main`. git branch -d feat may refuse if checking against main; if feat has an upstream it checks that upstream instead, and continuing to work on the same branch afterwards produces confusing repeated conflicts.
 
+### Why linear history helps bisect
+
+**`git bisect`** finds the commit that introduced a bug by binary search. You mark one commit as good (bug absent) and a later one as bad (bug present). Git checks out a commit halfway between them; you test it and answer `git bisect good` or `git bisect bad`, and the suspect range halves. Because the range halves every time, the number of tests grows only with the logarithm of the number of commits:
+
+```formula
+s ≈ ⌈log_2(n)⌉
+s ≈ ⌈log_2(1000)⌉ = ⌈9.97⌉ = 10
+where
+s: roughly how many commits you must test before git bisect names the first bad commit
+n: the number of candidate commits between the known-good and known-bad commits
+log_2: the base-2 logarithm: how many times you halve a number to get down to 1 (log_2(8) = 3, because 8 → 4 → 2 → 1)
+⌈ ⌉: the ceiling: round up to the next whole number, because you cannot run part of a test
+≈: approximately equal to; Git's own "roughly N steps" message counts only the tests still left after the one it has just checked out, so for 1,000 commits it first says roughly 9
+In words: each test halves the suspects, so doubling the number of commits adds only about one more test.
+```
+
+So 1,000 commits take about 10 tests and 1,000,000 take about 20. The estimate assumes every commit can be built and tested: a commit that does not build has to be skipped (`git bisect skip`), which costs extra steps. With squash merges each candidate is one whole, reviewed pull request, so bisect lands on a meaningful unit; merge-heavy history works too, but bisect may test side-branch commits that never ran CI.
+
 ## Cherry-pick
 
 `git cherry-pick <sha>` applies one commit's change on top of the current branch as a new commit. It is mostly used to backport a fix to a release branch. Use `-x` to append "(cherry picked from commit ...)" to the message so the link is traceable.
@@ -211,7 +229,7 @@ Reverting a merge commit needs `-m 1` to say which parent is the mainline. There
 A widely used compromise: **rebase your private branch** onto `main` to keep it current and tidy, then integrate it via a merge commit or squash merge on the platform. You get readable history without rewriting anything other people depend on.
 
 ## Key takeaways
-- A merge joins histories with a commit that has two parents; a fast-forward just moves the pointer when no join is needed.
+- A merge combines histories with a commit that has two parents; a fast-forward just moves the pointer when no join is needed.
 - Rebase replays commits as new ones on a new base, so hashes change; never rebase commits others have built on.
 - Use `zdiff3` conflict style and `rerere` to make conflicts easier; remember ours and theirs swap during a rebase.
 - Prefer `--force-with-lease --force-if-includes` to `--force` when updating a rewritten branch.

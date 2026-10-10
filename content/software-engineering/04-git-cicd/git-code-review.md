@@ -19,7 +19,7 @@ Ask engineers why they review and most say "to find bugs". Research suggests the
 
 So review is a bug filter, but also:
 
-1. **Shared ownership**: review can help more people understand a change; approval alone does not guarantee understanding.
+1. **Collective ownership**: review can help more people understand a change; approval alone does not guarantee understanding.
 2. **Consistency**: the codebase stays readable to everyone, not just its author.
 3. **Mentoring**, in both directions.
 4. **A security and design checkpoint** before something is hard to undo.
@@ -117,7 +117,7 @@ Only the placeholders are interpolated; every value goes through the driver as a
 
 ## Making review fast
 
-Slow review quietly destroys trunk-based development: if a review takes two days, people batch work into bigger changes to "make the wait worth it", which makes reviews slower still.
+Slow review quietly destroys trunk-based development: if a review takes two days, people bundle work into bigger changes to "make the wait worth it", which makes reviews slower still.
 
 Google's guideline is that **one business day is the maximum** time to respond to a review request, and that if you are not in the middle of a focused task you should review shortly after a request arrives. Responding does not have to mean finishing; an initial response can clarify expectations, but approval-dependent merges remain blocked until the required review is complete.
 
@@ -153,7 +153,7 @@ With required code-owner review enabled, billing/api.py needs an eligible paymen
 - Review finds defects but its biggest benefits are shared knowledge, consistency and design feedback; let CI and linters handle what machines can.
 - Approve changes that definitely improve code health, even if imperfect; block those that make things worse.
 - Keep changes small (around 100 lines is reasonable, 1,000 usually too big) and separate refactors from behaviour changes.
-- Review top-down: design, functionality, complexity, tests, then naming and style; label severity and explain why.
+- Review from the top down: design, functionality, complexity, tests, then naming and style; label severity and explain why.
 - Respond within a business day, and use branch protection and CODEOWNERS to route changes to the right people.
 
 ## Further reading

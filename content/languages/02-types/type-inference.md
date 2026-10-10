@@ -20,9 +20,9 @@ var names = new ArrayList<String>();
 var n = names.size(); // int
 ```
 
-C++ `auto`, C# `var`, Go `:=`, Kotlin `val` and Swift `let` can similarly infer a local from its initialiser. This example does not describe each language’s full inference rules: contextual and bidirectional inference can also contribute.
+C++ `auto`, C# `var`, Go's `x := 1` short declaration, Kotlin `val` and Swift `let` can similarly infer a local from its initialiser. This example does not describe each language’s full inference rules: contextual and bidirectional inference can also contribute.
 
-It has limits. In Java, `var list = new ArrayList<>();` infers `ArrayList<Object>`, because the diamond has nothing to go on. Method parameters and fields must still be annotated.
+It has limits. In Java, `var list = new ArrayList<>();` infers `ArrayList<Object>`, because the diamond operator `<>` has nothing to go on. Method parameters and fields must still be annotated.
 
 ### TypeScript: local plus contextual
 
@@ -81,22 +81,54 @@ HM works in three steps:
 compose f g x = f (g x)
 ```
 
-Step 1: give the unknowns type variables: `f : t1`, `g : t2`, `x : t3`.
+Type-theory papers use a compact notation for this, and the next three steps use it. A colon means "has type", and an arrow builds a function type.
 
-Step 2: read off constraints.
+Steps 1 and 2: give each unknown a type variable, then read off one constraint per function call. `g x` applies `g` to `x`, so `g` must be a function from `t3` to some new type `t4`. `f (g x)` then applies `f` to that `t4`, giving another new type `t5`:
 
-- `g x` applies `g` to `x`, so `g` is a function from `t3` to something new: `t2 = t3 -> t4`, and `g x : t4`.
-- `f (g x)` applies `f` to a `t4`: `t1 = t4 -> t5`, and the result is `t5`.
-
-Step 3: substitute back.
-
+```formula
+f : t1    g : t2    x : t3
+t2 = t3 → t4
+g x : t4
+t1 = t4 → t5
+f (g x) : t5
+where
+f, g, x: the three parameters of compose, whose types are not known yet
+t1, t2, t3: type variables: placeholder types for f, g and x, still to be worked out
+t4, t5: fresh type variables invented for the results of the calls g x and f (g x)
+:: "has type": f : t1 means "f has type t1"
+→: the function-type arrow: t3 → t4 is the type of a function that takes a t3 and returns a t4
+=: a constraint: the two sides must turn out to be the same type
+g x: function application: g called with the argument x (Haskell puts no brackets round arguments)
+In words: calling g on x forces g to be a function from x's type to something; calling f on that result forces f to be a function from that something to the final result.
 ```
-compose : t1 -> t2 -> t3 -> t5
-        = (t4 -> t5) -> (t3 -> t4)
-          -> t3 -> t5
+
+Step 3: substitute the solved `t1` and `t2` back into the type of `compose`, which takes `f`, then `g`, then `x`, and returns `t5`:
+
+```formula
+compose : t1 → t2 → t3 → t5
+compose : (t4 → t5) → (t3 → t4) → t3 → t5
+where
+compose: the function being typed
+t1, t2, t3, t4, t5: the type variables from steps 1 and 2; t1 = t4 → t5 and t2 = t3 → t4
+:: "has type"
+→: the function-type arrow. Arrows group to the right, so A → B → C means A → (B → C): take an A, then a B, and return a C. This is how Haskell writes a function of several arguments (currying)
+In words: compose takes a function from t4 to t5, then a function from t3 to t4, then a t3, and returns a t5.
 ```
 
-Nothing constrains `t3`, `t4` or `t5`, so they become universally quantified. Renamed tidily:
+Nothing constrains `t3`, `t4` or `t5`, so they become **universally quantified**: the caller may choose any types for them. Renamed tidily (`a` for `t3`, `b` for `t4`, `c` for `t5`):
+
+```formula
+compose : ∀a b c. (b → c) → (a → b) → a → c
+where
+compose: the function being typed
+a, b, c: type variables, renamed from t3, t4 and t5
+∀a b c.: "for all types a, b and c": the type is polymorphic, and each use of compose may pick its own a, b and c
+:: "has type"
+→: the function-type arrow, grouping to the right
+In words: for any three types, compose turns a function from b to c and a function from a to b into a function from a to c.
+```
+
+In Haskell's own syntax, `::` means "has type", `->` is the arrow, and the "for all" is left implicit:
 
 ```haskell
 compose :: (b -> c) -> (a -> b) -> a -> c
@@ -106,14 +138,33 @@ That is exactly the type of Haskell's built-in `(.)`. The compiler found it with
 
 ## Unification
 
-Unification asks: what substitution for the type variables makes these two types identical?
+Unification asks: what **substitution** (a rule replacing each type variable with a type) makes two types identical? Take the function types `a → Int` and `Bool → b`. Matching argument with argument and result with result gives:
+
+```formula
+S(a → Int) = S(Bool → b)
+S = {a := Bool, b := Int}
+S(a → Int) = Bool → Int
+S(Bool → b) = Bool → Int
+where
+S: the substitution being searched for
+S(T): the type T with every type variable replaced as S says
+a, b: type variables (types not yet known)
+Int: the type of whole numbers
+Bool: the type with the two values True and False
+→: the function-type arrow: Bool → Int is a function from Bool to Int
+:=: "is replaced by": every a becomes Bool, and every b becomes Int
+{ }: the set of replacements that makes up S
+In words: replacing a by Bool and b by Int turns both types into Bool → Int, so they unify.
+```
+
+Unification fails when two different concrete types meet, or when a variable would have to contain itself:
 
 | Unify | Result |
 |---|---|
 | `a` with `Int` | `a := Int` |
-| `a -> Int` with `Bool -> b` | `a := Bool, b := Int` |
+| `a → Int` with `Bool → b` | `a := Bool, b := Int` |
 | `Int` with `Bool` | type error |
-| `a` with `a -> b` | infinite type: error |
+| `a` with `a → b` | infinite type: error |
 
 Here is a small unifier in Python, not a complete Algorithm W implementation. It assumes finite, well-formed type terms and an acyclic substitution. Type variables are strings; other types are tuples like `("->", arg, result)` or `("Int",)`.
 
@@ -153,7 +204,24 @@ Unifying `("->", "a", ("Int",))` with `("->", ("Bool",), "b")` returns `{'a': ('
 
 ### The occurs check
 
-What is the type of `self_apply x = x x`? `x : a`, and applying `x` to itself needs `a = a -> b`. Substituting gives `a = (a -> b) -> b = ((a -> b) -> b) -> b`, forever. The **occurs check** (does `a` appear inside the type we're binding it to?) catches this. GHC reports "Occurs check: cannot construct the infinite type".
+What is the type of `self_apply x = x x`? Give `x` the type `a`. Applying `x` to an argument means `a` must be a function type, and the argument is `x` itself:
+
+```formula
+x : a
+a = a → b
+a = (a → b) → b
+a = ((a → b) → b) → b
+where
+x: the parameter of self_apply
+a: the unknown type of x
+b: the unknown result type of the call x x
+:: "has type"
+→: the function-type arrow: a → b is a function from a to b
+=: a constraint: both sides must be the same type
+In words: x is called with itself, so its type a must be "a function from a to b"; substituting that definition into itself makes the type grow forever, so no finite type works.
+```
+
+The **occurs check** (does `a` appear inside the type we're binding it to?) catches this. GHC reports "Occurs check: cannot construct the infinite type".
 
 ## Let-polymorphism
 
@@ -166,15 +234,51 @@ ok = let ident x = x
 bad f = (f 1, f True)
 ```
 
-In `ok`, `ident` is let-bound, so after inferring `t -> t` HM generalises it to `forall t. t -> t`. Each use gets a fresh copy: one at a number, one at `Bool`.
+In `ok`, `ident` is let-bound, so after inferring `t → t` HM generalises it. Each use then gets a fresh copy of `t`: one at a number type, one at `Bool`:
 
-In `bad`, `f` is a parameter. Its type is a single unknown `t`, shared across both uses. Unifying "argument is a number" with "argument is `Bool`" fails (GHC says `No instance for (Num Bool)`). Allowing `f` to be polymorphic would need **rank-2 types**, which go beyond ordinary HM let-polymorphism. Rank-2 inference is decidable in the corresponding System F fragment; rank-3 and higher inference is undecidable. GHC requires annotations for higher-rank polymorphic arguments.
+```formula
+ident : ∀t. t → t
+ident 1 : n        with t := n
+ident True : Bool  with t := Bool
+where
+ident: the let-bound identity function in ok
+t: a type variable
+∀t.: "for all types t": the type has been generalised, so each use may choose its own t
+n: the type of the literal 1, which can be any number type (Haskell writes this as the constraint Num n)
+True: one of the two values of Bool
+Bool: the type with the two values True and False
+:: "has type"
+→: the function-type arrow
+:=: "is replaced by", for that one use only
+In words: because ident is generalised, the call on 1 and the call on True each pick their own t, so they don't conflict.
+```
+
+In `bad`, `f` is a parameter. Its type is a single unknown `t`, with no "for all", shared across both uses:
+
+```formula
+f : t
+t = n → r1
+t = Bool → r2
+n = Bool
+where
+f: the parameter of bad; a lambda parameter gets one type, not a generalised one
+t: f's single type
+n: the type of the literal 1, which must be a number type (Num n)
+r1, r2: the unknown result types of f 1 and f True
+Bool: the type with the two values True and False
+:: "has type"
+→: the function-type arrow
+=: a constraint: both sides must be the same type
+In words: both calls constrain the same t, which forces the number type n to be Bool; Bool is not a number type, so inference fails.
+```
+
+GHC reports this as `No instance for (Num Bool)`. Allowing `f` to be polymorphic would need **rank-2 types**, which go beyond ordinary HM let-polymorphism. Rank-2 inference is decidable in the corresponding System F fragment; rank-3 and higher inference is undecidable. GHC requires annotations for higher-rank polymorphic arguments.
 
 ## Cost and limits
 
 - **Speed.** In practice HM runs in close to linear time. In theory, deciding ML typability is DEXPTIME-complete (Mairson; Kfoury, Tiuryn and Urzyczyn, 1990): nested `let`s can produce types that double in size at each level. This worst case is not a prediction of typical application performance.
 - **Extensions break completeness.** Rich combinations of subtyping, higher-rank types, GADTs and type-level computation can lose principal types, require annotations or make inference undecidable; no such result follows merely from adding any one feature in any form. That is one reason Java, TypeScript and Scala don't use HM: subtyping and overloading don't mix well with it.
-- **Type classes add constraints.** Haskell infers `square x = x * x` as `Num a => a -> a`. Sometimes a constraint can't be resolved: `f = show . read` fails with "ambiguous type variable", because nothing says which type to read.
+- **Type classes add constraints.** Haskell infers `square x = x * x` as `Num a => a -> a`, read "for any type `a` that is a number type (`Num a`), a function from `a` to `a`". Sometimes a constraint can't be resolved: `f = show . read` fails with "ambiguous type variable", because nothing says which type to read.
 - **Error messages.** The error is reported where unification fails, which can be far from the real mistake. A wrong argument on line 10 may be blamed on line 40.
 
 > [!tip] Annotate the boundaries

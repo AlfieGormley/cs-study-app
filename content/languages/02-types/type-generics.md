@@ -31,7 +31,7 @@ String s = names.get(0); // no cast
 
 ## Parametric polymorphism
 
-A function that works uniformly for every type is **parametrically polymorphic**. "Uniformly" is the important word: it runs the same code whatever the type, never inspecting it.
+A function that works uniformly for every type shows **parametric polymorphism**. "Uniformly" is the important word: it runs the same code whatever the type, never inspecting it.
 
 ```haskell
 first :: [a] -> Maybe a
@@ -52,7 +52,7 @@ def first[T](xs: list[T]) -> T:
     return xs[0]   # Python 3.12+ syntax
 ```
 
-On an empty list these examples differ: Haskell returns `Nothing`, TypeScript returns `undefined`, and Python raises `IndexError`. The type variable (`a`, `T`) links the input to the output. Calling `first` on a list of numbers gives a number back, and the checker knows it.
+In the Haskell line, `::` reads "has type", `[a]` means "a list of `a`", and `->` separates the argument type from the result type, so `first` takes a list of `a` and returns a `Maybe a` (either `Nothing` or `Just` one `a`). On an empty list these examples differ: Haskell returns `Nothing`, TypeScript returns `undefined`, and Python raises `IndexError`. The type variable (`a`, `T`) links the input to the output. Calling `first` on a list of numbers gives a number back, and the checker knows it.
 
 This is one of three kinds of polymorphism:
 
@@ -123,7 +123,23 @@ Under total parametric semantics (excluding nontermination, exceptions, `seq` an
 
 - `f :: a -> a`. The only thing `f` can do with an unknown `a` is return it. So `f` must be the identity (or never return).
 - `g :: [a] -> [a]`. `g` cannot invent new `a` values or look at them. It can only drop, duplicate and reorder elements based on the list's **shape**. For finite lists, `reverse` and `take 3` fit; `cycle` is a partial, potentially infinite example outside this total finite-list statement; `sort` does not (it needs `Ord a`).
-- A consequence: for any such `g` and any function `h`, `map h (g xs) == g (map h xs)`.
+
+A consequence is the free theorem for `g`. Because `g` only moves elements by position, it doesn't matter whether you transform the elements before or after calling it:
+
+```formula
+map h (g xs) = g (map h xs)   for all h, xs
+where
+g: any function of type [a] → [a] with no constraints, such as reverse
+h: any function from a to some other type b
+xs: any finite list whose elements have type a
+map h: the list you get by applying h to every element, keeping the order
+[a]: a list whose elements have type a
+a, b: type variables (any types)
+→: the function-type arrow: [a] → [a] takes a list of a and returns a list of a
+In words: transforming every element and then rearranging gives the same list as rearranging first and transforming afterwards.
+```
+
+For example, with `g = reverse` and `h` adding 1: reversing `[1, 2, 3]` gives `[3, 2, 1]` and adding 1 gives `[4, 3, 2]`; adding 1 first gives `[2, 3, 4]` and reversing gives `[4, 3, 2]`. The theorem assumes total functions on finite, fully defined lists.
 
 This only holds if the language really is uniform. Java breaks it: a generic method can call `instanceof`, `getClass()` or `hashCode()` on a `T`. TypeScript can use `typeof`; Python can use `type` or `isinstance`. Haskell supports useful parametric reasoning subject to those caveats. Rust generics also permit observations such as `size_of::<T>()`, so merely avoiding `Any` is not a parametricity guarantee.
 

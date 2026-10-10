@@ -8,7 +8,7 @@ summary: Building types from "and" and "or", counting their values, replacing nu
 
 Most data is built from two ideas. An order has a customer **and** a list of items **and** a total. A payment is a card payment **or** a bank transfer **or** a voucher. Classes and structs handle "and" well. Many mainstream languages had no direct way to say "or", so programmers faked it with nullable fields, type codes and `instanceof` chains.
 
-**Algebraic data types** (ADTs) give you both as first-class tools. Combined with **pattern matching**, which takes them apart safely, they are one of the most useful ideas to have spread from ML and Haskell into Rust, Swift, Kotlin, TypeScript, Python and Java.
+**Algebraic data types** (ADTs) give you both as built-in tools. Combined with **pattern matching**, which takes them apart safely, they are one of the most useful ideas to have spread from ML and Haskell into Rust, Swift, Kotlin, TypeScript, Python and Java.
 
 ## Product types: "and"
 
@@ -27,7 +27,19 @@ class Point:
     y: int
 ```
 
-It's called a product because of how the number of possible values combines. If `A` has `|A|` values and `B` has `|B|`, the pair `(A, B)` has `|A| × |B|`. A pair of `bool`s has 2 × 2 = 4 values.
+It's called a product because of how the number of possible values combines. A pair holds one value from each part, and every combination is allowed, so the counts multiply:
+
+```formula
+|A × B| = |A| × |B|
+|bool × bool| = 2 × 2 = 4
+where
+A, B: any two types
+A × B: the product type: a pair (tuple) holding one A and one B, written (A, B) in code
+|A|: the cardinality of A: how many distinct values the type A has
+bool: the Boolean type, with the 2 values true and false
+×: between types, "a pair of"; between numbers, ordinary multiplication
+In words: a pair has one value for every combination of its parts, so a pair of bools has 4 values: (false, false), (false, true), (true, false) and (true, true).
+```
 
 ## Sum types: "or"
 
@@ -46,7 +58,22 @@ enum Shape {
 }
 ```
 
-Each alternative is a **constructor** (or variant) and may carry its own data. The counts add: `|A + B| = |A| + |B|`. That is the "algebra": types built from sums and products.
+Each alternative is a **data constructor** (or variant) and may carry its own data. A value is one alternative *or* another, never both, so the counts add:
+
+```formula
+|A + B| = |A| + |B|
+|Option<bool>| = 1 + 2 = 3
+where
+A, B: any two types
+A + B: the sum type: either an A or a B, tagged with which one it is
+|A|: the cardinality of A: how many distinct values A has
+Option<bool>: Rust's optional bool: None (1 value) or Some holding a bool (2 values)
+bool: the Boolean type, with the 2 values true and false
++: between types, "one or the other"; between numbers, ordinary addition
+In words: a sum type has the values of its first alternative plus the values of its second, so an optional bool has 3: None, Some(true) and Some(false).
+```
+
+That is the "algebra": types built from sums and products.
 
 | Type | Values |
 |---|---|
@@ -79,7 +106,7 @@ fn area(s: &Shape) -> f64 {
 }
 ```
 
-Patterns nest, so you can match deep structure, and they can carry **guards**:
+Patterns nest, so you can match deep structure, and they can carry **pattern guards** (an extra `if` condition on an arm):
 
 ```rust
 enum Cmd { Quit, Buy(u32) }
@@ -103,7 +130,7 @@ The big win is that the compiler knows every alternative, so it can check that y
 - **Java 21**: a `switch` over a `sealed` type must cover every permitted subtype.
 - **TypeScript, Python**: possible with a `never`-typed trick, shown below.
 
-Add a `Triangle` variant, and an exhaustiveness check can flag matches lacking both that case and a catch-all. In a class hierarchy with `instanceof` chains, the compiler can't tell you.
+Add a `Triangle` variant, and an exhaustiveness check can flag matches lacking both that case and a catch-all arm. In a class hierarchy with `instanceof` chains, the compiler can't tell you.
 
 ## Recursive types: trees and expressions
 
@@ -135,7 +162,7 @@ An ADT makes absence explicit:
 data Maybe a = Nothing | Just a
 ```
 
-Rust's `Option<T>` is `None | Some(T)`, and you can't use the `T` without matching (or calling a method that handles `None`). Errors work the same way with `Result<T, E>` = `Ok(T) | Err(E)`:
+Rust's `Option<T>` has two variants, `None` and `Some(T)`, and you can't use the `T` without matching (or calling a method that handles `None`). Errors work the same way with `Result<T, E>`, whose two variants are `Ok(T)` (success, holding a `T`) and `Err(E)` (failure, holding an error `E`):
 
 ```rust
 fn parse_port(s: &str)
@@ -208,7 +235,7 @@ def area(s: Shape) -> float:
             assert_never(s)
 ```
 
-Python itself does not statically check exhaustiveness. Without a matching arm execution continues after the match; the shown catch-all instead calls `assert_never`, which raises at runtime. But mypy and Pyright narrow `s` in each case, and `typing.assert_never` (3.11+) makes a missing case a type error.
+Python itself does not statically check exhaustiveness. Without a matching arm execution continues after the match; the shown catch-all arm instead calls `assert_never`, which raises at runtime. But mypy and Pyright narrow `s` in each case, and `typing.assert_never` (3.11+) makes a missing case a type error.
 
 ### Java: sealed interfaces and records
 

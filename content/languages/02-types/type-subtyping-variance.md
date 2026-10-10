@@ -3,10 +3,20 @@ id: type-subtyping-variance
 title: Subtyping and variance
 level: intermediate
 minutes: 14
-summary: When one type can stand in for another, nominal versus structural subtyping, why functions are contravariant in their arguments, why mutable containers must be invariant, and how Java, TypeScript, Python, Kotlin, C# and Rust express variance.
+summary: When one type can stand in for another, nominal versus structural subtyping, why functions are contravariant in their arguments, why mutable collections must be invariant, and how Java, TypeScript, Python, Kotlin, C# and Rust express variance.
 ---
 
-If a function wants an `Animal` and you hand it a `Dog`, that should be fine: a dog can do everything an animal can. That is **subtyping**. We write `Dog <: Animal`, read "Dog is a subtype of Animal".
+If a function wants an `Animal` and you hand it a `Dog`, that should be fine: a dog can do everything an animal can. That is **subtyping**, written like this:
+
+```formula
+Dog <: Animal
+where
+<:: "is a subtype of": every value of the left-hand type can be used wherever the right-hand type is expected
+Dog, Animal: two example class types; every Dog is an Animal
+In words: Dog is a subtype of Animal, so a Dog may be passed anywhere an Animal is wanted.
+```
+
+The reverse direction is called a **supertype**: `Animal` is a supertype of `Dog`.
 
 The easy part is classes. The hard part, and the source of real bugs, is what happens to *compound* types. If `Dog <: Animal`, is a `List<Dog>` a `List<Animal>`? Is a function that takes a `Dog` usable where a function that takes an `Animal` is expected? The answers are "it depends" and "no", and the rules that decide them are called **variance**.
 
@@ -42,7 +52,21 @@ Many systems also have a **top** type for their relevant type domain (`Object` f
 
 ## Variance: the four cases
 
-Take a generic type `F<T>` and suppose `Dog <: Animal`. Variance says how `F<Dog>` relates to `F<Animal>`:
+Take a generic type `F<T>` (such as `List<T>`) and suppose `Dog <: Animal`. Variance says how `F<Dog>` relates to `F<Animal>`. The two directional cases, as rules:
+
+```formula
+A <: B  ⇒  F<A> <: F<B>
+A <: B  ⇒  F<B> <: F<A>
+where
+A, B: any two types where A is a subtype of B, such as Dog and Animal
+F<A>: the generic type F with A filled in, such as List<Dog>
+F<B>: the same generic type with B filled in, such as List<Animal>
+<:: "is a subtype of"
+⇒: "guarantees": whenever the left side holds, so does the right
+In words: in the first rule (covariance) the subtype arrow keeps its direction; in the second (contravariance) it flips.
+```
+
+All four cases:
 
 | Variance | Rule |
 |---|---|
@@ -73,6 +97,23 @@ safe:       Animal ->  Dog
 - The caller will only ever pass in a `Dog`. A function that accepts any `Animal` handles that fine. So a supertype in the parameter is safe: **contravariant**.
 - The caller will treat the result as an `Animal`. A function that returns a `Dog` satisfies that. So a subtype in the return is safe: **covariant**.
 
+As a general rule for function types, with the `Dog` example substituted in the last two lines:
+
+```formula
+P1 <: P2  and  R2 <: R1
+⇒  (P2 → R2) <: (P1 → R1)
+Dog <: Animal  and  Dog <: Animal
+⇒  (Animal → Dog) <: (Dog → Animal)
+where
+P1 → R1: the function type the caller expects, with parameter type P1 and result type R1 (here Dog → Animal)
+P2 → R2: the type of the function actually passed in (here Animal → Dog)
+Dog, Animal: the example types, with Dog <: Animal
+<:: "is a subtype of"
+→: the function-type arrow: P → R takes a P and returns an R
+⇒: "guarantees"
+In words: a function can stand in for another if it accepts at least as much (parameters flip direction) and returns no more than promised (results keep direction).
+```
+
 In TypeScript with `strictFunctionTypes`:
 
 ```ts
@@ -86,7 +127,7 @@ const b: (x: Animal) => void =
 // error: might be given a Cat
 ```
 
-## Aliased mutable containers and invariance
+## Aliased mutable collections and invariance
 
 A read-only list of dogs can safely be read as a list of animals: everything you take out is an animal. But a *mutable* list lets values go in as well as out:
 
@@ -159,7 +200,7 @@ interface Sink<in T> {
 }
 ```
 
-The compiler checks the declaration: using an `out T` as a method parameter is an error. Kotlin's read-only `List<out E>` is covariant; `MutableList<E>` is invariant. C# marks `IEnumerable<out T>` and `Action<in T>` the same way, though only on interfaces and delegates. TypeScript 4.7 added optional `in`/`out` annotations on type parameters, mainly to make variance explicit and checking faster.
+The compiler checks the declaration: using an `out T` as a method parameter is an error. Kotlin's read-only `List<out E>` is covariant; `MutableList<E>` is invariant. C# marks `IEnumerable<out T>` and `Action<in T>` the same way, though only on interfaces and delegate types (C#'s named function types). TypeScript 4.7 added optional `in`/`out` annotations on type parameters, mainly to make variance explicit and checking faster.
 
 ## Python: invariant lists, covariant sequences
 
@@ -180,7 +221,7 @@ show(dogs)  # ok: Sequence is covariant
 
 ## Rust: lifetimes and higher-ranked types
 
-Rust has no subclassing, so `Dog <: Animal` never arises; traits use bounds instead. Its subtyping includes lifetime relationships and higher-ranked function/trait-object types. For references, a longer lifetime can be shortened: `'long <: 'short`, meaning a reference that lives longer can be used where a shorter one is needed. So `&'static str` can go wherever `&'a str` is expected.
+Rust has no subclassing, so `Dog <: Animal` never arises; traits use bounds instead. Its subtyping includes lifetime relationships and higher-ranked function/trait-object types. For references, a longer lifetime can be shortened: this is often written `'long <: 'short`, with `<:` meaning "is a subtype of". A reference that lives longer can be used where a shorter one is needed. So `&'static str` can go wherever `&'a str` is expected.
 
 Variance still matters, and the compiler infers it from each type's fields:
 
@@ -224,7 +265,7 @@ interface B { m: (x: Dog) => void }
 - Nominal class systems (Java, C#) need declared relationships; structural systems (TypeScript, Go, Python Protocols) go by members.
 - Function types are contravariant in parameters and covariant in results.
 - Read-only (producer) types can be covariant, write-only (consumer) types contravariant, and freely aliased read-write interfaces generally need invariance or another safety mechanism.
-- Java uses use-site wildcards (PECS); Kotlin, C# and Scala use declaration-site `out`/`in`; Python infers or declares variance on type variables; Rust infers variance from fields; owned containers can remain covariant because mutation through a mutable borrow restricts aliasing.
+- Java uses use-site wildcards (PECS); Kotlin, C# and Scala use declaration-site `out`/`in`; Python infers or declares variance on type variables; Rust infers variance from fields; owned types such as `Vec<T>` and `Box<T>` can remain covariant because mutation through a mutable borrow restricts aliasing.
 - Covariant mutable arrays are a known hole: Java and C# check stores at run time, TypeScript doesn't check at all.
 
 ## Further reading

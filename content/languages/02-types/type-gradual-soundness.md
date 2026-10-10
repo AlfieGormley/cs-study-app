@@ -14,10 +14,28 @@ Examples of incremental static checking include TypeScript for JavaScript, mypy 
 
 A type system is **sound** if a program that passes the checker can never, when it runs, perform an operation on a value of the wrong type. A variable typed `number` really holds a number, every time.
 
-Formally, soundness is usually proved as two properties of a language's semantics:
+Formally, soundness is usually proved as two theorems about a language's semantics, **progress and preservation**. Type-theory papers write them like this:
 
-- **Progress**: a well-typed program is either finished or can take another step; it never gets stuck on something like `"a" * {}`.
-- **Preservation**: each step keeps the program well-typed.
+```formula
+⊢ e : τ  ⇒  e ∈ V  or  e ⟶ e′
+⊢ e : τ  and  e ⟶ e′  ⇒  ⊢ e′ : τ
+where
+e: a program (an expression) being run
+e′: e-prime: the program after one more step of execution
+τ: tau, a type such as number or string
+⊢: the typing judgement: ⊢ e : τ means "the type checker proves that e has type τ". In general it is written Γ ⊢ e : τ, where Γ (gamma) lists the types of the variables in scope; for a whole program Γ is empty and is left out
+:: "has type"
+V: the set of values: finished results such as 3 or "hi" that cannot run any further
+∈: "is a member of"
+⟶: "takes one step of execution to"
+⇒: "guarantees": if the left side holds, so does the right
+In words: progress (first line): a well-typed program is either finished or can take another step, so it never gets stuck; preservation (second line): taking a step keeps the program's type.
+```
+
+- **Progress** rules out getting stuck on something like `"a" * {}`, where no rule says what to do next.
+- **Preservation** means the guarantee lasts: after a million steps the program is still well-typed, so progress applies again.
+
+Together they mean a well-typed program never reaches a stuck state. This style of proof is due to Wright and Felleisen (1994).
 
 Soundness is about *absence of false negatives*. A sound checker may reject good programs (lesson 1), but never accepts one that will hit a type error. Controlled run-time failures that the type system *declares* can happen, such as an out-of-bounds index or a failed downcast, don't count against it.
 
@@ -40,11 +58,26 @@ u.foo;               // error
 - `unknown` is a true top type: anything goes in, while type-specific operations require narrowing; operations such as equality checks remain available.
 - `any` goes in and comes out as anything. The checker permits unsafe flows and operations. This is a useful intuition, not literal compatibility with every TypeScript type: for example, `any` is not assignable to `never`.
 
-Siek and Taha replace subtyping with a **consistency** relation, written `~`: `?` is consistent with every type, and two concrete types are consistent only if they match. Consistency is deliberately **not transitive**. `number ~ ?` and `? ~ string`, but not `number ~ string`. That's what lets untyped and typed code meet without making everything compatible with everything.
+Siek and Taha replace type equality with a **consistency relation**: the dynamic type is consistent with every type, and two concrete types are consistent only if they match. Consistency is deliberately **not transitive**:
+
+```formula
+? ~ T  and  T ~ ?   for all T
+number ~ ?  and  ? ~ string
+number ≁ string
+where
+?: the dynamic type, "not statically known" (any in TypeScript, Any in Python)
+T: any type
+~: "is consistent with": a value of one type may flow where the other is expected without a static error
+≁: "is not consistent with"
+number, string: two concrete types (TypeScript's names for numbers and text)
+In words: anything can flow into or out of the dynamic type, but going through it does not make number and string compatible with each other.
+```
+
+If consistency were transitive, the second line would give `number ~ string`, and then every type would be compatible with every other. Keeping it non-transitive is what lets untyped and typed code meet without making everything compatible with everything.
 
 ## Gradual guarantee
 
-A well-designed gradual system also satisfies the **gradual guarantee** (Siek and others, 2015): removing type annotations from a program that type-checks and runs should not make it fail to type-check, nor change what it computes. Adding annotations can only surface errors, never change correct behaviour. This is what makes migration incremental: a file with no annotations is still a valid program.
+A well-designed gradual system also satisfies the **gradual guarantee** (Siek and others, 2015): removing type annotations from a program that type-checks and runs never makes it fail to type-check, nor changes what it computes. Adding annotations can only surface errors, never change correct behaviour. This is what makes migration incremental: a file with no annotations is still a valid program.
 
 ## TypeScript: unsound by design
 
@@ -120,7 +153,7 @@ untyped module        typed module
 | Transient | Cheap shape checks at uses | Reticulated Python |
 | Guarded | Wrappers/contracts on values | Typed Racket |
 
-Typed Racket wraps higher-order values (functions, mutable structures) in **contracts** that check every later use, and on failure assigns blame according to which side violates the contract. Typed Racket also offers shallow and optional modes with different guarantees and costs. Wadler and Findler's blame theorem is the slogan: "well-typed programs can't be blamed".
+Typed Racket wraps higher-order values (functions, mutable structures) in **higher-order contracts** that check every later use, and on failure assigns blame according to which side violates the contract. Typed Racket also offers shallow and optional modes with different guarantees and costs. Wadler and Findler's blame theorem is the slogan: "well-typed programs can't be blamed".
 
 The catch is cost. Takikawa and colleagues' 2016 paper *Is Sound Gradual Typing Dead?* studied combinations of typed and untyped modules in benchmark programs, and found that some partly typed configurations ran many times slower than either the fully typed or fully untyped versions, because of checks on busy boundaries. Later work (Typed Racket's "shallow" mode, transient checks, better compilers) has cut this, but the tension is real.
 
@@ -139,7 +172,7 @@ The useful question is not "is it sound?" but "where are the holes, and do I con
 Dropbox's 2019 write-up describes checking over 4 million lines of Python with mypy, adopted gradually over several years. The common pattern in such migrations:
 
 1. **Start permissive.** Turn the checker on with loose settings so the build passes.
-2. **Type the core first.** Shared libraries and data models give the most leverage; their types flow into callers.
+2. **Type the core first.** Shared modules and data models give the most leverage; their types flow into callers.
 3. **Ratchet.** Per-module strictness flags (`mypy` per-module config, TypeScript project references). New files must be strict; old files can't get worse.
 4. **Turn on the important flags.** In TypeScript, `strict` (including `noImplicitAny` and `strictNullChecks`); in mypy, `--strict` or at least `--check-untyped-defs` and `--disallow-untyped-defs`.
 5. **Validate at the edges.** Types describe what *should* arrive. Validate network JSON with a correctly configured schema (such as Zod or Pydantic); this checks that schema, not every business invariant.
@@ -153,7 +186,7 @@ Dropbox's 2019 write-up describes checking over 4 million lines of Python with m
 - **`as` to silence errors.** An assertion is a promise you make to the checker; it's the first place to look when a "typed" program crashes.
 
 ## Key takeaways
-- Gradual typing mixes typed and untyped code using a dynamic type (`any`, `Any`) that is consistent with every type, in both directions.
+- Gradual typing mixes typed and untyped code using the dynamic type (`any`, `Any`) that is consistent with every type, in both directions.
 - `unknown`/`object` are safe top types; `any` switches checking off.
 - Soundness means a program that passes the checker never hits an unexpected type error at run time; TypeScript and mypy deliberately give it up for compatibility.
 - Common holes: `any`, casts and assertions, covariant arrays, method bivariance, unchecked indexing, unannotated Python functions.

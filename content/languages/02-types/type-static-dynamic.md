@@ -38,7 +38,7 @@ Static does **not** mean you must write the types. Haskell and OCaml infer almos
 let total = 40 + 2;
 ```
 
-Writing types explicitly is called **manifest** typing. Static checking with little or no annotation is called **type inference** (the subject of the next lesson).
+Writing types explicitly is called **manifest typing**. Static checking with little or no annotation is called **type inference** (the subject of the next lesson).
 
 ## Dynamic typing: check while running
 
@@ -109,7 +109,7 @@ Static checking cannot prove everything, so static languages keep some dynamic c
 
 - **Downcasts**: in Java, `(String) obj` is checked at run time and may throw `ClassCastException`.
 - **Array bounds**: Java, Rust and C# check indices at run time.
-- **Covariant array stores**: Java requires reference-array store compatibility checks (the JIT may eliminate checks it proves unnecessary) (lesson 4 explains why).
+- **Covariant array stores**: Java checks that each value stored into a reference array fits the array's real element type (the JIT may eliminate checks it proves unnecessary) (lesson 4 explains why).
 
 And dynamic languages can be checked statically: TypeScript adds a static checker on top of JavaScript, and mypy or Pyright check Python type hints. That hybrid is **gradual typing** (lesson 6).
 
@@ -133,7 +133,7 @@ The programmer knows `o` holds a String; the checker only knows its declared typ
 | Tooling | Declared/inferred types can guide tooling | Inference, annotations and runtime knowledge can guide tooling |
 | Speed | Depends on representation and implementation | Depends on representation and implementation |
 | Flexibility | Must satisfy checked constraints | Runtime operation rules still apply |
-| Feedback loop | REPLs and incremental checkers are possible | REPLs and compilation are possible |
+| Quick experiments | REPLs and incremental checkers are possible | REPLs and compilation are possible |
 
 What does this buy in practice? A 2017 study, *To Type or Not to Type* (Gao, Bird and Barr), examined a sample of fixed bugs in public JavaScript projects, added annotations, and found that TypeScript 2.0 and Flow 0.30 each detected about **15%**. This historical sample does not estimate every project or current checker; undetected bugs were not all established to be inherently beyond type checking.
 

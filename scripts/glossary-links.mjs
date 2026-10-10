@@ -61,7 +61,8 @@ for (const f of fs.readdirSync(dir)) {
   else if (f.endsWith('.questions.json'))
     text += JSON.parse(fs.readFileSync(p, 'utf8')).flatMap((q) => [q.prompt, q.workedExample, ...q.options.map((o) => o.explanation)]).join('\n') + '\n';
 }
-text = text.replace(/```[\s\S]*?```/g, ' ').replace(/\]\([^)]*\)/g, ']');
+// Code is never linked, except a whole inline span that is exactly a term; skip code spans entirely here.
+text = text.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`]*`/g, ' ').replace(/\]\([^)]*\)/g, ']');
 
 const counts = new Map();
 for (const m of text.matchAll(re)) {

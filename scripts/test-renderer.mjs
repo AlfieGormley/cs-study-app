@@ -39,3 +39,9 @@ test('text diagrams with Unicode arrows and ordinary code both stay available', 
   assert.ok(html.includes('is-code'));
   assert.ok(html.includes('<code>const count = 2;</code>'));
 });
+
+test('text written on a closing fence line becomes its own paragraph', () => {
+  const html = render('```python\nx = 1\n``` Then this shows.\n\nNext.');
+  assert.ok(html.includes('<p>Then this shows.</p>'));
+  assert.ok(html.includes('<p>Next.</p>'));
+});

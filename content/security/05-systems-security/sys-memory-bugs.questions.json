@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "The required capacity is 10 + 1 = 11 bytes, exceeding 8 by 3. The call is invalid; it might corrupt neighbouring state, abort or behave otherwise. Use a bounded API with valid arguments and check truncation/errors.",
+    "workedExample": "`strcpy` copies every character and then the terminating NUL (the zero byte ending a C string):\n\n```formula\nB_need = L + 1\nB_need = 10 B + 1 B = 11 B\nB_over = B_need − C\nB_over = 11 B − 8 B = 3 B\nwhere\nB_need: the destination space strcpy needs, in bytes (B)\nL: the source string's length in bytes, not counting the NUL; \"ABCDEFGHIJ\" has 10\n1: the one extra byte for the NUL\nB_over: how far the copy runs past the end of the destination, in bytes\nC: the destination's capacity; char buf[8] holds 8 B\nB: byte, 8 bits\nIn words: ten letters plus the NUL need 11 bytes, three more than the 8-byte buffer holds.\n```\n\nThe required capacity is 11 bytes, exceeding 8 by 3. The call is invalid; it might corrupt neighbouring state, abort or behave otherwise. Use a bounded API with correct arguments and check truncation/errors.",
     "link": {
       "title": "Buffer overflow — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Buffer_overflow"
@@ -37,7 +37,7 @@
     "options": [
       {
         "text": "`i <= 8`",
-        "explanation": "Classic off-by-one: this runs for i = 0..8, nine iterations, and writes `id[8]`, which is one past the end."
+        "explanation": "Classic off-by-one: this runs for i = 0..8, nine loop passes, and writes `id[8]`, which is one past the end."
       },
       {
         "text": "`i < 8`",
@@ -49,7 +49,7 @@
       },
       {
         "text": "`i < 9`",
-        "explanation": "Equivalent to `i <= 8`: nine iterations, the last writing out of bounds."
+        "explanation": "Equivalent to `i <= 8`: nine loop passes, the last writing out of bounds."
       }
     ],
     "answer": 1,
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "The required formatted length is 11. Eight output bytes hold seven characters, `hello w`, followed by NUL. Therefore the result is `11 [hello w]`. Check errors before converting the return value to an unsigned type:\n\n```c\nif (n < 0 || (size_t)n >= sizeof d) {\n    /* Handle error or truncation. */\n}\n```",
+    "workedExample": "The required formatted length is 11. `snprintf` keeps one byte of the capacity for the NUL:\n\n```formula\nK = C − 1 = 8 − 1 = 7\nn = 11\nn ≥ C\nwhere\nK: how many characters actually fit before the NUL\nC: the buffer's capacity, sizeof d, 8 bytes\n1: the byte reserved for the terminating NUL\nn: the value snprintf returns: the length of the full untruncated output, here 11 for \"hello world\"\n≥: greater than or equal to\nIn words: only 7 characters fit in an 8-byte buffer, and because the returned 11 is at least the capacity 8, the output was truncated.\n```\n\nEight output bytes hold seven characters, `hello w`, followed by NUL. Therefore the result is `11 [hello w]`. Check errors before converting the return value to an unsigned type:\n\n```c\nif (n < 0 || (size_t)n >= sizeof d) {\n    /* Handle error or truncation. */\n}\n```",
     "link": {
       "title": "snprintf — cppreference",
       "url": "https://en.cppreference.com/w/c/io/fprintf"
@@ -139,7 +139,7 @@
       },
       {
         "text": "`strncpy` pads with spaces, corrupting the string",
-        "explanation": "It pads with NUL bytes, and only when the source is *shorter* than `n`."
+        "explanation": "It fills the rest with NUL bytes, and only when the source is *shorter* than `n`."
       }
     ],
     "answer": 2,
@@ -157,7 +157,7 @@
     "options": [
       {
         "text": "16 bytes requested",
-        "explanation": "The mathematical product is 0x100000010. Reduced modulo 2^32 it is 0x10, or 16; attempting all intended item writes would exceed a successful allocation."
+        "explanation": "The mathematical product is 0x100000010. Keeping only its lowest 32 bits leaves 0x10, or 16; attempting all intended item writes would exceed a successful allocation."
       },
       {
         "text": "About 4 GB",
@@ -169,11 +169,11 @@
       },
       {
         "text": "The multiplication traps and the program aborts",
-        "explanation": "Unsigned arithmetic in C wraps silently modulo 2^32; there is no trap unless you add a check or a sanitizer."
+        "explanation": "Unsigned arithmetic in C wraps silently, keeping only the lowest 32 bits of the result; there is no trap unless you add a check or build with sanitizers."
       }
     ],
     "answer": 0,
-    "workedExample": "0x10000001 * 16 = 0x100000010; modulo 2^32 gives 16. Check `count > SIZE_MAX / sizeof(item)` before multiplication, apply an application limit, and handle allocation failure. On implementations such as glibc, `calloc(count, sizeof(item))` rejects multiplication overflow, but its return must still be checked.",
+    "workedExample": "A 32-bit unsigned type keeps only the lowest 32 bits of a result:\n\n```formula\nS = (n × s) mod 2^32\nn × s = 0x10000001 × 16\nn × s = 0x100000010\nn × s = 4,294,967,312\nS = 4,294,967,312 − 4,294,967,296\nS = 16 B\nwhere\nS: the byte count passed to malloc, in bytes (B)\nn: count, 0x10000001 = 268,435,457\ns: the item size, 16 B\nmod: modulo, the remainder after dividing; a value mod 2^32 keeps its lowest 32 bits\n2^32: 2 multiplied by itself 32 times, 4,294,967,296: how many values 32 bits can hold\n0x10000001: a hexadecimal (base-16) number, marked by the 0x prefix\nB: byte, 8 bits\nIn words: the true product needs 33 bits; dropping the top bit (subtracting 2^32 once) leaves a request for only 16 bytes.\n```\n\nCheck `count > SIZE_MAX / sizeof(item)` before multiplication, apply an application limit, and handle allocation failure. On implementations such as glibc, `calloc(count, sizeof(item))` rejects multiplication overflow, but its return must still be checked.",
     "link": {
       "title": "Integer overflow — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Integer_overflow"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "The request contains a type, two-byte payload length, payload and at least 16 padding bytes. Vulnerable code trusted the claimed length in a copy. A robust parser first checks that the header is present, parses the length, and then checks payload plus minimum padding against the remaining record. The review does not assume every malformed maximum-length request yields an identical complete reply.",
+    "workedExample": "The request contains a type, two-byte payload length, payload and at least 16 bytes of random padding. Vulnerable code trusted the claimed length in a copy. A robust parser first checks that the header is present, parses the length, and then checks payload plus minimum padding against the remaining record:\n\n```formula\n1 + 2 + L + 16 ≤ R\nL ≤ R − 19\nwhere\n1: the one-byte message type\n2: the two-byte payload-length field\nL: the payload length the request claims, in bytes\n16: the minimum padding RFC 6520 requires, in bytes\nR: the number of heartbeat-message bytes actually received\n≤: less than or equal to\nIn words: the claimed payload may be at most the received size minus the 19 bytes of header and minimum padding; anything larger must be discarded.\n```\n\nWith 40 bytes received, a claim above 21 is rejected. A two-byte field can claim up to 65,535 bytes, which is where the roughly 64 KB disclosure limit comes from. The review does not assume every malformed maximum-length request yields an identical complete reply.",
     "link": {
       "title": "The Heartbleed Bug",
       "url": "https://heartbleed.com/"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "A possible sequence is allocate X, free X, reuse X for request bytes, then access X through a stale alias. Prevent it through ownership and lifetime discipline. Nulling one pointer does not invalidate all aliases. ASan can detect accesses while freed storage remains poisoned, but may miss accesses after that address has been reused for a live allocation.",
+    "workedExample": "A possible sequence is allocate X, free X, X's storage is reused for request bytes, then access X through a stale alias. Prevent it through ownership and lifetime discipline. Nulling one pointer does not invalidate all aliases. ASan can detect accesses while freed storage remains poisoned, but may miss accesses after that address has been reused for a live allocation.",
     "link": {
       "title": "CWE-416: Use After Free — MITRE",
       "url": "https://cwe.mitre.org/data/definitions/416.html"
@@ -289,7 +289,7 @@
       },
       {
         "text": "Running the fuzzer and tests with AddressSanitizer enabled",
-        "explanation": "ASan detects many invalid accesses on executed instrumented paths. Instrumentation gaps, same-object overwrites and reused live storage can escape detection."
+        "explanation": "ASan detects many invalid accesses on executed instrumented paths. Instrumentation gaps, same-object overwrites and reused live storage can go undetected."
       },
       {
         "text": "Testing only with a corpus of valid sample images",
@@ -301,7 +301,7 @@
       },
       {
         "text": "Joining OSS-Fuzz or running fuzzing continuously in CI",
-        "explanation": "Continuous fuzzing can expose newly introduced failures within its input and instrumentation coverage. OSS-Fuzz has project eligibility requirements."
+        "explanation": "Continuous fuzzing can expose newly introduced failures within the inputs it reaches and the code it instruments. OSS-Fuzz has project eligibility requirements."
       }
     ],
     "answer": [
@@ -309,7 +309,7 @@
       1,
       4
     ],
-    "workedExample": "Combine valid regression cases, malformed-input fuzzing, sanitizer-enabled runs and continuous retesting. Results depend on exercised paths and detector coverage. Optimisation alone is not a bug-finding strategy, and a clean run does not prove safety.",
+    "workedExample": "Combine valid regression cases, malformed-input fuzzing, sanitizer-enabled runs and continuous retesting. Results depend on the paths exercised and what the detectors check. Optimisation alone is not a bug-finding strategy, and a clean run does not prove safety.",
     "link": {
       "title": "OSS-Fuzz — Google",
       "url": "https://google.github.io/oss-fuzz/"
@@ -319,11 +319,11 @@
     "id": "sys-memory-bugs-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A driver copies this raw struct across a trust boundary. Assume an ABI where `value` is at offset 8 and the struct occupies 16 bytes. What risk remains after assigning both fields?\n\n```c\nstruct info {\n    uint8_t  flag;\n    uint64_t value;\n};\nstruct info r;\nr.flag = 1;\nr.value = v;\ncopy_to_user(u, &r, sizeof r);\n```",
+    "prompt": "A kernel driver copies this raw struct across a trust boundary. Assume an ABI where `value` is at offset 8 and the struct occupies 16 bytes. What risk remains after assigning both fields?\n\n```c\nstruct info {\n    uint8_t  flag;\n    uint64_t value;\n};\nstruct info r;\nr.flag = 1;\nr.value = v;\ncopy_to_user(u, &r, sizeof r);\n```",
     "options": [
       {
         "text": "None; both fields are initialised",
-        "explanation": "The members are assigned, but that does not establish safe portable contents for the padding bytes."
+        "explanation": "The members are assigned, but that does not establish safe portable contents for the struct padding."
       },
       {
         "text": "`sizeof r` is 9, so the copy is too short",
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Given the stated layout, flag uses byte 0, padding occupies bytes 1–7, and value uses bytes 8–15. Do not transmit the padding. Encode the two named fields into an explicit wire format with defined endianness. `{0}` or an earlier `memset` is not a portable guarantee that padding stays zero after later member stores.",
+    "workedExample": "Given the stated layout, flag uses byte 0, padding occupies bytes 1–7, and value uses bytes 8–15:\n\n```formula\nP = o_v − s_f = 8 B − 1 B = 7 B\nS = o_v + s_v = 8 B + 8 B = 16 B\nwhere\nP: the number of padding bytes between flag and value\no_v: the offset of value from the struct's start; 8 B under the stated ABI, a multiple of 8 so the uint64_t is aligned\ns_f: the size of flag, a uint8_t: 1 B\nS: the whole struct's size, sizeof r\ns_v: the size of value, a uint64_t: 8 B\nB: byte, 8 bits\nIn words: the compiler leaves a 7-byte gap after the 1-byte flag so value starts at offset 8, making the struct 16 bytes, not 9.\n```\n\nDo not transmit the padding. Encode the two named fields into an explicit wire format with defined endianness. `{0}` or an earlier `memset` is not a portable guarantee that padding stays zero after later member stores.",
     "link": {
       "title": "CWE-200: Exposure of Sensitive Information — MITRE",
       "url": "https://cwe.mitre.org/data/definitions/200.html"

@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "The injected instructions run with the process's privileges",
-        "explanation": "This is what happened before NX. With NX the stack is not executable, so the CPU refuses to fetch instructions from it."
+        "explanation": "This was the outcome before NX. With NX the stack is not executable, so the CPU refuses to fetch instructions from it."
       },
       {
         "text": "Instruction fetch from that page faults; normal OS handling may terminate the process",
@@ -15,7 +15,7 @@
       },
       {
         "text": "ASLR moves the bytes elsewhere so they run safely",
-        "explanation": "ASLR randomises where regions are loaded; it does not relocate or sanitise data at run time."
+        "explanation": "ASLR randomises where regions are loaded; it does not relocate or alter data at run time."
       },
       {
         "text": "The canary check prevents the return entirely",
@@ -123,7 +123,7 @@
     "id": "sys-mitigations-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A teaching model has 256 equally likely library bases (eight bits of entropy). Forked workers keep the same unknown base after crashes. Each wrong guess crashes a worker. Trying each candidate at most once, approximately how many attempts are needed on average?",
+    "prompt": "A teaching model has 256 equally likely library bases (eight bits of entropy). Forked workers keep the same unknown base after crashes. Each wrong guess crashes a worker. Trying each possible base only once, approximately how many attempts are needed on average?",
     "options": [
       {
         "text": "About 8",
@@ -131,11 +131,11 @@
       },
       {
         "text": "About 128",
-        "explanation": "For 256 equally likely fixed bases, trying each candidate once gives expected position (256 + 1)/2 = 128.5, approximately 128. Elapsed time is not specified."
+        "explanation": "For 256 equally likely fixed bases, trying each base once gives expected position (256 + 1)/2 = 128.5, approximately 128. Elapsed time is not specified."
       },
       {
         "text": "About 268 million",
-        "explanation": "That is about 2^28, the size of a hypothetical 28-bit search space, not this eight-bit model."
+        "explanation": "That is the size of a hypothetical 28-bit search space (268,435,456 values), not this eight-bit model."
       },
       {
         "text": "It cannot be brute-forced because the base changes after each crash",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "There are 2^8 = 256 equiprobable candidates. For a fixed base and distinct guesses, the successful position is uniform from 1 to 256; its mean is 128.5. Independent uniform rerandomisation instead gives a geometric mean of 256 attempts. Request rate, restart costs and defences determine elapsed time, which is not given.",
+    "workedExample": "For a fixed base and distinct guesses, the successful position is equally likely to be any of 1 to 256, so the average is the midpoint:\n\n```formula\nN = 2^b = 2^8 = 256\nE_fixed = (N + 1) / 2\nE_fixed = (256 + 1) / 2 = 128.5\nwhere\nN: the number of equally likely bases\nb: the bits of entropy, 8 here\n2^b: 2 multiplied by itself b times\nE_fixed: the expected (average) number of attempts when the base stays fixed and no base is tried twice\n1: added because positions run from 1 to N, whose average is (1 + N) / 2\nIn words: 8 random bits give 256 possible bases, and working through them finds the right one about halfway, after 128.5 attempts on average.\n```\n\nIndependent uniform rerandomisation instead gives a fresh 1-in-256 chance each time. The number of tries then follows a geometric distribution, whose mean is 256 attempts. Request rate, restart costs and defences determine elapsed time, which is not given.",
     "link": {
       "title": "Address space layout randomization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Address_space_layout_randomization"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "For the known build and offset, `base = leaked_pointer - offset`. Other locations in that same mapping follow from their known offsets. A separate corruption flaw may make use of those addresses. The leak does not itself provide a write or guarantee a complete exploit.",
+    "workedExample": "For the known build and offset:\n\n```formula\nA_base = P − o_P\nA_T = A_base + o_T\nwhere\nA_base: the base address where the libc mapping starts\nP: the leaked pointer value, an address inside libc\no_P: the known offset of the leaked pointer's target from the start of that libc build\nA_T: the address of another target in the same libc mapping\no_T: that target's known offset from the start of libc\nIn words: subtract the leaked item's known offset to get the library's base, then add any other known offset to locate it.\n```\n\nFor example, a leaked 0x7f12345a1b20 with known offset 0x2db20 gives base 0x7f1234574000 (illustrative values). ASLR moved the whole library, not the layout inside it. A separate corruption flaw may make use of those addresses. The leak does not itself provide a write or guarantee a complete exploit.",
     "link": {
       "title": "Address space layout randomization — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Address_space_layout_randomization"
@@ -183,7 +183,7 @@
     "id": "sys-mitigations-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "With a compatible GCC/glibc toolchain, a team adds `-D_FORTIFY_SOURCE=3` to a debug build using `-O0`. Why are glibc’s fortified wrappers not enabled?",
+    "prompt": "With a compatible GCC/glibc toolchain, a team adds `-D_FORTIFY_SOURCE=3` to an unoptimised build using `-O0`. Why are glibc’s fortified wrappers not enabled?",
     "options": [
       {
         "text": "FORTIFY only checks heap buffers",
@@ -203,7 +203,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "`_FORTIFY_SOURCE` works through header magic: when the compiler can calculate the destination size (with `__builtin_object_size` or, at level 3, `__builtin_dynamic_object_size`), the call becomes `__memcpy_chk(dst, src, n, dst_size)`, which aborts if `n > dst_size`. That size analysis relies on the optimiser. At `-O0`, glibc does not enable the fortified wrappers (and recent versions warn). Run fortified checks in `-O2` builds, and use ASan in debug builds.",
+    "workedExample": "`_FORTIFY_SOURCE` works through header magic: when the compiler can calculate the destination size (with `__builtin_object_size` or, at level 3, `__builtin_dynamic_object_size`), the call becomes `__memcpy_chk(dst, src, n, dst_size)`, which aborts if `n > dst_size`. That size analysis relies on the optimiser. At `-O0`, glibc does not enable the fortified wrappers (and recent versions warn). Run fortified checks in `-O2` builds, and use ASan in unoptimised test builds.",
     "link": {
       "title": "Compiler Options Hardening Guide — OpenSSF",
       "url": "https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html"
@@ -225,11 +225,11 @@
       },
       {
         "text": "Eager binding can increase work at load time relative to lazy binding",
-        "explanation": "Work that lazy binding would defer is done earlier. Actual timing depends on the program and workload."
+        "explanation": "Work that lazy binding would defer is done earlier. Actual timing depends on the program and how it is used."
       },
       {
         "text": "It prevents buffer overflows on the stack",
-        "explanation": "RELRO protects one specific table of pointers; it does nothing about stack overflows."
+        "explanation": "RELRO protects one specific table of pointers; it does nothing about stack buffer overflows."
       }
     ],
     "answer": [
@@ -247,7 +247,7 @@
     "id": "sys-mitigations-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "An attacker has bypassed ASLR with a leak and uses a stack overflow (with the canary also leaked) to chain together snippets of existing libc code, each ending in `ret`. Which mitigation is designed to stop exactly this?",
+    "prompt": "An attacker has bypassed ASLR with a leak and uses a stack buffer overflow (with the canary also leaked) to chain together snippets of existing libc code, each ending in `ret`. Which mitigation is designed to stop exactly this?",
     "options": [
       {
         "text": "DEP/NX",
@@ -255,7 +255,7 @@
       },
       {
         "text": "A hardware shadow stack (for example Intel CET)",
-        "explanation": "Correct. Each `ret` compares the return address on the normal stack with the protected copy on the shadow stack. The overwritten addresses don't match, so the first hijacked return faults."
+        "explanation": "Correct. Each `ret` compares the return address on the ordinary call stack with the protected copy on the shadow stack. The overwritten addresses don't match, so the first hijacked return faults."
       },
       {
         "text": "Full RELRO",
@@ -267,7 +267,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. The technique described is return-oriented programming: abusing `ret` instructions so that overwritten return addresses chain existing code snippets.\n2. Its weak point is that it relies on *returns going somewhere other than where they were called from*.\n3. A shadow stack stores a copy of each return address in memory that ordinary writes cannot modify. On `ret`, the CPU checks both copies match.\n4. The first faked return fails the check. Forward-edge CFI (IBT, CFG) complements this for indirect calls and jumps.",
+    "workedExample": "1. The attack described is return-oriented programming: abusing `ret` instructions so that overwritten return addresses chain existing code snippets.\n2. Its weak point is that it relies on *returns going somewhere other than where they were called from*.\n3. A shadow stack stores a copy of each return address in memory that ordinary writes cannot modify. On `ret`, the CPU checks both copies match.\n4. The first faked return fails the check. Forward-edge CFI (IBT, CFG) complements this for indirect calls and jumps.",
     "link": {
       "title": "Return-oriented programming — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Return-oriented_programming"
@@ -297,7 +297,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Four bits represent 16 tags. Under the specified independent uniform model, one matches the stale tag, so P(match) = 1/16. Real allocator policies can exclude values or retag differently; unchecked accesses and same-granule overflows also affect protection. A mismatch report is immediate only in synchronous mode; asynchronous mode may report later.",
+    "workedExample": "Under the specified independent uniform model, exactly one of the possible tags matches the stale one:\n\n```formula\nT = 2^4 = 16\nP_match = 1 / T\nP_match = 1 / 16 = 6.25%\nwhere\nT: the number of distinct tag values\n2^4: 2 multiplied by itself 4 times, because a tag is 4 bits\nP_match: the probability that the new tag equals the stale pointer's tag, so the comparison does not catch the access\n%: per cent, parts per hundred\nIn words: one tag out of 16 equally likely tags matches, a 1-in-16 (6.25%) chance per comparison.\n```\n\nReal allocator policies can exclude values or retag differently; unchecked accesses and same-granule overflows also affect protection. A mismatch report is immediate only in synchronous mode; asynchronous mode may report later.",
     "link": {
       "title": "Memory Tagging Extension — Android",
       "url": "https://source.android.com/docs/security/test/memory-safety/arm-mte"
@@ -335,7 +335,7 @@
       1,
       2
     ],
-    "workedExample": "CFG, IBT/BTI and Clang forward-edge CFI constrain covered indirect transfers. A shadow stack checks returns against protected copies. A canary detects some stack corruption on protected exits and should not be treated as a complete return-integrity scheme. Enforcement and coverage must be enabled.",
+    "workedExample": "CFG, IBT/BTI and Clang forward-edge CFI constrain covered indirect transfers. A shadow stack checks returns against protected copies. A canary detects some stack corruption on protected exits and is not a complete return-integrity scheme. Enforcement must be enabled and must cover the code in question.",
     "link": {
       "title": "Control-flow integrity — Clang documentation",
       "url": "https://clang.llvm.org/docs/ControlFlowIntegrity.html"

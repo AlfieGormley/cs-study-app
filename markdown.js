@@ -91,7 +91,9 @@ export function render(md, options = {}) {
       const body = [];
       i++;
       while (i < lines.length && !/^\s*```/.test(lines[i])) body.push(lines[i++]);
-      i++;
+      // Text written on the closing fence line ("``` Then…") is a new paragraph, not something to drop.
+      const after = i < lines.length ? lines[i].replace(/^\s*```/, '').trim() : '';
+      if (after) lines[i] = after; else i++;
       out += language === 'formula'
         ? renderFormula(body.join('\n'), (t) => inline(t, options))
         : renderExample(body.join('\n'), language, options);

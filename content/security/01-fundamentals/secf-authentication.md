@@ -36,7 +36,7 @@ Password reuse can permit account takeover without cracking the target service's
 
 ### Measuring strength: entropy
 
-Password strength is measured in **bits of entropy**. Each bit doubles the number of guesses an attacker might need, so 52 bits means 2 multiplied by itself 52 times: about 4.5 × 10^15 equally likely possibilities (10^15 is 1 followed by 15 zeros, a thousand million million). For a password chosen **uniformly at random** (every possibility equally likely), the entropy is:
+Password strength is measured in **bits of entropy**. Each bit doubles the number of guesses an attacker might need, so 52 bits means 52 copies of 2 multiplied together: about 4.5 × 10^15 equally likely possibilities (10^15 is 1 followed by 15 zeros, a thousand million million). For a password chosen **uniformly at random** (every possibility equally likely), the entropy is:
 
 ```formula
 H = log_2(N^L) = L × log_2(N)
@@ -44,7 +44,7 @@ where
 H: the password's entropy, in bits: an attacker trying every possibility needs up to 2^H guesses
 N: the number of choices for each symbol: 94 non-space printable ASCII characters, 7,776 words in a Diceware list, or 10 digits in a PIN
 L: the length: how many symbols (characters or words) are chosen
-N^L: N multiplied by itself L times: the total number of possible passwords
+N^L: L copies of N multiplied together: the total number of possible passwords
 log_2: the logarithm to base 2: log_2(x) is the power you must raise 2 to in order to get x, so log_2(8) = 3 and log_2(1024) = 10
 In words: entropy in bits is the number of times you would have to double 1 to reach the number of possible passwords, and each extra random symbol adds the same number of bits again.
 ```
@@ -65,7 +65,7 @@ bits: the unit of entropy; one bit is one doubling of the number of possibilitie
 In words: eight random printable characters and four random Diceware words are about equally strong, at roughly 52 bits each.
 ```
 
-The same calculation for each scheme (94^8 means 94 multiplied by itself 8 times):
+The same calculation for each scheme (94^8 means 8 copies of 94 multiplied together):
 
 | Password scheme | Possibilities | Bits |
 |---|---|---|

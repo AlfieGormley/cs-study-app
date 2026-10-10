@@ -83,7 +83,7 @@ A client given a leaf and some intermediates must **build a path** to a trusted 
 
 1. Each certificate's signature verifies with the next one's public key.
 2. The certificates in the path are within their validity windows. A trust anchor is an input to validation, not necessarily processed as another path certificate; root-certificate expiry handling varies.
-3. Intermediate issuers are authorized CAs; Basic Constraints, applicable Key Usage, path length, name constraints and unrecognized critical extensions are checked.
+3. Intermediate issuers are authorized CAs; Basic Constraints, applicable Key Usage, path-length constraints, name constraints and unrecognized critical extensions are checked.
 4. The leaf's SAN matches the hostname, and its EKU allows `serverAuth`.
 5. Apply the client's revocation and browser CT policies. Coverage, freshness and failure handling vary; certificate-path validation alone does not establish either.
 

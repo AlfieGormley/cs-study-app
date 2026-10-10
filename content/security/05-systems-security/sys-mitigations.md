@@ -51,9 +51,9 @@ b: the number of unpredictable bits in the canary
 8 × 8: the canary's 8 bytes of 8 bits each, one 64-bit word on x86-64
 8: subtracted for the 8 bits of the byte glibc sets to zero, which an attacker already knows
 N: the number of equally likely canary values
-2^b: 2 multiplied by itself b times; each random bit doubles the number of possible values
+2^b: b copies of 2 multiplied together; each random bit doubles the number of possible values
 ≈: approximately equal to
-10^16: 10 multiplied by itself 16 times, ten thousand million million
+10^16: 16 copies of 10 multiplied together, ten thousand million million
 p: the chance that one blind guess of the whole canary is right
 In words: with 56 random bits there are about 72 thousand million million possible canaries, so one blind guess essentially never succeeds.
 ```
@@ -103,7 +103,7 @@ N = 2^28 = 268,435,456
 where
 N: the number of equally likely positions (base addresses) the mapping can have
 b: the bits of entropy: how many independent, uniformly random bits choose the position; 8 and 28 here
-2^b: 2 multiplied by itself b times
+2^b: b copies of 2 multiplied together
 In words: with 8 random bits a mapping has 256 possible positions; with 28 bits it has over 268 million.
 ```
 
@@ -211,7 +211,7 @@ P_match = 1 / T
 P_match = 1 / 16 = 0.0625 = 6.25%
 where
 T: the number of distinct tag values
-2^4: 2 multiplied by itself 4 times, because each tag is 4 bits
+2^4: 4 copies of 2 multiplied together, because each tag is 4 bits
 P_match: the probability that the new tag happens to equal the stale pointer's tag, so the bad access is not caught
 %: per cent, parts per hundred
 In words: with 16 equally likely tags, a stale pointer's tag still matches about one time in 16, roughly 6%.

@@ -40,7 +40,7 @@ The paper's key insight was **intelligence-driven defence**: map what you know a
 
 The kill chain was designed around malware delivered to a perimeter. It fits less well when:
 
-- the attacker uses **valid credentials** (phished or bought) and never installs malware;
+- the attacker uses **valid accounts** (phished or bought credentials) and never installs malware;
 - the attack is an **insider**;
 - the target is **cloud** infrastructure, where "installation" may mean creating an access key;
 - the attack loops (privilege escalation and lateral movement repeat many times inside the network).

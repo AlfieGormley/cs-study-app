@@ -48,7 +48,7 @@ Q_Grover ≈ √(N_keys) = 2^(k/2)
 where
 N_keys: the number of possible keys (the keyspace)
 k: the key length in bits: 128, 192 or 256 for AES
-2^k: 2 multiplied by itself k times, because each extra bit doubles the number of possible keys
+2^k: k copies of 2 multiplied together, because each extra bit doubles the number of possible keys
 T_avg: the average number of keys a classical brute-force search tries before hitting the right one (half the keyspace)
 Q_Grover: roughly how many queries Grover's algorithm, an idealised quantum search, would need: on the order of the square root of the keyspace
 √: square root: √(x) is the number that multiplied by itself gives x

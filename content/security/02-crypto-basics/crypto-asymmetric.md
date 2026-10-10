@@ -111,7 +111,7 @@ m: the message, encoded as a whole number; here 65 (the ASCII code for the lette
 n: the public modulus, 3233
 e: the public exponent, 17
 c: the ciphertext, a whole number from 0 to n − 1
-m^e: m multiplied by itself e times
+m^e: e copies of m multiplied together
 mod: "modulo": x mod n is the remainder left after dividing x by n
 ≤: is less than or equal to
 <: is less than
@@ -130,7 +130,7 @@ c: the ciphertext, 2790
 d: the private exponent, 2753, known only to the key owner
 n: the modulus, 3233
 m: the recovered message
-c^d: c multiplied by itself d times (computed step by step with remainders, never as one giant number)
+c^d: d copies of c multiplied together (computed step by step with remainders, never as one giant number)
 mod: "modulo": x mod n is the remainder left after dividing x by n
 In words: only the holder of d can undo the encryption: raising 2790 to the power 2753 and keeping the remainder after dividing by 3233 gives back 65.
 ```
@@ -240,7 +240,7 @@ where
 m: the message as a whole number, for example a PIN
 n: the modulus, about 2^2048 for a 2,048-bit key
 c: the ciphertext
-m^3: m multiplied by itself three times (the public exponent here is 3)
+m^3: three copies of m multiplied together (the public exponent here is 3)
 ∛: the ordinary cube root: ∛(c) is the number whose cube is c
 mod: "modulo": the remainder after dividing by n
 <: is less than

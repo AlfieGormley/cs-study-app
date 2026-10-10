@@ -38,7 +38,7 @@ n: the digest length in bits: 256 for SHA-256, 160 for SHA-1, 128 for MD5
 W_pre: the work to find a preimage: any message whose digest equals a given h, counted in hash computations
 W_2nd: the work to find a second preimage: a different message with the same digest as a given one
 W_coll: the work to find a collision: any two different messages with equal digests
-2^n: 2 multiplied by itself n times, which is the number of possible digests
+2^n: n copies of 2 multiplied together, which is the number of possible digests
 ≈: approximately equal to
 In words: hitting one particular digest takes about 2^n tries, but finding any two inputs that clash takes only about 2^(n/2), its square root.
 ```

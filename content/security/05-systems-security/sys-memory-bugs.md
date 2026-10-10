@@ -139,7 +139,7 @@ N_max = 2^16 − 1
 N_max = 65,536 − 1 = 65,535 B
 where
 N_max: the largest payload length the heartbeat's length field can claim, in bytes (B)
-2^16: 2 multiplied by itself 16 times, 65,536: the number of different values 16 bits can hold
+2^16: 16 copies of 2 multiplied together, 65,536: the number of different values 16 bits can hold
 1: subtracted because the values start at 0, so the largest is one less than the count
 B: byte, 8 bits
 In words: a 16-bit length field can claim at most 65,535 bytes, just under 64 KiB (64 × 1,024 bytes), so one malicious heartbeat could leak up to about 64 KB.
@@ -198,7 +198,7 @@ S: the byte count actually passed to malloc, in bytes (B)
 n: the item count read from the file header (count in the code); here 0x10000001, which is 268,435,457
 s: the size of one item in bytes, sizeof(item); 16 here
 mod: modulo, the remainder after dividing; a value mod 2^32 keeps only its lowest 32 bits
-2^32: 2 multiplied by itself 32 times, 4,294,967,296: the number of different values a 32-bit unsigned type can hold
+2^32: 32 copies of 2 multiplied together, 4,294,967,296: the number of different values a 32-bit unsigned type can hold
 0x10000001: a hexadecimal (base-16) number, marked by the 0x prefix; each hex digit is 4 bits
 B: byte, 8 bits
 In words: the true product needs 33 bits, so the 32-bit size type drops the top bit (subtracting 2^32 once), and 268,435,457 items of 16 bytes become a request for just 16 bytes.
@@ -218,7 +218,7 @@ where
 n: the item count (count in the code)
 s: the size of one item in bytes, sizeof(item); 16 here
 M: SIZE_MAX, the largest value size_t can hold; 2^32 − 1 for a 32-bit size_t
-2^32: 2 multiplied by itself 32 times, 4,294,967,296
+2^32: 32 copies of 2 multiplied together, 4,294,967,296
 ⌊ ⌋: floor: round down to a whole number, which is what C's integer division does for non-negative values
 ≤: less than or equal to
 In words: a count is safe only if it is at most SIZE_MAX divided by the item size, rounded down; with 16-byte items that is 268,435,455, so the count 268,435,457 above is rejected.

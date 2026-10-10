@@ -44,7 +44,7 @@ b: Bob's secret exponent, here 15; never sent
 A: Alice's public value, sent in the clear
 B: Bob's public value, sent in the clear
 s: the shared secret both of them compute
-g^a: g multiplied by itself a times
+g^a: a copies of g multiplied together
 mod: "modulo": x mod p is the remainder left after dividing x by p
 In words: each side raises the generator to its secret and publishes the result, then raises the other side's result to its own secret; both end up with the same number.
 ```

@@ -2,11 +2,11 @@
 id: logic-datapath-memory
 title: Datapath, SRAM vs DRAM, and a first look at Verilog
 level: advanced
-minutes: 18
+minutes: 20
 summary: How registers, an ALU and muxes combine into a processor datapath driven by control signals, how SRAM and DRAM cells store bits and why one is fast and the other dense, and how hardware is actually written today in Verilog.
 ---
 
-The previous lessons built the parts: gates, adders, muxes, decoders, flip-flops and state machines. This lesson assembles them. A processor is a **datapath** (the registers, ALU, memories and muxes that data flows through) plus a **control unit** (the logic that decides, for each instruction, which way every mux points and which storage gets written).
+The previous lessons built the parts: gates, adders, muxes, decoders, flip-flops and state machines. This lesson puts them together. A processor is a **datapath** (the registers, ALU, memories and muxes that data flows through) plus a **control unit** (the logic that decides, for each instruction, which way every mux points and which storage gets written).
 
 Then we look at two important kinds of volatile working memory, **SRAM** and **DRAM**, and finish with how engineers actually describe all this: not by drawing gates, but by writing a **hardware description language** such as Verilog.
 
@@ -30,7 +30,7 @@ read ports        v           v
                 value A    value B
 ```
 
-- In this teaching register file, reading is combinational: the register number drives the select lines of a 32-to-1 mux (5 select bits, since 2^5 = 32). The value appears as soon as the mux settles.
+- In this teaching register file, reading is combinational: the register number drives the select lines of a 32-to-1 mux (5 select bits, since five bits can name 2 × 2 × 2 × 2 × 2 = 32 registers). The value appears as soon as the mux settles.
 - **Writing** happens at the clock edge: the decoder turns `rd` into a one-hot signal, ANDed with the `RegWrite` control signal, which enables the load input of exactly one register (the "mux in front of D" trick from lesson 5).
 - x0 always reads as zero and discards writes. The implementation can return a constant rather than allocate an ordinary storage cell; merely disabling writes to an uninitialised cell would not guarantee zero.
 
@@ -80,7 +80,25 @@ The `x` for `sw` is a don't-care from lesson 3: with RegWrite = 0, whatever MemT
 
 ### Why high-performance designs pipeline
 
-In a single-cycle design the clock period must fit the **slowest** instruction. A load goes through every block: instruction memory, register read, ALU, data memory, then setup time at the register file. An `add` skips the data memory but still has to wait for the same long clock. Most of the hardware also sits idle most of the cycle: while the ALU computes, the instruction memory is doing nothing useful.
+In a single-cycle design the clock period must fit the **slowest** instruction. A load goes through every block: instruction memory, register read, ALU, data memory, then setup time at the register file. With illustrative delays (not measurements of a real chip):
+
+```formula
+T_clk ≥ t_IM + t_RF + t_ALU + t_DM + t_su
+T_clk ≥ 250 + 150 + 200 + 250 + 50 ps
+T_clk ≥ 900 ps
+where
+T_clk: the clock period, in picoseconds (ps)
+t_IM: the instruction memory read delay, here 250 ps
+t_RF: the register-file read delay, here 150 ps
+t_ALU: the ALU delay, here 200 ps
+t_DM: the data memory access delay, here 250 ps
+t_su: the setup time of the register file's write, here 50 ps
+ps: picoseconds, 10^-12 seconds
+≥: greater than or equal to
+In words: with these illustrative delays, a load needs 900 ps, so every instruction gets a 900 ps cycle, about 1.1 GHz, even though an add skips the data memory and would be finished after 650 ps. Mux, clock-to-Q and wire delays are ignored here.
+```
+
+An `add` skips the data memory but still has to wait for the same long clock. Most of the hardware also sits idle most of the cycle: while the ALU computes, the instruction memory is doing nothing useful.
 
 The fix is to put registers between the five steps so that up to five instructions can overlap in the ideal full five-stage pipeline. Stalls, flushes and hazards reduce occupancy and throughput. That is **pipelining**, the subject of module 4, and the five boxes above become its five stages.
 
@@ -152,8 +170,23 @@ That is the **1T1C** cell, far smaller than 6T SRAM, which is why DRAM is the ch
 The price is paid in behaviour:
 
 - **Reads are destructive.** Raising WL connects the capacitor to a bit line with much larger capacitance. The charge spreads out ("charge sharing"), nudging the bit line voltage up or down by a small amount. The sense amplifier detects and amplifies this, and in doing so **writes the value back** into the cells of the row.
-- **Rows, not words.** Activating a word line reads an entire row into the sense amplifiers, which act as a **row buffer**. Further reads from the same open row are much faster than opening a new one. This is why access patterns matter so much for DRAM performance (module 5).
-- **Charge leaks.** A capacitor slowly loses its charge, so every cell must be read and rewritten periodically. Refresh windows and commands depend on the device, temperature and selected refresh mode. As an illustrative schedule, 8,192 refresh operations in a 64 ms window average 7.8125 microseconds apart. Controllers must obey the part's timing and scheduling limits; affected banks cannot serve ordinary accesses during their refresh operation.
+- **Rows, not words.** Activating a word line reads an entire row into the sense amplifiers, which act as a **DRAM row buffer**. Further reads from the same open row are much faster than opening a new one. This is why access patterns matter so much for DRAM performance (module 5).
+- **Charge leaks.** A capacitor slowly loses its charge, so every cell must be read and rewritten periodically. Refresh windows and commands depend on the device, temperature and selected refresh mode. As an illustrative schedule, 8,192 refresh operations spread evenly over a 64 ms window are this far apart:
+
+```formula
+t_REFI = t_window / N_refresh
+t_REFI = 64 ms / 8192
+t_REFI = 64000 µs / 8192 = 7.8125 µs
+where
+t_REFI: the average interval between refresh commands (the name DDR datasheets use)
+t_window: the time within which every row must be refreshed, here 64 milliseconds (ms)
+N_refresh: the number of refresh commands in that window, here 8,192; each one refreshes a group of rows
+ms: milliseconds, 10^-3 seconds
+µs: microseconds, 10^-6 seconds; 1 ms = 1000 µs
+In words: 8,192 evenly spaced refreshes in 64 ms means one about every 7.8 microseconds.
+```
+
+Controllers must obey the part's timing and scheduling limits; affected banks cannot serve ordinary accesses during their refresh operation.
 
 > [!note] Evidence gap
 > A blanket DDR4/DDR5 refresh-window rule is omitted because no complete part-specific temperature/mode table was verified for that claim. Use the selected device's datasheet; the arithmetic example is not a controller specification.
@@ -250,7 +283,7 @@ Compare it with the block diagram of an FSM: the first `always` block is the sta
 
 Verilog has two assignment operators, and mixing them up is the most common beginner bug:
 
-- `<=` (**non-blocking**): a right-hand side is evaluated when its statement executes and the update is scheduled for the non-blocking-assignment region. In this race-free same-edge example, both right-hand sides read the old values. This models flip-flops, which all sample on the same edge. Use it in `always @(posedge clk)` blocks.
+- `<=` (**non-blocking assignment**): a right-hand side is evaluated when its statement executes and the update is scheduled for the non-blocking-assignment region. In this race-free same-edge example, both right-hand sides read the old values. This models flip-flops, which all sample on the same edge. Use it in `always @(posedge clk)` blocks.
 - `=` (**blocking**): updates immediately, so later lines see the new value. Use it in combinational `always @(*)` blocks.
 
 ```verilog

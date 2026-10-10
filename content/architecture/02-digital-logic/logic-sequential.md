@@ -2,11 +2,11 @@
 id: logic-sequential
 title: Latches, flip-flops and state machines
 level: intermediate
-minutes: 15
+minutes: 18
 summary: How feedback lets a circuit remember, the SR and D latches, edge-triggered flip-flops and their setup, hold and clock-to-Q timing, metastability, and how to design a finite-state machine from a state diagram to gates.
 ---
 
-Everything so far has been **combinational**: outputs depend only on current inputs. A computer also needs to **remember**: the program counter, the registers, the contents of memory. Circuits whose outputs depend on past inputs as well are **sequential**.
+Everything so far has been **combinational**: outputs depend only on current inputs. A computer also needs to **remember**: the program counter, the registers, the contents of memory. Circuits whose outputs depend on past inputs as well are **sequential circuits**.
 
 The trick that makes memory possible is **feedback**: wire a gate's output back into its own input. This lesson goes from the simplest feedback loop to the clocked flip-flops and finite-state machines that every processor is built from.
 
@@ -51,7 +51,22 @@ Each NOR's output feeds the other's input. Recall that a NOR outputs 1 only when
 
 ## The D latch
 
-The SR latch has two control inputs and a forbidden combination. The **D latch** (D for data) fixes both. It has a data input D and an enable E, and internally drives S = D·E and R = D'·E, so the ideal Boolean equations never assert both. Physical implementations still need timing constraints; propagation delays do not disappear.
+The SR latch has two control inputs and a forbidden combination. The **D latch** (D for data) fixes both. It has a data input D and an enable E, and internally drives the SR latch's inputs like this:
+
+```formula
+S = D·E
+R = D′·E
+S·R = D·D′·E = 0
+where
+S, R: the set and reset inputs of the internal SR latch
+D: the data input, 0 or 1
+E: the enable input, 0 or 1
+D′: NOT D
+·: AND: 1 only when both sides are 1
+In words: when E is 1, D = 1 sets the latch and D = 0 resets it; when E is 0 both S and R are 0, so it holds. Because D and NOT D are never both 1, S and R are never both 1.
+```
+
+So the ideal Boolean equations never assert both. Physical implementations still need timing constraints; propagation delays do not disappear.
 
 - When **E = 1**, the latch is **transparent**: Q follows D.
 - When **E = 0**, it is **opaque**: Q holds whatever D was when E fell.
@@ -116,18 +131,56 @@ These numbers set the speed of the whole chip. Consider two registers with combi
    +----------- CLK ----------+
 ```
 
-Data leaves FF1 at t_cq after an edge, takes up to t_pd to get through the logic, and must arrive t_su before the *next* edge:
+Data leaves FF1 at t_cq after an edge, takes up to t_pd to get through the logic, and must arrive t_su before the *next* edge. That gives the **setup constraint** on the clock period, and from it the fastest allowed clock:
 
+```formula
+T_clk ≥ t_{cq,max} + t_{pd,max} + t_su
+f_max = 1 / T_{clk,min}
+where
+T_clk: the clock period, the time between rising edges, in picoseconds (ps)
+T_{clk,min}: the smallest period that meets the constraint
+t_{cq,max}: the longest clock-to-Q delay of FF1: the time from the clock edge until FF1's output changes
+t_{pd,max}: the longest propagation delay through the logic between FF1 and FF2
+t_su: the setup time of FF2: how long before the edge its input must be stable
+f_max: the highest clock frequency allowed, in hertz (Hz); 1 GHz is 10^9 cycles per second
+≥: greater than or equal to
+ps: picoseconds, 10^-12 seconds
+Hz: hertz, cycles per second
+In words: one clock period must be long enough for data to leave the first flip-flop, cross the slowest logic, and settle before the second flip-flop samples it.
 ```
-T_clk >= t_cq(max) + t_pd(max) + t_su
+
+For example, with t_cq = 50 ps, t_pd = 400 ps and t_su = 30 ps:
+
+```formula
+T_clk ≥ 50 ps + 400 ps + 30 ps = 480 ps
+f_max = 1 / (480 × 10^{-12} s)
+f_max ≈ 2.08 × 10^9 Hz = 2.08 GHz
+where
+T_clk: the clock period
+f_max: the highest allowed clock frequency
+ps: picoseconds, 10^-12 seconds
+s: seconds
+Hz: hertz, cycles per second
+GHz: gigahertz, 10^9 Hz
+≥: greater than or equal to
+≈: approximately equal to
+In words: the period must be at least 480 ps, so the clock can run at about 2.08 GHz at most.
 ```
 
-With t_cq = 50 ps, t_pd = 400 ps and t_su = 30 ps, the period must be at least 480 ps, so the clock can run at about 2.08 GHz at most. The slowest such path on the chip is the **critical path**, and it sets the clock rate. (Clock skew, the difference in clock arrival time between FF1 and FF2, shifts this budget: if FF2's clock arrives earlier than FF1's, the logic has that much less time. If it arrives later, setup gets easier but hold, below, gets harder.)
+The constraint assumes an ideal clock that reaches both flip-flops at the same moment, with no jitter. The slowest such path on the chip is the **critical path**, and it sets the clock rate. (Clock skew, the difference in clock arrival time between FF1 and FF2, shifts this budget: if FF2's clock arrives earlier than FF1's, the logic has that much less time. If it arrives later, setup gets easier but hold, below, gets harder.)
 
-There is a second, sneakier constraint. The *new* value from FF1 must not reach FF2 so fast that it corrupts what FF2 is capturing on the same edge:
+There is a second, sneakier constraint. The *new* value from FF1 must never reach FF2 so fast that it corrupts what FF2 is capturing on the same edge. This is the **hold constraint**, shown here with an example path whose fastest clock-to-Q delay is 20 ps, fastest logic path 5 ps and hold time 40 ps:
 
-```
-t_cq(min) + t_pd(min) >= t_h
+```formula
+t_{cq,min} + t_{pd,min} ≥ t_h
+20 ps + 5 ps = 25 ps < 40 ps
+where
+t_{cq,min}: the shortest clock-to-Q delay of FF1
+t_{pd,min}: the shortest propagation delay through the logic (the fastest path)
+t_h: the hold time of FF2: how long after the edge its input must stay stable
+≥: greater than or equal to; <: less than
+ps: picoseconds, 10^-12 seconds
+In words: the earliest new data must never arrive before FF2's hold window has closed. In the example numbers, the new data arrives after 25 ps but FF2 needs its input steady for 40 ps, so the path fails by 15 ps.
 ```
 
 A **hold violation** cannot be fixed by slowing the clock, because the clock period does not appear in it. The fix is to add delay (buffers) to the short path. Static timing analysis tools check both constraints on every path.
@@ -155,7 +208,22 @@ A short pulse can be missed entirely; use pulse stretching or an appropriate han
 
 ## Building blocks from flip-flops
 
-- **Register**: n flip-flops sharing one clock. To make it hold its value unless `load` is asserted, put a 2-to-1 mux in front of each D: `D = load ? new : Q`. This avoids naive combinational clock gating. Proper integrated clock-gating cells or dedicated FPGA clock-enable resources can safely save power when used with their timing rules.
+- **Register**: n flip-flops sharing one clock. To make it hold its value unless `load` is asserted, put a 2-to-1 mux in front of each D:
+
+```formula
+D = L′·Q + L·D_new
+where
+D: the flip-flop's data input, sampled at the next clock edge
+Q: the flip-flop's current output (its stored value)
+L: the load signal (`load` in the text): 1 to load a new value
+L′: NOT L
+D_new: the new value to load
+·: AND: 1 only when both sides are 1
++: OR: 1 when at least one side is 1
+In words: when load is 0 the flip-flop is fed its own output and keeps its value; when load is 1 it is fed the new value. In code this is `D = load ? new : Q`.
+```
+
+This avoids naive combinational clock gating. Proper integrated clock-gating cells or dedicated FPGA clock-enable resources can safely save power when used with their timing rules.
 - **Shift register**: each flip-flop's Q feeds the next one's D; data moves one place per clock. Used for serial links and delay lines.
 - **Counter**: a register plus an incrementer, `Q <= Q + 1`. The program counter is a fancy version.
 - **Reset**: a **synchronous** reset only takes effect at a clock edge; an **asynchronous** reset acts immediately but must be released carefully (synchronously) to avoid metastability.
@@ -221,10 +289,19 @@ Q1 Q0 X | N1 N0 | Z
 
 **Step 4: minimise** with K-maps, using the don't-cares:
 
-```
-N1 = X·Q1 + X·Q0 = X·(Q1 + Q0)
-N0 = X·Q1'·Q0'
-Z  = Q1
+```formula
+N_1 = X·Q_1 + X·Q_0 = X·(Q_1 + Q_0)
+N_0 = X·Q_1′·Q_0′
+Z = Q_1
+where
+Q_1, Q_0: the current state bits (Q1 and Q0 in the table)
+N_1, N_0: the next state bits, loaded at the next clock edge (N1 and N0 in the table)
+X: the input
+Z: the output
+Q_1′, Q_0′: NOT Q_1, NOT Q_0
+·: AND: 1 only when both sides are 1
++: OR: 1 when at least one side is 1
+In words: go to S2 (N_1 = 1) when X is 1 and we were already in S1 or S2; go to S1 (N_0 = 1) when X is 1 and we were in S0; Z is simply the high state bit. Code 11 was a don't-care, which is what allows these short forms.
 ```
 
 **Step 5: build it**: two D flip-flops whose D inputs are N1 and N0, a few gates, and Z wired straight from Q1. Simulating it in Python confirms the behaviour:
@@ -247,13 +324,26 @@ A Mealy version needs only two states (S0: last input 0, S1: last input 1) with 
 
 ### State encoding
 
-Binary encoding uses the fewest flip-flops (⌈log2 n⌉ for n states). **One-hot** encoding uses one flip-flop per state, with exactly one set at a time. It needs more flip-flops but its next-state logic is usually simpler and faster, which suits FPGAs, where flip-flops are plentiful. Synthesis tools often re-encode FSMs automatically.
+Binary encoding uses the fewest flip-flops:
+
+```formula
+N_ff = ⌈log_2(n)⌉
+N_ff = ⌈log_2(10)⌉ = ⌈3.32⌉ = 4
+where
+N_ff: the number of state flip-flops with binary encoding
+n: the number of states, here 10
+log_2: logarithm base 2: the power you must raise 2 to in order to get n
+⌈ ⌉: ceiling: round up to the next whole number
+In words: k flip-flops give 2^k codes, so 10 states need 4 flip-flops (16 codes, 6 unused), because 3 flip-flops give only 8.
+```
+
+**One-hot** encoding uses one flip-flop per state, with exactly one set at a time. It needs more flip-flops but its next-state logic is usually simpler and faster, which suits FPGAs, where flip-flops are plentiful. Synthesis tools often re-encode FSMs automatically.
 
 ## Key takeaways
 - Feedback creates memory. An SR latch holds a bit; S = R = 1 is forbidden for a NOR latch.
 - A D latch is transparent while enabled. A D flip-flop (one implementation uses master and slave latches) captures D only at the clock edge, which makes synchronous design possible.
-- Setup: `T_clk >= t_cq(max) + t_pd(max) + t_su`. Hold: `t_cq(min) + t_pd(min) >= t_h`. Hold violations cannot be fixed by slowing the clock.
-- Asynchronous inputs can cause metastability. Use a validated synchroniser for single-bit levels and an appropriate protocol for pulses or coherent multi-bit transfers; no finite synchroniser eliminates all risk.
+- Setup: the clock period must cover the slowest clock-to-Q delay, the slowest logic path and the setup time. Hold: the fastest clock-to-Q delay plus the fastest logic path must be at least the hold time. Hold violations cannot be fixed by slowing the clock.
+- Asynchronous inputs can cause metastability. Use a validated synchroniser for single-bit levels and an appropriate protocol for pulses or consistent multi-bit transfers; no finite synchroniser eliminates all risk.
 - An FSM is a state register plus next-state and output logic. Moore outputs depend only on state; Mealy outputs also depend on inputs.
 
 ## Further reading

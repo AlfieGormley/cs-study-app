@@ -2,7 +2,7 @@
 id: logic-gates-cmos
 title: Logic gates and CMOS
 level: basic
-minutes: 13
+minutes: 16
 summary: The seven standard gates, why NAND and NOR are universal, and how CMOS transistors build a gate, which explains why inverting gates are cheapest and where a chip's power goes.
 ---
 
@@ -43,15 +43,20 @@ A set of gates is **functionally complete** if it can build every Boolean functi
 
 Remarkably, **NAND on its own is complete**. So is NOR. Here is how NAND replaces the others:
 
+```formula
+A′ = NAND(A, A)
+A·B = NAND(NAND(A, B), NAND(A, B))
+A + B = NAND(NAND(A, A), NAND(B, B))
+A + B = (A′·B′)′
+where
+A, B: Boolean inputs, each 0 or 1
+NAND(X, Y): the NAND gate (NOT-AND) applied to inputs X and Y: 0 only when both inputs are 1, otherwise 1
+A′, B′: NOT A, NOT B: the complement
+·: AND: 1 only when both sides are 1
++: OR: 1 when at least one side is 1
+( )′: NOT applied to the whole bracket
+In words: a NAND with both inputs tied together is an inverter; NAND followed by that inverter is AND; and NAND of the two inverted inputs is OR. The last line shows why: by De Morgan, NOT(NOT A AND NOT B) is A OR B.
 ```
-NOT A   = NAND(A, A)
-A AND B = NOT(NAND(A, B))
-        = NAND(NAND(A,B), NAND(A,B))
-A OR B  = NAND(NOT A, NOT B)
-        = NAND(NAND(A,A), NAND(B,B))
-```
-
-The OR line is De Morgan in disguise: `(A'·B')' = A + B`.
 
 XOR takes four NAND gates. Wiring diagrams of this get cluttered fast, so here it is as a **netlist**, a list of gates and the named wires between them, which is how real design tools describe circuits:
 
@@ -59,14 +64,26 @@ XOR takes four NAND gates. Wiring diagrams of this get cluttered fast, so here i
 n1 = NAND(A,  B)
 n2 = NAND(A,  n1)
 n3 = NAND(B,  n1)
-Y  = NAND(n2, n3)    # = A XOR B
+Y  = NAND(n2, n3)    # Y is A XOR B
 ```
 
-Check one row: A = 1, B = 0. Then n1 = 1, n2 = NAND(1,1) = 0, n3 = NAND(0,1) = 1, Y = NAND(0,1) = 1. Correct.
+Check one row by substituting A = 1 and B = 0, one gate at a time:
+
+```formula
+n1 = NAND(1, 0) = 1
+n2 = NAND(1, 1) = 0
+n3 = NAND(0, 1) = 1
+Y = NAND(0, 1) = 1
+where
+n1, n2, n3: the internal wires named in the netlist
+Y: the circuit's output
+NAND( , ): the NAND gate: 0 only when both inputs are 1, otherwise 1
+In words: with A = 1 and B = 0 the output is 1, which is what A XOR B should give, since the inputs differ.
+```
 
 ### Two-level logic in NAND-NAND
 
-The practical payoff: any sum of products converts directly to two layers of NAND. For `Y = AB + CD`:
+The practical payoff: any sum of products converts directly to two layers of NAND. Take the function A·B + C·D ("A and B, or C and D"):
 
 ```
 A --+------+
@@ -78,7 +95,25 @@ C --+------+   +---|      |
 D --+------+
 ```
 
-Why it works: `NAND(NAND(A,B), NAND(C,D)) = ((AB)'·(CD)')' = AB + CD` by De Morgan. Draw the AND-OR circuit, replace every gate with NAND, and the function is unchanged. The inversion bubbles cancel in pairs.
+Why it works, using De Morgan on the output gate:
+
+```formula
+Y = NAND(NAND(A, B), NAND(C, D))
+Y = ((A·B)′·(C·D)′)′
+Y = (A·B)′′ + (C·D)′′
+Y = A·B + C·D
+where
+Y: the circuit's output
+A, B, C, D: the four inputs, each 0 or 1
+NAND(X, Y): NOT (X AND Y): 0 only when both inputs are 1
+·: AND: 1 only when both sides are 1
++: OR: 1 when at least one side is 1
+( )′: NOT applied to the whole bracket
+( )′′: NOT applied twice, which cancels out
+In words: the outer NAND turns into an OR of its inverted inputs, and those inversions cancel the inner NANDs' inversions, leaving AND-OR.
+```
+
+So draw the AND-OR circuit, replace every gate with NAND, and the function is unchanged. The inversion bubbles cancel in pairs.
 
 ## Inside the gate: CMOS transistors
 
@@ -134,7 +169,19 @@ The fully complementary static CMOS gates constructed here have a **pull-up netw
 - The nMOS pair is in **series**: Y is pulled to 0 only when A **and** B are both 1.
 - The pMOS pair is in **parallel**: Y is pulled to 1 if A **or** B is 0.
 
-That is `Y = (AB)'`, NAND, in **4 transistors**. NOR is the mirror image: pMOS in series, nMOS in parallel, also 4 transistors.
+That is NOT (A AND B), the NAND function, in **4 transistors**:
+
+```formula
+Y = (A·B)′
+where
+Y: the gate's output
+A, B: the two inputs, each 0 or 1
+·: AND: 1 only when both sides are 1
+( )′: NOT applied to the whole bracket
+In words: the output is pulled to 0 only when both series nMOS transistors are on (A and B both 1); otherwise a parallel pMOS pulls it to 1.
+```
+
+NOR is the mirror image: pMOS connected in series, nMOS connected in parallel, also 4 transistors.
 
 ### Why AND costs more than NAND
 
@@ -165,7 +212,23 @@ A gate's output does not change instantly. Its output has to charge or discharge
 > [!note] Evidence gap
 > A universal modern-gate delay is omitted because no process, library cell, load or operating corner was supplied to verify the previous ten-picosecond figure.
 
-That sounds negligible until you do the arithmetic. A 3 GHz clock gives each cycle about 333 ps, and the logic between two registers must settle within it. How many gate stages fit depends on cell and wire delays and register overhead; which is why the depth of a circuit (the longest chain of gates, the **critical path**) matters as much as its size.
+That sounds negligible until you do the arithmetic. The time for one clock cycle is one divided by the clock frequency:
+
+```formula
+T = 1 / f
+T = 1 / (3 × 10^9 Hz)
+T ≈ 3.33 × 10^{-10} s ≈ 333 ps
+where
+T: the clock period, the time for one cycle, in seconds (s) or picoseconds (ps)
+f: the clock frequency, in hertz (Hz); here 3 GHz = 3 × 10^9 Hz
+Hz: hertz, cycles per second
+s: seconds
+ps: picoseconds: 1 ps = 10^{-12} s, a millionth of a millionth of a second
+≈: approximately equal to (rounded)
+In words: a 3 GHz clock ticks every third of a nanosecond, about 333 ps, and the logic between two registers must settle within that.
+```
+
+How many gate stages fit depends on cell and wire delays and register overhead, which is why the depth of a circuit (the longest chain of gates, the **critical path**) matters as much as its size.
 
 Delay grows with **fan-out**, the number of gate inputs one output drives, because each adds capacitance. Designers insert buffers to split large loads.
 
@@ -173,17 +236,43 @@ Delay grows with **fan-out**, the number of gate inputs one output drives, becau
 
 Each time a gate's output switches from 0 to 1, it charges its load capacitance from the supply; switching back to 0 dumps that charge to ground. The resulting **dynamic power** is approximately:
 
+```formula
+P_dynamic ≈ α × C × V^2 × f
+where
+P_dynamic: the dynamic (switching) power, in watts (W)
+α: alpha, the activity factor: the mean number of 0-to-1 output transitions per clock cycle, typically well below 1 because most nodes do not switch every cycle (about 0.1 is a common rough figure for data logic; a clock that rises once per cycle has α = 1). Some books instead count every transition, rising and falling, and write ½ × α × C × V^2 × f; that α is twice this one, so the power is the same
+C: the switched capacitance, in farads (F): the wires and gate inputs being charged
+V: the supply voltage, in volts (V)
+V^2: the supply voltage squared: each 0-to-1 transition draws energy C × V^2 from the supply
+f: the clock frequency, in hertz (Hz)
+W: watts, joules per second
+F: farads, the unit of capacitance
+Hz: hertz, cycles per second
+≈: approximately equal to
+In words: switching power grows in proportion to how often nodes switch, how much capacitance they drive and the clock rate, and with the square of the supply voltage.
 ```
-P_dynamic ≈ α · C · V² · f
 
-α  mean number of 0-to-1 transitions
-   per clock cycle
-C  switched capacitance
-V  supply voltage
-f  clock frequency
+For example, with illustrative numbers (not a real chip) α = 0.1, C = 1 nF of total switched capacitance, V = 1.0 V and f = 3 GHz:
+
+```formula
+P_dynamic ≈ α × C × V^2 × f
+P_dynamic ≈ 0.1 × 10^{-9} F × (1.0 V)^2
+            × 3 × 10^9 Hz
+P_dynamic ≈ 0.3 W
+where
+P_dynamic: the dynamic power, in watts (W)
+α: the activity factor, here 0.1 transitions per node per cycle
+C: the switched capacitance, here 1 nF (nanofarad) = 10^-9 F
+V: the supply voltage, here 1.0 V (V is also the symbol for volts, its unit)
+f: the clock frequency, here 3 GHz (gigahertz) = 3 × 10^9 Hz
+F: farads, the unit of capacitance
+Hz: hertz, cycles per second
+W: watts: one watt is one joule of energy per second
+≈: approximately equal to
+In words: these illustrative numbers give about 0.3 watts of switching power. Lowering the voltage to 0.8 V alone would multiply it by 0.8 × 0.8 = 0.64, saving 36 %.
 ```
 
-The V² term makes voltage reduction powerful at fixed activity and capacitance, but voltage limits and performance requirements constrain it, and why phones scale voltage and frequency together (DVFS). **Clock gating**, which stops the clock to idle blocks, attacks α.
+The V² term makes voltage reduction powerful at fixed activity and capacitance, but voltage limits and performance requirements constrain it. It is also why phones scale voltage and frequency together (DVFS). **Clock gating**, which stops the clock to idle blocks, attacks α.
 
 There is also **static (leakage) power**: real transistors are not perfect switches and leak a little current even when "off". At modern feature sizes, leakage is a significant share of total power, which is one reason the dream of ever-faster clocks ended in the mid-2000s (lesson 7 of the pipelining module covers the power wall).
 
@@ -203,7 +292,7 @@ There is also **static (leakage) power**: real transistors are not perfect switc
 - Any sum of products maps directly to two levels of NAND gates, thanks to De Morgan.
 - CMOS uses nMOS pull-down and pMOS pull-up networks that are duals; in steady state there is no path from VDD to ground.
 - In the conventional fully complementary construction, NAND2/NOR2 use four transistors; adding an inverter gives six-transistor AND2/OR2. NAND often has a favourable sizing tradeoff, depending on library and load.
-- Capacitive switching power is about α·C·V²·f when α counts 0-to-1 transitions per cycle. Short-circuit current during transitions and leakage add other power costs.
+- Capacitive switching power is proportional to the activity factor, the switched capacitance, the clock frequency and the square of the supply voltage. Short-circuit current during transitions and leakage add other power costs.
 
 ## Further reading
 - [Logic gate — Wikipedia](https://en.wikipedia.org/wiki/Logic_gate)

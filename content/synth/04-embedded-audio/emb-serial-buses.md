@@ -142,7 +142,7 @@ A three-byte register write (address, register, value) therefore uses 27 clock p
 
 There is no addressing: the controller pulls one device's **chip select** low, clocks data in both directions at once, then raises CS. Each device needs its own CS line.
 
-Outputs are push-pull (driven high and low), so SPI runs much faster than I2C: often several MHz to tens of MHz, depending on the parts and wiring.
+SPI uses push-pull outputs (driven high and low), so it runs much faster than I2C: often several MHz to tens of MHz, depending on the parts and wiring.
 
 ### Clock modes
 

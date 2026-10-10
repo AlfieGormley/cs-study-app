@@ -82,7 +82,7 @@ L = 2^16 = 65536
 where
 L: the number of distinct levels (values) a sample can take
 N: the bit depth, the number of bits per sample; here 16
-2^N: 2 multiplied by itself N times
+2^N: 2 raised to the power N (N copies of 2 multiplied together)
 In words: each bit doubles the number of levels, so 16 bits give 65,536 of them.
 ```
 

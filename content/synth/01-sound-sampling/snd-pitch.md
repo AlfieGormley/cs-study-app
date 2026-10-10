@@ -30,7 +30,7 @@ Two identities do almost all the work. The first says that adding in an exponent
 2^(a + b) = 2^a × 2^b
 2^(1 + 0.5) = 2 × 1.414 ≈ 2.83
 where
-2^a: 2 raised to the power a: 2 multiplied by itself a times (fractional and negative powers are allowed, e.g. 2^0.5 ≈ 1.414 and 2^−1 = 0.5)
+2^a: 2 raised to the power a: a copies of 2 multiplied together (fractional and negative powers are allowed, e.g. 2^0.5 ≈ 1.414 and 2^−1 = 0.5)
 a: any number, here an amount of octaves
 b: any other number, here another amount of octaves
 ≈: approximately equal to (rounded)
@@ -60,7 +60,7 @@ The practical rule follows: **do pitch arithmetic in note space, then convert to
 
 ## Semitones and equal temperament
 
-Western music divides the octave into 12 **semitones**. In **twelve-tone equal temperament** (12-TET), every semitone has the same frequency ratio. Twelve of them must make an octave (×2), so each one is the number that, multiplied by itself 12 times, gives 2:
+Western music divides the octave into 12 **semitones**. In **twelve-tone equal temperament** (12-TET), every semitone has the same frequency ratio. Twelve of them must make an octave (×2), so each one is the number that gives 2 when 12 copies of it are multiplied together:
 
 ```formula
 r = 2^(1/12)

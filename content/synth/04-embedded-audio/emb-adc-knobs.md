@@ -24,7 +24,7 @@ codes = 2^12 = 4096
 where
 codes: the number of distinct output values the ADC can produce (they run from 0 to codes − 1)
 N: the ADC's resolution, in bits; here 12
-2^N: 2 raised to the power N, that is, 2 multiplied by itself N times
+2^N: 2 raised to the power N, that is, N copies of 2 multiplied together
 In words: every extra bit doubles the number of codes, so 10 bits give 1,024, 12 bits give 4,096 and 16 bits give 65,536.
 ```
 
@@ -311,7 +311,7 @@ channels = 2^3 = 8
 where
 channels: how many inputs the select lines can address
 s: the number of digital select lines; here 3 on a CD4051
-2^s: 2 raised to the power s, 2 multiplied by itself s times
+2^s: 2 raised to the power s, s copies of 2 multiplied together
 In words: three select lines give eight combinations (000 to 111), one per input.
 ```
 

@@ -94,7 +94,7 @@ s: seconds
 In words: each MIDI bit lasts 32 µs, so a 2 µs edge uses up only about a sixteenth of it.
 ```
 
-The spec names the Sharp PC900V and HP 6N138 as acceptable and notes that other high-speed optocouplers may be. Its only recommended RD value is **280 Ω for the PC900V with a 5 V pull-up supply (VRX)**. Both named parts have open-collector outputs (the 6N138's output pin is the bare collector of its output transistor), which is why the pull-up RD is needed. The 6N138's datasheet characterises it at a 4.5 V supply, so for a 3.3 V receiver, pick an optocoupler whose datasheet supports a 3.3 V output supply and choose RD from that datasheet. Pull the output up to **your MCU's supply (3.3 V)**, never to 5 V on a pin that isn't 5 V tolerant.
+The spec names the Sharp PC900V and Hewlett-Packard 6N138 as acceptable and notes that other high-speed optocouplers may be. Its only recommended RD value is **280 Ω for the PC900V with a 5 V pull-up supply (VRX)**. Both named parts have open-collector outputs (the 6N138's output pin is the bare collector of its output transistor), which is why the pull-up RD is needed. The 6N138's datasheet characterises it at a 4.5 V supply, so for a 3.3 V receiver, pick an optocoupler whose datasheet supports a 3.3 V output supply and choose RD from that datasheet. Pull the output up to **your MCU's supply (3.3 V)**, never to 5 V on a pin that isn't 5 V tolerant.
 
 Optional additions in CA-033: ferrite beads on the signal pins, and a **0.1 µF capacitor** from MIDI IN pin 2 (or the jack shield) to ground. A capacitor's opposition to AC (its reactance) falls as frequency rises:
 

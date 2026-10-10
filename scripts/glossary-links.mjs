@@ -52,7 +52,7 @@ const look = (w) => {
   return null;
 };
 const words = [...new Set(maps.flatMap((m) => [...m.values()].map((v) => v.alias.toLowerCase())))].sort((a, b) => b.length - a.length);
-const re = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}\\p{N}_])`, 'giu');
+const re = new RegExp(`(?<![\\p{L}\\p{N}_])(?<!\\p{N}-)(?:${words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}\\p{N}_])`, 'giu');
 
 let text = '';
 for (const f of fs.readdirSync(dir)) {

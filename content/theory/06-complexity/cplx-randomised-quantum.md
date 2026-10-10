@@ -71,7 +71,7 @@ The constants 1/2 and 2/3 don't matter, thanks to amplification.
 where
 ε_k, ε_20: the probability that all k (or 20) independent runs miss a yes-instance (the error after k runs)
 k: the number of independent runs; 20 in the second line
-(1/2)^k: one-half multiplied by itself k times: each run misses with probability at most 1/2, and independent probabilities multiply
+(1/2)^k: k copies of one-half multiplied together: each run misses with probability at most 1/2, and independent probabilities multiply
 ≤: is at most
 ≈: approximately equal to
 In words: every extra run halves the chance of missing a yes-instance. Twenty runs bring it below one in a million, and no-instances are never wrongly accepted.
@@ -208,7 +208,7 @@ Miller–Rabin declares a composite "probably prime" with probability at most 1/
 where
 ε_k, ε_20: the probability that a composite number passes all k (or 20) rounds and is wrongly called prime
 k: the number of independent rounds, each with a fresh random base; 20 in the second line
-(1/4)^k: one-quarter multiplied by itself k times
+(1/4)^k: k copies of one-quarter multiplied together
 ≤: is at most
 ≈: approximately equal to
 In words: each round at least quarters the chance of being fooled, so 20 rounds leave about one chance in a trillion. A real prime is never rejected: the error is one-sided.
@@ -299,7 +299,7 @@ Pr[x] = |α_x|^2
 where
 N_amp: the number of complex amplitudes needed to describe the state
 n: the number of qubits; 50 in the second line
-2^n: 2 multiplied by itself n times: one amplitude per n-bit string
+2^n: n copies of 2 multiplied together: one amplitude per n-bit string
 x: one possible measurement outcome, an n-bit string
 α_x: alpha sub x, the amplitude (a complex number) attached to outcome x
 |α_x|: the magnitude (size) of that complex number

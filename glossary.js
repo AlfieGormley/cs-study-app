@@ -28,7 +28,7 @@ const patterns = new Map();
 const patternFor = (subject = '') => {
   if (!patterns.has(subject)) {
     const words = [...new Set(lookups(subject).flatMap((m) => [...m.values()].map((v) => v.alias.toLowerCase())))];
-    patterns.set(subject, new RegExp(`(?<![\\p{L}\\p{N}_])(?:${words.sort((a,b)=>b.length-a.length).map(regexEscape).join('|')})(?![\\p{L}\\p{N}_])`, 'giu'));
+    patterns.set(subject, new RegExp(`(?<![\\p{L}\\p{N}_])(?<!\\p{N}-)(?:${words.sort((a,b)=>b.length-a.length).map(regexEscape).join('|')})(?![\\p{L}\\p{N}_])`, 'giu'));
   }
   return patterns.get(subject);
 };

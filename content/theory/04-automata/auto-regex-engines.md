@@ -77,7 +77,7 @@ where
 n: the number of a's before the b
 g: the number of gaps between neighbouring a's
 W_split: the number of ways to cut the run of a's into non-empty consecutive pieces
-2^{n − 1}: 2 multiplied by itself n − 1 times: each gap is independently "cut" or "no cut"
+2^{n − 1}: n − 1 copies of 2 multiplied together: each gap is independently "cut" or "no cut"
 In words: every extra a adds one more gap and doubles the number of splits, so the work of trying them all doubles per character.
 ```
 

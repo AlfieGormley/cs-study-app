@@ -270,7 +270,7 @@ For example, `aa` and `aaa` are separated by `bb`: `aabb` is in L and `aaabb` is
 
 ### Lower bounds on DFA size
 
-It also gives tight lower bounds. In lesson 2, "the n-th symbol from the end is 1" needed 2ⁿ states, that is 2 multiplied by itself n times, where n is the position being checked. That was a Myhill–Nerode argument: the 2ⁿ strings of length n are pairwise distinguishable. For n = 3 that is 8 strings, `000` to `111`, and 8 states.
+It also gives tight lower bounds. In lesson 2, "the n-th symbol from the end is 1" needed 2ⁿ states, that is n copies of 2 multiplied together, where n is the position being checked. That was a Myhill–Nerode argument: the 2ⁿ strings of length n are pairwise distinguishable. For n = 3 that is 8 strings, `000` to `111`, and 8 states.
 
 ## What minimal DFAs are used for
 

@@ -280,7 +280,7 @@ where
 f(n): the function being bounded, e.g. an algorithm's step count for input size n
 g(n): the comparison function, e.g. n or n^2
 n: the input size, a natural number (0, 1, 2, …)
-O(g(n)): "Big-O of g": grows no faster than a constant multiple of g, once n is large enough
+O(g(n)): "Big-O of g": grows no faster than a constant times g, once n is large enough
 c: a positive constant multiplier, chosen by the prover
 n_0: a threshold input size, chosen by the prover; the inequality only has to hold from n_0 upwards
 ∃: there exists at least one

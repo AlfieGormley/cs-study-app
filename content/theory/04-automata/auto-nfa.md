@@ -317,7 +317,7 @@ In this comparison, m is the number of NFA states and e is the number of transit
 - An NFA can have several, zero or ε moves; it accepts if any path ends in an accepting state.
 - Simulate it by tracking the set of possible states, with ε-closure after each step. For an input of length n and an NFA with m states and e transitions, that takes O((n + 1)·(m + e)) time including initialization, or O((n + 1)·m) for bounded out-degree.
 - The subset construction turns any NFA into a DFA whose states are sets of NFA states; build only reachable sets.
-- NFAs and DFAs recognise exactly the same languages (Rabin–Scott), but the DFA can be exponentially larger: "n-th from last is 1" needs an NFA with n + 1 states but a DFA with 2ⁿ states (2 multiplied by itself n times).
+- NFAs and DFAs recognise exactly the same languages (Rabin–Scott), but the DFA can be exponentially larger: "n-th from last is 1" needs an NFA with n + 1 states but a DFA with 2ⁿ states (n copies of 2 multiplied together).
 - Practical engines can build DFA states lazily and bound cache memory, falling back when necessary; this trades some matching speed for control of memory growth.
 
 ## Further reading

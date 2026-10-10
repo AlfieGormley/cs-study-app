@@ -108,7 +108,7 @@ where
 S: the event "the page is slow" (at least one of its backend calls is slow)
 q: the chance one backend call is slow, 0.01
 N: the number of backend calls the page needs, 100
-0.99^100: the chance all 100 calls are fast, 0.99 multiplied by itself 100 times
+0.99^100: the chance all 100 calls are fast, 100 copies of 0.99 multiplied together
 P: probability
 ≈: approximately equal to
 In words: if each call is slow 1% of the time, a page that waits for 100 calls is slow about 63% of the time.

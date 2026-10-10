@@ -39,7 +39,7 @@ k: a particular number of successes we ask about, 0 to n
 P(X = k): the probability of exactly k successes
 C(n, k): "n choose k", the number of ways to pick which k of the n trials succeed
 !: factorial; n! = n × (n − 1) × … × 2 × 1, and 0! = 1
-p^k: p multiplied by itself k times, the chance that k chosen trials all succeed
+p^k: k copies of p multiplied together, the chance that k chosen trials all succeed
 (1 − p)^{n − k}: the chance that the other n − k trials all fail
 E[X]: the expected (mean) number of successes
 Var(X): the variance of the number of successes
@@ -59,7 +59,7 @@ where
 L: the number of packets lost out of 100
 P(L = 0): the probability that none is lost
 0.99: the chance one packet gets through
-0.99^100: 0.99 multiplied by itself 100 times, one factor per packet
+0.99^100: 100 copies of 0.99 multiplied together, one factor per packet
 100: C(100, 1), the number of ways to choose which single packet is lost
 0.01: the chance one packet is lost (1%)
 ≥: greater than or equal to
@@ -104,7 +104,7 @@ p: the probability one node is down, 0.01
 q: the probability one node is up, 1 − p = 0.99
 C(5, 3): "5 choose 3", the ways to pick which 3 nodes are down, which is 10
 C(5, 4): the ways to pick which 4 are down, which is 5
-p^3: p multiplied by itself 3 times; p^4 and p^5 likewise
+p^3: 3 copies of p multiplied together; p^4 and p^5 likewise
 ≥: greater than or equal to
 ≈: approximately equal to
 10^{−6}: one millionth

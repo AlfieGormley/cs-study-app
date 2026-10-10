@@ -177,7 +177,7 @@ where
 T(n): the minimum number of single-disc moves to move a tower of n discs
 n: the number of discs, 0 or more
 T(n − 1): the moves for the smaller tower, needed twice (off, then back on)
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 …: and so on
 In words: the first line is the recurrence, the second its first few values, the third a guessed closed form, and the fourth checks the guess: putting 2^{n−1} − 1 into the right-hand side gives back 2^n − 1.
 ```
@@ -196,7 +196,7 @@ where
 a(n): the nth term of the sequence
 n: the position in the sequence, a whole number
 c_1, c_2: fixed numbers (the constant coefficients), with c_2 not zero
-r: a candidate growth factor; r^n means r multiplied by itself n times
+r: a candidate growth factor; r^n means n copies of r multiplied together
 r_1, r_2: the two different roots (solutions) of the characteristic equation
 α, β: alpha and beta, constants fixed by the base cases (the first two terms)
 In words: try a pure exponential, find which growth factors fit, then mix them to match the starting values. This form of the solution needs the two roots to be distinct.

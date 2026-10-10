@@ -51,7 +51,7 @@ n: the number of cities
 !: factorial: m! = m × (m − 1) × … × 2 × 1, the number of ways to put m things in order
 T_HK: the number of basic steps Held–Karp takes
 O(...): Big O: grows at most as fast as a constant times the expression inside, for large n
-2^n: 2 multiplied by itself n times; here, the number of subsets of the n cities
+2^n: n copies of 2 multiplied together; here, the number of subsets of the n cities
 In words: brute force grows like a factorial, while Held–Karp grows like n squared times 2 to the n. Both are exponential, but the factorial is far worse.
 ```
 

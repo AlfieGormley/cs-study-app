@@ -128,7 +128,7 @@ where
 N: the number of sixes in the four rolls
 P(N = 0): the probability of no six in any of the four rolls
 5/6: the chance that one roll is not a six
-(5/6)^4: 5/6 multiplied by itself four times, once per independent roll
+(5/6)^4: four copies of 5/6 multiplied together, once per independent roll
 ≈: approximately equal to (rounded)
 ≥: greater than or equal to
 In words: four non-sixes in a row happen about 48% of the time, so at least one six happens about 52% of the time.
@@ -306,7 +306,7 @@ P(D) = q^3 = 0.01^3 = 0.000001
 1 − P(D) = 0.999999
 where
 q: the probability that one replica is down, here 0.01 (1%)
-q^3: q multiplied by itself three times, one factor per independent replica
+q^3: three copies of q multiplied together, one factor per independent replica
 D: the event "all three replicas are down at once"
 P(D): the probability of D
 In words: the cluster fails only when all three replicas are down together, about one moment in a million, giving "six nines" (99.9999%) availability.

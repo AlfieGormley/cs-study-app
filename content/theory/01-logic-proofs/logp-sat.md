@@ -16,7 +16,7 @@ N_assign = 2^100 ≈ 1.27 × 10^30
 where
 N_assign: the number of ways to give every variable the value true or false
 n: the number of propositional variables in the formula
-2^n: 2 multiplied by itself n times, because each variable doubles the count
+2^n: n copies of 2 multiplied together, because each variable doubles the count
 ≈: approximately equal to
 10^30: a 1 followed by 30 zeros
 In words: each extra variable doubles the number of assignments, so (second line) a formula with just 100 variables already has about 10^30 of them, far too many to try one by one.
@@ -75,7 +75,7 @@ n: the number of pairs
 ∧: AND
 ∨: OR
 N_clauses: the number of clauses in the equivalent CNF made by distribution
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 In words: distributing turns this into one clause for every way of picking a or b from each pair, so 2^n clauses; 30 pairs already give over a billion.
 ```
 

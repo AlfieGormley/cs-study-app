@@ -59,7 +59,7 @@ n^2: n × n, the number of cells in the n-by-n matrix (one per ordered pair)
 In words: a 3-element set has 9 possible ordered pairs, each either in or out, so 2^9 = 512 relations.
 ```
 
-The count explodes quickly: a 4-element set has 16 possible pairs and already 65,536 relations (2 multiplied by itself 16 times). The graph view is why so much of graph theory is really about relations.
+The count explodes quickly: a 4-element set has 16 possible pairs and already 65,536 relations (16 copies of 2 multiplied together). The graph view is why so much of graph theory is really about relations.
 
 ## The four key properties
 

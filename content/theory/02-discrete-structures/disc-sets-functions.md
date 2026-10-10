@@ -208,7 +208,7 @@ n: the number of elements in A
 | |: the cardinality: the number of elements in a set
 ∅: the empty set, the subset with nothing in it
 { }: the set of the things listed inside
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 In words: a set of n elements has 2^n subsets, counting both the empty set and the whole set. Three elements give 2 × 2 × 2 = 8 subsets.
 ```
 
@@ -443,7 +443,7 @@ A: the domain, with m elements
 B: the codomain, with n elements
 m: the number of elements in A (the inputs)
 n: the number of elements in B (the possible outputs)
-n^m: n multiplied by itself m times
+n^m: m copies of n multiplied together
 !: factorial: k! = k × (k − 1) × … × 2 × 1, with 0! = 1
 ≤: is less than or equal to
 >: is greater than

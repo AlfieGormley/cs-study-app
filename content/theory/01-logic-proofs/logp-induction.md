@@ -82,7 +82,7 @@ This is why a nested loop where the inner loop runs i times, for i = 1 to n, doe
 
 ### Example: the base case matters
 
-Claim: 2ⁿ > n² for all n ≥ 5 (2ⁿ is 2 multiplied by itself n times, n² is n times n).
+Claim: 2ⁿ > n² for all n ≥ 5 (2ⁿ is n copies of 2 multiplied together, n² is n times n).
 
 **Base case**, n = 5: 2⁵ = 32 and 5² = 25, and 32 > 25. ✓
 
@@ -96,7 +96,7 @@ n^2 ≥ 3 × n = 2 × n + n > 2 × n + 1
   for n ≥ 3
 where
 n: an integer with 2^n > n^2 assumed (the inductive hypothesis)
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 n^2: n multiplied by itself
 >, ≥: is greater than, is greater than or equal to
 In words: doubling 2^n keeps it above 2n², and 2n² is at least (n + 1)² whenever n ≥ 3, so 2^{n+1} > (n + 1)².

@@ -39,7 +39,7 @@ where
 N_PIN: the number of 4-digit PINs when any digit 0–9 may appear in any position, repeats allowed
 N_dist: the number of 4-digit PINs with no repeated digit: 10 choices, then 9 left, then 8, then 7
 N_pw: the number of passwords of length 1, 2 or 3 made from the 26 letters a–z
-10^4: 10 multiplied by itself 4 times (one factor of 10 per position)
+10^4: 4 copies of 10 multiplied together (one factor of 10 per position)
 26^2, 26^3: 26 × 26 and 26 × 26 × 26: the counts of 2-letter and 3-letter passwords
 In words: the PIN counts are the product rule (the second with shrinking choices); the password count is the sum rule over the three disjoint lengths, then the product rule inside each length.
 ```
@@ -83,7 +83,7 @@ n! > c^n   for all n ≥ n_0
 where
 n!: n factorial, the product of every whole number from n down to 1
 c: any fixed number greater than 1, for example 2 or 1000
-c^n: c multiplied by itself n times (exponential growth)
+c^n: n copies of c multiplied together (exponential growth)
 n_0: a threshold that depends on c; past it the inequality always holds. For c = 2, n_0 = 4 (4! = 24 > 16)
 ≥: greater than or equal to
 In words: factorial growth beats every exponential in the end, because each new factor n keeps getting bigger while c stays fixed.
@@ -142,7 +142,7 @@ C(n, k): the number of ways to choose k items from n when order doesn't matter (
 n: the number of distinct items, at least 1 for Pascal's rule
 k: the size of the subset, from 0 to n (for Pascal's rule, 1 to n − 1 so both terms make sense)
 …: and so on, through every subset size from 0 to n
-2^n: 2 multiplied by itself n times: each of the n items is either in or out
+2^n: n copies of 2 multiplied together: each of the n items is either in or out
 In words: line 1 is symmetry, line 2 is Pascal's rule, line 3 is the row sum. The last three lines check each fact with n = 5.
 ```
 
@@ -172,7 +172,7 @@ n: the power, a whole number 0 or more
 k: the number of brackets from which x is picked, running from 0 to n
 C(n, k): the number of ways to choose those k brackets ("n choose k")
 Σ: sigma, "sum of": add up the term after it for every whole number k from 0 to n
-x^k, y^{n−k}: x multiplied by itself k times, y multiplied by itself n − k times
+x^k, y^{n−k}: k copies of x multiplied together, y multiplied by itself n − k times
 In words: the coefficient of the term with k copies of x is the number of ways to choose which k brackets supply them. For n = 3 the coefficients are 1, 3, 3, 1, the fourth row of Pascal's triangle.
 ```
 
@@ -196,7 +196,7 @@ Many dynamic-programming problems ("unique paths") are this binomial coefficient
 
 ## Repetition allowed
 
-In this table, n is the number of distinct items (or kinds of item) available, at least 1, and k is how many you pick, 0 or more. nᵏ means n multiplied by itself k times.
+In this table, n is the number of distinct items (or kinds of item) available, at least 1, and k is how many you pick, 0 or more. nᵏ means k copies of n multiplied together.
 
 | Order? | Repeats? | Count |
 |---|---|---|

@@ -142,14 +142,14 @@ low + high > INT_MAX
 low + (high − low) / 2 ≤ high
 where
 INT_MAX: the largest value a 32-bit signed int can hold
-2^31: 2 multiplied by itself 31 times (one of the 32 bits holds the sign)
+2^31: 31 copies of 2 multiplied together (one of the 32 bits holds the sign)
 low, high: the search bounds, array indices with 0 ≤ low ≤ high
 In words: the second line is the overflow condition: two indices above about 1.07 billion add up to more than a 32-bit int can hold. The safe form only ever adds half the gap to low, so it never exceeds high.
 ```
 
 ## Fast exponentiation
 
-Computing xⁿ (x multiplied by itself n times) with n multiplications is slow for large n. For integer n ≥ 0, repeated squaring uses O(log(n + 1)) multiplications: a number that grows with the logarithm of n, roughly the number of binary digits of n. This is not a bit-operation bound: large-integer multiplication costs depend on operand size. The proof assumes exact arithmetic:
+Computing xⁿ (n copies of x multiplied together) with n multiplications is slow for large n. For integer n ≥ 0, repeated squaring uses O(log(n + 1)) multiplications: a number that grows with the logarithm of n, roughly the number of binary digits of n. This is not a bit-operation bound: large-integer multiplication costs depend on operand size. The proof assumes exact arithmetic:
 
 ```python
 def power(x, n):
@@ -177,7 +177,7 @@ x, n: the inputs; the function computes x^n
 result: the accumulated part of the answer, starting at 1
 base: the current base, starting at x and squared every iteration
 e: the remaining exponent, starting at n and halved (rounding down) every iteration
-base^e: base multiplied by itself e times
+base^e: e copies of base multiplied together
 In words: the first line is the invariant. The second line is the even case (base squared, e halved); the third and fourth are the odd case (result absorbs one base, then base squared and e becomes (e − 1)/2). Either way the product is unchanged.
 ```
 

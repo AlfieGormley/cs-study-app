@@ -60,7 +60,7 @@ N_rows = 2^3 = 8   for n = 3
 where
 N_rows: the number of rows in the truth table, one per combination of input values
 n: the number of propositional variables in the formula
-2^n: 2 multiplied by itself n times (2 to the power n)
+2^n: n copies of 2 multiplied together (2 to the power n)
 In words: a truth table over n variables has 2 to the power n rows, so two variables need 4 rows and three need 8.
 ```
 
@@ -294,7 +294,7 @@ N_rows = 2^60 ≈ 1.15 × 10^18   for n = 60
 where
 N_rows: the number of rows (assignments) to check
 n: the number of propositional variables
-2^n: 2 multiplied by itself n times
+2^n: n copies of 2 multiplied together
 ≈: approximately equal to
 10^18: a 1 followed by 18 zeros (a billion billion)
 In words: 20 variables is about a million rows, which takes a laptop well under a second, but 60 variables is over a billion billion rows, far too many to check one by one.

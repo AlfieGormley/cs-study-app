@@ -46,7 +46,7 @@ c: a fixed positive constant that does not depend on n
 n_0: a threshold size; the bound only has to hold for inputs at least this big
 ≤: is less than or equal to
 ≥: is greater than or equal to
-In words: the running time is O(f(n)) when, beyond some input size, it never exceeds a fixed multiple of f(n). An algorithm that takes 3 × n^2 + 5 × n steps is O(n^2), because with c = 4 the bound holds for every n ≥ 5.
+In words: the running time is O(f(n)) when, beyond some input size, it never exceeds a fixed constant times f(n). An algorithm that takes 3 × n^2 + 5 × n steps is O(n^2), because with c = 4 the bound holds for every n ≥ 5.
 ```
 
 Big O ignores constant factors and small inputs on purpose: it describes the shape of the growth, not the exact time on a particular machine.
@@ -63,7 +63,7 @@ where
 T(n): the worst-case number of steps the algorithm takes on an input of n bits
 n: the input size, in bits
 k: a constant exponent that does not grow with n, such as 1, 2 or 3
-n^k: n multiplied by itself k times (n to the power k)
+n^k: k copies of n multiplied together (n to the power k)
 O(...): Big O: "at most a constant times this, for large n"
 In words: a problem is in P when some deterministic algorithm solves every input in at most about n to the power k steps, for one fixed k. Sorting-style O(n^2) and shortest-path-style O(n^3) bounds qualify; 2 to the power n does not.
 ```
@@ -82,7 +82,7 @@ n^3 = 100^3 = 10^6 steps
 where
 n: the input size; here n = 100
 n^3: n to the power 3 (n × n × n), the step count of a cubic, polynomial-time algorithm
-2^n: 2 multiplied by itself n times, the step count of an exponential-time algorithm
+2^n: n copies of 2 multiplied together, the step count of an exponential-time algorithm
 ≈: approximately equal to
 steps: the unit of running time: one basic operation of the machine
 In words: at size 100 the cubic algorithm needs a million steps, a fraction of a second; the exponential one needs about 1.3 million million million million million steps. At a billion steps per second that is around 4 × 10^13 years.
@@ -163,7 +163,7 @@ N_sub = 2^6 = 64   for n = 6
 where
 N_sub: the number of different subsets of the list (including the empty subset)
 n: how many numbers are in the list; the example S above has n = 6
-2^n: 2 multiplied by itself n times: each number is either in or out of a subset
+2^n: n copies of 2 multiplied together: each number is either in or out of a subset
 In words: every extra number doubles the subsets to search. Six numbers give 64 subsets; 60 numbers give about 10^18. Checking any one subset still takes only one addition per element.
 ```
 

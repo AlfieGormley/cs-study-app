@@ -81,7 +81,7 @@ Here is the trick on the last digit of 7¹⁰⁰ (the last digit is the remainde
 7^4 ≡ 3 × 7 = 21 ≡ 1 (mod 10)
 7^100 = (7^4)^25 ≡ 1^25 = 1 (mod 10)
 where
-7^k: 7 multiplied by itself k times (here k is 1, 2, 3, 4 or 100)
+7^k: k copies of 7 multiplied together (here k is 1, 2, 3, 4 or 100)
 ≡: is congruent to: leaves the same remainder after dividing by 10
 mod: "modulo": the remainders are after dividing by 10, which gives the last digit
 In words: the last digit of the powers of 7 cycles 7, 9, 3, 1, and 100 is a whole number of 4-step cycles, so 7^100 ends in 1.
@@ -264,7 +264,7 @@ Computing a power modulo n by multiplying the base by itself once per unit of th
 3^13 ≡ 2 × 4 × 3 = 24 ≡ 3 (mod 7)
 where
 1101_2: the number 13 written in binary (base 2): 1 eight, 1 four, 0 twos, 1 one
-3^k: 3 multiplied by itself k times
+3^k: k copies of 3 multiplied together
 ≡: is congruent to: leaves the same remainder after dividing by 7
 mod: "modulo": remainders after dividing by 7
 In words: write 13 in binary, get 3 to the powers 1, 2, 4, 8 by squaring (reducing mod 7 each time), and multiply the ones for the 1-bits: the answer is 3.
@@ -335,7 +335,7 @@ So exponents can be reduced modulo p − 1: every block of p − 1 in the expone
 3^200 = (3^12)^16 × 3^8 ≡ 3^8 (mod 13)
 3^8 = 6561 = 504 × 13 + 9 ≡ 9 (mod 13)
 where
-3^k: 3 multiplied by itself k times
+3^k: k copies of 3 multiplied together
 ≡: is congruent to: leaves the same remainder after dividing by 13
 mod: "modulo": remainders after dividing by 13
 In words: 13 is prime, so 3^12 leaves remainder 1; 200 is sixteen 12s plus 8, so 3^200 leaves the same remainder as 3^8, which is 9.

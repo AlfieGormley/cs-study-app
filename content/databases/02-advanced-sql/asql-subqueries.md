@@ -69,7 +69,21 @@ WHERE total > (SELECT AVG(total)
 | 104 | 200 |
 | 106 | 90 |
 
-The inner query runs once, yields 81.25 (650 / 8), and the outer query compares each row with it. This is an **uncorrelated** subquery: it doesn't mention the outer query at all, so the database can evaluate it once and reuse the value.
+The inner query runs once and yields the mean order total:
+
+```formula
+avg = (t_1 + t_2 + … + t_n) / n
+avg = 650 / 8 = 81.25
+where
+avg: the mean (average) order total, what AVG(total) returns
+t_1, t_2, t_n: the totals of the first, second and last order
+…: and so on, for every order in between
+n: the number of rows being averaged, here 8 orders
+650: the sum of the 8 totals (120 + 45 + 60 + 200 + 45 + 90 + 60 + 30)
+In words: add up every order total and divide by how many orders there are.
+```
+
+The outer query then compares each row with 81.25 and keeps 120, 200 and 90. AVG skips NULL totals, so n counts only the non-NULL values. This is an **uncorrelated** subquery: it doesn't mention the outer query at all, so the database can evaluate it once and reuse the value.
 
 > [!warning] A "scalar" subquery that returns two rows
 > If a scalar subquery returns more than one row, **PostgreSQL raises an error**: `more than one row returned by a subquery used as an expression`. **SQLite silently uses the first row** it happens to find. A query that "works" in SQLite can fail in production on Postgres, and the SQLite answer was arbitrary anyway.
@@ -112,6 +126,24 @@ GROUP BY city;
 | Leeds | 135.0 |
 | London | 235.0 |
 | York | 45.0 |
+
+London's figure, for example, averages Ana's and Cat's spend. Eve has no orders, so the inner join drops her and Leeds averages Ben alone:
+
+```formula
+spend_c = Σ t_k for k = 1 to m
+avg_London = (240 + 230) / 2 = 235
+avg_Leeds = 135 / 1 = 135
+where
+spend_c: the total spend of customer c, the inner query's SUM(o.total)
+c: one customer
+t_k: the total of that customer's k-th order
+k: a counter over the customer's orders, 1, 2, …, m
+m: how many orders customer c has
+Σ: sigma, "add up" the term after it for every value of k listed
+avg_London, avg_Leeds: the outer query's AVG(spend) for that city's customers
+240, 230: Ana's spend (120 + 60 + 60) and Cat's spend (200 + 30)
+In words: first total each customer's orders, then average those per-customer totals within each city.
+```
 
 You need two levels of aggregation (sum per customer, then average per city), and SQL does not let you nest aggregates like `AVG(SUM(...))` directly. A derived table is the classic fix. The next lesson shows that a CTE says the same thing more readably.
 
@@ -205,6 +237,24 @@ WHERE total > ALL (
 -- 104 (200 beats 120, 60, 60)
 ```
 
+In maths notation, the two quantifiers say:
+
+```formula
+x > ALL(S)  means  x > s for all s ∈ S
+x > ANY(S)  means  x > s for some s ∈ S
+200 > 120, 200 > 60, 200 > 60
+where
+x: the value from the outer row, here an order total
+S: the set of values the subquery returns, here Ana's totals {120, 60, 60}
+s: any one value in S
+∈: "is a member of"
+ALL: SQL's quantifier "every value in the set"
+ANY: SQL's quantifier "at least one value in the set"
+In words: > ALL passes only if x beats every value the subquery returns; > ANY passes if x beats at least one of them.
+```
+
+Order 104 (200) beats all three of Ana's totals, so it is the only result. If S is empty there is no value for x to fail against, so `x > ALL(S)` is TRUE (it is *vacuously* true) and `x > ANY(S)` is FALSE.
+
 `= ANY (...)` is the same as `IN`. **SQLite does not support `ANY`/`ALL`**; for a nonempty set of non-NULL values, `> (SELECT MAX(...))` gives the same result as `> ALL (...)`. NULLs also matter: MAX ignores them, while ALL can return UNKNOWN. Watch the empty-set edge case: `> ALL` of an empty set is TRUE, whereas comparing with `MAX` of an empty set gives NULL, which filters everything out.
 
 Both databases accept row-value comparisons such as `WHERE (id, city) IN (SELECT ...)`.
@@ -220,7 +270,20 @@ Both databases accept row-value comparisons such as `WHERE (id, city) IN (SELECT
 | `NOT IN (subquery)` | Hashed SubPlan |
 | Correlated scalar | SubPlan per row |
 
-The interesting row is `NOT IN`. Because of the NULL semantics above, Postgres cannot turn it into an anti-join. When the subquery result is small it builds a hash table of it (a "hashed SubPlan"). If the planner estimates that hash will exceed its hash-memory budget (`work_mem × hash_mem_multiplier`), it uses a plain SubPlan that rescans the subquery for each outer row, which can be catastrophically slow on large tables. That is a second reason to prefer `NOT EXISTS`.
+The interesting row is `NOT IN`. Because of the NULL semantics above, Postgres cannot turn it into an anti-join. When the subquery result is small it builds a hash table of it (a "hashed SubPlan"). The memory a hash table may use is set by two configuration settings:
+
+```formula
+B = work_mem × hash_mem_multiplier
+B = 4 MB × 2.0 = 8 MB
+where
+B: the hash-memory budget: how much memory one hash table in a query may use before PostgreSQL must spill to disk or avoid hashing
+work_mem: the per-operation memory setting for sorts and hash tables; the default is 4 MB
+hash_mem_multiplier: how many times work_mem a hash-based operation may use; the default is 2.0 since PostgreSQL 15 (it was 1.0 in 13 and 14)
+MB: megabyte; in PostgreSQL settings 1 MB = 1024 × 1024 = 1,048,576 bytes
+In words: a hash table may use work_mem multiplied by hash_mem_multiplier, which with default settings is 8 MB.
+```
+
+If the planner estimates that the hashed subquery will exceed this budget, it uses a plain SubPlan that rescans the subquery for each outer row, which can be catastrophically slow on large tables. That is a second reason to prefer `NOT EXISTS`.
 
 A correlated scalar subquery in `SELECT` typically runs as a SubPlan once per outer row. With an index on `orders(customer_id)` that is fine for a few thousand rows; across millions of rows, a single `GROUP BY` and join is usually much cheaper.
 

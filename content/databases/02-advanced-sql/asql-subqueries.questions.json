@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. The subquery is uncorrelated, so it runs once.\n2. Sum the prices: 30 + 25 + 40 + 90 + 10 + 35 = 230.\n3. Average: 230 / 6 = 38.33.\n4. Compare each product with 38.33:\n\n| name | price | > 38.33? |\n|---|---|---|\n| Kettle | 30 | no |\n| Toaster | 25 | no |\n| Lamp | 40 | yes |\n| Rug | 90 | yes |\n| Mug | 10 | no |\n| Vase | 35 | no |\n\nTwo rows: Lamp and Rug.",
+    "workedExample": "1. The subquery is uncorrelated, so it runs once.\n2. It computes the mean price of all six products:\n\n```formula\navg = (30 + 25 + 40 + 90 + 10 + 35) / n\navg = 230 / 6 ≈ 38.33\nwhere\navg: the mean (average) price, what AVG(price) returns\nn: the number of products averaged, here 6\n30, 25, 40, 90, 10, 35: the prices of Kettle, Toaster, Lamp, Rug, Mug and Vase\n≈: approximately equal to; the exact value is 38.333…\nIn words: add the six prices and divide by six; any product dearer than about 38.33 passes the filter.\n```\n\n3. Compare each product with 38.33:\n\n| name | price | > 38.33? |\n|---|---|---|\n| Kettle | 30 | no |\n| Toaster | 25 | no |\n| Lamp | 40 | yes |\n| Rug | 90 | yes |\n| Mug | 10 | no |\n| Vase | 35 | no |\n\nTwo rows: Lamp and Rug.",
     "link": {
       "title": "Subquery expressions — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "The subquery references `p.category`, so it is evaluated per outer row with that row's category.\n\n1. Kitchen average: (30 + 25 + 10) / 3 = 21.67.\n2. Home average: (40 + 90 + 35) / 3 = 55.\n3. Compare:\n\n| name | price | avg | keep |\n|---|---|---|---|\n| Kettle | 30 | 21.67 | yes |\n| Toaster | 25 | 21.67 | yes |\n| Mug | 10 | 21.67 | no |\n| Lamp | 40 | 55 | no |\n| Rug | 90 | 55 | yes |\n| Vase | 35 | 55 | no |",
+    "workedExample": "The subquery references `p.category`, so it is evaluated per outer row with that row's category.\n\nWork out each category's average once:\n\n```formula\navg_K = (30 + 25 + 10) / 3 ≈ 21.67\navg_H = (40 + 90 + 35) / 3 = 55\nwhere\navg_K: the mean price in Kitchen (Kettle 30, Toaster 25, Mug 10)\navg_H: the mean price in Home (Lamp 40, Rug 90, Vase 35)\n3: the number of products in each category\n≈: approximately equal to; the exact value is 21.666…\nIn words: each category's average is its prices added up and divided by how many products it has; each product is compared only with its own category's figure.\n```\n\nThen compare each product with its own category's average:\n\n| name | price | avg | keep |\n|---|---|---|---|\n| Kettle | 30 | 21.67 | yes |\n| Toaster | 25 | 21.67 | yes |\n| Mug | 10 | 21.67 | no |\n| Lamp | 40 | 55 | no |\n| Rug | 90 | 55 | yes |\n| Vase | 35 | 55 | no |",
     "link": {
       "title": "Correlated subquery — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Correlated_subquery"
@@ -297,11 +297,11 @@
       },
       {
         "text": "Raise `statement_timeout` so the query can finish",
-        "explanation": "Increasing the timeout does not improve the plan. Repeated subplan scans can approach users × events work; inspect actual loop counts and early termination rather than assuming a full scan every time."
+        "explanation": "Increasing the timeout does not improve the plan. Repeated subplan scans can approach work proportional to the number of users multiplied by the number of events; inspect actual loop counts and early termination rather than assuming a full scan every time."
       }
     ],
     "answer": 1,
-    "workedExample": "1. `NOT IN` must return no rows if the subquery contains any NULL, and it must treat UNKNOWN correctly. A standard anti-join doesn't have those semantics, so Postgres won't use one.\n2. Instead it uses a SubPlan. If the subquery result is estimated to fit the hash-memory budget (`work_mem × hash_mem_multiplier`), that's a fast hashed SubPlan. If it does not fit, a plain SubPlan may repeatedly scan or materialize the result; the threshold depends on width and configuration, not row count alone.\n3. `NOT EXISTS` with a correlated equality is exactly an anti-join, so the planner can pick a Hash Anti Join or use an index on `events(user_id)`.\n4. As a bonus, it is also correct if `user_id` is ever NULL.",
+    "workedExample": "1. `NOT IN` must return no rows if the subquery contains any NULL, and it must treat UNKNOWN correctly. A standard anti-join doesn't have those semantics, so Postgres won't use one.\n2. Instead it uses a SubPlan. If the subquery result is estimated to fit the hash-memory budget, that's a fast hashed SubPlan. If it does not fit, a plain SubPlan may repeatedly scan or materialize the result; the threshold depends on width and configuration, not row count alone. The budget is:\n\n```formula\nB = work_mem × hash_mem_multiplier\nB = 4 MB × 2.0 = 8 MB\nwhere\nB: the hash-memory budget for one hash table\nwork_mem: the per-operation memory setting for sorts and hashes; default 4 MB\nhash_mem_multiplier: how many times work_mem a hash may use; default 2.0 since PostgreSQL 15\nMB: megabyte; in PostgreSQL settings 1 MB = 1024 × 1024 bytes\nIn words: with default settings a hash table may use 8 MB; a subquery result estimated to be larger than that is not hashed.\n```\n\n3. `NOT EXISTS` with a correlated equality is exactly an anti-join, so the planner can pick a Hash Anti Join or use an index on `events(user_id)`.\n4. As a bonus, it is also correct if `user_id` is ever NULL.",
     "link": {
       "title": "Don't Do This — PostgreSQL wiki",
       "url": "https://wiki.postgresql.org/wiki/Don%27t_Do_This"

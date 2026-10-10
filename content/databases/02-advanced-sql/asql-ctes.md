@@ -35,7 +35,19 @@ ORDER BY s.spent DESC;
 | Ana | 240 |
 | Cat | 230 |
 
-Spend per customer is Ana 240, Ben 135, Cat 230 and Dev 45, so the average is 650 / 4 = 162.5. Notice that `spend` is used twice, once in `FROM` and once in the subquery. With a derived table you would have to write the aggregation out twice.
+Spend per customer is Ana 240, Ben 135, Cat 230 and Dev 45. The scalar subquery averages those four figures:
+
+```formula
+avg = (240 + 135 + 230 + 45) / n
+avg = 650 / 4 = 162.5
+where
+avg: the mean spend per customer, what AVG(spent) returns
+n: the number of rows in spend, one per customer who has ordered, here 4
+240, 135, 230, 45: the spend of Ana, Ben, Cat and Dev
+In words: add up the four customers' spend and divide by four; Ana (240) and Cat (230) are above the result.
+```
+
+Eve never ordered, so she has no row in `spend` and isn't counted: the average is per ordering customer, not per customer. Notice that `spend` is used twice, once in `FROM` and once in the subquery. With a derived table you would have to write the aggregation out twice.
 
 You can chain several CTEs, each able to use the ones before it:
 
@@ -94,7 +106,7 @@ Postgres never inlines CTEs that are recursive or that have side effects (data-m
 
 A recursive CTE has two parts joined by `UNION ALL` (or `UNION`):
 
-1. The **anchor** (non-recursive term): the starting rows.
+1. The **anchor member** (non-recursive term): the starting rows.
 2. The **recursive term**: a query that references the CTE itself.
 
 For UNION ALL, PostgreSQL conceptually runs it as a loop over a *working table* (SQLite describes a row queue; the examples have the same results):
@@ -109,7 +121,30 @@ while work is not empty:
   work := new
 ```
 
-Each pass sees only the rows produced by the *previous* pass, not the whole result so far. The loop stops when a pass produces no rows.
+Each pass sees only the rows produced by the *previous* pass, not the whole result so far. The loop stops when a pass produces no rows. In set notation:
+
+```formula
+W_0 = A
+W_{k+1} = R(W_k)
+T = W_0 + W_1 + … + W_m
+W_{m+1} = ∅
+where
+W_0: the anchor's rows, the first working table
+A: the rows the anchor (non-recursive term) returns
+W_k: the working table after pass k: only the rows that pass produced
+W_{k+1}, W_{m+1}: the rows the next pass produces; W_{m+1}, the pass after the last productive one, is empty
+W_1, W_m: the working tables after pass 1 and after the last pass that produced rows
+R: the recursive term, run with the CTE's name standing for W_k
+k: the pass number, 0 for the anchor, then 1, 2, …
+m: the number of the last pass that produced any rows
+T: everything the CTE returns
++: here, append one batch of rows after another, keeping duplicates (UNION ALL)
+…: and every batch in between
+∅: the empty set: no rows
+In words: start with the anchor's rows, repeatedly feed only the newest rows into the recursive term, append whatever it produces, and stop at the first pass that produces nothing.
+```
+
+With `UNION` instead of `UNION ALL`, each pass also discards rows already in the result before they go into the next working table.
 
 ### Counting
 
@@ -123,7 +158,21 @@ SELECT i FROM n;
 -- 1, 2, 3, 4, 5
 ```
 
-Pass 1 sees {1} and makes {2}; pass 2 sees {2} and makes {3}; and so on until the pass that sees {5} makes nothing, because `5 < 5` is false. **The `WHERE` is the termination condition.** Forget it and the query never ends.
+Pass 1 sees {1} and makes {2}; pass 2 sees {2} and makes {3}; and so on until the pass that sees {5} makes nothing, because `5 < 5` is false. **The `WHERE` is the termination condition.** Forget it and the query never ends. Pass by pass:
+
+```formula
+i_0 = 1
+i_{k+1} = i_k + 1   if i_k < 5
+i_4 = 5
+where
+i_0: the anchor's value, 1
+i_k: the value in the working table after pass k
+i_{k+1}: the value the next pass makes from it
+i_4: the value after pass 4
+k: the pass number, starting at 0 for the anchor
+<: strictly less than
+In words: each pass adds 1 to the previous pass's value, but only while that value is below 5. Pass 5 reads 5, and 5 < 5 is false, so it makes nothing and the loop stops; so the CTE returns the five rows 1 to 5.
+```
 
 ### Walking a hierarchy
 
@@ -172,6 +221,21 @@ ORDER BY path;
 | 3 | Mia > Raj > Tom > Vic |
 | 2 | Mia > Raj > Uma |
 | 1 | Mia > Sam |
+
+The `depth` column follows a simple rule:
+
+```formula
+depth(s) = depth(p(s)) + 1
+depth(s_0) = 0
+depth(Vic) = depth(Tom) + 1 = 2 + 1 = 3
+where
+depth(s): the depth column: how many levels below the top a staff member s sits
+s: one staff member, a row of staff
+p(s): the manager of s (its parent in the tree), found through manager_id
+s_0: the anchor row, the staff member with no manager (Mia)
+Vic, Tom: two of the staff; Tom manages Vic
+In words: the anchor starts at depth 0, and each recursive pass adds 1 to the depth it inherits from the manager's row, so depth counts the joins from the root.
+```
 
 The anchor is Mia. Pass 1 joins staff to {Mia} and finds Raj and Sam. Pass 2 finds Tom and Uma (Sam has no reports). Pass 3 finds Vic. Pass 4 finds nothing, so the loop ends.
 
@@ -280,7 +344,7 @@ SELECT * FROM moved;
 All parts of the statement see the same snapshot, so a `SELECT` elsewhere in the same `WITH` won't see the deletion. SQLite rejects `DELETE` inside `WITH`.
 
 ## Key takeaways
-- A CTE names an intermediate result so a query reads as a sequence of steps, and can be referenced more than once.
+- A CTE names an intermediate result so a query reads as a series of steps, and can be referenced more than once.
 - Postgres 12+ normally inlines a once-referenced, non-recursive, side-effect-free SELECT CTE; repeated references normally materialise. Overrides apply only when eligible.
 - A recursive CTE is an anchor plus a recursive term; each pass sees only the previous pass's rows, and stops when a pass adds nothing.
 - Always have a termination condition, and protect against cycles with a path check, `UNION`, Postgres's `CYCLE` clause or a depth cap.

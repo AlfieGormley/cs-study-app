@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Row (1, 5): product 1 exists, so DO UPDATE runs. `stock.qty` is the existing 10, `excluded.qty` is the proposed 5. New qty: 15.\n2. Row (2, 7): no conflict, so it is inserted as is.\n3. Product 4 isn't in the statement, so it stays (4, 3).\n4. Result: (1, 15), (2, 7), (4, 3). Both SQLite (3.24+) and Postgres (9.5+) behave identically here.",
+    "workedExample": "1. Row (1, 5): product 1 exists, so DO UPDATE runs. `stock.qty` is the existing 10, `excluded.qty` is the proposed 5. New qty: 15.\n\n```formula\nq_new = q_stock + q_excluded\nq_new = 10 + 5 = 15\nwhere\nq_new: product 1's quantity afterwards\nq_stock: the existing quantity, stock.qty\nq_excluded: the proposed quantity, excluded.qty\nIn words: the update adds the incoming quantity to the stored one.\n```\n\n2. Row (2, 7): no conflict, so it is inserted as is.\n3. Product 4 isn't in the statement, so it stays (4, 3).\n4. Result: (1, 15), (2, 7), (4, 3). Both SQLite (3.24+) and Postgres (9.5+) behave identically here.",
     "link": {
       "title": "INSERT (ON CONFLICT) — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/sql-insert.html"
@@ -108,7 +108,7 @@
         "explanation": "'1' versus '10': '1' is a prefix of '10', and a shorter prefix sorts first, so '1' < '10'."
       },
       {
-        "text": "An error: operator does not exist: text >= integer",
+        "text": "An error: `operator does not exist: text >= integer`",
         "explanation": "That error happens with an unquoted `10`. With `'10'` both sides are text, so the query runs and quietly compares strings."
       }
     ],
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. (4, 2) conflicts. DO UPDATE's WHERE: `excluded.qty > stock.qty` = 2 > 3 = false. No update.\n2. (6, 9): no conflict, inserted.\n3. RETURNING emits only rows the statement inserted or updated: (6, 9).\n4. Product 4 keeps qty 3.\n\nThis condition means \"only if the quantity is larger\", not \"only if newer\". A version or timestamp comparison can reject stale updates when the versioning rules define a reliable order; deduplication is still needed for additive messages.",
+    "workedExample": "1. (4, 2) conflicts. DO UPDATE's WHERE, `excluded.qty > stock.qty`, is false, so there is no update:\n\n```formula\nq_excluded > q_stock\nq_excluded = 2,  q_stock = 3\nwhere\nq_excluded: the proposed quantity, 2\nq_stock: the stored quantity, 3\n>: greater than\nIn words: the update runs only if the incoming quantity is larger, and 2 is not larger than 3.\n```\n\n2. (6, 9): no conflict, inserted.\n3. RETURNING emits only rows the statement inserted or updated: (6, 9).\n4. Product 4 keeps qty 3.\n\nThis condition means \"only if the quantity is larger\", not \"only if newer\". A version or timestamp comparison can reject stale updates when the versioning rules define a reliable order; deduplication is still needed for additive messages.",
     "link": {
       "title": "UPSERT — SQLite docs",
       "url": "https://www.sqlite.org/lang_upsert.html"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Source row (1, -15) matches stock row 1.\n   - First clause: `WHEN MATCHED AND 15 + (-15) <= 0`: true, so DELETE.\n   - Later clauses are not considered for this row.\n2. Source row (3, 4) has no match: WHEN NOT MATCHED inserts (3, 4).\n3. With `RETURNING merge_action(), s.*` (Postgres 17+) you'd see `DELETE | 1 | 15` and `INSERT | 3 | 4`.\n\nSQLite has no MERGE; you'd write an upsert plus a separate DELETE.",
+    "workedExample": "1. Source row (1, -15) matches stock row 1.\n   - First clause: `WHEN MATCHED AND s.qty + v.delta <= 0` is true, so DELETE.\n   - Later clauses are not considered for this row.\n\nThe test on the first clause:\n\n```formula\nq_stock + δ ≤ 0\n15 + (−15) = 0 ≤ 0\nwhere\nq_stock: product 1's stored quantity, s.qty, 15\nδ: delta, the source row's change, v.delta, −15\n≤: less than or equal to\nIn words: the change would leave nothing in stock, so the DELETE clause fires.\n```\n\n2. Source row (3, 4) has no match: WHEN NOT MATCHED inserts (3, 4).\n3. With `RETURNING merge_action(), s.*` (Postgres 17+) you'd see `DELETE | 1 | 15` and `INSERT | 3 | 4`.\n\nSQLite has no MERGE; you'd write an upsert plus a separate DELETE.",
     "link": {
       "title": "MERGE — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/sql-merge.html"

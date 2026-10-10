@@ -35,7 +35,7 @@ fn(args) OVER (
 
 - **`PARTITION BY`** splits rows into independent groups, like `GROUP BY` without collapsing. Omit it and the whole result is one partition.
 - **`ORDER BY`** orders rows within each partition. Ranking and `LAG`/`LEAD` need a meaningful order for predictable results (the syntax also permits omitting it); for aggregates it also changes the default frame (see below).
-- **The frame** picks which rows of the partition, relative to the current row, an aggregate sees.
+- **The window frame** picks which rows of the partition, relative to the current row, an aggregate sees.
 
 Window functions run *after* `WHERE`, `GROUP BY` and `HAVING`, and before the final `ORDER BY` and `LIMIT`. That ordering explains several rules below.
 
@@ -57,7 +57,38 @@ FROM orders;
 | 104 | 200 | 30.8 |
 | ... | ... | ... |
 
-Each row gets its share of the 650 total. Note the `100.0`: with `total` stored as SQLite integers or PostgreSQL integer (not bigint/numeric), `100 * total / SUM(...)` does integer division and 45 becomes 6, not 6.9.
+Each row gets its share of the 650 total. The query computes this percentage for every row:
+
+```formula
+pct = round(100 × t / T, 1)
+pct = round(100 × 120 / 650, 1)
+pct = round(18.46…, 1) = 18.5 %
+where
+pct: the row's share of all revenue, as a percentage (%)
+t: this row's order total, here 120 (order 101); the lesson's totals are plain amounts with no currency given
+T: the sum of every order total in the window, here 650; `SUM(total) OVER ()` computes it
+round(x, 1): round x to 1 decimal place, as SQL's ROUND(x, 1) does
+100: converts a fraction (0.1846) into a percentage (18.46)
+…: the digits carry on (18.4615…)
+%: per cent, parts per hundred
+In words: divide the row's total by the grand total, multiply by 100 to get a percentage, then round to one decimal place.
+```
+
+Note the `100.0` in the SQL. With `total` stored as SQLite integers or PostgreSQL integer (not bigint/numeric), `100 * total / SUM(...)` does **integer division**, which throws away the fraction:
+
+```formula
+pct = trunc(100 × 45 / 650)
+pct = trunc(6.92…) = 6
+where
+pct: the percentage SQL returns when every operand is an integer
+45: order 102's total
+650: the grand total of all orders
+trunc(x): truncation: drop everything after the decimal point, rounding towards zero
+…: the digits carry on (6.923…)
+In words: when every value is a whole number, SQL keeps only the whole-number part of the division, so 6.92 becomes 6.
+```
+
+Writing `100.0` makes one operand a decimal, so the division keeps its fraction and 45 gives 6.9.
 
 Comparing a row with its group:
 
@@ -68,11 +99,25 @@ SELECT customer_id AS cust, id,
 FROM orders;
 ```
 
-Ana's orders (120, 60, 60) average 80, so they show +40, -20 and -20.
+Each row's `diff` is its own total minus the average of its partition:
+
+```formula
+diff = t − avg_c
+avg_c = (120 + 60 + 60) / 3 = 80
+diff = 120 − 80 = +40
+where
+diff: how far this order is above (+) or below (−) its customer's average order
+t: this order's total, here 120 (Ana's order 101)
+avg_c: the mean (average) total of all orders by the same customer c: their sum divided by how many there are
+c: the customer the row belongs to, here Ana; `PARTITION BY customer_id` decides which rows share c
+In words: subtract the customer's average order from this order; a positive answer means a bigger-than-usual order for that customer.
+```
+
+So Ana's three orders (120, 60, 60) show +40, −20 and −20. The differences in one partition always add up to 0.
 
 ## Ranking: ROW_NUMBER, RANK, DENSE_RANK
 
-The three differ only in how they treat **ties**. Our totals contain two ties (60 twice, 45 twice):
+The three differ only in how they treat **tied rows**: rows with the same sort value. Our totals contain two ties (60 twice, 45 twice):
 
 ```sql
 SELECT id, total,
@@ -98,9 +143,42 @@ WINDOW w AS (ORDER BY total DESC);
 - **`RANK`**: ties share a rank and leave a **gap** (4, 4, then 6). Like a sports table.
 - **`DENSE_RANK`**: ties share a rank with **no gap** (4, 4, then 5). Use it for "the Nth highest distinct value".
 
+You can work out either rank by counting what sorts ahead of the row:
+
+```formula
+RANK = 1 + N_ahead
+DENSE_RANK = 1 + D_ahead
+RANK = 1 + 5 = 6
+DENSE_RANK = 1 + 4 = 5
+where
+RANK: the value RANK() gives the row
+DENSE_RANK: the value DENSE_RANK() gives the row
+N_ahead: the number of rows that sort strictly before this one (tied rows don't count); for a 45 these are 200, 120, 90, 60 and 60, so 5
+D_ahead: the number of distinct sort values strictly before this one; for a 45 these are 200, 120, 90 and 60, so 4
+In words: for an order of 45, five rows but only four distinct values sort ahead. RANK counts every row ahead of you, so ties ahead push you down further; DENSE_RANK counts only different values ahead, so it never skips a number.
+```
+
+So DENSE_RANK can never be larger than RANK, and the two agree up to and including the first group of tied rows; they differ from the row after it.
+
 The `WINDOW w AS (...)` clause names a window so you don't repeat it. Both SQLite and Postgres support it.
 
-`NTILE(n)` splits rows into n roughly equal buckets (quartiles with `NTILE(4)`), and `PERCENT_RANK` and `CUME_DIST` give relative positions.
+`NTILE(k)` splits the rows of each partition into k buckets, numbered 1 to k, as equally as possible (quartiles with `NTILE(4)`). When the rows don't divide evenly, the leftover rows go one each to the first buckets:
+
+```formula
+q = ⌊n / k⌋
+r = n mod k
+q = ⌊8 / 3⌋ = 2,  r = 8 mod 3 = 2
+where
+n: the number of rows in the partition, here 8
+k: the number of buckets asked for, the argument of NTILE(k), here 3
+q: the size of the smaller buckets
+r: how many buckets get one extra row (size q + 1); these are the first r buckets
+⌊ ⌋: floor: round down to a whole number
+mod: the remainder after whole-number division (8 = 2 × 3 + 2, so 8 mod 3 = 2)
+In words: share the rows out evenly, then give the leftover rows one each to the first buckets.
+```
+
+So 8 rows in 3 buckets have sizes 3, 3 and 2. NTILE works on row positions, so two tied values can land in different buckets. `PERCENT_RANK` and `CUME_DIST` give relative positions as fractions between 0 and 1.
 
 ## Top-N per group
 
@@ -156,7 +234,22 @@ FROM m;
 | 2026-02 | 305 | 165 | 140 |
 | 2026-03 | 180 | 305 | -125 |
 
-The first row has no predecessor, so `LAG` returns NULL. Supply a default with the third argument, `LAG(rev, 1, 0)`, and an offset with the second (`LAG(rev, 12)` for year-over-year on monthly data).
+The `diff` column is a month-over-month change:
+
+```formula
+diff_m = rev_m − rev_{m−1}
+diff_Feb = 305 − 165 = 140
+diff_Mar = 180 − 305 = −125
+where
+diff_m: the change in revenue from the previous month to month m
+rev_m: the revenue of month m, the SUM of that month's order totals
+rev_{m−1}: the revenue of the month before m; this is what LAG(rev) reads
+m: a month, counted in window order
+diff_Feb, diff_Mar: the February and March changes, worked out from the table above
+In words: each month's change is its revenue minus the previous month's revenue; a negative answer means revenue fell.
+```
+
+The first row has no predecessor, so `LAG` returns NULL, and NULL minus anything is NULL. Supply a default with the third argument, `LAG(rev, 1, 0)`, and an offset with the second (`LAG(rev, 12)` for year-over-year on monthly data).
 
 Note the pattern: aggregate in a CTE first, then apply the window. Windows run after `GROUP BY`, so you *can* write `LAG(SUM(total)) OVER (...)` in one query, but the two-step form is easier to read.
 
@@ -181,7 +274,23 @@ FROM orders;
 | 2 | 2026-01-09 | 45 | 45 |
 | 2 | 2026-03-02 | 90 | 135 |
 
-The running total restarts for each partition.
+The running total restarts for each partition. Written as a sum:
+
+```formula
+S_i = Σ t_j   for j = 1 to i
+S_2 = t_1 + t_2 = 120 + 60 = 180
+S_3 = 120 + 60 + 60 = 240
+where
+S_i: the running total on row i of a partition
+i: the row's position within its partition, in ORDER BY order, starting at 1
+j: a counter that steps through the positions 1, 2, …, i
+t_j: the order total on row j
+S_2, S_3, t_1, t_2: the running total on rows 2 and 3, and the totals on rows 1 and 2
+Σ: sigma, "add up": add the term after it for every value of j listed
+In words: the running total on a row is the sum of every total from the first row of its partition up to and including that row.
+```
+
+These are customer 1's rows: 180 on the second row, 240 on the third.
 
 ### The default frame and the ties trap
 
@@ -192,7 +301,7 @@ RANGE BETWEEN UNBOUNDED PRECEDING
           AND CURRENT ROW
 ```
 
-`RANGE` means "up to and including all **peers** of the current row", where peers are rows with an equal `ORDER BY` value. With unique sort keys you never notice. With ties you do:
+`RANGE` means "up to and including all **peer rows** of the current row", where peer rows (peers) are rows with an equal `ORDER BY` value. With unique sort keys you never notice. With ties you do:
 
 ```sql
 SELECT id, total,
@@ -213,7 +322,26 @@ FROM orders;
 | 107 | 60 | 240 | 240 |
 | 106 | 90 | 330 | 330 |
 
-The table shows one possible ordering of ties; without a tie-breaker the ROWS totals assigned to ids 102/105 or 103/107 can swap. Under `RANGE`, both 45s include each other, so both show 120. Under `ROWS`, each row adds exactly one row. Neither is wrong, but a "running total" that jumps by 90 in one row is usually a bug. If the sort key can tie, write `ROWS` or add a tie-breaker column.
+The table shows one possible ordering of ties; without a tie-breaker the ROWS totals assigned to ids 102/105 or 103/107 can swap. Under `RANGE`, both 45s include each other, so both show 120. Under `ROWS`, each row adds exactly one row. The two frames sum different sets of rows:
+
+```formula
+S_RANGE(i) = Σ t_j for all j with v_j ≤ v_i
+S_ROWS(i) = Σ t_j for all j ≤ i
+S_RANGE = 30 + 45 + 45 = 120
+S_ROWS = 30 + 45 = 75
+where
+S_RANGE(i): the default RANGE frame's sum on row i
+S_ROWS(i): the ROWS UNBOUNDED PRECEDING sum on row i
+i: the current row's position in sort order, starting at 1; the worked lines are for order 102, the first 45, at position 2
+j: the position of another row in the same partition
+t_j: the total on row j
+v_i, v_j: the ORDER BY values of rows i and j, here the totals themselves
+Σ: sigma, "add up" the term after it for every j that meets the condition
+≤: less than or equal to; with ascending order, v_j ≤ v_i means "sorts at or before row i, peers included"
+In words: RANGE adds every row whose sort value is no bigger than the current row's, ties included; ROWS adds only the rows physically up to the current one.
+```
+
+Neither is wrong, but a "running total" that jumps by 90 in one row is usually a bug. If the sort key can tie, write `ROWS` or add a tie-breaker column.
 
 ### Moving averages
 
@@ -228,7 +356,23 @@ SELECT id, total,
 FROM orders;
 ```
 
-The first row averages just itself (120), the second averages two rows (82.5), and from the third row on it averages three: (120 + 45 + 60) / 3 = 75. Partial windows at the start are a common source of misleading charts.
+The frame holds the current row and up to two before it, so the average divides by however many rows the frame actually has:
+
+```formula
+avg3_i = (t_{i−2} + t_{i−1} + t_i) / 3
+avg3_1 = 120 / 1 = 120
+avg3_2 = (120 + 45) / 2 = 82.5
+avg3_3 = (120 + 45 + 60) / 3 = 75
+where
+avg3_i: the three-order moving average on row i
+i: the row's position in date order, starting at 1
+t_i, t_{i−1}, t_{i−2}: the order totals on row i and on the one and two rows before it
+avg3_1, avg3_2, avg3_3: the moving average on rows 1, 2 and 3
+3: the frame size: 2 PRECEDING plus the current row
+In words: from the third row on, average the current order and the two before it; the first two rows have fewer rows in their frame, so they average only 1 and 2 values.
+```
+
+Partial windows at the start are a common source of misleading charts.
 
 Frame modes: `ROWS` counts physical rows, `RANGE` uses value distance (`RANGE BETWEEN INTERVAL '7 days' PRECEDING AND CURRENT ROW` in Postgres), and `GROUPS` counts peer groups. Both databases support all three.
 

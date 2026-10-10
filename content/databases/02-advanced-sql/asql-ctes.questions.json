@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Trace the working table pass by pass:\n\n| pass | reads | i < 20? | makes |\n|---|---|---|---|\n| anchor | - | - | 1 |\n| 1 | 1 | yes | 2 |\n| 2 | 2 | yes | 4 |\n| 3 | 4 | yes | 8 |\n| 4 | 8 | yes | 16 |\n| 5 | 16 | yes | 32 |\n| 6 | 32 | no | nothing |\n\nThe `WHERE` filters the row being read, so one value past the limit gets through. To cap the output instead, filter on the new value: `WHERE i * 2 < 20`.",
+    "workedExample": "Each pass doubles the value it reads, but only if that value is below 20:\n\n```formula\ni_0 = 1\ni_{k+1} = 2 × i_k   if i_k < 20\ni_5 = 2 × 16 = 32\nwhere\ni_0: the anchor's value\ni_k: the value in the working table after pass k\ni_{k+1}: the value the next pass makes from it\ni_5: the value made by pass 5\nk: the pass number, 0 for the anchor\n<: strictly less than\nIn words: the test looks at the value being read, not the value being made, so 16 passes the test and produces 32.\n```\n\nTrace the working table pass by pass:\n\n| pass | reads | i < 20? | makes |\n|---|---|---|---|\n| anchor | - | - | 1 |\n| 1 | 1 | yes | 2 |\n| 2 | 2 | yes | 4 |\n| 3 | 4 | yes | 8 |\n| 4 | 8 | yes | 16 |\n| 5 | 16 | yes | 32 |\n| 6 | 32 | no | nothing |\n\nThe `WHERE` filters the row being read, so one value past the limit gets through. To cap the output instead, filter on the new value: `WHERE i * 2 < 20`.",
     "link": {
       "title": "WITH queries (CTEs) — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/queries-with.html"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. The question needs per-customer totals twice: once to list them and once to average them.\n2. A CTE names that result, so both uses refer to `spend`.\n3. Spend per customer: Ana 240, Ben 135, Cat 230, Dev 45. Average = 650 / 4 = 162.5.\n4. Ana and Cat are above 162.5.\n5. Without the CTE you'd repeat the subquery, and two copies of the same logic tend to drift apart when someone edits one.",
+    "workedExample": "1. The question needs per-customer totals twice: once to list them and once to average them.\n2. A CTE names that result, so both uses refer to `spend`.\n3. Spend per customer: Ana 240, Ben 135, Cat 230, Dev 45. The subquery averages them:\n\n```formula\navg = (240 + 135 + 230 + 45) / n\navg = 650 / 4 = 162.5\nwhere\navg: the mean spend per customer, AVG(spent)\nn: the number of rows in spend, one per ordering customer, here 4\n240, 135, 230, 45: the spend of Ana, Ben, Cat and Dev\nIn words: add the four customers' spend and divide by four.\n```\n\n4. Ana and Cat are above 162.5.\n5. Without the CTE you'd repeat the subquery, and two copies of the same logic tend to drift apart when someone edits one.",
     "link": {
       "title": "WITH queries (CTEs) — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/queries-with.html"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Anchor: `id = 2` gives {Raj}.\n2. Pass 1: staff whose manager is in {Raj}: {Tom, Uma}.\n3. Pass 2: staff whose manager is in {Tom, Uma}: {Vic}.\n4. Pass 3: staff whose manager is Vic: none, so stop.\n5. Result: Raj, Tom, Uma, Vic = **4 rows**.\n\nTo count only reports, subtract the anchor: `SELECT COUNT(*) - 1 FROM sub` gives 3.",
+    "workedExample": "1. Anchor: `id = 2` gives {Raj}.\n2. Pass 1: staff whose manager is in {Raj}: {Tom, Uma}.\n3. Pass 2: staff whose manager is in {Tom, Uma}: {Vic}.\n4. Pass 3: staff whose manager is Vic: none, so stop.\n5. Result: Raj, Tom, Uma and Vic, which is **4 rows**.\n\nTo count only reports, subtract the anchor: `SELECT COUNT(*) - 1 FROM sub` gives 3.",
     "link": {
       "title": "Hierarchical and recursive queries in SQL — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hierarchical_and_recursive_queries_in_SQL"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Each pass reads one row (a, b) and, if b < 10, makes (b, a + b):\n\n| pass | reads | makes |\n|---|---|---|\n| anchor | - | (0, 1) |\n| 1 | (0, 1) | (1, 1) |\n| 2 | (1, 1) | (1, 2) |\n| 3 | (1, 2) | (2, 3) |\n| 4 | (2, 3) | (3, 5) |\n| 5 | (3, 5) | (5, 8) |\n| 6 | (5, 8) | (8, 13) |\n| 7 | (8, 13) | nothing |\n\n`a` takes the values 0, 1, 1, 2, 3, 5, 8: **7 rows**, ending at 8. The CTE carries two columns because each pass only sees the previous row, so any state you need must travel in the row.",
+    "workedExample": "Each pass reads one row and makes the next:\n\n```formula\n(a_{k+1}, b_{k+1}) = (b_k, a_k + b_k)\n(a_0, b_0) = (0, 1)\n(a_6, b_6) = (8, 13)\nwhere\na_k, b_k: the two columns of the row made by pass k\na_{k+1}, b_{k+1}: the row the next pass makes, only if b_k < 10\na_0, b_0: the anchor row\na_6, b_6: the last row made (by pass 6); its b of 13 fails b < 10, so nothing follows it\nk: the pass number, 0 for the anchor\n<: strictly less than\nIn words: the new a is the old b, and the new b is the sum of the old pair, which generates the Fibonacci numbers.\n```\n\nTracing it:\n\n| pass | reads | makes |\n|---|---|---|\n| anchor | - | (0, 1) |\n| 1 | (0, 1) | (1, 1) |\n| 2 | (1, 1) | (1, 2) |\n| 3 | (1, 2) | (2, 3) |\n| 4 | (2, 3) | (3, 5) |\n| 5 | (3, 5) | (5, 8) |\n| 6 | (5, 8) | (8, 13) |\n| 7 | (8, 13) | nothing |\n\n`a` takes the values 0, 1, 1, 2, 3, 5, 8: **7 rows**, ending at 8. The CTE carries two columns because each pass only sees the previous row, so any state you need must travel in the row.",
     "link": {
       "title": "Hierarchical and recursive queries in SQL — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hierarchical_and_recursive_queries_in_SQL"

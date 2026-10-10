@@ -8,7 +8,7 @@ summary: The handful of patterns behind most SQL interview questions, from Nth h
 
 SQL interviews reuse a small set of patterns in different costumes. "Second-highest salary", "latest order per customer" and "longest login streak" are each one pattern plus edge cases. Learn the patterns and, more importantly, the questions to ask before you write anything:
 
-1. **Ties**: if two rows share the top value, do you want one or both?
+1. **Tied rows**: if two rows share the top value, do you want one or both?
 2. **NULLs and empties**: what should happen with no data? A NULL row, or no row?
 3. **Distinct**: is "second highest" the second row or the second distinct value?
 
@@ -48,6 +48,17 @@ All three give 120 for the non-NULL totals shown. To ignore missing totals on ar
 - **Generalise to N.** A doesn't generalise. B becomes `OFFSET N - 1`. C becomes `dr = N`. For N = 4, B and C give 60.
 - **Forgot DISTINCT?** With ties, the 5th highest via `ORDER BY total DESC LIMIT 1 OFFSET 4` without `DISTINCT` lands on the second 60 rather than 45. `ROW_NUMBER` makes the same mistake; `DENSE_RANK` is the ranking that means "Nth distinct value".
 - **Fewer than N values.** A returns one row containing NULL. B and C return **no rows**. If the spec says "return NULL", wrap it as a scalar subquery: `SELECT (SELECT DISTINCT total ... OFFSET 8) AS nth` gives a single NULL.
+
+OFFSET counts the rows to *skip*, which is why B uses N − 1:
+
+```formula
+k = N − 1
+k = 4 − 1 = 3
+where
+k: the OFFSET value: how many sorted rows to skip before returning one
+N: which highest value you want; N = 1 is the maximum, N = 4 the fourth highest
+In words: to land on the Nth row you skip the N − 1 rows above it; the distinct totals are 200, 120, 90, 60, …, so skipping 3 returns 60.
+```
 
 ## 2. Top N per group
 
@@ -132,7 +143,25 @@ HAVING COUNT(DISTINCT p.name) = 2;
 -- Ana, Cat
 ```
 
-`DISTINCT` matters: Ana bought Kettle in two different orders, so a plain `COUNT` gives her 3 and wrongly excludes her. Worse, a customer who bought Kettle twice and no Mug would count 2 and wrongly pass.
+In set terms the HAVING clause tests that the customer's products cover the whole required set:
+
+```formula
+|P_c ∩ Q| = |Q|
+|P_Ana ∩ Q| = |{Kettle, Mug}| = 2
+where
+P_c: the set of distinct products customer c bought
+c: one customer, one GROUP BY group
+Q: the required products, here {Kettle, Mug}
+∩: intersection: the items in both sets
+|X|: the number of distinct items in set X; COUNT(DISTINCT …) computes it
+X: any set
+{ }: a set of distinct items
+P_Ana: the products Ana bought, which include both Kettle and Mug
+Kettle, Mug: product names
+In words: a customer qualifies when the number of required products they bought equals the number of required products, which means they bought all of them.
+```
+
+The `WHERE p.name IN (…)` filter builds the intersection and `COUNT(DISTINCT p.name) = 2` compares its size. `DISTINCT` matters: Ana bought Kettle in two different orders, so a plain `COUNT` gives her 3 and wrongly excludes her. Worse, a customer who bought Kettle twice and no Mug would count 2 and wrongly pass.
 
 The same shape answers "customers who ordered in **every** month that had orders":
 
@@ -191,6 +220,19 @@ Every row with a lower-id twin is deleted. Then add a `UNIQUE` constraint so the
 
 The trick: subtract a row number from the date. Within a run of consecutive days, both go up by one each row, so the difference is constant. A gap changes it.
 
+```formula
+g_i = d_i − rn_i
+g_1 = 60 − 1 = 59
+g_4 = 64 − 4 = 60
+where
+g_i: the island key of row i; rows with the same key form one island (run)
+d_i: the date of row i, written here as its day number in 2026: 1 March is day 60 (January has 31 days, February 28), and 5 March is day 64
+rn_i: row i's ROW_NUMBER() in date order, used as a number of days
+i: the row's position, starting at 1
+g_1, g_4: the keys for rows 1 and 4: day 59 is 28 February and day 60 is 1 March, matching the table above
+In words: subtracting the row number cancels the steady one-day-per-row climb inside a run, so every day in a run gets the same key, and each gap moves the key forward.
+```
+
 | day | rn | day - rn |
 |---|---|---|
 | 03-01 | 1 | 02-28 |
@@ -246,6 +288,23 @@ WHERE running >= 400;
 -- 2026-02-14 (running = 425)
 ```
 
+The query finds the first row whose running total reaches the threshold:
+
+```formula
+S_i = t_1 + t_2 + … + t_i
+S_3 = 120 + 45 + 60 = 225
+S_4 = 225 + 200 = 425 ≥ 400
+where
+S_i: the running total after the i-th order in date order
+t_1, t_2, t_i: the totals of the 1st, 2nd and i-th orders
+…: and every order in between
+i: the position in date order, starting at 1
+S_3, S_4: the running totals after the 3rd and 4th orders
+≥: greater than or equal to
+400: the threshold the question asks about
+In words: keep adding totals in date order; the first row where the sum is at least 400 is the 4th order, on 14 February.
+```
+
 The window must be computed before filtering, hence the CTE. If two orders could share a date, decide whether the running total should step per order (`ROWS`, with a tie-breaker) or per day (the default `RANGE`).
 
 ## 7. Median
@@ -275,7 +334,21 @@ WHERE rn IN ((n + 1) / 2,
              (n + 2) / 2);
 ```
 
-With n = 8, integer division gives positions 4 and 5 (both 60), so the median is 60. With n = 7, both expressions give 4, the single middle row.
+The two `IN` positions come from integer division:
+
+```formula
+p_lo = ⌊(n + 1) / 2⌋
+p_hi = ⌊(n + 2) / 2⌋
+n = 8: ⌊9 / 2⌋ = 4, ⌊10 / 2⌋ = 5
+n = 7: ⌊8 / 2⌋ = 4, ⌊9 / 2⌋ = 4
+where
+p_lo, p_hi: the row numbers (rn) of the lower and upper middle rows
+n: the number of non-NULL totals, COUNT(*) OVER ()
+⌊ ⌋: floor: round down to a whole number, which is what integer division does for positive numbers
+In words: for an even count the two expressions pick the two middle rows, and for an odd count they both pick the single middle row; averaging them gives the median.
+```
+
+With n = 8 the positions are 4 and 5 (both 60), so the median is 60. With n = 7, both expressions give 4, the single middle row.
 
 ## 8. The LEFT JOIN filter trap
 

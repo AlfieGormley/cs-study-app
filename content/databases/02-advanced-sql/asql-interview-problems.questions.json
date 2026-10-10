@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. A's sorted rows: 200, 120, 90, 60, **60**, 45, 45, 30. OFFSET 4 skips the first four, so it returns the second 60.\n2. B's distinct values: 200, 120, 90, 60, **45**, 30. OFFSET 4 skips four, returning 45.\n3. \"5th highest total\" almost always means the distinct version. Clarify with the interviewer, then use DISTINCT or DENSE_RANK.",
+    "workedExample": "1. A's sorted rows: 200, 120, 90, 60, **60**, 45, 45, 30. OFFSET 4 skips the first four, so it returns the second 60.\n2. B's distinct values: 200, 120, 90, 60, **45**, 30. OFFSET 4 skips four, returning 45.\n\nOFFSET skips rows before the one returned:\n\n```formula\np = k + 1 = 4 + 1 = 5\nwhere\np: the position (1 = first) of the row returned\nk: the OFFSET value, the rows skipped\nIn words: OFFSET 4 skips four rows, so LIMIT 1 returns the 5th.\n```\n\n3. \"5th highest total\" almost always means the distinct version. Clarify with the interviewer, then use DISTINCT or DENSE_RANK.",
     "link": {
       "title": "LIMIT and OFFSET — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/queries-limit.html"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Number the rows in date order and subtract:\n\n| day | rn | day - rn |\n|---|---|---|\n| 10 | 1 | 9 |\n| 11 | 2 | 9 |\n| 13 | 3 | 10 |\n| 14 | 4 | 10 |\n| 15 | 5 | 10 |\n| 20 | 6 | 14 |\n\nGroup by `day - rn`: {10, 11} length 2, {13, 14, 15} length 3, {20} length 1. That's **3 islands**, the longest **3**. Within a run, day and rn both rise by 1, so the difference stays put; every gap bumps it up.",
+    "workedExample": "Number the rows in date order and subtract:\n\n| day | rn | day - rn |\n|---|---|---|\n| 10 | 1 | 9 |\n| 11 | 2 | 9 |\n| 13 | 3 | 10 |\n| 14 | 4 | 10 |\n| 15 | 5 | 10 |\n| 20 | 6 | 14 |\n\n```formula\ng_i = d_i − rn_i\ng = 10 − 1 = 11 − 2 = 9\ng = 13 − 3 = 14 − 4 = 15 − 5 = 10\ng = 20 − 6 = 14\nwhere\ng_i: row i's island key\ng: a key value shared by the rows on that line\nd_i: the day of the month of row i\nrn_i: row i's ROW_NUMBER() in date order\ni: the row's position, from 1\nIn words: consecutive days and row numbers rise together, so their difference stays fixed within a run.\n```\n\nGroup by `day - rn`: {10, 11} length 2, {13, 14, 15} length 3, {20} length 1. That's **3 islands**, the longest **3**. Within a run, day and rn both rise by 1, so the difference stays put; every gap bumps it up.",
     "link": {
       "title": "Window functions — SQLite docs",
       "url": "https://www.sqlite.org/windowfunctions.html"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Compute the running sum in date order:\n\n| date | total | running |\n|---|---|---|\n| 01-05 | 120 | 120 |\n| 01-09 | 45 | 165 |\n| 02-11 | 60 | 225 |\n| 02-14 | 200 | 425 |\n| 02-20 | 45 | 470 |\n| 03-02 | 90 | 560 |\n\n2. The first row with running >= 500 is 03-02.\n3. In SQL, compute `SUM(total) OVER (ORDER BY ordered_on)` in a CTE, then `SELECT MIN(ordered_on) ... WHERE running >= 500`. You can't filter on the window in the same query level.",
+    "workedExample": "1. Compute the running sum in date order:\n\n| date | total | running |\n|---|---|---|\n| 01-05 | 120 | 120 |\n| 01-09 | 45 | 165 |\n| 02-11 | 60 | 225 |\n| 02-14 | 200 | 425 |\n| 02-20 | 45 | 470 |\n| 03-02 | 90 | 560 |\n\n2. The first row whose running total is at least 500 is 03-02:\n\n```formula\nS_5 = 470 < 500\nS_6 = S_5 + t_6 = 470 + 90 = 560\nS_6 ≥ 500\nwhere\nS_5, S_6: running totals after the 5th and 6th orders in date order\nt_6: the 6th order's total, 90\n<: less than\n≥: greater than or equal to\nIn words: after five orders the total is still 470; the sixth order, on 03-02, lifts it to 560.\n```\n\n3. In SQL, compute `SUM(total) OVER (ORDER BY ordered_on)` in a CTE, then `SELECT MIN(ordered_on) ... WHERE running >= 500`. You can't filter on the window in the same query level.",
     "link": {
       "title": "Window functions — SQLite docs",
       "url": "https://www.sqlite.org/windowfunctions.html"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. n = 7.\n2. (n + 1) / 2 = 8 / 2 = 4.\n3. (n + 2) / 2 = 9 / 2 = 4 in integer arithmetic.\n4. So `rn IN (4, 4)` selects the single middle row: 60.\n5. For an even n, say 8: (9) / 2 = 4 and (10) / 2 = 5, so the two middle rows are averaged.\n\nIn Postgres, `percentile_cont(0.5) WITHIN GROUP (ORDER BY total)` gives the same result directly.",
+    "workedExample": "```formula\np_lo = ⌊(n + 1) / 2⌋ = ⌊8 / 2⌋ = 4\np_hi = ⌊(n + 2) / 2⌋ = ⌊9 / 2⌋ = 4\nwhere\np_lo, p_hi: the two row numbers (rn) the query keeps\nn: the number of rows, COUNT(*) OVER (), here 7\n⌊ ⌋: floor: round down to a whole number; integer division does this for positive numbers\nIn words: with 7 rows both expressions point at row 4, the single middle row.\n```\n\n1. So `rn IN (4, 4)` selects the single middle row: 60.\n2. For an even n, say 8: ⌊9 / 2⌋ = 4 and ⌊10 / 2⌋ = 5, so the two middle rows are averaged.\n\nIn Postgres, `percentile_cont(0.5) WITHIN GROUP (ORDER BY total)` gives the same result directly.",
     "link": {
       "title": "Aggregate functions — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Estimate rows touched:\n\n| approach | rows touched |\n|---|---|\n| ROW_NUMBER | ~50,000,000 |\n| correlated COUNT | 50M x group size |\n| LATERAL + LIMIT 3 | ~20 x 3 = 60 |\n\n1. The LATERAL subquery is planned once and executed per category.\n2. With `(category, revenue DESC)` indexed, `WHERE category = ? ORDER BY revenue DESC LIMIT 3` is an index scan that stops after three entries.\n3. You need the category list cheaply too: a small `categories` table, or a recursive \"loose index scan\" if categories live only in `products`.\n4. ROW_NUMBER is the right default when groups are many and small; LATERAL wins when groups are few and large.",
+    "workedExample": "Estimate rows touched:\n\n| approach | rows touched |\n|---|---|\n| ROW_NUMBER | ~50,000,000 |\n| correlated COUNT | 50M x group size |\n| LATERAL + LIMIT 3 | ~20 x 3 = 60 |\n\n```formula\nN_LATERAL ≈ c × k = 20 × 3 = 60\nN_ROWNUM ≈ n = 50,000,000\nwhere\nN_LATERAL: index entries returned by the LATERAL plan\nN_ROWNUM: rows the ROW_NUMBER plan may read\nc: the number of categories, 20\nk: rows wanted per category, 3\nn: rows in products, 50 million\n≈: roughly; actual physical page reads differ\nIn words: LATERAL reads about 3 entries per category, while ROW_NUMBER may read the whole table.\n```\n\n1. The LATERAL subquery is planned once and executed per category.\n2. With `(category, revenue DESC)` indexed, `WHERE category = ? ORDER BY revenue DESC LIMIT 3` is an index scan that stops after three entries.\n3. You need the category list cheaply too: a small `categories` table, or a recursive \"loose index scan\" if categories live only in `products`.\n4. ROW_NUMBER is the right default when groups are many and small; LATERAL wins when groups are few and large.",
     "link": {
       "title": "Top-N queries — Use The Index, Luke",
       "url": "https://use-the-index-luke.com/sql/partial-results/top-n-queries"

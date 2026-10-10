@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "An HSM is defined by key custody:\n\n- Generation inside the device, from its own RNG.\n- Keys flagged non-exportable.\n- Tamper detection that wipes keys if the casing is attacked (higher FIPS levels).\n\nIt does *not* make keys unusable: any caller the HSM authorises can still request signatures or decryptions.",
+    "workedExample": "An HSM is defined by key custody:\n\n- Generation inside the device, from its own RNG.\n- Keys flagged non-exportable.\n- Tamper response that wipes keys if the casing is attacked (higher FIPS levels).\n\nIt does *not* make keys unusable: any caller the HSM authorises can still request signatures or decryptions.",
     "link": {
       "title": "Hardware security module — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hardware_security_module"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "AES-GCM ciphertext length = plaintext length + 16 (tag). `seal()` also prepends the 12-byte nonce.\n\n```\nwrapped = n2 + GCM(KEK, DEK)\n        = 12 + (32 + 16) = 60\nblob    = n1 + GCM(DEK, data)\n        = 12 + (1000 + 16) = 1028\n```\n\nOverhead per record: 28 bytes, plus 60 for the wrapped DEK if each record has its own key. (A real AWS KMS wrapped key is larger, because it includes key metadata.)",
+    "workedExample": "AES-GCM ciphertext is as long as the plaintext, plus a 16-byte tag, and `seal()` also prepends the 12-byte nonce:\n\n```formula\nL_out = L_nonce + L_in + L_tag\nL_wrap = 12 + (32 + 16) = 60 B\nL_blob = 12 + (1000 + 16) = 1028 B\nwhere\nL_out: the length of one value stored by seal(), in bytes (B)\nL_nonce: the 12-byte nonce stored in front\nL_in: the plaintext length: 32 B for the DEK, 1,000 B for the record\nL_tag: the 16-byte GCM authentication tag\nL_wrap: the wrapped DEK: nonce n2 plus the DEK encrypted under the KEK\nL_blob: the data blob: nonce n1 plus the record encrypted under the DEK\nB: bytes\nIn words: each sealed value is its plaintext plus 28 bytes, so the wrapped DEK is 60 bytes and the 1,000-byte record becomes 1,028.\n```\n\nOverhead per record: 28 bytes, plus 60 for the wrapped DEK if each record has its own key. (A real AWS KMS wrapped key is larger, because it includes key metadata.)",
     "link": {
       "title": "NIST SP 800-38D: GCM and GMAC",
       "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
@@ -195,7 +195,7 @@
     "options": [
       {
         "text": "After about 430 days, at 2^32 encryptions, to keep the chance of a nonce collision negligible",
-        "explanation": "Correct: 2^32 / 10^7 ≈ 429.5 days. Nonce reuse repeats the GCM encryption stream and undermines authentication; exact authentication-key recovery depends on the available messages and tags."
+        "explanation": "Correct: 2^32 is about 4.29 billion encryptions, and at 10 million a day that takes about 429.5 days. Nonce reuse repeats the GCM encryption stream and undermines authentication; exact authentication-key recovery depends on the available messages and tags."
       },
       {
         "text": "Never; 96-bit nonces have 2^96 possibilities",
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "For random 96-bit IVs, SP 800-38D limits total invocations under the key to 2^32. At 10 million/day this is 429.5 days. The birthday approximation q(q−1)/2^97 at q=2^32 is about 2^-33, below the 2^-32 design target. Reuse reveals overlapping plaintext XORs and can enable tag forgery. Fresh per-object keys reduce invocations per key; they do not excuse nonce reuse when an object key is reused.",
+    "workedExample": "For random 96-bit IVs, SP 800-38D limits total invocations under the key to 2^32. At 10 million a day:\n\n```formula\nt = q_max / r\nt = 4,294,967,296 / 10,000,000 ≈ 429.5 d\nwhere\nt: the time until the key reaches the limit, in days (d)\nq_max: the NIST limit, 2^32 = 4,294,967,296 encryptions per key\nr: the write rate, 10 million rows (encryptions) per day\n≈: approximately equal to\nd: days\nIn words: one key reaches NIST's random-nonce limit after about 430 days of writes.\n```\n\nThe limit comes from the birthday approximation for a repeated nonce:\n\n```formula\nP ≈ q × (q − 1) / 2^{b+1}\nP ≈ 2^{32} × 2^{32} / 2^{97} = 2^{−33}\nwhere\nP: the probability that any two of the q random nonces are equal\nq: the number of encryptions under the key, here 2^32\nb: the nonce length, 96 bits\n≈: approximately equal to\nIn words: at 2^32 encryptions the chance of any repeated nonce is about 2^−33 (1 in 8.6 billion), below NIST's 2^−32 design target.\n```\n\nReuse reveals overlapping plaintext XORs and can enable tag forgery. A fresh key per object reduces invocations per key; it does not excuse nonce reuse if that key is used again.",
     "link": {
       "title": "NIST SP 800-38D: GCM and GMAC",
       "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
@@ -292,7 +292,7 @@
         "explanation": "The rows in backups are still decryptable with the shared key, which you cannot destroy without losing everyone's data."
       },
       {
-        "text": "Keep per-customer DEKs wrapped by a KMS key, store the wrapped DEKs in a separate, mutable key table (not in the immutable backups), and delete the customer's entry",
+        "text": "Keep per-customer DEKs wrapped by a KMS key, store the wrapped DEKs in a separate, mutable key table (outside the immutable backups), and delete the customer's entry",
         "explanation": "Correct. Once the wrapped DEK is gone everywhere, the ciphertext in backups cannot be decrypted. The key store's own backups must expire."
       },
       {
@@ -330,7 +330,7 @@
       },
       {
         "text": "Switch from AES-256 to AES-128 to make KMS faster",
-        "explanation": "The KMS operation cost is in the network and HSM, not in unwrapping 16 versus 32 bytes."
+        "explanation": "The KMS operation cost is in the network and HSM, rather than in unwrapping 16 versus 32 bytes."
       },
       {
         "text": "Call KMS `Encrypt` directly on each response instead",
@@ -338,7 +338,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "In one process with a stable 100-key working set, sufficient cache capacity and a 5-minute TTL, each key might need one unwrap per 5 minutes: about 100 calls instead of one per request. Multiple processes, eviction, expiry and cold starts increase that count. Cache keys must bind the encrypted key and relevant context, and enforce age/usage limits. AWS Encryption SDK support varies by language and component; verify the actual supported API.",
+    "workedExample": "In one process with a stable 100-key working set, sufficient cache capacity and a 5-minute TTL, each key might need one unwrap per 5 minutes: about 100 calls instead of one per request. Multiple processes, entries dropping out of a full cache, expiry and cold starts increase that count. Cache keys must bind the encrypted key and relevant context, and enforce age/usage limits. AWS Encryption SDK support varies by language and component; verify the actual supported API.",
     "link": {
       "title": "AWS KMS cryptography essentials — AWS docs",
       "url": "https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html"

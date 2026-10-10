@@ -11,14 +11,14 @@ Encryption does not make a secret go away. It turns a big secret (a database, a 
 Key handling is a major source of encryption failures, alongside implementation errors and protocol misuse. Publicly exposed credentials must be treated as compromised.
 
 > [!note] Content gap
-> A percentage of failures attributed to key management, a universal credential-discovery time and generic HSM throughput figures are omitted because no supporting measurement dataset was available.
+> A percentage of failures attributed to key management, a universal time until leaked credentials are discovered and generic HSM throughput figures are omitted because no supporting measurement dataset was available.
 
 ## The key lifecycle
 
 A typical key lifecycle includes these stages, and each one has its own failure modes:
 
 1. **Generate** from a cryptographically secure RNG, ideally inside the device that will use it.
-2. **Store** with controls against unauthorised copying: not in source code, not in a config file next to the data.
+2. **Store** with controls against unauthorised copying: never in source code, never in a config file next to the data.
 3. **Distribute** only to the systems that need it, over authenticated channels.
 4. **Use** for one purpose only, with access control and an audit trail.
 5. **Rotate** on a schedule and after any suspected compromise.
@@ -117,7 +117,24 @@ except InvalidTag:
     print("wrong context")
 ```
 
-This prints `60 37`, then `b'card 4242'`, then `wrong context`. The wrapped DEK is 12 bytes of nonce, 32 of key and 16 of tag. The ciphertext is 12 + 9 + 16 bytes. The context (`user=42`) is AEAD associated data: it is not secret, but decryption fails if it differs, so a ciphertext copied into another user's row will not decrypt when the application derives the expected context from trusted identity/row information. AWS KMS calls this the **encryption context**, and it can appear in CloudTrail events, so it must not contain secret data.
+This prints `60 37`, then `b'card 4242'`, then `wrong context`. The sizes come from AES-GCM's fixed overhead: its ciphertext is exactly as long as the plaintext, and `seal()` adds a nonce in front and GCM adds a tag at the end:
+
+```formula
+L_out = L_nonce + L_in + L_tag
+L_wrap = 12 + 32 + 16 = 60 B
+L_blob = 12 + 9 + 16 = 37 B
+where
+L_out: the length of one value stored by seal(), in bytes (B)
+L_nonce: the random nonce stored in front, 12 B (96 bits, the size GCM is designed for)
+L_in: the length of the plaintext encrypted: the 32-byte DEK, or the 9-byte record "card 4242"
+L_tag: the GCM authentication tag, 16 B
+L_wrap: the wrapped DEK
+L_blob: the encrypted record
+B: bytes
+In words: every value sealed this way costs 28 bytes more than its plaintext: 12 for the nonce and 16 for the tag.
+```
+
+The context (`user=42`) is AEAD associated data: it is not secret, but decryption fails if it differs, so a ciphertext copied into another user's row will not decrypt when the application derives the expected context from trusted identity/row information. AWS KMS calls this the **encryption context**, and it can appear in CloudTrail events, so it should never contain secret data.
 
 With the real service, the first two lines of `seal` become one call:
 
@@ -144,8 +161,37 @@ This is how S3 server-side encryption with KMS, EBS volumes, Google Cloud's defa
 
 Rotating a key means new data is protected by new key material. In envelope systems there are two separate things to rotate:
 
-- **KEK rotation**: for AWS-generated symmetric encryption keys, AWS KMS keeps every previous version of a key's material, wraps new DEKs with the latest, and still unwraps old ones automatically. The key ID does not change, and nothing is re-encrypted. Once enabled, automatic rotation runs yearly by default (configurable down to 90 days).
+- **KEK rotation**: for AWS-generated symmetric encryption keys, AWS KMS keeps every previous version of a key's material, wraps new DEKs with the latest, and still unwraps old ones automatically. The key's identifier does not change, and nothing is re-encrypted. Once enabled, automatic rotation runs yearly by default (configurable down to 90 days).
 - **DEK rotation**: generate fresh DEKs for new data. With AES-GCM and random 96-bit nonces, NIST limits a key to 2^32 encryptions, so a DEK shared by billions of records must be replaced.
+
+Where does 2^32 come from? With random nonces the danger is two encryptions picking the same nonce by chance, which breaks GCM. The birthday approximation gives the chance of any repeat:
+
+```formula
+P ≈ q × (q − 1) / 2^{b+1}
+P ≈ 2^{32} × 2^{32} / 2^{97} = 2^{−33}
+where
+P: the probability that at least two of the q nonces are equal
+q: the number of encryptions under one key; here the NIST limit, 2^32 ≈ 4.3 billion
+b: the nonce length in bits; 96 for GCM
+≈: approximately equal to; the approximation is accurate while P is small
+In words: the chance of a repeated nonce grows with the square of the number of messages; at 2^32 messages it is about 1 in 8.6 billion, inside NIST SP 800-38D's requirement that the chance of any repeat stay at or below 2^−32, which is why 2^32 is the most a key may carry with random 96-bit nonces.
+```
+
+The square is the "birthday" effect: every pair of encryptions is a chance for a match, the number of pairs grows with the square of the number of messages, and each pair matches with probability 1 in 2^96. Double the messages and the risk quadruples. For example, at 10 million encryptions a day one key reaches the limit in:
+
+```formula
+t = q_max / r
+t = 4,294,967,296 / 10,000,000 ≈ 429.5 d
+where
+t: the time until the key must be retired, in days (d)
+q_max: the NIST limit, 2^32 = 4,294,967,296 encryptions per key
+r: the encryption rate, 10 million per day
+≈: approximately equal to
+d: days
+In words: at 10 million encryptions a day, one random-nonce GCM key lasts about 14 months.
+```
+
+A fresh DEK per object keeps each key far below 2^32 encryptions, and a counter that is guaranteed never to repeat avoids random collisions altogether.
 
 Rotation limits how much data one key protects; it does *not* fix a compromise on its own. If a KEK leaked, old versions can still unwrap old DEKs. After a real compromise you must re-encrypt the data under keys the attacker never had.
 
@@ -160,7 +206,7 @@ Rotation limits how much data one key protects; it does *not* fix a compromise o
 
 - **Secrets in source control.** Bots scan public commits continuously. Use secret scanning and pre-commit hooks, and rotate any key that was ever pushed, even after deleting the commit.
 - **Logging plaintext keys** or decrypted data in debug output or crash dumps.
-- **KMS as a single point of failure.** If every request decrypts a DEK through KMS, a regional outage or quota limit stops your service. Cache plaintext DEKs in memory for a short time, accepting longer plaintext-key residency, weaker per-read audit granularity and delayed revocation. Cached keys help only until eviction or expiry; newly needed keys still require KMS.
+- **KMS as a single point of failure.** If every request decrypts a DEK through KMS, a regional outage or quota limit stops your service. Cache plaintext DEKs in memory for a short time, accepting longer plaintext-key residency, weaker per-read audit granularity and delayed revocation. Cached keys help only until they drop out of the cache or expire; newly needed keys still require KMS.
 - **Lost keys mean lost data.** Keep KEKs durable and backed up within the HSM or KMS's own mechanisms; test recovery.
 - **Encrypting with the KEK directly.** Calling KMS `Encrypt` on records works for small values, but adds latency to every operation and fails above the API's algorithm-specific payload limit (4,096 bytes for symmetric KMS encryption).
 - **Forgetting the threat model.** Disk encryption protects a stolen drive. It does nothing against SQL injection, because the database decrypts for any query it is allowed to run.

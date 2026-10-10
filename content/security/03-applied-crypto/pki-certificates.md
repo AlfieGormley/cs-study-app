@@ -104,7 +104,7 @@ def check_links(chain):
               iss.subject.rfc4514_string())
 ```
 
-For a root, intermediate and leaf, this prints `CN=shop.test <- CN=Toy Issuing CA` then `CN=Toy Issuing CA <- CN=Toy Root`. `verify_directly_issued_by` checks issuer/subject name agreement and signature validity; this loop does not check dates, hostname, CA constraints, trust, revocation or CT. Use a maintained validator and configure the required policy. `cryptography.x509.verification.PolicyBuilder` can build a server verifier with hostname/path checks, but does **not** automatically perform live revocation or browser CT enforcement.
+For a root, intermediate and leaf, this prints `CN=shop.test <- CN=Toy Issuing CA` then `CN=Toy Issuing CA <- CN=Toy Root`. `verify_directly_issued_by` checks issuer/subject name agreement and signature validity; this loop does not check dates, hostname, CA constraints, trust, revocation or CT. Use a maintained validator and configure the required policy. `cryptography.x509.verification.PolicyBuilder` can build a server certificate verifier with hostname/path checks, but does **not** automatically perform live revocation or browser CT enforcement.
 
 ## Revocation: the unsolved part
 
@@ -122,7 +122,7 @@ Shorter validity reduces the exposure window for a particular certificate, but d
 
 ## Keeping CAs honest
 
-An unconstrained trusted CA can authorize names outside the domains it usually serves. The accepted root set and constraints vary by platform and policy, so one compromised CA can affect many relying parties.
+An unconstrained trusted CA can authorize names outside the domains it usually serves. The set of accepted roots and the constraints vary by platform and policy, so one compromised CA can affect many relying parties.
 
 > [!example] DigiNotar, 2011
 > Attackers broke into the Dutch CA DigiNotar and issued hundreds of fraudulent certificates, including one for `*.google.com`, which was used to intercept Gmail users in Iran. Chrome caught it because it pinned Google's keys. Mozilla removed trust following the incident. This example concerns the documented certificate compromise, not a verified account of the company's later legal or financial proceedings.
@@ -137,7 +137,7 @@ Browsers also run their own root programmes. Mozilla, Apple, Microsoft and Googl
 
 Not every certificate comes from a public CA. Organisations run **private CAs** for internal services, VPNs, devices and **mutual TLS**, where clients present certificates too. Service meshes such as Istio issue each workload a certificate with a SPIFFE identity (`spiffe://cluster/ns/shop/sa/api`), valid for about a day by default, and rotate it automatically.
 
-Private PKI gives you control and short lifetimes, but you inherit the CA's problems: protecting the root key, distributing trust to every client, and handling revocation. Appropriate name constraints can limit what enforcing clients accept, but must cover the identity forms actually used. DNS constraints alone do not constrain arbitrary SPIFFE URI identities. A stolen issuing key can keep signing until its trust is removed or otherwise rejected.
+Private PKI gives you control and short lifetimes, but you inherit the CA's problems: protecting the root CA's key, distributing trust to every client, and handling revocation. Appropriate name constraints can limit what enforcing clients accept, but must cover the identity forms actually used. DNS constraints alone do not constrain arbitrary SPIFFE URI identities. A stolen issuing key can keep signing until its trust is removed or otherwise rejected.
 
 ## Pitfalls
 
@@ -148,7 +148,7 @@ Private PKI gives you control and short lifetimes, but you inherit the CA's prob
 
 ## Key takeaways
 - A certificate is a CA's signature binding names (in SAN) to a public key; PKI is the system of who may sign and how trust is distributed.
-- Trust flows from a small root store through intermediates to leaves; root-key protection and infrequent use are common operational designs, not requirements of every PKI.
+- Trust flows from a small root store through intermediates to leaves; root CA key protection and infrequent use are common operational designs, not requirements of every PKI.
 - Clients must check signatures, dates, CA constraints, the hostname, key usage and revocation; skipping one has broken real systems.
 - ACME automates domain validation; CAA and multi-perspective validation narrow attacks on it.
 - Revocation is unreliable because clients soft-fail; browsers push revocation data and the industry is moving to 47-day certificates.

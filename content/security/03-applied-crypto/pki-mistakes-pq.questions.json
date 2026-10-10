@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "Nothing; 52^32 possibilities is far too many to guess",
-        "explanation": "The space is large, but the generator is predictable. An attacker doesn't guess randomly; they reconstruct the RNG's state."
+        "explanation": "The space is large, but the generator is predictable. An attacker doesn't guess randomly; they reconstruct the generator's internal state."
       },
       {
         "text": "The tokens are too short; use 64 characters",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "MT19937 is not a cryptographic generator. A suitable sequence of 624 full 32-bit outputs allows state cloning; random.choice tokens expose partial outputs through rejection sampling, so that simple count is not an exact recovery guarantee for this API. Predictability risk is sufficient reason to use secrets.token_urlsafe(32), backed by the operating system CSPRNG.",
+    "workedExample": "The token space itself is enormous:\n\n```formula\nN = 52^{32} ≈ 8.2 × 10^{54}\nH = 32 × log_2(52) ≈ 182 bits\nwhere\nN: the number of possible 32-letter tokens using 52 letters (a–z and A–Z)\nH: the entropy, in bits, if every letter were truly random\nlog_2: logarithm base 2: the number of bits needed to pick one of 52 options (about 5.7)\n≈: approximately equal to\nbits: binary digits, the unit of entropy; each extra bit doubles the number of possibilities\nIn words: a truly random token like this would carry about 182 bits, far beyond any brute-force guessing.\n```\n\nBut the letters are not truly random. MT19937 is not a cryptographic generator. A suitable sequence of 624 full 32-bit outputs allows state cloning; random.choice tokens expose partial outputs through rejection sampling, so that simple count is not an exact recovery guarantee for this API. Predictability risk is sufficient reason to use secrets.token_urlsafe(32), backed by the operating system CSPRNG.",
     "link": {
       "title": "secrets — Python docs",
       "url": "https://docs.python.org/3/library/secrets.html"
@@ -67,7 +67,7 @@
     "options": [
       {
         "text": "`tag == expected`",
-        "explanation": "Ordinary equality is not a constant-time API. Its timing behavior depends on implementation; do not rely on it for secret-tag comparison."
+        "explanation": "Ordinary equality is not a constant-time API. Its timing behavior depends on implementation; do not rely on it when comparing secret tags."
       },
       {
         "text": "`tag in [expected]`",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "An idealised bytewise early-exit comparison can leak the matching-prefix length, but a real attack depends on timing signal, implementation and repeated samples. There is no universal 32 × 256-request upper bound for Python equality. hmac.compare_digest is the appropriate content-independent comparison API for validated equal-type/equal-length tags.",
+    "workedExample": "An idealised bytewise early-exit comparison can leak how many leading bytes matched, but a real attack depends on timing signal, implementation and repeated samples. There is no universal 32 × 256-request upper bound for Python equality. hmac.compare_digest is the appropriate content-independent comparison API for validated equal-type/equal-length tags.",
     "link": {
       "title": "Timing attack — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Timing_attack"
@@ -97,7 +97,7 @@
     "options": [
       {
         "text": "Nothing without the key",
-        "explanation": "With a repeated nonce the keystream cancels: `c1 XOR c2 XOR p1 = p2`. No key needed."
+        "explanation": "With a repeated nonce the keystream cancels: XORing c1, c2 and p1 together gives p2. No key needed."
       },
       {
         "text": "The overlapping p2 bytes; GCM nonce reuse also compromises authentication and can enable tag forgery",
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. CTR part: `c = p XOR KS(key, nonce)`. Same nonce → same KS.\n2. `c1 XOR c2 = p1 XOR p2`, so `p2 = c1 XOR c2 XOR p1`. The example prints `b'retreat at ten!'`.\n3. GCM tag: a polynomial in the hash key H, plus a nonce-dependent mask. Two tags with the same mask can be subtracted to cancel it, leaving a polynomial whose roots include H.\n4. With H and the known keystream, the attacker forges valid ciphertext and tags for that nonce. This is the 'forbidden attack' Böck et al. demonstrated against real HTTPS servers.",
+    "workedExample": "The CTR part of GCM XORs the plaintext with a keystream made from the key and nonce:\n\n```formula\nc = p ⊕ KS(K, N)\nc_1 ⊕ c_2 = p_1 ⊕ p_2\np_2 = c_1 ⊕ c_2 ⊕ p_1\nwhere\nc: a ciphertext (c_1 and c_2 are the two seen by the attacker)\np: a plaintext (p_1 is the guessed one, p_2 the target)\nc_1: the first ciphertext\nc_2: the second ciphertext\np_1: the known or guessed first plaintext, \"attack at dawn!\"\np_2: the second plaintext the attacker recovers\nKS: the keystream function, which turns a key and nonce into pseudorandom bytes\nK: the AES key\nN: the nonce, the same for both messages here\n⊕: XOR (exclusive OR), bit by bit; anything XORed with itself is 0, so the keystream cancels\nIn words: the same key and nonce give the same keystream, so XORing the two ciphertexts and the known plaintext leaves the other plaintext.\n```\n\n1. The example prints `b'retreat at ten!'`.\n2. GCM tag: a polynomial in the authentication subkey H, plus a nonce-dependent mask. Two tags with the same mask can be subtracted to cancel it, leaving a polynomial whose roots include H.\n3. With H and the known keystream, the attacker forges valid ciphertext and tags for that nonce. This is the 'forbidden attack' Böck et al. demonstrated against real HTTPS servers.",
     "link": {
       "title": "Nonce-disrespecting adversaries: practical forgery attacks on GCM in TLS",
       "url": "https://eprint.iacr.org/2016/475"
@@ -123,7 +123,7 @@
     "id": "pki-mistakes-pq-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An API authenticates requests with `sig = SHA256(secret_key + params)`. An attacker has one valid request `params = \"user=alice&amount=10\"` and its `sig`, but not the key. What can they do?",
+    "prompt": "An API authenticates each request with a tag that is a plain hash of the secret key followed by the request parameters:\n\n```formula\nt = SHA256(K ‖ m)\nwhere\nt: the tag sent with the request\nSHA256: the SHA-256 hash function\nK: the API's secret key\nm: the request parameters, as a string\n‖: concatenation: the key's bytes followed by the parameters' bytes\nIn words: the tag is the SHA-256 hash of the key and the parameters glued together.\n```\n\nAn attacker has one valid request with parameters `user=alice&amount=10` and its tag, but not the key. What can they do?",
     "options": [
       {
         "text": "Nothing; SHA-256 is preimage-resistant",
@@ -134,7 +134,7 @@
         "explanation": "Length extension does not reveal the key; it only lets the attacker extend messages."
       },
       {
-        "text": "Compute a valid `sig` for `params` with padding and extra data appended (e.g. `&amount=1000000`) via a length-extension attack",
+        "text": "Compute a valid tag for those parameters with padding and extra data appended (e.g. `&amount=1000000`) via a length-extension attack",
         "explanation": "Correct for the raw secret-prefix SHA-256 construction when key length is known or guessed. Whether the forged byte string is accepted as a useful request also depends on parser and format validation."
       },
       {
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Merkle–Damgård hashes (MD5, SHA-1, SHA-256) output their full internal state.\n2. `SHA256(key || m)` = state after processing `key || m || pad`.\n3. Load that state and keep hashing `extra`. The result equals `SHA256(key || m || pad || extra)`.\n4. The attacker only needs to guess the key's length to construct `pad`.\n5. The server parses the params; many parsers take the last `amount=`, so the attacker's value wins.\n6. Fix: HMAC-SHA256, which is immune by design. (SHA-3 and BLAKE2/3 are also not vulnerable, but use HMAC or a real MAC anyway.)",
+    "workedExample": "1. Merkle–Damgård hashes (MD5, SHA-1, SHA-256) output their full internal state.\n2. So the tag is SHA-256's internal state after processing the key, the parameters and SHA-256's own padding.\n3. Load that state and keep hashing extra data. The result equals the hash of key, parameters, padding and extra data (below).\n4. The attacker only needs to guess the key's length to construct the padding.\n5. The server parses the params; many parsers take the last `amount=`, so the attacker's value wins.\n6. Fix: HMAC-SHA256, which is immune by design. (SHA-3 and BLAKE2/3 are also not vulnerable, but use HMAC or another real message authentication code anyway.)\n\n```formula\nt = SHA256(K ‖ m)\nSHA256(K ‖ m ‖ P_m ‖ x) = SHA256_t(x)\nwhere\nt: the valid tag the attacker has\nSHA256: the SHA-256 hash function\nK: the secret key, unknown to the attacker\nm: the original parameters, \"user=alice&amount=10\"\nP_m: the padding SHA-256 adds after K ‖ m (a 1 bit, zeros and the length), computable once the key length is guessed\nx: the attacker's extra data, \"&amount=1000000\"\nSHA256_t: SHA-256 restarted from internal state t and run over x\n‖: concatenation\nIn words: resuming the hash from the published tag produces the correct tag for the longer message, without ever knowing K.\n```",
     "link": {
       "title": "Length extension attack — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Length_extension_attack"
@@ -181,7 +181,7 @@
       1,
       2
     ],
-    "workedExample": "An attacker varies preceding ciphertext/IV bytes and observes padding validity to constrain plaintext. False positives and message format affect query count; no universal 128-queries-per-byte guarantee applies. A padding oracle can also support chosen-plaintext ciphertext construction when the IV/format permits. Correct AEAD avoids CBC padding altogether and must not release unauthenticated plaintext; encrypt-then-MAC must verify before CBC decryption.",
+    "workedExample": "An attacker varies preceding ciphertext/IV bytes and observes padding validity to constrain plaintext. False positives and message format affect query count; no universal 128-queries-per-byte guarantee applies. A padding oracle can also support chosen-plaintext ciphertext construction when the IV/format permits. Correct AEAD avoids CBC padding altogether and should never release unauthenticated plaintext; encrypt-then-MAC must verify before CBC decryption.",
     "link": {
       "title": "Padding oracle attack — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Padding_oracle_attack"
@@ -211,7 +211,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "```\nx = 25  (secrecy lifetime)\ny = 7   (migration time)\nz = 15  (time to quantum)\nx + y = 32 > 15\n```\n\n1. Data encrypted at the end of migration (year 7) must stay secret until year 32.\n2. The adversary can decrypt recorded traffic from year 15.\n3. Even data encrypted today (year 0) must survive until year 25, beyond 15.\n4. So harvested ciphertext will be readable while still sensitive. Start with hybrid post-quantum key exchange now.",
+    "workedExample": "```formula\nx + y > z\nx + y = 25 + 7 = 32\n32 > 15 = z\nwhere\nx: how long the data must stay secret, 25 years\ny: how long migration takes, 7 years\nz: the assumed time until a cryptographically relevant quantum computer, 15 years\n>: is greater than\nIn words: secrecy plus migration (32 years) exceeds the time to a quantum computer (15 years) by 17 years, so migration is already urgent.\n```\n\n1. Data encrypted at the end of migration (year 7) must stay secret until year 32.\n2. An attacker can decrypt recorded traffic from year 15.\n3. Even data encrypted today (year 0) must survive until year 25, beyond 15.\n4. So harvested ciphertext will be readable while still sensitive. Start with hybrid post-quantum key exchange now.",
     "link": {
       "title": "Post-quantum cryptography — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Post-quantum_cryptography"
@@ -241,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Shor's algorithm finds periods, which solves integer factorisation and discrete logarithms in polynomial time.\n2. RSA relies on factoring; DH, ECDH, ECDSA and Ed25519 rely on discrete logs.\n3. Grover's algorithm searches unstructured spaces in about √N steps: AES-256 → ~2^128 work, which is fine.\n4. Lattice problems (ML-KEM, ML-DSA) and hash-based signatures (SLH-DSA) have no known Shor-like attack.",
+    "workedExample": "1. Shor's algorithm finds periods, which solves integer factorisation and discrete logarithms in polynomial time.\n2. RSA relies on factoring; DH, ECDH, ECDSA and Ed25519 rely on discrete logs.\n3. Grover's algorithm gives only a square-root speed-up on unstructured search (below): AES-256 still needs about 2^128 work, which is fine.\n4. Lattice problems (ML-KEM, ML-DSA) and hash-based signatures (SLH-DSA) have no known Shor-like attack.\n\n```formula\nW ≈ √(N) = √(2^k) = 2^{k/2}\nW_256 ≈ 2^{256/2} = 2^{128}\nwhere\nW: the idealised number of Grover steps to find a key\nN: the number of possible keys, 2^k\nk: the key length in bits\nW_256: the idealised Grover work for AES-256\n√: square root\n≈: approximately equal to\nIn words: Grover halves the effective key length in bits, so a 256-bit key still needs about 2^128 quantum steps, far out of reach.\n```",
     "link": {
       "title": "Shor's algorithm — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Shor%27s_algorithm"
@@ -289,7 +289,7 @@
       },
       {
         "text": "Implementations are new and may have bugs such as the KyberSlash timing leaks",
-        "explanation": "Correct for a flaw confined to the PQ component without exposing the classical secret or shared process state. A memory-safety bug compromising both components is not contained by hybrid mathematics."
+        "explanation": "Correct for a flaw confined to the PQ component without exposing the classical secret or other secrets in the same process. A memory-safety bug compromising both components is not contained by hybrid mathematics."
       },
       {
         "text": "Combining both secrets keeps the session secure if either algorithm holds",
@@ -330,8 +330,8 @@
         "explanation": "ECB leaks equality between blocks: the ECB penguin and Adobe."
       },
       {
-        "text": "AES-256-CBC with a fixed IV, plus `SHA256(key + ciphertext)` as an integrity check",
-        "explanation": "A fixed IV leaks equal prefixes, and `SHA256(key || data)` is length-extendable. Two mistakes from the lesson."
+        "text": "AES-256-CBC with a fixed IV, plus a SHA-256 hash of key then ciphertext as an integrity check",
+        "explanation": "A fixed IV leaks equal prefixes, and a plain hash of key then data is length-extendable. Two mistakes from the lesson."
       },
       {
         "text": "AES-256-GCM with a nonce derived from the current timestamp in seconds",
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Score each against the mistakes:\n\n| Design | Problems |\n|---|---|\n| CBC + fixed IV + SHA256(k‖c) | IV reuse, length extension |\n| ECB | equal blocks leak |\n| High-level AEAD + KMS | none of these |\n| GCM + timestamp nonce | nonce reuse |\n\nThe pattern: use misuse-resistant libraries, a CSPRNG, AEAD, per-object keys (envelope encryption from the key-management lesson) and context binding.",
+    "workedExample": "Score each against the mistakes:\n\n| Design | Problems |\n|---|---|\n| CBC + fixed IV + hash of key then ciphertext | IV reuse, length extension |\n| ECB | equal blocks leak |\n| High-level AEAD + KMS | none of these |\n| GCM + timestamp nonce | nonce reuse |\n\nThe pattern: use misuse-resistant libraries, a CSPRNG, AEAD, a fresh key per object (envelope encryption from the key-management lesson) and context binding.",
     "link": {
       "title": "Cryptographic Storage Cheat Sheet — OWASP",
       "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html"
@@ -356,8 +356,8 @@
         "explanation": "Even 2048-bit keys would fall: the attack works on shared primes regardless of length."
       },
       {
-        "text": "Devices generated keys at first boot with almost no entropy, so different devices produced the same primes; `gcd(n1, n2)` reveals a shared prime instantly",
-        "explanation": "Correct. If two moduli share one prime p, `gcd(n1, n2) = p`, and both factor immediately. This is a randomness failure, not a weakness of RSA."
+        "text": "Devices generated keys at first boot with almost no entropy, so different devices produced the same primes; the GCD of two public moduli reveals a shared prime instantly",
+        "explanation": "Correct. If two moduli share one prime, their greatest common divisor is that prime, and both factor immediately. This is a randomness failure, not a weakness of RSA."
       },
       {
         "text": "Shor's algorithm was run on a classical computer",
@@ -369,7 +369,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "If n1=p×q1 and n2=p×q2 with distinct other primes, gcd(n1,n2)=p. Dividing yields the remaining factors. Batch-GCD techniques scale this check to collections of public keys. Insufficient entropy can cause shared factors; a universal microsecond or multi-hour runtime is omitted because no benchmark setup is specified.",
+    "workedExample": "```formula\nn_1 = p × q_1\nn_2 = p × q_2\ngcd(n_1, n_2) = p\nwhere\nn_1: the first device's public RSA modulus\nn_2: the second device's public RSA modulus\np: the prime both devices generated\nq_1: the first device's other prime\nq_2: the second device's other prime\ngcd: greatest common divisor: the largest number dividing both exactly, found quickly by Euclid's algorithm\nIn words: a prime shared by two public moduli is their greatest common divisor, so it falls out of a cheap calculation without factoring either one.\n```\n\nDividing each modulus by the shared prime yields the remaining factors. Batch-GCD techniques scale this check to collections of public keys. Insufficient entropy can cause shared factors; a universal microsecond or multi-hour runtime is omitted because no benchmark setup is specified.",
     "link": {
       "title": "Mining your Ps and Qs: weak keys in network devices",
       "url": "https://factorable.net/"

@@ -79,7 +79,7 @@
       },
       {
         "text": "Cryptographic deniability: the shared-key tag alone is not transferable proof that Alice created the message, since Bob could compute it too",
-        "explanation": "Correct. Both parties hold the MAC key, so a transcript does not prove authorship to anyone else."
+        "explanation": "Correct. Both parties hold the shared authentication key, so a saved copy of the conversation does not prove authorship to anyone else."
       }
     ],
     "answer": 3,
@@ -93,7 +93,7 @@
     "id": "pki-e2ee-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "In X3DH, `DH2 = DH(EK_A, IK_B)`. What would break if Alice left DH2 out (keeping DH1, DH3, DH4)?",
+    "prompt": "In X3DH, Alice computes four Diffie–Hellman values and feeds all of them into the session key:\n\n```formula\nDH1 = DH(IK_A, SPK_B)\nDH2 = DH(EK_A, IK_B)\nDH3 = DH(EK_A, SPK_B)\nDH4 = DH(EK_A, OPK_B)\nwhere\nDH: one Diffie–Hellman computation: DH(X, Y) combines the private half of key pair X with the public half of key pair Y\nIK_A: Alice's long-term identity key pair\nIK_B: Bob's long-term identity key pair\nSPK_B: Bob's signed prekey pair (medium-term)\nEK_A: Alice's fresh ephemeral key pair for this session\nOPK_B: one of Bob's one-time prekey pairs\nDH1: the identity-key-to-signed-prekey result\nDH2: the ephemeral-to-Bob's-identity-key result\nDH3: the ephemeral-to-signed-prekey result\nDH4: the ephemeral-to-one-time-prekey result\nIn words: four pairings of Alice's keys with Bob's, each giving a shared secret that Bob can recompute with his private halves.\n```\n\nWhat would break if Alice left DH2 out (keeping DH1, DH3, DH4)?",
     "options": [
       {
         "text": "Forward secrecy, because DH2 is the only ephemeral term",
@@ -123,7 +123,7 @@
     "id": "pki-e2ee-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Using the lesson's symmetric ratchet `step()` (message key = HMAC(ck, 0x01), next chain key = HMAC(ck, 0x02)), an attacker steals Alice's sending chain key after she has sent messages 0–4 in the current chain, and before message 5. Which messages in this chain can the attacker decrypt?",
+    "prompt": "The lesson's symmetric ratchet `step()` derives keys like this:\n\n```formula\nmk = HMAC(ck, 0x01)\nck' = HMAC(ck, 0x02)\nwhere\nmk: the message key for the current message\nck: the current chain key\nck': the next chain key, which replaces ck\nHMAC: hash-based message authentication code (HMAC-SHA256), a keyed hash that cannot be run backwards\n0x01: the constant byte 1, labelling the message-key output\n0x02: the constant byte 2, labelling the next-chain-key output\nIn words: each chain key yields one message key and the next chain key, then is deleted.\n```\n\nAn attacker steals Alice's sending chain key after she has sent messages 0–4 in the current chain, and before message 5. Which messages in this chain can the attacker decrypt?",
     "options": [
       {
         "text": "Messages 0–4 only",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "With ck5 alone, an attacker derives mk5, ck6 and later keys in that chain, but cannot invert the KDF to recover erased earlier keys. A new chain derived from uncompromised root/DH state is outside this chain-key-only exposure. Theft of the whole device state is a stronger scenario and requires fresh unknown ratchet contributions before recovery.",
+    "workedExample": "The stolen value is the chain key for message 5. Running the ratchet forwards from it:\n\n```formula\nmk_5 = HMAC(ck_5, 0x01)\nck_6 = HMAC(ck_5, 0x02)\nmk_6 = HMAC(ck_6, 0x01)\nwhere\nck_5: the stolen chain key, current before message 5\nmk_5: the message key for message 5\nck_6: the next chain key\nmk_6: the message key for message 6, and so on for later messages\nHMAC: HMAC-SHA256, a one-way keyed hash\n0x01: the constant byte that labels a message key\n0x02: the constant byte that labels the next chain key\nIn words: the attacker can step forwards for ever in this chain, but cannot step backwards, because finding ck_4 from ck_5 would mean inverting HMAC.\n```\n\nSo with the chain key for message 5 alone, an attacker derives the keys for message 5 and later in that chain, but cannot invert the KDF to recover erased earlier keys. A new chain derived from uncompromised root/DH state is outside this chain-key-only exposure. Theft of the whole device state is a stronger scenario and requires fresh unknown ratchet contributions before recovery.",
     "link": {
       "title": "The Double Ratchet Algorithm — Signal",
       "url": "https://signal.org/docs/specifications/doubleratchet/"
@@ -181,7 +181,7 @@
       1,
       3
     ],
-    "workedExample": "1. Symmetric ratchet: one-way KDF chain, keys deleted after use. Forward secrecy. True.\n2. DH ratchet: new key pairs, new DH outputs into the root KDF. Healing. True.\n3. Healing needs the attacker to stop seeing new secrets. A persistent implant on the phone sees everything. False.\n4. The header includes the ratchet public key, `N` and `PN`. True.\n5. Skipped-key storage handles reordering. False.",
+    "workedExample": "1. Symmetric ratchet: one-way KDF chain, keys deleted after use. Forward secrecy. True.\n2. DH ratchet: new key pairs, new DH outputs into the root KDF. Healing. True.\n3. Healing needs the attacker to stop seeing new secrets. A persistent implant on the phone sees everything. False.\n4. The header includes the ratchet public key, the message's number in the current chain (N) and the previous chain's length (PN). True.\n5. Skipped-key storage handles reordering. False.",
     "link": {
       "title": "The Double Ratchet Algorithm — Signal",
       "url": "https://signal.org/docs/specifications/doubleratchet/"
@@ -229,7 +229,7 @@
       },
       {
         "text": "The attacker may still be able to derive future messages from stolen sender chain keys until members distribute new sender keys, so recovery is weaker and slower",
-        "explanation": "Correct. Sender Keys have no per-message DH ratchet; healing requires rotating sender keys (for example, when membership changes)."
+        "explanation": "Correct. Sender Keys have no per-message DH ratchet; healing requires rotating sender keys (for example, when members join or leave)."
       },
       {
         "text": "Messages must be encrypted 1,000 times",
@@ -267,11 +267,11 @@
       },
       {
         "text": "About 12 path nodes versus 4,095 pairwise messages",
-        "explanation": "Correct. A balanced binary tree with 4,096 leaves has depth log2(4096) = 12, so an update replaces the keys on the path to the root."
+        "explanation": "Correct. A balanced binary tree with 4,096 leaves has depth 12 (2 to the power 12 is 4,096), so an update replaces the keys on the path to the root."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Leaves are members; each internal node has a key pair known to the members below it.\n2. To update, a member picks new secrets for their leaf and every ancestor up to the root.\n3. For each node on the path, they encrypt its new secret to the sibling subtree's node key. One ciphertext covers a whole subtree.\n4. Path length:\n\n```\nlog2(4096) = 12\n```\n\n5. Pairwise re-keying would need a message to each of the 4,095 others. (Real trees can be unbalanced or have blank nodes, so costs vary, but stay logarithmic in the good case.)",
+    "workedExample": "1. Leaves are members; each internal node has a key pair known to the members below it.\n2. To update, a member picks new secrets for their leaf and every ancestor up to the root.\n3. For each node on the path, they encrypt its new secret to the sibling subtree's node key. One ciphertext covers a whole subtree.\n4. Path length: see the formula below.\n5. Pairwise re-keying would need a message to each of the 4,095 others. (Real trees can be unbalanced or have blank nodes, so costs vary, but stay logarithmic in the good case.)\n\n```formula\nL = log_2(N)\nL = log_2(4,096) = 12\nwhere\nL: the depth of a balanced binary tree: the number of nodes on a member's path that an update refreshes\nN: the number of members, one per leaf\nlog_2: logarithm base 2: the power 2 must be raised to; 2^12 = 4,096\nIn words: 4,096 is 2 multiplied by itself 12 times, so a balanced tree of 4,096 members is 12 levels deep.\n```",
     "link": {
       "title": "RFC 9420: The Messaging Layer Security (MLS) Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc9420"
@@ -301,7 +301,7 @@
       },
       {
         "text": "An attacker who records ciphertext today and steals the phone's current keys next month decrypting today's messages",
-        "explanation": "Forward secrecy prevents this: today's message keys are deleted and cannot be recomputed from next month's state."
+        "explanation": "Forward secrecy prevents this: today's message keys are deleted and cannot be recomputed from next month's keys."
       }
     ],
     "answer": [
@@ -331,7 +331,7 @@
       },
       {
         "text": "To replace signatures on prekeys with quantum-safe ones",
-        "explanation": "PQXDH does not make classical prekey authentication quantum-resistant. A sufficiently capable active quantum attacker would require resistant authentication; this is distinct from recorded-traffic confidentiality."
+        "explanation": "PQXDH does not make classical prekey authentication quantum-resistant. A sufficiently capable active quantum attacker would require resistant authentication; this differs from recorded-traffic confidentiality."
       },
       {
         "text": "Because ML-KEM is faster than X25519",
@@ -339,7 +339,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. A passive adversary can store encrypted traffic indefinitely.\n2. Shor's algorithm on a large quantum computer would solve elliptic-curve discrete logs, revealing X3DH secrets from recorded public keys.\n3. So key agreement needs quantum resistance *before* such machines exist.\n4. New PQ schemes have had less scrutiny; one NIST candidate (SIKE) was broken classically in 2022.\n5. Hybrid: `SK = KDF(DH1..DH4 || KEM_ss)`. Secure if either X25519 or the KEM holds.",
+    "workedExample": "1. A passive adversary can store encrypted traffic indefinitely.\n2. Shor's algorithm on a large quantum computer would solve elliptic-curve discrete logs, revealing X3DH secrets from recorded public keys.\n3. So key agreement needs quantum resistance *before* such machines exist.\n4. New PQ schemes have had less scrutiny; one NIST candidate (SIKE) was broken classically in 2022.\n5. Hybrid: the KEM's shared secret goes into the same KDF as the four DH values (below). Secure if either X25519 or the KEM holds.\n\n```formula\nSK = KDF(DH1 ‖ DH2 ‖ DH3 ‖ DH4 ‖ SS)\nwhere\nSK: the session's shared secret key\nKDF: key derivation function (HKDF in PQXDH)\nDH1: the identity-to-signed-prekey Diffie–Hellman result\nDH2: the ephemeral-to-identity-key result\nDH3: the ephemeral-to-signed-prekey result\nDH4: the ephemeral-to-one-time-prekey result (if one was available)\nSS: the shared secret from encapsulating to Bob's post-quantum KEM prekey\n‖: concatenation\nIn words: the session key depends on both the classical and the post-quantum secrets, so an attacker must recover both to learn it.\n```",
     "link": {
       "title": "Quantum Resistance and the Signal Protocol — Signal blog",
       "url": "https://signal.org/blog/pqxdh/"

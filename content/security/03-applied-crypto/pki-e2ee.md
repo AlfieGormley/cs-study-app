@@ -38,12 +38,27 @@ Bob's phone uploads a **prekey bundle** to the server in advance:
 
 When Alice wants to talk, the server gives her Bob's bundle, including one OPK, which it then deletes. Alice checks the signature on SPK_B, generates a fresh **ephemeral key** EK_A, and computes four Diffie–Hellman values:
 
-```
+```formula
 DH1 = DH(IK_A, SPK_B)
 DH2 = DH(EK_A, IK_B)
 DH3 = DH(EK_A, SPK_B)
 DH4 = DH(EK_A, OPK_B)
-SK  = KDF(DH1 || DH2 || DH3 || DH4)
+SK = KDF(DH1 ‖ DH2 ‖ DH3 ‖ DH4)
+where
+DH: one Diffie–Hellman computation (X25519 or X448 in Signal): DH(X, Y) combines the private half of key pair X with the public half of key pair Y; the holder of Y's private half gets the same result (32 bytes with X25519) from X's public half
+IK_A: Alice's long-term identity key pair
+IK_B: Bob's long-term identity key pair
+SPK_B: Bob's signed prekey pair, replaced every week or month
+EK_A: Alice's ephemeral key pair, made fresh for this session and deleted afterwards
+OPK_B: one of Bob's one-time prekey pairs, used once and deleted
+DH1: the shared secret from Alice's identity key and Bob's signed prekey
+DH2: the shared secret from Alice's ephemeral key and Bob's identity key
+DH3: the shared secret from Alice's ephemeral key and Bob's signed prekey
+DH4: the shared secret from Alice's ephemeral key and Bob's one-time prekey; left out if no one-time prekey was available
+SK: the 32-byte shared secret key that starts the session
+KDF: key derivation function: X3DH uses HKDF, with 32 bytes of 0xFF (for X25519) placed in front of the input to separate it from other uses of the same keys
+‖: concatenation: the bytes of one value followed directly by the next
+In words: Alice combines four pairings of her keys with Bob's, and hashes all four results into one session key; Bob, holding the matching private halves, computes exactly the same four values later.
 ```
 
 Each one has a job:
@@ -55,7 +70,7 @@ Each one has a job:
 Alice sends her first message encrypted under a key derived from SK, together with IK_A, EK_A and which prekeys she used. When Bob comes online, he computes the same four values and decrypts. No round trip was needed.
 
 > [!note] PQXDH
-> Signal announced **PQXDH** in 2023: Bob's bundle adds signed post-quantum prekeys. The published specification uses a parameterised KEM and gives CRYSTALS-Kyber-1024 as an example. NIST's later ML-KEM standard derives from Kyber, but draft Kyber encodings and the final standard must not be assumed interchangeable. Alice encapsulates to it and mixes the resulting secret into the KDF alongside the DH values. As with hybrid TLS, the hybrid is designed to retain secrecy if either component remains secure under the protocol's assumptions.
+> Signal announced **PQXDH** in 2023: Bob's bundle adds signed post-quantum prekeys. The published specification uses a parameterised KEM and gives CRYSTALS-Kyber-1024 as an example. NIST's later ML-KEM standard derives from Kyber, but draft Kyber encodings and the final standard cannot be assumed interchangeable. Alice encapsulates to it and mixes the resulting secret into the KDF alongside the DH values. As with hybrid TLS, the hybrid is designed to retain secrecy if either component remains secure under the protocol's assumptions.
 
 ## The Double Ratchet
 
@@ -63,7 +78,22 @@ X3DH gives a shared secret once. The **Double Ratchet** then updates the keys co
 
 ### The symmetric ratchet: a key per message
 
-Each direction has a **chain key**. Every message turns the chain once with a KDF, producing a fresh **message key** and the next chain key, and the old chain key is deleted:
+Each direction has a **chain key**. Every message turns the chain once with a KDF, producing a fresh **message key** and the next chain key, and the old chain key is deleted. Signal's specification recommends HMAC with two different one-byte inputs:
+
+```formula
+mk_i = HMAC(ck_i, 0x01)
+ck_{i+1} = HMAC(ck_i, 0x02)
+where
+mk_i: the message key for message number i in this chain, 32 bytes; it encrypts that one message
+ck_i: the chain key before message i, 32 bytes, used as the HMAC key
+ck_{i+1}: the next chain key, which replaces ck_i
+HMAC: hash-based message authentication code, here with SHA-256: a keyed hash whose output cannot be run backwards to find the key
+0x01: the single byte 1, the constant input that labels "make a message key"
+0x02: the single byte 2, the constant input that labels "make the next chain key"
+In words: the same chain key is hashed with two different labels, giving one key to use now and one to carry forward; because HMAC is one-way, neither output reveals the chain key that made it.
+```
+
+In code:
 
 ```python
 import hmac, hashlib
@@ -104,9 +134,22 @@ B1, B2 = Bob's ratchet keys
 B0 = Bob's signed prekey
 ```
 
-Each arrow is a root-KDF step: the DH output and the current root key go in, and a new root key and chain key come out.
+Each arrow is a root-KDF step: the DH output and the current root key go in, and a new root key and chain key come out:
 
-An attacker who stole the state at one point, but is not actively intercepting, does not know the private half of the next fresh ratchet key. Security recovers once fresh DH contributions unknown to the attacker are mixed in and delivered. The exact recovery point depends on whose state was stolen and which messages arrive; it is not an unconditional one-round-trip promise. That is **post-compromise security**, also called break-in recovery.
+```formula
+RK', CK = KDF_RK(RK, DH(a, B))
+where
+RK: the current root key, 32 bytes
+RK': the new root key that replaces it
+CK: the new chain key that starts a sending or receiving chain
+KDF_RK: the root-key KDF: Signal recommends HKDF with RK as the salt and the DH output as the input keying material, producing 64 bytes split into RK' and CK
+DH: one Diffie–Hellman computation
+a: the private half of Alice's current ratchet key pair (a1, a2 in the diagram)
+B: Bob's current ratchet public key (B0, B1, B2 in the diagram)
+In words: every new DH result is stirred into the root key, which then hands out a fresh chain key; an attacker who does not know the new DH result cannot follow the step.
+```
+
+An attacker who stole the state at one point, but is not actively intercepting, does not know the private half of the next fresh ratchet key. Security recovers once fresh DH contributions unknown to the attacker are mixed in and delivered. The exact moment of recovery depends on whose state was stolen and which messages arrive; it is not an unconditional one-round-trip promise. That is **post-compromise security**, also called break-in recovery.
 
 The combination is why it is called the *double* ratchet: a DH ratchet on receipt of a new peer ratchet public key, and a symmetric ratchet for each message in between.
 
@@ -135,9 +178,22 @@ All of this protects Alice's conversation with the holder of IK_B. The server de
 
 **Multiple devices**: devices need authenticated membership and protected sessions. Designs differ: Sesame supports per-user or per-device identity keys, and fan-out encrypts for relevant recipient devices. Adding a device need not change the account's identity fingerprint; device enrolment needs its own controls and visibility.
 
-**Small groups**: pairwise sessions for every message would cost O(n) encryptions. **Sender Keys** (used by WhatsApp and Signal groups) give each sender a chain key, distributed once over pairwise sessions; messages are encrypted once and fanned out by the server. It has forward secrecy, but weaker post-compromise security: healing requires distributing new sender keys.
+**Small groups**: pairwise sessions for every message would cost O(n) encryptions per message, where n is the number of group members (one for each other member's device session). **Sender Keys** (used by WhatsApp and Signal groups) give each sender a chain key, distributed once over pairwise sessions; messages are encrypted once and fanned out by the server. It has forward secrecy, but weaker post-compromise security: healing requires distributing new sender keys.
 
-**Large groups**: **MLS** (Messaging Layer Security, RFC 9420, 2023) arranges members' keys in a tree (TreeKEM), so a balanced populated tree can refresh a path of O(log n) nodes. A 10,000-member tree has roughly 14 ancestor levels. Actual update size/work also depends on blank nodes, resolution sizes and membership changes; the tree-depth example is not an unconditional total-cost bound.
+**Large groups**: **MLS** (Messaging Layer Security, RFC 9420, 2023) arranges members' keys in a tree (TreeKEM), so a balanced populated tree can refresh a path of O(log n) nodes. For a balanced tree:
+
+```formula
+L = ⌈log_2(N)⌉
+L = ⌈log_2(10,000)⌉ = ⌈13.29⌉ = 14
+where
+L: the number of levels above a member's leaf in a balanced binary tree: how many path nodes one update refreshes
+N: the number of members, one per leaf
+log_2: logarithm base 2: the power 2 must be raised to (log_2(1,024) = 10)
+⌈ ⌉: ceiling: round up to the next whole number
+In words: each doubling of the group adds only one level, so 10,000 members need about 14 refreshed nodes instead of 9,999 pairwise messages.
+```
+
+Actual update size/work also depends on blank nodes, resolution sizes and members joining or leaving; the tree-depth example is not an unconditional total-cost bound.
 
 ## What E2EE does not protect
 

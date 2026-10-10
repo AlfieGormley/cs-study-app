@@ -83,8 +83,29 @@ PSK or 0 --Extract--> Early Secret
 
 **HKDF-Extract** condenses input material into a pseudorandom key. **HKDF-Expand-Label** stretches it into named outputs, each with a label such as `"c hs traffic"` and the transcript hash at that moment as context. Two consequences follow:
 
-- **Keys are separated by purpose and direction.** Distinct labels derive client/server and handshake/application traffic secrets. A record key leak need not reveal sibling keys, but a parent secret can reveal its derived keys and a current application traffic secret can derive its future updates. Separation prevents simple reflection between directions under the cryptographic assumptions.
+- **Keys are separated by purpose and direction.** Distinct labels derive client/server and handshake/application traffic secrets. A leaked key for one direction and phase need not reveal sibling keys, but a parent secret can reveal its derived keys and a current application traffic secret can derive its future updates. Separation prevents simple reflection between directions under the cryptographic assumptions.
 - **Traffic secrets bind selected transcript prefixes.** The Early, Handshake and Master Secret extraction steps are not themselves all transcript-dependent. Derived traffic secrets use the appropriate handshake prefix, while signatures and Finished cover later messages. Tampering with a protected transcript is detected.
+
+Under the hood both steps are just HMAC, the keyed hash from the previous module. HKDF-Extract, and the first output block of HKDF-Expand (all TLS 1.3 needs for keys of 32 bytes or fewer), are:
+
+```formula
+PRK = HMAC(salt, IKM)
+T_1 = HMAC(PRK, info ‖ 0x01)
+OKM = trunc_L(T_1)
+where
+PRK: the pseudorandom key: Extract's output, 32 bytes when the hash is SHA-256
+HMAC: hash-based message authentication code: HMAC(key, data) is a keyed hash of the data; with SHA-256 the output is 32 bytes
+salt: a non-secret value used as the HMAC key in Extract; in TLS 1.3 it is derived from the previous stage's secret (or is all zeros at the very start)
+IKM: input keying material: the raw secret being condensed, such as the ECDH shared secret
+T_1: the first 32-byte output block of Expand
+info: context bytes that name the output: in TLS 1.3, the output length, the label (such as "tls13 key") and a context value (a transcript hash for traffic secrets; empty for the final key and IV)
+‖: concatenation: the bytes of one value followed directly by the bytes of the next
+0x01: a single byte with value 1, the block counter; a longer output would continue with HMAC(PRK, T_1 ‖ info ‖ 0x02) and so on
+OKM: output keying material: the derived key, IV or secret
+trunc_L: keep only the first L bytes
+L: the number of bytes wanted: 16 for an AES-128 key, 12 for an IV, 32 for a SHA-256 traffic secret
+In words: Extract squeezes an unevenly distributed secret into one uniformly random key; Expand runs HMAC again over a label, so every purpose gets its own independent-looking key from the same secret.
+```
 
 From each traffic secret, two more expansions produce the actual AEAD key and a 12-byte IV. Here is that last step, checked against the published RFC 8448 example handshake:
 
@@ -119,23 +140,34 @@ This prints `3fce516009c21727d0f2e4e86ee403bc` and `5d313eb2671276ee13000b30`, t
 
 ### Finished: an HMAC over everything
 
-Each side ends its flight with a **Finished** message: an HMAC, keyed with a key derived from its handshake traffic secret, over the transcript hash. It proves that this side derived the same keys and saw the same messages. A mismatch aborts the connection. The server may send application data after its own Finished before receiving the client Finished; optional 0-RTT data arrives earlier still and has weaker replay guarantees.
+Each side ends its flight with a **Finished message**: an HMAC, keyed with a key derived from its handshake traffic secret, over the transcript hash. It proves that this side derived the same keys and saw the same messages. A mismatch aborts the connection. The server may send application data after its own Finished before receiving the client Finished; optional 0-RTT data arrives earlier still and has weaker replay guarantees.
 
 ## Job 4: protecting records with AEAD
 
-After the handshake, data travels in **records** of up to 16 KiB of content. Each record is sealed with the negotiated AEAD:
+After the handshake, data travels in **TLS records** of up to 16 KiB of content. Each record is sealed with the negotiated AEAD:
 
-```
-nonce = iv XOR seq (64-bit, padded)
-aad   = 5-byte record header
-ct    = AEAD-Seal(key, nonce,
-                  data + type + pad,
-                  aad)
+```formula
+N = IV ⊕ S
+C = Seal(K, N, P ‖ T_ct ‖ Z, A)
+where
+N: the per-record nonce, 12 bytes; it is computed by both sides and never sent
+IV: the static 12-byte IV derived from the traffic secret with HKDF
+⊕: XOR (exclusive OR), byte by byte: each output bit is 1 when the two input bits differ
+S: the 64-bit record sequence number (0 for the first record under a key, then 1, 2, …), written as a 12-byte number with zero bytes on the left
+C: the protected record body: ciphertext plus a 16-byte authentication tag
+Seal: AEAD encryption: encrypts and authenticates in one operation
+K: the traffic key, for example 16 bytes for AES-128-GCM
+P: the plaintext record content, up to 16 KiB (16,384 bytes)
+T_ct: one byte giving the real record type: handshake, alert or application data
+Z: optional zero bytes of padding, which can hide the true length
+A: the associated data: the 5-byte record header, authenticated but not encrypted
+‖: concatenation: one value's bytes followed by the next
+In words: each record's nonce is the fixed IV with the record number mixed into its last bytes, and the AEAD encrypts the content plus its true type while also authenticating the visible header.
 ```
 
 - **The nonce is never sent.** Both sides keep a 64-bit record **sequence number**, starting at 0 for each key, and XOR it into the static IV. Each record gets a unique nonce without spending bytes on the wire, and deletion, reordering or replay within the delivered TLS byte stream causes subsequent authentication failure. Ordinary packet loss is repaired by TCP.
 - **The header is authenticated** as associated data, so its length and type cannot be altered.
-- **The real content type is inside the encryption**, along with optional padding, so an observer cannot easily tell handshake messages from alerts or application data.
+- **The real record type is inside the encryption**, along with optional padding, so an observer cannot easily tell handshake messages from alerts or application data.
 
 Continuing the code above:
 
@@ -152,9 +184,26 @@ print(nonce(iv, 1).hex())
 print(nonce(iv, 256).hex())
 ```
 
-Output: `...13000b30` (the IV itself), `...13000b31`, then `...13000a30`. Only the low bytes change, and no two records under one key share a nonce.
+Output: `...13000b30` (the IV itself), `...13000b31`, then `...13000a30`. Record 256 is the sequence number 0x0100, so it changes bits in the last two bytes: 0x0b XOR 0x01 is 0x0a, and 0x30 XOR 0x00 stays 0x30. Only the low bytes change, and no two records under one key share a nonce.
 
-AEAD keys also have **usage limits**. RFC 8446 says to send no more than about 2^24.5 full-size records (roughly 24 million records, close to 400 GB) under one AES-GCM key. Long-lived connections send a **KeyUpdate** message, which updates the sender's write secret and receiver's corresponding read secret with HKDF, giving a new key and resetting that direction's sequence number. Updating the opposite direction requires its own KeyUpdate.
+AEAD keys also have **usage limits**. RFC 8446 says to send no more than about 2^24.5 full-size records (roughly 24 million records, close to 400 GB) under one AES-GCM key. In bytes:
+
+```formula
+D_max = R_max × S_rec
+D_max = 2^{24.5} × 16,384 B
+D_max ≈ 23.7 × 10^6 × 16,384 B
+D_max ≈ 3.89 × 10^{11} B ≈ 389 GB
+where
+D_max: the most data one AES-GCM key should protect, in bytes (B)
+R_max: RFC 8446's record limit for AES-GCM, 2^24.5 ≈ 23.7 million full-size records; staying under it keeps an attacker's chance of breaking the AEAD's guarantees below about 2^−57 (roughly 1 in 10^17)
+S_rec: the content of one full-size record, 16 KiB = 16,384 bytes
+≈: approximately equal to
+B: bytes
+GB: gigabytes; 1 GB = 10^9 bytes
+In words: one AES-GCM key is good for roughly 389 GB of full records before it should be replaced.
+```
+
+A connection streaming 50 MB/s reaches that in about 7,800 seconds, a little over two hours. The limit is a safety margin chosen by the RFC, not a cliff: the risk grows gradually with the amount encrypted. For ChaCha20-Poly1305, RFC 8446 notes that the 64-bit sequence number would wrap before the safety limit is reached. Long-lived connections send a **KeyUpdate** message, which updates the sender's write secret and receiver's corresponding read secret with HKDF, giving a new key and resetting that direction's sequence number. Updating the opposite direction requires its own KeyUpdate.
 
 Older TLS suites permitted CBC with a separate HMAC, traditionally MAC-then-encrypt; RFC 7366 later defined an encrypt-then-MAC extension. BEAST targeted predictable IVs in TLS 1.0, Lucky 13 exploited timing in CBC processing, and the original POODLE targeted SSL 3.0 padding. TLS 1.3 allows only AEAD.
 

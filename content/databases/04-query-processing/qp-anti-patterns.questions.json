@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "```\nrows produced = OFFSET + LIMIT\n              = 99,980 + 20\n              = 100,000\n```\n\nThe work grows linearly with the page number. Keyset pagination remembers the last `id` and asks for `WHERE id > :last_id ORDER BY id LIMIT 20`: an index seek followed by the next visible rows, without scanning earlier pages. In the lesson that was 0.014 ms against 67 ms.",
+    "workedExample": "```formula\nn_read = n_off + n_lim\nn_read = 99,980 + 20 = 100,000\nwhere\nn_read: the index entries walked (and rows fetched) to answer the request\nn_off: the OFFSET value, the rows skipped, 99,980\nn_lim: the LIMIT value, the rows returned, 20\nIn words: OFFSET pagination does the work of every earlier page plus the page you asked for.\n```\n\nThe work grows linearly with the page number. Keyset pagination remembers the last `id` and asks for `WHERE id > :last_id ORDER BY id LIMIT 20`: an index seek followed by the next visible rows, without scanning earlier pages. In the lesson that was 0.014 ms against 67 ms.",
     "link": {
       "title": "Use The Index, Luke: paging without OFFSET",
       "url": "https://use-the-index-luke.com/no-offset"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```\nqueries = 1 (posts) + 2,000 (authors)\nper query = 0.05 exec + 0.4 RTT\n          = 0.45 ms\ntotal ~ 2,001 x 0.45 ms ~ 900 ms\n```\n\nBatched:\n\n```sql\nSELECT * FROM users\nWHERE id = ANY(%s)\n```\n\nwith the distinct author IDs reduces author loading to one round trip; execution time and plan depend on the data and environment. In Django use `select_related('author')`; in SQLAlchemy, `selectinload` or `joinedload`.",
+    "workedExample": "```formula\nn_q = 1 + 2,000 = 2,001\nt_total ≈ n_q × (t_exec + t_RTT)\nt_total ≈ 2,001 × (0.05 ms + 0.4 ms)\nt_total ≈ 2,001 × 0.45 ms ≈ 900 ms\nwhere\nn_q: the number of queries: 1 for the posts plus 1 per post for its author\nt_total: the total time the page spends waiting on the database\nt_exec: the time the database spends running one query, 0.05 ms\nt_RTT: the network round-trip time (RTT) for one query, 0.4 ms\nms: millisecond, a thousandth of a second\n≈: approximately equal to\nIn words: 2,001 small queries at 0.45 ms each add up to about 0.9 seconds, almost all of it network latency.\n```\n\nBatched:\n\n```sql\nSELECT * FROM users\nWHERE id = ANY(%s)\n```\n\nwith the distinct author IDs reduces author loading to one round trip; execution time and plan depend on the data and environment. In Django use `select_related('author')`; in SQLAlchemy, `selectinload` or `joinedload`.",
     "link": {
       "title": "pg_stat_statements — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/pgstatstatements.html"
@@ -206,10 +206,7 @@
         "explanation": "Not sargable on this index. \"9 am on any day\" isn't a contiguous range of timestamps; you would need an expression index on the extract."
       }
     ],
-    "answer": [
-      0,
-      3
-    ],
+    "answer": [0, 3],
     "workedExample": "The test: is the indexed column alone on one side of the comparison, with everything else on the other side computable before the scan?\n\n| Condition | Column bare? |\n|---|---|\n| `created_at >= now() - ...` | Yes |\n| `date_trunc(.., created_at)` | No |\n| `created_at + interval` | No |\n| `created_at BETWEEN $1 AND $2` | Yes |\n| `extract(hour FROM ..)` | No |\n\nAlgebra often rescues the third case; the fifth needs an expression index.",
     "link": {
       "title": "Sargable — Wikipedia",
@@ -240,7 +237,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Each Bath customer has about 10 orders, so the join produces about 10 rows per customer: 125,174.\n2. DISTINCT then hashes all of them to remove duplicates.\n3. EXISTS asks a yes/no question per customer:\n\n```\nNested Loop Semi Join\n  (actual rows=12500.00)\n-> Seq Scan on customers c\n-> Index Only Scan on orders\n     (actual rows=1.00\n      loops=12500)\n```\n\nThe inner side returns 1 row per loop (it stops at the first match) instead of 10.",
+    "workedExample": "1. Each Bath customer has about 10 orders, so the join produces about 10 rows per customer: 125,174.\n2. DISTINCT then hashes all of them to remove duplicates.\n3. EXISTS asks a yes/no question per customer:\n\n```\nNested Loop Semi Join\n  (actual rows=12500.00)\n-> Seq Scan on customers c\n-> Index Only Scan on orders\n     (actual rows=1.00\n      loops=12500)\n```\n\nThe inner side returns 1 row per loop (it stops at the first matching row) instead of 10.",
     "link": {
       "title": "Subquery expressions — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
@@ -270,7 +267,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Executions 1-5: custom plans using the real value 'pending' -> `Index Only Scan using orders_pending_idx (rows=30767)`.\n2. Execution 6: Postgres builds a generic plan with `$1` unknown. Selectivity = 1/3 (3 distinct values): `rows=333333`. For a third of the table, a Seq Scan is cheapest, and the partial index isn't provably applicable.\n3. The planner compares estimated costs, decides the generic plan is acceptable, and caches it.\n4. Every later call scans the table.\n\nFixes: `plan_cache_mode = force_custom_plan` for this connection or role; or use a literal for the hot value.",
+    "workedExample": "1. Executions 1-5: custom plans using the real value 'pending' -> `Index Only Scan using orders_pending_idx (rows=30767)`.\n2. Execution 6: Postgres builds a generic plan with `$1` unknown. It assumes each of the 3 distinct statuses is equally common, so a third of the rows match: `rows=333333`. For a third of the table, a Seq Scan is cheapest, and the partial index isn't provably applicable.\n3. The planner compares estimated costs, decides the generic plan is acceptable, and caches it.\n4. Every later call scans the table.\n\nFixes: `plan_cache_mode = force_custom_plan` for this connection or role; or use a literal for the hot value.",
     "link": {
       "title": "PREPARE — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/sql-prepare.html"
@@ -300,7 +297,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Compare the two plans' work:\n\n```\nSubquery: 12,500 loops x\n  Index Only Scan (~10 entries)\n  ~ 125,000 index entries\nJoin: Seq Scan all 1,000,000\n  orders + hash + group\n```\n\nThe subquery reads about 1/8 as many rows. Remove the index and each loop becomes a 1,000,000-row scan:\n\n```\n12,500 x 1,000,000\n  = 12.5 billion row visits\n```\n\nIn this example the scalar correlated SubPlan repeats an indexed lookup per outer row; other correlated subqueries may be transformed into joins. Check `loops` and whether the inner side uses an index.",
+    "workedExample": "Compare the two plans' work:\n\nThe subquery plan does 12,500 small index lookups:\n\n```formula\nn_sub ≈ L × m\nn_sub ≈ 12,500 × 10 = 125,000\nwhere\nn_sub: the index entries the subquery plan reads in total\nL: the number of loops, one per York customer, 12,500\nm: the index entries read per loop, about 10 (one customer's orders)\n≈: approximately equal to\nIn words: 12,500 lookups of about 10 entries each is about 125,000 entries.\n```\n\nThe join instead scans all 1,000,000 orders, then hashes and groups them. So the subquery reads about 1/8 as many rows. Remove the index and each loop becomes a 1,000,000-row scan:\n\n```formula\nn_scan = L × n_table\nn_scan = 12,500 × 1,000,000\nn_scan = 12,500,000,000\nwhere\nn_scan: the row visits with no index, about 12.5 billion\nL: the number of loops, 12,500\nn_table: the rows scanned per loop, every order, 1,000,000\nIn words: scanning the whole orders table once per customer means 12.5 billion row visits.\n```\n\nIn this example the scalar correlated SubPlan repeats an indexed lookup per outer row; other correlated subqueries may be transformed into joins. Check `loops` and whether the inner side uses an index.",
     "link": {
       "title": "Using EXPLAIN — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/using-explain.html"
@@ -317,7 +314,7 @@
         "explanation": "Correct. Otherwise rows satisfying the uncovered branch could be missed. Other conditions or a different access path may still allow index use."
       },
       {
-        "text": "Since Postgres 12, a side-effect-free, non-recursive SELECT CTE referenced once is normally inlined into the main query",
+        "text": "Since Postgres 12, a side-effect-free, non-recursive SELECT CTE used only once in the query is normally inlined into the main query",
         "explanation": "Correct. It's then optimised together with the rest. `AS MATERIALIZED` restores the old fencing behaviour when you want it."
       },
       {
@@ -333,12 +330,8 @@
         "explanation": "Because of NULL semantics, Postgres can't plan NOT IN as an anti-join. It uses a hashed SubPlan, or a plain per-row SubPlan if the results don't fit in `work_mem`."
       }
     ],
-    "answer": [
-      0,
-      1,
-      3
-    ],
-    "workedExample": "1. OR: a BitmapOr needs an index scan for every branch. True.\n2. CTE inlining arrived in Postgres 12 for side-effect-free, non-recursive CTEs referenced once. True.\n3. count(*): an exact MVCC-visible count generally scans a table or index; it is not a constant-time catalog lookup. False.\n4. SELECT *: forces heap access unless the index happens to contain every column. True.\n5. NOT IN: hashed SubPlan at best, a cost cliff (976 million in the lesson) at worst. False.",
+    "answer": [0, 1, 3],
+    "workedExample": "1. OR: a BitmapOr needs an index scan for every branch. True.\n2. CTE inlining arrived in Postgres 12 for side-effect-free, non-recursive CTEs used only once. True.\n3. count(*): an exact MVCC-visible count generally scans a table or index; it is not a constant-time catalog lookup. False.\n4. SELECT *: forces heap access unless the index happens to contain every column. True.\n5. NOT IN: hashed SubPlan at best, a cost cliff (976 million in the lesson) at worst. False.",
     "link": {
       "title": "Don't Do This — PostgreSQL wiki",
       "url": "https://wiki.postgresql.org/wiki/Don%27t_Do_This"

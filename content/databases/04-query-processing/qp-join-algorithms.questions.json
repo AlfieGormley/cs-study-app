@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "In this illustrative plan the `Hash` node sits over `Seq Scan on customers`:\n\n```\nHash\n  Buckets: 131072  Batches: 1\n  Memory Usage: 4540kB\n-> Seq Scan on customers c\n```\n\nThe illustrative 100,000-key hash table occupies about 4.5 MB, which fits within the default 8 MB (`work_mem` 4 MB x `hash_mem_multiplier` 2). A hash table of 1,000,000 orders would need roughly ten times that and would spill.",
+    "workedExample": "In this illustrative plan the `Hash` node sits over `Seq Scan on customers`:\n\n```\nHash\n  Buckets: 131072  Batches: 1\n  Memory Usage: 4540kB\n-> Seq Scan on customers c\n```\n\nThe illustrative 100,000-key hash table occupies 4,540 kB, about 4.4 MB. The default limit for one hash table is:\n\n```formula\nL_hash = M_work × k_hash\nL_hash = 4 MB × 2 = 8 MB\nwhere\nL_hash: the most memory one hash table may use before Postgres splits the join into batches on disk, in megabytes (MB)\nM_work: the `work_mem` setting, the memory budget for one sort or hash operation\nk_hash: the `hash_mem_multiplier` setting, default 2.0 since PostgreSQL 15\nMB: megabyte; in PostgreSQL settings 1 MB = 1,024 kB\nIn words: by default a hash table may use twice `work_mem`, 8 MB, so the customers table fits in one batch.\n```\n A hash table of 1,000,000 orders would need roughly ten times that and would spill.",
     "link": {
       "title": "Hash join — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hash_join"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "The outer side produced 99 orders (`id < 100`). For each, the nested loop asked the inner side \"find the customer with this id\".\n\n```\ntotal rows = rows x loops\n           = 1.00 x 99 = 99\ntotal time ~ 0.004 ms x 99\n           ~ 0.4 ms\n```\n\nThis estimates time within the inner node, not the whole query's execution time. Always multiply by `loops` when deciding where the time went.",
+    "workedExample": "The outer side produced 99 orders (`id < 100`). For each, the nested loop asked the inner side \"find the customer with this id\".\n\n```formula\nn_total = n_loop × L\nn_total = 1.00 × 99 = 99\nt_total ≈ t_loop × L\nt_total ≈ 0.004 ms × 99 ≈ 0.4 ms\nwhere\nn_total: the total rows the inner node returned across all executions\nn_loop: the `rows` figure, the average rows per execution, here 1.00\nL: the `loops` figure, the number of executions, here 99\nt_total: the total time spent in the inner node, in milliseconds (ms)\nt_loop: the per-execution time, the second number of `actual time`, here 0.004 ms\n≈: approximately equal to\nms: millisecond, a thousandth of a second\nIn words: 99 lookups of one row each, at about 4 microseconds each, is 99 rows in about 0.4 ms.\n```\n\nThis estimates time within the inner node, not the whole query's execution time. Always multiply by `loops` when deciding where the time went.",
     "link": {
       "title": "Using EXPLAIN — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/using-explain.html"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Block nested loop cost = outer pages + (number of outer blocks) x inner pages.\n\n```\nR outer: 2000 + ceil(2000/50) x 400\n       = 2000 + 40 x 400 = 18,000\nS outer: 400 + ceil(400/50) x 2000\n       = 400 + 8 x 2000 = 16,400\n```\n\nThe smaller table goes outside, because the number of times you rescan the inner is what dominates.",
+    "workedExample": "A block nested loop reads the outer table once, in blocks of 50 pages, and scans the whole inner table once per block:\n\n```formula\nC = P_out + ⌈P_out / b⌉ × P_in\nC_R = 2,000 + ⌈2,000 / 50⌉ × 400\nC_R = 2,000 + 40 × 400 = 18,000\nC_S = 400 + ⌈400 / 50⌉ × 2,000\nC_S = 400 + 8 × 2,000 = 16,400\nwhere\nC: the block nested loop cost, in page I/Os (each page read counts as one)\nC_R: the cost with R as the outer table\nC_S: the cost with S as the outer table\nP_out: the number of pages in the outer table\nP_in: the number of pages in the inner table\nb: the outer pages held in memory per block, here 50 (52 buffer pages minus one input page for the inner table and one output page)\n⌈ ⌉: ceiling: round up to the next whole number, because a part-full final block still needs a full inner scan\nIn words: with S outside there are only 8 blocks, so the big table is scanned 8 times; with R outside, the small table is scanned 40 times.\n```\n\nThe smaller table goes outside, because the number of times you rescan the inner is what dominates.",
     "link": {
       "title": "Nested loop join — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Nested_loop_join"
@@ -123,7 +123,7 @@
     "id": "qp-join-algorithms-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Same tables: R = 2,000 pages, S = 400 pages. Neither fits in memory, but there is enough memory for a two-phase Grace hash join. What does it cost in page I/Os?",
+    "prompt": "Same tables: R has 2,000 pages and S has 400 pages. Neither fits in memory, but there is enough memory for a two-phase Grace hash join. What does it cost in page I/Os?",
     "options": [
       {
         "text": "2,400",
@@ -131,7 +131,7 @@
       },
       {
         "text": "4,800",
-        "explanation": "That's 2(M + N), the partitioning phase alone. The partitions must then be read back to join them."
+        "explanation": "That's 2(M + N), the partitioning phase alone. The partitions must then be read again to join them."
       },
       {
         "text": "12,000",
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Grace hash join has two phases:\n\n```\npartition: read R, S     2,400\n           write parts   2,400\njoin:      read parts    2,400\ntotal      3(M + N)  =   7,200\n```\n\nCompare with the block nested loop's best of 16,400 from the previous question. The output write is excluded in both, as is conventional.",
+    "workedExample": "Grace hash join has two phases. Partitioning reads both tables and writes them back out as partitions (2 I/Os per page). Joining reads each pair of partitions once (1 I/O per page):\n\n```formula\nC_GH = 2 × (M + N) + (M + N)\nC_GH = 2 × 2,400 + 2,400\nC_GH = 3 × 2,400 = 7,200\nwhere\nC_GH: the cost of a Grace hash join, in page I/Os (each page read or written counts as one)\nM: the number of pages in R, 2,000\nN: the number of pages in S, 400\nIn words: every page is read, written, then read again: 3 I/Os per page of the two tables.\n```\n\nCompare with the block nested loop's best of 16,400 from the previous question. The output write is excluded in both, as is conventional.",
     "link": {
       "title": "Hash join — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hash_join"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. `Batches: 4` means Postgres used a hybrid hash join: it kept one partition in memory and wrote three to temp files.\n2. `temp read/written` confirm the disk traffic.\n3. Content gap: no reproducible timing record is available for this comparison; measure the effect of reducing batches on your workload.\n4. Fix: `SET work_mem = '16MB'` in the report's session, or `SET LOCAL` inside its transaction. Avoid raising it globally without thought: `work_mem` applies **per sort or hash operation, per process**, so a big global value can exhaust RAM under concurrency.",
+    "workedExample": "1. `Batches: 4` means Postgres used a hybrid hash join: it kept one partition in memory and wrote three to temp files.\n2. `temp read/written` confirm the disk traffic.\n3. Content gap: no reproducible timing record is available for this comparison; measure the effect of reducing batches on your workload.\n4. Fix: `SET work_mem = '16MB'` in the report's session, or `SET LOCAL` inside its transaction. Avoid raising it globally without thought: `work_mem` applies **per sort or hash operation, per process**, so a big global value can exhaust RAM under concurrency.\n\nThe limit that was exceeded:\n\n```formula\nL_hash = M_work × k_hash\nL_hash = 1 MB × 2 = 2 MB\nwhere\nL_hash: the most memory one hash table may use before Postgres splits the join into batches on disk, in megabytes (MB)\nM_work: the `work_mem` setting, the memory budget for one sort or hash operation\nk_hash: the `hash_mem_multiplier` setting, default 2.0 since PostgreSQL 15\nMB: megabyte; in PostgreSQL settings 1 MB = 1,024 kB\nIn words: with `work_mem` at 1 MB a hash table may use only 2 MB, so a build side needing more is split into batches.\n```\n\nThe `Memory Usage` shown (1,392 kB) is the peak memory used for one batch after the split, which is why it is under the limit.",
     "link": {
       "title": "Resource consumption — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/runtime-config-resource.html"
@@ -199,7 +199,7 @@
       },
       {
         "text": "Both inputs are huge and unsorted, and there is plenty of memory for hashing",
-        "explanation": "Sorting both huge inputs costs O(n log n) and may spill; hashing is linear. Content gap: no reproducible timing record is available for the lesson's illustrative comparison."
+        "explanation": "Sorting both huge inputs costs O(n log n) for n rows and may spill; hashing is linear, O(n): its work grows in proportion to n. Content gap: no reproducible timing record is available for the lesson's illustrative comparison."
       }
     ],
     "answer": [
@@ -296,7 +296,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "```\nnested loop: k x 4 pages x 4 = 16k\nhash join:   1,029 x 1 = 1,029\n16k = 1,029  ->  k ~ 64\n```\n\nBelow about 64 outer rows the index probes win; above, scanning the inner table once and hashing wins. Real planners add CPU costs, caching effects (`effective_cache_size`) and correlation, so the real crossover moves, but the shape is the same. That's why a misestimate of the outer row count flips the join choice.",
+    "workedExample": "Set the two costs equal and solve for the number of outer rows:\n\n```formula\nC_NL = k × p × c_rand\nC_hash = P × c_seq\nk × 4 × 4 = 1,029 × 1\nk = 1,029 / 16 ≈ 64\nwhere\nC_NL: the cost of the index nested loop, in planner cost units\nC_hash: the cost of the hash join's single scan of the inner table, in planner cost units\nk: the number of outer rows\np: the random page reads per outer row, here 4\nc_rand: the cost of one random page read, here 4 units\nP: the number of pages in the inner table, here 1,029\nc_seq: the cost of one sequential page read, 1 unit\n≈: approximately equal to\nIn words: each outer row costs the nested loop 16 units, so about 64 outer rows cost the same as one 1,029-page scan.\n```\n\nBelow about 64 outer rows the index probes win; above, scanning the inner table once and hashing wins. Real planners add CPU costs, caching effects (`effective_cache_size`) and correlation, so the real crossover moves, but the shape is the same. That's why a misestimate of the outer row count flips the join choice.",
     "link": {
       "title": "Query planning configuration — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/runtime-config-query.html"
@@ -314,7 +314,7 @@
       },
       {
         "text": "`WHERE EXISTS (subquery)` is typically planned as a Semi Join, which stops at the first match per outer row",
-        "explanation": "Correct. A semi join returns each outer row at most once, so it can stop probing after the first match."
+        "explanation": "Correct. A semi join never returns an outer row twice, so it can stop probing after the first matching row."
       },
       {
         "text": "A `Hash Right Join` in the plan means the SQL must have said `RIGHT JOIN`",

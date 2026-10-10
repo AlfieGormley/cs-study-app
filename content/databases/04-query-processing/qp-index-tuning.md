@@ -35,7 +35,27 @@ Bitmap Heap Scan on orders
 -> Bitmap Index Scan on orders_date_idx
 ```
 
-Matching 3.7% of the rows touched 7,306 of 7,353 heap pages, nearly all of them. Orders for a given quarter are spread uniformly through the table (`correlation` near 0), so almost every 8 KB page contains a few. A bitmap scan visits matching heap pages in physical order. Whether it beats a sequential scan when nearly every page is touched must be measured; the illustrative timing is not a general guarantee. But the benefit of an index depends on **how many pages** the matching rows occupy, not just how many rows match.
+Matching 3.7% of the rows touched 7,306 of 7,353 heap pages, nearly all of them. Orders for a given quarter are spread uniformly through the table (`correlation` near 0), so almost every 8 KiB page contains a few. You can predict that: if matching rows are scattered at random, the chance that a page has none at all is tiny.
+
+```formula
+m = r_page × s
+m = 136 × 0.037 ≈ 5
+p_none = (1 − s)^{r_page}
+p_none = 0.963^{136} ≈ 0.006
+P_hit ≈ P × (1 − p_none)
+P_hit ≈ 7,353 × 0.994 ≈ 7,309
+where
+m: the average number of matching rows on each heap page
+r_page: the number of rows on each heap page, about 136 for `orders`
+s: the selectivity: the fraction of rows that match, here 0.037 (3.7%) for one quarter
+p_none: the probability that a page holds no matching row, if each row matches independently at random; (1 − s) multiplied by itself once per row on the page
+P: the number of heap pages in the table, 7,353
+P_hit: the expected number of heap pages holding at least one matching row
+≈: approximately equal to
+In words: with about 5 matches per page on average, only about 1 page in 170 escapes, so the index scan still visits about 99.4% of the pages.
+```
+
+The prediction, about 7,309 pages, is close to the 7,306 the plan reported. The model assumes matches are scattered at random; any clustering by date lowers the page count. A bitmap scan visits matching heap pages in physical order. Whether it beats a sequential scan when nearly every page is touched must be measured; the illustrative timing is not a general guarantee. But the benefit of an index depends on **how many pages** the matching rows occupy, not just how many rows match.
 
 If the table were physically ordered by date (as an append-only log usually is), the same quarter would occupy about 4% of the pages, and the index would win by far more.
 
@@ -190,14 +210,14 @@ It read 4,984 and 63,535 index entries to find 308 rows. A composite index desig
 | orders_date_idx | 6.9 MB |
 | orders_pending_idx | 272 kB |
 
-The date index is a third the size of the others because Postgres 13+ **deduplicates** B-tree entries: 1,000,000 rows share only 2,400 distinct dates.
+The date index is a third the size of the others because of **B-tree deduplication** (Postgres 13+), which stores a repeated key once with a list of row pointers: 1,000,000 rows share only 2,400 distinct dates.
 
 Costs to weigh:
 
-- **Writes.** An INSERT maintains applicable indexes; a partial index excludes rows outside its predicate. Changing a column referenced by a non-summarising index, including an `INCLUDE` column, prevents a **HOT** (heap-only tuple) update. BRIN is a summarising-index exception; HOT also requires room on the original heap page.
+- **Writes.** An INSERT maintains applicable indexes; a partial index excludes rows outside its predicate. Changing a column used by a non-summarising index, including an `INCLUDE` column, prevents a **HOT** (heap-only tuple) update. BRIN is a summarising-index exception; HOT also requires room on the original heap page.
 - **Memory.** Indexes compete with table data for the buffer cache.
 - **Vacuum.** Every index must be scanned when dead rows are cleaned up.
-- **Planning.** More indexes mean more paths to consider, and more chances of a surprising choice.
+- **Planning.** More indexes give more paths to consider, and more chances of a surprising choice.
 
 Find indexes that are never used:
 
@@ -213,7 +233,7 @@ Check over weeks of traffic, and on replicas, before dropping anything. Also loo
 
 ## A tuning workflow
 
-1. Find the queries that matter with `pg_stat_statements`, ordered by `total_exec_time` (frequency x duration), not just the slowest single run.
+1. Find the queries that matter with `pg_stat_statements`, ordered by `total_exec_time` (the run time of every call added together, so a fast query called a million times can outrank a slow one called once), not just the slowest single run.
 2. Get `EXPLAIN (ANALYZE, BUFFERS)` on production-sized data.
 3. Design an index for the query: equality columns, then sort, then range; add `INCLUDE` columns only if an index-only scan is worth the size.
 4. Build it without blocking writes: `CREATE INDEX CONCURRENTLY`. It's slower, and if it fails it leaves an invalid index you must drop.

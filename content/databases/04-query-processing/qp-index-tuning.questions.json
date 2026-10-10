@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Apply the rule: equality columns first, then the sort column.\n\n1. Equality: `customer_id = $1` -> first column.\n2. Sort: `ordered_on DESC` -> second column (a B-tree can be read backwards).\n3. LIMIT 5: with rows already in order, the scan stops early.\n\nAn illustrative plan:\n\n```\nLimit\n-> Index Scan Backward using\n     orders_cust_date_idx\n     Index Cond: (customer_id = 42)\n     Index Searches: 1\nExecution Time: 0.032 ms\n```\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "workedExample": "Apply the rule: equality columns first, then the sort column.\n\n1. Equality: `customer_id = $1` -> first column.\n2. Sort: `ordered_on DESC` -> second column (a B-tree can be read backwards).\n3. LIMIT 5: with rows already in order, the scan stops early.\n\nAn illustrative plan:\n\n```\nLimit\n-> Index Scan Backward using\n     orders_cust_date_idx\n     Index Cond: (customer_id = 42)\n     Index Searches: 1\nExecution Time: 0.032 ms\n```\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
     "link": {
       "title": "Multicolumn indexes — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/indexes-multicolumn.html"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "For a selective search using this equality condition, the indexed expression must match (or have a supported equivalent):\n\n| Indexed | Query uses | Usable? |\n|---|---|---|\n| `email` | `email = ...` | Yes |\n| `email` | `lower(email) = ...` | No |\n| `lower(email)` | `lower(email) = ...` | Yes |\n\nBonus: ANALYZE then collects statistics on `lower(email)`, so the estimate changes from the 0.5% default (500 rows) to 1.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "workedExample": "For a selective search using this equality condition, the indexed expression must match (or have a supported equivalent):\n\n| Indexed | Query uses | Usable? |\n|---|---|---|\n| `email` | `email = ...` | Yes |\n| `email` | `lower(email) = ...` | No |\n| `lower(email)` | `lower(email) = ...` | Yes |\n\nBonus: ANALYZE then collects statistics on `lower(email)`, so the estimate changes from the 0.5% default (500 rows) to 1.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
     "link": {
       "title": "Indexes on expressions — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/indexes-expressional.html"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Index entries don't record transaction visibility; the heap does.\n2. The visibility map has a bit per heap page: \"every row here is visible to everyone\".\n3. An UPDATE writes a new row version and clears that bit for the page.\n4. 20,000 updated rows over 7,353 pages (~136 rows each) clears the bit on nearly every page.\n5. So the index-only scan fetches the heap for almost every row: 20,592 heap fetches, 20,661 buffers.\n6. VACUUM can set all-visible bits when every relevant tuple is visible to all transactions; long-running snapshots can delay this.\n\nFix: let autovacuum run sooner on that table, or run `VACUUM` straight after the nightly job.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "workedExample": "1. Index entries don't record transaction visibility; the heap does.\n2. The visibility map has a bit per heap page: \"every row here is visible to everyone\".\n3. An UPDATE writes a new row version and clears that bit for the page.\n4. 20,000 updated rows over 7,353 pages (~136 rows each) clears the bit on nearly every page.\n5. So the index-only scan fetches the heap for almost every row: 20,592 heap fetches, 20,661 buffers.\n6. VACUUM can set all-visible bits when every relevant tuple is visible to all transactions; long-running snapshots can delay this.\n\nFix: let autovacuum run sooner on that table, or run `VACUUM` straight after the nightly job.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
     "link": {
       "title": "Index-only scans and covering indexes — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/indexes-index-only-scans.html"
@@ -180,7 +180,7 @@
       0,
       1
     ],
-    "workedExample": "The test is: does the query's WHERE clause *logically imply* `status = 'pending'`?\n\n| Query condition | Implies it? |\n|---|---|\n| status = 'pending' AND ... | Yes |\n| ordered_on < ... only | No |\n| status IN (pending, cancelled) | No |\n| status = $1 (generic) | Can't prove |\n\nOnly when it's implied can the planner be sure every row the query needs is in the index.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "workedExample": "The test is: does the query's WHERE clause *logically imply* `status = 'pending'`?\n\n| Query condition | Implies it? |\n|---|---|\n| status = 'pending' AND ... | Yes |\n| ordered_on < ... only | No |\n| status IN (pending, cancelled) | No |\n| status = $1 (generic) | Can't prove |\n\nOnly when it's implied can the planner be sure every row the query needs is in the index.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
     "link": {
       "title": "Partial indexes — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/indexes-partial.html"
@@ -206,11 +206,11 @@
       },
       {
         "text": "About 99%",
-        "explanation": "Correct. P(page has no match) = 0.963^136, about 0.006, so about 99.4% of pages have at least one. For illustration, 7,306 of 7,353 pages would be about 99.4%."
+        "explanation": "Correct. The chance that a page has no match is 0.963 multiplied by itself 136 times, about 0.006, so about 99.4% of pages have at least one. For illustration, 7,306 of 7,353 pages would be about 99.4%."
       }
     ],
     "answer": 3,
-    "workedExample": "```\nP(row misses)   = 1 - 0.037 = 0.963\nP(page misses)  = 0.963 ^ 136\n                = e^(136 x ln 0.963)\n                = e^(-5.13) ~ 0.006\nP(page has one) ~ 0.994\n```\n\nEach page has on average 136 x 0.037 = 5 matches. This is why `correlation` matters so much to the cost of an index scan: with data clustered by the filtered column, the same 3.7% of rows would occupy about 3.7% of the pages.",
+    "workedExample": "```formula\np_miss = 1 − s = 1 − 0.037 = 0.963\np_none = p_miss^{r_page} = 0.963^{136}\np_none = e^{136 × ln(0.963)}\np_none = e^{−5.13} ≈ 0.006\np_hit = 1 − p_none ≈ 0.994\nwhere\np_miss: the probability that one row does not match\ns: the selectivity: the fraction of rows matching, 0.037\np_none: the probability that none of a page's rows match, assuming each row matches independently at random\nr_page: the number of rows per page, 136\ne: Euler's number, about 2.718, the base of natural logarithms\nln: the natural logarithm (logarithm to base e); ln(0.963) ≈ −0.0377\np_hit: the probability that a page holds at least one match, which is the fraction of pages the scan visits\n≈: approximately equal to\nIn words: a page escapes only if all 136 of its rows miss, and that happens to only about 1 page in 170.\n```\n\nEach page has on average 136 × 0.037 ≈ 5 matches. This is why `correlation` matters so much to the cost of an index scan: with data clustered by the filtered column, the same 3.7% of rows would occupy about 3.7% of the pages.",
     "link": {
       "title": "Statistics used by the planner — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/planner-stats.html"
@@ -240,7 +240,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Locale collations like `en_US` sort with linguistic rules (case and punctuation handled specially), so strings sharing a byte prefix aren't guaranteed to be contiguous in the index.\n2. `text_pattern_ops` sorts by raw bytes, so all strings starting `c42@` are contiguous.\n3. Postgres rewrites the LIKE into a range:\n\n```\nIndex Cond:\n  ((email ~>=~ 'c42@'::text)\n   AND (email ~<~ 'c42A'::text))\nFilter: (email ~~ 'c42@%'::text)\n```\n\n(`A` is the byte after `@`.) It then rechecks the LIKE as a filter.",
+    "workedExample": "1. Locale collations like `en_US` sort with linguistic rules (case and punctuation handled specially), so strings sharing a byte prefix aren't guaranteed to be contiguous in the index.\n2. `text_pattern_ops` sorts by raw bytes, so all strings starting `c42@` are contiguous.\n3. Postgres turns the LIKE into a range:\n\n```\nIndex Cond:\n  ((email ~>=~ 'c42@'::text)\n   AND (email ~<~ 'c42A'::text))\nFilter: (email ~~ 'c42@%'::text)\n```\n\n(`A` is the byte after `@`.) It then rechecks the LIKE as a filter.",
     "link": {
       "title": "Operator classes and families — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/indexes-opclass.html"
@@ -270,7 +270,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. The index is sorted by date, then customer. Customer 42 may have zero, one or multiple orders within each date.\n2. Skip scan: for each distinct date d, descend to `(d, 42)` and read matches.\n3. Cost grows with the number of distinct leading values: 2,400 descents, 6.4 ms.\n4. With `(customer_id, ordered_on)` it's one descent and about 0.03 ms.\n\nIf the leading column had 1,000,000 distinct values, skip scan would be useless and the planner wouldn't pick it. Design the index for the query.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "workedExample": "1. The index is sorted by date, then customer. Customer 42 may have zero, one or multiple orders within each date.\n2. Skip scan: for each distinct date d, descend to `(d, 42)` and read matches.\n3. Cost grows with the number of distinct leading values: 2,400 descents, 6.4 ms.\n4. With `(customer_id, ordered_on)` it's one descent and about 0.03 ms.\n\nIf the leading column had 1,000,000 distinct values, skip scan would be useless and the planner wouldn't pick it. Design the index for the query.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
     "link": {
       "title": "PostgreSQL 18 release notes",
       "url": "https://www.postgresql.org/docs/18/release-18.html"
@@ -300,7 +300,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "How a HOT update works:\n\n1. If no indexed column changes and the page has free space, the new row version goes on the same page, chained from the old one.\n2. Indexes still point to the old version and follow the chain. No index writes.\n\nOnce `total` is in an index (even as INCLUDE), changing it means:\n\n1. Not HOT-eligible.\n2. New entries in applicable ordinary indexes, plus more WAL; partial indexes omit nonmatching rows and summarising indexes such as BRIN behave differently.\n\nCheck `n_tup_hot_upd` vs `n_tup_upd` in `pg_stat_user_tables` before and after. Only cover columns that rarely change.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "workedExample": "How a HOT update works:\n\n1. If no indexed column changes and the page has free space, the new row version goes on the same page, chained from the old one.\n2. Indexes still point to the old version and follow the chain. No index writes.\n\nOnce `total` is in an index (even as INCLUDE), changing it means:\n\n1. Not HOT-eligible.\n2. New entries in applicable ordinary indexes, plus more WAL; partial indexes omit nonmatching rows and summarising indexes such as BRIN behave differently.\n\nCheck `n_tup_hot_upd` vs `n_tup_upd` in `pg_stat_user_tables` before and after. Only cover columns that rarely change.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
     "link": {
       "title": "Heap-only tuples (HOT) — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/storage-hot.html"
@@ -322,14 +322,14 @@
       },
       {
         "text": "If `CREATE INDEX CONCURRENTLY` fails, it can leave an INVALID index that can still add write overhead and needs cleanup or rebuilding",
-        "explanation": "Correct. Depending on the failure stage, an invalid index may still be maintained on writes while being ignored for queries. Drop and retry, or use a supported rebuild procedure."
+        "explanation": "Correct. Depending on the failure stage, an invalid index may still be maintained on writes while being ignored for queries. Drop it and retry, or recreate it with `REINDEX INDEX CONCURRENTLY`."
       },
       {
         "text": "Adding more indexes always makes reads faster and has no effect on reads that don't use them",
         "explanation": "Indexes compete for cache memory and add planning work. Writes slow down too, which can hurt reads through locks and I/O contention."
       },
       {
-        "text": "A B-tree on a low-cardinality column can be much smaller than one on a unique column, thanks to deduplication",
+        "text": "A B-tree on a low-cardinality column can be much smaller than one on a unique column, thanks to B-tree deduplication",
         "explanation": "Correct. Since Postgres 13, duplicates are stored once with a list of row pointers. In the lesson the date index (2,400 values) was 6.9 MB against 21 MB for the unique primary key."
       }
     ],
@@ -338,7 +338,7 @@
       2,
       4
     ],
-    "workedExample": "1. Leftmost prefix: `(customer_id, ordered_on)` answers `customer_id = ?`. True.\n2. Index usage stats are per instance and reset on stats reset; unique indexes enforce constraints without scans. False.\n3. Concurrent builds can fail on deadlocks or uniqueness violations and leave `INVALID` indexes. True.\n4. Indexes cost cache, planning and write time. False.\n5. Deduplication shrinks indexes with many repeated keys. True.\n\n**Content gap — benchmark evidence:** numeric plan/timing examples here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "workedExample": "1. Leftmost prefix: `(customer_id, ordered_on)` answers `customer_id = ?`. True.\n2. Index usage stats are per instance and reset on stats reset; unique indexes enforce constraints without scans. False.\n3. Concurrent builds can fail on deadlocks or uniqueness violations and leave `INVALID` indexes. True.\n4. Indexes cost cache, planning and write time. False.\n5. B-tree deduplication shrinks indexes with many repeated keys. True.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
     "link": {
       "title": "CREATE INDEX — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/sql-createindex.html"

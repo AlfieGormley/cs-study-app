@@ -72,7 +72,7 @@ Execution Time: 27.149 ms
 | `Buffers: shared hit` | Pages found in Postgres's cache |
 | `Buffers: shared read` | Pages fetched from the OS or disk |
 
-From this one node: the estimate (30,767) was within 2% of the truth, the scan read every one of the 7,353 pages (7,011 + 342), and it threw away 97% of the rows it read. The last fact is the important one. Reading a million rows to keep 30,000 is a sign that an index might help (lesson 5).
+From this one node: the estimate (30,767) was within about 2.3% of the truth (30,066), the scan read every one of the 7,353 pages (7,011 + 342), and it threw away 97% of the rows it read. The last fact is the important one. Reading a million rows to keep 30,000 is a sign that an index might help (lesson 5).
 
 The `.00` on actual rows is new in Postgres 18. It's there because `rows` is an **average per loop**, and averages needn't be whole numbers, as you'll see below.
 
@@ -89,10 +89,21 @@ Hash Join  (actual time=12.237..44.658)
 -> Hash  (actual time=12.038..12.038)
 ```
 
+```formula
+t_excl = t_node − Σ t_child
+t_excl = 44.658 − 25.815 − 12.038
+t_excl ≈ 6.8 ms
+where
+t_excl: the node's exclusive time: the time spent in the node itself, in milliseconds (ms)
+t_node: the node's inclusive time, the second number of its `actual time`, here 44.658 ms for the Hash Join
+t_child: a child's inclusive time, the second number of its `actual time`: 25.815 ms for the orders scan and 12.038 ms for the Hash
+Σ: sum: add up the term for every child
+≈: approximately equal to
+ms: millisecond, a thousandth of a second
+In words: of the 44.7 ms reported for the Hash Join, about 6.8 ms was spent joining; the rest was its children.
 ```
-exclusive = 44.658 - 25.815 - 12.038
-          = 6.8 ms in the join itself
-```
+
+If a child ran more than once (`loops` above 1), multiply its time by its loops before subtracting, as the next rule explains. With parallel workers, `loops` counts the processes that ran the node at the same time and the times are averages across them, so don't multiply by loops there: the subtraction is only a rough guide.
 
 So most of the 47 ms went on the orders scan (26 ms), not the join.
 
@@ -111,9 +122,20 @@ Nested Loop  (actual rows=600.00 loops=1)
      Buffers: shared hit=1191 read=9
 ```
 
-```
-inner rows  = 3.00 x 200 = 600
-inner time ~ 0.001 ms x 200 = 0.2 ms
+```formula
+n_total = n_loop × L
+n_total = 3.00 × 200 = 600
+t_total ≈ t_loop × L
+t_total ≈ 0.001 ms × 200 = 0.2 ms
+where
+n_total: the total number of rows the node produced across all its executions
+n_loop: the `rows` figure: the average number of rows per execution, here 3.00
+L: the `loops` figure: the number of times the node was executed, here 200 (once per outer row)
+t_total: the total time spent in the node across all executions, in milliseconds (ms)
+t_loop: the per-execution time, the second number of `actual time`, here 0.001 ms
+≈: approximately equal to (the per-loop time is a rounded average)
+ms: millisecond, a thousandth of a second
+In words: 200 lookups of 3 rows each is 600 rows, and 200 lookups of about a microsecond each is about 0.2 ms.
 ```
 
 `Buffers` are already **totals** across all loops, not per loop: 1,200 page accesses, 6 per lookup.
@@ -134,12 +156,26 @@ Nested Loop  (rows=3)
 Buffers: shared hit=3589400
 ```
 
-The Seq Scan on `imports` expected 1 row and got 600,000. That's the root cause. The nested loop above it was a reasonable choice for 1 row and a poor one for 600,000: 3.6 million page accesses. After `ANALYZE imports`, the planner chose a hash join with about 19,000.
+The Seq Scan on `imports` expected 1 row and got 600,000. Measure the gap as a ratio, whichever way round is bigger:
+
+```formula
+r = max(n_act / n_est, n_est / n_act)
+r = max(600,000 / 1, 1 / 600,000)
+r = 600,000
+where
+r: the misestimate factor: how many times too high or too low the estimate was; 1 means exact
+n_act: the actual rows per loop, from `actual rows`, here 600,000
+n_est: the estimated rows, the `rows` figure in the first brackets, here 1
+max: the larger of the two values
+In words: the estimate was 600,000 times too low, far beyond the 10x that marks a serious error.
+```
+
+That's the root cause. The nested loop above it was a reasonable choice for 1 row and a poor one for 600,000: 3.6 million page accesses. After `ANALYZE imports`, the planner chose a hash join with about 19,000.
 
 > [!tip] Estimates the other way are dangerous too
 > An overestimate can make the planner reject an index and scan a whole table. Any big gap is worth explaining.
 
-## Red flags and what they mean
+## Red flags and what they indicate
 
 | You see | It suggests |
 |---|---|
@@ -194,7 +230,26 @@ Index Scan Backward
 
 ## Reading BUFFERS
 
-Each buffer is an 8 KB page, so `Buffers: shared hit=7011 read=342` is about 55 MB served from shared memory and 2.7 MB from outside it.
+Each buffer is one page, normally 8 KiB, so the counts convert to volumes. For `Buffers: shared hit=7011 read=342`:
+
+```formula
+V = n_buf × 8 KiB
+V_hit = 7,011 × 8 KiB = 56,088 KiB
+V_hit ≈ 54.8 MiB
+V_read = 342 × 8 KiB = 2,736 KiB
+V_read ≈ 2.7 MiB
+where
+V: the volume of data the buffer accesses represent
+n_buf: the number of buffer (page) accesses in the count
+V_hit: the volume served from Postgres's shared memory
+V_read: the volume requested from the operating system
+KiB: kibibyte, 1,024 bytes
+MiB: mebibyte, 1,024 KiB
+≈: approximately equal to
+In words: about 55 MiB came from Postgres's own cache and under 3 MiB had to be requested from the operating system.
+```
+
+Repeated accesses to the same page count again each time, so this is a measure of work, not of distinct data.
 
 - **hit**: already in shared buffers.
 - **read**: requested from the operating system. It might still have come from the OS page cache, so a `read` is not necessarily a disk read. Turn on `track_io_timing` to see the real I/O time.
@@ -214,7 +269,7 @@ Buffer access counts complement timing, but they are not independent of system s
 
 For long plans, paste the text into a visualiser such as [explain.depesz.com](https://explain.depesz.com/) or [explain.dalibo.com](https://explain.dalibo.com/), which compute exclusive times and highlight misestimates for you.
 
-To catch slow plans in production without running EXPLAIN by hand, use the **auto_explain** module, which logs the plans of statements slower than a threshold, and **pg_stat_statements**, which records total time and calls per normalised query so you know which queries to look at first.
+To catch slow plans in production without running EXPLAIN by hand, use the **auto_explain** module, which logs the plans of statements slower than a threshold, and **pg_stat_statements**, which records total time and calls for each query shape (queries that differ only in their constant values are counted together) so you know which queries to look at first.
 
 > [!note] Other databases
 > MySQL has `EXPLAIN ANALYZE` (8.0.18+) with a similar tree format. SQLite's `EXPLAIN QUERY PLAN` is much terser:

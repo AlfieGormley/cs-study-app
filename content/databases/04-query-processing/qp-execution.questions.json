@@ -41,7 +41,7 @@
       },
       {
         "text": "In the order the lines are printed: Aggregate first, then Hash Join, and so on",
-        "explanation": "Plans are printed root first, but that's display order, not execution order. Reading a plan top to bottom like a script is a common beginner mistake."
+        "explanation": "Plans are printed root first, but that's display order, not the order in which work happens. Reading a plan top to bottom like a script is a common beginner mistake."
       },
       {
         "text": "Bottom-up: the scans read rows from tables and each parent consumes its children's output",
@@ -67,7 +67,7 @@
     "options": [
       {
         "text": "Postgres ignores the order of clauses and always filters last",
-        "explanation": "The filter has clearly been applied first here, not last. Clause order doesn't fix execution order, but \"always last\" would be the worst choice."
+        "explanation": "The filter has clearly been applied first here, not last. The order of clauses doesn't fix the order in which work happens, but \"always last\" would be the worst choice."
       },
       {
         "text": "It's a display quirk; the filter really runs after the join",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "SQL's logical order (FROM, then WHERE, then GROUP BY...) defines what the result *means*. The planner may compute it any way that produces the same result.\n\nFor an inner join, `filter(join(A, B))` equals `join(filter(A), B)` when the filter only mentions columns of A. Doing it first:\n\n```\nwithout pushdown: join 1,000,000 rows\nwith pushdown:    join    30,066 rows\n```\n\nThat's about 33 times fewer probe-side input rows; total join work also includes building the hash table and producing matches.",
+    "workedExample": "SQL's logical order (FROM, then WHERE, then GROUP BY...) defines what the result *means*. The planner may compute it any way that produces the same result.\n\nFor an inner join, `filter(join(A, B))` equals `join(filter(A), B)` when the filter only mentions columns of A. Doing it first:\n\n```formula\nr = n_all / n_kept\nr = 1,000,000 / 30,066 ≈ 33\nwhere\nr: how many times fewer order rows reach the join when the filter is pushed down into the scan\nn_all: the order rows the join would receive without pushdown: every order, 1,000,000\nn_kept: the order rows that survive the status filter in the scan, 30,066 pending orders\n≈: approximately equal to\nIn words: filtering first means the join handles about 33 times fewer order rows.\n```\n\nThat's about 33 times fewer probe-side input rows; total join work also includes building the hash table and producing matches.",
     "link": {
       "title": "Planner/optimiser — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/planner-optimizer.html"
@@ -97,7 +97,7 @@
     "options": [
       {
         "text": "`[3]` then `5`",
-        "explanation": "That would mean the scan ran to the end. The limit returns as soon as it has one row, so the scan never gets asked for rows 4 and 5."
+        "explanation": "That would imply the scan ran to the end. The limit returns as soon as it has one row, so the scan never gets asked for rows 4 and 5."
       },
       {
         "text": "`[3]` then `3`",
@@ -146,7 +146,11 @@
         "explanation": "Not blocking. Limit passes rows straight through and simply stops after N."
       }
     ],
-    "answer": [0, 2, 3],
+    "answer": [
+      0,
+      2,
+      3
+    ],
     "workedExample": "Ask of each operator: could it ever be correct to emit a row before reading the last input row?\n\n| Operator | Emit early? |\n|---|---|\n| Sort | No: last row may sort first |\n| Filter | Yes: decide row by row |\n| Hash build | No: table must be complete |\n| HashAggregate | No: totals not final |\n| Limit | Yes: pass-through |\n\nBlocking operators show a high **startup cost** in EXPLAIN (the first number in `cost=a..b`). The probe side of a hash join does stream, but only after the build has finished.",
     "link": {
       "title": "Using EXPLAIN — PostgreSQL docs",
@@ -177,7 +181,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "`cost=a..b` means:\n\n- `a` = startup cost: work done before the first row comes out.\n- `b` = total cost: work to return every row.\n\nFor the Seq Scan, `a = 0`: it can return a row immediately. For the Sort, `a = 140,936.84`, which already includes the scan's full 17,353 plus the comparison work. Returning the sorted rows adds the last 2,500 (`b - a = 143436.84 - 140936.84`).\n\nUnder a `LIMIT`, the planner weighs startup cost heavily, which is why it often prefers an index that is already in order.",
+    "workedExample": "The two numbers in `cost=140936.84..143436.84` are:\n\n- the **startup cost**: work done before the first row comes out;\n- the **total cost**: work to return every row.\n\nFor the Seq Scan the startup cost is 0: it can return a row immediately. For the Sort it is 140,936.84, which already includes the scan's full 17,353 plus the comparison work of sorting. Returning the sorted rows adds the rest:\n\n```formula\nC_run = C_total − C_start\nC_run = 143,436.84 − 140,936.84\nC_run = 2,500\nwhere\nC_run: the cost of handing the sorted rows up once sorting is finished, in planner cost units\nC_total: the Sort's total cost, the second number, 143,436.84\nC_start: the Sort's startup cost, the first number, 140,936.84\nIn words: almost all of a sort's cost is paid before its first row; emitting the million sorted rows adds only 2,500 units (0.0025 per row, the default `cpu_operator_cost`).\n```\n\nUnder a `LIMIT`, the planner weighs startup cost heavily, which is why it often prefers an index that is already in order.",
     "link": {
       "title": "Using EXPLAIN — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/using-explain.html"
@@ -237,7 +241,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```\n10 GiB = 10 x 1,048,576 KiB\n       = 10,485,760 KiB\npages  = 10,485,760 / 8\n       = 1,310,720\ncost   = 1,310,720 x 1.0\n```\n\nThe real Seq Scan cost would also add `cpu_tuple_cost` (0.01) per row, plus `cpu_operator_cost` (0.0025) per row per filter condition. For our `orders` table: `7353 + 1,000,000 x 0.01 = 17,353`, exactly what EXPLAIN shows.",
+    "workedExample": "Convert the size to pages, then charge one unit per page:\n\n```formula\nP = V / v_page\nP = 10,485,760 KiB / 8 KiB\nP = 1,310,720\nC = P × c_page\nC = 1,310,720 × 1.0 = 1,310,720\nwhere\nP: the number of pages in the table\nV: the table's size: 10 GiB = 10 × 1,048,576 KiB = 10,485,760 KiB\nv_page: the size of one page, 8 KiB\nC: the page-reading part of the scan's estimated cost, in planner cost units\nc_page: `seq_page_cost`, default 1.0 per page read in order\nKiB: kibibyte, 1,024 bytes; 1 GiB (gibibyte) is 1,048,576 KiB\nIn words: 10 GiB of 8 KiB pages is about 1.3 million pages, and a sequential scan charges one unit per page.\n```\n\nThe real Seq Scan cost also adds `cpu_tuple_cost` (0.01) per row, plus `cpu_operator_cost` (0.0025) per row per filter condition. For our `orders` table with no filter:\n\n```formula\nC_seq = P × c_page + n × c_tuple\nC_seq = 7,353 × 1.0 + 1,000,000 × 0.01\nC_seq = 7,353 + 10,000 = 17,353\nwhere\nC_seq: the estimated total cost of the sequential scan, in planner cost units\nP: the number of pages in orders, 7,353\nc_page: `seq_page_cost`, 1.0 per page\nn: the number of rows in orders, 1,000,000\nc_tuple: `cpu_tuple_cost`, 0.01 per row\nIn words: 7,353 pages plus a million rows at 0.01 each gives 17,353, exactly what EXPLAIN shows.\n```",
     "link": {
       "title": "Query planning configuration — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/runtime-config-query.html"
@@ -258,16 +262,16 @@
         "explanation": "This query does not request sampling: ORDER BY ... LIMIT must identify the exact top rows."
       },
       {
-        "text": "All 1,000,000, but the sort keeps only the best 10 in a small heap",
-        "explanation": "Correct. A top-N heapsort reads every row but holds only a 10-element heap, which is why memory is 26 kB rather than tens of megabytes. Content gap: no reproducible timing record is available for this illustrative plan."
+        "text": "All 1,000,000, but the sort keeps only the best 10 in a small bounded heap",
+        "explanation": "Correct. A top-N heapsort reads every row but holds only a 10-element bounded heap, which is why memory is 26 kB rather than tens of megabytes. Content gap: no reproducible timing record is available for this illustrative plan."
       },
       {
         "text": "All 1,000,000, and they are all fully sorted before the top 10 are returned",
-        "explanation": "All rows are read, but a full sort isn't needed. The planner knows about the LIMIT and uses a bounded heap: O(n log 10) instead of O(n log n)."
+        "explanation": "All rows are read, but a full sort isn't needed. The planner knows about the LIMIT and uses a bounded heap: O(n log 10) work instead of O(n log n), where n is the number of input rows (1,000,000) and log is the logarithm, which grows slowly."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Is any operator under the Limit blocking? Yes, the Sort.\n2. So the Limit can't save the scan: the Seq Scan returns all 1,000,000 rows (`actual rows=1000000.00`).\n3. But the Sort is *bounded*. It keeps a heap of the 10 best rows and discards anything smaller, so it needs about 26 kB.\n4. Cost: O(n log k) with k = 10.\n\nTo make the LIMIT truly early-exit, give it an index on `total`: an Index Scan Backward returns rows already in order, so it can stop after 10.",
+    "workedExample": "1. Is any operator under the Limit blocking? Yes, the Sort.\n2. So the Limit can't save the scan: the Seq Scan returns all 1,000,000 rows (`actual rows=1000000.00`).\n3. But the Sort is *bounded*. It keeps a bounded heap of the 10 best rows and discards anything smaller, so it needs about 26 kB.\n4. Cost: each row is compared against a bounded heap of 10 rows instead of being sorted among a million:\n\n```formula\nC_top ≈ n × log_2(k)\nC_top ≈ 1,000,000 × 3.3 ≈ 3,300,000\nC_full ≈ n × log_2(n)\nC_full ≈ 1,000,000 × 20 ≈ 20,000,000\nwhere\nC_top: the rough number of comparisons a top-N heapsort makes\nC_full: the rough number of comparisons a full sort makes\nn: the number of input rows, 1,000,000\nk: the number of rows kept, set by the LIMIT, here 10\nlog_2: the logarithm to base 2: how many times you can halve a number before reaching 1; log_2(10) ≈ 3.3 and log_2(1,000,000) ≈ 20\n≈: approximately equal to\nIn words: keeping only the best 10 rows costs each row about 3 comparisons instead of about 20, and needs only a bounded heap of 10 rows in memory.\n```\n\nTo make the LIMIT truly early-exit, give it an index on `total`: an Index Scan Backward returns rows already in order, so it can stop after 10.",
     "link": {
       "title": "LIMIT and OFFSET — PostgreSQL docs",
       "url": "https://www.postgresql.org/docs/current/queries-limit.html"
@@ -297,7 +301,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Count the calls for a scan, filter and sum over 1 billion rows:\n\n```\niterator:   ~3 calls x 1e9 rows\n          = ~3e9 next() calls\nbatch 1024: ~3 x 1e9/1024\n          = ~2.9e6 calls\n```\n\nEach call also has branches and pointer chasing. With batches, the inner loop is something like `for i in range(1024): out[i] = a[i] > 5`, which compilers and CPUs execute very fast. For OLTP queries touching a few rows, batching can offer less benefit; per-row overhead is only one factor in an engine's execution-model design.",
+    "workedExample": "Count the calls for a scan, filter and sum over 1 billion rows:\n\n```formula\nN_row ≈ k × n\nN_row ≈ 3 × 10^9\nN_batch ≈ k × n / b\nN_batch ≈ 3 × 10^9 / 1,024 ≈ 2.9 × 10^6\nwhere\nN_row: the number of `next()` calls when each call returns one row\nN_batch: the number of `next()` calls when each call returns a batch of rows\nk: the number of operators each row passes through, about 3 here (scan, filter, sum)\nn: the number of rows, 10^9\n10^9: ten to the power 9, one billion\nb: the number of rows in each batch, here 1,024\n≈: approximately equal to\nIn words: batching 1,024 rows per call cuts about 3 billion calls to about 3 million.\n```\n\nEach call also has branches and pointer chasing. With batches, the inner loop is something like `for i in range(1024): out[i] = a[i] > 5`, which compilers and CPUs execute very fast. For OLTP queries touching a few rows, batching can offer less benefit; per-row overhead is only one factor in an engine's execution-model design.",
     "link": {
       "title": "Query plan — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Query_plan"
@@ -330,7 +334,11 @@
         "explanation": "Correct. The build side scans all 100,000 customers to build the hash table, because any of them might match a pending order."
       }
     ],
-    "answer": [0, 3, 4],
+    "answer": [
+      0,
+      3,
+      4
+    ],
     "workedExample": "Work up from the leaves:\n\n1. `Seq Scan customers` returns 100,000 rows into `Hash` (build side).\n2. `Seq Scan orders` filters in place: 30,066 pass, 969,934 removed.\n3. `Hash Join` probes with each pending order: 30,066 joined rows.\n4. `HashAggregate` groups by city: 8 rows.\n5. `Sort` (top-N) sorts those 8 and `Limit` takes 3.\n\nThe Limit is above two blocking operators, so it saves nothing below them. Content gap: no reproducible benchmark record is available for the illustrative plan; no measured page-I/O or runtime claim is made.",
     "link": {
       "title": "Using EXPLAIN — PostgreSQL docs",

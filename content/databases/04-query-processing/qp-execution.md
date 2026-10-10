@@ -44,7 +44,7 @@ Every statement goes through the same stages. The names below are PostgreSQL's, 
 ```
 
 1. **Parser.** Checks the grammar and builds a parse tree. A typo like `SELEC` fails here, before any table is touched.
-2. **Analyser** (or binder). Looks names up in the system catalog: does `orders` exist, does it have a `status` column, what type is it? It produces a query tree with every name resolved. "Column does not exist" errors come from here.
+2. **Analyser** (or binder). Looks names up in the system catalog: does `orders` exist, does it have a `status` column, what type is it? It produces PostgreSQL's analysed query tree, with every name resolved. "Column does not exist" errors come from here.
 3. **Rewriter.** Applies rules. The main one is **view expansion**: a query against a view is rewritten into a query against the view's underlying tables, so the planner can optimise the whole thing together. Row-level security policies are added here too.
 4. **Planner/optimiser.** Considers many ways to run the query and estimates the cost of each. It outputs one **plan**.
 5. **Executor.** Runs the plan and streams rows back to the client.
@@ -191,6 +191,22 @@ This is why `EXPLAIN` shows two costs for each node, like `cost=0.00..19853.00`.
 ## Pages: the unit of cost
 
 Tables and indexes are stored in fixed-size **pages** (normally 8 KiB in PostgreSQL and 16 KiB in MySQL InnoDB; both have configurable page-size options). The `orders` table holds about 136 rows per page. The database reads whole pages, never single rows, so the main question for any plan is **how many pages does it touch, and are they in memory?**
+
+To turn a row count into the number of pages a full scan must read, divide by how many rows fit on one page:
+
+```formula
+P = ⌈n_rows / r_page⌉
+P = ⌈1,000,000 / 136⌉
+P = ⌈7,352.9⌉ = 7,353
+where
+P: the number of database pages the table occupies, so the number of pages a full sequential scan reads
+n_rows: the number of rows in the table, here 1,000,000 orders
+r_page: the average number of rows that fit on one page, here about 136 for `orders` (8 KiB pages holding rows of a few dozen bytes each, plus per-row and per-page overhead)
+⌈ ⌉: ceiling: round up to the next whole number, because a part-filled last page is still a whole page to read
+In words: a million orders at about 136 per page fill about 7,353 pages, and it is that page count, not the row count, that a full scan pays for.
+```
+
+That matches the 7,353 pages in the table at the top of this lesson. It assumes rows are packed evenly; real tables also contain free space and dead row versions, so the true page count is usually a little higher than this ideal.
 
 - A page found in Postgres's shared buffer cache is a **hit**: a memory access, well under a microsecond.
 - A page that isn't is a **read**. It might come from the operating system's cache (microseconds) or from the SSD (tens to hundreds of microseconds).

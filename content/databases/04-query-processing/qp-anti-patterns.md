@@ -85,7 +85,19 @@ Limit  (actual rows=20.00)
 Execution Time: 66.979 ms
 ```
 
-To skip 900,000 rows, Postgres has to produce them: it walked 900,020 index entries and fetched their rows, then threw away all but 20. Page 1 is fast and page 45,000 is slow, and the deeper users go the worse it gets.
+To skip 900,000 rows, Postgres has to produce them: it walked 900,020 index entries and fetched their rows, then threw away all but 20.
+
+```formula
+n_read = n_off + n_lim
+n_read = 900,000 + 20 = 900,020
+where
+n_read: the number of index entries walked and rows fetched to answer one page
+n_off: the OFFSET value: the number of rows skipped, here 900,000
+n_lim: the LIMIT value: the number of rows returned, here 20
+In words: an OFFSET query does the work of every page before the one you asked for, plus the page itself.
+```
+
+With 20 rows per page, an offset of 900,000 is page 45,001. Page 1 reads 20 rows; page 45,001 reads 900,020. The work grows in step with the page number, so the deeper users go the worse it gets.
 
 **Keyset pagination** remembers where the last page ended:
 
@@ -103,7 +115,7 @@ Limit  (actual rows=20.00)
 Execution Time: 0.014 ms
 ```
 
-In these illustrative timings the difference is large. Keyset pagination avoids work proportional to the skipped offset, though actual latency still depends on the data, index and system state. For a non-unique sort column, use a tie-breaker: `WHERE (ordered_on, id) < ($1, $2) ORDER BY ordered_on DESC, id DESC`. The trade-off is that you can't jump straight to page 371, which most interfaces don't need.
+In these illustrative timings the difference is large. Keyset pagination avoids work that grows with the skipped offset, though actual latency still depends on the data, index and system state. For a non-unique sort column, use a tie-breaker: `WHERE (ordered_on, id) < ($1, $2) ORDER BY ordered_on DESC, id DESC`. The trade-off is that you can't jump straight to page 371, which most interfaces don't need.
 
 ## 5. NOT IN with a subquery
 
@@ -221,7 +233,25 @@ for c in customers:
         " WHERE customer_id = %s", [c.id])
 ```
 
-That's 1 query plus one per customer: 12,501 queries for York. Each query might take only 0.05 ms to run, but every one pays a network round trip, typically 0.1 to 1 ms within a data centre. At 0.5 ms each that's over 6 seconds of waiting, for data one query could return:
+That's 1 query plus one per customer: 12,501 queries for York. Each query might take only 0.05 ms to run, but every one pays a network round trip, typically 0.1 to 1 ms within a data centre. With a 0.5 ms round trip:
+
+```formula
+t_total ≈ n_q × (t_exec + t_RTT)
+t_total ≈ 12,501 × (0.05 ms + 0.5 ms)
+t_total ≈ 12,501 × 0.55 ms
+t_total ≈ 6,900 ms ≈ 6.9 s
+where
+t_total: the total time the application spends waiting on the database
+n_q: the number of queries: 1 for the customers plus 1 per customer, here 12,501
+t_exec: the time the database spends running one query, here 0.05 ms
+t_RTT: the network round-trip time (RTT) for one query, here 0.5 ms
+ms: millisecond, a thousandth of a second
+s: second
+≈: approximately equal to
+In words: twelve and a half thousand tiny queries add up to about 7 seconds, over 6 of them spent waiting on the network.
+```
+
+That's for data one query could return:
 
 ```python
 rows = db.fetch(
@@ -251,7 +281,22 @@ Seq Scan on orders  (rows=333333)
   Filter: (status = $1)
 ```
 
-The generic plan assumes the average value (1/3 of rows, with 3 distinct statuses) and can't use the partial index. If most calls ask for rare values, every call now scans the table. Fixes: `SET plan_cache_mode = force_custom_plan` for that session or role, or write separate statements for the rare and common cases.
+The generic plan doesn't know the value, so it assumes an average one, as if every status were equally common:
+
+```formula
+s = 1 / n_distinct = 1 / 3
+n_est = s × n_table
+n_est = 1,000,000 / 3 ≈ 333,333
+where
+s: the selectivity the generic plan assumes for status = $1
+n_distinct: the number of distinct values in the column, here 3 statuses
+n_est: the estimated number of matching rows
+n_table: the number of rows in the table, here 1,000,000
+≈: approximately equal to
+In words: without knowing the parameter, the planner expects a third of the table to match, so a sequential scan looks cheapest.
+```
+
+It also can't use the partial index, because it can't prove the parameter is 'pending'. If most calls ask for rare values, every call now scans the table. Fixes: `SET plan_cache_mode = force_custom_plan` for that session or role, or write separate statements for the rare and common cases.
 
 ## 11. Exact counts and SELECT *
 
@@ -261,7 +306,7 @@ The generic plan assumes the average value (1/3 of rows, with 3 distinct statuse
 
 ## Myths
 
-- **"CTEs are optimisation fences."** True before Postgres 12. Since 12, a non-recursive, side-effect-free SELECT CTE referenced once is normally inlined into the main query and optimised with it, unless you write `AS MATERIALIZED`.
+- **"CTEs are optimisation fences."** True before Postgres 12. Since 12, a non-recursive, side-effect-free SELECT CTE used only once in the query is normally inlined into the main query and optimised with it, unless you write `AS MATERIALIZED`.
 - **"Always use a join instead of a subquery."** Section 6 showed a subquery beating a join. Read the plan.
 - **"An index on every column is safe."** The previous lesson covered the write, cache and HOT costs.
 

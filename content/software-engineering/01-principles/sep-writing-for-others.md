@@ -103,7 +103,22 @@ def retry(fn, *, attempts=3,
     """
 ```
 
-That's Google style; NumPy and reStructuredText styles are also common. Pick one per project so tools (Sphinx, IDE tooltips) render it consistently.
+The delay rule in that docstring is **exponential backoff**: each wait is twice the one before, so a struggling service gets more and more breathing room. Written as maths rather than Python:
+
+```formula
+t_n = b × 2^n
+where
+t_n: the wait after failed attempt number n, in seconds (s)
+b: the base delay (the backoff argument), in seconds; 0.5 s by default here
+n: which failure this is, counting from 0 for the first failed attempt
+2^n: 2 raised to the power n, that is n twos multiplied together (2^0 = 1, 2^1 = 2, 2^2 = 4)
+s: seconds
+In words: the first wait is the base delay, and every later wait doubles it.
+```
+
+With the defaults (`attempts=3`, `backoff=0.5`), the waits are 0.5 s after the first failure and 1 s after the second. The third attempt is the last, so if it also fails there is no wait: the exception is raised. Real retry helpers usually also cap the delay and add random jitter, which this sketch leaves out.
+
+That docstring is in Google style; NumPy and reStructuredText styles are also common. Pick one per project so tools (Sphinx, IDE tooltips) render it consistently.
 
 A good docstring answers what a caller needs and can't see: units, valid ranges, what's raised, side effects, thread-safety, and whether arguments are mutated. It doesn't narrate the implementation.
 
@@ -164,7 +179,7 @@ resize(img, width=800, height=600,
 - **Types and enums instead of strings and booleans**: `Align.LEFT`, not `"left"`, which might be misspelt.
 - **Make illegal states unrepresentable**: rather than `Order(status="paid", paid_at=None)` being possible, model `PaidOrder` with a required `paid_at` and validate boundary inputs. Python annotations alone still allow an explicitly supplied `None` at runtime.
 - **Safe defaults**: TLS verification on, timeouts set. Python's `requests` has *no* default timeout, so a call can hang forever, a well-known pitfall.
-- **Principle of least astonishment**: similar operations should behave similarly. If `list.sort()` sorts in place and returns `None`, then a `sorted()` that returns a new list must not also mutate.
+- **Principle of least astonishment**: similar operations should behave similarly. If `list.sort()` sorts in place and returns `None`, then a `sorted()` that returns a new list ought to leave its input unchanged.
 
 ### Hyrum's Law
 

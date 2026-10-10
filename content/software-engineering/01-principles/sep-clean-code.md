@@ -42,7 +42,7 @@ The second version needs no comment. The reader knows what goes in, what comes o
 
 ### Put units and meaning in the name
 
-Ambiguous units cause real failures. NASA's Mars Climate Orbiter was lost in 1999 because one piece of software produced pound-force seconds and another expected newton seconds.
+Ambiguous units cause real failures. NASA's Mars Climate Orbiter was lost in 1999 because one piece of software produced pound-force seconds and another expected newton seconds. One pound-force second is about 4.45 newton seconds, so the navigation software underestimated the effect of each small thruster firing by that factor.
 
 ```python
 timeout = 30          # seconds? ms?

@@ -28,7 +28,7 @@ Different failures need different responses. Mixing them up is the root of most 
 
 Languages take two broad approaches.
 
-**Exceptions** (Python, Java, C#) separate the error path from the normal path. An error propagates up the stack until something catches it.
+**Exceptions** (Python, Java, C#) separate the error path from the normal flow. An error propagates up the call stack until something catches it.
 
 - Pro: the happy path reads cleanly, and errors can't be silently ignored by forgetting to check a return value.
 - Con: the error path is invisible at the call site. Any line might throw, and you can't tell from reading it.
@@ -153,7 +153,7 @@ except psycopg.OperationalError as e:
 
 ## Fail fast, at the boundary
 
-Validate input where it enters the system (an HTTP handler, a CLI, a message consumer) and convert it to trusted types. Deeper code can then assume valid data instead of re-checking everywhere.
+Validate input where it enters the system (an HTTP handler, a CLI, a message consumer) and convert it to validated types. Deeper code can then assume valid data instead of re-checking everywhere.
 
 ```python
 from dataclasses import dataclass
@@ -176,7 +176,7 @@ A failure close to its cause is cheap to diagnose. A `None` that travels through
 
 ### Collecting errors instead of stopping at the first
 
-For user input, failing on the first problem is frustrating ("fix the email... now fix the postcode... now..."). Fowler's **notification** pattern collects all validation errors and returns them together:
+For user input, failing on the first problem is frustrating ("fix the email... now fix the postcode... now..."). Fowler's **notification pattern** collects all validation errors and returns them together:
 
 ```python
 def validate(form):

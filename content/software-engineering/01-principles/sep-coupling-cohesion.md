@@ -36,7 +36,7 @@ A traditional ordering from tighter to looser coupling follows. It is a design h
 | Content | reaches into another's internals |
 | Common | shares global mutable data |
 | External | shares a format or device |
-| Control | passes a flag steering the other |
+| Control | passes a mode flag steering the other |
 | Stamp | passes a whole record, uses a bit |
 | Data | passes only the values needed |
 
@@ -126,7 +126,7 @@ A `utils.py` holding `slugify`, `retry` and `parse_vat_number` is coincidentally
 
 ### Spotting low cohesion in a class
 
-A useful smell: **do methods use disjoint sets of fields?**
+A useful code smell to look for: **do methods use non-overlapping sets of fields?**
 
 ```python
 class Customer:
@@ -167,7 +167,7 @@ Don't apply it mechanically. Chaining on data structures and fluent builders (`q
 
 ### Tell, don't ask
 
-Rather than pulling data out of an object to make a decision about it, tell the object what you want and let it decide.
+Rather than extracting data from an object to make a decision about it, tell the object what you want and let it decide.
 
 ```python
 # Ask: logic lives outside the data
@@ -191,13 +191,42 @@ This raises cohesion (the rule lives with the balance it protects) and lowers co
 
 ## Measuring it
 
-A module-level variant of Robert C. Martin's package metrics gives a rough number. Here we count distinct modules (other formulations count classes across package boundaries):
+A module-level variant of Robert C. Martin's package metrics gives a rough number. Here we count distinct modules (other formulations count classes across package boundaries). Start with two counts for a module:
 
-- **Ca** (afferent coupling): how many modules depend on it.
-- **Ce** (efferent coupling): how many modules it depends on.
-- **Instability** `I = Ce / (Ca + Ce)`, from 0 (stable) to 1 (unstable), when the denominator is positive. An isolated module has an undefined ratio unless a tool specifies a convention.
+- **Afferent coupling**: how many other modules depend on it (incoming dependencies). "Afferent" means "carried towards".
+- **Efferent coupling**: how many other modules it depends on (outgoing dependencies). "Efferent" means "carried away".
 
-A module that many others use and that depends on little (I near 0) is hard to change safely, so it should be abstract and slow-moving. A value near 1 means outgoing dependencies dominate, not that nobody depends on it. Exactly I = 1 means Ca = 0 and Ce > 0. The ratio measures structural dependence, not observed change frequency. The **stable dependencies principle** says dependencies should point towards stability.
+**Instability** combines them into one number: the share of a module's dependency links that point outwards. Use it to ask "if I change this module, how many others might break?" and "how exposed is it to changes elsewhere?"
+
+```formula
+I = Ce / (Ca + Ce)
+where
+I: the module's instability, a plain ratio with no unit, from 0 (maximally stable) to 1 (maximally unstable)
+Ce: efferent coupling, the number of other modules this module depends on (outgoing)
+Ca: afferent coupling, the number of other modules that depend on this module (incoming)
+In words: instability is outgoing dependencies divided by all dependencies, in either direction. The more a module leans on others, and the fewer lean on it, the closer it is to 1.
+```
+
+A worked example. A `money` module is imported by 9 other modules and imports only 1 itself. An `admin_report` module is imported by nothing and imports 4 modules:
+
+```formula
+I_money = 1 / (9 + 1) = 0.1
+I_report = 4 / (0 + 4) = 1
+where
+I_money: the instability of the money module, a ratio with no unit
+I_report: the instability of the admin_report module, a ratio with no unit
+In words: money has 9 incoming and 1 outgoing link, so it is very stable (0.1); admin_report has only outgoing links, so it is maximally unstable (1).
+```
+
+A module that many others use and that depends on little (I near 0, like `money`) is hard to change safely, so it should be abstract and slow-moving. A value near 1 means outgoing dependencies dominate, not that nobody depends on it. Exactly I = 1 means Ca = 0 and Ce > 0, as with `admin_report`.
+
+Limits of the metric:
+
+- It needs Ca + Ce to be positive. An isolated module (no links either way) divides 0 by 0, so its instability is undefined unless a tool specifies a convention.
+- Every dependency counts as 1, whether it uses one function or fifty.
+- The ratio measures structural dependence, not observed change frequency.
+
+The **stable dependencies principle** says dependencies should point towards stability: a module should depend only on modules whose instability is lower than its own.
 
 ## Trade-offs
 
@@ -211,7 +240,7 @@ A module that many others use and that depends on little (I near 0) is hard to c
 - Coupling ranges from content and common (worst) to data (best); cohesion ranges from coincidental (worst) to functional (best).
 - Connascence names *what* two pieces of code must agree on; weaken strong forms (position, meaning) to weaker ones (name), especially across boundaries.
 - The Law of Demeter and "tell, don't ask" keep knowledge local.
-- Shotgun surgery and divergent change are the symptoms; instability `Ce / (Ca + Ce)` is one rough metric.
+- Shotgun surgery and divergent change are the symptoms; instability (outgoing dependencies as a share of all dependencies) is one rough metric.
 - Decoupling is not free; invest where change is likely and boundaries are costly.
 
 ## Further reading

@@ -263,7 +263,7 @@ You can inject a concrete `PostgresClient` (DI without DIP), and you can follow 
 - **Interface explosion.** An `IUserService` with exactly one implementation, created "for DIP", can add indirection without a demonstrated benefit. Introduce the abstraction when there's a second implementation or a real need to isolate (tests count).
 - **SRP as "one method per class".** Splitting to the point where a feature is spread over twenty classes destroys cohesion. The test is actors and reasons to change, not size.
 - **OCP everywhere.** Designing every class for extension is speculative; most code is best closed by simply being easy to edit.
-- **Inheritance hierarchies.** Most LSP trouble starts with inheritance used for code reuse. Prefer composition; inherit only when the subtype truly honours the contract.
+- **Inheritance hierarchies.** Most LSP trouble starts with inheritance used just to share code. Prefer composition; inherit only when the subtype truly honours the contract.
 
 ## Key takeaways
 - SRP: a module should answer to one actor; split code that changes for different people's reasons.

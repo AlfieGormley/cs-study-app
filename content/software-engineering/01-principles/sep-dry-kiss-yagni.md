@@ -110,7 +110,22 @@ def flatten(xs):
     return out
 ```
 
-The clever version is shorter, but a reader must untangle `sum` over lists, a lambda and a conditional expression. Even on a flat list of n elements it takes Θ(n²) time: `sum(..., [])` copies both operands each time. The recursive `extend` version avoids that flat-list penalty, although deep nesting still adds repeated copying and recursion overhead.
+The clever version is shorter, but a reader must untangle `sum` over lists, a lambda and a conditional expression. It is also slow. `sum(..., [])` adds lists with `+`, and list `+` builds a brand-new list each time, copying both operands. On a flat list, step 1 copies 1 element reference, step 2 copies 2, and so on:
+
+```formula
+T(n) = 1 + 2 + … + n
+T(n) = n × (n + 1) / 2
+T(n) = Θ(n^2)
+where
+T(n): the total number of element references copied while flattening, as a function of n
+n: the number of elements in the input list
+…: and so on: keep adding each whole number up to n
+Θ: Big-Theta: "grows in proportion to", ignoring constant factors and small inputs
+n^2: n multiplied by itself
+In words: the k-th step copies k references, so the total is the sum of 1 to n, which grows with the square of the list's length.
+```
+
+For a list of 1,000 elements that is 1,000 × 1,001 / 2 = 500,500 copies; for 100,000 elements it is about 5 billion. Doubling the list roughly quadruples the work. The simple version appends each element once, so its work grows only in proportion to n. Its recursive `extend` avoids that flat-list penalty, although deep nesting still adds repeated copying and recursion overhead.
 
 Rich Hickey's talk *Simple Made Easy* draws a useful line:
 
@@ -150,12 +165,12 @@ def orders_to_csv(orders, file):
         writer.writerow([o.id, o.total])
 ```
 
-Martin Fowler breaks down what a presumptive feature costs, even when the guess turns out right:
+Martin Fowler breaks down what a presumptive feature costs. Even when the guess turns out right, you still pay the cost of delay and the cost of carry:
 
-- **Cost of build**: the time spent now.
+- **Cost of build**: the analysis, coding and testing time spent now, wasted entirely if the feature is never needed.
 - **Cost of delay**: the features you didn't ship because you were building this one.
 - **Cost of carry**: every reader, test and change must work around the extra code.
-- **Cost of repair**: when the guess is wrong, which it often is, the code must be ripped out or bent to fit.
+- **Cost of repair**: even a feature that is needed was often built the wrong way, because you only learn what it should do later; reworking it is technical debt. A feature that is never needed must also be ripped out.
 
 ### What YAGNI does not mean
 

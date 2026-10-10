@@ -61,7 +61,7 @@ A minimal reproduction often makes the cause obvious. It also makes a perfect re
 
 ## Step 3: localise it by binary search
 
-When you do not know where the bug is, halve the search space with each experiment. In an ideal binary search, 20 yes/no tests distinguish roughly a million candidates. Arbitrary code, configuration interactions and non-monotonic failures need not provide such a partitioning oracle.
+When you do not know where the bug is, halve the search space with each experiment. In an ideal binary search, 20 yes/no tests distinguish roughly a million candidates (20 halvings cover 1,048,576). Arbitrary code, configuration interactions and non-monotonic failures need not provide such a partitioning oracle.
 
 You can binary-search almost anything:
 
@@ -85,7 +85,25 @@ git bisect good    # or: git bisect bad
 git bisect reset
 ```
 
-For a linear history with one deterministic good-to-bad transition and no skipped commits, N candidate commits need about log2(N) tests. Merges, flaky tests, reversions and untestable commits complicate this bound. For 1,000 commits that is about 10 tests, since 2^10 = 1,024.
+How many tests does bisect need? Each test halves the range of suspect commits, so the question is how many halvings it takes to get from all the candidates down to one:
+
+```formula
+2^T ≥ N
+T ≈ log_2(N)
+2^10 = 1,024 ≥ 1,000
+T = ⌈log_2(1,000)⌉ = ⌈9.97⌉ = 10
+where
+T: the number of commits you must test (build and check)
+N: the number of candidate commits between the known good and known bad revisions; here 1,000
+2^T: 2 multiplied by itself T times: the number of candidates that T halvings can tell apart
+log_2: the logarithm to base 2: log_2(N) is the power you must raise 2 to in order to get N, which is the number of halvings that shrink N to 1
+≥: greater than or equal to
+≈: approximately equal to
+⌈ ⌉: ceiling: round up to the next whole number, because you cannot run part of a test
+In words: each test halves the suspects, and 10 halvings are enough for 1,024 commits, so about 10 tests find the culprit among 1,000.
+```
+
+This assumes a linear history with one deterministic good-to-bad transition and no skipped commits. Merges, flaky tests, reversions and untestable commits complicate this bound. Doubling the history to 2,000 commits adds only about one more test.
 
 Better still, automate it with a script whose exit code tells git the answer:
 

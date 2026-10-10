@@ -62,7 +62,7 @@ Practical habits:
 
 - **Small changes.** Smaller coherent changes are easier to understand and review; line counts alone do not determine review quality. Split refactoring from behaviour change (see the refactoring lesson).
 - **Fast responses.** Google's guide says one business day is the maximum time to respond to a review request. Slow reviews are a hidden tax on every engineer.
-- **Comment on the code, not the person.** "This loop is O(n²); a set would make it O(n)" rather than "why would you do this?".
+- **Comment on the code, not the person.** "This loop is O(n²); a set would make it O(n)" (where n is the number of items) rather than "why would you do this?".
 - **Label severity.** Prefix optional suggestions with `Nit:` so the author knows what blocks approval.
 - **Automate the trivial.** Formatters and linters in CI settle style, so humans spend review time on design and correctness.
 - **Explain the why** in the PR description: context, approach, how it was tested, and what the reviewer should focus on.
@@ -79,6 +79,34 @@ Google's SRE book gives concrete guidelines worth knowing:
 - With a primary and a secondary on call around the clock and week-long shifts, the ideal coverage calculation gives **eight engineers** for a single-site team, before leave and other resilience needs. Google separately recommends about **six per site** for dual-site teams, considering both coverage and critical team mass.
 - Google reports around **6 hours** of work per incident in its experience, including diagnosis and follow-up, and uses at most **2 incidents per 12-hour shift** as a workload guideline. This is not a universal incident-duration estimate.
 - Response expectations cited by Google: about **5 minutes** for user-facing, time-critical services, about **30 minutes** for less time-sensitive ones.
+
+Where does eight come from? Two roles must be filled at every moment, and nobody may spend more than a quarter of their time in either of them:
+
+```formula
+E_min = R / f_max
+E_min = 2 / 0.25
+E_min = 8
+where
+E_min: the smallest team that can staff the rotation, in engineers
+R: the number of on-call roles filled at all times: a primary and a secondary, so 2
+f_max: the largest fraction of time one engineer may spend on call: 25%, which is 0.25
+In words: two seats must always be filled and each person may sit in one only a quarter of the time, so you need four people per seat, eight in all.
+```
+
+With week-long shifts, each of the eight is on call (primary or secondary) for one week in every four, as the SRE book puts it. Real teams need more, to cover leave, illness and training.
+
+The incident limit follows the same kind of reasoning:
+
+```formula
+H = k × t
+H = 2 × 6 h = 12 h
+where
+H: the incident work generated during one shift, in hours (h)
+k: the number of incidents in the shift; Google's guideline maximum is 2
+t: the average hours of work per incident in Google's experience (root-cause analysis, remediation, and follow-up such as writing the postmortem and fixing bugs), about 6 h
+h: hours
+In words: two incidents of about six hours' work each fill a whole 12-hour shift, so more than two leaves no time to handle them properly.
+```
 
 A **follow-the-sun** rotation across suitable time zones and shift lengths can avoid night duty, with clear handovers. Check that the roster covers all 24 hours: London and San Francisco each working an ordinary eight-hour day do not provide complete coverage.
 

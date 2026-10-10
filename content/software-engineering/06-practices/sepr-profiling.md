@@ -31,22 +31,35 @@ Without a target you cannot tell when to stop, and performance work has no natur
 
 ## Amdahl's law: where the ceiling is
 
-If part of a program takes fraction *p* of the runtime, and you make that part *s* times faster, the overall speedup for fixed work, assuming the remaining runtime is unchanged, is:
+**Amdahl's law** (Gene Amdahl, 1967) answers the question "if I speed up one part of a program, how much faster does the whole thing get?" It applies to a fixed amount of work, assuming the rest of the runtime is unchanged. Suppose a function takes 30% of runtime and you make it 10 times faster:
 
-```
-speedup = 1 / ((1 - p) + p / s)
+```formula
+S = 1 / ((1 − p) + p / s)
+S = 1 / ((1 − 0.3) + 0.3 / 10)
+S = 1 / (0.7 + 0.03)
+S = 1 / 0.73 ≈ 1.37
+where
+S: the overall speedup: old total runtime divided by new total runtime, a plain ratio ("1.37 times faster")
+p: the fraction of the original runtime spent in the part you improve, between 0 and 1; here 0.3 (30%)
+1 − p: the fraction of runtime you do not touch; here 0.7
+s: how many times faster you make that part; here 10
+≈: approximately equal to
+In words: the untouched 70% still takes as long as before, so a tenfold speedup of the other 30% only makes the whole program about 1.37 times faster.
 ```
 
-Suppose a function takes 30% of runtime and you make it 10 times faster:
+The untouched part sets a ceiling. Even if the improved part became infinitely fast, its time would shrink to nothing and only the untouched part would remain:
 
-```
-1 / (0.7 + 0.3 / 10)
-= 1 / (0.7 + 0.03)
-= 1 / 0.73
-≈ 1.37x
+```formula
+S_max = 1 / (1 − p)
+S_max = 1 / 0.7 ≈ 1.43
+where
+S_max: the largest possible overall speedup, reached as the improved part's time shrinks to zero
+p: the fraction of the original runtime spent in the part you improve; here 0.3
+≈: approximately equal to
+In words: if 70% of the runtime is untouched, no amount of work on the other 30% can make the program more than about 1.43 times faster.
 ```
 
-Even making it infinitely fast only gives 1 / 0.7 ≈ 1.43×. The 70% you did not touch caps the gain. The lesson: work on the biggest slice first, and a profiler tells you which slice that is.
+The 70% you did not touch caps the gain. The lesson: work on the biggest slice first, and a profiler tells you which slice that is.
 
 ## Step 1: benchmark honestly
 
@@ -71,7 +84,7 @@ Common benchmarking mistakes:
 
 - **Unrealistic data.** An algorithm that is fine with 100 rows can be quadratic at 100,000. Use production-sized inputs.
 - **Mismatched warm-up.** Warm up for steady-state measurements; measure cold starts separately if that is the target. The first run can pay for cold caches, lazy imports, connection setup and JIT compilation (in PyPy, the JVM or V8).
-- **Noise.** Laptops throttle, browsers steal CPU. Repeat runs and compare distributions, not single numbers.
+- **Noise.** Laptops slow their CPUs when hot (thermal throttling), browsers steal CPU. Repeat runs and compare distributions, not single numbers.
 - **Measuring the wrong thing.** A micro-benchmark of string concatenation tells you nothing if the request spends 90% of its time waiting for Postgres.
 
 ## Step 2: profile to find the bottleneck
@@ -81,7 +94,7 @@ A **profiler** tells you where time goes. There are two main kinds.
 | Kind | How it works | Example |
 |---|---|---|
 | Deterministic | Hooks every call and return | `cProfile` |
-| Sampling | Records stacks N times/sec | `py-spy`, `perf` |
+| Sampling | Records stacks at a fixed rate | `py-spy`, `perf` |
 
 **Deterministic** profilers count observed call events in the profiled execution scope, with overhead that can disproportionately affect tiny functions. **Sampling** profilers periodically capture stacks; some interrupt execution while tools such as py-spy read another process externally. Sampling is approximate and often lower overhead, but production use requires suitable permissions and validation of workload impact. `py-spy` can attach to a running Python process by PID without restarting it.
 
@@ -135,7 +148,7 @@ For whole machines, Gregg's **USE method** is a quick checklist: for each resour
 Candidate improvements to evaluate against measurements:
 
 1. **Do less work.** Remove repeated computation, unneeded fields, duplicate calls.
-2. **Better algorithms and data structures.** O(n²) to O(n log n) beats any micro-optimisation once n is large.
+2. **Better algorithms and data structures.** O(n²) to O(n log n), where n is the number of input items, beats any micro-optimisation once n is large.
 3. **Batch I/O.** One query for 5,000 rows instead of 5,000 queries. Batch API calls, buffer writes.
 4. **Cache** results that are expensive and reused, with a plan for invalidation.
 5. **Concurrency** for I/O-bound work (asyncio, threads): overlap the waits.
@@ -155,11 +168,27 @@ def common_fast(a, b):
     return [x for x in a if x in bs]
 ```
 
-With 10,000 items in each list, `common` does up to 100 million comparisons; `common_fast` does about 20,000 operations. This is an asymptotic comparison, not a measured timing guarantee. It assumes stable, hashable values and effectively constant-time equality/hashing; the set uses O(m) additional memory. Unhashable values or unusual equality semantics can invalidate this replacement. No universal seconds-to-milliseconds result is included because it cannot be reliably established without a specified workload and benchmark.
+With 10,000 items in each list, the two versions differ enormously in the work they do:
+
+```formula
+C_list = n_a × n_b
+C_list = 10,000 × 10,000 = 100,000,000
+C_set ≈ n_b + n_a
+C_set ≈ 10,000 + 10,000 = 20,000
+where
+C_list: the worst-case number of equality comparisons `common` makes, scanning list b once for every item of a
+C_set: the approximate number of basic operations `common_fast` makes: one pass to build the set, then one hash lookup per item of a
+n_a: the number of items in list a, here 10,000
+n_b: the number of items in list b, here 10,000
+≈: approximately equal to
+In words: scanning a list for each item costs up to 100 million comparisons, while building a set once and looking items up in it costs about 20,000 operations.
+```
+
+This is an asymptotic comparison, not a measured timing guarantee. It assumes stable, hashable values and effectively constant-time equality/hashing; the set uses extra memory proportional to the length of b (m in the code comments). Unhashable values or unusual equality semantics can invalidate this replacement. No universal seconds-to-milliseconds result is included because it cannot be reliably established without a specified workload and benchmark.
 
 ### Memory
 
-Memory problems show up as growing RSS, swapping, or the container being OOM-killed. Python's `tracemalloc` takes snapshots of allocations; comparing two snapshots shows which lines allocated the memory that grew:
+Memory problems show up as growing RSS, memory swapping, or the container being OOM-killed. Python's `tracemalloc` takes snapshots of allocations; comparing two snapshots shows which lines allocated the memory that grew:
 
 ```python
 import tracemalloc

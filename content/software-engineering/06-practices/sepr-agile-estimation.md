@@ -29,7 +29,7 @@ Scrum and Kanban are two approaches used to organise work and feedback.
 
 ## Scrum
 
-Scrum is a framework for working in fixed-length iterations called **Sprints**. The official definition is the *Scrum Guide* by Ken Schwaber and Jeff Sutherland, last revised in 2020. It is short (under 15 pages) and much of what people call "Scrum" is not in it.
+Scrum is a framework for working in fixed-length iterations called **Scrum Sprints**, usually just called Sprints. The official definition is the *Scrum Guide* by Ken Schwaber and Jeff Sutherland, last revised in 2020. It is short (under 15 pages) and much of what people call "Scrum" is not in it.
 
 ### The Scrum Team
 
@@ -89,20 +89,38 @@ Kanban does not prescribe roles or iterations. Useful practices include:
 | H     | E       |            |      |
 ```
 
-The numbers are WIP limits. With Dev full at 3, a developer who finishes C does not start F; they help clear Review first. This is **pull**, not push: work moves when there is capacity downstream. Stop starting, start finishing.
+The numbers are WIP limits. With Dev full at 3, a developer who finishes C does not start F; they help clear Review first. This is a **pull system**, not push: work moves when there is capacity downstream. Stop starting, start finishing.
 
 ### Little's law
 
-Why limit WIP? **Little's law** from queueing theory says, for a stable system over the long run:
+Why limit WIP? **Little's law**, proved by John Little in 1961 for queueing systems, links three averages. It answers the question "if we keep this much work open, how long will each item take on average?" It holds for a stable system over the long run, meaning work leaves at about the rate it arrives, so the queue is not growing without limit:
 
-```
-avg WIP = throughput x avg cycle time
+```formula
+L = λ × W
+W = L / λ
+where
+L: the average WIP: how many items are in progress (started but not finished) at any moment, in items
+λ: lambda, the average throughput: how many items the workflow finishes per unit of time, in items per week
+W: the average cycle time: how long one item spends between starting and finishing, in weeks
+In words: the average amount of open work equals the finishing rate times the average time each item spends in the system, so with the finishing rate fixed, less open work means each item gets through faster.
 ```
 
-Rearranged: average cycle time = average WIP / average throughput, using the same workflow boundary and time units.
+The second line is the same law rearranged. All three must use the same workflow boundary (say, "from Dev to Done") and the same time unit. The law says nothing about any single item, and it fails if the board is filling up or emptying.
 
 > [!example] Halving WIP
-> In a stable workflow, average throughput is 4 items/week and average WIP is 12, so average cycle time is **3 weeks**. If average WIP becomes 6 while average throughput remains 4, average cycle time becomes **1.5 weeks**. A WIP cap is not the measured average, and this does not promise that every item finishes twice as fast.
+> In a stable workflow, average throughput is 4 items a week and average WIP is 12. Then average WIP falls to 6 while throughput stays at 4. A WIP cap is not the measured average, and this does not promise that every item finishes twice as fast.
+
+```formula
+W = L / λ
+W = 12 / 4 = 3 wk
+W = 6 / 4 = 1.5 wk
+where
+W: the average cycle time, in weeks (wk)
+L: the average WIP, in items: 12 before, 6 after
+λ: lambda, the average throughput, in items per week; 4 in both cases
+wk: weeks, the unit of time used here
+In words: with the finishing rate unchanged, halving the average amount of open work halves the average time an item takes, from 3 weeks to 1.5 weeks.
+```
 
 Lower WIP may reduce context switching, but excessive restriction can starve stages and reduce throughput. Measure both flow and capacity.
 
@@ -129,23 +147,52 @@ McConnell also separates three things that are often confused. An **estimate** i
 
 ### Relative estimation: story points
 
-Relative estimation is one technique for discussing size and uncertainty. **Story points** size work relative to a reference item ("this is about twice the login page"), often on a rough Fibonacci-like scale: 1, 2, 3, 5, 8, 13. The growing gaps express growing uncertainty: there is no meaningful difference between 14 and 15.
+Relative estimation is one technique for discussing size and uncertainty. **Story points** size work relative to a reference item ("this is about twice the password-reset page"), often on a rough Fibonacci-like scale: 1, 2, 3, 5, 8, 13. The growing gaps express growing uncertainty: there is no meaningful difference between 14 and 15.
 
 **Planning poker** uses simultaneous revelation to reduce anchoring on the first spoken estimate: everyone reveals a card at once. If one person says 2 and another 13, they discuss, and usually one of them knows something the other does not. That conversation is the most valuable part.
 
-**Velocity** is points completed per Sprint, used to forecast how much the team can take on. It only works within one team: points are not comparable across teams.
+A team's **velocity** (sprint velocity) is the number of story points it completes per Sprint, used to forecast how much the team can take on. It is usually averaged over the last few Sprints, and a rough forecast divides the remaining backlog by it:
+
+```formula
+v = (P_1 + P_2 + P_3) / 3
+v = (21 + 18 + 24) / 3 = 21
+N ≈ B / v
+N ≈ 105 / 21 = 5
+where
+v: the team's velocity: the average number of story points it completed per Sprint
+P_1: the story points actually completed (meeting the Definition of Done) in the oldest of the last three Sprints, here 21
+P_2: the story points completed in the next Sprint, here 18
+P_3: the story points completed in the most recent Sprint, here 24
+3: the number of past Sprints averaged (an illustrative choice; teams often use the last few)
+N: the forecast number of Sprints needed to finish the remaining work
+B: the remaining backlog, in story points, sized by the same team
+≈: approximately equal to; the forecast is a rough guide, not a promise
+In words: a team that has averaged 21 points a Sprint, with 105 points of work left, will need roughly five more Sprints if nothing else changes.
+```
+
+This illustrative forecast assumes the backlog stays the same size and the team's capacity stays stable. Because the past Sprints varied from 18 to 24 points, a range (about 4.4 to 5.8 Sprints, so 5 or 6) is more honest than the single number. Velocity only works within one team: points are not comparable across teams.
 
 ### Ranges and three-point estimates
 
-A single number hides uncertainty. A **three-point estimate** gives optimistic (O), most likely (M) and pessimistic (P) values. The PERT formula weights them:
+A single number hides uncertainty. A **three-point estimate** gives three values for one task: an optimistic one, a most likely one and a pessimistic one. **PERT** (the Program Evaluation and Review Technique, developed for the US Navy's Polaris programme in the late 1950s) combines them into a single expected duration by weighting the most likely value four times as heavily as either extreme:
 
-```
-expected = (O + 4M + P) / 6
-O=2, M=4, P=12 days
-(2 + 16 + 12) / 6 = 5 days
+```formula
+E = (O + 4 × M + P) / 6
+E = (2 + 4 × 4 + 12) / 6
+E = (2 + 16 + 12) / 6
+E = 30 / 6 = 5 d
+where
+E: the PERT expected (mean) duration of the task, in days (d)
+O: the optimistic estimate, if most things go well, in days; here 2
+M: the most likely estimate (the mode), in days; here 4
+P: the pessimistic estimate, if most things go badly, in days; here 12
+d: days, the unit of time used here
+4: the weight given to the most likely value, so it counts four times as much as each extreme
+6: the sum of the weights (1 + 4 + 1), which turns the weighted sum back into an average
+In words: add the optimistic and pessimistic values to four times the most likely one and divide by six; a long pessimistic tail pulls the expected value above the most likely one.
 ```
 
-Under this PERT weighting model the estimated mean (5) is above the mode (4), reflecting the asymmetric inputs. Three inputs alone do not establish the true distribution, and not every duration distribution is right-skewed.
+The weights come from approximating each task's duration with a beta distribution, a smooth curve bounded by the optimistic and pessimistic values. Under this PERT weighting model the estimated mean (5) is above the mode (4), reflecting the asymmetric inputs. Three inputs alone do not establish the true distribution, and not every duration distribution is right-skewed.
 
 ### Forecasting from data: Monte Carlo
 
@@ -171,13 +218,43 @@ print("50%:", runs[5_000])
 print("85%:", runs[8_500])
 ```
 
-Average throughput is 30 / 8 = 3.75 items a week. The seeded example prints 11 weeks at the 50th percentile and 13 weeks at the 85th. These are model outputs, not guaranteed real-world probabilities. Resampling assumes this short history represents future throughput, weeks can be sampled independently, remaining items are comparable and the backlog stays fixed. Changes in scope, staffing or dependence can invalidate the forecast.
+For comparison, the simple average gives a single-number answer:
+
+```formula
+λ = (3 + 5 + 2 + 6 + 4 + 4 + 1 + 5) / 8
+λ = 30 / 8 = 3.75 per wk
+T ≈ B / λ
+T ≈ 40 / 3.75 ≈ 10.7 wk
+where
+λ: lambda, the average throughput over the 8 recorded weeks, in items finished per week
+8: the number of past weeks in the history
+T: the naive forecast time to finish the backlog, in weeks
+wk: weeks, the unit of time used here
+B: the remaining backlog, here 40 items
+≈: approximately equal to
+In words: the team finished 30 items in 8 weeks, about 3.75 a week, so 40 items would take roughly 10.7 weeks at that average pace.
+```
+
+The average says nothing about how likely a miss is; the simulation does. The seeded example prints 11 weeks at the 50th percentile and 13 weeks at the 85th. These are model outputs, not guaranteed real-world probabilities. Resampling assumes this short history represents future throughput, weeks can be sampled independently, remaining items are comparable and the backlog stays fixed. Changes in scope, staffing or dependence can invalidate the forecast.
 
 Some teams take this further with **#NoEstimates**: split work into small, similar-sized items and forecast purely from throughput.
 
 ## Brooks's law
 
-Fred Brooks, in *The Mythical Man-Month* (1975): "Adding manpower to a late software project makes it later." New people need training from existing members, and the number of possible pairwise communication links grows as n(n−1)/2: a team of 5 has 10, a team of 10 has 45. These are possible links, not a claim that every pair communicates or that actual overhead must be quadratic. Adding people can help on separable work; evaluate onboarding and coordination costs.
+Fred Brooks, in *The Mythical Man-Month* (1975): "Adding manpower to a late software project makes it later." New people need training from existing members, and the number of possible pairwise communication links grows much faster than the team. Each of the n people can pair with the n − 1 others, and that counts every pair twice (Ann–Bob and Bob–Ann), so divide by 2:
+
+```formula
+C = n × (n − 1) / 2
+C = 5 × 4 / 2 = 10
+C = 10 × 9 / 2 = 45
+where
+C: the number of possible one-to-one communication links in the team
+n: the number of people in the team; here 5, then 10
+2: corrects for counting each pair twice
+In words: doubling a team from 5 to 10 people more than quadruples the possible pairs, from 10 to 45.
+```
+
+These are possible links, not a claim that every pair communicates or that actual overhead must be quadratic. Adding people can help on separable work; evaluate onboarding and coordination costs.
 
 ## Pitfalls
 
@@ -190,7 +267,7 @@ Fred Brooks, in *The Mythical Man-Month* (1975): "Adding manpower to a late soft
 ## Key takeaways
 - Agile favours short feedback cycles over big upfront plans; it does not mean no planning or no docs.
 - Scrum has three accountabilities, five timeboxed events and three artefacts, each with a commitment (Product Goal, Sprint Goal, Definition of Done).
-- Kanban visualises flow and limits WIP; by Little's law, cycle time = WIP / throughput, so reducing average WIP reduces average cycle time if throughput stays fixed and the stable-system assumptions hold.
+- Kanban visualises flow and limits WIP; by Little's law, average cycle time is average WIP divided by average throughput, so reducing average WIP reduces average cycle time if throughput stays fixed and the stable-system assumptions hold.
 - Estimates are uncertain by nature: use relative sizing, ranges, three-point estimates or Monte Carlo forecasts from real throughput.
 - Keep estimates, targets and commitments distinct, and remember Brooks's law when a project is late.
 

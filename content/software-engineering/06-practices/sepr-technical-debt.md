@@ -18,8 +18,8 @@ Ward Cunningham coined it in a 1992 experience report about a financial product 
 
 Three ideas are packed in there:
 
-- **Principal**: the work needed to bring the code up to the design you now know you want.
-- **Interest**: the extra time every future change costs because you have not done that work.
+- **Principal** (the debt principal): the work needed to bring the code up to the design you now know you want.
+- **Interest** (the debt interest): the extra time every future change costs because you have not done that work.
 - **Borrowing can be smart.** Shipping early to learn from real users is valuable. The mistake is never repaying.
 
 Cunningham later stressed that he meant code written with your best current understanding, which becomes "debt" as you learn more about the problem. He did not mean permission to write sloppy code.
@@ -60,12 +60,46 @@ Debt is not only messy code:
 
 Not all ugly code is costly debt. Frequent changes expose design costs, but unchanged code can also incur incident response, security maintenance, runtime cost and knowledge risk. Compare those costs as well as change friction.
 
-A worked example makes the trade-off concrete:
+A worked example makes the trade-off concrete. Two quantities matter: the debt interest (the extra time you pay over a period because of the debt) and the **payback period** (how long the fix takes to earn back its own cost in saved interest):
+
+```formula
+I = a × c
+T = F / I
+where
+I: the interest: extra days of work the debt costs per period (per quarter or per year)
+a: the extra days each change to the area costs because of its poor structure
+c: the number of changes to the area per period
+T: the payback period, in the same periods as I: how long until the time saved equals the time spent on the fix
+F: the one-off cost of the fix (the principal), in days
+In words: interest is the extra cost per change times how often you change it, and a fix pays for itself once the interest it saves adds up to what the fix cost.
+```
 
 > [!example] Is it worth paying down?
-> The checkout module's structure adds about 2 extra days to each feature that touches it. The team ships 8 such features a quarter, so the interest is about **16 days a quarter**. A restructure is estimated at **20 days**. It pays for itself in under two quarters, and keeps paying after that.
+> The checkout module's structure adds about 2 extra days to each feature that touches it, and the team ships 8 such features a quarter. A restructure is estimated at **20 days**.
 >
-> A legacy reporting module also adds 2 days per change, but changes once a year. Interest: **2 days a year**. Ignoring other costs, a 20-day fix takes ten years to repay through change savings alone. Deferring it may make sense if security, operational and knowledge risks are also acceptable.
+> A legacy reporting module also adds 2 days per change, but changes once a year. The same 20-day fix would apply.
+
+```formula
+I_checkout = 2 d × 8 per qtr
+I_checkout = 16 d per qtr
+T_checkout = 20 d / (16 d per qtr)
+T_checkout = 1.25 qtr
+I_report = 2 d × 1 per yr
+I_report = 2 d per yr
+T_report = 20 d / (2 d per yr)
+T_report = 10 yr
+where
+I_checkout: the interest the checkout module costs, in days per quarter
+T_checkout: the payback period of fixing the checkout module, in quarters
+I_report: the interest the reporting module costs, in days per year
+T_report: the payback period of fixing the reporting module, in years
+d: days of engineering work
+qtr: a quarter: three months
+yr: a year
+In words: the busy checkout module costs 16 days a quarter, so a 20-day fix pays for itself in about a quarter and a bit; the rarely touched report module costs 2 days a year, so the same fix takes ten years to repay.
+```
+
+The checkout fix pays for itself in under two quarters and keeps paying after that. Ignoring other costs, the reporting fix takes ten years to repay through change savings alone; deferring it may make sense if security, operational and knowledge risks are also acceptable. The model assumes the interest stays constant and that the fix removes it completely; in practice both are estimates.
 
 This is why "the code is ugly" is a weak argument and "this costs us 16 days a quarter" is a strong one.
 
@@ -73,7 +107,7 @@ This is why "the code is ugly" is a weak argument and "this costs us 16 days a q
 
 Adam Tornhill's **hotspot** analysis combines two signals you already have: how often a file changes (from version control) and how complex it is (lines of code or a complexity metric). Files that are both complex and frequently changed are where interest is being paid.
 
-Change frequency from git:
+File change frequency from git:
 
 ```
 git log --since="12 months ago" \

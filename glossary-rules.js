@@ -4,7 +4,9 @@
 // All-caps phrases (NOT IN, MUST NOT, GROUP BY) match exact case too, so they never capture everyday "not in" or "must not".
 const isCapsWord = (alias) => /^(?:\p{Lu}|\p{Lu}[\p{Lu}\p{N}/+._-]{1,15}s?)$/u.test(alias);
 const isCapsPhrase = (alias) => /^\p{Lu}[\p{Lu}\p{N}/+._-]*(?: [\p{Lu}\p{N}][\p{Lu}\p{N}/+._-]*)+$/u.test(alias);
-export const isAcronym = (alias) => isCapsWord(alias) || isCapsPhrase(alias);
+// Short mixed-case names (reST, eTLD, iOS) match exact case too, so "reST" never captures "rest".
+const isShortMixedCase = (alias) => /^\S{2,5}$/u.test(alias) && /\p{Ll}\p{Lu}/u.test(alias);
+export const isAcronym = (alias) => isCapsWord(alias) || isCapsPhrase(alias) || isShortMixedCase(alias);
 export const aliasKey = (alias) => (isAcronym(alias) ? '=' + alias : alias.toLowerCase());
 // Lookup order inside a subject: that subject's module terms (which may shadow a core term), then core terms
 // (glossary-data.js), then other

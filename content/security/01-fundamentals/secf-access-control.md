@@ -27,10 +27,10 @@ The theoretical starting point is a matrix: rows are subjects, columns are objec
 | bob | none | read, write | print |
 | carol | read | none | none |
 
-A large matrix is often sparse, so systems commonly represent permissions through object-oriented lists or subject-held authority rather than a dense table:
+A large matrix is often sparse, so systems commonly represent permissions through per-object lists or subject-held authority rather than a dense table:
 
 - **Access control lists (ACLs)** store each **column** with its object: "payroll.xlsx: alice rw, carol r". File systems, S3 bucket policies and most databases work this way. Easy to answer "who can access this file?"; hard to answer "what can Alice access?".
-- **Capabilities** store each **row** with the subject: Alice holds unforgeable tokens, each naming an object and rights. Can support delegation and narrow rights, but neither is automatic; revocation depends on the design. A Unix file descriptor, a signed pre-authorised URL and an OAuth access token are all capability-like.
+- **Capabilities** (capability lists) store each **row** with the subject: Alice holds unforgeable tokens, each naming an object and rights. Can support delegation and narrow rights, but neither is automatic; revocation depends on the design. A Unix file descriptor, a signed pre-authorised URL and an OAuth access token are all capability-like.
 
 ## Discretionary access control (DAC)
 
@@ -45,9 +45,28 @@ $ ls -l report.txt
  owner alice: rw-
 ```
 
-The permission bits are often written in octal: r = 4, w = 2, x = 1, summed per class. `rw-r-----` is 6, 4, 0, so `chmod 640`.
+The permission bits are often written in **octal** (base 8), one digit per class. Each class has three on/off bits, and three bits can count from 0 to 7, which is exactly one octal digit. Read is worth 4, write 2 and execute 1:
 
-For ordinary users and these mode bits alone, without extended ACLs or overriding privileges, Unix checks the classes **in order and stops at the first match**: if you're the owner, only the owner bits apply; else if you're in the group, the group bits; else other. So with `chmod 604`, the owner can read and write, any *other* user can read, but members of the group cannot read, because they match the group class first and stop there.
+```formula
+d = 4 × r + 2 × w + 1 × x
+d_owner = 4 × 1 + 2 × 1 + 1 × 0 = 6
+d_group = 4 × 1 + 2 × 0 + 1 × 0 = 4
+d_other = 4 × 0 + 2 × 0 + 1 × 0 = 0
+where
+d: one octal digit of the mode, from 0 to 7, for one class (owner, group or other)
+r: 1 if the class may read (an r in the string), 0 if not (a -)
+w: 1 if the class may write (a w), 0 if not
+x: 1 if the class may execute (an x), 0 if not
+d_owner: the owner's digit for rw-
+d_group: the group's digit for r--
+d_other: the digit for everyone else, for ---
+4: the place value of the read bit; 2 and 1 are the place values of the write and execute bits, the base-2 place values of the bit patterns 100, 010 and 001
+In words: add 4 for read, 2 for write and 1 for execute in each class, so rw-r----- becomes the digits 6, 4 and 0.
+```
+
+So `rw-r-----` is set with `chmod 640`. Going the other way, 7 is `rwx`, 5 is `r-x` and 0 is no access.
+
+For ordinary users and these mode bits alone, without extended ACLs or overriding privileges, Unix checks the classes **in order and stops at the first class that matches**: if you're the owner, only the owner bits apply; else if you're in the group, the group bits; else other. So with `chmod 604`, the owner can read and write, any *other* user can read, but members of the group cannot read, because they match the group class first and stop there.
 
 DAC is flexible and intuitive. Its weakness: any program you run acts with your authority, so malware (or a confused user) can share your files with anyone. The owner's discretion is the attacker's discretion.
 
@@ -82,7 +101,7 @@ Windows Mandatory Integrity Control normally enforces **no write up** through in
 
 ## Role-based access control (RBAC)
 
-In **RBAC**, permissions attach to **roles**, and users are assigned roles.
+In **RBAC**, permissions attach to **access-control roles**, and users are assigned roles.
 
 ```
 users        roles          permissions

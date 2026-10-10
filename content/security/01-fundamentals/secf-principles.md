@@ -31,7 +31,7 @@ In practice least privilege means:
 
 - **Service accounts scoped to one job.** The thumbnail worker gets read access to one bucket, not `s3:*`.
 - **No standing admin rights.** Engineers request elevated access for a time-limited window (just-in-time access), which is logged.
-- **Avoid unnecessary elevated execution.** Use an unprivileged service with a narrowly scoped binding mechanism where supported. If start-up needs elevation, drop the unneeded identities, groups and capabilities afterwards. Non-root containers still need appropriate capability and access controls.
+- **Avoid unnecessary elevated execution.** Use an unprivileged service with a narrowly scoped binding mechanism where supported. If start-up needs elevation, drop the unneeded identities, groups and Linux capabilities afterwards. Non-root containers still need appropriately restricted Linux capabilities and access controls.
 - **Short-lived credentials** rather than long-lived keys, so a leaked token expires.
 
 The hard part isn't the principle; it is keeping permissions tight over time. Permissions accrete: someone adds a wildcard to fix an outage and nobody removes it. Tools such as AWS IAM Access Analyzer compare granted permissions with those actually used.
@@ -80,7 +80,7 @@ def can_delete(user):
     return user.role in ALLOWED
 ```
 
-The same idea applies to error handling. If the authorisation service times out, should the request be allowed? For a payments API, no: **fail closed**. Other systems may have a different safety or availability requirement. Physical exit and fire-containment design requires its own safety rules and is not specified here. Make the access-control failure policy explicit instead of letting an unhandled exception decide.
+The same idea applies to error handling. If the call to the authorisation service times out, should the request be allowed? For a payments API, no: **fail closed**. Other systems may have a different safety or availability requirement. Physical exit and fire-containment design requires its own safety rules and is not specified here. Make the access-control failure policy explicit instead of letting an unhandled exception decide.
 
 ```python
 def is_allowed(user, action):
@@ -109,7 +109,7 @@ Keep the security-relevant parts **small and simple**, so they can be reviewed a
 
 ## Open design
 
-Security should not depend on the attacker not knowing how the system works. This is **Kerckhoffs's principle** from 1883 cryptography: a cipher should be secure even if everything except the key is public.
+Security shouldn't depend on the attacker not knowing how the system works. This is **Kerckhoffs's principle** from 1883 cryptography: a cipher should be secure even if everything except the key is public.
 
 Secrecy can still add a little friction (not publishing your internal network map is sensible), but "nobody knows the admin URL" is not a control. **Security through obscurity** fails the day the secret leaks, and it usually leaks.
 

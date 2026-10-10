@@ -6,7 +6,7 @@ minutes: 11
 summary: A structured way to ask "what can go wrong?" before attackers do, using data-flow diagrams, STRIDE per element and costed attack trees.
 ---
 
-Security problems can arise from overlooked assumptions: an internal API that turned out to be reachable from the internet, an admin endpoint with no check, a log file with tokens in it. **Threat modelling** is the habit of thinking about those things on purpose, early, while they are still cheap to fix.
+Security problems can arise from overlooked assumptions: an internal API that turned out to be exposed to the internet, an admin endpoint with no check, a log file with tokens in it. **Threat modelling** is the habit of thinking about those things on purpose, early, while they are still cheap to fix.
 
 It doesn't need special tools or a security team. At its simplest it is a whiteboard, the people who built the system and an hour of structured questioning.
 
@@ -120,9 +120,41 @@ The numbers are invented additive cost units for this exercise, not measured dif
 - **OR node**: the attacker picks the cheapest child, so take the **minimum**.
 - **AND node**: the attacker must do every child, so take the **sum**.
 
-Working up: phishing costs 2 + 4 = 6. Account takeover is min(3, 6) = 3. The backup route is 5 + 9 = 14. The root is min(2, 3, 14) = **2**, via the IDOR.
+Written as rules for any node with children whose costs are c_1 up to c_k:
 
-In this model, removing the IDOR path raises the minimum from 2 to 3. Strengthening a cost-14 path alone leaves that minimum unchanged. Real prioritisation also needs impact, likelihood, mitigation cost and interactions between paths; these invented numbers cannot rank a real deployment.
+```formula
+C_OR = min(c_1, c_2, …, c_k)
+C_AND = c_1 + c_2 + … + c_k
+where
+C_OR: the cost of an OR node, in the exercise's invented cost units
+C_AND: the cost of an AND node, in the same units
+min: the minimum: the smallest of the values in the brackets
+c_1: the cost of the node's first child (a leaf's number, or a cost already worked out lower down)
+c_2: the cost of the second child
+c_k: the cost of the last child
+k: the number of children the node has
+…: "and so on" for every child in between
+In words: an attacker who may choose pays only for the cheapest option; an attacker who must do every step pays for all of them.
+```
+
+Work from the leaves up to the root:
+
+```formula
+C_phish = 2 + 4 = 6
+C_takeover = min(3, C_phish) = 3
+C_backup = 5 + 9 = 14
+C_root = min(2, C_takeover, C_backup)
+C_root = min(2, 3, 14) = 2
+where
+C_phish: cost of the AND node "Phish password AND OTP": phishing page (2) plus real-time OTP relay (4), in cost units
+C_takeover: cost of the OR node "Take over their account": the cheaper of credential stuffing (3) and the phishing route
+C_backup: cost of the AND node "Steal DB backup": find the public bucket (5) plus decrypt the backup (9)
+C_root: cost of the root goal, the cheapest of its three children: guessing the invoice URL (2), account takeover and backup theft
+min: the minimum: the smallest of the values in the brackets
+In words: the cheapest way to read another customer's invoice costs 2 units, by guessing the invoice URL (the IDOR).
+```
+
+In this model, removing the IDOR path leaves the root at the cheaper of 3 and 14, so the minimum rises from 2 to 3. Strengthening a cost-14 path alone leaves that minimum unchanged. Real prioritisation also needs impact, likelihood, mitigation cost and interactions between paths; these invented numbers cannot rank a real deployment.
 
 ```python
 def cost(node):
@@ -135,7 +167,7 @@ def cost(node):
     return min(costs)  # OR
 ```
 
-Other annotations need their own aggregation rules. For this additive cost model use minimum/sum; for "requires special equipment?", OR requires it only when every feasible alternative does, while AND requires it when any required step does. Probabilities require explicit dependence assumptions and must not simply be added like costs.
+Other annotations need their own aggregation rules. For these additive costs use minimum/sum; for "requires special equipment?", OR requires it only when every feasible alternative does, while AND requires it when any required step does. Probabilities require explicit dependence assumptions and mustn't simply be added like costs.
 
 > [!warning] Trees are only as good as their leaves
 > An attack tree can't show a path nobody thought of. Use STRIDE (breadth) to populate the tree, and the tree (depth) to prioritise.
@@ -153,7 +185,21 @@ Each threat gets one of four responses:
 
 "Accept" is legitimate, but it should be a decision made by someone with the authority to accept the risk, written down with a review date. "We didn't get round to it" is not acceptance.
 
-To prioritise, teams assess **likelihood and impact** with explicit assumptions. CVSS describes vulnerability severity; a Base score alone is not an organisation's complete risk assessment. Historical popularity claims about DREAD are omitted because this review did not establish reliable comparative evidence.
+To prioritise, teams assess **likelihood and impact** with explicit assumptions. A common rule of thumb combines the two into a single score. OWASP's Risk Rating Methodology starts from this same "standard risk model", although it then rates each factor from 0 to 9 and combines LOW/MEDIUM/HIGH bands in a lookup table rather than multiplying; the 1-to-5 scales below are an illustrative simplification:
+
+```formula
+R = L × I
+R = 4 × 2 = 8
+where
+R: the risk score, used only to rank threats against each other; it has no unit
+L: likelihood: how probable it is that this threat is carried out successfully, on an agreed ordinal scale (here 1 = rare to 5 = almost certain)
+I: impact: how bad the consequences would be if it happened, on the same kind of scale (here 1 = negligible to 5 = severe)
+In words: a threat that is both likely and damaging ranks highest; here a likely (4) but low-impact (2) threat scores 8 out of a possible 25.
+```
+
+On these 1-to-5 scales a rare but severe threat (1 × 5 = 5) ranks below the example above (8), even though its worst case is far worse. That is the main limit of the formula: likelihood and impact are ordinal judgements, not measured quantities, so the product is a ranking aid, not a real probability or a cost in pounds. Write down the scale and the assumptions behind each score, and let someone review the outliers rather than trusting the arithmetic.
+
+CVSS describes vulnerability severity; a Base score alone is not an organisation's complete risk assessment. Historical popularity claims about DREAD are omitted because this review did not establish reliable comparative evidence.
 
 ## Step 4: check your work
 

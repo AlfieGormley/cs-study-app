@@ -8,7 +8,7 @@ summary: What "secure" actually means (confidentiality, integrity, availability)
 
 "Is this system secure?" has no answer until you say *secure against what, protecting which property*. A bank's public interest-rate page has no secrets, but it matters a great deal if someone changes the numbers. A hospital's patient records must stay private, but they also must be available at 3 a.m. in A&E.
 
-Security people use two small frameworks to make that question precise. The **CIA triad** names the properties you want to protect. **AAA** names the machinery that enforces who may do what, and keeps a record of it.
+Security people use two small frameworks to make that question precise. The **CIA triad** names the properties you want to protect. **AAA** names the machinery that enforces who may do what, and records what happened.
 
 ## The CIA triad
 
@@ -51,7 +51,7 @@ def digest(path):
 ```
 
 > [!warning] A hash alone is not enough
-> If an attacker can swap the file, they can usually swap the hash published next to it too. A plain hash detects accidents. To detect deliberate tampering, the reference value must come from a trusted channel, or you need a MAC or signature (covered in the cryptography module).
+> If an attacker can swap the file, they can usually swap the hash published next to it too. A plain hash detects accidents. To detect deliberate tampering, the reference value must come from a trusted channel, or you need a message authentication code or a digital signature (covered in the cryptography module).
 
 ### Availability
 
@@ -63,7 +63,7 @@ Ransomware can attack availability and integrity by altering files; if data is a
 
 ## The properties pull against each other
 
-Disconnecting a server can reduce remote exposure while making its service unavailable. It does not prevent physical access or disclosure of existing copies. Real design evaluates the risks to each property.
+Disconnecting a server can reduce remote exposure while taking its service offline. It does not prevent physical access or disclosure of existing copies. Real design evaluates the risks to each property.
 
 - **Encryption** improves confidentiality but adds a key that, if lost, makes data permanently unavailable.
 - **Account lockout** after failed logins protects confidentiality, but lets an attacker lock out every user on purpose (an availability attack).
@@ -164,7 +164,7 @@ In modern applications the same split shows up as:
 - Controls can introduce trade-offs: evaluate key loss, lockout abuse and failure behaviour alongside the intended protection.
 - Authentication checks evidence for a claimed identity, authorisation decides permission, accounting records events.
 - HTTP 401 requires an authentication challenge; 403 is a refusal and does not guarantee authentication succeeded.
-- Audit logs must be protected from the very administrators they monitor, and must not contain secrets.
+- Audit logs must be protected from the very administrators they monitor, and mustn't contain secrets.
 
 > [!note] Scope and evidence
 > These are illustrative threat models, not a universal ranking of risks. Legal assurance for signatures and production log completeness are not established here; those depend on the system, evidence and applicable process.

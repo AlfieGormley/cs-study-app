@@ -27,7 +27,7 @@ The point of MFA is independence: stealing a password from a breach dump doesn't
 
 Passwords are cheap and universal, but they fail in predictable ways:
 
-- **Reuse.** One breached site's passwords are tried on every other site. This is **credential stuffing**, and it works because a substantial fraction of people reuse passwords.
+- **Password reuse.** One breached site's passwords are tried on every other site. This is **credential stuffing**, and it works because a substantial fraction of people reuse passwords.
 - **Guessability.** People choose `123456`, names, sports teams and keyboard walks.
 - **Phishing.** A convincing fake login page collects the password directly.
 - **Theft from servers.** Badly stored password databases leak in plaintext or as fast hashes.
@@ -36,7 +36,36 @@ Password reuse can permit account takeover without cracking the target service's
 
 ### Measuring strength: entropy
 
-For a password chosen **uniformly at random** from N possibilities, the strength is log2(N) bits.
+Password strength is measured in **bits of entropy**. Each bit doubles the number of guesses an attacker might need, so 52 bits means 2 multiplied by itself 52 times: about 4.5 × 10^15 equally likely possibilities (10^15 is 1 followed by 15 zeros, a thousand million million). For a password chosen **uniformly at random** (every possibility equally likely), the entropy is:
+
+```formula
+H = log_2(N^L) = L × log_2(N)
+where
+H: the password's entropy, in bits: an attacker trying every possibility needs up to 2^H guesses
+N: the number of choices for each symbol: 94 non-space printable ASCII characters, 7,776 words in a Diceware list, or 10 digits in a PIN
+L: the length: how many symbols (characters or words) are chosen
+N^L: N multiplied by itself L times: the total number of possible passwords
+log_2: the logarithm to base 2: log_2(x) is the power you must raise 2 to in order to get x, so log_2(8) = 3 and log_2(1024) = 10
+In words: entropy in bits is the number of times you would have to double 1 to reach the number of possible passwords, and each extra random symbol adds the same number of bits again.
+```
+
+Taking the logarithm turns the multiplication of choices into an addition of bits: each random character or word adds a fixed number of bits. A Diceware word list has 7,776 words because five rolls of a six-sided die give 6^5 = 7,776 combinations. Two worked examples:
+
+```formula
+H_c = 8 × log_2(94)
+H_c ≈ 8 × 6.555 ≈ 52.4 bits
+H_w = 4 × log_2(7776)
+H_w ≈ 4 × 12.925 ≈ 51.7 bits
+where
+H_c: entropy of 8 random characters from the 94 non-space printable ASCII characters, in bits
+H_w: entropy of 4 random words from a 7,776-word Diceware list, in bits
+log_2: the logarithm to base 2: log_2(94) ≈ 6.555 because 2^6.555 ≈ 94
+≈: approximately equal to (the logarithms are rounded)
+bits: the unit of entropy; one bit is one doubling of the number of possibilities
+In words: eight random printable characters and four random Diceware words are about equally strong, at roughly 52 bits each.
+```
+
+The same calculation for each scheme (94^8 means 94 multiplied by itself 8 times):
 
 | Password scheme | Possibilities | Bits |
 |---|---|---|
@@ -100,6 +129,25 @@ Fast hashes like SHA-256 are designed to be quick; actual cracking rates depend 
 | bcrypt | cost 10+, 72-byte input limit |
 | PBKDF2-HMAC-SHA256 | 600,000 iterations |
 
+In the scrypt row, N is the CPU/memory cost, r the block size and p the parallelism. Together they set how much memory each password guess needs, which is what makes scrypt expensive to attack with many cheap parallel chips:
+
+```formula
+M ≈ 128 × N × r bytes
+M ≈ 128 × 2^17 × 8 bytes
+M ≈ 134217728 bytes = 128 MiB
+where
+M: the memory one scrypt hash computation needs
+N: the CPU/memory cost parameter: how many 128 × r-byte blocks scrypt fills and then reads back in a data-dependent order; it must be a power of 2, here 2^17 = 131,072
+r: the block size parameter, here 8; it scales the size of each block
+128: bytes per unit of r: scrypt's basic block is two 64-byte chunks, so a block is 128 × r bytes (1,024 bytes when r = 8)
+bytes: the unit of memory; one byte is 8 bits
+MiB: mebibyte, 2^20 = 1,048,576 bytes
+≈: approximately equal to (scrypt also needs a little extra working memory)
+In words: these settings make every single guess fill about 128 MiB of memory, so an attacker cannot cheaply run millions of guesses side by side.
+```
+
+The parallelism p is 1 here, so it adds nothing. A larger p adds memory only if the p independent lanes are actually run at the same time (memory then grows about p times); run one after another, they reuse the same 128 MiB. The Python example below sets `maxmem=2**28` (256 MiB) because `hashlib.scrypt` raises an error when the memory needed exceeds its limit, and the default limit (OpenSSL's 32 MiB) is far smaller than 128 MiB.
+
 Prefer Argon2id; OWASP lists scrypt when Argon2id is unavailable, bcrypt mainly for legacy systems, and PBKDF2 for applicable compliance needs. Tune and periodically revisit costs; the table is not a universal deployment prescription.
 
 Python provides scrypt when the build has the required OpenSSL support:
@@ -129,11 +177,48 @@ def verify(pw, salt, stored):
 
 ### Why slowness matters: a calculation
 
-Suppose an attacker steals a database of 8-character random passwords (about 6.1 × 10^15 possibilities).
+Suppose an attacker steals a database of 8-character random passwords drawn from the 94 printable characters: 94^8, or about 6.1 × 10^15, possibilities. Assume **unsalted fast SHA-256** and an illustrative 10^10 (ten billion) guesses a second. The worst-case time to try every possibility is the size of the search divided by the guess rate:
 
-- With **unsalted fast SHA-256** at an assumed 10^10 guesses a second, the worst case is 6.1 × 10^15 / 10^10 ≈ 6.1 × 10^5 seconds, about **7 days**, and each candidate digest can be compared against all unsalted hashes using the same scheme. Exhausting this space covers only passwords in the assumed eight-character alphabet.
-- With a **salted** hash, the work is repeated **per user**.
-- With a **memory-hard** hash tuned so each guess costs, say, 10^4 times more, the same search takes around 190 years per user.
+```formula
+T = S / G
+T = 6.1 × 10^15 / (10^10 per s)
+T = 6.1 × 10^5 s
+T = 6.1 × 10^5 / 86400 days
+T ≈ 7.1 days
+where
+T: the worst-case time to try every possible password once
+S: the size of the search space: 94^8 ≈ 6.1 × 10^15 possible passwords
+G: the guess rate: candidates the attacker hashes and checks per second; 10^10 is an assumed illustrative figure, not a hardware benchmark
+s: seconds
+86400: the number of seconds in a day (24 × 60 × 60)
+days: the unit of the final answer, one day being 86,400 s
+≈: approximately equal to (rounded)
+In words: ten billion guesses a second exhausts every 8-character random password in about a week; on average the right one turns up halfway, after about 3.5 days.
+```
+
+Because there is no salt, each candidate digest can be compared against all unsalted hashes using the same scheme, so one week cracks every account in this space at once. Exhausting this space covers only passwords in the assumed eight-character alphabet.
+
+With a **salted** hash, the work is repeated **per user**: a candidate hashed with Alice's salt is useless against Bob's.
+
+With a **memory-hard** hash tuned so each guess costs, say, 10^4 (ten thousand) times more, the same search for one user takes:
+
+```formula
+T_slow = S × k / G
+T_slow = 6.1 × 10^15 × 10^4 / 10^10 s
+T_slow = 6.1 × 10^9 s
+T_slow = 6.1 × 10^9 / 31557600 years
+T_slow ≈ 193 years
+where
+T_slow: the worst-case time to exhaust the search space for one user with the slow hash
+S: the size of the search space: about 6.1 × 10^15 possible passwords
+k: the slowdown factor: how many times more each guess costs than with fast SHA-256; 10^4 is an assumed example
+G: the fast-hash guess rate, 10^10 guesses per second (assumed)
+s: seconds
+31557600: the number of seconds in an average year of 365.25 days
+years: the unit of the final answer
+≈: approximately equal to (rounded)
+In words: making each guess ten thousand times more expensive turns a one-week search into one of around 190 years, for every user separately.
+```
 
 The numbers are illustrative, but the shape is real: distinct salts prevent sharing the same candidate-hash computation across accounts. Total attack cost also depends on targeting, password distribution and stopping rules; it is not universally an exact user-count multiplier. No hardware benchmark is supplied for these illustrative rates.
 

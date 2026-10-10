@@ -51,8 +51,8 @@ Later models address this. The **Unified Kill Chain** (Paul Pols, 2017) combines
 
 **MITRE ATT&CK** is a public knowledge base of adversary behaviour built from real incident reports. Instead of a strict sequence, it is a matrix:
 
-- **Tactics** are the *why*: the attacker's goal for an activity. The live Enterprise tactics page consulted for this review lists 15; counts and names are version-dependent.
-- **Techniques** (and sub-techniques) are the *how*, at a level of abstraction that is useful to defenders, each with an ID such as T1078 (Valid Accounts).
+- **ATT&CK tactics** are the *why*: the attacker's goal for an activity. The live Enterprise tactics page consulted for this review lists 15; counts and names are version-dependent.
+- **ATT&CK techniques** (and sub-techniques) are the *how*, at a level of abstraction that is useful to defenders, each with an ID such as T1078 (Valid Accounts).
 - Technique entries can link procedure examples, mitigations and detection guidance. Available coverage varies; a listed technique does not imply complete detection.
 
 The consulted Enterprise list below is a taxonomy, not a required chronological sequence:
@@ -90,7 +90,7 @@ Here are the patterns that appear again and again in incident reports, and what 
 
 ### Execution, persistence and evasion
 
-Attackers can **live off the land**: using tools already present on the system (PowerShell, WMI, remote administration tools, cloud CLIs) rather than custom malware. A malicious binary need not be installed. File-hash matching alone may miss the abuse, but antivirus can also inspect scripts, command content or behaviour; product labels do not determine detection capability.
+Attackers can **live off the land**: using tools already present on the system (PowerShell, WMI, remote administration tools, cloud CLIs) rather than custom malware. A malicious binary need not be installed. File-hash matching alone may miss the abuse, but antivirus can also inspect scripts, command content or behaviour; product labels do not determine what a tool can detect.
 
 Defenders respond by watching **behaviour**, not files: endpoint detection and response (EDR) records process trees, so "Word spawned PowerShell, which made a network connection" stands out even if every binary is legitimate.
 

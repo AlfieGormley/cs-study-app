@@ -73,13 +73,13 @@ Not every decision deserves the same care. Jeff Bezos's 2015 shareholder letter 
 | Name of an internal helper | Two-way |
 | Choice of logging library behind an adapter | Two-way |
 | Public library API at 1.0 | One-way-ish |
-| Primary database for 10 years of data | One-way-ish |
+| Main database for 10 years of data | One-way-ish |
 | Splitting into separately deployed services | One-way-ish |
 
 Two consequences for architecture:
 
 1. **Spend ADR and review effort on one-way doors.** Make two-way decisions quickly.
-2. **Turn one-way doors into two-way ones** where you can. Putting the database behind a repository port, or a vendor SDK behind an adapter, can reduce call-site changes, but migration cost also depends on data and semantic compatibility. Much of good architecture is buying reversibility.
+2. **Turn one-way doors into two-way ones** where you can. Putting the database behind a repository port, or a vendor SDK behind an adapter, can reduce call-site changes, but the cost of migrating also depends on data and semantic compatibility. Much of good architecture is buying reversibility.
 
 The related idea of the **last responsible moment** says to delay irreversible decisions until you have the most information, but no later, since not deciding is also a decision.
 
@@ -97,9 +97,9 @@ Examples:
 |---|---|
 | Layering | import-linter contract in CI |
 | No cycles | Acyclic import check |
-| Latency | p99 < 200 ms in load test |
-| Dependency hygiene | No package > 1 major behind |
-| Bundle size | Fail if > 250 KB gzipped |
+| Latency | p99 latency under 200 ms in a load test |
+| Dependency hygiene | No package more than 1 major version behind |
+| Bundle size | Fail if over 250 KB gzipped |
 
 A fitness function can be an ordinary test:
 
@@ -131,7 +131,7 @@ def test_domain_has_no_framework():
 
 This small example checks direct absolute import statements, requires at least one source file, and matches the top-level package exactly. It does not resolve relative or dynamic imports and can include imports guarded by TYPE_CHECKING. A dedicated tool like import-linter also follows indirect chains, which is why it's usually the better choice. The point is that architecture rules become executable and fail the build like any other bug.
 
-### Making change incremental
+### Changing structure incrementally
 
 A long all-at-once rewrite can delay feedback and lose undocumented behavior. Joel Spolsky's essay Things You Should Never Do argues against this approach using Netscape as a cautionary example.
 
@@ -165,7 +165,7 @@ Every step is a small commit on the main branch, so you avoid a months-long merg
 
 - **Monolith first.** In his 2015 essay, Fowler reported that almost all successful microservice stories he had heard began with monoliths, while many from-scratch stories involved trouble. This is practitioner experience, not a representative success-rate study; because boundaries are hard to get right before you understand the domain. A well-modularised monolith keeps the option open.
 - **Sacrificial architecture.** Sometimes the right design for today is one you expect to throw away when you reach 10× scale. Fowler's example is eBay, which moved from Perl to C++ to Java as it grew, as recounted in his essay. Knowing it's temporary changes how much you invest.
-- **Conway's law.** "Organizations which design systems are constrained to produce designs which are copies of the communication structures of these organizations." Shared ownership can affect boundaries, but Conway's observation does not deterministically predict that any shared module will blur. The *inverse Conway manoeuvre* shapes teams to match the architecture you want.
+- **Conway's law.** "Organizations which design systems are constrained to produce designs which are copies of the communication structures of these organizations." Ownership shared between teams can affect boundaries, but Conway's observation does not deterministically predict that any shared module will blur. The *inverse Conway manoeuvre* shapes teams to match the architecture you want.
 
 ## Pitfalls
 
@@ -173,7 +173,21 @@ Every step is a small commit on the main branch, so you avoid a months-long merg
 2. **ADR as a design document.** ADRs record a *decision*. Long technical designs belong elsewhere and can be linked.
 3. **Fitness functions nobody runs.** A check outside CI is a suggestion.
 4. **Evolution as an excuse for no design.** "We'll refactor later" works only if the code is testable and modular enough to refactor, and if later actually comes.
-5. **Toggles that never die.** Independent binary flags can create up to 2^n configurations; dependencies and mutually exclusive flags can reduce reachable combinations. Put a removal date on them.
+5. **Toggles that never die.** Every independent on/off flag doubles the number of configurations the code could run in (see the formula below); dependencies, and flags that can't both be on, can reduce the reachable combinations. Put a removal date on them.
+
+Each toggle has two states, and independent toggles can be combined freely, so the possible configurations multiply:
+
+```formula
+C_max = 2^n
+C_max = 2^10 = 1024
+where
+C_max: the largest possible number of distinct on/off combinations of the toggles, each a separate configuration that could need testing
+n: the number of independent feature toggles, each simply on or off; here 10
+2^n: 2 multiplied by itself n times
+In words: each extra independent toggle doubles the number of possible configurations, so 10 long-lived toggles allow up to 1024.
+```
+
+This is an upper bound: toggles that depend on each other, or can't both be on, rule some combinations out. It still shows why old toggles should be deleted rather than left to accumulate.
 
 ## Key takeaways
 - An ADR records one significant decision's context, decision and consequences; keep it short and preserve accepted decision history, while updating status and adding explicit corrections or superseding records.

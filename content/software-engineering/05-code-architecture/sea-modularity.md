@@ -18,7 +18,7 @@ The lesson still stands: **decompose around decisions likely to change, and hide
 
 ### Deep and shallow modules
 
-John Ousterhout (*A Philosophy of Software Design*) frames module quality as interface cost versus functionality:
+John Ousterhout (*A Philosophy of Software Design*) frames module quality as the cost of a module's interface versus the functionality it provides:
 
 ```
  deep module           shallow module
@@ -84,21 +84,99 @@ With a cycle, the three packages behave as one: isolated testing, reasoning and 
 
 ### SDP: depend towards stability
 
-The **Stable Dependencies Principle**: depend in the direction of stability. A package that many others depend on is hard to change (it is *stable* in Martin's sense, meaning costly to change, not "rarely buggy"). Martin's instability metric:
+The **Stable Dependencies Principle**: depend in the direction of stability. A package that many others depend on is hard to change (it is *stable* in Martin's sense, meaning costly to change, not "rarely buggy").
 
-```
- I = Ce / (Ca + Ce)
+To make "stable" measurable, Martin counts the dependency arrows into and out of a package. Arrows coming in mean other code will break if this package changes; arrows going out mean this package can be broken by changes elsewhere. His measure of **instability** is the share of arrows that point outwards:
 
- Ca: packages that depend on this one
- Ce: packages this one depends on
- I = 0  maximally stable
- I = 1  maximally unstable
- Undefined if Ca + Ce = 0
+```formula
+I = Ce / (Ca + Ce)
+where
+I: the instability of one package, a number from 0 (maximally stable) to 1 (maximally unstable); it is a ratio of two counts, so it has no unit
+Ce: efferent couplings: how many other packages this package depends on (imports), its outgoing arrows
+Ca: afferent couplings: how many other packages depend on (import) this package, its incoming arrows
+In words: instability is the fraction of a package's dependencies that point outwards. A package that only imports others and is imported by nobody scores 1; a package that is imported by others and imports nothing scores 0.
 ```
+
+Martin's original definition counts *classes* on each side of the boundary (classes outside that depend on classes inside, and classes inside that depend on classes outside); counting whole packages or modules, as here, is a common simplification that can give different numbers, though the idea is the same. If a package has no dependencies in either direction, both counts are 0 and the formula becomes 0 divided by 0, which is undefined; tools pick their own convention for that case.
+
+For example, suppose `billing` is imported by `orders` and `checkout`, and itself imports only `money`:
+
+```formula
+I = Ce / (Ca + Ce)
+I = 1 / (2 + 1)
+I ≈ 0.33
+where
+I: the instability of `billing`, from 0 to 1, no unit
+Ce: packages `billing` imports: only `money`, so 1
+Ca: packages that import `billing`: `orders` and `checkout`, so 2
+≈: approximately equal to (one third, rounded to two decimal places)
+In words: one of billing's three dependency arrows points outwards, so it is fairly stable: two packages would feel any change to it.
+```
+
+A web package that imports four others and is imported by nothing scores 4 / (0 + 4) = 1; a `money` package imported by four others that imports nothing scores 0 / (4 + 0) = 0.
 
 Volatile code (UI, integrations, experiments) should have high *I* and depend on low-*I* code, never the other way round. If a stable core package imports a volatile one, every experiment risks breaking the core.
 
 The related **Stable Abstractions Principle** says stable packages should be abstract (interfaces or abstract types; a pure calculation is not automatically abstract) so they can be extended without being modified. That is why ports, owned by the core, sit at the stable end.
+
+### Abstractness and the main sequence
+
+Martin also measures how abstract a package is, so the two principles can be checked together:
+
+```formula
+A = Na / Nc
+where
+A: the abstractness of one package, from 0 (no abstract types) to 1 (only abstract types); a ratio of counts, so no unit
+Na: the number of abstract classes and interfaces in the package (in Python, abstract base classes and Protocols)
+Nc: the total number of classes in the package, abstract and concrete together
+In words: abstractness is the fraction of a package's classes that are abstract.
+```
+
+Martin's ideal is that a package's abstractness and instability add up to 1: stable packages fully abstract, unstable packages fully concrete, or a balance in between. He calls the line where they add up to 1 the **main sequence**, and measures how far a package sits from it. (His original distance divided this by the square root of 2 to give the true perpendicular distance, at most about 0.707; the simpler form below, which he also gives, runs from 0 to 1.)
+
+```formula
+D = |A + I − 1|
+where
+D: the distance from the main sequence, from 0 (on the ideal line) to 1 (as far from it as possible); no unit
+A: the package's abstractness, from 0 to 1, as defined above
+I: the package's instability, from 0 to 1, as defined earlier in this section
+| |: absolute value: drop any minus sign, so |−0.4| = 0.4
+In words: add abstractness and instability; the further the total is from 1, in either direction, the more the package breaks the stable-abstractions guideline.
+```
+
+First example: a `core.ports` package holds two Protocols and nothing else. The core and the adapters import it, and it imports nothing.
+
+```formula
+A = Na / Nc = 2 / 2 = 1
+I = Ce / (Ca + Ce) = 0 / (2 + 0) = 0
+D = |A + I − 1| = |1 + 0 − 1| = 0
+where
+A: abstractness: both of its 2 classes are abstract
+Na: abstract classes and interfaces: 2
+Nc: all classes in the package: 2
+I: instability, from 0 to 1
+Ce: packages it imports: none, so 0
+Ca: packages importing it: the core and the adapters, counted here as 2
+D: distance from the main sequence, from 0 to 1
+| |: absolute value: drop any minus sign
+In words: the ports package is fully abstract and fully stable, so it sits exactly on the main sequence.
+```
+
+Second example: a concrete `pricing` package with no abstract types, which many packages import and which imports nothing.
+
+```formula
+A = 0
+I = 0
+D = |0 + 0 − 1| = 1
+where
+A: abstractness: no abstract types, so 0
+I: instability: nothing imported, so 0
+D: distance from the main sequence, from 0 to 1
+| |: absolute value: drop any minus sign
+In words: a stable but fully concrete package is as far from the main sequence as possible.
+```
+
+Martin calls this corner the **zone of pain**: everything depends on the package, and it offers no abstraction to extend instead of edit. Stable concrete code that almost never needs to change, such as a standard string library, is harmless there. The opposite corner, fully abstract and fully unstable, is the **zone of uselessness**: abstract types that nothing implements or uses. These numbers are prompts for a conversation, not targets to optimise.
 
 ## Import cycles in Python
 

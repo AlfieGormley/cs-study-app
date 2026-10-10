@@ -113,7 +113,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Invariants of the aggregate: ≤ 50 lines, lines only while `draft`.\n2. `Order.add_line` checks both before appending.\n3. `order.lines.append(...)` goes around it. Nothing stops a 51st line or a line on a shipped order.\n4. Fix: keep the list private (`_lines`), expose a read-only view (a tuple or property), and route all changes through root methods.",
+    "workedExample": "1. Invariants of the aggregate: at most 50 lines, lines only while `draft`.\n2. `Order.add_line` checks both before appending.\n3. `order.lines.append(...)` goes around it. Nothing stops a 51st line or a line on a shipped order.\n4. Fix: keep the list private (`_lines`), expose a read-only view (a tuple or property), and route all changes through root methods.",
     "link": {
       "title": "DDD Aggregate — Martin Fowler",
       "url": "https://martinfowler.com/bliki/DDD_Aggregate.html"
@@ -169,11 +169,11 @@
       },
       {
         "text": "Only that the code will be longer",
-        "explanation": "The serious costs are runtime ones: load time, memory and concurrency conflicts."
+        "explanation": "The serious costs are runtime ones: loading time, memory and concurrency conflicts."
       }
     ],
     "answer": 0,
-    "workedExample": "1. Every operation on any order goes through the `Customer` root and saves it, bumping its version.\n2. Two people editing different orders for the same customer both started at version *v*; the second save fails. Conflicts grow with activity.\n3. Every load fetches 2,000 orders plus lines.\n4. Ask which rules need **immediate** consistency across orders and the customer. Usually none, so split: `Order` aggregate with `customer_id`. A strict shared credit limit needs an atomic reservation protocol; an uncoordinated read/check or delayed event alone cannot prevent concurrent overspending.",
+    "workedExample": "1. Every operation on any order goes through the `Customer` root and saves it, bumping its version.\n2. Two people editing different orders for the same customer both started from the same version number; the second save fails. Conflicts grow with activity.\n3. Every load fetches 2,000 orders plus lines.\n4. Ask which rules need **immediate** consistency across orders and the customer. Usually none, so split: `Order` aggregate with `customer_id`. A strict shared credit limit needs an atomic reservation protocol; an uncoordinated read/check or delayed event alone cannot prevent concurrent overspending.",
     "link": {
       "title": "Architecture Patterns with Python: Aggregates and Consistency Boundaries",
       "url": "https://www.cosmicpython.com/book/chapter_07_aggregate.html"
@@ -233,7 +233,7 @@
       },
       {
         "text": "Anti-corruption layer: an adapter that translates CRM records into your own `Customer` model",
-        "explanation": "Correct. The ACL sits at the boundary and maps `CUST_NO` to `customer_id`, decodes status codes, and so on. Only the ACL knows the CRM's model; the rest of your code never sees it."
+        "explanation": "Correct. The ACL sits at the boundary and maps `CUST_NO` to `customer_id`, decodes status codes, and so on. Only the ACL knows the CRM's model; none of your other code ever sees it."
       }
     ],
     "answer": 3,
@@ -247,14 +247,14 @@
     "id": "sea-ddd-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "When an order is placed, stock must be reserved. `Order` and `StockItem` are separate aggregates. Both are stored in one transactional database. A developer writes one transaction that calls `order.place()` and `stock.reserve(qty)` for every line, then commits. What is the DDD-recommended alternative, and what does it trade?",
+    "prompt": "When an order is placed, stock must be reserved. `Order` and `StockItem` are separate aggregates. Both are stored in one transactional database. A developer writes one transaction that calls `order.place()` and `stock.reserve(qty)` for every line, then ends with a database commit. What is the DDD-recommended alternative, and what does it trade?",
     "options": [
       {
         "text": "Merge `Order` and `StockItem` into one aggregate so one transaction is legal",
-        "explanation": "Stock is shared across all orders; putting it in each order's aggregate is impossible, and one giant aggregate would serialise every order in the shop."
+        "explanation": "Stock is shared across all orders; putting it in each order's aggregate is impossible, and one giant aggregate would make every order in the shop wait its turn."
       },
       {
-        "text": "`order.place()` records an `OrderPlaced` event; after commit a handler reserves stock in its own transaction, accepting eventual consistency and adding compensation for failures",
+        "text": "`order.place()` records an `OrderPlaced` event; after the database commit a handler reserves stock in its own transaction, accepting eventual consistency and adding compensation for failures",
         "explanation": "This is a common design when temporary pending status and compensation are acceptable. Use reliable event publication and idempotent handlers; separating transactions does not eliminate hot-stock contention."
       },
       {
@@ -267,7 +267,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Rule: **modify one aggregate per transaction**.\n2. Contention: in the single-transaction version, every order containing a popular SKU locks that `StockItem` row. At peak, orders queue behind each other.\n3. Event version:\n   - T1: `order.place()` → status `placed`, append `OrderPlaced`; commit.\n   - Commit the order plus durable outbox event atomically; a relay delivers it with retries and consumers deduplicate.\n   - T2 per SKU: atomically reserve idempotently; on partial failure release earlier reservations or apply the chosen compensation policy.\n   - On failure: publish `ReservationFailed` → mark order back-ordered or cancel, email customer.\n4. Trade: an inconsistency window whose duration needs monitoring and recovery and compensation logic, in exchange for small locks and independent aggregates.\n\nSome teams *do* knowingly break the rule for convenience when contention is low; the point is to make that a conscious choice.",
+    "workedExample": "1. Rule: **modify one aggregate per transaction**.\n2. Contention: in the single-transaction version, every order containing a popular SKU locks that `StockItem` row. At peak, orders queue behind each other.\n3. Event version:\n   - T1: `order.place()` → status `placed`, append `OrderPlaced`; database commit.\n   - Save the order plus a durable outbox event in one database commit; a relay delivers it with retries and consumers deduplicate.\n   - T2 per SKU: atomically reserve idempotently; on partial failure release earlier reservations or apply the chosen compensation policy.\n   - On failure: publish `ReservationFailed` → mark order back-ordered or cancel, email customer.\n4. Trade: an inconsistency window whose duration needs monitoring and recovery and compensation logic, in exchange for small locks and independent aggregates.\n\nSome teams *do* knowingly break the rule for convenience when contention is low; the point is to make that a conscious choice.",
     "link": {
       "title": "Architecture Patterns with Python: Aggregates and Consistency Boundaries",
       "url": "https://www.cosmicpython.com/book/chapter_07_aggregate.html"
@@ -327,7 +327,7 @@
       },
       {
         "text": "The repository pattern; `session.commit()` should be called twice, once per object",
-        "explanation": "Two commits would make the change non-atomic without any of the event-driven safeguards, which is worse than either option."
+        "explanation": "Calling it twice, each call a separate database commit, would make the change non-atomic without any of the event-driven safeguards, which is worse than either option."
       }
     ],
     "answer": 0,

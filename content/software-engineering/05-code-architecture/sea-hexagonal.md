@@ -89,7 +89,7 @@ class Notifier(Protocol):
         ...
 ```
 
-The use case depends only on those ports. This minimal example demonstrates wiring, not reliable cross-system delivery: saving and notifying need an explicit transaction/retry policy. A production flow can atomically commit state and an outbox row, then notify asynchronously.
+The use case depends only on those ports. This minimal example demonstrates wiring, not reliable cross-system delivery: saving and notifying need an explicit transaction/retry policy. A production flow can save the state and an outbox row in one database commit, then notify asynchronously.
 
 ```python
 # core/services.py
@@ -255,7 +255,7 @@ What it costs:
 - Ports are interfaces owned by the core; driving ports are called from outside, driven ports are implemented outside.
 - Dependency inversion makes source dependencies point inwards even when calls go outwards.
 - Clean and onion architecture are concentric-circle versions of the same idea, governed by the Dependency Rule.
-- In-memory fake adapters give fast, behaviour-focused tests of business rules.
+- In-memory fake adapters give fast tests of business rules that check behaviour.
 - The cost is mapping and indirection; skip it for thin CRUD apps.
 
 ## Further reading

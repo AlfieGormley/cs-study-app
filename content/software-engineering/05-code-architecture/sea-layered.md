@@ -157,7 +157,7 @@ Now the batch job calls `services.apply_discount` directly. The rule in `Order` 
 > The repository builds `Order` objects, so `data` imports `domain`, an arrow pointing *up* the diagram. That conflicts with a literal source-import ordering of this particular diagram. Layered separation can use mappers or dependency inversion; it does not require domain objects to inherit an ORM. The next lesson develops dependency inversion explicitly.
 
 > [!note] Application layer vs domain layer
-> The domain holds rules that would exist even without software: "a closed order can't be discounted". The application layer orchestrates a use case: load, call the domain, save, commit, perhaps send an email. Fowler calls the latter a **service layer**. In a rich domain-model design, repeated business decisions in application services suggest missing domain behavior. Conditional orchestration is not itself a violation, and transaction-script designs deliberately organize logic differently.
+> The domain holds rules that would exist even without software: "a closed order can't be discounted". The application layer orchestrates a use case: load, call the domain, save, finish with a database commit, perhaps send an email. Fowler calls the latter a **service layer**. In a rich domain-model design, repeated business decisions in application services suggest missing domain behavior. Conditional orchestration is not itself a violation, and transaction-script designs deliberately organize logic differently.
 
 ## Strict vs relaxed layering
 

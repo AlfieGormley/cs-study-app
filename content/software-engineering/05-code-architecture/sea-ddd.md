@@ -75,7 +75,7 @@ class Money:
         return Money(total, self.currency)
 ```
 
-With default eq=True, dataclass generates field equality; combining it with frozen=True normally generates a hash. Frozen blocks ordinary attribute assignment but does not deeply freeze contained objects, and hashing requires hashable fields. This example deliberately supports only nonnegative GBP/USD amounts; other domains may need negative money values and different currency/rounding rules. So `Money(Decimal("5"), "GBP") == Money(Decimal("5"), "GBP")` is `True`.
+With the default `eq=True`, dataclass generates field equality; combining it with `frozen=True` normally generates a hash. Frozen blocks ordinary attribute assignment but does not deeply freeze contained objects, and hashing requires hashable fields. This example deliberately supports only nonnegative GBP/USD amounts; other domains may need negative money values and different currency/rounding rules. So `Money(Decimal("5"), "GBP") == Money(Decimal("5"), "GBP")` is `True`.
 
 Why bother? Value objects:
 
@@ -171,11 +171,11 @@ WHERE id = 42 AND version = 7;
 -- Reload and retry, or report a conflict.
 ```
 
-Because the aggregate is the consistency boundary, one root version can protect child changes only if every writer checks/advances it and commits all related changes atomically in the same transaction.
+Because the aggregate is the consistency boundary, one root version can protect child changes only if every writer checks/advances it and writes all related changes in one database commit.
 
 ### Rules across aggregates: eventual consistency
 
-What about "reserve stock when an order is placed"? Stock is a different aggregate (maybe a different context). Rather than updating both in one transaction, `Order.place()` records an `OrderPlaced` **domain event**. Commit the state and a durable pending event atomically (for example an outbox); a reliable relay invokes an idempotent reservation handler in a separate transaction. If reservation fails, a compensating action (cancel the order, notify the customer) follows.
+What about "reserve stock when an order is placed"? Stock is a different aggregate (maybe a different context). Rather than updating both in one transaction, `Order.place()` records an `OrderPlaced` **domain event**. Save the state and a durable pending event in one database commit (for example an outbox); a reliable relay invokes an idempotent reservation handler in a separate transaction. If reservation fails, a compensating action (cancel the order, notify the customer) follows.
 
 This is a deliberate trade: big aggregates give immediate consistency but more lock contention and slower loads; small ones scale but need event handling.
 
@@ -210,7 +210,7 @@ How contexts relate is as important as what's inside them. Evans' common relatio
 | Open host service | Upstream offers a public protocol |
 | Published language | A documented shared format |
 
-The **anti-corruption layer** (ACL) is useful when an external model should not shape your own. When your context consumes a legacy system or a third party with a messy model, you put a translation layer at the edge so their concepts never leak into your model:
+The **anti-corruption layer** (ACL) is useful when an external model should not shape your own. When your context consumes a legacy system or a third party with a messy model, you put a translation layer at your context's boundary so their concepts never leak into your model:
 
 ```python
 class LegacyCrmAdapter:

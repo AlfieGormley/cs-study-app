@@ -95,7 +95,7 @@ The `context` is the version information the client read (a vector clock). Passi
 
 ## Partitioning: consistent hashing with virtual nodes
 
-Hash each key (Cassandra uses Murmur3) onto a ring of 2^64 tokens (2 multiplied by itself 64 times, about 1.8 × 10^19 possible positions). Each node owns positions on the ring, and a key belongs to the first node clockwise from its hash.
+Hash each key (Cassandra uses Murmur3) onto a ring of 2^64 tokens (64 copies of 2 multiplied together, about 1.8 × 10^19 possible positions). Each node owns positions on the ring, and a key belongs to the first node clockwise from its hash.
 
 ```
         ring (hash space)

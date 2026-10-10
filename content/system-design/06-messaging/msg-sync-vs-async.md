@@ -68,7 +68,7 @@ where
 P_slow: the probability that a request hits at least one slow call, as a fraction (0.049 is 4.9%)
 p: the probability that any one call is slow, here 0.01 (1%)
 k: the number of independent calls the request must wait for, here 5
-^: to the power of; 0.99^5 means 0.99 multiplied by itself 5 times
+^: to the power of; 0.99^5 means 5 copies of 0.99 multiplied together
 ≈: approximately equal to
 In words: if each of 5 calls is fast 99% of the time, all 5 are fast only about 95% of the time, so about 1 request in 20 is slow.
 ```

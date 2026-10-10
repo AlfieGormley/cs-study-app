@@ -8,7 +8,7 @@ summary: What a cache buys you, the layers it can live in from browser to buffer
 
 A **cache** is a small, fast store that keeps copies of data that lives somewhere slower or more expensive. You put one in front of a source of truth so that repeated requests for the same thing don't pay the full cost every time.
 
-Caching helps when a workload has reuse or skew. Some workloads approximate a Zipf-like popularity pattern, but a fixed 80/20 split is not universal; measure the actual access distribution. In workloads with temporal locality, a value read once is likely to be read again soon. This is called **locality of reference**: *temporal* locality (the same item again) and *spatial* locality (nearby items).
+Caching helps when a workload has reuse or skew. Some workloads approximate a Zipf-like popularity pattern, but a fixed 80/20 split is not universal; measure the actual access distribution. In workloads with temporal locality, a value read once is likely to be read again soon. This is called **locality of reference**: temporal locality (the same item again) and spatial locality (nearby items).
 
 ## What a cache buys you
 

@@ -22,7 +22,7 @@ Estimates juggle very large numbers, so they are written as powers of ten: 10^3 
 10^a × 10^b = 10^{a + b}
 10^a / 10^b = 10^{a − b}
 where
-10^3, 10^6: ten to the power 3 and ten to the power 6: ten multiplied by itself that many times, which is a 1 followed by that many zeros
+10^3, 10^6: ten to the power 3 and ten to the power 6: that many copies of ten multiplied together, which is a 1 followed by that many zeros
 ^: "to the power of"; the small raised number (the exponent) counts the tens multiplied together
 a, b: any two exponents
 In words: a power of ten is a 1 followed by that many zeros; multiplying adds the zeros, dividing takes them away.

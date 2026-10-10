@@ -80,7 +80,7 @@ where
 codes: how many different codes of exactly that length exist
 62: the number of characters in the base62 alphabet (10 digits + 26 lower-case + 26 upper-case letters)
 L: the code length in characters
-62^L: 62 multiplied by itself L times
+62^L: L copies of 62 multiplied together
 10^10, 10^12, 10^14: 1 followed by 10, 12 or 14 zeros: 57 billion, 3.5 trillion and 218 trillion codes
 ≈: approximately equal to (rounded)
 In words: each extra character makes 62 times as many codes, so 7 characters give about 3.5 trillion.
@@ -255,7 +255,7 @@ writes: links created per second across the fleet, here the 3,000/s peak
 In words: a million-ID block lasts about five and a half minutes at peak, so the coordinator sees a handful of requests an hour.
 ```
 
-The multiply-and-wrap shuffle from the "guessable" bullet looks like this:
+The multiply-and-wrap bijective shuffle from the "guessable" bullet looks like this:
 
 ```formula
 m = (a × n) mod 62^7
@@ -284,7 +284,7 @@ time = 2^41 ms ≈ 69.7 years
 where
 seq: distinct sequence numbers one worker can issue in one millisecond
 time: how long the 41-bit millisecond timestamp lasts before it wraps round
-2^12, 2^41: 2 multiplied by itself 12 or 41 times; a field of b bits holds 2^b different values
+2^12, 2^41: 12 or 41 copies of 2 multiplied together; a field of b bits holds 2^b different values
 ms: millisecond, a thousandth of a second
 years: calendar years
 ≈: approximately equal to (rounded)
@@ -314,7 +314,7 @@ In words: ten characters cover values up to about 8 × 10^17, but Snowflake IDs 
 A key generation service pre-computes random 7-character codes, stores them in an "unused" table, and hands batches to write servers. It's essentially Option B with random rather than sequential codes. It works, but you have to store and manage billions of unused keys.
 
 > [!tip] Recommended answer
-> Range-allocated counters with a bijective shuffle, base62-encoded to 7 characters. Collision-free and short when ranges are never reused; the shuffle is not an access-control mechanism, and the coordinator is touched only once per million links.
+> Range-allocated counters with a bijective shuffle, base62-encoded to 7 characters. Collision-free and short when ranges are never reused; the bijective shuffle is not an access-control mechanism, and the coordinator is touched only once per million links.
 
 **Custom aliases** go in the same table using a conditional write ("insert if not exists": DynamoDB `attribute_not_exists`, or a primary key constraint in SQL). To stop a custom alias colliding with a future generated code, either reserve a distinct format for aliases (for example, require them to be 8+ characters or contain a hyphen) or have the generator skip codes that already exist.
 

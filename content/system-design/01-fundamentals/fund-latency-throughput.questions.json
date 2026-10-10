@@ -71,19 +71,19 @@
       },
       {
         "text": "About 39%",
-        "explanation": "Correct. The chance that no shard is slow is 0.99 multiplied by itself 50 times, about 0.605, so the chance that at least one is slow is about 1 − 0.605 = 0.395, i.e. 39.5%. Fan-out turns a per-server tail into a common user experience."
+        "explanation": "Correct. The chance that no shard is slow is 0.99 raised to the power 50, about 0.605, so the chance that at least one is slow is about 1 − 0.605 = 0.395, i.e. 39.5%. Fan-out turns a per-server tail into a common user experience."
       },
       {
         "text": "50%",
-        "explanation": "Incorrect. This simply multiplies 50 × 1%, which overcounts cases where several shards are slow at once. The correct calculation uses the complement: 1 minus the chance that all 50 are fast (0.99 multiplied by itself 50 times)."
+        "explanation": "Incorrect. This simply multiplies 50 × 1%, which overcounts cases where several shards are slow at once. The correct calculation uses the complement: 1 minus the chance that all 50 are fast (0.99 raised to the power 50)."
       },
       {
         "text": "0.01 to the power 50: effectively zero",
-        "explanation": "Incorrect. 0.01 multiplied by itself 50 times is the probability that *all* 50 shards are slow simultaneously. The query only needs *one* slow shard to be slow."
+        "explanation": "Incorrect. 0.01 raised to the power 50 is the probability that *all* 50 shards are slow simultaneously. The query only needs *one* slow shard to be slow."
       }
     ],
     "answer": 1,
-    "workedExample": "The query is slow if **at least one** shard is slow. It's easier to compute the complement, the chance that every shard is fast, and subtract it from 1:\n\n```formula\nP_all = (1 − q)^n = 0.99^50\nP_all = e^{n × ln(1 − q)}\nP_all ≈ e^{50 × (−0.01005)}\nP_all ≈ e^{−0.5025} ≈ 0.605\nP_slow = 1 − P_all ≈ 0.395\nwhere\nq: the probability that one shard is slow, 1% = 0.01\nn: the number of shards the query waits for, 50\nP_all: the probability that all 50 shards are fast\nP_slow: the probability that the query is slow (at least one shard slow)\n^: \"to the power of\": 0.99^50 means 0.99 multiplied by itself 50 times\ne: Euler's number, about 2.718, the base of natural logarithms\nln: the natural logarithm, the inverse of raising e to a power; ln(0.99) ≈ −0.01005\n≈: approximately equal to (rounded)\nIn words: each shard is fast 99% of the time, all fifty are fast only about 60% of the time, so about 40% of queries wait for a slow shard. The e and ln lines are just a way to work out 0.99^50 without a calculator's power key.\n```\n\nSo ~39.5% of queries are slow. This assumes shards are slow independently of each other. Mitigations: hedged requests to replica shards, returning partial results after a deadline, or reducing per-shard variance (GC tuning, isolating background work).",
+    "workedExample": "The query is slow if **at least one** shard is slow. It's easier to compute the complement, the chance that every shard is fast, and subtract it from 1:\n\n```formula\nP_all = (1 − q)^n = 0.99^50\nP_all = e^{n × ln(1 − q)}\nP_all ≈ e^{50 × (−0.01005)}\nP_all ≈ e^{−0.5025} ≈ 0.605\nP_slow = 1 − P_all ≈ 0.395\nwhere\nq: the probability that one shard is slow, 1% = 0.01\nn: the number of shards the query waits for, 50\nP_all: the probability that all 50 shards are fast\nP_slow: the probability that the query is slow (at least one shard slow)\n^: \"to the power of\": 0.99^50 means 50 copies of 0.99 multiplied together\ne: Euler's number, about 2.718, the base of natural logarithms\nln: the natural logarithm, the inverse of raising e to a power; ln(0.99) ≈ −0.01005\n≈: approximately equal to (rounded)\nIn words: each shard is fast 99% of the time, all fifty are fast only about 60% of the time, so about 40% of queries wait for a slow shard. The e and ln lines are just a way to work out 0.99^50 without a calculator's power key.\n```\n\nSo ~39.5% of queries are slow. This assumes shards are slow independently of each other. Mitigations: hedged requests to replica shards, returning partial results after a deadline, or reducing per-shard variance (GC tuning, isolating background work).",
     "link": {
       "title": "The Tail at Scale (Dean and Barroso, PDF)",
       "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"
@@ -377,7 +377,7 @@
       1,
       2
     ],
-    "workedExample": "Use the stated trace evidence to identify the bottleneck. Low average CPU alone cannot rule out queueing at a lock, an I/O device, a hot core or a constrained worker pool. The tail comes from per-shard variability amplified by fan-out:\n\n```formula\nP_slow = 1 − 0.99^n\nP_slow = 1 − 0.99^100 ≈ 0.63\nwhere\nP_slow: the probability that a query waits on at least one slow shard\nn: the number of shards each query fans out to, 100\n0.99: the chance one shard responds in time (it is slow 1% of the time)\n^: \"to the power of\": 0.99^100 means 0.99 multiplied by itself 100 times\n≈: approximately equal to\nIn words: with 100 shards each slow 1% of the time, about 63% of queries meet at least one slow shard.\n```\n\nSo fix variability (isolate background work) or stop waiting for the slowest shard (hedging, deadlines with partial results). Adding capacity treats a queueing problem you don't have.",
+    "workedExample": "Use the stated trace evidence to identify the bottleneck. Low average CPU alone cannot rule out queueing at a lock, an I/O device, a hot core or a constrained worker pool. The tail comes from per-shard variability amplified by fan-out:\n\n```formula\nP_slow = 1 − 0.99^n\nP_slow = 1 − 0.99^100 ≈ 0.63\nwhere\nP_slow: the probability that a query waits on at least one slow shard\nn: the number of shards each query fans out to, 100\n0.99: the chance one shard responds in time (it is slow 1% of the time)\n^: \"to the power of\": 0.99^100 means 100 copies of 0.99 multiplied together\n≈: approximately equal to\nIn words: with 100 shards each slow 1% of the time, about 63% of queries meet at least one slow shard.\n```\n\nSo fix variability (isolate background work) or stop waiting for the slowest shard (hedging, deadlines with partial results). Adding capacity treats a queueing problem you don't have.",
     "link": {
       "title": "The Tail at Scale (Dean and Barroso, PDF)",
       "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"

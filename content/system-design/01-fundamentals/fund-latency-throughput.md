@@ -191,9 +191,9 @@ where
 P_slow: the probability that a user request is slow, i.e. at least one of its backend calls is slow, from 0 to 1
 q: the probability that any one server responds slowly; here 0.01 (1%), which is what "the p99 is slow" means
 n: the number of servers the request fans out to in parallel
-^: "to the power of": 0.99^10 means 0.99 multiplied by itself 10 times
+^: "to the power of": 0.99^10 means 10 copies of 0.99 multiplied together
 ≈: approximately equal to (rounded)
-In words: each call is fast with probability 0.99; all n are fast with probability 0.99 multiplied by itself n times; anything else means the user waits for a slow one.
+In words: each call is fast with probability 0.99; all n are fast with probability 0.99 raised to the power n; anything else means the user waits for a slow one.
 ```
 
 The formula assumes each server is slow independently of the others. Correlated slowness (a shared overloaded database, say) changes the numbers.

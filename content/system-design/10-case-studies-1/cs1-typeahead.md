@@ -75,7 +75,7 @@ In words: the query text is small; the per-node top-10 lists dominate, at about 
 ```formula
 2^32 ≈ 4.3 × 10^9 > 10^8
 where
-2^32: the number of different values 32 bits can hold, 2 multiplied by itself 32 times
+2^32: the number of different values 32 bits can hold, 32 copies of 2 multiplied together
 10^9: a billion; 10^8: a hundred million, the number of queries kept
 >: is greater than
 ≈: approximately equal to
@@ -211,7 +211,7 @@ score: the query's ranking score
 d: one day of history
 count_d: how many times the query was searched on day d
 age_d: how many days ago day d was (0 for today)
-0.9^{age_d}: 0.9 multiplied by itself age_d times, the weight for that day; it shrinks by 10% per day of age
+0.9^{age_d}: age_d copies of 0.9 multiplied together, the weight for that day; it shrinks by 10% per day of age
 ≈: approximately equal to (rounded)
 In words: each day of age multiplies a search's weight by 0.9, so a search's weight halves roughly every 6.6 days and a month-old search keeps only about 4%.
 ```

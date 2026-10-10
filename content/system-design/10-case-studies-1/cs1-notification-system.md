@@ -246,7 +246,7 @@ wait_n = U(0, cap_n)
 where
 n: the retry number, starting at 0 for the first retry
 b: the base delay, here 1 second
-2^n: 2 multiplied by itself n times (1, 2, 4, 8...), so the ceiling doubles on each retry
+2^n: n copies of 2 multiplied together (1, 2, 4, 8...), so the ceiling doubles on each retry
 c: a maximum delay, so waits stop growing (say 60 seconds)
 min: "the smaller of"
 cap_n: the longest wait allowed before retry n

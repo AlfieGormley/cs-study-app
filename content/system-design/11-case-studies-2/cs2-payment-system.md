@@ -108,7 +108,7 @@ where
 A_major: the amount in the main currency unit, such as pounds (£)
 A_minor: the stored whole number of minor units, such as pence
 d: the number of decimal places the currency uses; 2 for GBP (pounds), 0 for JPY (yen), 3 for BHD (Bahraini dinar)
-10^d: 10 multiplied by itself d times; 10^2 = 100
+10^d: d copies of 10 multiplied together; 10^2 = 100
 £: pounds sterling
 In words: store whole pence and divide by 100 only when displaying pounds, so the stored value is always exact.
 ```

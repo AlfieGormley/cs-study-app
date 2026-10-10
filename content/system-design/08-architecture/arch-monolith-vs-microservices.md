@@ -88,7 +88,7 @@ A_2: the availability of the second required service, likewise
 A_n: the availability of the last (nth) required service
 A: the availability of each service when they are all the same, e.g. 0.999 (99.9 %); the second line is the shortcut for that case
 n: the number of services the request must pass through, all of which must succeed
-^: "to the power of": A^n means A multiplied by itself n times
+^: "to the power of": A^n means n copies of A multiplied together
 %: per cent; 99.9 % = 0.999
 In words: the chain is only as available as all its links together, so every extra required service pulls the total down.
 ```
@@ -100,7 +100,7 @@ A_total = 0.999^6
 A_total ≈ 0.994 = 99.4 %
 where
 A_total: the availability of the whole six-service request path, as a fraction (or per cent)
-^: "to the power of": 0.999^6 is 0.999 multiplied by itself 6 times (0.999 × 0.999 × 0.999 × 0.999 × 0.999 × 0.999)
+^: "to the power of": 0.999^6 is 6 copies of 0.999 multiplied together (0.999 × 0.999 × 0.999 × 0.999 × 0.999 × 0.999)
 ≈: approximately equal to (rounded)
 %: per cent; 0.994 = 99.4 %
 In words: six 99.9 %-available services in a chain give about 99.4 %, roughly six times the failures of one service alone.

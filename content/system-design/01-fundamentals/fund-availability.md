@@ -100,7 +100,7 @@ A_DB: the database's availability, 99.95% = 0.9995
 In words: multiplying three high availabilities gives one that is lower than any of them.
 ```
 
-The chain is **less** available than its weakest link. Every synchronous dependency you add lowers the ceiling. With independent failures, a service requiring 10 dependencies at 99.9% each has modelled availability of 0.999 multiplied by itself 10 times, about 0.990 (99.0%), i.e. about 3.65 days of downtime a year.
+The chain is **less** available than its weakest link. Every synchronous dependency you add lowers the ceiling. With independent failures, a service requiring 10 dependencies at 99.9% each has modelled availability of 0.999 raised to the power 10, about 0.990 (99.0%), i.e. about 3.65 days of downtime a year.
 
 This is the mathematical reason to:
 

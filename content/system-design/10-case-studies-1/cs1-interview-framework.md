@@ -187,7 +187,7 @@ total = 35 × 3 / 2 = 52.5 → 54
 where
 load: peak requests per second for the app tier, here 30,000 reads + 3,000 writes = 33,000/s
 capacity: requests per second one server handles, here an assumed 1,000/s
-servers: servers needed at peak with nothing broken: 33, rounded up to 35 for a little slack before the zone sum
+servers: servers needed at peak with nothing broken: 33, rounded up to 35 for a little headroom before the zone sum
 Z: the number of availability zones (separate data-centre sites) the fleet is spread over, here 3
 total: servers to run so that losing one whole zone still leaves enough
 →: "round up to", here to 54 so the three zones get 18 each

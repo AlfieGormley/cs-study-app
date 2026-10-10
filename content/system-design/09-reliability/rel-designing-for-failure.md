@@ -19,7 +19,7 @@ where
 P_slow: the probability that a request hits at least one slow downstream call, a number from 0 to 1 (0.395 = 39.5%)
 p: the probability that any single downstream call is slow, here 1% = 0.01
 n: the number of independent downstream calls one request makes, here 50
-^: "to the power of"; 0.99^50 means 0.99 multiplied by itself 50 times
+^: "to the power of"; 0.99^50 means 50 copies of 0.99 multiplied together
 ≈: approximately equal to (the result is rounded)
 %: per cent, parts per hundred; 0.395 = 39.5%
 In words: each call is fast 99% of the time, but all 50 being fast happens only about 60% of the time, so roughly 4 requests in 10 meet at least one slow call.

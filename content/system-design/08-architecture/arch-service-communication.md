@@ -136,7 +136,7 @@ where
 C: the worst-case number of calls the bottom service receives for one user request
 a: the maximum attempts each layer makes per call (1 try + its retries), e.g. 3 for 1 try + 2 retries
 n: the number of layers in the chain that retry
-^: "to the power of": a^n means a multiplied by itself n times
+^: "to the power of": a^n means n copies of a multiplied together
 In words: retries multiply rather than add, so the load on the bottom service grows exponentially with the number of retrying layers.
 ```
 
@@ -147,7 +147,7 @@ C = 3^3 = 3 × 3 × 3 = 27
 C = 4^2 = 4 × 4 = 16
 where
 C: worst-case calls reaching the bottom service for one user request
-^: "to the power of": 3^3 is 3 multiplied by itself 3 times
+^: "to the power of": 3^3 is 3 copies of 3 multiplied together
 In words: 3 retrying layers of 3 attempts give 27 calls; 2 layers of 4 attempts give 16.
 ```
 

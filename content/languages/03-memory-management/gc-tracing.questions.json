@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Mark-sweep leaves live objects where they are, so free space ends up in holes:\n\n```\n[A][ ][B][  ][C][ ]\n```\n\n2. Allocation must search free lists, and a big request can fail despite enough total space.\n3. Compaction or copying packs live objects:\n\n```\n[A][B][C][        ]\n         ^ bump\n```\n\n4. Allocation is now as cheap as stack allocation: check the limit, advance the pointer.",
+    "workedExample": "1. Mark-sweep leaves live objects where they are, so free space ends up in holes:\n\n```\n[A][ ][B][  ][C][ ]\n```\n\n2. Allocation must search free lists, and a big request can fail even though enough memory is free in total.\n3. Compaction or copying packs live objects:\n\n```\n[A][B][C][        ]\n         ^ bump\n```\n\n4. Allocation is now as cheap as stack allocation: check the limit, advance the pointer.",
     "link": {
       "title": "Tracing garbage collection — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Copying collection only ever visits what it copies.\n2. Live objects: 30. Each is copied to to-space, and its pointers are scanned and forwarded.\n3. Dead objects: 970. Never touched; from-space is reused wholesale after the swap.\n\n```\nwork ~ 30 objects\nfreed = 970 objects (for free)\n```\n\n4. Contrast mark-sweep: marks 30, but sweeps all 1,000.\n\nLow survival is exactly the young generation's profile, hence copying nurseries.",
+    "workedExample": "1. Copying collection only ever visits what it copies.\n2. Live objects: 30. Each is copied to to-space, and its pointers are scanned and forwarded.\n3. Dead objects: 970. Never touched; from-space is reused wholesale after the swap.\n\n```formula\nW ∝ n_live\nn_live = 30\nn_dead = n_total − n_live\nn_dead = 1,000 − 30 = 970\nwhere\nW: the collector's work for this collection\n∝: \"is proportional to\": W grows in step with n_live\nn_live: the number of reachable (live) objects, which are copied and scanned\nn_dead: the number of unreachable objects, reclaimed without being visited\nn_total: all objects in the semispace, 1,000 here\nIn words: the work tracks the 30 live objects; the 970 dead ones are freed by reusing the whole space, at no per-object cost.\n```\n\n4. Contrast mark-sweep: marks 30, but sweeps all 1,000.\n\nLow survival is exactly the young generation's profile, hence copying nurseries.",
     "link": {
       "title": "Cheney's algorithm — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cheney%27s_algorithm"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Track `scan` and `free`:\n\n1. Copy roots: to-space = `[A][C]`. scan at A.\n2. Scan A: child B not yet copied, copy it: `[A][C][B]`. Leave a forwarding pointer in old B.\n3. Scan C: child B is forwarded. Just update C's field.\n4. Scan B: child D not copied: `[A][C][B][D]`.\n5. Scan D: no children. scan == free: done.\n\n```\nto-space: A C B D\n```\n\nForwarding pointers make shared objects (B is pointed to twice) get copied exactly once.",
+    "workedExample": "Track `scan` and `free`:\n\n1. Copy roots: to-space = `[A][C]`. scan at A.\n2. Scan A: child B not yet copied, copy it: `[A][C][B]`. Leave a forwarding pointer in old B.\n3. Scan C: child B is forwarded. Just update C's field.\n4. Scan B: child D not copied: `[A][C][B][D]`.\n5. Scan D: no children. scan == free: done.\n\n```\nto-space: A C B D\n```\n\nForwarding pointers make objects with several referrers (B is pointed to twice) get copied only once.",
     "link": {
       "title": "Cheney's algorithm — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cheney%27s_algorithm"
@@ -173,7 +173,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Time to fill the young generation:\n\n```\n200 MB / 400 MB/s = 0.5 s\n```\n\n2. Survivors per collection:\n\n```\n3% x 200 MB = 6 MB copied\n```\n\n3. The other 194 MB is reclaimed with no per-object work.\n\nThis is the generational bet paying off: you collect frequently, but each collection is small because almost everything is already dead.",
+    "workedExample": "1. Time to fill the young generation, then survivors per collection:\n\n```formula\nt = Y / A\nt = 200 MB / (400 MB/s) = 0.5 s\nC = f × Y\nC = 0.03 × 200 MB = 6 MB\nwhere\nt: the time between collections, in seconds (s)\nY: the nursery space available for new objects, in megabytes (MB)\nA: the allocation rate, in MB per second (MB/s)\nC: the bytes copied out by each collection, in MB\nf: the survival fraction: 3% = 0.03\nMB: megabyte, 1,000,000 bytes\ns: seconds\nIn words: the nursery fills every half-second, and each collection copies only the 3% that is still live, 6 MB.\n```\n\n2. The survivors are what get copied; everything else is dead.\n\n3. The other 194 MB (200 − 6) is reclaimed with no per-object work.\n\nThis is the generational bet paying off: you collect frequently, but each collection is small because almost everything is already dead.",
     "link": {
       "title": "HotSpot GC implementation — Oracle",
       "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-collector-implementation.html"
@@ -251,7 +251,7 @@
     "id": "gc-tracing-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A tracing collector's cost per byte allocated is roughly proportional to `live / (heap - live)`. A service has 2 GB of live data and a 3 GB heap. You raise the heap to 6 GB. By about how much does GC work fall? Assume constant live size and per-byte scan cost; ignore sweep, root, fixed and concurrent-pacing overheads.",
+    "prompt": "A tracing collector's cost per byte allocated follows roughly this model:\n\n```formula\nW ∝ L / (H − L)\nwhere\nW: GC work per byte allocated\n∝: \"is proportional to\"\nL: the live data, in gigabytes (GB)\nH: the total heap size, in GB\nGB: gigabyte, 1,000,000,000 bytes\nIn words: GC work per allocated byte is live data divided by spare heap room.\n```\n\nA service has 2 GB of live data and a 3 GB heap. You raise the heap to 6 GB. By about how much does GC work fall? Assume constant live size and per-byte scan cost; ignore sweep, root, fixed and concurrent-pacing overheads.",
     "options": [
       {
         "text": "By half, because the heap doubled",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Each collection does work ~ live data (2 GB here).\n2. Each collection frees ~ heap - live, which is how much you can allocate before the next one.\n3. So work per byte allocated ~ live / (heap - live).\n\n```\n3 GB heap: 2 / (3 - 2) = 2.0\n6 GB heap: 2 / (6 - 2) = 0.5\nratio: 2.0 / 0.5 = 4\n```\n\n4. Doubling the heap quadrupled the headroom, so collections run four times less often.\n\nThis non-linear effect is why small heaps near the live size make GC thrash, and why Go's `GOGC` and JVM heap sizing matter so much.",
+    "workedExample": "1. Each collection does work roughly in proportion to the live data (2 GB here).\n2. Each collection frees roughly the heap size minus the live data, which is how much you can allocate before the next one.\n3. So work per byte allocated is about live data divided by headroom:\n\n```formula\nW_1 ≈ L / (H_1 − L) = 2 / (3 − 2) = 2.0\nW_2 ≈ L / (H_2 − L) = 2 / (6 − 2) = 0.5\nW_1 / W_2 = 2.0 / 0.5 = 4\nwhere\nW_1, W_2: GC work per byte allocated with the 3 GB and the 6 GB heap (a ratio, no unit)\nL: the live data, 2 GB\nH_1, H_2: the heap sizes before and after, 3 GB and 6 GB\nH − L: the headroom, the free space between collections: 1 GB before, 4 GB after\n≈: approximately equal to; a rough model\nIn words: the heap doubles but the headroom quadruples, so the collector does about a quarter of the work per allocated byte.\n```\n\n4. Doubling the heap quadrupled the headroom, so collections run four times less often.\n\nThis disproportionate effect is why small heaps near the live size make GC thrash, and why Go's `GOGC` and JVM heap sizing matter so much.",
     "link": {
       "title": "Tracing garbage collection — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection"
@@ -301,7 +301,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Minor GC work = trace young survivors + scan **dirty cards** in the old generation.\n2. A cache that keeps storing fresh young objects into old structures dirties cards across the 20 GB.\n\n```\n20 GB / 512 B = ~40 million cards\neven 1% dirty = ~400,000 cards\n```\n\n3. Each dirty card must be scanned for pointers into the young generation, so pause time grows with cache churn, not just young size.\n\nRemedies: store values off-heap or in primitive arrays, reduce churn, or use a collector designed for big heaps (lesson 5).\n\nThe card calculation assumes 512-byte granularity; collector settings and remembered-set refinement can change the actual work. This is one plausible cause, not a diagnosis established from heap size alone.",
+    "workedExample": "1. A minor GC's work is tracing the young survivors plus scanning the **dirty cards** in the old generation.\n2. A cache that keeps storing fresh young objects into old structures dirties cards across the 20 GB.\n\n```formula\nN_cards = M_old / c\nN_cards = 20 GB / 512 B ≈ 40,000,000\nN_dirty = d × N_cards\nN_dirty = 0.01 × 40,000,000 = 400,000\nwhere\nN_cards: the number of cards covering the old generation\nM_old: the old generation's size, 20 GB\nc: the card size, 512 bytes (B) in a common HotSpot configuration\nN_dirty: the number of dirty cards a minor GC must scan\nd: the fraction of cards dirtied since the last minor GC; 1% = 0.01 here\nGB: gigabyte, 1,000,000,000 bytes (20 GB ÷ 512 B is 39 million; with 2^30-byte gigabytes it is 42 million, so \"about 40 million\" either way)\nB: bytes\n≈: approximately equal to\nIn words: a 20 GB old generation is about 40 million cards, so even if only 1% are dirty, every minor GC has about 400,000 cards to scan.\n```\n\n3. Each dirty card must be scanned for pointers into the young generation, so pause time grows with cache churn, not just young size.\n\nRemedies: store values off-heap or in primitive arrays, reduce churn, or use a collector designed for big heaps (lesson 5).\n\nThe card calculation assumes 512-byte granularity; collector settings and remembered-set refinement can change the actual work. This is one plausible cause, not a diagnosis established from heap size alone.",
     "link": {
       "title": "HotSpot GC implementation — Oracle",
       "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-collector-implementation.html"

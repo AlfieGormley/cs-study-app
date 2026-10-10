@@ -55,7 +55,7 @@ Why forbid it? Both `s1` and `s2` would point at the same heap buffer, and both 
  +---------+      +---------+
 ```
 
-For String a move transfers its pointer/length/capacity representation without cloning its buffer. Physical copies may be optimized away, and non-Copy values need not be on the stack or own heap memory.
+For String a move transfers its pointer/length/capacity representation without cloning its heap buffer. Physical copies may be optimized away, and non-Copy values need not be on the stack or own heap memory.
 
 Passing to a function moves too:
 
@@ -72,7 +72,7 @@ consume(name);  // E0382: moved value
 Two escape routes:
 
 - **`Copy` types** (integers, `f64`, `bool`, `char`, and tuples or arrays of them) permit implicit duplication, so the original remains usable. Copy describes semantics, not location: a Copy value can be stored in a heap object, and shared references to heap data are Copy too.
-- **.clone()** invokes type-specific cloning. String clones its buffer, but Rc/Arc clones share an allocation; Clone is not a universal deep-copy guarantee.
+- **.clone()** invokes type-specific cloning. String clones its heap buffer, but Rc/Arc clones share an allocation; Clone is not a universal deep-copy guarantee.
 
 > [!note] Compare C++
 > std::move is a cast enabling move overloads; it does not itself move or modify the source. Standard-library moved-from objects generally remain valid with type-specific guarantees (a moved unique_ptr is empty). Rust rejects reading an uninitialized moved value, but permits reinitialization and valid uses of unmoved fields after partial moves.
@@ -145,11 +145,11 @@ error[E0502]: cannot borrow `v` as mutable
 because it is also borrowed as immutable
 ```
 
-This isn't pedantry. `push` may reallocate the vector's buffer to a bigger one and free the old one, leaving `first` pointing into freed memory. In C++ comparable code can compile and becomes a dangling-reference access if reallocation actually invalidates that reference. In Rust it can't be written in safe code.
+This isn't pedantry. `push` may reallocate the vector's heap buffer to a bigger one and free the old one, leaving `first` pointing into freed memory. In C++ comparable code can compile and becomes a dangling-reference access if reallocation actually invalidates that reference. In Rust it can't be written in safe code.
 
 ### Non-lexical lifetimes
 
-A borrow can end after its **last use**, before the block ends; control flow and destructor requirements also constrain its lifetime. Delete the `println!` above and the code compiles: `first` is never used after the `push`, so the borrows don't overlap. This refinement, *non-lexical lifetimes*, arrived in the 2018 edition and removed many spurious errors.
+A Rust borrow can end after its **last use**, before the block ends; control flow and destructor requirements also constrain its lifetime. Delete the `println!` above and the code compiles: `first` is never used after the `push`, so the borrows don't overlap. This refinement, *non-lexical lifetimes*, arrived in the 2018 edition and removed many spurious errors.
 
 ### Data races
 
@@ -157,7 +157,7 @@ The same rule prevents data races. A data race involves conflicting concurrent a
 
 ## Lifetimes
 
-A reference must never outlive the value it points to. The compiler checks this with **lifetimes**: names for the region of code where a reference is valid.
+A reference must never outlive the value it points to. The compiler checks this with **Rust lifetimes**: names for the region of code where a reference is valid.
 
 ```rust
 let r;
@@ -172,7 +172,7 @@ println!("{r}");
 error[E0597]: `x` does not live long enough
 ```
 
-Most lifetimes are inferred. Annotations are needed when elision cannot describe the relationship, including some returned references and types containing references:
+Most lifetimes are inferred. Lifetime annotations are needed when lifetime elision cannot describe the relationship, including some returned references and types containing references:
 
 ```rust
 fn longest<'a>(a: &'a str, b: &'a str)
@@ -187,7 +187,7 @@ Returning a reference to a local is impossible to annotate correctly, so the com
 
 ## Shared ownership and interior mutability
 
-Some data really does have several owners: a node in a graph, a cache shared across threads. Rust provides library types for this, and you opt in explicitly:
+Some data really does have several owners: a node in a graph, a cache shared across threads. Rust provides library types for this, and you choose them explicitly:
 
 | Need | Type |
 |---|---|
@@ -197,7 +197,7 @@ Some data really does have several owners: a node in a graph, a cache shared acr
 | mutate behind `&` | `RefCell<T>` |
 | ...across threads | `Mutex<T>` |
 
-`Rc` and `Arc` are reference counting (lesson 3), and so they can leak cycles; you break them with `Weak`. `RefCell` moves the borrow check to **run time**: calling `borrow_mut()` while another borrow is active **panics** instead of failing to compile. The common combinations are `Rc<RefCell<T>>` for shared mutable data in one thread and `Arc<Mutex<T>>` across threads.
+`Rc` and `Arc` are reference counting (lesson 3), and so they can leak cycles; you break them with `Weak`. `RefCell` moves the borrow check to **run time**: calling `borrow_mut()` while another borrow is active triggers a **run-time panic** instead of failing to compile. The common combinations are `Rc<RefCell<T>>` for shared mutable data in one thread and `Arc<Mutex<T>>` across threads.
 
 > [!warning] Leaks are "safe"
 > Rust's guarantee is memory **safety**, not freedom from leaks. An `Rc` cycle, `std::mem::forget` or `Box::leak` can all leak memory in safe code. Leaking can't cause undefined behaviour, so Rust allows it.
@@ -219,7 +219,7 @@ What you get back: control over allocation and release without a mandatory traci
 - Assignment and argument passing move heap-owning values, and using a moved-from variable is a compile error, which rules out double frees.
 - Borrows follow aliasing XOR mutation: many `&T` or one `&mut T`, which prevents iterator invalidation and data races.
 - Lifetimes let the compiler prove no reference outlives its value, ruling out dangling pointers with no run-time cost.
-- `Rc`, `Arc`, `RefCell` and `Mutex` opt in to shared ownership and run-time checks where static ownership doesn't fit, and `unsafe` isolates what can't be proven.
+- `Rc`, `Arc`, `RefCell` and `Mutex` add shared ownership and run-time checks where static ownership doesn't fit, and `unsafe` isolates what can't be proven.
 - Safe Rust rules out use-after-free and data races but not leaks.
 
 ## Further reading

@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Track the count:\n\n| Line | rc |\n|---|---|\n| `a = N()` | 1 |\n| `b = a` | 2 |\n| `a = None` | 1 |\n| `b = None` | 0, freed |\n\n1. `print(\"one\")` runs while rc is 1.\n2. `b = None` takes it to 0; `__del__` prints `freed` straight away.\n3. Then `print(\"two\")`.\n\nThis promptness is a defining property of reference counting.",
+    "workedExample": "Track the reference count:\n\n| Line | count |\n|---|---|\n| `a = N()` | 1 |\n| `b = a` | 2 |\n| `a = None` | 1 |\n| `b = None` | 0, freed |\n\n1. `print(\"one\")` runs while the count is 1.\n2. `b = None` takes it to 0; `__del__` prints `freed` straight away.\n3. Then `print(\"two\")`.\n\nThis promptness is a defining property of reference counting.",
     "link": {
       "title": "Reference counting — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Reference_counting"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. `A.other = B` gives B rc ≥ 1; `B.other = A` gives A rc ≥ 1.\n2. Drop all outside references: each count falls by those, but the internal ones remain.\n\n```\n[A rc=1] --> [B rc=1]\n   ^------------'\n```\n\n3. Counting asks \"does anything point at me?\", not \"can the program reach me?\". For a cycle those questions have different answers.\n\nA tracing collector asks the second question, which is why it handles cycles naturally.",
+    "workedExample": "1. `A.other = B` gives B a reference count of at least 1; `B.other = A` gives A a count of at least 1.\n2. Drop all outside references: each count falls by those, but the internal ones remain.\n\n```\n[A rc=1] --> [B rc=1]\n   ^------------'\n```\n\n3. Counting asks \"does anything point at me?\", not \"can the program reach me?\". For a cycle those questions have different answers.\n\nA tracing collector asks the second question, which is why it handles cycles naturally.",
     "link": {
       "title": "Reference counting — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Reference_counting"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Draw the references:\n\n```\nparent --strong--> child\nchild  --?------> parent\n```\n\n2. If both are strong, that is a cycle of length 2.\n3. Ownership flows downward, so make the upward pointer weak.\n4. Dropping the root: root rc → 0, freed; it decrements each child to 0; they free their children, and so on.\n\nPython `weakref.ref`, Swift `weak`, C++ `weak_ptr` and Rust `Weak` all express this.\n\nDropping the root only destroys children that have no other strong owners. A child retained elsewhere can survive with an empty weak parent reference.",
+    "workedExample": "1. Draw the references:\n\n```\nparent --strong--> child\nchild  --?------> parent\n```\n\n2. If both are strong, that is a cycle of length 2.\n3. Ownership flows downward, so make the upward pointer weak.\n4. Dropping the root: the root's count falls to 0 and it is freed; it decrements each child to 0; they free their children, and so on.\n\nPython `weakref.ref`, Swift `weak`, C++ `weak_ptr` and Rust `Weak` all express this.\n\nDropping the root only destroys children that have no other strong owners. A child retained elsewhere can survive with an empty weak parent reference.",
     "link": {
       "title": "Rc and reference cycles — The Rust Book",
       "url": "https://doc.rust-lang.org/book/ch15-06-reference-cycles.html"
@@ -113,7 +113,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. After `del a, b`: each object rc = 1 (held by the other). Nothing freed.\n2. `print(\"X\")`.\n3. `gc.collect()`:\n   - copy rc into scratch: A=1, B=1\n   - subtract internal refs: A=0, B=0\n   - nothing has an outside reference, so both are unreachable\n   - run finalisers (PEP 442), free them\n4. `print(\"Y\")`.\n\nBefore Python 3.4, objects with `__del__` in a cycle were left in `gc.garbage` instead.",
+    "workedExample": "1. After `del a, b`: each object's reference count is 1 (held by the other). Nothing freed.\n2. `print(\"X\")`.\n3. `gc.collect()`:\n   - copy the reference counts into scratch: A=1, B=1\n   - subtract internal refs: A=0, B=0\n   - nothing has an outside reference, so both are unreachable\n   - run finalisers (PEP 442), free them\n4. `print(\"Y\")`.\n\nThe scratch counts in step 3, as a calculation:\n\n```formula\ng_A = rc_A − i_A = 1 − 1 = 0\ng_B = rc_B − i_B = 1 − 1 = 0\nwhere\ng_A, g_B: the scratch counts of the two objects: references from outside the group\nrc_A, rc_B: their reference counts after del, 1 each\ni_A, i_B: references to each object from inside the group; each is pointed at once, by the other\nIn words: once the internal references are subtracted, neither object has any outside reference left, so both are unreachable.\n```\n\nBefore Python 3.4, objects with `__del__` in a cycle were left in `gc.garbage` instead.",
     "link": {
       "title": "Python gc module documentation",
       "url": "https://docs.python.org/3/library/gc.html"
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Run the algorithm:\n\n1. Copy the counts into scratch fields: A=2, B=2, C=1.\n2. Subtract one for every reference *inside* the group:\n\n```\nA->B : B 2 -> 1\nB->C : C 1 -> 0\nC->B : B 1 -> 0\n\nA = 2  (outside refs)\nB = 0\nC = 0\n```\n\n3. A is above zero, so something outside the group holds it: alive.\n4. Mark everything reachable from alive objects: A → B, B → C.\n5. Nothing is left unmarked, so there is no garbage.\n\nThe trap is step 3: a scratch count of zero only means \"no outside references\". Reachability from a live object decides.",
+    "workedExample": "Run the algorithm:\n\n1. Copy the counts into scratch fields: A=2, B=2, C=1.\n2. Subtract one for every reference *inside* the group: A→B and C→B both point at B, and B→C points at C. Nothing inside points at A.\n\n```formula\ng_A = rc_A − i_A = 2 − 0 = 2\ng_B = rc_B − i_B = 2 − 2 = 0\ng_C = rc_C − i_C = 1 − 1 = 0\nwhere\ng_A, g_B, g_C: each object's scratch count: the references it has from outside the group\nrc_A, rc_B, rc_C: the reference counts given in the question: 2, 2 and 1\ni_A, i_B, i_C: references to each object from inside the group: none to A, two to B (from A and C), one to C (from B)\nIn words: only A keeps references from outside the group (two of them); B's and C's counts are explained entirely by pointers within the group.\n```\n\n3. A is above zero, so something outside the group holds it: alive.\n4. Mark everything reachable from alive objects: A → B, B → C.\n5. Nothing is left unmarked, so there is no garbage.\n\nThe trap is step 3: a scratch count of zero only means \"no outside references\". Reachability from a live object decides.",
     "link": {
       "title": "Python gc module documentation",
       "url": "https://docs.python.org/3/library/gc.html"
@@ -323,7 +323,7 @@
       },
       {
         "text": "Deferred reference counting, which skips updates for stack variables, can reduce overhead at the cost of slightly delayed freeing",
-        "explanation": "Correct. Stack references are the most frequent; deferring them and reconciling periodically removes much of the count traffic."
+        "explanation": "Correct. Stack references are the most frequent; deferring them and catching up periodically removes much of the count traffic."
       },
       {
         "text": "Reference counting guarantees no pauses, so it suits hard real-time systems unconditionally",
@@ -331,7 +331,7 @@
       },
       {
         "text": "With reference counting, destructor timing is unpredictable",
-        "explanation": "Simple eager RC often gives predictable release at the last strong decrement. Cycles, deferred counting and language optimization can complicate timing, so no universal timing guarantee applies to every RC system."
+        "explanation": "Simple eager reference counting often gives predictable release at the last strong decrement. Cycles, deferred counting and language optimization can complicate timing, so no universal timing guarantee applies to every reference-counting system."
       }
     ],
     "answer": [
@@ -339,7 +339,7 @@
       1,
       2
     ],
-    "workedExample": "1. Cycles: the fundamental gap; you need a fix. True.\n2. Atomics: only when crossing threads. True.\n3. Deferred RC: a classic optimisation from the research literature. True.\n4. No pauses: false; freeing a big structure recursively is a pause.\n5. Unpredictable destructors: false; that is a tracing-GC property.\n\nA real-world example of the full design: CPython (counting, weakrefs and a cycle collector). Swift picks counting plus weak/unowned and no collector.",
+    "workedExample": "1. Cycles: the fundamental gap; you need a fix. True.\n2. Atomics: only when crossing threads. True.\n3. Deferred reference counting: a classic optimisation from the research literature. True.\n4. No pauses: false; freeing a big structure recursively is a pause.\n5. Unpredictable destructors: false; that is a tracing-GC property.\n\nA real-world example of the full design: CPython (counting, weakrefs and a cycle collector). Swift picks counting plus weak/unowned and no collector.",
     "link": {
       "title": "Reference counting — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Reference_counting"

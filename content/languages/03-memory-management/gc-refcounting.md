@@ -27,6 +27,19 @@ In the basic model each managed allocation has a strong-reference count (possibl
 
 That last rule makes freeing **recursive**. When the head of a linked list dies, its count of zero decrements the second node to zero, and so on down the list.
 
+In the trace above, each `rc=` value is the object's reference count. Each update is a single addition or subtraction:
+
+```formula
+rc' = rc + 1
+rc' = rc − 1
+where
+rc: the object's reference count before the change: how many strong references currently point at it
+rc': the count after the change; the first line applies when a reference is created, the second when one is destroyed
+In words: creating a reference adds one, destroying one subtracts one, and the object is freed at the moment the count reaches 0.
+```
+
+Following the trace: `Obj()` starts at 1, `b = a` makes it 1 + 1 = 2, `del a` makes it 2 − 1 = 1, and `b = None` makes it 1 − 1 = 0, so the object is freed. The model assumes every reference is counted; weak references (below) deliberately are not.
+
 ## Watching it in CPython
 
 In ordinary GIL-enabled CPython, object headers include reference-count metadata. This simple non-resurrecting example illustrates prompt finalization; free-threaded/deferred counting, cycles and finalizers can alter timing:
@@ -57,7 +70,7 @@ after del b
 `del a` only drops the count from 2 to 1, because `b` still refers to the object. `del b` drops it to 0, so the object is freed immediately, before the next line runs.
 
 > [!note] Immortal objects
-> Since Python 3.12, objects such as `None`, `True` and small integers are **immortal** (PEP 683): reference-count operations treat them specially and ordinary decrements do not deallocate them. The large reported count is not a reliable count of live references or a stable universal constant.
+> Since Python 3.12, objects such as `None`, `True` and small integers are **immortal objects** (PEP 683): reference-count operations treat them specially and ordinary decrements do not deallocate them. The large reported count is not a reliable count of live references or a stable universal constant.
 
 ## Why people like it
 
@@ -93,7 +106,7 @@ Two objects that refer to each other each hold a count of at least 1, forever, e
           unreachable, never freed
 ```
 
-Cycles are everywhere in real programs: a parent node and its children with `parent` pointers, a doubly linked list, an object that registers itself as a callback, an exception that holds a traceback that holds the frame that holds the exception.
+Cycles are everywhere in real programs: a parent node and its children with `parent` pointers, a doubly linked list, an object that adds itself as a callback, an exception that holds a traceback that holds the frame that holds the exception.
 
 Pure counting cannot reclaim an unreachable strong-reference cycle that remains intact. Weak edges, explicit link removal or a design that forbids strong cycles can avoid that situation. There are two fixes: make some references not count (weak references), or add a separate collector that finds cycles.
 
@@ -142,6 +155,19 @@ It only needs to consider **container** objects (lists, dicts, class instances),
 3. Anything left with a scratch count above zero is referenced from **outside** the group, so it is alive. Everything reachable from it is alive too.
 4. Whatever remains is referenced only from inside the group: unreachable cycles. Free it.
 
+Steps 1 and 2 compute, for each container, how many of its references come from outside the group:
+
+```formula
+g_X = rc_X − i_X
+where
+g_X: the scratch count for container X (CPython's source calls this field gc_refs)
+rc_X: X's ordinary reference count
+i_X: the number of references to X that come from other containers in the group being examined
+In words: take an object's count and subtract the references the group itself holds; what is left are references from outside, such as local variables.
+```
+
+In the example below, after `del x, y` each node has a reference count of 1 and one reference from inside the group (the other node points at it), so its scratch count is 1 − 1 = 0: nothing outside holds them, and they are freed. An object with a scratch count above zero is alive, and step 3 keeps everything reachable from it alive too, even objects whose own scratch count is 0.
+
 ```python
 import gc
 gc.disable()  # explicit collect still works
@@ -172,7 +198,7 @@ collected
 
 After `del x, y`, each node still has a count of 1 from the other, so nothing is freed. `gc.collect()` subtracts the internal references, finds both at zero, and frees them. Since Python 3.4 (PEP 442), objects with `__del__` in a cycle are collected normally. Before that, they were parked uncollectable in `gc.garbage`.
 
-The collector is **generational**: new containers are examined often, survivors less often, because most objects die young (lesson 4). Scheduling depends on version/build: net allocation counts matter, and free-threaded CPython also considers process-memory growth. The thresholds are tunable with `gc.set_threshold()`.
+The collector is a **generational collector**: new containers are examined often, survivors less often, because most objects die young (lesson 4). Scheduling depends on version/build: net allocation counts matter, and free-threaded CPython also considers process-memory growth. The thresholds are tunable with `gc.set_threshold()`.
 
 > [!warning] Disabling the cycle collector
 > gc.disable() disables automatic cyclic collection. Reference counting still operates and explicit gc.collect() still works; unreachable intact strong cycles can accumulate until explicitly collected or broken. Some services do this deliberately for predictable latency and then must avoid creating cycles.
@@ -186,7 +212,7 @@ The collector is **generational**: new containers are examined often, survivors 
 | Cost paid on | strong-reference updates and cascading release | collection and barriers |
 | Destructors | deterministic | not timed |
 
-Many systems blend the two. CPython is reference counting plus a tracing cycle collector. Research collectors use **deferred** reference counting, which skips count updates for stack variables and reconciles them periodically, to get most of the promptness with much less overhead.
+Many systems blend the two. CPython is reference counting plus a tracing cycle collector. Research collectors use **deferred reference counting**, which skips count updates for stack variables and corrects the counts periodically, to get most of the promptness with much less overhead.
 
 ## Key takeaways
 - Reference counting frees an object the moment its count reaches zero, and frees its children recursively.

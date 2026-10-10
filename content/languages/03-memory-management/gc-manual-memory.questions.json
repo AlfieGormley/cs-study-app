@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "Nothing; `strlen` counts every byte the string needs",
-        "explanation": "`strlen` counts the characters but not the terminating NUL byte, so the buffer is one byte short."
+        "explanation": "`strlen` counts the characters but not the terminating NUL byte, so the allocation is one byte short."
       },
       {
         "text": "It leaks memory because it never calls `free`",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "In the assumed hosted process, exit reclaims the address space, so the small short-lived allocation has limited retention cost. The server accumulates 4,000 × 1,000 × 86,400 = 345,600,000,000 bytes/day, or 345.6 decimal GB. Time and type of resource failure depend on limits and workload; there is no guaranteed OOM-kill schedule.",
+    "workedExample": "In the assumed hosted process, exit reclaims the address space, so the small short-lived allocation has limited retention cost. The server's daily leak is its leak rate times the seconds in a day:\n\n```formula\nR = 4,000 B/req × 1,000 req/s\nR = 4,000,000 B/s\nD = R × 86,400 s\nD = 345,600,000,000 B\nD = 345.6 GB\nwhere\nR: the leak rate, in bytes per second (B/s)\nB: bytes\nreq: one request\ns: seconds\nD: the memory leaked per day, in bytes\n86,400: seconds in a day (24 × 60 × 60)\nGB: gigabyte, 1,000,000,000 bytes (decimal)\nIn words: 4,000 bytes on each of 1,000 requests a second is 4 MB a second, about 346 GB a day.\n```\n Time and type of resource failure depend on limits and workload; there is no guaranteed OOM-kill schedule.",
     "link": {
       "title": "Valgrind quick start guide",
       "url": "https://valgrind.org/docs/manual/quick-start.html"
@@ -191,7 +191,7 @@
     "id": "gc-manual-memory-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A C++ function creates `auto p = std::make_unique<Widget>();` and then calls a function that throws an exception. What happens to the `Widget`? Assume a handler outside the function catches the exception, with normal stack unwinding.",
+    "prompt": "A C++ function creates `auto p = std::make_unique<Widget>();` and then calls a function that throws an exception. What happens to the `Widget`? Assume a handler outside the function catches the exception, with ordinary stack unwinding.",
     "options": [
       {
         "text": "It is freed when the exception unwinds the stack, because `p`'s destructor runs",
@@ -289,7 +289,7 @@
     "id": "gc-manual-memory-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "An attacker can make a server free an object containing a function pointer while a dangling pointer to it survives, and can then send a packet whose payload is copied into a newly allocated buffer of the same size. Why is this so dangerous?",
+    "prompt": "An attacker can make a server free an object containing a function pointer while a dangling pointer to it survives, and can then send a packet whose payload is copied into a newly allocated block of the same size. Why is this so dangerous?",
     "options": [
       {
         "text": "It only causes a crash, because freed memory is unmapped from the process",
@@ -304,7 +304,7 @@
         "explanation": "`calloc` zeroes the new block at allocation, but the attacker then fills it with their payload. Zeroing does not stop the aliasing."
       },
       {
-        "text": "The new buffer can occupy the freed slot, so the next call through the dangling pointer jumps to an address the attacker chose",
+        "text": "The new block can occupy the freed slot, so the next call through the dangling pointer jumps to an address the attacker chose",
         "explanation": "Correct. This is the classic use-after-free exploitation pattern: reclaim the slot with controlled bytes, then let the program use its stale pointer to call or write somewhere useful to the attacker."
       }
     ],
@@ -331,7 +331,7 @@
       },
       {
         "text": "LeakSanitizer, because use-after-free is a kind of leak",
-        "explanation": "Use-after-free is the opposite of a leak: the memory was freed too early, not never freed. LeakSanitizer also needs a sanitizer build."
+        "explanation": "Use-after-free is the opposite of a leak: the memory was freed prematurely, not never freed. LeakSanitizer also needs a sanitizer build."
       },
       {
         "text": "Neither; use-after-free can only be found by code review",

@@ -63,7 +63,7 @@
     "id": "gc-modern-q3",
     "level": "basic",
     "type": "single",
-    "prompt": "A Go service has 300 MB of live heap and GOGC=100. Ignoring GC roots and a binding memory limit, what is its approximate heap-size goal (not the collection-start threshold)?",
+    "prompt": "A Go service has 300 MB of live heap and `GOGC=100`. Ignoring GC roots and any active memory limit, what is its approximate heap-size goal (not the collection-start threshold)?",
     "options": [
       {
         "text": "300 MB",
@@ -71,11 +71,11 @@
       },
       {
         "text": "400 MB",
-        "explanation": "That would be GOGC=33, growth of a third."
+        "explanation": "That would be `GOGC=33`, growth of a third."
       },
       {
         "text": "600 MB",
-        "explanation": "Correct. target = live + live × 100/100 = 300 + 300 = 600 MB (ignoring the stacks and globals Go 1.18+ also counts)."
+        "explanation": "Correct. The goal is the live heap plus 100% of it: 300 MB + 300 MB = 600 MB (ignoring the stacks and globals Go 1.18+ also counts)."
       },
       {
         "text": "30 GB",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Formula:\n\n```\ntarget = live + live x GOGC/100\n```\n\n2. Plug in:\n\n```\n300 + 300 x 100/100\n= 300 + 300\n= 600 MB\n```\n\n3. This gives a 300 MB allocation allowance in the simplified model. The pacer starts marking before the goal; the goal is not the trigger threshold.\n\nWith GOGC=50 the target would be 450 MB (more frequent GC, less memory); with GOGC=200 it would be 900 MB.",
+    "workedExample": "1. Apply the Go heap-goal formula:\n\n```formula\nH_goal = L + L × GOGC / 100\nH_goal = 300 MB + 300 MB × 100 / 100\nH_goal = 300 MB + 300 MB = 600 MB\nwhere\nH_goal: the heap-size goal, in megabytes (MB)\nL: the live heap measured after the last GC cycle, 300 MB\nGOGC: the Go GC tuning percentage, 100 here (the default)\n100: converts the percentage into a fraction (100% = 1)\nMB: megabyte, 1,000,000 bytes\nIn words: with GOGC at 100 the heap may grow by 100% of the live heap, to twice its size.\n```\n\n2. The result: 600 MB.\n\n3. This gives a 300 MB allocation allowance in the simplified model. The pacer starts marking before the goal; the goal is not the trigger threshold.\n\nWith `GOGC=50` the goal would be 300 MB + 150 MB = 450 MB (more frequent GC, less memory); with `GOGC=200` it would be 300 MB + 600 MB = 900 MB.",
     "link": {
       "title": "A Guide to the Go Garbage Collector — go.dev",
       "url": "https://go.dev/doc/gc-guide"
@@ -143,7 +143,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. G1 splits the heap into regions.\n2. Concurrent marking records how many live bytes each old region has.\n3. Evacuating a region costs ~ its live bytes; it frees the whole region.\n\n| Region | Live | Copy cost | Freed |\n|---|---|---|---|\n| R1 | 10% | low | 90% |\n| R2 | 80% | high | 20% |\n\n4. Pick R1 first. G1 adds regions to a mixed collection, cheapest first, until its pause-time budget is used.",
+    "workedExample": "1. G1 splits the heap into regions.\n2. Concurrent marking records how many live bytes each old region has.\n3. Evacuating a region costs roughly in proportion to its live bytes; it frees the whole region.\n\n| Region | Live | Copy cost | Freed |\n|---|---|---|---|\n| R1 | 10% | low | 90% |\n| R2 | 80% | high | 20% |\n\n4. Pick R1 first. G1 adds regions to a mixed collection, cheapest first, until its pause-time budget is used.",
     "link": {
       "title": "HotSpot GC tuning guide: G1 — Oracle",
       "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-first-g1-garbage-collector1.html"
@@ -222,7 +222,7 @@
     "id": "gc-modern-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Assume requests otherwise take a fixed 4 ms, arrivals are uniform, a 200 ms pause starts every 8 seconds, and ignore in-flight requests and post-pause queueing. What fraction arrive during a pause and what happens to p99?",
+    "prompt": "Assume requests otherwise take a fixed 4 ms, arrivals are uniform, a 200 ms pause starts every 8 seconds, and ignore requests already in progress and post-pause queueing. What fraction arrive during a pause and what happens to p99?",
     "options": [
       {
         "text": "About 0.025%; the p99 is unaffected",
@@ -242,7 +242,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "200/8000 = 2.5% of arrivals occur during pauses. Their added waits are uniformly spread over 0–200 ms. The upper 1% of all requests corresponds to waits above 120 ms, so this model gives p99 = 124 ms. The median remains 4 ms. In-flight work, other latency variation and queue draining change real results.",
+    "workedExample": "Work out the fraction that hits a pause, then where the slowest 1% begins:\n\n```formula\nf = t_p / t_c = 200 ms / 8000 ms\nf = 0.025\nw = t_p × (1 − 0.01 / f)\nw = 200 ms × (1 − 0.01 / 0.025)\nw = 200 ms × 0.6 = 120 ms\np99 = t_r + w = 4 ms + 120 ms = 124 ms\nwhere\nf: the fraction of requests that arrive during a pause (2.5%)\nt_p: the pause length, 200 milliseconds (ms)\nt_c: the time from one pause start to the next, 8 s = 8000 ms\n0.01: the slowest 1% of all requests\nw: the extra wait at the 99th-percentile boundary; delayed requests wait anywhere from 0 to t_p, evenly spread\np99: the 99th-percentile latency: 99% of requests finish faster\nt_r: the normal request time, 4 ms\nms: milliseconds\nIn words: 2.5% of requests are delayed; the slowest 40% of those (1% of all) wait more than 120 ms, so p99 is about 124 ms.\n```\n The median remains 4 ms. In-flight work, other latency variation and queue draining change real results.",
     "link": {
       "title": "Getting to Go: Go's GC journey — go.dev",
       "url": "https://go.dev/blog/ismmkeynote"
@@ -255,15 +255,15 @@
     "prompt": "A Go service has a 2 GiB container limit, and live heap can grow from 600 MiB to 1.2 GiB. Measurements show little memory outside the Go runtime. Which is a reasonable configuration to test, rather than a guaranteed OOM fix?",
     "options": [
       {
-        "text": "GOGC=off, with no memory limit",
+        "text": "`GOGC=off`, with no memory limit",
         "explanation": "With no trigger at all, the heap grows until the container kills it, faster than before."
       },
       {
-        "text": "GOGC=400 so the GC runs less often",
-        "explanation": "Less frequent GC raises the peak heap (1.2 GiB live → about 6 GiB target), making OOM kills more likely."
+        "text": "`GOGC=400` so the GC runs less often",
+        "explanation": "Less frequent GC raises the peak heap (1.2 GiB live gives a goal of 1.2 + 1.2 × 4 = 6 GiB), making OOM kills more likely."
       },
       {
-        "text": "Set GOMEMLIMIT to around 1.8 GiB and keep GOGC=100",
+        "text": "Set `GOMEMLIMIT` to around 1.8 GiB and keep `GOGC=100`",
         "explanation": "A soft runtime memory limit below the container limit can restrain growth, but headroom must cover memory the runtime does not track. It can still exceed its soft limit."
       },
       {
@@ -272,7 +272,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Ignoring roots, 600 MiB live gives a 1200 MiB heap goal at GOGC=100.\n2. A 1.2 GiB live heap gives a 2.4 GiB goal, beyond the container limit.\n3. For example, GOMEMLIMIT=1800MiB (about 1.76 GiB) lowers the runtime memory budget; measure the margin required by this process.\n4. The budget includes runtime-managed stacks and metadata, but excludes C allocations and other untracked memory.\n5. It is soft: under GC pressure the runtime can exceed it, so it does not guarantee avoidance of an OOM kill.",
+    "workedExample": "1. Ignoring roots, apply the heap-goal formula at both ends of that growth:\n\n```formula\nH_goal = L + L × GOGC / 100\nH_goal = 600 MiB × 2 = 1,200 MiB\nH_goal = 1.2 GiB × 2 = 2.4 GiB\nwhere\nH_goal: the Go heap-size goal\nL: the live heap: 600 MiB at first, growing to 1.2 GiB\nGOGC: the Go GC tuning percentage, 100 here, so L × GOGC / 100 = L and the goal is twice the live heap\n100: converts the percentage into a fraction\nMiB: mebibyte, 1,048,576 bytes\nGiB: gibibyte, 1,024 MiB\nIn words: at the default setting the heap may grow to twice the live data, which at 1.2 GiB live is past the 2 GiB container limit.\n```\n\n2. So the 2.4 GiB goal is beyond the container limit.\n3. For example, GOMEMLIMIT=1800MiB (about 1.76 GiB) lowers the runtime memory budget; measure the margin required by this process.\n4. The budget includes runtime-managed stacks and metadata, but excludes C allocations and other untracked memory.\n5. It is soft: under GC pressure the runtime can exceed it, so it does not guarantee avoidance of an OOM kill.",
     "link": {
       "title": "A Guide to the Go Garbage Collector — go.dev",
       "url": "https://go.dev/doc/gc-guide"

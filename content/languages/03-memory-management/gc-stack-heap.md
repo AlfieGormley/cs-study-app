@@ -6,9 +6,9 @@ minutes: 10
 summary: Where values live in C, Python, Java, Go and Rust, why the stack is fast but short-lived, and how escape analysis decides what goes on the heap.
 ---
 
-Every value a program creates has to live somewhere in memory, and sooner or later that memory must be given back. Two common storage mechanisms are the **stack** and the **heap**. Registers, static storage and optimizations also matter; this is an introductory model, not an exhaustive classification.
+Every value a program creates has to live somewhere in memory, and sooner or later that memory must be given back. Two common storage mechanisms are the **call stack** and **heap memory**, usually just called "the stack" and "the heap". Registers, static storage and optimizations also matter; this is an introductory model, not a complete classification.
 
-The difference is about **lifetime**. A conventional call frame is reclaimed on return, while block-scoped object lifetimes can end earlier. Heap allocations can outlive the allocating call; reclamation follows ownership, reachability or explicit deallocation rather than actual future need. The rest of this module is really about the heap, so it pays to understand why the stack is the easy case.
+The difference is about **object lifetime**: how long a value stays valid. A conventional call frame is reclaimed on return, while block-scoped object lifetimes can end earlier. Heap allocations can outlive the allocating call; reclamation follows ownership, reachability or explicit deallocation rather than actual future need. The rest of this module is really about the heap, so it pays to understand why the stack is the easy case.
 
 > [!note] Scope of this module
 > The Operating Systems subject covers virtual memory, pages and how `malloc` carves up memory internally. Here we take the language-level view: who decides when a value dies, and how.
@@ -33,7 +33,7 @@ When a function is called, the program pushes a **stack frame** holding its para
  low addresses (grows down on x86/ARM)
 ```
 
-Allocating a frame is just moving the **stack pointer** register by a fixed amount, usually a single instruction. Freeing it is moving the pointer back. The simple LIFO fast path needs no free-list search. Prologues, alignment, stack checks, page faults and runtime stack growth can add work; cache residency is not guaranteed.
+Allocating a frame is just moving the **stack pointer** register by a fixed amount, usually a single instruction. Freeing it is moving the pointer back. The simple LIFO fast path needs no free-list search. Function prologues, stack alignment, stack checks, page faults and runtime stack growth can add work; cache residency is not guaranteed.
 
 The catch is that the stack is strictly **last in, first out**. A frame cannot outlive the call that created it, and the compiler usually needs to know each frame's size in advance.
 
@@ -68,14 +68,14 @@ int *good(void) {
 }
 ```
 
-`bad` returns the address of a slot in a frame that has already been popped. Accessing the expired object is undefined behavior regardless of whether later calls reuse that storage; no particular output or crash is guaranteed. Clang warns: *address of stack memory associated with local variable 'x' returned*. `good` returns NULL on allocation failure; on success the caller has a new duty: call `free(p)` exactly once.
+`bad` returns the address of a slot in a frame that has already been popped. Accessing the expired object is undefined behavior regardless of whether later calls reuse that storage; no particular output or crash is guaranteed. Clang warns: *address of stack memory associated with local variable 'x' returned*. `good` returns NULL on allocation failure; on success the caller has a new duty: call `free(p)` once and only once.
 
 ## How each language places values
 
 | Language | Stack | Heap |
 |---|---|---|
 | C | many automatic locals; placement optimized | allocated storage from malloc |
-| CPython | implementation-specific interpreter frames | most objects; some shared/static objects |
+| CPython | interpreter frames (details vary by version) | most objects; some shared or static objects |
 | Java | local slots conceptually; may be registers | objects in JVM model; allocations may be eliminated |
 | Go | non-escaping values | escaping values |
 | Rust | local values often inline or registers | owned allocations through Box, Vec, String |
@@ -127,7 +127,7 @@ Things that commonly force a value to escape in Go: returning its address, stori
 
 ### Rust: ownership and explicit allocations
 
-Rust values can live in locals, registers, static storage or inside another allocation. Box owns a heap allocation, while Vec and String usually own buffers. A local Vec or String commonly has inline pointer/length/capacity metadata; a Box<T> for sized T has a pointer-sized representation, not those three fields, and the buffer is freed automatically when the owner goes out of scope (lesson 6).
+Rust values can live in locals, registers, static storage or inside another allocation. Box owns a heap allocation, while Vec and String usually own a heap buffer. A local Vec or String commonly has inline pointer/length/capacity metadata; a Box<T> for sized T has a pointer-sized representation, not those three fields, and its heap buffer is freed automatically when the owner goes out of scope (lesson 6).
 
 ```
  let v = vec![1, 2, 3];
@@ -158,6 +158,27 @@ Goroutine stacks are a neat trick. They start tiny and, when a function needs mo
 > [!warning] Big arrays on the stack
 > If double is 8 bytes and the array is materialized on the stack, `double grid[2000][2000];` needs 32,000,000 bytes, exceeding an 8 MiB stack budget. Allocate it on the heap instead.
 
+To check whether a local array fits, multiply its element count by the size of one element and compare the result with the thread's stack budget:
+
+```formula
+S_grid = 2000 × 2000 × 8 B
+S_grid = 32,000,000 B
+S_stack = 8 MiB = 8 × 1,048,576 B
+S_stack = 8,388,608 B
+S_grid / S_stack ≈ 3.8
+where
+S_grid: the memory the array needs, in bytes (B): rows × columns × bytes per element
+2000: the number of rows, and also the number of columns, in grid[2000][2000]
+8: the size of one C double (a 64-bit floating-point number) on common platforms, in bytes
+S_stack: the thread's stack budget, in bytes; 8 MiB is a common Linux default for the main thread, but it is configurable
+B: bytes; one byte is 8 bits
+MiB: mebibyte, 2^20 = 1,048,576 bytes (binary prefix; a megabyte, MB, is 1,000,000 bytes)
+≈: approximately equal to (the result is rounded)
+In words: the array needs about 3.8 times the whole stack budget, before counting any other frame, so it cannot fit.
+```
+
+The same multiplication works for any fixed-size local: a 100 × 100 grid of doubles needs only 80,000 bytes and fits easily. The budget is not fixed: it depends on the operating system, `ulimit -s` and how the thread was created.
+
 > [!note] Limits of this model
 > A universal stack size or allocation latency is omitted: neither is guaranteed across runtimes, operating systems and compiler settings. Dynamic size and sharing alone do not require heap storage (C VLAs and safely scoped sharing are counterexamples).
 
@@ -186,7 +207,7 @@ Shared heap objects are exactly what makes deallocation hard: you can only free 
 | Lifetime | the call | any |
 | Size | fixed, small | flexible, large |
 
-Performance-minded code in managed languages tries to **avoid heap allocation in hot loops**: reuse buffers, prefer values over pointers in Go, and let escape analysis keep short-lived objects off the heap. Every avoided allocation is also work the garbage collector never has to do.
+Performance-minded code in managed languages tries to **avoid heap allocation in hot loops**: reuse allocations, prefer values over pointers in Go, and let escape analysis keep short-lived objects off the heap. Every avoided allocation is also work the garbage collector never has to do.
 
 ## Key takeaways
 - Conventional call frames use LIFO allocation; physical placement and object lifetimes depend on the language and implementation.

@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Think about what a heap allocator must do: find a free block big enough, record its size, and later accept it back in any order.\n2. A stack frame is freed in the reverse order it was created, always.\n3. With LIFO order, the free space is always one contiguous region above the stack pointer.\n4. So allocation is `sp -= frame_size` and freeing is `sp += frame_size`.\n\nThe price of that speed is the LIFO restriction: nothing in the frame can outlive the call.",
+    "workedExample": "1. Think about what a heap allocator must do: find a free block big enough, record its size, and later accept it back in any order.\n2. A stack frame is freed in the reverse order it was created, always.\n3. With LIFO order, the free space is always one contiguous region above the stack pointer.\n4. So allocation just subtracts the frame size from the stack pointer, and freeing adds it back:\n\n```formula\nsp_after = sp_before − F\nsp_after = 10,000 − 64 = 9,936\nsp_back = sp_after + F\nsp_back = 9,936 + 64 = 10,000\nwhere\nsp_before: the stack pointer (the register holding the address of the top of the stack) just before the call; 10,000 is a made-up address to keep the numbers simple\nsp_after: the stack pointer once the new frame is allocated; the stack grows towards lower addresses on x86 and ARM, so allocating subtracts\nF: the frame size in bytes, fixed by the compiler; 64 bytes here\nsp_back: the stack pointer after the function returns, exactly where it started\nIn words: allocating a frame is one subtraction and freeing it is one addition; no free block has to be searched for.\n```\n\nIn code this is often a single instruction, written `sp -= frame_size` and `sp += frame_size`.\n\nThe price of that speed is the LIFO restriction: nothing in the frame can outlive the call.",
     "link": {
       "title": "Stack-based memory allocation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Stack-based_memory_allocation"
@@ -207,7 +207,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "8 MiB = 8 × 1,048,576 = 8,388,608 bytes. Dividing by 128 yields 65,536 frames. Real available depth is lower because of existing frames, guards and implementation overhead; actual frame and stack sizes must be measured.",
+    "workedExample": "Divide the stack budget by the size of one frame:\n\n```formula\nS_stack = 8 MiB = 8 × 1,048,576 B\nS_stack = 8,388,608 B\nN = S_stack / S_frame\nN = 8,388,608 B / 128 B = 65,536\nwhere\nS_stack: the thread's stack budget, in bytes (B)\nMiB: mebibyte, 2^20 = 1,048,576 bytes (binary prefix)\nB: bytes; one byte is 8 bits\nN: the number of frames (nested calls) that fit\nS_frame: the stack space one call uses, in bytes; 128 B here (return address, saved registers and locals)\nIn words: an 8 MiB stack holds 65,536 frames of 128 bytes each.\n```\n\nSo the answer is about 65,000 calls. Real available depth is lower because of existing frames, guards and implementation overhead; actual frame and stack sizes must be measured.",
     "link": {
       "title": "Stack-based memory allocation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Stack-based_memory_allocation"
@@ -255,7 +255,7 @@
     "options": [
       {
         "text": "Go about 200 MB; Java about 100 GB reserved",
-        "explanation": "Correct. 100,000 × ~2 KB ≈ 200 MB for goroutines; 100,000 × 1 MB ≈ 100 GB of reserved stack for threads. The OS commits thread stack pages lazily, but the reservations, kernel thread structures and scheduling cost still make this impractical."
+        "explanation": "Correct. 100,000 × about 2 KB is about 200 MB for goroutines; 100,000 × 1 MB is about 100 GB of reserved stack for threads. The OS commits thread stack pages only when they are first touched, but the reservations, kernel thread structures and scheduling cost still make this impractical."
       },
       {
         "text": "Both about 100 GB, because stacks are the same everywhere",
@@ -271,7 +271,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Goroutine stack bytes: 100,000 × 2,048 = 204,800,000 B, about 205 MB. Platform-thread reservations: 100,000 × 1,048,576 = 104,857,600,000 B, about 105 GB. The rounded answer is about 200 MB versus 100 GB. These are assumed sizes, not universal defaults or predictions of resident memory.",
+    "workedExample": "Multiply the number of stacks by the size of each:\n\n```formula\nM_go = 100,000 × 2,048 B\nM_go = 204,800,000 B ≈ 205 MB\nM_java = 100,000 × 1,048,576 B\nM_java = 104,857,600,000 B ≈ 105 GB\nwhere\nM_go: total initial stack memory for the goroutines, in bytes (B)\nM_java: total stack address space reserved for the Java platform threads, in bytes\n100,000: the number of goroutines, or of threads\n2,048: a 2 KiB goroutine starting stack, in bytes (1 KiB = 1,024 bytes)\n1,048,576: a 1 MiB thread stack reservation, in bytes (1 MiB = 1,048,576 bytes)\nB: bytes\nMB: megabyte, 1,000,000 bytes\nGB: gigabyte, 1,000,000,000 bytes\n≈: approximately equal to (rounded)\nIn words: the goroutines start with about 205 MB of stack in total, while the threads reserve about 105 GB, roughly 500 times more.\n```\n The rounded answer is about 200 MB versus 100 GB. These are assumed sizes, not universal defaults or predictions of resident memory.",
     "link": {
       "title": "A Guide to the Go Garbage Collector — go.dev",
       "url": "https://go.dev/doc/gc-guide"
@@ -322,12 +322,12 @@
         "explanation": "True. `vec!` allocates a heap buffer and the `Vec` owns it."
       },
       {
-        "text": "The heap buffer is freed when the garbage collector next runs",
-        "explanation": "False. Rust has no garbage collector. The buffer is freed deterministically when `v` goes out of scope (its `Drop` runs)."
+        "text": "The vector's heap buffer is freed when the garbage collector next runs",
+        "explanation": "False. Rust has no garbage collector. The vector's heap buffer is freed deterministically when `v` goes out of scope (its `Drop` runs)."
       },
       {
-        "text": "`let w = v;` copies the 24-byte header, not the heap buffer, and `v` can no longer be used",
-        "explanation": "True. This is a move: the pointer, length and capacity are copied into `w`, ownership transfers, and the compiler rejects later uses of `v` so the buffer is never freed twice."
+        "text": "`let w = v;` copies the 24-byte header, not its heap buffer, and `v` can no longer be used",
+        "explanation": "True. This is a move: the pointer, length and capacity are copied into `w`, ownership transfers, and the compiler rejects later uses of `v` so its heap buffer is never freed twice."
       }
     ],
     "answer": [
@@ -335,7 +335,7 @@
       1,
       3
     ],
-    "workedExample": "Draw the layout:\n\n```\n stack (v)        heap\n +-----------+    +---+---+---+\n | ptr  -----+--> | 1 | 2 | 3 |\n | len = 3   |    +---+---+---+\n | cap = 3   |     12 bytes\n +-----------+\n  3 x 8 = 24 bytes\n```\n\n1. Three words on the stack: 24 bytes.\n2. Three 4-byte integers on the heap: 12 bytes.\n3. Freeing happens when the owner's scope ends, with no GC.\n4. `let w = v;` copies the three words and marks `v` as moved. Only `w` will free the buffer.\n\nThis describes the ownership/layout model; the compiler can eliminate physical copies or allocations when observable behavior is preserved.",
+    "workedExample": "Draw the layout:\n\n```\n stack (v)        heap\n +-----------+    +---+---+---+\n | ptr  -----+--> | 1 | 2 | 3 |\n | len = 3   |    +---+---+---+\n | cap = 3   |     12 bytes\n +-----------+\n  3 x 8 = 24 bytes\n```\n\n1. Three words on the stack: 24 bytes.\n2. Three 4-byte integers on the heap: 12 bytes.\n3. Freeing happens when the owner's scope ends, with no GC.\n4. `let w = v;` copies the three words and marks `v` as moved. Only `w` will free its heap buffer.\n\nThe two sizes, as a calculation:\n\n```formula\nS_header = 3 × 8 B = 24 B\nS_buffer = 3 × 4 B = 12 B\nwhere\nS_header: the size of the Vec value itself (pointer, length, capacity), in bytes (B)\nS_buffer: the size of its heap buffer holding the elements, in bytes\n3: three header fields in the first line; three elements in the second\n8: the size of a pointer or usize on a 64-bit target, in bytes\n4: the size of one i32 (a 32-bit integer), in bytes\nB: bytes\nIn words: the Vec's header is three 8-byte words, 24 bytes, while the three 4-byte integers it owns take 12 bytes on the heap.\n```\n\nThis describes the ownership/layout model; the compiler can eliminate physical copies or allocations when observable behavior is preserved.",
     "link": {
       "title": "What is ownership? — The Rust Book",
       "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"

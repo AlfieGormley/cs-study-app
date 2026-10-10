@@ -55,7 +55,22 @@ char *greet(const char *who) {
 Compare `getenv`, whose result you must **not** free, and `strdup`, whose result you **must** free. Both return `char *`. Getting the convention wrong in either direction is a bug.
 
 > [!tip] Counting bytes for strings
-> `"Hello, "` is 7 characters. A C string also needs a terminating NUL byte, so the buffer must be `strlen(who) + 7 + 1`. Forgetting the `+ 1` is one of the most common heap overflows.
+> `"Hello, "` is 7 characters. A C string also needs a terminating NUL byte, so the allocation must be `strlen(who) + 7 + 1`. Forgetting the `+ 1` is one of the most common heap overflows.
+
+The allocation size for `greet` is the sum of its three parts:
+
+```formula
+n = L + 7 + 1
+n = 3 + 7 + 1 = 11
+where
+n: the number of bytes to ask malloc for (the variable n in greet)
+L: the length of the name in characters, which is what strlen(who) returns; it does not count the name's own NUL. For "ann", L = 3
+7: the length of "Hello, ": five letters, a comma and a space
+1: the single terminating NUL byte that marks where every C string ends
+In words: the allocation needs room for the greeting, the name and one extra byte for the terminator.
+```
+
+So `greet("ann")` allocates 11 bytes: `Hello, ann` is 10 visible characters plus the NUL. The code writes this as `strlen(who) + 8`, folding the 7 and the 1 together. The formula assumes one byte per character, which holds for C's `char` strings even when they contain UTF-8 text, because `strlen` counts bytes, not letters.
 
 ## The five classic bugs
 
@@ -75,6 +90,26 @@ void handle(void) {
 ```
 
 An ordinary process exit reclaims its address space, so a small bounded leak in a short-lived tool may have limited impact. In an illustrative server, leaking 4,000 bytes per request at 1,000 requests/s accumulates 345.6 GB per day (decimal). The time and mode of failure depend on memory limits, allocation behavior and the environment; an OOM kill within hours is not guaranteed.
+
+The daily figure is the leak rate multiplied by the number of seconds in a day:
+
+```formula
+R = 4,000 B/req × 1,000 req/s
+R = 4,000,000 B/s
+D = R × 86,400 s
+D = 345,600,000,000 B = 345.6 GB
+where
+R: the leak rate: bytes lost per second
+B: bytes
+req: one request handled by the server
+s: seconds
+D: the memory leaked in one day, in bytes
+86,400: the number of seconds in a day (24 × 60 × 60)
+GB: gigabyte, 1,000,000,000 bytes (decimal)
+In words: 4 kB lost on each of 1,000 requests a second is 4 MB a second, which over a day adds up to about 346 GB.
+```
+
+The model assumes a steady request rate and that nothing frees the leaked memory; real traffic varies through the day, so treat it as an order-of-magnitude warning, not a prediction.
 
 ### 2. Use-after-free
 
@@ -119,7 +154,7 @@ These bugs are not just crashes. Consider a use-after-free:
 2. An attacker triggers an allocation of the same size with contents they control (say, a string from a network packet). The allocator reuses the freed slot.
 3. The program calls through its dangling pointer, reading the attacker's bytes as a function address.
 
-If the slot is reused as assumed and control-flow defenses do not stop the indirect call, this can enable arbitrary code execution. Overflows and double frees can be turned into similar primitives.
+If the slot is reused as assumed and control-flow defenses do not stop the call through the corrupted pointer, this can enable arbitrary code execution. Overflows and double frees can be turned into similar primitives.
 
 Chromium’s published analysis reported roughly 70% of its high-severity security bugs as memory-safety issues, with use-after-free a major category. Treat this as the historical dataset described by the source, not a measured current rate across all products. A separate universal Microsoft annual percentage is omitted here because this review has not established its applicable period and dataset. This is why governments and large companies now push new code towards **memory-safe languages**: Java, Go, Python, C#, Swift and Rust.
 
@@ -151,7 +186,7 @@ Every path runs the same cleanup. The Linux kernel uses this `goto` pattern ever
 
 ### Arenas (region allocation)
 
-Instead of freeing objects one by one, allocate everything for one task (a request, a compiler pass, a game frame) from an **arena** and free the whole arena at the end. Individual frees disappear, so most use-after-free and double-free bugs within that region disappear too. Compilers, game engines and web servers (nginx's per-request pools) use this heavily.
+Instead of freeing objects one by one, allocate everything for one task (a request, a compiler pass, a game frame) from an **arena allocator** and free the whole arena at the end. Individual frees disappear, so most use-after-free and double-free bugs within that region disappear too. Compilers, game engines and web servers (nginx's per-request pools) use this heavily.
 
 ## C++: tie memory to object lifetime (RAII)
 

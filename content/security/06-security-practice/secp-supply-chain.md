@@ -43,12 +43,12 @@ xz-utils is a compression library present on almost every Linux system. Its main
 
 From late 2021 a contributor calling themselves **"Jia Tan"** sent helpful, ordinary patches. In 2022 several accounts, described in the linked historical reconstruction as suspected sock puppets, pressured Collin on the mailing list, complaining the project was slow and that he should hand over maintenance. Jia Tan gained commit access in late 2022 and was making releases by 2023.
 
-In February and March 2024 Jia Tan released versions **5.6.0 and 5.6.1** containing a backdoor (**CVE-2024-3094**, CVSS 10.0). It was hidden with real care:
+In February and March 2024 Jia Tan released versions **5.6.0 and 5.6.1** containing a backdoor (**CVE-2024-3094**, CVSS 10.0, the maximum on CVSS's 0.0–10.0 severity scale). It was hidden with real care:
 
 - The payload sat in two binary "test" files (`bad-3-corrupt_lzma2.xz`, `good-large_compressed.lzma`), whose encoded contents require additional inspection.
-- The trigger was a modified `build-to-host.m4` that appeared **only in the release tarballs**, not in git.
+- The trigger was a modified `build-to-host.m4` that appeared **only in the release tarballs**, never in git.
 - It activated only when building Debian or RPM packages on x86-64 Linux.
-- Several distributions patch OpenSSH's `sshd` to link `libsystemd`, which links `liblzma`. The backdoor used that path to hook the server's RSA key verification, so the holder of the attacker's private key could run commands on any affected machine via SSH.
+- Several distributions apply a distribution patch to OpenSSH's `sshd` that links it to `libsystemd`, which links `liblzma`. The backdoor used that path to hook the server's RSA key verification, so the holder of the attacker's private key could run commands on any affected machine via SSH.
 
 It was disclosed after a developer investigated unexpected behavior. Andres Freund, a PostgreSQL developer at Microsoft, noticed SSH logins on Debian unstable using unusual CPU (a failed login went from about 0.3 s to 0.8 s) and Valgrind errors, investigated, and disclosed it on 29 March 2024. The backdoored versions had reached Fedora Rawhide, Fedora 40 beta and Debian unstable and testing, primarily in prerelease distributions at disclosure; exact affected distributions and build conditions must be checked against their advisories.
 
@@ -101,6 +101,19 @@ pip install --require-hashes \
   -r requirements.txt
 ```
 
+The check pip runs in this mode is a single comparison per downloaded file. A hash function turns any file into a short fixed-length fingerprint, and changing even one byte changes the fingerprint completely:
+
+```formula
+H(f) = h_lock
+where
+H: the SHA-256 hash function: it turns a file of any size into a 256-bit fingerprint, written as 64 hexadecimal characters
+f: the package file pip has just downloaded (a wheel or source archive)
+h_lock: the SHA-256 fingerprint you recorded for that file in requirements.txt, after --hash=sha256:
+In words: pip installs a file only when the fingerprint of what it downloaded equals the fingerprint you recorded; a re-uploaded, swapped or tampered file gives a different fingerprint and the install stops.
+```
+
+For example, if someone replaces `requests-2.32.3` on a mirror with a modified copy, its *H(f)* no longer equals the recorded `70761c...` value and pip refuses it. The comparison only proves "same bytes as before". If the file you recorded was already malicious, its *H(f)* matches perfectly.
+
 A **software bill of materials (SBOM)** is a machine-readable component inventory whose completeness depends on generation scope and metadata quality, in **SPDX** or **CycloneDX** format. US Executive Order 14028 (May 2021) pushed SBOMs into federal procurement. With SBOMs stored per release, "where do we run Log4j?" becomes a query:
 
 ```python
@@ -120,7 +133,7 @@ def check(path):
 This simplified CycloneDX-style inventory lists candidate components, not vulnerability verdicts. Match full package identity and version against the applicable advisory, including backport branches and prereleases; then assess configuration/reachability. A blanket `<2.17.1` check would misclassify backported fixes and later advisories.
 
 > [!note] Content gap
-> Universal inventory-response times and relative incident-frequency claims are omitted because no comparable measurement dataset was available.
+> Universal timings for answering inventory questions and relative incident-frequency claims are omitted because no comparable measurement dataset was available.
 
 ### Know it hasn't been tampered with: provenance and SLSA
 
@@ -160,7 +173,7 @@ How the incidents map:
 - Lockfiles with hashes and SBOMs answer "what exactly do we run?", which was the hard question during Log4Shell.
 - SLSA provenance and hardened builds address tampering between source and artefact; they do not stop a malicious trusted maintainer.
 - Signatures bind an artifact to a signing key/validated identity, not safety or independently verified build execution; enforce the expected signer and provenance policy.
-- Dependency confusion and typosquatting exploit how package managers resolve names; use a single trusted index and reserved names.
+- Dependency confusion and typosquatting exploit how package managers pick a package for a given name; use a single trusted index and reserved names.
 
 ## Further reading
 - [SLSA specification: levels](https://slsa.dev/spec/v1.2/)

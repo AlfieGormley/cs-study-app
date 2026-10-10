@@ -8,7 +8,20 @@ summary: What to log and how to keep it trustworthy, how detection rules and ale
 
 Prevention eventually fails. A zero-day, a phished password or a poisoned dependency gets someone in. What separates a minor incident from a catastrophe is usually **how quickly you notice and how well you respond**.
 
-Security people measure this as **dwell time**: how long an attacker is inside before being detected. Mandiant's M-Trends 2026 reports a 14-day global median for the 2025 investigations in its dataset, up from 11 days for 2024. These are incident-response sample statistics, not a measurement of every intrusion. Changes in detection, attacker behavior and case mix can affect the result; the trend alone does not prove one cause.
+Security people measure this as **dwell time**: how long an attacker is inside before being detected.
+
+```formula
+T_dwell = t_detect − t_in
+T_dwell = 14 − 0 = 14 days
+where
+T_dwell: dwell time, in days
+t_detect: when defenders first detect the intrusion (an alert, a user report or an outside notification), counted in days from the break-in
+t_in: when the attacker first got in, here day 0; usually only worked out afterwards from logs and forensics
+days: calendar days
+In words: dwell time is the gap between the break-in and its discovery; an attacker who got in on day 0 and was found on day 14 had 14 days inside.
+```
+
+Dwell time stops at detection: containment and recovery come later and are measured separately. Mandiant's M-Trends 2026 reports a 14-day global median for the 2025 investigations in its dataset, up from 11 days for 2024. These are incident-response sample statistics, not a measurement of every intrusion. Changes in detection, attacker behavior and case mix can affect the result; the trend alone does not prove one cause.
 
 ## What to log
 
@@ -59,13 +72,47 @@ A capable intruder deletes logs to cover their tracks (MITRE ATT&CK technique T1
 - **Ship logs off the host quickly** to a central store the host cannot modify.
 - Use **append-only or write-once** storage (for example S3 Object Lock) for critical audit trails.
 - **Synchronise clocks** (NTP); correlating events across systems with skewed clocks is miserable.
-- Set **retention** to match how long incidents take to find. With 7-day retention and a 10-day intrusion, early evidence may be lost even though later events remain. Retention should reflect investigation needs, risk, cost and data-protection requirements, not only a population median.
+- Set **log retention** to match how long incidents take to find. With 7-day retention and a 10-day intrusion, early evidence may be lost even though later events remain. Log retention should reflect investigation needs, risk, cost and data-protection requirements, not only a population median.
+
+How much of an intrusion has already aged out of your logs is a subtraction:
+
+```formula
+t_lost = T_dwell − R   when T_dwell > R
+t_lost = 10 − 7 = 3 days
+where
+t_lost: how many days at the start of the intrusion have already been deleted by the time you detect it, in days
+T_dwell: dwell time: how long the attacker was inside before detection, in days
+R: the retention period: how many days logs are kept before they are deleted
+days: calendar days
+In words: if attackers were inside longer than you keep logs, the earliest part of the intrusion, often the break-in itself, is gone; with 7-day retention and a 10-day intrusion, the first 3 days are lost.
+```
+
+This assumes logs are deleted exactly *R* days after they are written and nothing was archived elsewhere. If *T_dwell* is shorter than *R*, nothing is lost.
 
 ## From logs to detections
 
 A **SIEM** (security information and event management system, such as Splunk, Elastic Security, Microsoft Sentinel or Google SecOps) collects logs centrally, normalises them and runs **detection rules** over them.
 
 A simple in-memory rule alerts after more than 5 failed logins from one IP in a 60-second window. It assumes nondecreasing event timestamps per IP and a trusted clock. Production detection needs late-event handling, bounded/expired per-IP state, rate controls and deduplication; this sketch deliberately omits them.
+
+For each IP address, every new failed login moves a **sliding window** of the last 60 seconds forwards and counts what is inside it:
+
+```formula
+t_cut = t_now − W
+N > L
+t_cut = 50 − 60 = −10 s
+N = 6 > 5
+where
+t_cut: the cut-off: failed logins at or before this time drop out of the window, in seconds (s)
+t_now: the timestamp of the failed login that has just arrived, in seconds
+W: the window length, 60 s (WINDOW in the code)
+N: the number of failed logins from this IP after t_cut, up to and including t_now (len(q) in the code)
+L: the limit, 5 (LIMIT in the code)
+s: seconds
+In words: the rule fires when more than L failures from one IP fall inside the last W seconds; with failures at 0, 10, 20, 30, 40 and 50 s, the one at 50 s leaves all six in the window, and 6 > 5 raises an alert.
+```
+
+The code keeps each IP's recent timestamps in a queue, drops from the front everything at or before *t_cut*, then compares how many are left, *N*, with *L*:
 
 ```python
 from collections import defaultdict, deque
@@ -126,8 +173,27 @@ Keep detections healthy:
 
 - **Measure precision**: what fraction of alerts from each rule were real? Tune or delete rules that are always noise.
 - **Add context automatically**: asset owner, user's normal location, recent changes.
-- **Tier alerts**: page a human only for high-confidence, high-impact signals.
-- **Test detections**: replay attack techniques (for example with Atomic Red Team) and check the alert fires.
+- **Tier alerts**: page a human only for high-confidence, high-impact detections.
+- **Test detections**: re-run known attack techniques (for example with Atomic Red Team) and check the alert fires.
+
+**Precision** is a ratio, and it explains why noise is so hard to escape. Real attacks are rare compared with normal activity (a low **base rate**), so a rule that is wrong on only a tiny fraction of harmless events can still produce mostly false alarms. An illustrative calculation with made-up numbers: 1,000,000 harmless logins a day, 2 real attacks, and a rule that catches both attacks but misfires on 0.1 % of harmless logins:
+
+```formula
+P = TP / (TP + FP)
+FP = FPR × N_ok
+FP = 0.001 × 1000000 = 1000
+P = 2 / (2 + 1000) ≈ 0.002
+where
+P: precision: the fraction of a rule's alerts that were real, from 0 (all noise) to 1 (all real); 0.002 is 0.2 %
+TP: true positives: alerts that fired on real malicious activity; here 2, assuming there were 2 real attacks that day and the rule caught both
+FP: false positives: alerts that fired on harmless activity
+FPR: false-positive rate: the fraction of harmless events the rule wrongly alerts on; here 0.001, which is 1 in 1,000
+N_ok: the number of harmless events the rule examines; here 1,000,000 logins a day
+≈: approximately equal to (the result is rounded)
+In words: a rule that misfires on only 1 harmless login in 1,000 still raises about 1,000 false alerts a day against a million logins, so even if it catches both real attacks only about 2 alerts in 1,000 are real.
+```
+
+To raise *P*, cut *FP*: narrow the rule, add context so it fires only on unusual combinations, or tier it so low-confidence matches enrich other alerts instead of paging someone. Catching more real attacks (*TP*) barely helps while *FP* is in the thousands.
 
 ## Case study: how SolarWinds was finally caught
 
@@ -159,7 +225,7 @@ ${${env:X:-j}ndi:...}
 
 These examples illustrate nested/default lookups that can construct `jndi` without containing the literal `${jndi:` pattern in raw input. The environment-default example assumes X is absent; runtime configuration matters. Cloudflare's advice was to treat *any* `${` in input as suspicious. Better still were detections higher up the pyramid:
 
-- **Egress**: unexpected outbound LDAP/RMI connections may be useful signals. Restrict unnecessary egress according to the application baseline; some applications legitimately use these protocols, and these blocks do not cover every exploit/exfiltration path.
+- **Egress**: unexpected outbound LDAP/RMI connections may be useful warning signs. Restrict unnecessary egress according to the application baseline; some applications legitimately use these protocols, and these blocks do not cover every exploit/exfiltration path.
 - **Process behaviour**: a Java process spawning `sh`, `curl` or `powershell`.
 - **DNS**: lookups of unusual subdomains from servers (many scanners used DNS callbacks).
 
@@ -167,7 +233,7 @@ And remember the payload can arrive through *any* logged field, not just HTTP: u
 
 ## Incident response
 
-The following teaching diagram is the older **NIST SP 800-61 Revision 2** four-phase model. Revision 3 (April 2025) supersedes it and integrates incident response with CSF 2.0, including Govern/Identify/Protect preparation and Detect/Respond/Recover activities plus continual improvement:
+The following teaching diagram is the older **NIST SP 800-61 Revision 2** four-phase model. NIST SP 800-61 Revision 3 (April 2025) supersedes it and integrates incident response with CSF 2.0, including Govern/Identify/Protect preparation and Detect/Respond/Recover activities plus continual improvement:
 
 ```
  Preparation
@@ -185,7 +251,7 @@ The following teaching diagram is the older **NIST SP 800-61 Revision 2** four-p
 
 ### Preparation
 
-Done before anything happens: an IR plan, named roles (incident commander, communications, scribe), on-call rotas, contact lists for legal and regulators, logging already in place, and **practice** through tabletop exercises.
+Done before anything happens: an IR plan, named roles (incident commander, communications, scribe), on-call rotas, contact lists for legal and regulators, logging already set up, and **practice** through tabletop exercises.
 
 ### Detection and analysis
 
@@ -195,12 +261,12 @@ Confirm it is real, establish scope (which systems, accounts, data) and severity
 
 **Containment** stops the bleeding: isolate hosts, disable accounts, revoke credentials, block domains. There is a real tension:
 
-- Contain too early and noisily, and a sophisticated attacker realises they are seen, changes tactics or triggers destructive actions.
+- Contain prematurely and noisily, and a sophisticated attacker realises they are seen, changes tactics or triggers destructive actions.
 - Contain too late, and they keep stealing data.
 
-For a commodity ransomware infection, contain immediately. For a stealthy, persistent intruder, teams sometimes scope quietly first, then evict everywhere at once.
+For a commodity ransomware infection, contain immediately. For a stealthy, persistent intruder, teams sometimes scope quietly first, then evict the attacker everywhere at once.
 
-**Preserve evidence** before you wipe anything. Collect in **order of volatility** (RFC 3227): prioritise the most volatile relevant evidence, such as registers/cache and memory/network/process state, before less volatile storage. The order depends on the system, including temporary filesystems and remote logs. Rebooting usually destroys volatile evidence and may leave persistent malware intact. Balance evidence collection with urgent containment and safety; do not delay essential protective action merely to preserve evidence.
+**Preserve evidence** before you wipe anything. Collect in **order of volatility** (RFC 3227): prioritise the most volatile relevant evidence, such as CPU registers and caches, memory contents, network connections and running processes, before less volatile storage. The order depends on the system, including temporary filesystems and remote logs. Rebooting usually destroys volatile evidence and may leave persistent malware intact. Balance evidence collection with urgent containment and safety; do not delay essential protective action merely to preserve evidence.
 
 **Eradication** removes the attacker's footholds: malware, backdoor accounts, persistence mechanisms, stolen credentials (rotate them all). **Recovery** restores service, often by rebuilding from known-good images rather than cleaning, and monitors closely for return.
 

@@ -1,21 +1,14 @@
-# ACTIVE: formula and glossary retrofit (started 8 October 2026)
+# Formula and glossary retrofit: COMPLETE (8–11 October 2026)
 
-The user asked for three things:
-1. Glossary coverage: "too many is better than too little".
-2. A clearer quiz answer reveal: done in commit 7ece17f.
-3. Every formula symbol explained, everywhere.
+All 76 modules have formula blocks and verified glossaries, and a final cross-subject reconciliation pass
+re-verified every subject. Full report: [formula-glossary-report.md](formula-glossary-report.md).
 
-Tooling is done: formula blocks, per-module glossary.json, the skills in .claude/skills, scripts/lint-formulas.mjs
-and scripts/glossary-coverage.mjs.
-
-The content sweep runs per module:
-- an author sub-agent briefed with docs/sweep-brief.md;
-- then an independent verifier briefed with docs/sweep-verify-brief.md, which re-stamps.
-
-Pilot: the six synth modules. Then the other 70.
-
-A module is done when `node scripts/build.mjs --check <dir>` passes and its verification.json has a "revisions"
-entry with scope "formula + glossary retrofit".
+- Mandatory skills: `.claude/skills/writing-formulas`, `.claude/skills/glossary-terms`.
+- Matching rules: `glossary-rules.js` (see the report for the full list).
+- Briefs used: `docs/sweep-brief.md` (author), `docs/sweep-verify-brief.md` (verifier).
+- Future edits follow docs/CONTENT_PROCESS.md as before. Every changed glossary term or lesson must be
+  re-verified and re-stamped.
+- Not yet pushed to GitHub Pages: push only once the user is happy.
 
 ---
 

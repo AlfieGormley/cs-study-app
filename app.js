@@ -29,7 +29,7 @@ const badge = (level) => `<span class="badge ${esc(level)}">${esc(level)}</span>
 
 // ---------- Persistent state (per device) ----------
 const STORE_KEY = 'csstudy.v1';
-const defaults = () => ({ done: {}, answers: {}, bookmarks: {}, pos: {}, last: null, days: [], fontScale: 1, session: null });
+const defaults = () => ({ done: {}, answers: {}, bookmarks: {}, pos: {}, last: null, days: [], fontScale: 1, session: null, practiceMode: 'all' });
 let state = defaults();
 try {
   state = { ...defaults(), ...JSON.parse(localStorage.getItem(STORE_KEY) || '{}') };
@@ -534,8 +534,9 @@ async function practiceView(params) {
   if (navigation !== navigationId) return;
   const all = Object.keys(questions).filter((key) => key.startsWith(`${sub.id}/`)).map((key) => qItem(key, questions));
 
-  const pool = () => all.filter(({ s, m, level, qid }) => {
+  const pool = () => all.filter(({ s, m, l, level, qid }) => {
     if (!p.mods.has(m) || !p.levels.has(level)) return false;
+    if (state.practiceMode === 'completed' && !state.done[lessonKey(s, l)]) return false;
     const a = state.answers[qKey(s, qid)];
     if (p.filter === 'new') return !a;
     if (p.filter === 'wrong') return a && !a.last;
@@ -544,10 +545,15 @@ async function practiceView(params) {
   const chip = (group, val, label, on) => `<button class="chip" data-g="${group}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
   const draw = () => {
     const n = pool().length;
+    const completedOnly = state.practiceMode === 'completed';
+    const completed = subjectProgress(sub).done;
     view.innerHTML = `
       <h1 class="large-title">Practice</h1>
       <p class="subtitle">Build a custom quiz from any mix of topics and levels.</p>
       ${idx.subjects.length > 1 ? `<div class="section-label"><label for="practice-subject">Subject</label></div><select class="subject-select" id="practice-subject">${idx.subjects.map((s) => `<option value="${esc(s.id)}" ${s.id === sub.id ? 'selected' : ''}>${esc(s.title)}</option>`).join('')}</select>` : ''}
+      <div class="section-label" id="practice-mode-label">Practice mode</div>
+      <div class="chips" role="group" aria-labelledby="practice-mode-label" aria-describedby="practice-mode-help">${chip('mode', 'all', 'All lessons', !completedOnly)}${chip('mode', 'completed', 'Completed lessons only', completedOnly)}</div>
+      <p class="quiz-hint" id="practice-mode-help">${completedOnly ? `${plural(completed, 'completed lesson')} in this subject. Only includes lessons you've marked complete.` : 'Choose from every lesson in this subject.'}</p>
       <div class="section-label">Modules <button class="chip" data-g="allmods" style="float:right;padding:2px 10px;font-size:12px">${p.mods.size === sub.modules.length ? 'None' : 'All'}</button></div>
       <div class="chips">${sub.modules.map((m) => chip('m', m.id, m.title, p.mods.has(m.id))).join('')}</div>
       <div class="section-label">Difficulty</div>
@@ -556,6 +562,7 @@ async function practiceView(params) {
       <div class="chips">${[['all', 'Any'], ['new', 'Not yet answered'], ['wrong', 'Got wrong last time']].map(([v, t]) => chip('f', v, t, p.filter === v)).join('')}</div>
       <div class="section-label">How many</div>
       <div class="chips">${[5, 10, 20, 50, 0].map((v) => chip('n', v, v ? String(v) : 'All', p.n === v)).join('')}</div>
+      ${completedOnly && !n ? `<div class="empty" role="status"><b>${completed ? 'No questions match your filters' : 'No completed lessons yet'}</b>${completed ? 'Try changing your modules, difficulty or question filter.' : `Open a lesson and tap “Mark as complete” to include its questions.<a class="btn secondary" href="#/s/${sub.id}">Browse lessons</a>`}</div>` : ''}
       <div class="sticky-actions"><button class="btn" id="go" ${n ? '' : 'disabled'}>Start · ${p.n && p.n < n ? p.n : n} of ${plural(n, 'question')}</button></div>`;
     $('#practice-subject')?.addEventListener('change', (event) => { location.hash = `#/practice?s=${event.target.value}`; });
     $$('.chip', view).forEach((c) => (c.onclick = () => {
@@ -564,6 +571,7 @@ async function practiceView(params) {
       if (g === 'allmods') p.mods = p.mods.size === sub.modules.length ? new Set() : new Set(sub.modules.map((m) => m.id));
       if (g === 'm') p.mods.has(v) ? p.mods.delete(v) : p.mods.add(v);
       if (g === 'l') p.levels.has(v) ? p.levels.delete(v) : p.levels.add(v);
+      if (g === 'mode') { state.practiceMode = v; save(); }
       if (g === 'f') p.filter = v;
       if (g === 'n') p.n = Number(v);
       draw();

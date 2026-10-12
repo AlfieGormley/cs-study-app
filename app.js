@@ -2,6 +2,7 @@ import { render as md, plainText } from './markdown.js';
 import { installExampleTools } from './examples.js';
 import { loadDiagrams } from './diagrams.js';
 import { installGlossary, searchGlossary, glossary } from './glossary.js';
+import { daysSinceCompletion, normalizeCompletionRange } from './practice.js';
 installGlossary();
 installExampleTools();
 
@@ -29,11 +30,12 @@ const badge = (level) => `<span class="badge ${esc(level)}">${esc(level)}</span>
 
 // ---------- Persistent state (per device) ----------
 const STORE_KEY = 'csstudy.v1';
-const defaults = () => ({ done: {}, answers: {}, bookmarks: {}, pos: {}, last: null, days: [], fontScale: 1, session: null, practiceMode: 'all' });
+const defaults = () => ({ done: {}, answers: {}, bookmarks: {}, pos: {}, last: null, days: [], fontScale: 1, session: null, practiceMode: 'all', practiceAge: normalizeCompletionRange() });
 let state = defaults();
 try {
   state = { ...defaults(), ...JSON.parse(localStorage.getItem(STORE_KEY) || '{}') };
 } catch { /* private mode or corrupted: start fresh */ }
+state.practiceAge = normalizeCompletionRange(state.practiceAge);
 let saveTimer;
 const save = (now = false) => {
   clearTimeout(saveTimer);
@@ -397,13 +399,14 @@ async function quizView(id) {
     const { picked, checked } = ses;
     const right = checked && isCorrect(q, picked);
     const marked = !!state.bookmarks[key];
+    const completionAge = daysSinceCompletion(state.done[lessonKey(item.s, item.l)]);
     view.innerHTML = `
       <div class="quiz-progress">
         <span class="meta">${ses.i + 1} / ${ses.items.length}</span>
         <div class="progress"><div style="width:${pct(ses.i + (checked ? 1 : 0), ses.items.length)}%"></div></div>
         <button class="icon-btn" id="bm" aria-pressed="${marked}" aria-label="Bookmark question">${bookmarkIcon(marked)}</button>
       </div>
-      <div class="row-meta" style="margin:0 0 10px">${badge(q.level)}<span class="meta">${esc(lesson.title)}</span></div>
+      <div class="row-meta" style="margin:0 0 10px">${badge(q.level)}<span class="meta">${esc(lesson.title)}</span>${completionAge === null ? '' : `<span class="meta quiz-completion-age">Completed ${completionAge ? `${plural(completionAge, 'day')} ago` : 'today'}</span>`}</div>
       <div class="quiz-prompt prose">${md(q.prompt, { subject: item.s })}</div>
       ${multi ? '<div class="quiz-hint">Select all that apply.</div>' : ''}
       ${checked ? verdict(right) : ''}
@@ -518,6 +521,7 @@ async function quizSummary(ses) {
 }
 
 // ---------- Practice ----------
+let onPracticeResume = null;
 async function practiceView(params) {
   const navigation = navigationId;
   const idx = await getIndex();
@@ -534,19 +538,68 @@ async function practiceView(params) {
   if (navigation !== navigationId) return;
   const all = Object.keys(questions).filter((key) => key.startsWith(`${sub.id}/`)).map((key) => qItem(key, questions));
 
-  const pool = () => all.filter(({ s, m, l, level, qid }) => {
+  const completedLessons = () => {
+    const now = Date.now();
+    return sub.modules.flatMap((m) => m.lessons).filter((lesson) => {
+      const completedAt = state.done[lessonKey(sub.id, lesson.id)];
+      if (!completedAt) return false;
+      if (!state.practiceAge.enabled) return true;
+      const age = daysSinceCompletion(completedAt, now);
+      return age !== null && age >= state.practiceAge.min && age <= state.practiceAge.max;
+    });
+  };
+  const pool = (eligible = new Set(completedLessons().map((lesson) => lesson.id))) => all.filter(({ s, m, l, level, qid }) => {
     if (!p.mods.has(m) || !p.levels.has(level)) return false;
-    if (state.practiceMode === 'completed' && !state.done[lessonKey(s, l)]) return false;
+    if (state.practiceMode === 'completed' && !eligible.has(l)) return false;
     const a = state.answers[qKey(s, qid)];
     if (p.filter === 'new') return !a;
     if (p.filter === 'wrong') return a && !a.last;
     return true;
   });
   const chip = (group, val, label, on) => `<button class="chip" data-g="${group}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
+  const ageLabel = () => state.practiceAge.min === state.practiceAge.max
+    ? `${plural(state.practiceAge.min, 'day')} ago`
+    : `${state.practiceAge.min}–${state.practiceAge.max} days ago`;
+  const sliderMax = () => Math.max(30, state.practiceAge.max, ...sub.modules.flatMap((m) => m.lessons)
+    .map((lesson) => daysSinceCompletion(state.done[lessonKey(sub.id, lesson.id)]) ?? 0));
+  const emptyMessage = (n, matching, completed) => {
+    if (state.practiceMode !== 'completed' || n) return '';
+    if (!completed) return `<div class="empty" role="status"><b>No completed lessons yet</b>Open a lesson and tap “Mark as complete” to include its questions.<a class="btn secondary" href="#/s/${sub.id}">Browse lessons</a></div>`;
+    if (state.practiceAge.enabled && !matching) return '<div class="empty" role="status"><b>No lessons in this day range</b>Widen the range or choose Any time to include more completed lessons.</div>';
+    return '<div class="empty" role="status"><b>No questions match your filters</b>Try changing your modules, difficulty or question filter.</div>';
+  };
+  // Update counts and paired controls in place: keep the slider under the user's
+  // finger and the number input focused while editing on a phone.
+  const updateAge = (editing) => {
+    const lessons = completedLessons();
+    const n = pool(new Set(lessons.map((lesson) => lesson.id))).length;
+    for (const bound of ['min', 'max']) {
+      const input = $(`#practice-age-${bound}`);
+      if (input && input !== editing) input.value = state.practiceAge[bound];
+      const slider = $(`#practice-age-${bound}-slider`);
+      if (slider) {
+        slider.max = sliderMax();
+        slider.value = state.practiceAge[bound];
+        slider.setAttribute('aria-valuetext', `${plural(state.practiceAge[bound], 'day')} ago`);
+      }
+    }
+    const summary = $('#practice-age-summary');
+    if (summary) summary.textContent = `${ageLabel()} · ${plural(lessons.length, 'lesson')}`;
+    $('#practice-empty').innerHTML = emptyMessage(n, lessons.length, subjectProgress(sub).done);
+    const go = $('#go');
+    go.disabled = !n;
+    go.textContent = `Start · ${p.n && p.n < n ? p.n : n} of ${plural(n, 'question')}`;
+  };
   const draw = () => {
+    const matching = completedLessons().length;
     const n = pool().length;
     const completedOnly = state.practiceMode === 'completed';
     const completed = subjectProgress(sub).done;
+    const age = state.practiceAge;
+    const ageControl = (bound, label) => `<div class="practice-age-control">
+      <div class="practice-age-input"><label for="practice-age-${bound}">${label}</label><span><input type="number" id="practice-age-${bound}" min="0" step="1" inputmode="numeric" value="${age[bound]}" aria-describedby="practice-age-help"> days ago</span></div>
+      <input type="range" id="practice-age-${bound}-slider" min="0" max="${sliderMax()}" step="1" value="${age[bound]}" aria-label="${label} days since completion" aria-valuetext="${plural(age[bound], 'day')} ago">
+    </div>`;
     view.innerHTML = `
       <h1 class="large-title">Practice</h1>
       <p class="subtitle">Build a custom quiz from any mix of topics and levels.</p>
@@ -554,6 +607,12 @@ async function practiceView(params) {
       <div class="section-label" id="practice-mode-label">Practice mode</div>
       <div class="chips" role="group" aria-labelledby="practice-mode-label" aria-describedby="practice-mode-help">${chip('mode', 'all', 'All lessons', !completedOnly)}${chip('mode', 'completed', 'Completed lessons only', completedOnly)}</div>
       <p class="quiz-hint" id="practice-mode-help">${completedOnly ? `${plural(completed, 'completed lesson')} in this subject. Only includes lessons you've marked complete.` : 'Choose from every lesson in this subject.'}</p>
+      ${completedOnly ? `<fieldset class="practice-age"><legend>Time since completion</legend>
+        <div class="chips">${chip('age', 'all', 'Any time', !age.enabled)}${chip('age', 'range', 'Day range', age.enabled)}</div>
+        ${age.enabled ? `<p class="practice-age-summary" id="practice-age-summary" role="status">${ageLabel()} · ${plural(matching, 'lesson')}</p>
+          ${ageControl('min', 'At least')}${ageControl('max', 'At most')}
+          <p class="meta" id="practice-age-help">0 means today. Both limits are included. Based on the day you marked each lesson complete.</p>` : ''}
+      </fieldset>` : ''}
       <div class="section-label">Modules <button class="chip" data-g="allmods" style="float:right;padding:2px 10px;font-size:12px">${p.mods.size === sub.modules.length ? 'None' : 'All'}</button></div>
       <div class="chips">${sub.modules.map((m) => chip('m', m.id, m.title, p.mods.has(m.id))).join('')}</div>
       <div class="section-label">Difficulty</div>
@@ -562,7 +621,7 @@ async function practiceView(params) {
       <div class="chips">${[['all', 'Any'], ['new', 'Not yet answered'], ['wrong', 'Got wrong last time']].map(([v, t]) => chip('f', v, t, p.filter === v)).join('')}</div>
       <div class="section-label">How many</div>
       <div class="chips">${[5, 10, 20, 50, 0].map((v) => chip('n', v, v ? String(v) : 'All', p.n === v)).join('')}</div>
-      ${completedOnly && !n ? `<div class="empty" role="status"><b>${completed ? 'No questions match your filters' : 'No completed lessons yet'}</b>${completed ? 'Try changing your modules, difficulty or question filter.' : `Open a lesson and tap “Mark as complete” to include its questions.<a class="btn secondary" href="#/s/${sub.id}">Browse lessons</a>`}</div>` : ''}
+      <div id="practice-empty">${emptyMessage(n, matching, completed)}</div>
       <div class="sticky-actions"><button class="btn" id="go" ${n ? '' : 'disabled'}>Start · ${p.n && p.n < n ? p.n : n} of ${plural(n, 'question')}</button></div>`;
     $('#practice-subject')?.addEventListener('change', (event) => { location.hash = `#/practice?s=${event.target.value}`; });
     $$('.chip', view).forEach((c) => (c.onclick = () => {
@@ -572,14 +631,31 @@ async function practiceView(params) {
       if (g === 'm') p.mods.has(v) ? p.mods.delete(v) : p.mods.add(v);
       if (g === 'l') p.levels.has(v) ? p.levels.delete(v) : p.levels.add(v);
       if (g === 'mode') { state.practiceMode = v; save(); }
+      if (g === 'age') { state.practiceAge.enabled = v === 'range'; save(); }
       if (g === 'f') p.filter = v;
       if (g === 'n') p.n = Number(v);
       draw();
       $$('.chip', view).find((el) => el.dataset.g === g && el.dataset.v === v)?.focus({ preventScroll: true });
     }));
+    for (const bound of ['min', 'max']) {
+      const input = $(`#practice-age-${bound}`), slider = $(`#practice-age-${bound}-slider`);
+      const change = (event) => {
+        const value = event.currentTarget.valueAsNumber;
+        if (!Number.isSafeInteger(value) || value < 0) return;
+        age[bound] = value;
+        if (bound === 'min') age.max = Math.max(age.max, value);
+        else age.min = Math.min(age.min, value);
+        save();
+        updateAge(event.currentTarget);
+      };
+      input?.addEventListener('input', change);
+      slider?.addEventListener('input', change);
+      input?.addEventListener('change', () => updateAge());
+    }
     $('#go').onclick = () => startSession(pool(), `${sub.title} practice`, '#/practice', { shuffle: true, limit: p.n });
   };
   draw();
+  onPracticeResume = () => updateAge(document.activeElement);
 }
 
 // ---------- Review ----------
@@ -777,6 +853,7 @@ async function route() {
   const navigation = ++navigationId;
   view.setAttribute('aria-busy', 'true');
   onScrollSave = null;
+  onPracticeResume = null;
   const [path, query = ''] = location.hash.replace(/^#/, '').split('?');
   scrollTo(0, 0);
   for (const [re, fn, wantsParams] of routes) {
@@ -801,6 +878,8 @@ async function route() {
 addEventListener('hashchange', route);
 addEventListener('pagehide', () => save(true));
 document.addEventListener('visibilitychange', () => document.hidden && save(true));
+addEventListener('focus', () => onPracticeResume?.());
+document.addEventListener('visibilitychange', () => { if (!document.hidden) onPracticeResume?.(); });
 route();
 
 // ---------- Offline support ----------

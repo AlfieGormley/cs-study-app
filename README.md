@@ -31,6 +31,18 @@ Wide diagrams scroll within their panel; Expand provides a larger view with zoom
 Run `node --test scripts/test-renderer.mjs scripts/test-diagrams.mjs` to check example escaping, source preservation and safe
 rendering inside quiz choices, diagram topology and all generated diagram definitions. See `CONTENT_SPEC.md` for diagram and sequential-flow authoring.
 
+## Practice completed lessons
+
+In **Practice**, choose **Completed lessons only** to use lessons you've marked complete in the selected
+subject. Under **Time since completion**, choose **Day range** and set the minimum and maximum with the
+sliders or day inputs. A range of **1–10** includes lessons completed yesterday through ten days ago;
+**0** includes today. Both limits are included, and age counts local calendar days from the saved
+completion date. **Any time** includes all completed lessons.
+
+The mode and day range are remembered on this device and work with the module, difficulty and answer
+filters. Answering a question does not reset its lesson's completion date. Unmarking and completing the
+lesson again gives it a new completion date.
+
 ## Live app
 
 **https://alfiegormley.github.io/cs-study-app/** is hosted on GitHub Pages from the `main` branch.

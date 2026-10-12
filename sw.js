@@ -1,9 +1,12 @@
-// Offline support: precache the app shell and all content, serve cache-first.
-importScripts('assets.js');
-const CACHE = `cs-study-${self.APP_VERSION}`;
+// VERSION is stamped by scripts/build.mjs. Every release changes this worker.
+const VERSION = 'bee531db09cc';
+importScripts(`assets.js?v=${VERSION}`);
+const CACHE = `cs-study-${VERSION}`;
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(self.APP_ASSETS)).then(() => self.skipWaiting()));
+  // A new release must not copy old files out of the browser's HTTP cache.
+  const requests = self.APP_ASSETS.map((url) => new Request(url, { cache: 'reload' }));
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(requests)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
@@ -18,9 +21,14 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   event.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((hit) => {
+    caches.open(CACHE).then((cache) => cache.match(req, { ignoreSearch: true })).then((hit) => {
       if (hit) return hit;
-      return fetch(req).catch(() => (req.mode === 'navigate' ? caches.match('./') : Response.error()));
+      return fetch(req).catch(() => (req.mode === 'navigate'
+        ? caches.open(CACHE).then((cache) => cache.match('./')) : Response.error()));
     })
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'APP_VERSION') event.ports[0]?.postMessage(VERSION);
 });

@@ -156,7 +156,7 @@ function toast(text, action, onAction) {
   t.hidden = false;
   if (action) $('button', t).onclick = () => { t.hidden = true; onAction(); };
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => { t.hidden = true; }, action ? 10000 : 2500);
+  if (!action) toast.timer = setTimeout(() => { t.hidden = true; }, 2500);
 }
 
 // ---------- Views ----------
@@ -702,6 +702,7 @@ async function settingsView() {
     <div class="section-label">App</div>
     <div class="list">
       <div class="setting"><span>Offline ready</span><b>${offline ? 'Yes' : 'Not yet'}</b></div>
+      <div class="setting"><a href="update.html">Get the latest app version ↗</a></div>
       <div class="setting"><span>Content</span><span class="meta">${idx.subjects.map((s) => `${esc(s.title)}: ${plural(subjectProgress(s).total, 'lesson')}`).join('<br>')}</span></div>
     </div>
     <p class="meta" style="margin:16px 4px">Your progress is stored only on this device.</p>`;
@@ -767,8 +768,22 @@ route();
 // ---------- Offline support ----------
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   const hadController = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW registration failed', e));
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch((e) => console.warn('SW registration failed', e));
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (hadController) toast('New content is available.', 'Reload', () => location.reload());
+  });
+  let lastUpdateCheck = Date.now();
+  const checkForUpdate = async (force = false) => {
+    if (!navigator.onLine || (!force && Date.now() - lastUpdateCheck < 60000)) return;
+    lastUpdateCheck = Date.now();
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (registration) await registration.update();
+      else await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+    } catch { /* Keep reading the cached app when the connection is unavailable. */ }
+  };
+  addEventListener('online', () => checkForUpdate(true));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkForUpdate();
   });
 }

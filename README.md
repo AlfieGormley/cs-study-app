@@ -35,8 +35,15 @@ rendering inside quiz choices, diagram topology and all generated diagram defini
 
 **https://alfiegormley.github.io/cs-study-app/** is hosted on GitHub Pages from the `main` branch.
 
-To publish changes: `node scripts/build.mjs`, then commit (including `data/` and `assets.js`) and `git push`.
+To publish changes: `node scripts/build.mjs`, then commit (including `data/`, `assets.js` and the stamped
+version in `sw.js`) and `git push`.
 Pages redeploys in a minute or two, and installed copies update the next time they're opened online.
+
+The update notice stays visible until you tap **Reload**. If a browser copy gets stuck on an older
+version, open [the update page](https://alfiegormley.github.io/cs-study-app/update.html) while online,
+or use **Settings → Get the latest app version**. It downloads a fresh offline cache and preserves
+the progress saved in that browser. Installed home-screen copies check for updates when reopened
+or brought back into the foreground while online.
 
 ## Put it on your iPhone
 

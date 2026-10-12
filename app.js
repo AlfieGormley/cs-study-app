@@ -166,37 +166,51 @@ async function homeView() {
   const st = answerStats();
   const totalLessons = idx.subjects.reduce((n, s) => n + subjectProgress(s).total, 0);
   const doneLessons = idx.subjects.reduce((n, s) => n + subjectProgress(s).done, 0);
-  let cont = '';
+  const firstSubject = idx.subjects[0];
+  const firstModule = firstSubject?.modules.find((m) => m.lessons.length);
+  let nextStep = firstModule ? { s: firstSubject, m: firstModule, l: firstModule.lessons[0], continuing: false } : null;
   if (state.last) {
     const [s, m, l] = state.last.split('/');
     const lm = findModuleMeta(s, m)?.lessons.find((x) => x.id === l);
-    if (lm) {
-      cont = `<div class="section-label">Continue</div>
-        <a class="tile" href="#/l/${s}/${m}/${l}">
-          <div class="row-meta" style="margin:0 0 6px">${badge(lm.level)}<span class="meta">${esc(findModuleMeta(s, m).title)}</span></div>
-          <h3>${esc(lm.title)}</h3><p>${esc(lm.summary)}</p></a>`;
-    }
+    if (lm) nextStep = { s: findSubject(s), m: findModuleMeta(s, m), l: lm, continuing: true };
   }
   view.innerHTML = `
-    <div class="page-heading"><div><div class="eyebrow">YOUR COMPUTER SCIENCE COMPANION</div><h1 class="large-title">Make room for learning.</h1>
-    <p class="subtitle">${streak() ? `🔥 ${plural(streak(), 'day')} streak` : 'Big ideas. Small steps. Build your understanding, one lesson at a time.'}</p></div><a class="settings-link" href="#/settings" aria-label="Settings">Settings <span aria-hidden="true">↗</span></a></div>
-    <div class="stats">
-      <div class="stat"><b>${doneLessons}<small style="font-size:13px;color:var(--muted)">/${totalLessons}</small></b><span>Lessons</span></div>
-      <div class="stat"><b>${st.answered}</b><span>Questions</span></div>
+    <div class="page-heading">
+      <div class="hero-copy"><div class="eyebrow"><span class="status-dot" aria-hidden="true"></span>${streak() ? `${plural(streak(), 'day')} streak. Keep it going.` : 'A little progress, every day'}</div>
+        <h1 class="large-title">Small steps.<br><span class="title-highlight">Big ideas.</span></h1>
+        <p class="subtitle">Your space to understand computer science.<br>Pick a subject. Get curious. Build something in your mind.</p>
+        <a class="hero-link" href="#subjects">Explore the subjects <span aria-hidden="true">↓</span></a>
+      </div>
+      ${nextStep ? `<aside class="next-step">
+        <div class="next-step-top"><span class="eyebrow">${nextStep.continuing ? 'Pick up where you left off' : 'A good place to start'}</span><span class="next-step-mark" aria-hidden="true">↗</span></div>
+        <div class="row-meta">${badge(nextStep.l.level)}<span class="meta">${nextStep.l.minutes} min read</span></div>
+        <h2>${esc(nextStep.l.title)}</h2><p>${esc(nextStep.s.title)} / ${esc(nextStep.m.title)}</p>
+        <a class="btn" href="#/l/${nextStep.s.id}/${nextStep.m.id}/${nextStep.l.id}">${nextStep.continuing ? 'Continue learning' : 'Start learning'} <span aria-hidden="true">→</span></a>
+      </aside>` : ''}
+    </div>
+    <div class="stats home-stats" aria-label="Your study progress">
+      <div class="stat"><b>${doneLessons}<small> / ${totalLessons}</small></b><span>Lessons completed</span></div>
+      <div class="stat"><b>${st.answered}</b><span>Questions answered</span></div>
       <div class="stat"><b>${st.attempts ? pct(st.right, st.attempts) + '%' : '–'}</b><span>Accuracy</span></div>
     </div>
-    ${cont}
-    <div class="section-label section-heading"><span>Explore subjects</span><span class="meta">${idx.subjects.length} subjects · ${totalLessons} lessons</span></div>
+    <div class="section-label section-heading" id="subjects"><h2>Find your next rabbit hole.</h2><span class="meta">${idx.subjects.length} subjects · ${totalLessons} lessons</span></div>
     <div class="subject-grid">
     ${idx.subjects.map((s, i) => {
       const p = subjectProgress(s);
-      return `<a class="tile subject-tile" href="#/s/${s.id}" style="--subject-hue:${[245,170,210,280,30,335,155,225,265,195,315][i % 11]}">
-        <div class="tile-top"><span class="subject-icon" aria-hidden="true">${['⌘','{ }','▤','⇄','▦','λ','◇','&lt;/&gt;','∀','≡','✧'][i % 11]}</span><span class="tile-arrow" aria-hidden="true">↗</span></div><h3>${esc(s.title)}</h3><p>${esc(s.description)}</p>
+      return `<a class="tile subject-tile" href="#/s/${s.id}" data-tone="${['lime', 'lavender', 'peach', 'blue'][i % 4]}">
+        <div class="tile-top"><span class="subject-icon" aria-hidden="true">${['⌘','{ }','▤','⇄','▦','λ','◇','&lt;/&gt;','∀','≡','✧'][i % 11]}</span><span class="tile-index" aria-hidden="true">${String(i + 1).padStart(2, '0')}</span><span class="tile-arrow" aria-hidden="true">↗</span></div><h3>${esc(s.title)}</h3><p>${esc(s.description)}</p>
         <div class="row-meta"><span class="meta">${plural(s.modules.length, 'module')} · ${plural(p.total, 'lesson')} · ${plural(p.questions, 'question')}</span></div>
         <div class="tile-footer"><span>${p.done ? `${p.done} completed` : 'Ready when you are'}</span><span>${pct(p.done, p.total)}%</span></div><div class="progress" aria-label="${pct(p.done, p.total)}% complete"><div style="width:${pct(p.done, p.total)}%"></div></div></a>`;
     }).join('')}</div>
     <div class="section-label">More</div>
     <div class="list"><a class="row" href="#/dictionary"><div class="row-main"><div class="row-title">Technical dictionary</div><div class="row-sub">${glossary.length} plain-language definitions across every subject</div></div>${chevron}</a><a class="row" href="#/settings"><div class="row-main"><div class="row-title">Settings</div><div class="row-sub">Text size, progress, offline</div></div>${chevron}</a></div>`;
+  $('.hero-link', view).addEventListener('click', (event) => {
+    event.preventDefault();
+    const heading = $('#subjects h2');
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+    heading.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  });
 }
 
 async function subjectView(s) {

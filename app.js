@@ -76,15 +76,10 @@ async function getModule(s, m) {
     modules.set(k, fetch(`data/${s}/${m}.json`).then((r) => {
       if (!r.ok) throw new Error(`Couldn't load ${k}`);
       return r.json();
-    }));
+    }).catch((error) => { modules.delete(k); throw error; }));
   }
   const [mod] = await Promise.all([modules.get(k), loadDiagrams()]);
   return mod;
-}
-async function getAllModules(subjectId) {
-  const idx = await getIndex();
-  const subs = subjectId ? idx.subjects.filter((s) => s.id === subjectId) : idx.subjects;
-  return Promise.all(subs.flatMap((s) => s.modules.map((m) => getModule(s.id, m.id))));
 }
 let searchIdx = null;
 let qIdx = null;
@@ -160,8 +155,11 @@ function toast(text, action, onAction) {
 }
 
 // ---------- Views ----------
+let navigationId = 0;
 async function homeView() {
+  const navigation = navigationId;
   const idx = await getIndex();
+  if (navigation !== navigationId) return;
   chrome({ title: 'Learn', tab: 'learn' });
   const st = answerStats();
   const totalLessons = idx.subjects.reduce((n, s) => n + subjectProgress(s).total, 0);
@@ -214,7 +212,9 @@ async function homeView() {
 }
 
 async function subjectView(s) {
+  const navigation = navigationId;
   await getIndex();
+  if (navigation !== navigationId) return;
   const sub = findSubject(s);
   if (!sub) return notFound();
   chrome({ title: sub.title, back: '#/', backLabel: 'Learn', tab: 'learn' });
@@ -239,7 +239,9 @@ async function subjectView(s) {
 }
 
 async function moduleView(s, m) {
+  const navigation = navigationId;
   await getIndex();
+  if (navigation !== navigationId) return;
   const sub = findSubject(s);
   const meta = findModuleMeta(s, m);
   if (!meta) return notFound();
@@ -262,14 +264,17 @@ async function moduleView(s, m) {
     <div class="btn-row"><button class="btn" id="quiz-mod">Quiz this module (${q})</button></div>`;
   $('#quiz-mod').onclick = async () => {
     const mod = await getModule(s, m);
+    if (navigation !== navigationId) return;
     startSession(allQuestions([mod]), `${meta.title} quiz`, `#/m/${s}/${m}`, { shuffle: true });
   };
 }
 
 async function lessonView(s, m, l) {
+  const navigation = navigationId;
   await getIndex();
   const meta = findModuleMeta(s, m);
   const mod = await getModule(s, m).catch(() => null);
+  if (navigation !== navigationId) return;
   const lesson = mod?.lessons.find((x) => x.id === l);
   if (!lesson) return notFound();
   const key = lessonKey(s, l);
@@ -354,7 +359,9 @@ function isCorrect(q, picked) {
 }
 
 async function quizView(id) {
+  const navigation = navigationId;
   await getIndex();
+  if (navigation !== navigationId) return;
   const ses = state.session;
   if (!ses || ses.id !== id) {
     location.replace('#/practice');
@@ -363,6 +370,7 @@ async function quizView(id) {
   if (ses.i >= ses.items.length) return quizSummary(ses);
   const item = ses.items[ses.i];
   const { lesson, q } = await resolveItem(item);
+  if (navigation !== navigationId) return;
   if (!q) { // content changed since the session was saved: skip it
     ses.items.splice(ses.i, 1);
     save();
@@ -476,6 +484,7 @@ async function quizView(id) {
 }
 
 async function quizSummary(ses) {
+  const navigation = navigationId;
   chrome({ title: 'Results', back: ses.back, backLabel: 'Done', focus: true });
   const total = ses.results.length;
   const right = ses.results.filter((r) => r.ok).length;
@@ -489,6 +498,7 @@ async function quizSummary(ses) {
     const { q, lesson } = await resolveItem(r);
     return q ? `<a class="row" href="#/l/${r.s}/${r.m}/${r.l}"><div class="row-main"><div class="row-title">${esc(plainText(q.prompt).slice(0, 110))}</div><div class="row-sub">${esc(lesson.title)}</div></div>${chevron}</a>` : '';
   }));
+  if (navigation !== navigationId) return;
   const C = 2 * Math.PI * 54;
   view.innerHTML = `
     <h1 class="large-title center">Session complete</h1>
@@ -509,18 +519,24 @@ async function quizSummary(ses) {
 
 // ---------- Practice ----------
 async function practiceView(params) {
+  const navigation = navigationId;
   const idx = await getIndex();
+  if (navigation !== navigationId) return;
   chrome({ title: 'Practice', tab: 'practice' });
   const p = practiceView.prefs ??= { s: idx.subjects[0]?.id, mods: null, levels: new Set(LEVELS), n: 10, filter: 'all' };
   if (params.get('s') && params.get('s') !== p.s) { p.s = params.get('s'); p.mods = null; }
   const sub = findSubject(p.s) ?? idx.subjects[0];
   if (!sub) return (view.innerHTML = '<div class="empty"><b>No content yet</b></div>');
   p.mods ??= new Set(sub.modules.map((m) => m.id));
-  const all = allQuestions(await getAllModules(sub.id));
+  // Configure a quiz from the small question index. Load only the current
+  // question's module once the session starts, rather than every lesson up front.
+  const questions = await getQIndex();
+  if (navigation !== navigationId) return;
+  const all = Object.keys(questions).filter((key) => key.startsWith(`${sub.id}/`)).map((key) => qItem(key, questions));
 
-  const pool = () => all.filter(({ s, m, q }) => {
-    if (!p.mods.has(m) || !p.levels.has(q.level)) return false;
-    const a = state.answers[qKey(s, q.id)];
+  const pool = () => all.filter(({ s, m, level, qid }) => {
+    if (!p.mods.has(m) || !p.levels.has(level)) return false;
+    const a = state.answers[qKey(s, qid)];
     if (p.filter === 'new') return !a;
     if (p.filter === 'wrong') return a && !a.last;
     return true;
@@ -560,8 +576,10 @@ async function practiceView(params) {
 
 // ---------- Review ----------
 async function reviewView() {
+  const navigation = navigationId;
   chrome({ title: 'Review', tab: 'review' });
   const idx = await getQIndex();
+  if (navigation !== navigationId) return;
   const keys = (obj) => Object.keys(obj).filter((k) => idx[k]);
   const mistakes = keys(state.answers).filter((k) => state.answers[k].last === false).map((k) => qItem(k, idx));
   const marked = keys(state.bookmarks).map((k) => qItem(k, idx));
@@ -593,14 +611,18 @@ async function reviewView() {
 // ---------- Search ----------
 let searchText = '';
 async function searchView() {
+  const navigation = navigationId;
   await getIndex();
+  if (navigation !== navigationId) return;
   chrome({ title: 'Search', tab: 'search' });
   view.innerHTML = `
     <h1 class="large-title">Search</h1>
     <p class="subtitle">Find an idea, revisit a concept, or discover something new. <a href="#/dictionary">Look up a technical term ↗</a></p>
     <label class="sr-only" for="q">Search lessons</label><input class="search-input" id="q" type="search" placeholder="e.g. consistent hashing, Raft, LRU" autocomplete="off" value="${esc(searchText)}">
     <p class="meta" id="search-status" role="status"></p><div id="results"></div>`;
-  const docs = (await getSearch()).map((d) => ({
+  const search = await getSearch();
+  if (navigation !== navigationId) return;
+  const docs = search.map((d) => ({
     s: d.s, m: d.m, modTitle: d.mt, text: d.x,
     l: { id: d.l, title: d.t, summary: d.sum, level: d.lv },
     hay: `${d.t} ${d.sum} ${d.x}`.toLowerCase(),
@@ -681,7 +703,9 @@ function dictionaryView(params) {
 
 // ---------- Settings ----------
 async function settingsView() {
+  const navigation = navigationId;
   const idx = await getIndex();
+  if (navigation !== navigationId) return;
   chrome({ title: 'Settings', back: '#/', backLabel: 'Learn', tab: 'learn' });
   const st = answerStats();
   const offline = 'serviceWorker' in navigator && navigator.serviceWorker.controller;
@@ -742,6 +766,8 @@ const routes = [
   [/^\/settings$/, settingsView],
 ];
 async function route() {
+  const navigation = ++navigationId;
+  view.setAttribute('aria-busy', 'true');
   onScrollSave = null;
   const [path, query = ''] = location.hash.replace(/^#/, '').split('?');
   scrollTo(0, 0);
@@ -751,13 +777,17 @@ async function route() {
       try {
         await (wantsParams ? fn(new URLSearchParams(query)) : fn(...m.slice(1)));
       } catch (e) {
+        if (navigation !== navigationId) return;
         console.error(e);
         view.innerHTML = `<div class="empty"><b>Something went wrong</b>${esc(e.message)}<br><br>If you're offline, open the app once with a connection so it can save the content.</div>`;
       }
+      if (navigation !== navigationId) return;
+      view.setAttribute('aria-busy', 'false');
       view.focus({ preventScroll: true });
       return;
     }
   }
+  view.setAttribute('aria-busy', 'false');
   notFound();
 }
 addEventListener('hashchange', route);

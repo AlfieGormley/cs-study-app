@@ -43,3 +43,31 @@ test('short aliases are scoped to their subject; acronyms match exact case', asy
   assert.ok(fallsBack(t, 'tree depth') && fallsBack(t, 'low-pass') && !fallsBack(t, 'depth') && !fallsBack({}, 'tree depth'));
   assert.equal(aliasKey('Sample Rate'), aliasKey('sample rate'));
 });
+
+test('word buckets preserve literal punctuation, longest phrases and Unicode boundaries', () => {
+  for (const [subject, label] of [
+    ['system-design', 'binary search tree'],
+    ['system-design', 'HTTP/2'],
+    ['system-design', 'cache-aside'],
+    ['synth', 'm/s'],
+    ['synth', 'I²S'],
+    ['synth', 'dB'],
+  ]) {
+    const entry = exactTerm(label, subject);
+    assert.ok(entry, label + ' must exist in the dictionary');
+    assert.match(inline(`(${label}), ${label}.`, { subject }), new RegExp(`data-term="${entry.id}"`));
+  }
+  assert.doesNotMatch(inline('1-Redis αRedis Redis_thing Redisish'), /data-term=/);
+  assert.doesNotMatch(inline('rest and http/2', { subject: 'system-design' }), /data-term=/);
+});
+
+test('dictionary searches retain alphabetical order without exposing their cached order', () => {
+  const entries = searchGlossary();
+  const firstId = entries[0].id;
+  entries.reverse();
+  assert.equal(searchGlossary()[0].id, firstId);
+  const compare = new Intl.Collator('en', { sensitivity: 'base' }).compare;
+  const results = searchGlossary('cache');
+  assert.ok(results.length > 1);
+  assert.ok(results.every((entry, i) => !i || compare(results[i - 1].term, entry.term) <= 0));
+});

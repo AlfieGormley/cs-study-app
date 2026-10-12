@@ -5,7 +5,6 @@ import { aliasKey, fallsBack } from './glossary-rules.js';
 export const glossary = [...core, ...moduleTerms];
 
 const esc = (text) => String(text).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const regexEscape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const byId = new Map();
 const coreMap = new Map();         // alias key -> { entry, alias }: core terms, every subject
 const bySubject = new Map();       // subject id -> Map(alias key -> { entry, alias })
@@ -23,14 +22,31 @@ for (const entry of glossary) {
   }
 }
 const lookups = (subject) => [bySubject.get(subject), coreMap, fallback].filter(Boolean);
-// One matcher per subject, longest alias first.
-const patterns = new Map();
-const patternFor = (subject = '') => {
-  if (!patterns.has(subject)) {
-    const words = [...new Set(lookups(subject).flatMap((m) => [...m.values()].map((v) => v.alias.toLowerCase())))];
-    patterns.set(subject, new RegExp(`(?<![\\p{L}\\p{N}_])(?<!\\p{N}-)(?:${words.sort((a,b)=>b.length-a.length).map(regexEscape).join('|')})(?![\\p{L}\\p{N}_])`, 'giu'));
+// Match only aliases sharing the next word. A single giant expression containing
+// every glossary phrase takes seconds to compile on a phone's first lesson.
+const firstToken = /^[\p{L}\p{N}_]+|[^\p{L}\p{N}_]/u;
+const candidateStarts = /(?<![\p{L}\p{N}_])(?<!\p{N}-)(?:[\p{L}\p{N}_]+|[^\p{L}\p{N}_])/gu;
+const wordCharacter = /[\p{L}\p{N}_]/u;
+const matchers = new Map();
+const matcherFor = (subject) => {
+  if (!matchers.has(subject)) {
+    const buckets = new Map();
+    const words = new Set();
+    for (const map of lookups(subject)) {
+      for (const { alias } of map.values()) {
+        const word = alias.toLowerCase();
+        if (words.has(word)) continue;
+        words.add(word);
+        const key = word.match(firstToken)?.[0];
+        if (!key) continue;
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(word);
+      }
+    }
+    for (const bucket of buckets.values()) bucket.sort((a, b) => b.length - a.length);
+    matchers.set(subject, buckets);
   }
-  return patterns.get(subject);
+  return matchers.get(subject);
 };
 export const getTerm = (id) => byId.get(id);
 export function exactTerm(text, subject = '') {
@@ -66,16 +82,37 @@ export function linkTerms(html, { interactive = true, terms = true, seen = null,
       return part;
     }
     if (protectedDepth) return part;
-    return part.replace(patternFor(subject), (match) => {
-      const entry = exactTerm(match, subject);
-      return entry && first(entry) ? termButton(entry, match) : match;
-    });
+    const buckets = matcherFor(subject);
+    let out = '', end = 0;
+    for (const candidate of part.matchAll(candidateStarts)) {
+      const start = candidate.index;
+      if (start < end) continue;
+      const aliases = buckets.get(candidate[0].toLowerCase());
+      if (!aliases) continue;
+      const alias = aliases.find((word) =>
+        part.slice(start, start + word.length).toLowerCase() === word &&
+        !wordCharacter.test(String.fromCodePoint(part.codePointAt(start + word.length) ?? 0)));
+      if (!alias) continue;
+      const label = part.slice(start, start + alias.length);
+      const entry = exactTerm(label, subject);
+      out += part.slice(end, start) + (entry && first(entry) ? termButton(entry, label) : label);
+      end = start + label.length;
+    }
+    return out + part.slice(end);
   }).join('');
 }
+const termOrder = new Intl.Collator('en', { sensitivity: 'base' });
+let dictionaryOrder;
+const searchText = new WeakMap();
 export function searchGlossary(query = '') {
   const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  return glossary.filter((entry) => words.every((word) => `${entry.term} ${entry.aliases.join(' ')} ${entry.definition} ${entry.category}`.toLowerCase().includes(word)))
-    .sort((a,b) => a.term.localeCompare(b.term, 'en', { sensitivity:'base' }));
+  dictionaryOrder ??= [...glossary].sort((a, b) => termOrder.compare(a.term, b.term));
+  if (!words.length) return [...dictionaryOrder];
+  return dictionaryOrder.filter((entry) => {
+    if (!searchText.has(entry)) searchText.set(entry, `${entry.term} ${entry.aliases.join(' ')} ${entry.definition} ${entry.category}`.toLowerCase());
+    const text = searchText.get(entry);
+    return words.every((word) => text.includes(word));
+  });
 }
 
 export function installGlossary() {

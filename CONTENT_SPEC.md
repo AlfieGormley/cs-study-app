@@ -181,5 +181,7 @@ buttons are not annotated. Don't add terms to `glossary-data.js`; it is the froz
 
 Follow `.claude/skills/writing-formulas/SKILL.md`. Every equation goes in a fenced `formula` block: equation lines,
 a `where` line, a `symbol: meaning` line for **every** symbol, unit and function used, then `In words: ...`. The
-build rejects undefined symbols and missing "In words" lines. Equation lines obey the 44/40 character limits;
-definitions wrap freely.
+build rejects undefined symbols, unmatched grouping brackets and missing "In words" lines. Assume the reader
+can read basic algebra: use implicit multiplication for unambiguous products, retain signs between numbers or
+ambiguous names, and bracket compound numerators, denominators, exponents and function arguments. Equation
+lines obey the 44/40 character limits; definitions wrap freely.

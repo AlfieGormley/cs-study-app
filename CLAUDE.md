@@ -26,7 +26,8 @@ If a safety check stops a writer, skip that lesson and record it; don't retry it
 ## Writing skills (mandatory for all content)
 
 - `.claude/skills/writing-formulas/SKILL.md`: every equation goes in a `formula` block that defines every
-  symbol, unit and function, with an "In words" line. Assume the reader knows no symbol.
+  symbol, unit and function, with an "In words" line. Assume basic algebra, use conventional implicit
+  multiplication where clear, and include every bracket needed to show the intended operation order.
 - `.claude/skills/glossary-terms/SKILL.md`: each module's `glossary.json` gets an entry for every term a
   beginner might not know. Too many is better than too few.
 

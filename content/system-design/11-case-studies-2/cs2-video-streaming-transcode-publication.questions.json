@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cs2-video-streaming-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 2-hour film takes 6 hours in the current serial encode pipeline. Which design exposes parallel work and individually retryable units to reduce completion time?",
+    "options": [
+      {
+        "text": "Give the job a much larger machine (e.g. 192 cores) and run ffmpeg with more threads",
+        "explanation": "A larger machine may help when the encoder scales, but it does not create separately retryable chunk tasks. Speedup depends on the codec, preset, hardware and threading; there is no universal 192-core ceiling."
+      },
+      {
+        "text": "Transcode on the fly at the CDN edge when a viewer first requests each segment",
+        "explanation": "Wrong as the main strategy. Edge transcoding adds latency to every cold request, repeats work on every edge node, and needs heavy CPU at thousands of sites. It's occasionally used for niche formats, but not as the primary pipeline."
+      },
+      {
+        "text": "Split the source into keyframe-aligned chunks, fan out one idempotent task per chunk and rendition to a worker pool, then stitch the outputs",
+        "explanation": "Split at independently decodable boundaries, align rendition segments and fan out tasks. Speedup depends on encoder scaling, compute capacity and scheduling/assembly overhead;10,800 tasks alone does not imply minutes."
+      },
+      {
+        "text": "Only produce a 240p rendition at first, because it encodes fastest",
+        "explanation": "Partially useful (quick low renditions improve time to first watch), but on its own it gives viewers poor quality and doesn't solve the 6-hour wait for the full ladder."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count the independent work units: chunks in the film times renditions per chunk.\n\n```formula\nN = (T / c) × R\nN = (7,200 s / 4 s) × 6\nN = 1,800 × 6 = 10,800 tasks\nwhere\nN: number of encoding tasks\nT: film length, in seconds (s); 2 hours is 7,200 s\nc: chunk length, in seconds (s); here 4\nR: renditions (quality levels); here 6\ns: seconds\ntasks: encoding jobs, the thing being counted\nIn words: 1,800 four-second chunks, each encoded at 6 quality levels, is 10,800 tasks that can run in parallel.\n```\n\nDividing 6 serial wall-hours by the task count is only an ideal equal-cost model, not a measured per-task runtime. Benchmark compute and I/O, align independently decodable boundaries, version task identities and publish complete outputs atomically before marking ready.",
+    "link": {
+      "title": "Adaptive bitrate streaming (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your transcoding pipeline runs on spot instances. A worker is reclaimed halfway through encoding chunk 412 of video `v9` at 720p, and the workflow engine retries the task on another machine. Which design choices make that retry safe? Select all that apply.",
+    "options": [
+      {
+        "text": "Publish a complete validated object or atomically select an immutable attempt output, rather than expose partial data.",
+        "explanation": "Correct. Readers (the packager) never see a partial segment, and an abandoned temporary object is harmless garbage to clean up later."
+      },
+      {
+        "text": "Each attempt writes to a fresh random filename, so two attempts never collide",
+        "explanation": "Fresh attempt keys avoid collisions but alone do not identify the winning output. They can be safe when combined with atomic winner selection, as in option A; deterministic names alone do not guarantee idempotence or fence stale writes."
+      },
+      {
+        "text": "The video is only marked `ready` after every task in the DAG has completed",
+        "explanation": "Correct. Marking ready early would publish a manifest pointing at a segment that doesn't exist yet. The DAG's final step is the single place that flips the status."
+      },
+      {
+        "text": "Workers increment a shared `chunks_done` counter when they finish",
+        "explanation": "Wrong. A counter increment is not idempotent. A task that finishes, crashes before acknowledging and is retried would count twice, and the video could be marked ready with a chunk missing."
+      },
+      {
+        "text": "Include source and encode-profile versions in the task key, and use conditional completion/versioned output publication.",
+        "explanation": "Versioned identities and atomic winning-result selection prevent stale attempts from replacing a newer encode. A fixed filename alone provides no such protection."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "An interrupted multipart upload is not a completed object. Retry the versioned task, validate its full output and conditionally publish the winning result. S3 has no generic filesystem-style atomic rename; immutable object keys plus an atomic metadata pointer are an option. Track completed task identities rather than blind increments, and publish a ready manifest only after all required outputs exist.",
+    "link": {
+      "title": "Adaptive bitrate streaming (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
+    }
+  }
+]

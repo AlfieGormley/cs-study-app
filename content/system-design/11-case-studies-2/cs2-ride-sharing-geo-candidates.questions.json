@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs2-ride-sharing-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You index drivers by geohash at precision 6 and answer 'nearby drivers' by looking only at the rider's own cell. Riders standing near cell boundaries report 'no cars available' while the map shows a car 50 m away. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "Query all cells intersecting the required search area, including neighbors across boundaries, then filter by actual distance.",
+        "explanation": "A 3×3 neighborhood suffices only when its geometry covers the desired radius at that latitude. Expand beyond immediate neighbors when necessary."
+      },
+      {
+        "text": "Geohash precision 6 is too coarse. Switch to precision 9",
+        "explanation": "Wrong. Finer cells make the boundary problem *more* frequent, because more riders sit near an edge. Precision isn't the root cause."
+      },
+      {
+        "text": "Geohash cells overlap, so drivers are being double-counted and then removed",
+        "explanation": "Wrong. Geohash cells tile the plane with no overlap. The issue is the opposite: there's a hard boundary that a single-cell lookup can't see past."
+      },
+      {
+        "text": "The geohash needs to be stored as an integer rather than a string",
+        "explanation": "Wrong. The representation (base-32 string or interleaved integer bits) doesn't change which points fall in which cell, so it doesn't fix boundary misses."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A driver 50 m across a boundary is invisible to a single-cell lookup. Cover every cell intersecting the desired metric search region, fetch candidates, then distance-filter. Geohash widths shrink with latitude, so the equatorial 1.2 km × 0.6 km dimensions do not prove coverage everywhere. H3 gridDisk supplies graph-distance neighbors; pentagons and projection distortion mean it is not an exact equal-distance circle.",
+    "link": {
+      "title": "Geohash (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Geohash"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Uber built H3 using hexagons rather than squares. Which advantages of hexagonal cells matter for surge pricing and supply/demand analysis? Select all that apply.",
+    "options": [
+      {
+        "text": "Regular planar hexagons have six equally spaced edge neighbors, which provides a useful approximation for local H3 smoothing.",
+        "explanation": "H3 approximates this geometry on a sphere; actual distances vary with projection distortion and near pentagons. It does not make every direction exactly equal."
+      },
+      {
+        "text": "k-ring queries (all cells within k steps) approximate a circle well",
+        "explanation": "Correct. A hexagonal k-ring is a reasonable approximation of a radius, which suits 'demand within about 1 km'. Square rings are squares, with corners much further away than their edges."
+      },
+      {
+        "text": "Hexagons nest perfectly, so each parent is exactly 7 children with no gaps or overlap",
+        "explanation": "Wrong. Hexagons *can't* be tiled exactly by smaller hexagons. H3's children only approximately cover their parent (with a rotation between resolutions). S2's square cells, by contrast, nest exactly."
+      },
+      {
+        "text": "Hexagonal cells eliminate the need for any neighbour lookups",
+        "explanation": "Wrong. You still need neighbours. Hexagons just make neighbour relationships uniform and cheap to compute."
+      },
+      {
+        "text": "Cells at a given resolution have roughly uniform area, so per-cell supply/demand ratios are comparable",
+        "explanation": "Correct. Neighbouring H3 cells at one resolution are very close in area, unlike lat/lng rectangles, which shrink towards the poles. (Across the whole globe, area at one resolution varies by up to about 2x, but within a city that hardly matters.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Hexagonal graph neighborhoods are useful for local smoothing and approximately circular candidate regions. H3 has projection distortion and twelve pentagons per resolution, so actual distances/areas vary. The roughly 2× global area ratio refers to hexagons only. Parent-child logical hierarchy is exact, while geometric containment is approximate.",
+    "link": {
+      "title": "H3 documentation",
+      "url": "https://h3geo.org/docs/"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Away from H3 pentagon distortions, approximate resolution 8 cells as regular hexagons with average area 0.74 km². For a graph radius of two rings, about how many cells and total area are covered?",
+    "options": [
+      {
+        "text": "9 cells, about 6.7 km²",
+        "explanation": "Wrong. 9 is the geohash answer (a cell plus its 8 square neighbours). A hexagon has 6 neighbours, and each ring adds 6 more cells than the ring inside it (6, then 12)."
+      },
+      {
+        "text": "13 cells, about 9.6 km²",
+        "explanation": "Wrong. This adds 6 for each ring (1 + 6 + 6) but forgets that each ring is longer than the last. Ring 1 has 6 cells and ring 2 has 12."
+      },
+      {
+        "text": "19 cells, about 14 km²",
+        "explanation": "Correct. The regular-hexagon model has one centre, six first-ring and twelve second-ring cells. Their stated average areas total about 14 km². Equal-area circle radius does not prove full metric-radius coverage."
+      },
+      {
+        "text": "25 cells, about 18.5 km²",
+        "explanation": "Wrong. 25 is a 5 × 5 square block. Two hexagonal rings around a centre cell hold 1 + 6 + 12 = 19 cells, fewer than a square block."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count the cells ring by ring. Ring 1 has 6 hexagons and each further ring has 6 more than the one inside it:\n\nCentre: one cell.\nFirst ring: six cells, seven including the centre.\nSecond ring: twelve cells, nineteen altogether.\n\nSumming the rings gives a general formula:\n\n```formula\nn = 1 + 3k(k + 1)\nn = 1 + 3 × 2 × 3 = 19 cells\nwhere\nn: total hexagons within k steps of the centre, including the centre cell\nk: the ring radius: how many cell-to-cell steps out from the centre you search; here 2\ncells: H3 hexagons\nIn words: the centre cell plus rings of 6, 12, 18 ... cells; two rings give 19 cells.\n```\n\n```formula\nA = n × a = 19 × 0.74 km² ≈ 14 km²\nr = √(A / π) = √(14 km² / 3.14) ≈ 2.1 km\nwhere\nA: total area covered, in square kilometres (km²)\nn: cells covered; here 19\na: average area of one resolution-8 H3 cell; about 0.74 km²\nr: radius of a circle with the same area, in kilometres (km)\nπ: pi, the ratio of a circle's circumference to its diameter, about 3.14\n√: square root\nkm: kilometres\nkm²: square kilometres\n≈: approximately equal to\nIn words: 19 cells cover about 14 square kilometres, about the same as a circle 2.1 km in radius.\n```\n\nThat's a sensible pickup search in a city. If it comes back empty, expand to three rings (37 cells, about 27 km²). Real H3 cells vary in size, so the area is approximate.",
+    "link": {
+      "title": "H3: hexagonal hierarchical geospatial indexing (docs)",
+      "url": "https://h3geo.org/docs/"
+    }
+  }
+]

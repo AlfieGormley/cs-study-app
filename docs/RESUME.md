@@ -54,12 +54,17 @@ author/independent-verifier process. Existing skipped-content decisions below re
   verified and stamped (38 units/97 questions/105 cards/207 glossary terms). Case studies 1 is independently
   verified and stamped (43 units/85
   questions/103 formula cards/183 glossary terms); its 12 compiled dictionary meaning probes pass.
-  Complexity's required formula-format follow-up is verified and published. Case studies 2 (42 units/101
-  questions) is under independent review; DSA linear and hashing structures are being authored in course order.
+  Complexity's required formula-format follow-up is verified and published. Case studies 2 is independently
+  verified and stamped (42 units/101 questions/105 cards/238 glossary terms). DSA linear and trees are being
+  authored; hashing (37 units/73 questions) is under independent review, continuing in course order.
   The user confirmed course order, with system design next. Remaining modules are queued.
 - Current reports: [short-lessons-report.md](short-lessons-report.md). Working queue and baseline snapshots:
   `/tmp/cs-study-short-lessons/queue.json`, `original-index.json`, `original-questions.json`; baseline commit
   `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`. The full original course has 482 lessons and 5,565 questions.
+- The user explicitly says to run until completion without further approval questions. Continue the authorised
+  content conversions and publications without task confirmations; runtime permission controls remain external.
+  DSA linear is now under independent review (32 units/67 questions); hashing is also under review, and trees
+  is finishing author checks (35 initial units/80 original questions).
 - Case studies 1 integration candidate: verified eleven-module full build `48856bef26a5`, 83 originals
   → 400 units with 993 questions. All mobile renders and eleven actual lesson/quiz routes pass; 61 Node
   tests pass, all original questions survive, and all 964 original files remain byte-identical.
@@ -70,6 +75,14 @@ author/independent-verifier process. Existing skipped-content decisions below re
   438 units with 1,090 questions. All mobile renders and twelve actual lesson/quiz routes pass; 61 Node tests,
   original question preservation and all 964 archival comparisons pass. All 18 compiled dictionary probes
   pass, including precise definitions, intentional absence and representative inline contexts.
+- Published eighth-batch commit `8f0be42`: Reliability. GitHub Pages succeeded and all four live
+  app/manifest/progress/index files match `0136066f140a`. Installed-app update, offline completion-age practice
+  and dictionary context checks pass.
+- Complete system-design candidate: all eleven modules now have 413 short units with 1,041 questions.
+  The thirteen-module verified full build `75de57f32921` has 99 originals → 480 units/1,191 questions;
+  all mobile renders, thirteen actual module lesson/quiz routes, 61 Node tests, original question preservation
+  and 964 archive comparisons pass. Case Studies II's twelve dictionary ID/definition/negative probes pass,
+  and earlier Reliability/Case Studies I meanings remain correct in the new compiled subject dictionary.
 - Root owns shared code and generated assets. `/tmp/cs-study-short-lessons/preview-verified.mjs` builds isolated
   previews from the last published release and overlays currently verified modules, allowing pending author
   files to stay out of releases. Previously converted modules retain their last verified units during follow-up

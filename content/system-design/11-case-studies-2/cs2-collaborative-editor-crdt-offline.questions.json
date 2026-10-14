@@ -1,0 +1,176 @@
+[
+  {
+    "id": "cs2-collaborative-editor-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do text CRDTs like Yjs or RGA avoid the need to transform operations?",
+    "options": [
+      {
+        "text": "Stable element identifiers and defined sequence-integration rules avoid rebasing numeric positions; concurrency and duplicate/causal handling follow the chosen CRDT.",
+        "explanation": "Stable IDs identify anchors across edits. Convergence additionally depends on the correct integration algorithm and its delivery requirements. Yjs binary updates accept duplicate and reordered delivery; this is not a blanket rule for every raw operation in every CRDT."
+      },
+      {
+        "text": "They lock the document so only one person edits at a time",
+        "explanation": "Wrong. CRDTs are designed for *concurrent* edits with no locking. Locking would destroy real-time collaboration."
+      },
+      {
+        "text": "They resolve every conflict with last-writer-wins on the whole document",
+        "explanation": "Wrong. Whole-document LWW would throw away one user's edits entirely. Sequence CRDTs merge at character granularity."
+      },
+      {
+        "text": "They send the full document on every keystroke",
+        "explanation": "Wrong. State-based syncing exists, but text CRDTs normally send small ops or deltas. Sending full documents doesn't remove the need to merge concurrent changes anyway."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the two representations of 'insert X after a':\n\n| | Op |\n|---|---|\n| OT | `insert(1, 'X')` (index) |\n| CRDT | `insert('X', id=(alice,7), after=(bob,1))` |\n\nIf Bob concurrently deletes `c`, its id `(bob,3)` is tombstoned, but `(bob,1)`, the `a`, is still there. Alice's insert applies the same way whether it arrives before or after Bob's delete.\n\nIf two users insert after the same anchor at once, every replica orders them by comparing ids (for example by counter, then client id), so everyone gets the same sequence. The price is metadata: ids and tombstones per character.",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q3",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're building a note-taking app where users often edit for hours on aeroplanes and then sync, sometimes directly between their own devices without a server. Which statements about choosing a CRDT here are true? Select all that apply.",
+    "options": [
+      {
+        "text": "CRDTs converge without a central sequencer, so device-to-device sync works naturally",
+        "explanation": "A correct CRDT can converge without a central sequencer when its delivery, duplicate handling and causal requirements hold. Yjs binary updates accept reordering and repetition; some operation-based CRDTs require causal delivery."
+      },
+      {
+        "text": "A CRDT can merge long-offline changes without OT-style rebasing, though merge cost depends on the algorithm and retained history.",
+        "explanation": "Missing updates can be exchanged using version/state information. Integration still has computation and memory costs; there is no universal linear-time or constant-cost guarantee for arbitrary offline histories."
+      },
+      {
+        "text": "Document size on disk will equal the visible text size",
+        "explanation": "Wrong. CRDTs keep per-element ids and tombstones for deleted content. Modern implementations compress this well, but heavily edited documents still carry noticeable overhead."
+      },
+      {
+        "text": "Semantic conflicts, like both users rewriting the same sentence, are resolved into what both intended",
+        "explanation": "Convergence does not guarantee either complete rewrite remains visible or that the merged text is meaningful. Algorithms can combine, hide or overwrite effects. Give users conflict visibility and recovery tools."
+      },
+      {
+        "text": "Removing anchor metadata needs an algorithm-specific safety or migration protocol; indefinitely offline replicas complicate that protocol.",
+        "explanation": "Structural references and deleted payload are different. Some implementations reclaim payload while keeping anchor information. Returning old replicas may need preserved metadata, a new snapshot or an explicit migration policy."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Peer-to-peer and offline requirements fit CRDT synchronization well. They do not categorically rule out all decentralized OT research. Evaluate merge cost, metadata, garbage collection and reconnect policies for the actual library. Convergence does not ensure a human-meaningful merged sentence, so provide conflict visibility and recovery UX.",
+    "link": {
+      "title": "CRDTs: the hard parts (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In a sequence CRDT such as RGA or Yjs, deleting a character leaves a tombstone. Which statements about tombstones are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A document's stored size can grow even while its visible text shrinks",
+        "explanation": "Correct. Deleting a paragraph removes it from view but leaves its tombstones in the structure."
+      },
+      {
+        "text": "They're needed because a concurrent insert may reference the deleted character's id as its anchor",
+        "explanation": "Correct. If Bob inserts 'after char X' while Alice deletes X, Bob's op must still find X's position when it arrives."
+      },
+      {
+        "text": "Structural tombstone removal must preserve references needed by delayed operations, using the chosen CRDT’s reclamation or migration protocol.",
+        "explanation": "Knowing a delete was seen is not by itself a universal proof that no pending operation can reference the anchor. Algorithms may keep compact structural metadata while reclaiming deleted payload; use their documented GC rules."
+      },
+      {
+        "text": "Tombstones make undo impossible",
+        "explanation": "Wrong. Undo is just another operation, for example re-inserting the text. Tombstones don't prevent it."
+      },
+      {
+        "text": "Tombstoned characters are shown to users in a greyed-out style",
+        "explanation": "Wrong. Tombstones are internal metadata. Users never see them. Suggestion mode is a separate product feature."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Replay the case that forces tombstones:\n\n```\ndoc: a b c   (ids a1 b1 c1)\nalice: delete b1\nbob:   insert 'X' after b1\n```\n\nIf Alice's replica *removed* b1, Bob's op arrives and asks 'after what?'. With a tombstone, b1 still sits between a1 and c1, invisible, so X goes there: `a X c`. Bob's replica, after receiving the delete, also shows `a X c`.\n\nWhen can b1 finally go? Only when no replica can still send an op anchored on it. A server-mediated system needs a documented epoch/migration protocol that prevents old clients from submitting references no longer represented; taking a snapshot alone is insufficient. On offline peer-to-peer devices it's hard, because a device might reappear after months.",
+    "link": {
+      "title": "CRDTs: the hard parts (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Alice and Bob concurrently insert words at the same point while offline. After every update is delivered, all replicas show an interleaving such as cdaotg instead of either intact word ordering. What happened?",
+    "options": [
+      {
+        "text": "The CRDT failed to converge",
+        "explanation": "Wrong. Every replica shows the same text, so it *did* converge. Convergence doesn't guarantee a sensible result."
+      },
+      {
+        "text": "The CRDT's ordering of concurrent inserts at the same anchor interleaved the two runs character by character. Algorithms such as Fugue are designed to keep each user's run together",
+        "explanation": "Correct. This is the interleaving anomaly. All replicas agree, but the merged text mixes the two words. Newer sequence CRDTs avoid it."
+      },
+      {
+        "text": "The network delivered characters out of order",
+        "explanation": "The premise says all required updates have arrived. Correct integration respects the algorithm’s causal and duplicate requirements; a deterministic but interleaving merge can converge while producing poor text."
+      },
+      {
+        "text": "OT would have produced the same result, so it's unavoidable",
+        "explanation": "Wrong. The anomaly depends on the algorithm. Some designs, whether OT- or CRDT-based, keep runs together and some don't."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Why it can happen. Both users insert after the same anchor P:\n\n```\nalice: c(a1) a(a2) t(a3)\nbob:   d(b1) o(b2) g(b3)\n```\n\nIf the tie-break rule effectively orders each character by comparing ids *independently*, alternate characters can win, giving c d a o t g.\n\nWhat users want is either `catdog` or `dogcat` (with a separator only if one was actually inserted): the order between the two runs doesn't matter, but each run should stay intact. Fugue (Weidner and Kleppmann) was designed to minimise this interleaving.\n\nThe lesson: **convergence is necessary but not sufficient**. 'Same everywhere' and 'what users meant' are different properties.",
+    "link": {
+      "title": "CRDTs: the hard parts (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Erin takes a laptop on a flight with edit access to a document. While she's offline, the owner downgrades her to viewer. She lands and her client reconnects with 300 queued ops. Which server behaviours are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Accept them without checks, since the CRDT guarantees convergence",
+        "explanation": "Wrong. Convergence is about consistency between replicas. It says nothing about who's allowed to write."
+      },
+      {
+        "text": "Check authorisation for each op at reconnect time, against current permissions",
+        "explanation": "Correct. The server is the enforcement point. The client's cached view of its permissions is stale."
+      },
+      {
+        "text": "Deduplicate by `client_id + seq` in case some ops were sent before the flight",
+        "explanation": "Correct. Some of the 300 may already have been committed before she lost connection. Idempotent submission keeps resends safe, whatever the permission outcome."
+      },
+      {
+        "text": "Accept them, because she had edit rights when she made them",
+        "explanation": "Wrong. The device's clock and local permission state can't be trusted. Accepting would let anyone with stale access keep editing by staying offline."
+      },
+      {
+        "text": "Reject the ops and tell the client, so the UI can explain why and let her copy her text elsewhere",
+        "explanation": "Correct. Silently discarding work is hostile. A clear rejection lets the product offer something like 'save as a copy' or 'suggest these changes'."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Authenticate the sender and verify current document access. Check operation IDs within the document/client identity scope, validating duplicate payload identity rather than trusting a guessed ID. Previously committed edits are not applied again; new edits require current edit permission and atomic commit/deduplication. Rejected offline edits should remain recoverable locally, with a clear explanation.",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  }
+]

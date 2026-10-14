@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cs2-job-scheduler-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A tenant's webhook endpoint goes down for 10 minutes. 100,000 runs fail, and each is retried every 30 seconds exactly. When the endpoint recovers, it immediately falls over again. What retry policy fixes this?",
+    "options": [
+      {
+        "text": "Retry every 5 seconds instead, so runs complete sooner after recovery",
+        "explanation": "Wrong. Shorter fixed intervals make the synchronised waves bigger and more frequent."
+      },
+      {
+        "text": "Exponential backoff with random jitter, a cap on the delay, and a dead-letter queue after a maximum number of attempts",
+        "explanation": "Correct. Exponential growth reduces the total retry rate, jitter breaks up the synchronised waves, and the DLQ stops runs retrying forever."
+      },
+      {
+        "text": "Retry with exponential backoff but no jitter",
+        "explanation": "Better than fixed intervals, but runs that failed together still retry together at 1 s, 2 s, 4 s and so on. Recovery still meets synchronised spikes."
+      },
+      {
+        "text": "Disable retries for webhook targets",
+        "explanation": "Wrong. That breaks the at-least-once promise: every run during the outage is silently lost."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Why fixed 30 s retries hurt:\n\n```\n100,000 runs fail within seconds\n-> 100,000 retries at t+30 s\n-> 100,000 retries at t+60 s ...\n```\n\nThe endpoint sees a wall of 100,000 requests every 30 s. When it recovers, the next wall knocks it over again.\n\nWith 'full jitter', each retry waits a random time between zero and an exponentially growing ceiling. Assume a 1 s base delay and a 600 s cap:\n\n```formula\nd = random(0, min(c, b × 2^a))\nd_1 = random(0, min(600, 1 × 2^1))\nd_1 = random(0, 2) s\nwhere\nd: the wait before this retry, in seconds (s)\nd_1: the wait before attempt 1\nrandom(x, y): a number chosen uniformly at random between x and y, so retries spread evenly\nmin(x, y): the smaller of x and y\nc: the cap, the longest wait allowed; here 600 s (10 minutes)\nb: the base delay; the question does not give one, so assume 1 s (this matches the 0–2 s window for attempt 1 in the table below)\na: the attempt number (1, 2, 3, ...)\n2^a: a copies of 2 multiplied together, so the ceiling doubles every attempt\ns: seconds\nIn words: each retry waits a random time up to a ceiling that doubles each attempt, until the ceiling hits the cap.\n```\n\n| Attempt | Window |\n|---|---|\n| 1 | 0–2 s |\n| 4 | 0–16 s |\n| 8 | 0–256 s |\n| 10+ | 0–600 s (cap) |\n\nAt attempt 10 the uncapped ceiling would be 1,024 s, so the 600 s cap applies. By the time the endpoint recovers, the retries are spread over minutes, so it sees a few hundred a second rather than a wall. After, say, 12 attempts, park the run in the DLQ and alert the tenant.",
+    "link": {
+      "title": "Asynchronous task scheduling at Dropbox (Dropbox Tech)",
+      "url": "https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "One tenant schedules 1 M jobs for exactly midnight UTC. Other tenants' midnight jobs now start 20 minutes late. Which changes would stop one tenant starving the others? Select all that apply.",
+    "options": [
+      {
+        "text": "One bigger shared FIFO queue",
+        "explanation": "Wrong. A FIFO queue serves work in arrival order, so the million jobs that arrived first still sit in front of everyone else's."
+      },
+      {
+        "text": "Per-tenant quotas on firings per second and concurrent runs",
+        "explanation": "Correct. Quotas cap how much shared capacity one tenant can claim at once. The excess waits in that tenant's own backlog."
+      },
+      {
+        "text": "Dedicated worker pools for very heavy tenants or job types",
+        "explanation": "Correct. Isolation means the heavy tenant's load lands on capacity it pays for, not on the shared pool."
+      },
+      {
+        "text": "Raise the heavy tenant's priority so its jobs clear faster",
+        "explanation": "Wrong. That makes the starvation of other tenants worse, not better."
+      },
+      {
+        "text": "Per-tenant queues (or priority classes) drained by weighted fair queuing",
+        "explanation": "Correct. Workers take from each tenant's queue in turn, so a million-job backlog for one tenant doesn't sit in front of everyone else's work."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "How long the last job behind the backlog waits is the backlog divided by the drain rate:\n\n```formula\nT = Q / r\nT = 1,000,000 jobs / 50,000 per min\nT = 20 min\nwhere\nT: delay before the next tenant's job reaches the front, in minutes (min)\nQ: jobs ahead of it in the FIFO queue; here 1 million\nr: the rate workers drain the queue; here 50,000 jobs per minute\njobs: scheduled job runs\nmin: minutes\nIn words: draining a million jobs at 50,000 a minute takes 20 minutes, so everyone else's midnight jobs start 20 minutes late.\n```\n\nFair scheduling gives other tenants opportunities earlier, subject to weights, worker capacity and job duration. It does not guarantee starts within seconds; the large backlog may take longer than 20 minutes when others receive a share. Worker isolation still leaves shared databases and downstream services to protect.",
+    "link": {
+      "title": "Asynchronous task scheduling at Dropbox (Dropbox Tech)",
+      "url": "https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox"
+    }
+  }
+]

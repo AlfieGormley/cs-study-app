@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cs2-payment-system-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "During daily reconciliation, the PSP settlement report shows a £45 refund on payment `pay_789` that doesn't appear in your ledger. What is the most likely cause, and the right handling?",
+    "options": [
+      {
+        "text": "The PSP made an error. Ignore it",
+        "explanation": "A discrepancy needs investigation. The provider or report can also be wrong; do not ignore it or assume the report alone proves the refund occurred. Confirm against available authoritative transaction records."
+      },
+      {
+        "text": "Delete payment `pay_789` from the ledger so the totals match",
+        "explanation": "Wrong. Ledgers are append-only. Deleting entries destroys the audit trail and misstates history. Corrections are always new transactions."
+      },
+      {
+        "text": "Someone issued a refund directly in the PSP dashboard, or the refund webhook was lost. Raise a break, confirm the refund via the PSP API, and post the missing refund transaction (with a unique ref) to the ledger",
+        "explanation": "Correct. Out-of-band actions and missed webhooks are the classic reasons for breaks. Resolution is to verify against the source of truth and post a correcting, balanced transaction, which can be automated for this known pattern."
+      },
+      {
+        "text": "Update the original capture entry from £100 to £55",
+        "explanation": "Wrong. Changing a posted entry rewrites history, and it misrepresents what happened: a £100 capture, then a £45 refund. Post a separate refund transaction."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Match settlement references and investigate the missing refund through provider records. If confirmed, post a unique balanced refund transaction under the agreed allocation policy. For an unpaid driver with an 80/20 split and no fee refund:\n\n```formula\nd = 0.8 × 4,500 = 3,600\nr = 0.2 × 4,500 = 900\nΣ a_i = −4,500 + 3,600 + 900 = 0\nwhere\nd: the reduction in what the driver is owed, in pence (a debit, so positive)\nr: the reduction in platform revenue, in pence (a debit, so positive)\n4,500: the £45 refund in pence, leaving PSP clearing (a credit, so negative)\nΣ: sigma, \"add up all of\"\na_i: the signed amount of entry i, in pence\ni: counts through the three entries\nIn words: the £45 leaving the PSP is split 80/20 between the driver's share and the platform's, and the three entries cancel.\n```\n\nSo the signed entries are: PSP clearing minus 4,500 pence, driver payable plus 3,600 pence and revenue plus 900 pence. If the seller was already paid, a receivable or recovery process may be required instead. Dashboard provenance may require audit logs rather than a refund API field.",
+    "link": {
+      "title": "Double-entry bookkeeping (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Double-entry_bookkeeping"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "At 1,200 payments/s, every ledger transaction updates the materialised balance of `platform_revenue`. p99 latency spikes, and lock waits on that one row dominate. Which fix keeps the ledger correct?",
+    "options": [
+      {
+        "text": "Stop recording platform revenue in the ledger",
+        "explanation": "Wrong. Transactions would no longer balance, and revenue would be unauditable. Every movement must be recorded."
+      },
+      {
+        "text": "Update the balance asynchronously from a fire-and-forget queue without durable delivery or deduplication",
+        "explanation": "Wrong as stated. Fire-and-forget can lose or duplicate increments, so the balance drifts from the sum of entries. Asynchronous is fine only if it's idempotent and derived from the entries."
+      },
+      {
+        "text": "Split the hot account into N sub-accounts (`platform_revenue_00` to `_31`), pick one per transaction, and sum them for reporting. Or don't materialise its balance, and derive it from entries plus periodic snapshots",
+        "explanation": "Correct. Both remove the single-row hotspot while keeping every transaction balanced and every balance derivable from immutable entries. Contention per row drops about N times."
+      },
+      {
+        "text": "Lower the isolation level to READ UNCOMMITTED",
+        "explanation": "Wrong. Write-write conflicts on one row still serialise on its lock, and dirty reads of balances risk acting on uncommitted data."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Why it melts: if each transaction holds the `platform_revenue` row lock for a fixed time, the row can handle at most one update per lock time:\n\n```formula\nC = 1 / t\nC = 1 / 0.002 s = 500 updates/s\nwhere\nC: the most updates per second one row can take\nt: how long each transaction holds the row lock, in seconds (s); about 2 ms (milliseconds) = 0.002 s\ns: seconds\nupdates: balance-row updates\nIn words: a lock held for 2 ms allows at most 500 updates a second, well below the 1,200 needed.\n```\n\nFix 1, **sharded sub-accounts**: spread the updates over N rows.\n\n```formula\nu = p / N\nu = 1,200/s / 32 ≈ 38/s\nwhere\nu: updates per second each sub-account row receives\np: payments per second; 1,200\nN: number of sub-accounts; here 32\ns: seconds\n≈: approximately equal to\nIn words: 32 sub-accounts each take about 38 updates a second, far below the 500 a second ceiling.\n```\n\n- Reporting: `SUM(balance) WHERE parent='platform_revenue'`.\n\nFix 2, **no materialised balance for this account**:\n- The balance is the snapshot balance plus the sum of the later signed entries.\n- Snapshot every minute or hour with a background job.\n\nBoth keep the core invariants: entries are immutable, every transaction sums to zero, and any balance can be recomputed from entries. Purpose-built ledgers (TigerBeetle, for example) are designed around exactly this contention pattern.",
+    "link": {
+      "title": "Accounting for developers, part I (Modern Treasury)",
+      "url": "https://www.moderntreasury.com/journal/accounting-for-developers-part-i"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "At 10x scale the ledger is sharded by account id. A customer's account is on shard A and the seller's on shard B. You implement a transfer as two local transactions through a `clearing` account on each shard. The process crashes after the shard A transaction commits. What makes this safe?",
+    "options": [
+      {
+        "text": "Nothing. Without two-phase commit, money is lost whenever a crash happens between the steps",
+        "explanation": "Wrong. Money isn't lost: it's sitting visibly in the clearing account. What you need is a guarantee that step 2 eventually runs exactly once."
+      },
+      {
+        "text": "Shard A's transaction also writes an outbox row. A relay retries step 2 on shard B until it succeeds, and a UNIQUE ref_id on B makes repeats no-ops. A non-zero clearing balance shows money in flight",
+        "explanation": "The durable outbox and unique destination reference make retry recoverable and duplicate-resistant. They do not alone guarantee eventual success or safe compensation; destination cancellation/fencing must prevent a late forward step after reversal."
+      },
+      {
+        "text": "Run shard B's step first so the seller is credited before the customer is debited",
+        "explanation": "Wrong. Reordering just moves the crash window. A crash after B commits leaves the seller credited with money nobody was debited for."
+      },
+      {
+        "text": "Recompute all balances nightly, which hides the inconsistency",
+        "explanation": "Wrong. Recomputing balances from entries would faithfully reproduce the half-done transfer. The fix is to finish it, not hide it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "On shard A atomically post customer +2350, clearing_A -2350 and durable transfer intent. On B atomically post clearing_B +2350 and seller -2350 with a unique transfer reference. A recoverable relay retries; progress requires eventual recovery. Monitor individual transfers, since opposite in-flight balances can cancel in aggregate. Before compensating A, establish a durable terminal cancellation on B that rejects delayed attempts; otherwise a delayed credit could occur after the customer was refunded.",
+    "link": {
+      "title": "Accounting for developers, part I (Modern Treasury)",
+      "url": "https://www.moderntreasury.com/journal/accounting-for-developers-part-i"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs2-payment-system-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should a payment system store `amount: 2350, currency: \"GBP\"` rather than `amount: 23.50`?",
+    "options": [
+      {
+        "text": "Binary floating point can't represent most decimal fractions exactly, so sums drift (even adding small decimal fractions can show a binary rounding artefact). Integer minor units are exact, and the explicit currency says what a unit means",
+        "explanation": "Correct. Financial arithmetic must be exact and auditable. Integers in minor units (pence, cents), or a fixed-point decimal type, avoid rounding drift. Currency matters because minor units differ: JPY has 0 decimal places and BHD has 3."
+      },
+      {
+        "text": "Integers take less storage than floats",
+        "explanation": "Wrong. Both are typically 8 bytes. Storage isn't the reason. Exactness is."
+      },
+      {
+        "text": "JSON can't encode decimal numbers",
+        "explanation": "Wrong. JSON can encode 23.50, but most parsers turn it into an IEEE 754 double, which reintroduces the precision problem. That's a reason to avoid it, but JSON itself isn't the limitation."
+      },
+      {
+        "text": "PSPs reject decimal amounts for security reasons",
+        "explanation": "Wrong. Many PSP APIs (Stripe, for example) do take integer minor units, but for precision and unambiguity, not security."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "For JavaScript Number (binary64), `0.1 + 0.2` gives `0.30000000000000004`. Repeated naive addition of 0.01 can accumulate error; exact results depend on the summation algorithm. Integer pence give `10 + 20 = 30` exactly within the integer range. Exact decimal types are another option with explicit precision and rounding. Currency exponents and PSP-specific amount rules must be checked: GBP uses pence, JPY whole yen and BHD fils.",
+    "link": {
+      "title": "The Payment Intents API (Stripe docs)",
+      "url": "https://docs.stripe.com/payments/payment-intents"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client sends `POST /payments` with `Idempotency-Key: K1`. While the first request is still processing (waiting on the PSP), a retry with the same key arrives at another server. What should that server do?",
+    "options": [
+      {
+        "text": "Process it too. Idempotency only matters after the first request finishes",
+        "explanation": "Wrong. Concurrent duplicates are the most dangerous case. Two in-flight requests could each call the PSP and create two charges before either stores a result."
+      },
+      {
+        "text": "Generate a new key K2 and process it as a fresh payment",
+        "explanation": "A new key would identify a new logical operation and defeat deduplication. Servers may generate stable operation keys in other designs; the error here is generating a fresh key for a retry."
+      },
+      {
+        "text": "See that K1 exists in state `in_progress` and return 409 Conflict (or block until the first completes), without starting a second execution",
+        "explanation": "Correct. The key row is inserted atomically as `in_progress` before any side effect, so the duplicate can't start a parallel execution. Once the first completes, retries get the stored response."
+      },
+      {
+        "text": "Return the stored response, which will be empty",
+        "explanation": "Wrong. There's no stored response yet. Returning an empty or placeholder success would mislead the client into thinking the payment completed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Atomically insert a merchant-scoped key, operation scope and request fingerprint. On conflict, validate the fingerprint before returning a completed result or 409 for in-progress work. A recoverable lease must use atomic ownership changes and fencing/version checks; expiry alone does not prove the original worker stopped. Resume with the same provider operation key within its retention contract, otherwise reconcile.",
+    "link": {
+      "title": "Designing robust and predictable APIs with idempotency (Stripe)",
+      "url": "https://stripe.com/blog/idempotency"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Customers report occasional double charges after flaky mobile connections, even though your API supports `Idempotency-Key`. Reviewing the mobile client, you find it creates the key inside the HTTP retry wrapper. Which practices would fix or prevent this class of bug? Select all that apply.",
+    "options": [
+      {
+        "text": "Use the current timestamp in milliseconds as the key",
+        "explanation": "Wrong. Retries happen at different milliseconds, so each gets a new key, and two users can collide on the same millisecond."
+      },
+      {
+        "text": "Generate the key once per logical operation (one tap of Pay) and persist it on the device before the first attempt",
+        "explanation": "Correct. Retries, including after an app restart, then carry the same key, so the server returns the first result instead of charging again."
+      },
+      {
+        "text": "Generate a fresh key on each retry, so the server can tell attempts apart",
+        "explanation": "Wrong. That's the bug. Each attempt looks like a new payment to the server, so a retry after a lost response charges twice."
+      },
+      {
+        "text": "Have the server store a hash of the request body with the key and reject reuse with a different body",
+        "explanation": "Correct. That doesn't cause double charges, but it catches the opposite bug, one key reused for two different payments, which would otherwise silently return the wrong result."
+      },
+      {
+        "text": "Derive the PSP idempotency key deterministically from your payment id, e.g. `pay_123:authorise`",
+        "explanation": "A stable provider key protects the same operation within that provider's retention and parameter contract. Different partial refunds need distinct stable IDs, and ambiguous outcomes after expiry require reconciliation."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Trace the bug:\n\n```\ntap Pay\n  attempt 1: key A -> charged,\n     response lost\n  attempt 2: key B -> charged again\n```\n\nThe server did its job: A and B are different keys. The fix is on the client:\n\n```\ntap Pay: save one UUID for all retries\n  attempt 1: key K\n  attempt 2: key K -> stored result\n```\n\nThen layer the other defences:\n\n| Layer | Protects against |\n|---|---|\n| client key per operation | retries |\n| request hash check | key reuse bugs |\n| deterministic PSP key | server-side retries |\n| UNIQUE ledger ref_id | double posting |",
+    "link": {
+      "title": "Idempotent requests (Stripe API docs)",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs2-payment-system-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your orchestrator calls the PSP to authorise £80. After 30 s, the call times out with no response. What is the correct next step?",
+    "options": [
+      {
+        "text": "Mark the payment FAILED and tell the customer to try again",
+        "explanation": "Wrong. The PSP may have authorised the charge. If the customer retries (with a new payment and new key), they may be charged twice, and the first authorisation goes unaccounted for."
+      },
+      {
+        "text": "Immediately retry the PSP call with a fresh idempotency key",
+        "explanation": "Wrong. A fresh key tells the PSP it's a *new* operation, so if the first succeeded you've now authorised £160. Retries must reuse the same key."
+      },
+      {
+        "text": "Mark it UNKNOWN, then resolve it: retry with the *same* deterministic PSP idempotency key, or query the PSP for the payment by reference, or wait for the webhook. Only then move to AUTHORISED or FAILED",
+        "explanation": "A timeout leaves an ambiguous outcome. Reconcile by reference or retry only within the provider idempotency contract; keys can expire and outcomes may remain unresolved. Authorisation reserves funds and is not itself a settled charge."
+      },
+      {
+        "text": "Mark it AUTHORISED optimistically and fix it in reconciliation",
+        "explanation": "Wrong. You might ship goods or start a ride for an unpaid order. Reconciliation is a safety net, not the primary way to learn payment outcomes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The request may never have arrived, may have completed with a lost response, or may still be executing. Persist UNKNOWN. Use a status query/webhook and same-key retries only within the PSP contract. A provider may replay a stored error or remove old keys; unresolved cases need investigation rather than a fresh charge.",
+    "link": {
+      "title": "Idempotent requests (Stripe API docs)",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You process PSP webhooks. Which practices are necessary for correctness? Select all that apply.",
+    "options": [
+      {
+        "text": "Verify each webhook using the provider signature scheme, including any signed timestamp and replay tolerance.",
+        "explanation": "Use the provider SDK with the exact raw-body bytes and signed metadata. Timestamp checks limit old replays; event deduplication is also needed within the permitted time window."
+      },
+      {
+        "text": "Insert each event id into a table with a unique key, and skip events already processed",
+        "explanation": "A unique provider/event ID prevents repeated processing when coupled to durable recoverable work and atomic state changes. Finite delivery retries do not guarantee every event arrives."
+      },
+      {
+        "text": "Assume events arrive in the order the PSP generated them",
+        "explanation": "Delivery order is not guaranteed. A charge.refunded event can arrive before charge.captured. Store the evidence and apply valid transitions or retrieve current provider state/history."
+      },
+      {
+        "text": "Do all processing (ledger postings, emails) synchronously before returning 200",
+        "explanation": "Wrong. Slow handlers exceed the PSP's delivery timeout, causing redeliveries and retry storms. Durably store the event, return 200 quickly, and process asynchronously."
+      },
+      {
+        "text": "Route state changes through the same conditional state-machine transitions used by the synchronous API path",
+        "explanation": "Correct. Using one transition function for both paths means a webhook and an API response reporting the same outcome converge, rather than double-posting or regressing state."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Verify the provider signature over its required raw bytes and signed timestamp. Atomically persist the event and durable work, acknowledge promptly, then process unprocessed records after crashes. Apply valid state transitions and unique business-operation ledger references in one transaction. Fetch provider state/history when necessary. Different event IDs may describe the same business operation, so event-ID deduplication alone is insufficient.",
+    "link": {
+      "title": "Idempotent requests (Stripe API docs)",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  },
+  {
+    "id": "cs2-payment-system-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Payment `pay_555` is AUTHORISED in your database. A `charge.refunded` webhook arrives, but the `charge.captured` webhook hasn't arrived yet. Your state machine only allows `CAPTURED -> REFUNDING/REFUNDED`. What should the handler do?",
+    "options": [
+      {
+        "text": "Force the status to REFUNDED, since the PSP is the source of truth",
+        "explanation": "Wrong. Skipping CAPTURED means the capture's ledger transaction is never posted, so the refund reverses money the ledger never received."
+      },
+      {
+        "text": "Drop the event, since it's an invalid transition",
+        "explanation": "Wrong. The refund really happened. Dropping it guarantees a reconciliation break and money unaccounted for."
+      },
+      {
+        "text": "Return 500 so the PSP keeps retrying the webhook forever",
+        "explanation": "Wrong. Failing the webhook risks redelivery storms and, eventually, the PSP giving up. Acknowledge fast once the event is stored."
+      },
+      {
+        "text": "Store the event and return 200, then either retry it later once the capture has been applied, or fetch the payment's current state from the PSP and apply the missing transitions in order",
+        "explanation": "Correct. Webhooks can arrive out of order. Treat them as hints: persist them, then converge the local state machine through valid transitions, posting each ledger transaction as you go."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "What the PSP actually did:\n\n```\n10:00 captured   (webhook delayed)\n10:05 refunded   (webhook arrives first)\n```\n\nWhat your handler sees: AUTHORISED, then a refund. Converge it:\n\n1. Insert the event into `psp_events` (dedupe on event_id), return 200.\n2. The worker fetches `pay_555` from the PSP API: captured and refunded.\n3. Apply `AUTHORISED -> CAPTURED` (post `capture:pay_555`).\n4. Apply `CAPTURED -> REFUNDED` (post `refund:re_...`).\n5. When the late `charge.captured` webhook arrives, the conditional transition finds the payment already past CAPTURED, and the UNIQUE ref_id stops a second capture posting. It's a no-op.",
+    "link": {
+      "title": "The Payment Intents API (Stripe docs)",
+      "url": "https://docs.stripe.com/payments/payment-intents"
+    }
+  }
+]

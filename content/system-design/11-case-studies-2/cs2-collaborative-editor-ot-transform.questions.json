@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs2-collaborative-editor-q1",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The document is `abc` at revision 10. Alice sends `insert(1, \"X\")` and Bob concurrently sends `delete(2)` (removing `c`), both based on revision ten. The server commits Alice's op first. Into what must the server transform Bob's op before applying it?",
+    "options": [
+      {
+        "text": "`delete(2)`, unchanged",
+        "explanation": "Wrong. After Alice's insert, the document is `aXbc`, and index 2 is now `b`. Applying the original op would delete Bob's neighbour instead of `c`, violating his intention."
+      },
+      {
+        "text": "Reject Bob's op as a conflict and ask him to retry",
+        "explanation": "Wrong. OT's purpose is that concurrent edits to different characters both succeed automatically. Rejecting them would make real-time collaboration miserable."
+      },
+      {
+        "text": "`delete(1)`",
+        "explanation": "Wrong. This shifts in the wrong direction. Insertions *before* a position push it right, not left. `delete(1)` would remove Alice's `X`."
+      },
+      {
+        "text": "`delete(3)`",
+        "explanation": "Correct. Alice inserted one character at position 1, which is before Bob's target at position 2, so every later index shifts right by one. `delete(3)` on `aXbc` removes `c`, giving `aXb`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Work it through:\n\n1. Rev 10: `a b c` at indices 0, 1, 2.\n2. Commit Alice `insert(1,'X')`, giving rev 11: `a X b c` at 0, 1, 2, 3.\n\nBob's `delete(2)` was meant for `c`. The transform rule for a delete against an earlier-committed insert:\n\n```formula\np' = p + n,  if i ≤ p\np' = p,      if i > p\np' = 2 + 1 = 3\nwhere\np: the position (0-based index) Bob's delete targets; here 2\np': the transformed position to use on the new document\ni: the position where Alice's insert went; here 1\nn: the number of characters Alice inserted; here 1\n≤: is less than or equal to\n>: is greater than\nIn words: if someone inserted text at or before your target, your target moves right by the length of their insert.\n```\n\nHere 1 ≤ 2, so it becomes **`delete(3)`**, committed as rev 12: `a X b`.\n\nOn the other side, Bob's client receives Alice's op and transforms it against his own pending `delete(2)`. The insert at 1 is before the delete at 2, so it's unchanged: `insert(1,'X')` on `ab` gives `aXb`.\n\nBoth replicas show `aXb`. That's convergence plus intention preservation.",
+    "link": {
+      "title": "Operational transformation (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Operational_transformation"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In client-server OT, Alice's client has op A in flight (sent, not yet acked) and op B buffered (typed since). A server op S from Bob arrives, based on a revision before A. What must Alice's client do?",
+    "options": [
+      {
+        "text": "Apply S directly to the local document, since the server has already ordered it",
+        "explanation": "Wrong. S's positions refer to the document *without* A and B. Applied raw to Alice's local copy, which already includes them, it can land in the wrong place."
+      },
+      {
+        "text": "Discard A and B, apply S, and ask Alice to retype",
+        "explanation": "Wrong. Losing local edits breaks the basic promise of collaborative editing. Transformation exists to avoid exactly this."
+      },
+      {
+        "text": "Transform S against A and then B before applying it locally, and transform A and B against S so they stay valid on the server's history",
+        "explanation": "Correct. The client keeps its pending ops and the incoming op mutually consistent, so both the local view and the eventual server commit converge."
+      },
+      {
+        "text": "Wait until A is acknowledged, then apply S",
+        "explanation": "Wrong. Waiting doesn't change the fact that S doesn't account for A and B, and it stalls remote updates for a round trip."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Picture the two histories:\n\n```\nserver: ... r10 -> S (r11)\nalice:  ... r10 -> A -> B\n```\n\nAlice's screen starts from revision ten, then applies A and B. To show S, she needs S expressed *after* A and B:\n\n```formula\nS_1 = transform(S, A)\nS_2 = transform(S_1, B)\nwhere\nS: incoming server operation based on the earlier revision\nA: local operation currently in flight\nB: local buffered operation, in the corresponding transformed context\nS_1: server operation transformed through A\nS_2: server operation transformed through A then B\ntransform: the protocol-specific operation transformation function; operation contexts must match\nIn words: Transform the incoming change through both local stages before applying it.\n```\n\nHer pending ops must also move on top of S, because that's what the server will see:\n\n```formula\nA_1 = transform(A, S)\nwhere\nA: local operation currently in flight\nS: incoming server operation in the matching prior context\nA_1: rebased in-flight operation\ntransform: protocol-specific transformation of the first operation against the second\nIn words: Rebase the local pending change through the incoming server change; adjust the buffer in its corresponding context too.\n```\n\nWhen the server acks A (as r12), the client sends the rebased buffer. Keeping only **one op in flight** keeps this bookkeeping to a single in-flight op plus one buffer.",
+    "link": {
+      "title": "Operational transformation (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Operational_transformation"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs2-web-crawler-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your crawler has spent a day fetching 4 million pages from one small site's event calendar (`/events?month=2087-03`, `/events?month=2087-04`, ...). Which defences would have prevented this? Select all that apply.",
+    "options": [
+      {
+        "text": "A per-host page budget per crawl cycle, scaled by the host's importance",
+        "explanation": "Correct. A small, low-authority host might get a budget of a few thousand pages. Once spent, its remaining URLs wait for the next cycle, which bounds the damage from any trap."
+      },
+      {
+        "text": "Detecting high near-duplicate rates (SimHash) on a host and throttling it",
+        "explanation": "Correct. Generated calendar pages are near-identical templates. A spike in near-duplicate matches is a strong trap signal."
+      },
+      {
+        "text": "A larger Bloom filter",
+        "explanation": "Wrong. Every calendar URL really is distinct, so a perfect seen-set would still let each one through. Dedup of identical URLs doesn't stop *infinite* distinct URLs."
+      },
+      {
+        "text": "Lowering priority for URLs with large depth from the seed or an exploding parameter space",
+        "explanation": "Correct. Each 'next month' click adds depth. Priority decay with depth, plus detecting a parameter that takes unbounded values, pushes these URLs to the back of the frontier."
+      },
+      {
+        "text": "Faster fetchers so the calendar finishes sooner",
+        "explanation": "Wrong. The calendar is infinite, so it never 'finishes'. Speed just wastes resources faster."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Classify the trap: an **infinite space of distinct URLs** with near-identical content.\n\n- Seen-URL dedup can't help, because every URL is new.\n- What *can* help is bounding effort and spotting low value:\n  1. **Budget**: a maximum page count per host that grows with the host's importance, for example 5,000 for an obscure host.\n  2. **Value signal**: SimHash shows 99% near duplicates on this host, so throttle it.\n  3. **Structure signal**: depth over 15, or one query parameter with 10,000+ distinct values, so demote it.\n\nAdd URL length and path-repetition limits, and spider traps become a bounded, small cost.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You re-crawl 300 M known pages per week, and about 80% of them haven't changed since last time. What's the cheapest way to cut bandwidth substantially?",
+    "options": [
+      {
+        "text": "Send conditional GETs using the stored ETag (`If-None-Match`) or `If-Modified-Since`, so unchanged pages return `304 Not Modified` with no body",
+        "explanation": "Correct. A 304 costs a few hundred bytes instead of about 100 KB. For the 80% of unchanged pages (on servers that support validators), that removes most re-crawl bandwidth."
+      },
+      {
+        "text": "Fetch only the first 1 KB of each page and compare it",
+        "explanation": "Wrong. Changes often happen further down the page, and partial fetches still cost a connection plus TLS. Range requests on HTML are also often unsupported."
+      },
+      {
+        "text": "Compress pages with gzip after downloading them",
+        "explanation": "Wrong. Compressing *after* download saves storage, not transfer. You'd request `Accept-Encoding: gzip` anyway, but that's separate from skipping unchanged pages."
+      },
+      {
+        "text": "Stop re-crawling entirely",
+        "explanation": "Wrong. The 20% of pages that do change matter, and the index goes stale. The goal is to make unchanged checks cheap, not to skip them."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the bytes transferred with and without conditional GETs:\n\n```formula\nF = 300 M × 100 KB = 30 TB\nU = 0.8 × 300 M = 240 M pages\nC = 240 M × 500 B = 0.12 TB\nR = 60 M × 100 KB + C ≈ 6.12 TB\nwhere\nF: weekly re-crawl transfer if every page returns a full body\nU: unchanged pages (80%)\nC: transfer for the unchanged pages when each returns a 304 Not Modified of about 500 bytes\nR: new weekly total: 60 M changed pages at full size plus the 304s\nM: million\nKB: kilobytes, 1,000 bytes\nB: bytes\nTB: terabytes, 10^12 bytes\npages: web pages\n≈: approximately equal to\nIn words: answering the 240 million unchanged pages with tiny 304s cuts the week from 30 TB to about 6 TB, roughly an 80% saving.\n```\n\nWithout validators those 240 M unchanged pages would cost 24 TB in full bodies. The saving applies only where servers support validators (ETag or Last-Modified).\n\nGo further by learning each page's change rate. If a page has changed once in 20 checks, re-crawl it less often. Weight the schedule by importance × change probability.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You model a page's changes as a Poisson process. History says it changes on average once every 10 days. If you re-crawl it every 10 days, what's the probability that it has changed at least once since the last fetch?",
+    "options": [
+      {
+        "text": "100%, because it changes once every 10 days",
+        "explanation": "Wrong. 'Once every 10 days on average' doesn't mean exactly once in every 10-day window. Some windows have no changes and some have several."
+      },
+      {
+        "text": "50%",
+        "explanation": "Wrong. This treats it as a coin flip. The Poisson model gives a specific value, about 63% (see the worked example)."
+      },
+      {
+        "text": "About 63%",
+        "explanation": "Correct. At 0.1 changes a day over 10 days, one change is expected; the Poisson chance of no change is then about 37%, so the chance of at least one change is about 63%."
+      },
+      {
+        "text": "About 10%",
+        "explanation": "Wrong. 10% is the chance per *day* (roughly). Over 10 days the chance is much higher."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "In a Poisson process, events happen independently at a steady average rate. The chance of **no** events in a window follows from that model:\n\n```formula\nP_0 = e^(−λ × t)\nP_c = 1 − P_0\nwhere\nP_0: probability the page has not changed during the window (0 = never, 1 = certain)\nP_c: probability it has changed at least once\ne: Euler's number, about 2.718, the base of natural logarithms\nλ: the average change rate, in changes per day\nt: time since the last fetch, in days\n−: minus; e raised to a negative power is a number between 0 and 1\nIn words: the longer you wait, relative to how often the page changes, the less likely it is to be unchanged.\n```\n\nHere the page changes once every 10 days on average, and you wait 10 days:\n\n```formula\nλ = 1 / 10 days = 0.1/day\nλ × t = 0.1/day × 10 days = 1\nP_0 = e^(−1) ≈ 0.368\nP_c = 1 − 0.368 = 0.632 ≈ 63%\nwhere\nλ: the change rate, in changes per day\nt: the re-crawl interval; here 10 days\nP_0: probability of no change\nP_c: probability of at least one change\ne: Euler's number, about 2.718\nday: one day\ndays: days\n≈: approximately equal to\nIn words: re-crawling at the page's average change interval finds it changed about 63% of the time, not 100%.\n```\n\nWhat it means for scheduling (same formula with other intervals):\n\n| Re-crawl every | P(changed) |\n|---|---|\n| 2 days | 18% |\n| 10 days | 63% |\n| 30 days | 95% |\n\nCrawl often and most fetches are wasted 304s. Crawl rarely and the copy is stale most of the time. Weighting the interval by importance is how you pick a point on that curve. Real pages are not perfectly Poisson (news sites change in bursts), so treat this as a model.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  }
+]

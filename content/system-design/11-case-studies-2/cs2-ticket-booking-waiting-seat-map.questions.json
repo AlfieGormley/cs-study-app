@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs2-ticket-booking-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Admitted shoppers spend about 5 minutes from entry to payment. Your booking tier and payment provider comfortably sustain 30,000 concurrent shoppers. At what rate should the waiting room admit users?",
+    "options": [
+      {
+        "text": "30,000 users per minute",
+        "explanation": "Wrong. Admitting 30,000 a minute while each stays 5 minutes builds up to 150,000 concurrent shoppers, five times the safe capacity."
+      },
+      {
+        "text": "6,000 users per minute",
+        "explanation": "Correct. Five minutes per shopper and thirty thousand concurrent shoppers permit six thousand admissions a minute in the steady-state model. The worked example defines the quantities and shows the calculation."
+      },
+      {
+        "text": "150,000 users per minute",
+        "explanation": "Wrong. This multiplies capacity by time instead of dividing. It would overwhelm the system 25x."
+      },
+      {
+        "text": "Admit everyone at once and let autoscaling handle it",
+        "explanation": "Wrong. The constraint is the **contended inventory rows** and the payment provider's rate limits, neither of which autoscale. Stateless API servers scaling up doesn't help a hot database partition."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Little's law says that in a steady system the average number inside equals the arrival rate times the time each one stays. Rearrange it to find the arrival (admission) rate:\n\n```formula\nL = λ × W\nλ = L / W\nλ = 30,000 users / 5 min\nλ = 6,000 users/min = 100 users/s\nwhere\nL: shoppers inside the booking system at once; the safe concurrency is 30,000\nλ: the admission rate, in users per minute\nW: average time each shopper spends from entry to payment, in minutes (min); here 5\nusers: admitted shoppers\nmin: minutes\ns: seconds\nIn words: if each shopper stays 5 minutes and you can hold 30,000 at once, admit 6,000 a minute.\n```\n\nIn practice:\n1. Start below this (say 4,000 a minute) because the first minutes are the most contended.\n2. Run a feedback loop: if p99 hold latency or error rate rises, cut the admission rate. If they're healthy, raise it.\n3. Also factor in **abandonment**. If 30% of admitted users leave within a minute, the average time in the system falls and you can admit faster.\n\nThe waiting time for the back of the queue is the queue length divided by the admission rate:\n\n```formula\nT = Q / λ\nT = 2,000,000 / 6,000 per min ≈ 333 min\nwhere\nT: how long the last person in line waits, in minutes (min)\nQ: people waiting; here 2 million\nλ: the admission rate; 6,000 users per minute\nmin: minutes\n≈: approximately equal to\nIn words: admitting 6,000 a minute takes about 333 minutes (over 5 hours) to reach the last of 2 million fans.\n```\n\nSo you'd show 'sold out' long before then, once inventory is gone.",
+    "link": {
+      "title": "Cloudflare Waiting Room (developer docs)",
+      "url": "https://developers.cloudflare.com/waiting-room/"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're designing a virtual waiting room for an on-sale with 2 M expected visitors. Which design choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Serve the waiting page and queue-position polling from the CDN or edge, with no per-user origin calls",
+        "explanation": "Correct. At about 67 k polls per second (2 M every 30 s), origin calls would recreate the very overload the queue exists to prevent. Edge-served status from a published counter is cheap."
+      },
+      {
+        "text": "Give everyone who arrived before the start time a random position, so refreshing at exactly 10:00:00 gives no advantage",
+        "explanation": "Correct. Random initial ordering removes the incentive (for humans and bots) to stampede at the open, smoothing the spike."
+      },
+      {
+        "text": "Issue admitted users a signed, short-lived token that the booking API verifies statelessly",
+        "explanation": "Verify signature and claims, bind admission to the authenticated user/event/session, limit admitted session request rates and block direct-origin bypass. A transferable signed token alone does not stop sharing or repeated access."
+      },
+      {
+        "text": "Keep each user's queue position in the main inventory database, so it's strongly consistent",
+        "explanation": "Wrong. It puts millions of rows and polling reads on the exact database you're trying to protect. Queue state belongs in a separate, edge-friendly store."
+      },
+      {
+        "text": "Admit users at a fixed rate configured a week in advance",
+        "explanation": "Wrong. Static rates ignore live conditions: payment-provider slowdowns, abandonment, error rates. Admission should be a feedback loop on downstream health."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Keep waiting-page and approximate position reads at the edge. Maintain authenticated per-user queue identity and controlled aggregate admission. The queue may trade exact ordering for throughput, but admission counters cannot be arbitrarily stale without risking oversubscription. Inventory allocation remains authoritative and transactional.",
+    "link": {
+      "title": "Building Cloudflare Waiting Room (Cloudflare blog)",
+      "url": "https://blog.cloudflare.com/cloudflare-waiting-room/"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the first minute of a big on-sale, 90% of hold attempts return 409 because thousands of admitted fans are all clicking the same few front sections on the seat map. Fans are furious and retry constantly. What change most reduces the contention?",
+    "options": [
+      {
+        "text": "Refresh the seat-map cache every 100 ms instead of every 2 s",
+        "explanation": "Wrong. A fresher map helps a little, but fans still race for the same seats, and you've multiplied the cache rebuild load by 20x."
+      },
+      {
+        "text": "Switch from conditional updates to `SELECT ... FOR UPDATE`",
+        "explanation": "Wrong. Pessimistic locks make losers *wait* before failing instead of failing fast. The contention, and the 409s, stay the same."
+      },
+      {
+        "text": "Offer 'best available': the fan chooses a price tier and quantity, and the server allocates contiguous seats from a pre-computed list",
+        "explanation": "A coordinated allocator can distribute requests among distinct blocks. A shared precomputed list alone does not guarantee distinct choices; atomic allocation and conflict handling are still needed."
+      },
+      {
+        "text": "Raise the admission rate so more fans get to try",
+        "explanation": "Wrong. More shoppers in the same sections means even more collisions. The fix has to change how seats are chosen."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Look at why the 409s happen. It's not the database being slow. It's many fans asking for **the same rows**:\n\n```\nfans clicking row A: 3,000\nseats in row A:        40\n=> at most 40 succeed\n```\n\nWith best available, the allocator walks a list of seats ordered by quality and assigns each request the next contiguous block in its tier. Each request targets *different* rows, so the conditional update almost always succeeds.\n\nThe same idea applies anywhere many clients want 'one of these': let the server choose, instead of having every client race for the best item.",
+    "link": {
+      "title": "Ticketmaster system design breakdown (Hello Interview)",
+      "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster"
+    }
+  }
+]

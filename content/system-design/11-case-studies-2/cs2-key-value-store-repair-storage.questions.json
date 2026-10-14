@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs2-key-value-store-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Cassandra node is down for 14 days, while a large batch of rows is deleted. `gc_grace_seconds` is the default 10 days, and the node is brought back without running repair first. What is the risk?",
+    "options": [
+      {
+        "text": "Deleted data can 'resurrect'. The other replicas compacted away their tombstones after 10 days, so the returning node's old values look like the newest data, and read repair or repair spreads them back",
+        "explanation": "If deletion tombstones have been safely purged on the other replicas before the stale node returns, old values can reappear. Purge is not automatic exactly at 10 days. Complete repair before grace expires and follow safe replacement/rebuild procedures for an overdue node."
+      },
+      {
+        "text": "None. Hinted handoff will deliver all the deletes",
+        "explanation": "Wrong. Hints are only kept for a limited window (3 hours by default in Cassandra), so after 14 days most of the deletes weren't hinted."
+      },
+      {
+        "text": "The node will refuse to start",
+        "explanation": "Wrong. Cassandra starts normally. That's what makes this failure dangerous: nothing alerts you, and deleted data simply reappears."
+      },
+      {
+        "text": "Reads become slower due to extra tombstones, but data stays correct",
+        "explanation": "Wrong. The tombstones are *gone* on the other replicas, which is the problem. Correctness, not just performance, is at stake."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\nday 0   node X down; holds row r=v\nday 1   DELETE r on Y, Z (tombstone t)\nday 11  gc_grace passes; compaction on\n        Y, Z drops tombstone t (and v)\nday 14  X returns, still has r=v\n        read/repair: Y, Z have nothing;\n        X has v -> v is 'newest'\n        -> r reappears everywhere\n```\n\nThe safe practice:\n1. Run `nodetool repair` on every node more often than every gc_grace_seconds (for example, weekly when gc_grace is 10 days).\n2. If a node has been down longer than gc_grace, **don't** rejoin it as-is. Wipe it and bootstrap it as a replacement.",
+    "link": {
+      "title": "Compaction (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/index.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You store IoT sensor readings in Cassandra. Rows are written once, never updated, read mostly for the last 24 hours, and expire after 30 days via TTL. Which compaction strategy fits best?",
+    "options": [
+      {
+        "text": "Size-tiered (STCS)",
+        "explanation": "Not the best fit. STCS mixes old and new data into ever-larger SSTables, so expired rows linger inside big files that only compact rarely. It wastes disk and needs lots of headroom."
+      },
+      {
+        "text": "Leveled (LCS)",
+        "explanation": "Wrong for this workload. LCS is tuned for read-heavy *update* workloads. With write-once data it rewrites the same immutable rows across levels repeatedly, which is high write amplification for no benefit."
+      },
+      {
+        "text": "Time-window (TWCS)",
+        "explanation": "TWCS is a good candidate for mostly immutable, consistently expiring time-series data. Entire SSTables can be dropped only when fully expired and safe under tombstone/overlap rules; file count and read cost are not fixed."
+      },
+      {
+        "text": "No compaction at all",
+        "explanation": "Wrong. Without compaction, SSTable count grows without limit, read amplification explodes and expired data is never removed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "One-day TWCS windows group similarly aged immutable data, which can make whole-file expiry efficient. The active window can contain multiple SSTables; closed-window file counts and query fan-out depend on compaction state, partitions and late data. TTL expiry alone does not imply immediate deletion on day 31: grace and overlap safety checks still apply. Mixed TTLs and late writes can delay reclamation.",
+    "link": {
+      "title": "Compaction (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/compaction/index.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about keeping replicas in sync in a Dynamo-style store are true? Select all that apply.",
+    "options": [
+      {
+        "text": "With a sloppy quorum, exceeding the home-replica count with read and write counts does not guarantee intersection: write acknowledgements can come from stand-in nodes.",
+        "explanation": "Correct. That's the trade-off of sloppy quorums. They improve write availability during failures, at the cost of the overlap guarantee until hints are handed off."
+      },
+      {
+        "text": "Merkle trees skip matching subtrees and localize differing key ranges, often reducing comparison traffic substantially.",
+        "explanation": "For an ideal balanced tree with one key per leaf, sparse differences can be localised with roughly O(k × log N) hash comparisons, where k is the number of differing keys, N the number of keys, and O(...) means \"grows in proportion to\". Cassandra uses range trees: differing leaves can require streaming more data than the changed keys, and building trees scans data."
+      },
+      {
+        "text": "Read repair alone guarantees all replicas eventually converge",
+        "explanation": "Wrong. Read repair only fixes keys that are *read*. Cold keys that are never read can stay divergent for ever, which is why periodic anti-entropy (Merkle) repair is still needed."
+      },
+      {
+        "text": "Hinted handoff covers short outages: a stand-in stores writes for a down replica and delivers them when it returns",
+        "explanation": "Correct. Hints bridge transient failures. They're bounded in time (Cassandra's default hint window is 3 hours), beyond which repair has to take over."
+      },
+      {
+        "text": "Gossip guarantees every node learns of a failure within exactly one second",
+        "explanation": "Wrong. Gossip spreads information probabilistically in O(log N) rounds, where N is the number of nodes: the rounds grow with the logarithm of the cluster size. Failure detection (for example phi accrual) is a suspicion level, not a deterministic deadline."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "In a balanced binary tree with one key per leaf, the depth is the base-2 logarithm of the number of keys, and each differing key costs about one comparison per level:\n\n```formula\nd = log_2(n) = log_2(1,000,000) ≈ 20\nc ≈ k × d = 10 × 20 = 200\nwhere\nd: depth of the tree, in levels\nn: keys covered by the tree; here 1 million\nlog_2: logarithm to base 2: how many times you halve n to reach 1\nc: hash comparisons needed, roughly\nk: keys that differ between the two replicas; here 10\n≈: approximately equal to\nIn words: a million keys make a tree about 20 levels deep, so ten scattered differences need on the order of hundreds of comparisons.\n```\n\nThat is an order of magnitude, not an exact 200-hash bound. Real repair trees group ranges and can stream unchanged data within differing ranges. Sloppy quorum sets may not overlap: writes acknowledged by A and D can be missed by reads from stale B and C before handoff.",
+    "link": {
+      "title": "Merkle tree (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Merkle_tree"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cs2-job-scheduler-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A scheduler resumes after losing its shard lease and tries to insert runs already created by the new owner. Which guards prevent stale schedule writes and duplicate durable run records?",
+    "options": [
+      {
+        "text": "A longer lease TTL, such as 60 s",
+        "explanation": "Wrong. It only shifts the threshold. A 61 s pause (or a VM migration) causes the same problem, and longer leases slow failover after real crashes."
+      },
+      {
+        "text": "Checking `if lease.is_valid()` before each write",
+        "explanation": "Wrong. The check and the write aren't atomic. A can check, pause again, then write. Time-based leases can't be made safe by the holder checking its own clock."
+      },
+      {
+        "text": "Fencing tokens (writes carry the lease revision, and the store rejects stale ones), plus a unique `(job_id, scheduled_at)` key so a duplicate run insert fails",
+        "explanation": "The protected database checks the installed ownership epoch; the unique occurrence key suppresses a second run record. Couple run creation and outbox intent atomically. Neither guard alone deduplicates arbitrary external worker side effects."
+      },
+      {
+        "text": "Using Redis Redlock instead of etcd",
+        "explanation": "Wrong. Redlock has the same fundamental problem: a paused client can't know its lock expired. Without fencing tokens, it's no safer, which was Martin Kleppmann's argument in his critique of Redlock."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Timeline:\n\n```\ntime 0 s: A gets lease, token 41\ntime 2 s: A pauses (GC)\ntime 10 s: lease expires\ntime 11 s: B gets lease, token 42\ntime 12 s: B inserts j9 at 09:00\ntime 22 s: A retries j9 at 09:00\n```\n\nTwo independent guards:\n1. **Fencing**: the job store has seen token 42 for shard 17, and A's write carries 41, so it's **rejected**.\n2. **Idempotent key**: `INSERT runs(j9, 09:00)` hits the primary key and does nothing (`ON CONFLICT DO NOTHING`).\n\nThe principle: safety must be enforced by the **resource being protected**, because a client can never be sure its lease is still valid.",
+    "link": {
+      "title": "How to do distributed locking (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need to support one-off jobs delayed anywhere from 1 second to 1 year, at about 50,000 new delayed jobs a second. Which design is most appropriate?",
+    "options": [
+      {
+        "text": "Put every job straight into SQS with its full delay",
+        "explanation": "Wrong. SQS message delays max out at 15 minutes, so anything longer can't be expressed. A year-long delay needs durable storage outside the queue."
+      },
+      {
+        "text": "A single Redis sorted set scored by due time, holding all jobs",
+        "explanation": "Wrong at this scale. 50 k/s × up to a year of delay is about 1.6 trillion entries, far more than RAM. And a single sorted set is a hot key with asynchronous-replication loss risk on failover."
+      },
+      {
+        "text": "A tiered design: store far-future jobs in the sharded job store (indexed by due time, or in time buckets). A mover promotes jobs due within the next few minutes into an in-memory timing wheel or a short-delay queue, which targets their due times under a measured lateness budget",
+        "explanation": "A sharded durable store holds far-future work, while recoverable near-term structures reduce polling cost. Memory and dispatch capacity still need measurement; this is a design option, not a proven universal architecture."
+      },
+      {
+        "text": "One sleeping thread per job",
+        "explanation": "Wrong. Millions of sleeping threads exhaust memory, and every job is lost on restart. There's no durability at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Work out how much is waiting at once in each tier. Everything here is \"arrival rate × time spent waiting\" (Little's law).\n\n```formula\nD = 50,000/s × 86,400 s = 4,320,000,000\nP = 4,320,000,000 × 365 ≈ 1.58 × 10^12\nN = 50,000/s × 300 s = 15,000,000\nS = 15,000,000 × 100 B = 1.5 GB\nwhere\nD: new delayed jobs per day (4.32 billion)\nP: worst-case pending jobs if every job waited a full year of 365 days (about 1.6 trillion)\nN: jobs due within a 5-minute (300 s) near-term window, at a steady 50,000 due per second\nS: memory for that window at an assumed 100 bytes per entry, before overhead\ns: seconds; a day has 86,400 s\nB: bytes\nGB: gigabytes, 1,000,000,000 bytes\n10^12: one trillion (a 1 followed by 12 zeros)\n≈: approximately equal to\nIn words: a year of waiting jobs could reach about 1.6 trillion, far beyond memory, but the next 5 minutes hold only about 15 million jobs, about 1.5 GB.\n```\n\nShorter delay distributions reduce the year-long figure. Rebuild pending near-term work from durable state after failure; advancing schedules alone is insufficient if the timer was lost.",
+    "link": {
+      "title": "Amazon SQS delay queues (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-delay-queues.html"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team wants to send a reminder 3 days after sign-up, and plans to do it by sending an SQS message with `DelaySeconds` set to 259,200. What happens, and what's a better design?",
+    "options": [
+      {
+        "text": "It works. SQS holds the message invisibly for 3 days and then delivers it",
+        "explanation": "Wrong. SQS delay queues and message timers max out at 15 minutes (900 seconds). A 3-day delay is rejected."
+      },
+      {
+        "text": "The call fails because the maximum delay is 15 minutes. Store the reminder in the durable job store (or a managed scheduler such as EventBridge Scheduler) and promote it into a short-delay queue when it's close to due",
+        "explanation": "Correct. The tiered pattern keeps long waits in cheap, durable storage and uses the queue only for the last few minutes. AWS itself recommends EventBridge Scheduler for longer delays."
+      },
+      {
+        "text": "Use the visibility timeout instead, which can hide a message for up to 3 days",
+        "explanation": "Wrong. The visibility timeout applies after a consumer receives a message, and its maximum is 12 hours. It's a processing lease, not a scheduling tool."
+      },
+      {
+        "text": "Chain 288 messages of 15 minutes each, re-enqueuing on every delivery",
+        "explanation": "It can be made to work, but it costs 288 sends and receives per reminder and multiplies the chance of a lost hop. A durable store plus a mover is simpler and cheaper."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Convert three days to seconds:\n\n```formula\nt = 3 days × 86,400 s/day\nt = 259,200 s\nwhere\nt: the requested delay, in seconds (s)\ns: seconds\nday: one day, 24 × 60 × 60 = 86,400 s\ndays: days\nIn words: three days is 259,200 seconds, far more than SQS's 900-second (15-minute) maximum delay.\n```\n\nPersist the reminder and promote it with a recoverable outbox near its due time. Clamp a standard-queue message delay to a whole number of seconds between 0 and 900, and handle already overdue work. FIFO queues do not support per-message timers; use their queue-level delay or a scheduler appropriate to the timing requirement.",
+    "link": {
+      "title": "Amazon SQS visibility timeout (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+    }
+  }
+]

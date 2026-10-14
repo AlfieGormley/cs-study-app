@@ -1,0 +1,77 @@
+[
+  {
+    "id": "cs2-key-value-store-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Cassandra is 'Dynamo-inspired', but it doesn't copy every Dynamo technique. Which statements are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "Amazon DynamoDB uses the same leaderless design as the 2007 Dynamo paper",
+        "explanation": "Wrong. DynamoDB is a different system: each partition is a replication group with a leader chosen by Multi-Paxos."
+      },
+      {
+        "text": "Dynamo resolves concurrent writes with vector clocks and returns siblings for the application to merge",
+        "explanation": "Correct. The shopping basket's union merge is the classic example."
+      },
+      {
+        "text": "In Cassandra, hints don't count towards the consistency level (except at `ANY`), so it doesn't use Dynamo's sloppy quorum",
+        "explanation": "Correct. A `QUORUM` write in Cassandra needs real home replicas. Hints only help a returning node catch up."
+      },
+      {
+        "text": "Cassandra resolves conflicts per cell by last-write-wins on timestamps",
+        "explanation": "Correct. No siblings: the highest timestamp wins, which is simple but can silently lose concurrent writes."
+      },
+      {
+        "text": "Cassandra uses vector clocks on every cell",
+        "explanation": "Wrong. It uses timestamps. Vector clocks are the Dynamo and Riak approach."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Compare the three systems feature by feature:\n\n| Feature | Dynamo | Cassandra | DynamoDB |\n|---|---|---|---|\n| leader | none | none | per partition |\n| conflicts | vector clocks | LWW | leader orders |\n| sloppy quorum | yes | no | n/a |\n| hinted handoff | yes | yes | n/a |\n\nThe practical consequence of Cassandra's choices: a `QUORUM` write can *fail* when two of three replicas are down (Dynamo would have accepted it on stand-ins), and two concurrent writes to one cell keep only the later timestamp.",
+    "link": {
+      "title": "Dynamo: Amazon's highly available key-value store (SOSP 2007)",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "One key (a viral product's config) receives 200,000 reads a second on a 100-node cluster with three replica copies, and its three replicas are overloaded. Which measures actually relieve them? Select all that apply.",
+    "options": [
+      {
+        "text": "Write copies under sub-keys (`cfg#0` to `cfg#9`) and have readers pick one at random",
+        "explanation": "Subkeys can spread replica placement but may overlap on physical nodes. Update propagation and version selection need an explicit consistency policy; ten copies are not automatically atomically consistent."
+      },
+      {
+        "text": "Add 100 more nodes",
+        "explanation": "Wrong. A key lives on exactly RF nodes however big the cluster is. The new nodes won't take any of this key's traffic."
+      },
+      {
+        "text": "Increase `num_tokens` so the key is spread across more vnodes",
+        "explanation": "Wrong. Vnodes split the *ring* into more ranges, but a single key still hashes to one token and one set of RF replicas."
+      },
+      {
+        "text": "Cache the value in the application (or a cache tier) with a short TTL",
+        "explanation": "Correct. Most reads never reach the store. Even a 1 s TTL turns 200,000 reads a second into a handful per app instance."
+      },
+      {
+        "text": "Switch the table to leveled compaction",
+        "explanation": "Wrong. Compaction affects how many SSTables a read touches, not how many nodes share one key's load. A hot, unchanging key is probably served from memory anyway."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "Three replica copies limit one key to three replica owners. The load on each owner is the read rate times the replicas each read contacts, shared over the three owners:\n\n```formula\np = q × R / RF\np = 200,000/s × 1 / 3 ≈ 67,000/s\np = 200,000/s × 2 / 3 ≈ 133,000/s\nwhere\np: replica reads per second hitting each of the key's replicas\nq: logical reads of the key per second; 200,000\nR: replicas each read contacts (consistency level); 1 or 2\nRF: replication factor, the replicas that own the key; 3\ns: seconds\n≈: approximately equal to\nIn words: at R = 1 each replica takes about 67,000 reads a second; at R = 2, about 133,000, before retries.\n```\n\nThe lesson's 23k/node number is an average workload estimate, not a measured capacity ceiling. Coalesced app caching reduces refreshes; ten subkeys may use up to 30 distinct owners (10 × 3) but placement can overlap and updates need consistency handling.",
+    "link": {
+      "title": "Consistent hashing (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  }
+]

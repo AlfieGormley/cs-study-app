@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cs2-ticket-booking-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two users click seat 14F at the same instant. Your code does `SELECT status FROM seats WHERE id=14F`, sees `AVAILABLE`, then runs `UPDATE seats SET status='HELD' WHERE id=14F`. What goes wrong?",
+    "options": [
+      {
+        "text": "Nothing. Databases execute statements one at a time",
+        "explanation": "Wrong. Databases run transactions concurrently. Under the default isolation level (READ COMMITTED in Postgres), both SELECTs can see AVAILABLE before either UPDATE commits."
+      },
+      {
+        "text": "The database deadlocks",
+        "explanation": "Wrong. A deadlock needs two transactions each waiting on a lock the other holds. Here the second UPDATE just waits briefly for the first's row lock, then overwrites it."
+      },
+      {
+        "text": "The second UPDATE fails with a unique-constraint violation",
+        "explanation": "Wrong. Updating a status column violates no unique constraint. Both updates succeed silently, which is exactly why this bug is dangerous."
+      },
+      {
+        "text": "Both users read AVAILABLE, both UPDATEs succeed, and both believe they hold 14F: a classic check-then-act race",
+        "explanation": "Correct. The check and the act are separate steps, so another transaction can slip between them. The fix is to fold the check into the write (`UPDATE ... WHERE status='AVAILABLE'`) or to lock the row first."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Timeline under READ COMMITTED:\n\n```\nT1: SELECT 14F -> AVAILABLE\nT2: SELECT 14F -> AVAILABLE\nT1: UPDATE 14F SET HELD (h1); COMMIT\nT2: UPDATE 14F SET HELD (h2); COMMIT\n```\n\nThe final state is held by h2, but user 1 was also told 'held'. Two fixes:\n\n1. **Conditional write** (preferred):\n```sql\n-- Losing claim updates no rows.\nUPDATE seats\nSET status='HELD', hold_id=:h\nWHERE id='14F'\n  AND status='AVAILABLE';\n```\nThen check rows affected: 1 means won, 0 means lost.\n\n2. **Pessimistic lock**: `SELECT ... FOR UPDATE` makes T2 wait for T1's commit, then re-read the row and see HELD.",
+    "link": {
+      "title": "Explicit locking (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your hold-expiry sweeper runs every minute and resets expired HELD seats to AVAILABLE. During a big on-sale, the sweeper falls 6 minutes behind. With the design in this lesson, what is the impact?",
+    "options": [
+      {
+        "text": "Seats are double-booked, because expired holds are still marked HELD",
+        "explanation": "Wrong. A stale HELD status can't cause a double booking. If anything it would hide seats, and the design handles even that."
+      },
+      {
+        "text": "Expired seats are unsellable for 6 minutes, so the event looks sold out",
+        "explanation": "Wrong for this design. The hold statement treats `status='HELD' AND hold_expires_at < now()` as available, so new holds can take expired seats whether or not the sweeper has run."
+      },
+      {
+        "text": "Correctness and sellability are unaffected, because expiry is evaluated at hold time. Only the cached seat map may show some expired seats as held until the sweeper or cache catches up",
+        "explanation": "New ordinary HELD allocations can reclaim expired rows using the conditional predicate. PAYMENT_PENDING requires separate durable recovery. Cache snapshots may lag; the lazy-expiry claim does not cover every payment state automatically."
+      },
+      {
+        "text": "Payments fail, because they depend on the sweeper",
+        "explanation": "Wrong. Checkout transitions check the hold id and state directly. They don't depend on the sweeper."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Lazy expiry in the new-hold predicate makes ordinary expired HELD rows reusable without a timely sweeper. Evaluate deadlines with appropriate database time semantics and short transactions. PAYMENT_PENDING is different: resolve provider outcomes before release. A cached seat map can derive ordinary availability from status plus expiry.",
+    "link": {
+      "title": "Ticketmaster system design breakdown (Hello Interview)",
+      "url": "https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user selects 4 seats and your service locks them one at a time with `SELECT ... FOR UPDATE`, in the order the user clicked. Under load you see frequent deadlock errors. Why, and what's the minimal fix?",
+    "options": [
+      {
+        "text": "Row locks always deadlock under load. Switch to table-level locks",
+        "explanation": "Wrong. Table locks would remove deadlocks by serialising *every* booking for the event, destroying throughput. Row locks are fine if acquired in a consistent order."
+      },
+      {
+        "text": "Increase the deadlock timeout so the database waits longer",
+        "explanation": "Wrong. A deadlock is a cycle. Waiting longer doesn't resolve it, it just delays the inevitable abort and holds locks longer, which makes contention worse."
+      },
+      {
+        "text": "The hold TTL is too short",
+        "explanation": "Wrong. TTLs govern hold expiry; a deadlock arises from a cycle of lock dependencies, not a particular hold duration."
+      },
+      {
+        "text": "Two transactions lock overlapping seats in different orders (A: 14F then 14G; B: 14G then 14F), so each waits on the other. Acquire locks in a canonical order, such as sorted seat_id, ideally in one statement",
+        "explanation": "Consistent locking order across transactions removes this particular circular wait. A set-based UPDATE is not a general deadlock-prevention guarantee; handle deadlock aborts and other locked resources too."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The deadlock recipe needs four conditions (Coffman). Ordering removes **circular wait**:\n\n```\nA: lock 14F ... wants 14G\nB: lock 14G ... wants 14F\n=> cycle, so the database aborts one\n```\n\nWith sorted ordering, both lock 14F first. B waits on 14F while A takes 14G and commits, then B proceeds and sees the seats taken. No cycle.\n\nEven better: lock in one statement, `SELECT ... WHERE seat_id IN (...) ORDER BY seat_id FOR UPDATE`, then one conditional UPDATE. All the locks are taken in a canonical order within one round trip, but the lock duration still includes subsequent work until commit. Then check that rows affected = 4, or roll back.",
+    "link": {
+      "title": "Explicit locking (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  }
+]

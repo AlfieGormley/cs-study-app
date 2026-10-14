@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cs2-ride-sharing-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "One shard of your in-memory location index crashes and loses all its data. What is the impact, and what is the recovery strategy implied by a good design?",
+    "options": [
+      {
+        "text": "Catastrophic. You must restore it from the last nightly backup",
+        "explanation": "Wrong. A nightly backup of positions that change every 4 s is worthless. The data is stale within seconds, so backing it up is pointless."
+      },
+      {
+        "text": "Trips in progress are lost, because trip state lives in the location index",
+        "explanation": "Wrong in a good design. Trip state belongs in a durable, transactional store, separate from soft location state, precisely so a location-shard loss can't lose trips."
+      },
+      {
+        "text": "Rebuild the soft-state index from fresh pings once routing recovers, keeping authoritative trip/driver-assignment state in durable storage.",
+        "explanation": "Nominal 4-second updates help recovery for connected drivers, but detection, routing, reconnection and network delays can extend degradation. Missing/stale drivers should be excluded until refreshed."
+      },
+      {
+        "text": "Replay the last 24 hours of Kafka location events into the new shard",
+        "explanation": "Replaying a full day is unnecessary when only the latest valid location is needed. A recent compacted snapshot/log may help recovery; fresh pings follow the nominal four-second interval only after routing and device connectivity recover."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A shard crash removes candidate locations, not durable trips. Reassign ownership safely, accept fresh sequenced pings and rebuild the geo index. A lost or disconnected device may not refresh promptly; apply a freshness threshold. Optional recent-state replication or log replay can reduce degradation. No measured one-to-four-second recovery guarantee is available.",
+    "link": {
+      "title": "Gossip protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Gossip_protocol"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A rider taps Request. The `POST /v1/trips` reaches the server and a trip is created, but the response is lost when the phone switches from Wi-Fi to 4G. The app retries automatically. What stops the rider ending up with two cars?",
+    "options": [
+      {
+        "text": "The client sends the same `Idempotency-Key` on the retry, and the server returns the existing trip for that key instead of creating another",
+        "explanation": "Correct. The server stores key to trip_id when it first creates the trip. The retry finds the key and gets the original response back."
+      },
+      {
+        "text": "The server rejects any second request from the same rider within 60 seconds",
+        "explanation": "Wrong. This blocks legitimate cases (a rider booking for a friend, or cancelling and rebooking) and still returns an error rather than the trip the rider actually has."
+      },
+      {
+        "text": "The driver CAS prevents it, because a driver can only hold one trip",
+        "explanation": "Wrong. The CAS stops one *driver* getting two trips. Two duplicate trips would simply be matched to two different drivers."
+      },
+      {
+        "text": "TCP guarantees the request is only delivered once",
+        "explanation": "Wrong. TCP guarantees ordering within one connection. After a network switch the retry travels on a new connection, and the server can't tell it from a new request without an application-level key."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Walk the timeline:\n\n```\nt0 POST /trips  key K1\nt1 server: insert trip T1, save K1->T1\nt2 response lost (network switch)\nt3 retry POST /trips  key K1\nt4 server: K1 exists -> return T1\n```\n\nThe key is generated **once per user intent** (one tap of Request), not per HTTP attempt. Save the key and the trip in the same transaction, so a crash between them can't leave a trip with no key.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Surge multipliers are recomputed every minute per H3 cell. A rider sees £14.00 (1.4x), taps Request 20 seconds later, and surge has risen to 1.8x. What should happen?",
+    "options": [
+      {
+        "text": "Honour the price via the `quote_id` returned with it, which is valid until its `expires_at`",
+        "explanation": "Correct. Quotes lock the price for a short window (a few minutes). Surge can then be computed asynchronously and eventually consistently, while each rider's price stays consistent."
+      },
+      {
+        "text": "Charge 1.8x, because that's the current market price",
+        "explanation": "The displayed unexpired quote is the contract in this scenario. Silently replacing it with a higher price breaks that contract; legal requirements depend on jurisdiction and product terms."
+      },
+      {
+        "text": "Recompute surge synchronously at request time so it's always exact",
+        "explanation": "Wrong. Computing demand/supply over sliding windows and neighbours on every request is expensive, and still wouldn't match the price the rider was shown a moment ago."
+      },
+      {
+        "text": "Reject the request and force the rider to refresh",
+        "explanation": "Wrong. It's poor user experience and causes extra request churn exactly when demand is highest. A quote with an expiry is the standard pattern."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The design separates two concerns:\n\n1. **Market signal**: a stream job recomputes cell multipliers about every minute under the stated policy.\n2. **Customer contract**: the quote stores its identifier, rider, route, price and explicit expiry two minutes after creation.\n3. Booking checks identity, route, expiry and any single-use rule before honouring that price.\n\nAfter expiry, show a fresh price before confirmation. A KV TTL helps remove old records, but validate the recorded deadline explicitly; delayed eviction must not extend quote validity.",
+    "link": {
+      "title": "H3 documentation",
+      "url": "https://h3geo.org/docs/"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs2-key-value-store-q1",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With three home replicas, which required write/read counts force every read group to overlap every completed write group, while allowing one replica to be unavailable for both operations?",
+    "options": [
+      {
+        "text": "One write acknowledgement, one read response",
+        "explanation": "Wrong. 1 + 1 = 2, which isn't greater than 3, so a read can hit a replica the write never reached and return stale data."
+      },
+      {
+        "text": "Three write acknowledgements, one read response",
+        "explanation": "Overlap holds (3 + 1 = 4 > 3), but any single replica failure blocks *all writes*, because W needs all three. It fails the 'tolerate one down' requirement."
+      },
+      {
+        "text": "Two write acknowledgements, two read responses",
+        "explanation": "Correct. 2 + 2 = 4 > 3, so quorums overlap in at least one replica. And since each needs only 2 of 3, one replica can be down and both reads and writes still succeed."
+      },
+      {
+        "text": "One write acknowledgement, three read responses",
+        "explanation": "Overlap holds (1 + 3 = 4 > 3), but any single replica failure blocks *all reads*, and every read waits for the slowest replica."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "For a fixed home replica set, two conditions must hold at once: read and write quorums must overlap, and each quorum must still be reachable with one of the three replicas down.\n\n```formula\nR + W > N\nR ≤ N − 1 and W ≤ N − 1\nN = 3: R + W > 3, R ≤ 2, W ≤ 2\nwhere\nR: replicas that must answer a read\nW: replicas that must acknowledge a write\nN: replicas holding the key; here 3\nN − 1: replicas still up when one has failed\n>: is greater than\n≤: is less than or equal to\nIn words: reads and writes must overlap, and neither may need all three replicas.\n```\n\nOnly two read responses and two write acknowledgements satisfy both constraints here. This establishes overlap, not linearizability. Configure driver consistency explicitly; defaults vary by driver and version. Sloppy quorums can break the fixed-set assumption.",
+    "link": {
+      "title": "Dynamo: Amazon's highly available key-value store (SOSP 2007)",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your 6-node ring gives each node a single token. Node C fails permanently. What problem do virtual nodes (many tokens per physical node) solve here?",
+    "options": [
+      {
+        "text": "Vnodes can spread failed-node ranges and recovery work across more peers instead of concentrating primary-range ownership on one successor.",
+        "explanation": "Correct. Vnodes turn 'one neighbour takes everything' into 'everyone takes a little'. That balances steady-state load and parallelises recovery."
+      },
+      {
+        "text": "Vnodes let the ring keep serving C's keys without any replicas",
+        "explanation": "Wrong. Vnodes are about *placement*, not redundancy. Availability for C's keys still comes from the other N - 1 replicas."
+      },
+      {
+        "text": "Vnodes eliminate the need for consistent hashing",
+        "explanation": "Wrong. Vnodes *are* a refinement of consistent hashing: more points per node on the same ring."
+      },
+      {
+        "text": "Vnodes make cross-key transactions possible",
+        "explanation": "Wrong. Token placement has nothing to do with transactional guarantees across keys."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "In a simplified balanced single-token primary-ownership ring, removing one of six nodes transfers its 1/6 primary range to one successor, doubling that primary share. Replicated copies and recovery sources complicate actual load.\n\nWith vnodes, many token successors can belong to the same physical peer: sixteen ranges do not imply sixteen distinct physical successors among five survivors. In the ideal case the load spreads evenly over the five survivors:\n\n```formula\ns_before = 1 / 6\ns_after = 1 / 5\ns_after / s_before = 6 / 5 = 1.2\nwhere\ns_before: each node's share of the ring with six nodes\ns_after: each survivor's share once five nodes split the ring evenly\nIn words: each survivor goes from a sixth to a fifth of the data, a 20% increase, instead of one node doubling.\n```\n\nThis is an ideal balanced redistribution, not a guaranteed distribution. The cited Cassandra 5.0 configuration uses 16 tokens.",
+    "link": {
+      "title": "Dynamo architecture (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  }
+]

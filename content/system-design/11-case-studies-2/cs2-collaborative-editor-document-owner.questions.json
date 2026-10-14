@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs2-collaborative-editor-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your session server acknowledges ops as soon as they're applied in memory, then writes them to the op log in batches every 2 seconds. A server crash loses the last second of a user's typing, even though their client had shown it as saved. What's the correct fix?",
+    "options": [
+      {
+        "text": "Write batches every 100 ms instead",
+        "explanation": "Wrong. This shrinks the window but doesn't close it. Any acknowledged-but-unpersisted op can still be lost. The bug is acking before the write is durable."
+      },
+      {
+        "text": "Replicate in-memory state to a second server and never write to disk",
+        "explanation": "Wrong. Memory-only replication loses everything if both fail (a rack or power event) and provides no history. You still need a durable log."
+      },
+      {
+        "text": "Ack an op only after it's durably appended to the op log. Clients keep unacknowledged ops and resend them after reconnecting, deduplicated by `client_id + seq`",
+        "explanation": "Correct. Acknowledgement must mean 'durable'. Group commit can still batch writes for efficiency, as long as acks wait for the batch. Client-side retention plus idempotent resend covers the in-flight ops."
+      },
+      {
+        "text": "Save the full document from the client every 30 seconds",
+        "explanation": "Wrong. Full-document saves from many clients conflict with each other, and that defeats the op-based model. It also doesn't stop acknowledged ops being lost in between."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Append the edit, revision, ownership epoch and operation-deduplication record atomically under the selected durability contract; acknowledge only after commit. If the owner crashes before commit, retry; if it crashes after commit but before ack, deduplicate and acknowledge the existing edit. Local echo remains immediate. Group-commit and saved-indicator latency must be measured rather than assumed to be 5 ms or 50–100 ms.",
+    "link": {
+      "title": "Operational transformation (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Operational_transformation"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Each document is owned by one session server via a 10 s lease. Server S1 freezes for 15 s, its lease expires, and S2 takes ownership. S1 unfreezes and keeps accepting ops from clients still connected to it. How do you stop the document's history forking?",
+    "options": [
+      {
+        "text": "Make the op-log append conditional: `INSERT (doc_id, rev)` must be unique, and carry a fencing token the store checks. S1's appends then fail, so it drops its clients, which reconnect to S2",
+        "explanation": "Correct. The protected store atomically rejects S1’s obsolete ownership epoch even if the next revision is unused. Checking the expected revision and unique operation identity supplies separate ordering and retry guards; revision uniqueness alone is insufficient."
+      },
+      {
+        "text": "Trust S1 to check its lease clock before each op",
+        "explanation": "Wrong. A paused process can check, freeze again, and then write. Time-based leases can't guarantee mutual exclusion on their own."
+      },
+      {
+        "text": "Let both servers accept ops and merge the two histories later with OT",
+        "explanation": "Wrong. Server-side OT assumes one total order per document. Two divergent server histories, each with acknowledged ops, can't be cleanly reconciled after the fact."
+      },
+      {
+        "text": "Use a longer 60 s lease",
+        "explanation": "Wrong. Any lease can be outlived by a pause or partition. It only makes failover slower after genuine crashes."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Install the new owner epoch in the protected store before accepting its writes. Atomically verify epoch and expected revision, append the operation and deduplicate its ID. A stale owner must fail even if it guesses an unused revision; uniqueness alone does not fence it. Clients keep unacknowledged edits and reconnect. Durability applies within the explicitly configured storage failure model.",
+    "link": {
+      "title": "How to do distributed locking (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  }
+]

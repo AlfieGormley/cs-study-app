@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs2-job-scheduler-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Three PostgreSQL pollers contend while selecting due jobs FOR UPDATE. Which query clause lets them take other unlocked rows instead?",
+    "options": [
+      {
+        "text": "`SKIP LOCKED`",
+        "explanation": "Correct. `FOR UPDATE SKIP LOCKED` returns only rows not locked by another transaction, so the three pollers naturally split the due jobs among themselves without blocking. It's the standard Postgres and MySQL 8 queue-claiming idiom."
+      },
+      {
+        "text": "`NOWAIT`",
+        "explanation": "Wrong. `NOWAIT` makes the query *error* immediately if any target row is locked. The pollers would mostly get errors and retry, rather than taking other free rows."
+      },
+      {
+        "text": "`DISTINCT`",
+        "explanation": "Wrong. Removing duplicate result rows has nothing to do with lock contention, and the rows are already unique by job_id."
+      },
+      {
+        "text": "`SERIALIZABLE`",
+        "explanation": "Wrong. Raising the isolation level adds more conflict detection and serialisation failures. It makes contention worse, not better."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Without SKIP LOCKED:\n\n1. Poller 1 locks the first 500 due rows.\n2. Pollers 2 and 3 run the same query, reach row 1, and **block** until poller 1 commits.\n3. Effective parallelism is 1.\n\nWith `FOR UPDATE SKIP LOCKED LIMIT 500`:\n\n1. Poller 1 locks rows 1–500.\n2. Poller 2 skips them and locks 501–1,000.\n3. Poller 3 takes 1,001–1,500.\n\nAll three run in parallel. And because the claim, the run insert and the `next_run_at` advance happen in one transaction, a crash just releases the locks, and another poller picks up the rows on its next pass.",
+    "link": {
+      "title": "Explicit locking (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your scheduler records a run and enqueues it like this: (1) `INSERT runs ...; UPDATE jobs SET next_run_at ...; COMMIT;` then (2) `kafka.send(run)`. Occasionally a run is recorded as QUEUED but never executes. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "Kafka loses messages. Switch to RabbitMQ",
+        "explanation": "The identified failure is the application crash before sending. Broker durability also depends on replication and acknowledgment configuration; acks=all alone is not an unconditional guarantee."
+      },
+      {
+        "text": "Wrap both in a distributed two-phase commit across Postgres and Kafka",
+        "explanation": "Wrong in practice. Kafka doesn't take part in XA transactions with Postgres, and 2PC adds blocking failure modes. The outbox pattern gets the same effect using only a local transaction."
+      },
+      {
+        "text": "Send to Kafka first, then commit",
+        "explanation": "Wrong. It just flips the failure: a crash after send but before commit leaves a run executing with no record and `next_run_at` not advanced, so it fires again next poll."
+      },
+      {
+        "text": "The process can crash after the commit but before `kafka.send`, a dual-write gap. Use the transactional outbox: insert an outbox row in the same transaction, and have a relay publish outbox rows to Kafka and mark them sent",
+        "explanation": "A durable outbox makes publication recoverable. Relays can publish duplicates; consumers must enforce run-state/effect deduplication. A unique producer-side run row alone does not deduplicate consumer execution."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The bug is a **dual write**: two systems updated without a shared transaction.\n\n```\nCOMMIT        <- durable\n   X crash\nkafka.send()  <- never happens\n```\n\nOutbox fix:\n\n```sql\nBEGIN;\n-- Stable occurrence key deduplicates.\nINSERT INTO runs(job_id, scheduled_at)\nVALUES (:job, :scheduled)\nON CONFLICT DO NOTHING;\nUPDATE jobs SET next_run_at=:next\nWHERE job_id=:job;\n-- Relay discovery survives a crash.\nINSERT INTO outbox(job_id, scheduled_at)\nVALUES (:job, :scheduled)\nON CONFLICT DO NOTHING;\nCOMMIT;\n```\n\nThe recoverable relay reads unsent outbox rows, sends them to the queue and marks them sent only after acknowledgement. A crash after sending can resend the row, so the stable run identity and worker-side effect contract still matter.\n\nIf the relay crashes after send but before marking sent, it re-sends. The consumer sees the same `run_id` twice and dedups it. The end result is at-least-once publication, which is exactly the guarantee you designed for.",
+    "link": {
+      "title": "Asynchronous task scheduling at Dropbox (Dropbox Tech)",
+      "url": "https://dropbox.tech/infrastructure/asynchronous-task-scheduling-at-dropbox"
+    }
+  }
+]

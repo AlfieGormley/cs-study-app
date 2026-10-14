@@ -1,0 +1,122 @@
+[
+  {
+    "id": "cs2-key-value-store-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a Dynamo-style store with vector clocks, a shopping basket has version `[A:2]`. During a partition, client 1 adds 'book' via node A, giving `[A:3]`, and client 2 adds 'pen' via node B, giving `[A:2, B:1]`. After the partition heals, what does a read return?",
+    "options": [
+      {
+        "text": "Only `[A:3]`, because it has the higher counter",
+        "explanation": "Wrong. Neither clock dominates. `[A:3]` has a higher A, but `[A:2, B:1]` has B:1 where the other has B:0. Discarding one would silently lose an update."
+      },
+      {
+        "text": "Only `[A:2, B:1]`, because it was written last",
+        "explanation": "Wrong. Vector clocks don't use wall-clock time. 'Last' is meaningless for concurrent writes, which is precisely why LWW loses data."
+      },
+      {
+        "text": "Both versions as siblings, with a merged context. The application merges them (for example, the union {book, pen}) and writes back with clock `[A:3, B:1]` or later",
+        "explanation": "Correct. Concurrent versions are both returned. The client's merge produces a version that descends from both, and the siblings collapse."
+      },
+      {
+        "text": "An error, because the key is corrupted",
+        "explanation": "Wrong. Concurrent versions are a normal, expected outcome in an always-writeable store. Detecting them is what vector clocks are for."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the clocks entry by entry (a missing entry counts as 0):\n\n| | A | B |\n|---|---|---|\n| v1 | 3 | 0 |\n| v2 | 2 | 1 |\n\nOne version descends from another only if each of its counters is at least as big:\n\n```formula\nv1_A > v2_A   as 3 > 2\nv1_B < v2_B   as 0 < 1\nwhere\nv1_A: node A's counter in v1 = [A:3]; here 3\nv1_B: node B's counter in v1; 0, because a missing entry counts as 0\nv2_A: node A's counter in v2 = [A:2, B:1]; here 2\nv2_B: node B's counter in v2; here 1\n>: is greater than\n<: is less than\nIn words: v1 is ahead on node A but behind on node B, so neither clock is greater than or equal to the other in every entry, and neither descends from the other.\n```\n\nSo they're **concurrent**, and the store returns both.\n\nThe client merges them (a basket union gives {book, pen}) and does `put(value, context=[A:3, B:1])`. The coordinating node increments its own entry, for example `[A:4, B:1]`, which dominates both siblings, so they're discarded.\n\nThe trade-off Amazon accepted: with union merges, a *removed* item can reappear if the removal was concurrent with another change.",
+    "link": {
+      "title": "Vector clock (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Vector_clock"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two services increment a counter in Cassandra with read-modify-write: read a value of 100, then each write a value of 101. Both do it at the same moment, and the result is 101, not 102. Why, and what's the right fix?",
+    "options": [
+      {
+        "text": "The network dropped one write. Retry failed writes",
+        "explanation": "Wrong. Both writes succeeded. Last-write-wins kept the one with the higher timestamp, and both wrote the same value, 101. Retrying doesn't change the logic."
+      },
+      {
+        "text": "Clock skew. Sync NTP and the result will be 102",
+        "explanation": "Wrong. Clock skew can make the *wrong* write win, but even with perfect clocks, two writes of 101 give 101. The bug is read-modify-write under LWW, not skew."
+      },
+      {
+        "text": "Raise consistency to ALL for both the read and the write",
+        "explanation": "Wrong. Both clients can still read 100 at ALL before either writes. Stronger consistency on separate reads and writes doesn't make the read-modify-write atomic."
+      },
+      {
+        "text": "Cassandra resolves conflicting writes to a cell by last-write-wins on timestamp, so concurrent read-modify-writes overwrite each other. Use a native counter column (or a commutative design such as appending events), or a lightweight transaction (compare-and-set) if strict sequencing is needed",
+        "explanation": "Correct. LWW loses concurrent updates by design. Counters (increments that merge) or per-event rows that you sum avoid read-modify-write. LWT/Paxos gives compare-and-set at higher latency."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace it:\n\n```\nBoth services read the value 100.\nS1 writes 101 with its timestamp.\nS2 writes 101, stamped 3 us later.\nLWW keeps the later value: 101.\n```\n\nFixes, by trade-off:\n\n| Approach | Cost |\n|---|---|\n| counter column (an atomic increment) | non-idempotent on retry |\n| one row per view, summed or rolled up | more storage, async totals |\n| LWT `UPDATE ... IF views=100` | several round trips (Paxos) |\n\nThe general lesson: on an LWW store, design data so concurrent writers touch **different cells**, or use operations that commute.",
+    "link": {
+      "title": "Dynamo architecture (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Cassandra node is down for 5 hours during a busy period, with the default `max_hint_window` of 3 hours. It then comes back. What state is its data in, and what should you do?",
+    "options": [
+      {
+        "text": "Fully up to date, because hinted handoff replays everything it missed",
+        "explanation": "Wrong. Coordinators stop storing hints for a node once it has been down longer than the hint window, so writes in the last 2 hours were never hinted."
+      },
+      {
+        "text": "It receives hints for writes from roughly its first 3 hours offline but misses the last 2 hours, so run repair on it",
+        "explanation": "Correct. Hints cover short outages only. Beyond the window, anti-entropy repair (Merkle-tree comparison) is what brings the replica back in sync."
+      },
+      {
+        "text": "It must be wiped and re-bootstrapped, because it was down longer than the hint window",
+        "explanation": "A five-hour outage normally calls for repair rather than an automatic wipe. If stale data outlives deletion grace, safe replacement/rebuild may be required to avoid resurrection; the procedure depends on actual tombstone and repair history."
+      },
+      {
+        "text": "Reads at QUORUM will return stale data until it's repaired",
+        "explanation": "Quorum reads overlap completed quorum writes on the same fixed replica set. The prompt does not specify write consistency, so a quorum read is not automatically guaranteed current. Timestamps and partial/concurrent writes matter too."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "With hints enabled and the documented 3h window, coordinators stop generating new hints after about 3h of downtime. Some earlier hints may also be unavailable after coordinator failures; hints are best-effort repair help. A 5 h outage therefore needs repair. Before rejoining a node whose stale data outlived tombstone grace, assess safe rebuild/replacement rather than blindly repairing old data into the cluster.",
+    "link": {
+      "title": "Dynamo architecture (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  },
+  {
+    "id": "cs2-key-value-store-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a last-write-wins store, coordinator X's clock runs 200 ms fast. A user sets `status=away` through X at real time 0 ms. 100 ms later, the user sets `status=online` through a correctly synced coordinator Y. Coordinators assign the timestamps. What does a later read return?",
+    "options": [
+      {
+        "text": "`online`, because it was written later",
+        "explanation": "Wrong. LWW compares *timestamps*, not real time. The later write carries the smaller timestamp."
+      },
+      {
+        "text": "Both values as siblings",
+        "explanation": "Wrong. LWW stores never keep siblings. That's the vector-clock approach."
+      },
+      {
+        "text": "Whichever replica answers first",
+        "explanation": "Wrong. After repair, every replica keeps the cell with the highest timestamp, so all agree, on the wrong value."
+      },
+      {
+        "text": "`away`. X stamped it 200 ms, and Y stamped `online` 100 ms, so the earlier write wins and the later one is silently lost",
+        "explanation": "Correct. Clock skew larger than the gap between two writes reverses their order under LWW."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The first write receives timestamp 200 while the later write receives 100, so LWW selects `away` once both are reconciled. Clock synchronization reduces risk without proving real-time ordering. Client timestamps help only with a correct monotonic scheme covering relevant writers; wall clocks can move backward and devices differ. Use an appropriate conditional/transactional design when ordering matters.",
+    "link": {
+      "title": "Vector clock (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Vector_clock"
+    }
+  }
+]

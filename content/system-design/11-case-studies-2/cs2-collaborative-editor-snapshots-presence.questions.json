@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cs2-collaborative-editor-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 3-year-old design spec has 4 million ops in its log and takes 40 seconds to open. Which storage design fixes load time while keeping full revision history?",
+    "options": [
+      {
+        "text": "Delete ops older than 30 days",
+        "explanation": "Wrong. You'd lose the ability to rebuild old revisions, and without a snapshot you can't even rebuild the *current* state from the remaining ops."
+      },
+      {
+        "text": "Store the document only as a single mutable blob, updated on every op",
+        "explanation": "Wrong. Rewriting a large blob on every keystroke is very write-heavy, it loses the op history needed for revisions, and it races with concurrent writers."
+      },
+      {
+        "text": "Cache the rendered document in the browser forever",
+        "explanation": "Wrong. It doesn't help new devices or collaborators, goes stale with others' edits, and doesn't fix the server-side rebuild cost."
+      },
+      {
+        "text": "Use periodic snapshots plus retained operations sufficient to reconstruct every promised revision; load current state from the newest snapshot and its tail.",
+        "explanation": "Snapshots bound replay only as far as their successful publication keeps up. Keeping full revision history requires enough operations or snapshots to reconstruct every revision; discarding intermediate operations for coarse snapshots reduces history granularity."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Load time is roughly the number of operations replayed times the cost of each. Assume 10 microseconds (µs, millionths of a second) per operation:\n\n```formula\nt = n × c\nt = 4,000,000 × 10 µs = 40 s\nt = 500 × 10 µs = 5,000 µs = 5 ms\nwhere\nt: time to rebuild the document by replay\nn: operations replayed; 4 million with no snapshot, at most about 500 after a recent snapshot\nc: replay cost per operation; an assumed 10 µs\nµs: microseconds, millionths of a second\nms: milliseconds, thousandths of a second\ns: seconds\nIn words: replaying 4 million ops takes 40 seconds, but replaying only the 500 since the last snapshot takes 5 milliseconds.\n```\n\nThis excludes snapshot fetch and parse time. Publish snapshots durably and monitor snapshot lag. To reconstruct an old revision, load a snapshot at or before it and retain all necessary intervening operations. Hourly snapshots alone cannot reproduce every intermediate edit. Restoring creates a new authorised change under the current concurrency protocol.",
+    "link": {
+      "title": "How Figma's multiplayer technology works (Figma blog)",
+      "url": "https://www.figma.com/blog/how-figmas-multiplayer-technology-works/"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You store each user's cursor as an integer offset, broadcast whenever it moves. Users report collaborators' cursors 'jumping' to the wrong place whenever someone types above them. What should you change?",
+    "options": [
+      {
+        "text": "Broadcast cursors 60 times a second so they're always fresh",
+        "explanation": "Wrong. More frequent updates waste bandwidth and still briefly show wrong positions after every remote edit. The positions themselves need to account for edits."
+      },
+      {
+        "text": "Persist cursors to the op log so they're ordered with edits",
+        "explanation": "Wrong. Cursors are ephemeral presence data. Logging them bloats history with high-frequency noise, and still needs transformation to be meaningful."
+      },
+      {
+        "text": "Treat cursors as positions that are transformed by incoming ops (OT), or anchor them to character ids (CRDT), so they move with the text",
+        "explanation": "Correct. A raw offset is just another index, and it goes stale exactly as a raw insert position does. Transforming it, or anchoring it to a stable id, keeps it attached to the same character."
+      },
+      {
+        "text": "Hide remote cursors while anyone is typing",
+        "explanation": "Wrong. It sidesteps the bug by removing a core collaborative feature."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "An insertion of 15 characters before offset 120 moves its corresponding text to 135. OT transforms the cursor with the same positional model. CRDT relative positions retain stable association, but must define behavior when the anchor or containing type is deleted; converting back to a display offset still requires computation.",
+    "link": {
+      "title": "Yjs (GitHub)",
+      "url": "https://github.com/yjs/yjs"
+    }
+  },
+  {
+    "id": "cs2-collaborative-editor-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "200,000 users are actively typing at peak, and each document has about 3 collaborators, so each update goes to about 2 others. Cursor presence is throttled to 10 updates a second per user. Roughly how many presence messages a second does the fan-out tier deliver, and what does it suggest?",
+    "options": [
+      {
+        "text": "About 400,000 a second. Presence is negligible next to ops",
+        "explanation": "Wrong. This forgets the fan-out of 2 recipients and the 10 updates per user. 200,000 × 10 × 2 is ten times larger."
+      },
+      {
+        "text": "About 4 M a second, more than the ~2 M op messages, so presence must be cheap: ephemeral, throttled, coalesced and kept out of the op log",
+        "explanation": "Correct. Presence can be the largest message stream in the system. That's why it never touches durable storage and why throttling matters."
+      },
+      {
+        "text": "About 40 M a second, so presence should be dropped entirely",
+        "explanation": "Wrong. That's 10x too high (it multiplies by 20 recipients), and live cursors are a core feature. The answer is to make them cheap, not remove them."
+      },
+      {
+        "text": "About 4 M a second, so presence should be written to the op log to keep it ordered with edits",
+        "explanation": "Right number, wrong conclusion. Writing 4 M presence updates a second durably would dwarf the real op log for no benefit. A stale cursor only matters for a fraction of a second."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Multiply it out: users sending presence, times updates each sends per second, times recipients for each update.\n\n```formula\nP = U × r × k\nP = 200,000 × 10/s × 2\nP = 4,000,000 messages/s\nwhere\nP: presence messages the fan-out tier delivers per second\nU: users actively typing at peak; 200,000\nr: presence updates per user per second; throttled to 10\nk: other collaborators who receive each update; about 2\ns: seconds\nmessages: delivered presence messages\nIn words: 200,000 users sending 10 cursor updates a second to 2 others each is 4 million messages a second.\n```\n\nCompare ops: 1 M ops/s in, about 2 M/s fanned out. Presence is **twice** the op fan-out.\n\n```formula\nP = U r k\nP = 200,000 × 60/s × 2\nP = 24,000,000 messages/s\nwhere\nP: delivered presence messages per second\nU: sending users; here 200,000\nr: assumed raw event rate per user, 60 per second\nk: recipients per update; here 2\ns: seconds\nmessages: delivered presence updates\nIn words: Unthrottled sixty-per-second updates would deliver twenty-four million messages each second.\n```\n\nHence the rules:\n\n- throttle (10/s) and coalesce (send only the latest position)\n- ephemeral pub/sub, no durable writes\n- heartbeat TTL (~30 s) to drop ghosts",
+    "link": {
+      "title": "How Figma's multiplayer technology works (Figma blog)",
+      "url": "https://www.figma.com/blog/how-figmas-multiplayer-technology-works/"
+    }
+  }
+]

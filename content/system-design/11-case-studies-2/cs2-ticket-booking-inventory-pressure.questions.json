@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs2-ticket-booking-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A general-admission festival sells 20,000 standing tickets, tracked in a single remaining-inventory row initially holding 20,000. At on-sale, 3,000 purchase transactions a second try to decrement it, and p99 latency explodes. What is the best fix?",
+    "options": [
+      {
+        "text": "Split inventory into multiple bucket rows (for example 50 rows of 400). Decrement a random bucket with `WHERE remaining >= :qty`, and fall back to others when a bucket is empty",
+        "explanation": "Bucketed conditional decrements preserve nonnegative inventory if transfers/rebalancing are also atomic. Load can spread, but real throughput depends on shared resources and remaining stock; a 50x gain is not guaranteed."
+      },
+      {
+        "text": "Switch the row's isolation level to READ UNCOMMITTED",
+        "explanation": "Wrong. Lower isolation doesn't remove row-lock contention for writes, and it risks reading uncommitted decrements, which can cause overselling."
+      },
+      {
+        "text": "Cache `remaining` in Redis and decrement only there, syncing to the database hourly",
+        "explanation": "Wrong as stated. Redis can decrement fast, but making it the sole authority with hourly sync means a Redis failover can lose decrements and oversell. Redis can work if it's treated as an authoritative ledger with persistence and care, but hourly sync isn't that."
+      },
+      {
+        "text": "Remove the check and reconcile oversells later with refunds",
+        "explanation": "Wrong. Overselling a venue's safety capacity is a legal and safety issue, not just a customer-service one. 'No oversell' is the hard requirement."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "If each decrement holds the row's exclusive lock for a fixed time, one row can serve at most one transaction per lock duration:\n\n```formula\nC_1 = 1 / t\nC_1 = 1 / 0.002 s = 500 tx/s\nC_N = N × C_1\nC_N = 50 × 500 tx/s = 25,000 tx/s\nwhere\nC_1: ideal ceiling for one row, in transactions per second (tx/s)\nt: how long each transaction holds the row lock, in seconds (s); an assumed 2 ms (milliseconds) = 0.002 s\nC_N: ideal ceiling across N independent bucket rows\nN: number of bucket rows; here 50\ntx: database transactions\ns: seconds\nIn words: a row locked for 2 ms at a time can take at most 500 decrements a second; 50 independent rows could in theory take 25,000.\n```\n\n3,000 a second is six times the single-row ceiling, so p99 latency explodes. The 25,000/s figure is a lock-only theoretical ceiling, not a measured database capacity. Atomically decrement a bucket only when its remaining count is at least the quantity requested. Near sell-out, partial remainders can fragment inventory; combine buckets transactionally or restrict order size. Rebalancing must preserve the total atomically.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You admit 2,000 shoppers/min; each obtains 4 seats and 30% of these holds eventually abandon. Each abandoned checkout retains inventory for its full 8-minute hold lifetime. In steady state with sufficient remaining inventory, what is their average seat occupancy over those full lifetimes?",
+    "options": [
+      {
+        "text": "About 2,400 seats",
+        "explanation": "Wrong. That is the number of seats abandoned *per minute* (2,000 × 0.3 × 4). Each abandoned hold stays in place for 8 minutes, so multiply by the hold duration."
+      },
+      {
+        "text": "About 19,200 seats",
+        "explanation": "Correct. Six hundred abandoned four-seat holds enter each minute and last eight minutes in this model. That ties up 19,200 seats on average, nearly a third of the stadium, rather than the number of shoppers alone."
+      },
+      {
+        "text": "About 64,000 seats",
+        "explanation": "Wrong. This applies the 8 minutes to all 2,000 shoppers rather than the 30% who abandon. Fans who pay release their hold into SOLD."
+      },
+      {
+        "text": "Zero, because expired holds are treated as available at read time",
+        "explanation": "Wrong. Lazy expiry makes seats available once they *expire*. Until then, for up to 8 minutes, an abandoned hold still blocks the seat."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Little's law again: in steady state, the average number of seats sitting in dead holds equals the rate seats enter dead holds times how long each stays there.\n\n```formula\na = 2,000/min × 0.3 = 600/min\nλ = 600/min × 4 seats = 2,400 seats/min\nL = λ × W\nL = 2,400 seats/min × 8 min\nL = 19,200 seats\nwhere\na: shoppers who will abandon, per minute\nλ: the rate seats enter abandoned holds, in seats per minute\nL: average seats tied up in abandoned holds at any moment\nW: how long each abandoned hold keeps its seats, in minutes (min); the full 8-minute hold\n0.3: the 30% of shoppers who abandon\nseats: tickets\nmin: minutes\nIn words: 2,400 seats a minute, each blocked for 8 minutes, keeps 19,200 seats locked up on average.\n```\n\nThat's why the lesson warns about 'sold out' followed by seats reappearing. Levers:\n\n| Change | Dead seats |\n|---|---|\n| hold 8 -> 4 min | 9,600 |\n| explicit cancel on exit | lower |\n| short initial hold, extend at checkout | lower |\n\nExtending the hold only when checkout starts lets you use a short browse hold without punishing fans who are actually paying.",
+    "link": {
+      "title": "Building Cloudflare Waiting Room (Cloudflare blog)",
+      "url": "https://blog.cloudflare.com/cloudflare-waiting-room/"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're expanding to three regions. Each event's inventory lives in one home region. Which parts of the flow can safely be served from **any** region with eventually consistent data? Select all that apply.",
+    "options": [
+      {
+        "text": "Creating holds on specific seats",
+        "explanation": "Wrong. Two regions each accepting a hold on 14F from their own replica would double-allocate. Holds must go to the home region's authoritative store."
+      },
+      {
+        "text": "Event catalogue and venue information",
+        "explanation": "Correct. It's read-mostly and changes rarely, so it can be replicated globally."
+      },
+      {
+        "text": "The waiting-room page and queue-position polling",
+        "explanation": "Correct. These are edge-served and approximate by design. A position a few seconds stale harms nobody."
+      },
+      {
+        "text": "The `HELD -> SOLD` transition at checkout",
+        "explanation": "Wrong. This is the final allocation decision and must run against the single authoritative copy, with the hold_id condition."
+      },
+      {
+        "text": "Seat-map availability snapshots",
+        "explanation": "Correct. The map is already allowed to be a couple of seconds stale, because the hold's conditional update is the real check."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Catalogue, approximate queue-position reads and seat-map snapshots can be served globally. Hold and final allocation writes go to the authoritative event store in this design. Admission itself still needs controlled capacity and authenticated tokens. Cross-region latency depends on routing and must be measured; no fixed Sydney–London round-trip budget is assumed.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  }
+]

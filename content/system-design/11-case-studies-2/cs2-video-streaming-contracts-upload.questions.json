@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs2-video-streaming-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In an HLS-based video service, what does the `GET /videos/{id}/play` endpoint on your API servers typically return?",
+    "options": [
+      {
+        "text": "A signed URL to a manifest (master playlist) on the CDN, plus DRM licence details",
+        "explanation": "Correct. The player fetches the manifest from the CDN, picks a rendition and pulls segments over plain HTTP. The API only authorises playback and hands out signed, expiring URLs."
+      },
+      {
+        "text": "The video bytes, streamed from the API server over a long-lived HTTP response",
+        "explanation": "Wrong. Streaming tens of Tbps through API servers would be ruinously expensive and slow. The API tier serves only small control-plane responses, and the bytes come from the CDN."
+      },
+      {
+        "text": "A WebSocket connection over which the server pushes segments at the right bitrate",
+        "explanation": "Wrong. In HLS/DASH the client pulls segments and decides the bitrate itself. Server push over WebSockets would defeat ordinary HTTP caching, which is the main reason HTTP streaming won."
+      },
+      {
+        "text": "A single MP4 URL at the highest bitrate, which the player downscales locally",
+        "explanation": "Wrong. This is progressive download. It can't adapt to the network, so a viewer on 2 Mbps 4G would stall constantly on a 15 Mbps 4K file."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Separate the **control plane** from the **data plane**:\n\n1. Control plane (your API): is this user allowed to watch? Which CDN node should they use? Here is a signed manifest URL valid for a few hours.\n2. Data plane (CDN): the player downloads `master.m3u8`, sees the variants (480p at 1 Mbps, 1080p at 5 Mbps, ...), picks one based on measured throughput and buffer, then fetches 6 s segments one by one.\n\nThe API response is a few hundred bytes. The video might be gigabytes. Keeping them apart is what lets the API tier stay small while the CDN scales to Tbps.",
+    "link": {
+      "title": "HTTP Live Streaming (Apple developer docs)",
+      "url": "https://developer.apple.com/documentation/http-live-streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A sequential GCS-style resumable upload sends a 4 GB video in 8 MiB chunks, with only one chunk in flight. The connection drops near 3.1 GB. What should the client do?",
+    "options": [
+      {
+        "text": "The app restarts the upload from byte 0, because a partial object in storage may be corrupt",
+        "explanation": "Wrong. Throwing away 3.1 GB on every dropout means a long upload on a flaky link may never finish. Resumable protocols exist precisely to avoid this."
+      },
+      {
+        "text": "The app asks the upload endpoint for the last committed offset, then sends only the chunks after it",
+        "explanation": "Query the committed byte range and resume after it. Under the one-chunk-in-flight assumption, at most that 8MiB chunk may need retransmission. S3 multipart uses numbered part records instead of one committed offset."
+      },
+      {
+        "text": "The API server buffers the whole upload in memory, so the app can just carry on sending where it thinks it stopped",
+        "explanation": "Wrong twice. Multi-GB bodies shouldn't pass through API servers at all, and the client can't know which in-flight bytes actually arrived, so it must ask the server for the committed offset."
+      },
+      {
+        "text": "The app re-sends the last 3.1 GB in parallel streams to make up time",
+        "explanation": "Wrong. Those bytes are already stored. Parallelism helps with the *remaining* parts (S3 multipart allows it), not with re-sending committed data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The server’s committed range, not the client’s sent-byte counter, determines where to resume. Chunks are 8 MiB (mebibytes): 1 MiB = 1,048,576 bytes, so 8 MiB = 8,388,608 bytes. If the server reports 369 complete chunks:\n\n```formula\no = n × c\no = 369 × 8,388,608 B\no = 3,095,396,352 B ≈ 3.1 GB\nwhere\no: the byte offset to resume from (the first byte not yet stored)\nn: chunks the server has committed; here 369\nc: chunk size, in bytes (B); 8 MiB = 8,388,608 B\nB: bytes\nGB: gigabytes, 1,000,000,000 bytes\n≈: approximately equal to\nIn words: 369 complete 8 MiB chunks means the server already holds the first 3,095,396,352 bytes, so the upload restarts from that byte.\n```\n\nResume the GCS session with the appropriate Content-Range. Multiple concurrent parts would require separate recovery accounting; S3 tracks part numbers and ETags.",
+    "link": {
+      "title": "GCS resumable upload recovery",
+      "url": "https://cloud.google.com/storage/docs/performing-resumable-uploads"
+    }
+  }
+]

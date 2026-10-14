@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 12/76. Updated 2026-10-14.
+Verified modules: 13/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -18,6 +18,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | system-design/Architecture & Scaling Patterns | 9 | 41 | 108 | 84 | 262 | 495 | 26 |
 | system-design/Reliability, Operations & Security | 8 | 38 | 97 | 105 | 207 | 447 | 147 |
 | system-design/Case Studies I | 7 | 43 | 85 | 103 | 183 | 773 | 66 |
+| system-design/Case Studies II | 8 | 42 | 101 | 105 | 238 | 495 | 68 |
 | dsa/Complexity Analysis | 7 | 35 | 81 | 290 | 150 | 830 | 32 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
@@ -1444,6 +1445,136 @@ Low-confidence areas:
 - **medium** — glossary: glossary term push-service. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
 - **medium** — glossary: glossary term cs1-web-risk. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
 - **medium** — glossary: glossary term cs1-fcm-unregistered. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+
+## system-design: Case Studies II
+
+[Independent verification record](../content/system-design/11-case-studies-2/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Restore lost word spacing in the GCS upload scenario.
+- Replace unrelated ABR question source with the actual committed-range protocol.
+- Restore film-length word spacing.
+- Remove unsupported universal encoder threading ceiling.
+- Correct distractor claim that random immutable attempt names are inherently unsafe.
+- Remove universal keyframe/compression claim from the correct option itself.
+- Remove universal keyframe claim from the distractor explanation.
+- Remove unsupported universal all-renditions OCA fill claim.
+- Hypothetical inputs do not constitute a measured break-even.
+- Clarify that peak location throughput was extrapolated over the whole day.
+- Remove guaranteed four-second recovery and blanket rejection of useful recent replay.
+- Distinguish TTL cleanup from explicit quote expiry validation.
+- Qualify unsupported universal Hilbert-versus-Z-order superiority.
+- Separate equal-area radius from H3 search coverage guarantee.
+- Remove false claim that broadcasting inherently causes double booking.
+- Durable retries can repeat capture attempts; idempotency protects effects.
+- Add missing event scope and distinguish seat allocation from capture confirmation.
+- Strict order need not use one unreplicated central server.
+- Make burst-to-one-second-average ratio dimensionless.
+- Fix same burst-ratio dimensional error in the question.
+- Correct residual universal segment/keyframe claim in lesson prose.
+- Replace unsupported single-cause historical explanation with concrete protocol advantages.
+- Correct attribution after fetching the actual 1999 Mercator paper.
+- Source the ten-times-fetch-delay heuristic to its actual fetched textbook.
+- Explain the missing host-map routing rule required by the textbook algorithm.
+- Fix a dimensionless millisecond ratio incorrectly labelled messages per second.
+- Define the added message-count unit in its standalone formula.
+- Scope the table to this central-server OT design rather than all OT protocols.
+- Remove blanket any-order assumption from the correct option explanation.
+- Remove false guarantee that both semantic rewrites always survive.
+- Snapshot creation alone does not prove safe anchor removal.
+- Do not invent spaces absent from the concurrent character operations.
+- Make correct option reflect deferred rather than necessarily permanently skipped occurrence.
+- Distinguish scheduled due times from actual execution times.
+- Remove guaranteed precise firing from the correct option.
+- Replace misleading theorem analogy with the actual external-effect ambiguity.
+- Do not introduce quorum overlap as a sufficient read-latest-write guarantee.
+- Qualify read-repair scope and configurable NONE mode against Cassandra docs.
+- Remove universal wipe-at-gc-grace rule from the distractor explanation.
+- Avoid equating an unbalanced ledger record with physical creation of money.
+- Remove conservation guarantee from the correct invariant explanation.
+- Replace invented Stripe refund.succeeded event name.
+- Remove the opposite throughput-based ABR alias from buffer-based ABR.
+- Remove recurring-job aliases from their opposite one-off definition.
+- Remove generic subkeys alias that misdefines replicated opaque configuration copies as summed counters.
+- Qualify exact H3 count with pentagon and metric-coverage limitations.
+- Correct blanket claim that server-ordered OT automatically avoids TP2.
+- Correct self-contained fragmented-MP4 decoding guarantee.
+- Qualify universal AV1 speed, saving and popularity policy.
+- Remove unsupported promise that a 25-node reserve survives every rack loss.
+- Qualify signed URLs as limiting lifetime rather than eliminating hotlinking.
+- Scope lock avoidance to LMAX core rather than the entire system.
+- Correct zero-clearing-balance inference for offsetting unresolved transfers.
+- Keep SHOULD tie-break strength and wildcard semantics exact.
+- Remove configuration-count alias from generic token-ring definition.
+- Remove Job execution-time limit from the CronJob scheduling-control definition.
+- Qualify universal Hilbert locality superiority.
+- Replace undeclared symbolic timeline notation with explicit elapsed-time labels.
+- Specify stable hash and nominal due-time intervals without promising execution cadence.
+- Restore a proper standalone closing fence before the presence guidance.
+- Remove undefined pseudo-equations from the LWW event trace.
+- Keep dollars-per-minute dimensions explicit in break-even substitutions.
+- Define the savings-rate unit locally.
+- Group every natural-log function argument explicitly.
+- Retain area units inside the substituted equal-area-radius root.
+- Correct original-paper versus textbook-frontier attribution in the dictionary.
+- Avoid ICMP rate-limiting fallback annotation in admission and crawler request-budget prose; use the correct request-rate wording.
+- Replace the inconsistent 403 Uber investor-page reading link with its company-hosted full-year-results PDF; the HTML and PDF corroborate the dated inputs.
+
+Remaining gaps:
+
+- No original walkthrough topic intentionally removed; split sections retain the source caveats, examples and archival records.
+- No reproducible production codec/CDN/dispatch/crawler/payment/editor/store capacity benchmark: these capacities, bitrates, pricing, latencies and retention examples are declared inputs.
+- No end-to-end cloud upload or PSP call/failover implementation; SQL fixtures bind documented parameters and test selected guards, not a complete surrounding lease/application/durability protocol.
+- The 224 selected OT insert/delete cases do not prove every TP1/TP2 law, rich-text transformation or CRDT reclamation rule. No live H3 engine or production CRDT fleet was benchmarked.
+- Jurisdiction-complete accounting, legal and PCI compliance is outside this module. The UK record-retention example is specifically sourced rather than a worldwide rule.
+- Original archive formula-finder debt remains byte-identical and excluded from active routes; all six active hits are genuine Rule 6 exceptions.
+- The root coordinator must run the fresh whole-app build, compiled dictionary probes, mobile, offline/update and release checks before publication.
+
+Low-confidence areas:
+
+- **medium** — cs2-video-streaming-contracts-upload: Production policies, version-dependent details and deployment performance. Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- **medium** — cs2-video-streaming-storage-budget: Production policies, version-dependent details and deployment performance. Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- **medium** — cs2-video-streaming-egress-budget: Production policies, version-dependent details and deployment performance. Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- **medium** — cs2-video-streaming-transcode-publication: Production policies, version-dependent details and deployment performance. Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- **medium** — cs2-video-streaming-codec-economics: Production policies, version-dependent details and deployment performance. Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- **medium** — cs2-video-streaming-abr-progress: Production policies, version-dependent details and deployment performance. Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- **medium** — cs2-video-streaming-cdn-placement: Production policies, version-dependent details and deployment performance. Codec/device/CDN/platform details change, and hypothetical encode/traffic/egress inputs are not production benchmarks.
+- **medium** — cs2-ride-sharing-location-budget: Production policies, version-dependent details and deployment performance. Location intervals, batch windows and surge response are scenario policies; historical Uber figures/technology are dated and exact failover capacity is unmeasured.
+- **medium** — cs2-ride-sharing-location-contracts: Production policies, version-dependent details and deployment performance. Location intervals, batch windows and surge response are scenario policies; historical Uber figures/technology are dated and exact failover capacity is unmeasured.
+- **medium** — cs2-ride-sharing-geo-candidates: Production policies, version-dependent details and deployment performance. Location intervals, batch windows and surge response are scenario policies; historical Uber figures/technology are dated and exact failover capacity is unmeasured.
+- **medium** — cs2-ride-sharing-matching-quotes: Production policies, version-dependent details and deployment performance. Location intervals, batch windows and surge response are scenario policies; historical Uber figures/technology are dated and exact failover capacity is unmeasured.
+- **medium** — cs2-web-crawler-fetch-budget: Production policies, version-dependent details and deployment performance. Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- **medium** — cs2-web-crawler-seen-content: Production policies, version-dependent details and deployment performance. Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- **medium** — cs2-web-crawler-content-identity: Production policies, version-dependent details and deployment performance. Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- **medium** — cs2-web-crawler-frontier-contracts: Production policies, version-dependent details and deployment performance. Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- **medium** — cs2-web-crawler-robots-ownership: Production policies, version-dependent details and deployment performance. Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- **medium** — cs2-web-crawler-freshness-traps: Production policies, version-dependent details and deployment performance. Host policies, duplicate thresholds, latency and workload models need corpus-specific validation; original Mercator and later textbook constructions are distinguished.
+- **medium** — cs2-ticket-booking-crowd-budget: Production policies, version-dependent details and deployment performance. Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- **medium** — cs2-ticket-booking-authoritative-holds: Production policies, version-dependent details and deployment performance. Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- **medium** — cs2-ticket-booking-payment-recovery: Production policies, version-dependent details and deployment performance. Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- **medium** — cs2-ticket-booking-waiting-seat-map: Production policies, version-dependent details and deployment performance. Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- **medium** — cs2-ticket-booking-inventory-pressure: Production policies, version-dependent details and deployment performance. Admission/hold capacity and payment recovery are explicit protocol contracts rather than a deployed end-to-end ticketing implementation.
+- **medium** — cs2-job-scheduler-schedule-budget: Production policies, version-dependent details and deployment performance. Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- **medium** — cs2-job-scheduler-due-transactions: Production policies, version-dependent details and deployment performance. Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- **medium** — cs2-job-scheduler-timers-ownership: Production policies, version-dependent details and deployment performance. Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- **medium** — cs2-job-scheduler-execution-cron: Production policies, version-dependent details and deployment performance. Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- **medium** — cs2-job-scheduler-tenant-retry-scaling: Production policies, version-dependent details and deployment performance. Scheduling lateness, lease/epoch installation and endpoint effects require a deployed failure model; product cron/delay semantics are version-dependent.
+- **medium** — cs2-payment-system-money-workload: Production policies, version-dependent details and deployment performance. Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- **medium** — cs2-payment-system-operation-contracts: Production policies, version-dependent details and deployment performance. Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- **medium** — cs2-payment-system-unknown-webhooks: Production policies, version-dependent details and deployment performance. Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- **medium** — cs2-payment-system-balanced-ledger: Production policies, version-dependent details and deployment performance. Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- **medium** — cs2-payment-system-reconcile-scale: Production policies, version-dependent details and deployment performance. Provider retention/auth/capture and accounting policies vary by endpoint/rail/jurisdiction; fixtures do not certify financial compliance or a live PSP workflow.
+- **medium** — cs2-collaborative-editor-edit-budget: Production policies, version-dependent details and deployment performance. Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- **medium** — cs2-collaborative-editor-document-owner: Production policies, version-dependent details and deployment performance. Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- **medium** — cs2-collaborative-editor-ot-transform: Production policies, version-dependent details and deployment performance. Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- **medium** — cs2-collaborative-editor-crdt-offline: Production policies, version-dependent details and deployment performance. Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- **medium** — cs2-collaborative-editor-snapshots-presence: Production policies, version-dependent details and deployment performance. Selected transformation cases and fetched library/paper contracts are verified, but no complete rich-text convergence proof or fleet benchmark is supplied.
+- **medium** — cs2-key-value-store-replica-budget: Production policies, version-dependent details and deployment performance. Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
+- **medium** — cs2-key-value-store-ring-quorums: Production policies, version-dependent details and deployment performance. Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
+- **medium** — cs2-key-value-store-failure-conflicts: Production policies, version-dependent details and deployment performance. Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
+- **medium** — cs2-key-value-store-repair-storage: Production policies, version-dependent details and deployment performance. Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
+- **medium** — cs2-key-value-store-hotkeys-evolution: Production policies, version-dependent details and deployment performance. Product defaults are the fetched Cassandra 5.0 YAML/docs and historical Dynamo papers; quorum intersection is not linearisability and capacity remains hypothetical.
 
 ## dsa: Complexity Analysis
 

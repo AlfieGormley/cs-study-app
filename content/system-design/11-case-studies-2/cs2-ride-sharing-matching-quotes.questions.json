@@ -1,0 +1,167 @@
+[
+  {
+    "id": "cs2-ride-sharing-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two dispatcher instances, handling two different riders, both select driver D as the best candidate at the same moment. What mechanism most simply guarantees D receives only one offer?",
+    "options": [
+      {
+        "text": "Rely on the location index: once D is offered, it removes D from the cell set",
+        "explanation": "Wrong. The location index is eventually consistent soft state. Both dispatchers read it before either update lands, so both still see D as available. It can't provide mutual exclusion."
+      },
+      {
+        "text": "Let both offers go out and have the driver app reject the second",
+        "explanation": "Wrong. It pushes correctness to an unreliable mobile client. If the driver accepts both quickly, or the app is offline, you now have two riders expecting one car."
+      },
+      {
+        "text": "Route all dispatching globally through a single thread",
+        "explanation": "Wrong. It would be correct, but at ~1,200 requests/s with ETA calls per request it's a throughput and availability bottleneck. A single global thread also can't survive a data-centre failure."
+      },
+      {
+        "text": "A conditional write (compare-and-set) on D's state: set `offered` only `WHERE state='available' AND version=v`",
+        "explanation": "Correct. Exactly one of the two conditional updates succeeds. The loser sees 0 rows affected and moves to its next candidate. It's simple, has no lock service, and is correct even with retries."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Two authoritative CAS updates against available/version 7 cannot both succeed. Bind the winning offer to a unique offer ID and epoch. Only that still-pending offer can be expired or declined; a stale timeout must not release a later accepted trip. Driver reservation and trip acceptance must commit atomically or follow a recoverable protocol preserving both invariants.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your greedy dispatcher assigns each request, the moment it arrives, to the driver with the lowest ETA. Average pickup times are worse than a competitor's in dense downtown areas. Which change best addresses this?",
+    "options": [
+      {
+        "text": "Collect requests over a 1–2 s window, build an ETA cost matrix between those riders and nearby drivers, and solve the assignment problem to minimise total ETA",
+        "explanation": "Batching can improve the assignment objective on the chosen candidates, but adds waiting and computation. Net real-world pickup benefit must be measured;1–2 seconds is a hypothetical window."
+      },
+      {
+        "text": "Rank by straight-line distance instead of ETA, because it's cheaper and lets you consider more drivers",
+        "explanation": "Wrong. Straight-line distance ignores one-way streets, rivers and traffic. It's fine for pre-filtering but makes the final ranking worse, not better."
+      },
+      {
+        "text": "Increase the location update interval to 15 s to reduce load",
+        "explanation": "Wrong. Staler locations make ETAs less accurate, which worsens matching. Load isn't the problem described."
+      },
+      {
+        "text": "Offer each request to the 5 nearest drivers at the same time and take the first acceptance",
+        "explanation": "Broadcasting can be safe with authoritative winner selection and fenced cancellations, but alone does not optimise the fleet-wide assignment objective. It adds offer work and may disturb drivers."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A tiny example shows the greedy failure:\n\n| | Driver X | Driver Y |\n|---|---|---|\n| Rider A | 2 min | 3 min |\n| Rider B | 3 min | 10 min |\n\nGreedy: A arrives first and takes X (2 min), so B gets Y (10 min). Total **12 min**.\n\nBatched: A gets Y (3 min) and B gets X (3 min). Total **6 min**.\n\nWith a 2 s window downtown, you might batch dozens of riders and drivers and solve with a Hungarian-style or min-cost-flow solver. In quiet suburbs a batch has one rider, so batching degenerates gracefully to greedy.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In this design, which authoritative mutation paths need coordination to prevent conflicting driver assignments and invalid trip transitions? Select all that apply.",
+    "options": [
+      {
+        "text": "Whether driver D is `available`, `offered` or `on_trip`",
+        "explanation": "The reservation write needs an authoritative atomic guard. Candidate reads can be stale if that guard rejects obsolete choices; the authority can be replicated through consensus rather than one physical copy."
+      },
+      {
+        "text": "The surge multiplier per H3 cell",
+        "explanation": "Wrong. Surge is a smoothed market signal recomputed every minute. What has to be consistent is the price the rider accepted, which lives in the quote."
+      },
+      {
+        "text": "Each driver's latest latitude and longitude",
+        "explanation": "Wrong. Location is soft state that refreshes every 4 s. A position a few seconds stale only makes the ranking slightly less accurate, and making it CP would add replication cost to 500,000 writes a second."
+      },
+      {
+        "text": "Trip state transitions such as `driver_assigned` to `in_trip` to `completed`",
+        "explanation": "Correct. The trip drives payment. A lost or duplicated transition means a lost trip or a double charge."
+      },
+      {
+        "text": "Every read of an immutable, signed, rider-bound quote must use a linearizable database.",
+        "explanation": "Not necessarily. An immutable authenticated quote can carry its price, rider, route and expiry; an eventual store must not substitute a different price on a miss. Revocation or single-use redemption can require coordination, but ordinary quote reads need not all be linearizable."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "Coordinate driver reservation and authoritative trip-state changes. Candidate locations, surge estimates and display reads can be stale under explicit policies. An immutable signed quote can preserve the offered price without a linearizable lookup; validate identity, route and expiry, and coordinate redemption if the product requires it.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "At peak you handle about 1,200 ride requests a second, and a k-ring search in a busy city returns around 300 available drivers. A teammate wants to call the road-routing ETA service for all 300 candidates. What's the better approach?",
+    "options": [
+      {
+        "text": "Call ETA for all 300, because straight-line distance is misleading",
+        "explanation": "Wrong. Distance is misleading for the final ranking, but routing every candidate costs 1,200 × 300 = 360,000 route computations a second, mostly for drivers who were never going to win."
+      },
+      {
+        "text": "Skip ETA entirely and rank by straight-line distance",
+        "explanation": "Wrong. A driver 300 m away across a river with no bridge can be 15 minutes away by road. Crow-flies distance alone gives bad matches."
+      },
+      {
+        "text": "Pre-filter cheaply by straight-line distance (and vehicle type), then call ETA only for the top ~10 and rank those",
+        "explanation": "Correct. The cheap filter cuts ETA load by about 30x (12,000 calls/s instead of 360,000), and the expensive ETA call is spent only where it changes the decision."
+      },
+      {
+        "text": "Precompute ETAs between every pair of H3 cells once a day",
+        "explanation": "Wrong. ETAs depend on live traffic, and the number of cell pairs is enormous. Cached cell-to-cell estimates can help as a coarse filter, but they can't replace live routing for the final choice."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count route computations per second: requests per second times candidates routed per request.\n\n```formula\nC = q × m\nC_all = 1,200/s × 300 = 360,000/s\nC_top = 1,200/s × 10 = 12,000/s\nwhere\nC: route (ETA) computations per second\nC_all: computations when routing every candidate\nC_top: computations when routing only a top-10 shortlist\nq: ride requests per second at peak; here 1,200\nm: candidates sent to the routing service per request\ns: seconds\nIn words: routing all 300 candidates needs 360,000 route calculations a second; a top-10 shortlist needs 12,000, which is 30 times fewer.\n```\n\nThis trades candidate recall for cost: the best ETA may lie outside the distance shortlist, especially around rivers or limited crossings. Measure recall and widen or improve the coarse filter where needed.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "cs2-ride-sharing-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A stadium empties after a concert, and about 50,000 ride requests arrive from a handful of H3 cells within 15 minutes. The shard owning those cells is overloaded. Which measures help? Select all that apply.",
+    "options": [
+      {
+        "text": "Use batched matching for the area, assigning many riders to many drivers per window",
+        "explanation": "Correct. Batching amortises work over each window and produces much better assignments when demand is dense."
+      },
+      {
+        "text": "Route every request in the city to one global dispatcher so nothing is double-booked",
+        "explanation": "Wrong. Double-booking is already prevented by the driver CAS. Centralising dispatch would turn a hot shard into a hot *system*."
+      },
+      {
+        "text": "Let surge rise in those cells, which draws in drivers and spreads out demand",
+        "explanation": "Higher prices may affect supply and demand, but the response is not immediate or guaranteed. Admission controls and technical capacity protection are still required."
+      },
+      {
+        "text": "Index dense areas at a finer resolution so the hotspot spans more cells, which can live on different shards",
+        "explanation": "Finer cells can distribute a spatially broad hotspot if shard placement separates them. A co-located crowd can remain hot, and queries across more cells add fan-out; refinement is not an automatic load split."
+      },
+      {
+        "text": "Ask drivers' apps to send locations every second instead of every 4 s",
+        "explanation": "Wrong. That quadruples location writes into the same overloaded cells and doesn't add a single driver."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Size the spike. Fifteen minutes is 900 seconds:\n\n```formula\nq = N / t\nq = 50,000 / 900 s ≈ 55/s\np = W / i\np = 30,000 / 3 s = 10,000/s\nwhere\nq: ride requests per second\nN: requests in the spike; here 50,000\nt: the window they arrive in, in seconds (s); 15 minutes = 900 s\np: map reads per second from waiting riders\nW: riders waiting with the app open; an example figure of 30,000 (tens of thousands)\ni: how often each app polls for nearby cars, in seconds; an example of 3\ns: seconds\n≈: approximately equal to\nIn words: the requests are only about 55 a second, but tens of thousands of open maps polling every few seconds add around 10,000 reads a second to the same cells.\n```\n\nThe request rate alone looks modest, but it all lands on one shard, and each request triggers k-ring scans, CAS attempts and ETA calls over the same few cells. On top of that, every waiting rider's map is reading the same cells, and arriving drivers are writing to them.\n\nThe fixes attack different parts of the problem:\n\n- **Finer cells** spread the *index* load across shards.\n- **Batching** spreads the *matching* work over fewer, better decisions.\n- **Surge** changes the *market*, adding supply and smoothing demand.\n\nMore frequent pings and a central dispatcher both make the hotspot worse.",
+    "link": {
+      "title": "H3: hexagonal hierarchical geospatial indexing (docs)",
+      "url": "https://h3geo.org/docs/"
+    }
+  }
+]

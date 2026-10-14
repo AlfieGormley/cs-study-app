@@ -1,0 +1,122 @@
+[
+  {
+    "id": "cs2-video-streaming-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your player uses a purely throughput-based ABR algorithm. Viewers on mobile complain that quality keeps jumping between 480p and 1080p every few seconds. What is the most effective change?",
+    "options": [
+      {
+        "text": "Switch to a buffer-based or hybrid algorithm that chooses the bitrate mainly from buffer occupancy, with hysteresis",
+        "explanation": "Buffer-aware switching and hysteresis can damp oscillation. Tune them against representative traces; they do not universally eliminate all quality changes or stalls."
+      },
+      {
+        "text": "Make segments 1 second long so the player reacts faster",
+        "explanation": "Wrong as a standalone fix. Faster sampling can make an unsmoothed controller more sensitive to noise; it does not add hysteresis. Shorter segments also increase request rate under the same buffering policy."
+      },
+      {
+        "text": "Remove the 720p rendition so there are fewer rungs to switch between",
+        "explanation": "Wrong. Fewer rungs make each switch a *bigger* visible jump (480p straight to 1080p) and waste bandwidth. The ladder isn't the cause of the instability."
+      },
+      {
+        "text": "Have the server choose the bitrate instead of the client",
+        "explanation": "Moving the decision alone does not solve oscillation. A server-assisted controller could use client telemetry, but still needs a stable policy; server assistance does not inherently prevent cacheable segments."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Diagnose the cause:\n\n- Mobile throughput is noisy. One segment downloads at 8 Mbps and the next at 2 Mbps.\n- A throughput rule picks the highest rung that fits under a safety margin:\n\n```formula\nb ≤ 0.8 × T_last\nwhere\nb: the bitrate of the rendition chosen for the next segment, in megabits per second (Mbps)\nT_last: the throughput measured while downloading the last segment, in Mbps\n0.8: a safety margin, so only 80% of the measured speed is used\n≤: is less than or equal to\nMbps: megabits per second\nIn words: choose the best quality whose bitrate is at most 80% of how fast the last segment arrived.\n```\n\nWith that rule, at 8 Mbps the limit is 6.4 Mbps, so it picks 5 Mbps (1080p); at 2 Mbps the limit is 1.6 Mbps, so it picks 1 Mbps (480p). It flips every segment.\n\nThe fix is to use the **buffer** as a shock absorber:\n\n| Buffer | Choice |\n|---|---|\n| < 10 s | lowest safe rung |\n| 10–30 s | step up gradually |\n| > 30 s | top sustainable rung |\n\nWith 30 s buffered, a 4 s dip doesn't threaten a stall, so there's no reason to drop quality. Add hysteresis (require sustained evidence before switching) to reduce unnecessary switching, then validate the policy on representative network traces.",
+    "link": {
+      "title": "Adaptive bitrate streaming (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Adaptive_bitrate_streaming"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must support both Apple devices (HLS) and Android/web players (DASH). Storage and CDN cache footprint are major costs. What packaging approach minimises them?",
+    "options": [
+      {
+        "text": "Store separate MPEG-TS segments for HLS and separate fMP4 segments for DASH",
+        "explanation": "Wrong. Where compatible players and encryption can share fragmented MP4, separate media copies create avoidable storage and cache duplication; the effect on total storage and hit rate is workload-dependent."
+      },
+      {
+        "text": "Repackage on the fly at the edge from a single mezzanine file",
+        "explanation": "Just-in-time packaging is a legitimate technique (used by some origins), but doing it at every edge costs CPU at thousands of sites and still caches two formats. CMAF achieves the saving without per-request work."
+      },
+      {
+        "text": "Use only DASH and ship a JavaScript DASH player on iOS Safari",
+        "explanation": "Wrong in practice. Native iOS apps and AirPlay rely on HLS, and FairPlay DRM is built around HLS. Dropping HLS breaks a large share of devices."
+      },
+      {
+        "text": "Package once as CMAF (fragmented MP4) segments, and publish both an HLS playlist and a DASH MPD that reference the same files",
+        "explanation": "Compatible CMAF segments can be shared by HLS and DASH manifests when codec, encryption and player support align. This avoids duplicate media copies for that ladder, not universally half of all platform storage."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "For compatible players, codecs and encryption, both playlists can reference the same immutable .m4s objects. HLS has supported fragmented MP4 as well as MPEG-TS; separate duplicate media is not inherent to the protocol. Sharing files reduces duplicate packaging/cache footprint, but originals, alternate codecs and incompatible DRM combinations remain separate costs.",
+    "link": {
+      "title": "Dynamic Adaptive Streaming over HTTP (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_Adaptive_Streaming_over_HTTP"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A music video goes viral with 2 M people watching at once. View counts are stored as `videos.view_count` in the sharded MySQL tier, and each player runs `UPDATE ... SET view_count = view_count + 1` when playback starts. The shard holding that video starts timing out. What is the best fix?",
+    "options": [
+      {
+        "text": "Move the shard to a bigger machine",
+        "explanation": "Wrong. Every increment to the same row takes the same row lock, so they serialise no matter how many cores you add. A bigger box buys little against a single hot row."
+      },
+      {
+        "text": "Re-shard `videos` by a hash of `video_id`",
+        "explanation": "Wrong. The video already lives on exactly one shard, and it's one row. No sharding key spreads writes to a single row."
+      },
+      {
+        "text": "Send view events to a log such as Kafka, deduplicate and aggregate per video per minute in a stream processor, and write the totals",
+        "explanation": "Correct. Thousands of increments a second become one write per video per minute. The count lags slightly, which nobody minds, and the stream step can also apply fraud rules such as a minimum watch time."
+      },
+      {
+        "text": "Cache the count in Redis and drop the database write",
+        "explanation": "Partly helpful for reads, but with no durable write the count is lost when Redis restarts, and there is still no deduplication or fraud filtering. The log-and-aggregate pattern solves both."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Quantify the hot spot. Suppose 2 M viewers start within about 10 minutes (600 seconds):\n\n```formula\nw = V / t\nw = 2,000,000 / 600 s ≈ 3,300 writes/s\nwhere\nw: increments arriving at the one row, in writes per second\nV: viewers starting playback; here 2,000,000\nt: the window they start in, in seconds (s); 10 minutes = 600 s\ns: seconds\nwrites: single-row UPDATE statements\n≈: approximately equal to\nIn words: two million starts in ten minutes is about 3,300 writes a second, all to one row.\n```\n\nEach increment takes the row lock, writes redo and commits. Even at 1 ms (one millisecond) each, one row can take at most about 1,000 increments a second, so 3,300 a second saturates it.\n\nWith stream aggregation:\n\n```\nKafka: 3,300 events/s (model input)\nprocessor: sum per video per minute\nDB: 1 write/min for this video\n```\n\n```formula\nF = w × 60 s / 1\nF = 3,333 writes/s × 60 s ≈ 200,000\nwhere\nF: how many times fewer writes the hot row receives\nw: writes per second without aggregation; here about 3,333\n60 s: one minute, the aggregation window\n1: the single write per minute after aggregation\ns: seconds\nwrites: row updates\n≈: approximately equal to\nIn words: about 200,000 increments a minute collapse into one write a minute.\n```\n\nThat is a reduction of about 200,000 times for the hot row, and it gives you a place to dedupe one view per session.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "cs2-video-streaming-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For a live design that keeps the same approximate number of buffered full segments, what tradeoff follows from reducing segment duration from 6 to 2 seconds?",
+    "options": [
+      {
+        "text": "It cuts latency with no downside, because segment length only affects the manifest",
+        "explanation": "Segment duration changes full-segment request frequency and can change buffer/packaging delay. Compression cost depends on codec dependencies and random-access spacing; not every segment or LL-HLS part must start with an independently decodable frame."
+      },
+      {
+        "text": "It can lower latency and triples full-segment requests. Compression may worsen if random-access spacing also shortens; LL-HLS parts can lower latency further.",
+        "explanation": "It can reduce packaging/buffer delay under the stated policy and triples full-segment request frequency. Compression cost depends on whether random-access/keyframe spacing also changes. LL-HLS publishes partial segments for lower latency."
+      },
+      {
+        "text": "It increases latency, because the player must fetch three times as many segments before starting",
+        "explanation": "Wrong. The player buffers a similar *number* of segments, so shorter segments mean less buffered time and lower latency."
+      },
+      {
+        "text": "It makes no difference to latency, which is set entirely by the CDN's cache TTL",
+        "explanation": "Wrong. Live latency is dominated by encode and packaging delay plus how much the player buffers, and buffer depth is measured in segments."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Requests per minute is 60 seconds divided by the segment length:\n\n```formula\nq = 60 s / d\nq = 60 s / 6 s = 10\nq = 60 s / 2 s = 30\nwhere\nq: full-segment requests per viewer per minute (excluding manifests, audio and parts)\nd: segment duration, in seconds (s)\ns: seconds\nIn words: cutting segments from 6 s to 2 s triples the requests, from 10 to 30 a minute.\n```\n\nWith an illustrative latency model (encode/package delay of one segment, 2 seconds of transport, a player buffer of three segments):\n\n```formula\nL = d + 2 s + 3 × d\nL = 6 s + 2 s + 18 s = 26 s\nL = 2 s + 2 s + 6 s = 10 s\nwhere\nL: glass-to-glass live latency, in seconds (s)\nd: segment duration, in seconds (s); 6 then 2\n2 s: assumed network transport delay\n3 × d: three buffered segments\ns: seconds\nIn words: under these assumptions, latency falls from 26 seconds to 10 seconds.\n```\n\nThese are chosen assumptions, not universal player behaviour. LL-HLS parts can be delivered before a complete segment exists; not every part must be independently decodable.",
+    "link": {
+      "title": "HTTP Live Streaming (Apple developer docs)",
+      "url": "https://developer.apple.com/documentation/http-live-streaming"
+    }
+  }
+]

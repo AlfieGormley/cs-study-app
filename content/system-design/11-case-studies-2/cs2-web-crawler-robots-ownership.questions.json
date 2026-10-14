@@ -1,0 +1,160 @@
+[
+  {
+    "id": "cs2-web-crawler-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your crawler requests `https://shop.example/robots.txt` and gets `503 Service Unavailable`. According to RFC 9309, what should it do?",
+    "options": [
+      {
+        "text": "Treat the site as having no restrictions and crawl everything",
+        "explanation": "Wrong. That's the RFC's rule for **4xx** (robots.txt 'unavailable', such as a 404). A 5xx means the server is struggling, and crawling everything would add to its load."
+      },
+      {
+        "text": "Use the last cached robots.txt indefinitely",
+        "explanation": "Partly wrong. A cached copy can be used during a long outage, but by default the RFC says not to rely on cached rules for more than 24 hours when the file is reachable, and a 5xx initially means disallow."
+      },
+      {
+        "text": "Assume complete disallow for the host, and retry robots.txt later",
+        "explanation": "Correct. RFC 9309 says that if robots.txt is unreachable because of server errors (5xx), crawlers must assume complete disallow. If it stays unreachable for a long time (the RFC suggests 30 days), they may fall back to a cached copy or carry on as if there were no rules."
+      },
+      {
+        "text": "Ignore robots.txt for this host from now on",
+        "explanation": "Wrong. One error never releases a crawler from the protocol. It also risks crawling paths the owner explicitly disallowed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "RFC 9309 distinguishes unavailable 4xx (the crawler may access resources) from undefined robots due to 5xx/network failure (assume disallow). Retry politely and retain cache state according to the RFC. Its example 30-day long-outage period is not a mandatory threshold. A robots permission is not authentication or a blanket legal permission to access content.",
+    "link": {
+      "title": "RFC 9309: Robots Exclusion Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9309.html"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run 50 crawler nodes. Which partitioning scheme makes per-host politeness easiest to enforce correctly?",
+    "options": [
+      {
+        "text": "Hash the full URL across nodes, so load is perfectly even",
+        "explanation": "Wrong. URLs for one host would spread over all 50 nodes. Each would fetch independently, so the host could get 50 concurrent requests unless you add a distributed rate limiter, which is extra latency and complexity."
+      },
+      {
+        "text": "Assign URLs round-robin as they're discovered",
+        "explanation": "Wrong. Same problem as hashing the full URL: no node owns a host, so politeness needs global coordination. Round-robin also ignores DNS and robots cache locality."
+      },
+      {
+        "text": "Consistent-hash the hostname (or registered domain), so each host is owned by exactly one node, which keeps its back queue and next-allowed time locally",
+        "explanation": "Correct. One host owner can coordinate that host locally, including its robots and DNS caches. A balanced consistent-hash ring moves a limited share of hosts during membership changes. Safe handover still requires draining or fencing old fetchers, and shared-IP limits need coordination across owners."
+      },
+      {
+        "text": "Partition by top-level domain (.com, .org, .uk ...)",
+        "explanation": "Wrong. It's catastrophically skewed: .com alone is a huge share of the web, so one node would get most of the work."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A single fenced owner for each host can serialize its fetches and retain local scheduling/cache state. On failover, recover durable queues and prevent old in-flight ownership from violating the host limit. Shared-IP limits must span different host owners; per-node IP counters alone can multiply the allowed rate. Consistent hashing redistributes approximately a fraction of hosts only under balanced placement assumptions.",
+    "link": {
+      "title": "Consistent hashing (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A site's robots.txt contains:\n\n```\nUser-agent: *\nDisallow: /private\nAllow: /private/press\n```\n\nUnder RFC 9309, may your crawler fetch `/private/press-kit.pdf`?",
+    "options": [
+      {
+        "text": "No. `Disallow` rules always take precedence over `Allow` rules",
+        "explanation": "Wrong. RFC 9309 has no blanket precedence for `Disallow`. The most specific (longest) matching rule decides."
+      },
+      {
+        "text": "No. `/private/press` is a folder, so it doesn't match a file called `press-kit.pdf`",
+        "explanation": "Wrong. Rules match as path *prefixes* of octets, not as folders. `/private/press` is a prefix of `/private/press-kit.pdf`, so the rule matches."
+      },
+      {
+        "text": "Yes. Both rules match, and `Allow: /private/press` is the longer match, so it wins",
+        "explanation": "Correct. `/private/press` is 14 octets against 8 for `/private`. The most specific match must be used, so the fetch is allowed."
+      },
+      {
+        "text": "Yes, but only because `Allow` comes after `Disallow` in the file",
+        "explanation": "Wrong. Order in the file doesn't matter under RFC 9309. Swap the two lines and the answer is the same."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Apply the RFC's rule step by step:\n\n1. Find every rule in the matching group whose path is a prefix of the URL path.\n   - `/private` matches (8 octets).\n   - `/private/press` matches (14 octets).\n2. Use the **most specific** match, the one with the most octets: `Allow: /private/press`.\n3. Only if two matching rules were equally long would the tie-break apply, and then `Allow` should win.\n\nSo `/private/press-kit.pdf` is allowed, while `/private/accounts` (matching only `/private`) is not.\n\nThe prefix behaviour surprises site owners. If they meant only the press folder, they should write `Allow: /private/press/`.",
+    "link": {
+      "title": "RFC 9309: Robots Exclusion Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9309.html"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are reviewing a colleague's robots.txt handling against RFC 9309. Which behaviours are compliant? Select all that apply.",
+    "options": [
+      {
+        "text": "On `503` or a connection timeout, stop crawling the host until robots.txt can be fetched",
+        "explanation": "Correct. An 'unreachable' robots.txt (server or network error) means the crawler must assume complete disallow."
+      },
+      {
+        "text": "Match the `User-agent` line case-insensitively, so `MyBot` matches `mybot`",
+        "explanation": "Correct. The RFC requires case-insensitive matching of the product token."
+      },
+      {
+        "text": "Re-use a successfully fetched robots.txt for a week to save requests",
+        "explanation": "Wrong. Crawlers should not use a cached copy for more than 24 hours unless the file is unreachable."
+      },
+      {
+        "text": "Treat `Crawl-delay` as a mandatory part of the standard",
+        "explanation": "Wrong. `Crawl-delay` isn't defined in RFC 9309. Honouring it is good manners, but it's an extension."
+      },
+      {
+        "text": "On `404 Not Found` for robots.txt, crawl the host without robots restrictions",
+        "explanation": "Correct. A 4xx means the file is 'unavailable', and the RFC says the crawler may then access any resource on the server."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "For robots handling: follow parseable successful rules; a 4xx may permit access under the protocol; undefined 5xx/network failure requires disallow; cache guidance is SHOULD NOT exceed 24h unless unreachable; product-token matching is case-insensitive. Crawl-delay is an optional extension. A long undefined period may permit the RFC’s documented fallback. These rules do not make robots.txt an authorization mechanism.",
+    "link": {
+      "title": "RFC 9309: Robots Exclusion Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9309.html"
+    }
+  },
+  {
+    "id": "cs2-web-crawler-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your crawler enforces a 2-second delay per **host**. A shared-hosting provider serves 2,000 small sites from one IP address, and all 2,000 are in your frontier. The provider complains about overload. What's going on?",
+    "options": [
+      {
+        "text": "Nothing is wrong. 2 s per host is already very polite",
+        "explanation": "Wrong. It's polite to each *site*, but all 2,000 sites share one machine, and the per-host limits add up on that machine."
+      },
+      {
+        "text": "The per-host limits add up to about 1,000 requests a second on one server. Also apply a coordinated per-IP request budget",
+        "explanation": "Correct. Across two thousand hosts, one request each every two seconds adds up to one thousand requests per second at the shared IP. A coordinated per-IP budget protects shared infrastructure."
+      },
+      {
+        "text": "The DNS cache is stale, so requests are going to the wrong server",
+        "explanation": "Wrong. The requests are reaching the right server. There are simply too many of them."
+      },
+      {
+        "text": "The Bloom filter is producing false positives, causing repeat fetches",
+        "explanation": "Wrong. Bloom false positives make you *skip* URLs, not fetch them again."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each host allows one request every 2 seconds, but all the hosts share one IP address, so their rates add up:\n\n```formula\nr = H / d\nr = 2,000 / 2 s = 1,000 requests/s\nwhere\nr: requests per second arriving at the shared IP address\nH: hosts on that IP that are in your frontier; here 2,000\nd: per-host delay between requests, in seconds (s); here 2\ns: seconds\nrequests: HTTP requests\nIn words: 2,000 sites each fetched every 2 seconds is 1,000 requests a second at one server.\n```\n\nActual server capacity is not known from its label or host count. Enforce a coordinated per-IP budget in addition to host limits, using the resolved address while respecting DNS caching and changes. CDNs/anycast complicate the one-IP/one-machine assumption, so tune policy using evidence.",
+    "link": {
+      "title": "Web crawler (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler"
+    }
+  }
+]

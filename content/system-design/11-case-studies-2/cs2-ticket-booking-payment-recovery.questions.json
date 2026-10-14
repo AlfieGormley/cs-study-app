@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs2-ticket-booking-q3",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user's hold on 4 seats expires at 20:00:00. Their card authorisation, started at 19:59:50, returns success at 20:00:05. Meanwhile, another user held those seats at 20:00:02. What design prevents a double sale?",
+    "options": [
+      {
+        "text": "Capture the payment, then mark the seats SOLD, because the first user started paying first",
+        "explanation": "Wrong. 'Started first' isn't a lock. The seats now belong to hold #2. Blindly marking them SOLD for user 1 overwrites user 2's valid hold and creates a double sale."
+      },
+      {
+        "text": "Make holds last 60 minutes so they never expire during payment",
+        "explanation": "Wrong. It reduces the race but locks up inventory for an hour each time someone abandons. Seats look sold out, then reappear, and the race still exists for very slow payments."
+      },
+      {
+        "text": "Atomically move a valid owned hold into PAYMENT_PENDING, authorise, then conditionally reserve for the order and durably capture; reconcile uncertain outcomes before releasing seats.",
+        "explanation": "The ownership predicate prevents overwriting another hold. Extending a deadline only reduces expiry races; capture can still fail or time out, so durable recovery is needed before confirmation or release."
+      },
+      {
+        "text": "Use a distributed lock in Redis around the whole checkout",
+        "explanation": "Wrong. A Redis lock with a TTL has the same expiry problem (a slow payment outlives the lock), and without fencing it can't stop a stale holder's write. The database's conditional update is the real safeguard."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Lock and validate all four seats, including hold ID, state and fresh expiry; move them atomically to PAYMENT_PENDING.\n2. Authorise with a stable PSP key.\n3. Conditional order reservation and an outbox capture job commit together. Roll back if not all seats match.\n4. Capture with provider idempotency; confirm only on success.\n5. Reconcile UNKNOWN outcomes. Do not let an expiry sweep reallocate a seat while an old capture could still succeed. Definitive failure needs a fenced cancellation/void path.",
+    "link": {
+      "title": "How to do distributed locking (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Three checkout requests arrive for the same hold. Along with a durable capture job and provider-enforced idempotency within its retention contract, which server-side protections prevent duplicate orders and repeated capture effects? Select all that apply.",
+    "options": [
+      {
+        "text": "Capturing the payment immediately on each request, then refunding duplicates overnight",
+        "explanation": "Wrong. That double-charges the fan and makes support and the ledger clean up a problem that idempotency would have prevented."
+      },
+      {
+        "text": "An `Idempotency-Key` stored with a UNIQUE constraint, so repeats with the same key return the first result",
+        "explanation": "Correct. The retry and the double-tap (if the app generates one key per checkout attempt) map to the same stored result rather than running again."
+      },
+      {
+        "text": "A UNIQUE constraint on `orders.hold_id`",
+        "explanation": "Correct. Even if two requests carried different keys, one hold can produce only one order. The second insert fails."
+      },
+      {
+        "text": "An ownership-checked PAYMENT_PENDING-to-order reservation, atomic with the order and durable capture intent.",
+        "explanation": "Only the winning reservation creates capture work. The worker must use stable PSP idempotency and reconcile ambiguous outcomes; a crash after external capture is not solved by the seat update alone."
+      },
+      {
+        "text": "Disabling the Pay button after the first tap",
+        "explanation": "Wrong as a guarantee. It's a good UX touch, but it does nothing about network retries, a second device or a modified client. The server must be safe on its own."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Layer the defences, each catching what the previous one misses:\n\n1. **Idempotency key**: the same logical request (a retry) returns the stored response.\n2. **UNIQUE hold_id on orders**: different requests for the same hold can't both create orders.\n3. **Conditional SOLD transition**: only one transaction wins the seats, and capture is tied to winning.\n\n```\nreq A key K1 -> new: authorise,\n   SOLD ok, capture -> order O1\nreq B key K1 -> stored: return O1\nreq C key K2 -> insert order fails\n   (hold_id taken) -> void auth\n```\n\nClient-side measures reduce noise, but correctness has to live on the server.",
+    "link": {
+      "title": "Optimistic concurrency control (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Optimistic_concurrency_control"
+    }
+  },
+  {
+    "id": "cs2-ticket-booking-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "To make holds fast, a teammate makes Redis the **only** record of holds: `SET seat:e1:14F h1 NX PX 480000`. The SOLD transition later reads the hold from Redis. During the on-sale the Redis primary crashes and a replica is promoted. Two fans later both complete checkout for 14F. How did that happen?",
+    "options": [
+      {
+        "text": "`NX` doesn't work under concurrency, so both `SET`s succeeded on the primary",
+        "explanation": "Wrong. On a single Redis node, `SET ... NX` is atomic, so only one of two concurrent calls succeeds."
+      },
+      {
+        "text": "Redis replication is asynchronous. The primary acknowledged h1's hold and crashed before replicating it, so on the promoted replica 14F looked free and a second `SET NX` succeeded",
+        "explanation": "Correct. The acknowledged write was lost in failover. With Redis as the only source of truth, a lost write becomes a double allocation."
+      },
+      {
+        "text": "The `PX 480000` expiry is too short, so the hold expired before checkout",
+        "explanation": "Wrong. 480,000 ms is 8 minutes, the intended hold length. Expiry returns the seat to the pool. It doesn't by itself give it to two people."
+      },
+      {
+        "text": "The database's isolation level was too weak",
+        "explanation": "Wrong. In this design the database never checked anything, which is the actual problem. The final transition must be a conditional update in the strongly consistent store."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Replay the failover:\n\n```\nt0 fan1: SET 14F h1 NX -> OK (primary)\nt1 primary crashes before replicating\nt2 replica promoted, has no 14F key\nt3 fan2: SET 14F h2 NX -> OK\nt4 both reach checkout\n```\n\nRedis can pre-filter, while the authoritative inventory store validates the event and owning hold. After moving a valid hold to PAYMENT_PENDING, a selected allocation fragment is:\n\n```sql\n-- Check event and hold ownership.\nUPDATE seats SET status='SOLD'\nWHERE event_id='e1' AND seat_id='14F'\n  AND hold_id=:h\n  AND status='PAYMENT_PENDING';\n```\n\nHere SOLD reserves the seat for the pending order; it does not itself prove capture success. Commit order/capture intent atomically, confirm only on provider success and recover UNKNOWN outcomes. If the database never recorded h1, its transition affects no row.",
+    "link": {
+      "title": "How to do distributed locking (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  }
+]

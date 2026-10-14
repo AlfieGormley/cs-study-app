@@ -1,0 +1,139 @@
+[
+  {
+    "id": "cs2-job-scheduler-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A worker finishes sending a customer's weekly report email, then crashes before acknowledging the run. Its lease expires and the run is redelivered. This is expected behaviour of which delivery guarantee, and what must the job do about it?",
+    "options": [
+      {
+        "text": "At-most-once. The job needn't do anything, because it will never run twice",
+        "explanation": "Wrong. At-most-once systems ack *before* doing the work, so a crash loses the run rather than repeating it. Redelivery after a crash is the hallmark of at-least-once."
+      },
+      {
+        "text": "At-least-once. The fix is to make the lease timeout infinite",
+        "explanation": "Wrong. With an infinite lease, a crashed worker's run would never be retried, which turns the system into at-most-once and silently loses runs."
+      },
+      {
+        "text": "Exactly-once. The scheduler guarantees the email is sent once, so redelivery is a bug",
+        "explanation": "Wrong. No scheduler can guarantee exactly-once *execution* of external side effects: a worker can always die after acting but before reporting. Exactly-once is only achievable as idempotent *effects*."
+      },
+      {
+        "text": "Redelivery is consistent with at-least-once-style processing; enforce provider idempotency or another atomic effect contract using the run ID.",
+        "explanation": "A crash after sending but before acknowledgement can cause another attempt. A local send log alone cannot make an external email effect atomic; provider support or reconciliation is required."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Acknowledging before work risks losing it; acknowledging afterward permits retries after an ambiguous completion. Do not insert a permanent sent flag before sending: a crash between the insert and send would suppress the only attempt. Use recoverable attempt state plus provider-enforced idempotency where supported. Without an atomic destination contract, choose and document the possible-duplicate versus possible-loss tradeoff.",
+    "link": {
+      "title": "Amazon SQS visibility timeout (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A customer schedules `30 1 * * *` (01:30 daily) in `Europe/London`. Which situations must your scheduler have an explicit, documented policy for? Select all that apply.",
+    "options": [
+      {
+        "text": "The last Sunday in March, when 01:30 local time doesn't exist",
+        "explanation": "Correct. UK clocks jump from 01:00 GMT straight to 02:00 BST, so local times in [01:00, 02:00) never happen that day. Without a policy (skip, or fire at the first valid instant), the job silently doesn't run, or the library throws."
+      },
+      {
+        "text": "The last Sunday in October, when 01:30 local time occurs twice",
+        "explanation": "Correct. Clocks go back from 02:00 BST to 01:00 GMT, so 01:00–02:00 happens twice. Without a 'first occurrence only' rule, keyed on the UTC instant, the job fires twice."
+      },
+      {
+        "text": "The scheduler was down at the scheduled time: fire late or skip?",
+        "explanation": "Correct. This is the missed-run policy (Kubernetes' `startingDeadlineSeconds`). Without it, an outage either silently drops runs or floods the system with catch-ups."
+      },
+      {
+        "text": "The previous run is still executing when the next is due",
+        "explanation": "Correct. That needs a concurrency policy (Allow, Forbid or Replace, in Kubernetes terms). Long-running daily jobs overlapping themselves is a common source of corruption."
+      },
+      {
+        "text": "Storing the schedule as a fixed UTC offset (+01:00) so DST never matters",
+        "explanation": "A fixed offset does not preserve 01:30 London throughout the year. Store the IANA zone and calculate date-specific occurrences."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Choose explicit gap and fold policies; storing UTC instants makes chosen occurrences unambiguous but does not itself select the first fold. Apply a documented late-start/catch-up policy. Atomically enforce per-job overlap rules; a separate check then enqueue can race. Cancellation cannot undo completed external effects, so Replace also needs cooperative cancellation or destination fencing.",
+    "link": {
+      "title": "CronJob (Kubernetes docs)",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're running a report every 5 minutes as a Kubernetes CronJob, and runs sometimes take 8 minutes. Which statements about CronJob behaviour are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "The default policy is `Allow`, so overlapping runs execute concurrently unless you change it",
+        "explanation": "Correct. Allow is the default, so an 8-minute job on a 5-minute schedule will overlap with the next run."
+      },
+      {
+        "text": "`startingDeadlineSeconds` sets the maximum time a Job may run before it is killed",
+        "explanation": "Wrong. It's the deadline for *starting* a late run. Past it, that occurrence is skipped. Limiting run time is `activeDeadlineSeconds` on the Job."
+      },
+      {
+        "text": "With `concurrencyPolicy: Replace`, the running Job is replaced by the new one",
+        "explanation": "Correct. The old Job is cancelled, which suits work where only the latest result matters."
+      },
+      {
+        "text": "CronJob guarantees each scheduled time produces exactly one Job",
+        "explanation": "Wrong. The docs warn that a CronJob may occasionally create two Jobs, or none, for one schedule, so Jobs should be idempotent."
+      },
+      {
+        "text": "With `concurrencyPolicy: Forbid`, the controller does not create a concurrent Job at that instant; a missed occurrence may still start later within its starting deadline.",
+        "explanation": "Forbid does not create a concurrent Job at that instant. Once the previous Job finishes, a missed occurrence may start if the starting deadline permits; it is not necessarily discarded forever."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "At :05 while A still runs, Allow can start B, Forbid defers creation, and Replace replaces A. When A finishes at :08, Forbid may create the missed occurrence depending on the start deadline and controller timing. Policies apply only to Jobs from the same CronJob and do not make external effects exactly-once.",
+    "link": {
+      "title": "CronJob (Kubernetes docs)",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/"
+    }
+  },
+  {
+    "id": "cs2-job-scheduler-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "2 M hourly jobs opt in to 'any time in the first 5 minutes'. You spread them with a stable hash-derived offset between zero and 299 seconds. A colleague suggests a fresh random offset in the same window on each run instead. Why is the hash better?",
+    "options": [
+      {
+        "text": "The hash spreads the jobs more evenly than a random number",
+        "explanation": "Wrong. Both spread about 6,700 jobs per second over the window. The difference is what happens to each job from run to run."
+      },
+      {
+        "text": "A stable hash keeps each job’s scheduled due-time offset the same every hour; fresh random offsets vary the nominal gaps by almost five minutes either way.",
+        "explanation": "Correct. Deterministic jitter spreads the *fleet* while keeping each *job's* cadence regular, which is what tenants expect from 'hourly'."
+      },
+      {
+        "text": "Random numbers are too slow to generate at 2 M per hour",
+        "explanation": "Wrong. Generating 2 M random numbers is trivial. The concern is behaviour, not cost."
+      },
+      {
+        "text": "The hash avoids the need for a `(job_id, scheduled_at)` run key",
+        "explanation": "Wrong. You still need the run key for dedup. Jitter only changes *when* a run fires."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "First, check the spreading. The 5-minute window is 300 seconds:\n\n```formula\nq = J / w\nq = 2,000,000 jobs / 300 s\nq ≈ 6,700 runs/s\nwhere\nq: runs started per second once spread out\nJ: hourly jobs that opted in; here 2 million\nw: the jitter window, in seconds (s); 5 minutes = 300 s\ns: seconds\njobs: scheduled jobs\nruns: job executions\n≈: approximately equal to\nIn words: spreading 2 million jobs evenly over 300 seconds gives about 6,700 runs a second instead of 2 million in one second.\n```\n\nEither method achieves that. Use a stable integer digest and take its remainder after division by 300. The chosen slot is between zero and 299 seconds and stays the same for each job; actual execution can still be delayed. Python’s built-in string hash is not the stable cross-process algorithm required here.\n\nNow follow one job over two hours:\n\n| Method | 09:xx | 10:xx | Gap |\n|---|---|---|---|\n| hash | 09:03:17 | 10:03:17 | 60 min |\n| random | 09:00:20 | 10:04:50 | 64.5 min |\n\nWith random jitter, nominal due times can be almost 55 minutes or almost 65 minutes apart, which surprises anyone using 'hourly' for rate limits or billing. A stable hash is predictable for each tenant and still smooth for the fleet.",
+    "link": {
+      "title": "Executing cron scripts reliably at scale (Slack Engineering)",
+      "url": "https://slack.engineering/executing-cron-scripts-reliably-at-scale/"
+    }
+  }
+]

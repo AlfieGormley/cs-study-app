@@ -1,0 +1,130 @@
+[
+  {
+    "id": "rel-slos-error-budgets-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service has a 99.9% request-based availability SLO over 30 days and serves **500 million** requests a month. A bad deploy causes 100% errors for 15 minutes at peak, when traffic is 400 req/s. Roughly what fraction of the monthly error budget did that incident consume?",
+    "options": [
+      {
+        "text": "About 35%",
+        "explanation": "35% is 15 minutes divided by the time-based budget of 43.2 minutes. This SLO is request-based, so what matters is how many requests failed, and peak traffic is about twice the average."
+      },
+      {
+        "text": "About 72%",
+        "explanation": "Correct. The monthly allowance is 500,000 failed requests. At 400 requests per second for 900 seconds, the incident fails 360,000 requests and consumes 72% of that budget. The worked card shows each step."
+      },
+      {
+        "text": "About 7.2%",
+        "explanation": "This is off by a factor of ten, typically from computing the budget as 1% rather than 0.1% of requests (5,000,000)."
+      },
+      {
+        "text": "About 0.07%",
+        "explanation": "This compares failed requests with *total* requests (360k / 500M), giving the error rate contribution rather than the fraction of the *budget*, which is only 0.1% of requests."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nB = N(1 − SLO)\nB = 500,000,000 × 0.001 = 500,000\nF = r × t\nF = 400 req/s × 900 s = 360,000\nf = F / B\nf = 360,000 / 500,000 = 0.72 = 72%\nwhere\nB: the error budget, failed requests allowed in 30 days\nN: the requests in 30 days, here 500 million\nSLO: the objective, here 99.9% = 0.999\nF: the requests failed by the incident\nr: the request rate during the incident, here 400 requests per second (req/s)\nt: the outage length, 15 minutes = 900 seconds (s)\nf: the fraction of the budget consumed\nreq: requests\ns: seconds\n%: per cent\nIn words: the month allows 500,000 failures, and 15 minutes of total failure at 400 req/s produced 360,000 of them, 72% of the budget.\n```\n\nCompare with a uniform-traffic time view: 15 minutes is about 35% of the 43.2-minute allowance. The request-based figure is higher because the outage hit peak. Average traffic is 500 million requests over 2.59 million seconds (30 days), about 193 req/s, so the 400 req/s peak is about twice average.\n\nUnder Google's example policy, any single incident using more than 20% of the budget requires a postmortem; this one certainly does, and with only 28% left the team should slow releases.",
+    "link": {
+      "title": "Error budget policy (Google SRE workbook)",
+      "url": "https://sre.google/workbook/error-budget-policy/"
+    }
+  },
+  {
+    "id": "rel-slos-error-budgets-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your request-based SLO is 99.9% over 30 days. Assume constant traffic and a clean preceding history. For the last several hours, the error rate has been a steady **0.5%**. What is the burn rate, and if it continues, how long until the whole month's budget is gone (starting from a full budget)?",
+    "options": [
+      {
+        "text": "Burn rate 0.5; the budget lasts 60 days",
+        "explanation": "This divides the SLO's budget by the error rate the wrong way round. Burn rate is the error rate divided by the budget rate: 0.5% ÷ 0.1% = 5, not 0.5."
+      },
+      {
+        "text": "Burn rate 5; the budget lasts 6 days",
+        "explanation": "Correct. The burn rate is 0.5% / 0.1% = 5. A burn rate of 1 lasts the full 30 days, so 5 lasts 30 / 5 = 6 days."
+      },
+      {
+        "text": "Burn rate 50; the budget lasts 14.4 hours",
+        "explanation": "50 would be the burn rate at a 5% error rate. With 0.5% errors you're consuming budget 5× faster than sustainable, not 50×."
+      },
+      {
+        "text": "Burn rate 5; the budget lasts 5 hours",
+        "explanation": "The burn rate is right but the time isn't: time to exhaustion is the period divided by burn rate, 720 h / 5 = 144 h, not 5 h."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nb = e / (1 − SLO)\nb = 0.5% / 0.1% = 5\nt_out = T / b = 720 h / 5 = 144 h\nwhere\nb: the burn rate, a plain multiplier\ne: the observed error rate, here 0.5%\nSLO: the objective, 99.9%, so 1 − SLO = 0.1%\nt_out: the time until a full budget is gone\nT: the SLO period, 30 days = 720 hours (h)\nh: hours\n%: per cent\nIn words: errors at five times the budget rate empty a 30-day budget in 6 days (144 hours).\n```\n\nWhich alert catches this? The 6× / 6 h paging rule needs a burn rate above 6, and 5 never gets there, so nobody is paged. The 1× / 3-day ticket rule fires once the 3-day window's average burn rate passes 1:\n\n```formula\nbt / W > 1\n5 × t / 72 h > 1\nt > 72 h / 5 = 14.4 h\nwhere\nb: the burn rate since the errors started, here 5\nt: the time since the errors started, in hours (h)\nW: the rule's long window, 3 days = 72 h\n>: \"is greater than\"\nh: hours\nIn words: with clean history before, the 3-day average reaches burn rate 1 after 14.4 hours of burning at 5×.\n```\n\nA ticket rather than a page is appropriate: you have days, not minutes.",
+    "link": {
+      "title": "Alerting on SLOs (Google SRE workbook)",
+      "url": "https://sre.google/workbook/alerting-on-slos/"
+    }
+  },
+  {
+    "id": "rel-slos-error-budgets-q10",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "A service has exhausted its error budget over the trailing four weeks. Under the Google SRE workbook's example error budget policy, which of these are appropriate? Select all that apply.",
+    "options": [
+      {
+        "text": "Wait for the budget to reset to 100% on the first of next month",
+        "explanation": "Incorrect for a rolling window. Events age out continuously; the remaining budget depends on both old and new events and can change sharply as an incident leaves the window."
+      },
+      {
+        "text": "Hold a postmortem for the incident that alone used 35% of the budget",
+        "explanation": "Correct. The example policy requires a postmortem, with at least one top-priority action item, for any single incident consuming more than 20% of the four-week budget."
+      },
+      {
+        "text": "Pause feature releases until the service is back within its SLO",
+        "explanation": "Correct. The policy halts changes and releases except urgent fixes while the budget is exhausted, redirecting effort to reliability."
+      },
+      {
+        "text": "Still ship a fix for an actively exploited security vulnerability",
+        "explanation": "Correct. The example policy explicitly exempts security fixes and P0 bugs from the freeze; leaving a hole open would be a worse outcome."
+      },
+      {
+        "text": "Ship the big launch anyway, because the product manager agreed a date with marketing",
+        "explanation": "Incorrect. The point of a pre-agreed policy is that it decides these conflicts in advance. Disputes are escalated, not settled by whoever pushes hardest."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Work through the policy's clauses:\n\n| Clause | Applies? |\n|---|---|\n| Budget exhausted → freeze | ✓ pause features |\n| Exemptions: P0 bugs, security | ✓ ship the patch |\n| Single incident > 20% → postmortem | ✓ (35%) |\n| Escalate disagreements | the launch can't override |\n\nOn the reset: with a rolling 28-day window, today's budget depends on the last 28 days. If the bad incident was 10 days ago, its failures remain in the window for another 18 days. Better new traffic can improve the ratio sooner but does not erase those failures.",
+    "link": {
+      "title": "Error budget policy (Google SRE workbook)",
+      "url": "https://sre.google/workbook/error-budget-policy/"
+    }
+  },
+  {
+    "id": "rel-slos-error-budgets-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A search API has a latency SLO: **99% of requests served in at most 300 ms**, over a rolling 28 days. Assume 28 million requests in the full window, uniform traffic, a clean history before this day, and this error rate continuing. In the last 24 hours it served 1,000,000 requests, of which 25,000 took longer than 300 ms. What is the burn rate, and what fraction of the 28-day budget did that day use?",
+    "options": [
+      {
+        "text": "Burn rate 2.5; about 9% of the budget",
+        "explanation": "Correct. The budget rate is 1% slow requests. 2.5% slow is a burn rate of 2.5. One day at 2.5× uses 2.5 × 24 h out of 672 h, about 8.9% of the budget."
+      },
+      {
+        "text": "Burn rate 25; the whole budget is gone",
+        "explanation": "25 would be the burn rate against a 0.1% budget. A 99% SLO allows 1% slow requests, so the budget is ten times bigger."
+      },
+      {
+        "text": "Burn rate 0.4; about 1.5% of the budget",
+        "explanation": "This divides the budget by the bad rate the wrong way round (1% / 2.5%). The burn rate is the observed bad rate divided by the budget rate."
+      },
+      {
+        "text": "It can't be computed; latency SLOs have no error budget",
+        "explanation": "A latency SLO written as a ratio (good means served in at most 300 milliseconds) has a budget exactly like availability: 1% of requests may be slow."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Treat \"slower than 300 ms\" as a bad event.\n\n```formula\ne = 25,000 / 1,000,000 = 2.5%\nb = e / (1 − SLO) = 2.5% / 1% = 2.5\nT = 28 × 24 h = 672 h\nf = bw / T\nf = 2.5 × 24 h / 672 h ≈ 8.9%\nwhere\ne: the bad-event ratio over the day\nb: the burn rate, a plain multiplier\nSLO: the objective, 99%, so 1 − SLO = 1%\nT: the SLO period, 28 days in hours (h)\nf: the fraction of the 28-day budget used\nw: the time spent burning, here 24 h\nh: hours\n≈: approximately equal to (rounded)\n%: per cent\nIn words: 2.5% slow against a 1% allowance is a burn rate of 2.5, and a day of that uses about 9% of the 28-day budget.\n```\n\nAlerting: below the 6× and 14.4× pages, but well above 1×. Using the illustrative 1× / 3-day ticket threshold, the 3-day average passes 1 once the lookback average exceeds one, after 28.8 hours: a little more than a day.\n\nThis is why SLIs are written as \"proportion under a threshold\" rather than “a p99 below 300 milliseconds”: the ratio form gives you a budget and burn rate for free.",
+    "link": {
+      "title": "Implementing SLOs (Google SRE workbook)",
+      "url": "https://sre.google/workbook/implementing-slos/"
+    }
+  }
+]

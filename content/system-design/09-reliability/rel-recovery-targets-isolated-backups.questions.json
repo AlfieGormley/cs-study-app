@@ -1,0 +1,152 @@
+[
+  {
+    "id": "rel-disaster-recovery-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A business says: \"If our region fails, we can tolerate losing up to 5 minutes of orders, and we must be back online within 1 hour.\" Which statement maps these correctly?",
+    "options": [
+      {
+        "text": "RPO of one hour; RTO of five minutes",
+        "explanation": "This swaps the two. Data loss tolerance (5 minutes of orders) is the recovery *point*; time to come back online is the recovery *time*."
+      },
+      {
+        "text": "RPO of five minutes; RTO of one hour",
+        "explanation": "Correct. RPO measures acceptable data loss in time (the last 5 minutes of writes); RTO measures acceptable downtime (1 hour to restore service)."
+      },
+      {
+        "text": "Both RPO and RTO of five minutes, because they must match",
+        "explanation": "RPO and RTO are independent targets. A system can have near-zero RPO (synchronous replication) and still take an hour to fail over, or vice versa."
+      },
+      {
+        "text": "SLA of five minutes; SLO of one hour",
+        "explanation": "SLA and SLO are broader service-level concepts and can include recovery commitments; these specific data-loss and restoration-time targets are conventionally named RPO and RTO."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Draw the timeline:\n\n```\nlast copy   disaster        restored\n   │◀─RPO─▶│◀─────RTO──────▶│\n```\n\nBoth targets are limits on a gap in time:\n\n```formula\nt_d − t_c ≤ RPO\nt_r − t_d ≤ RTO\nwhere\nt_d: the disaster time in minutes from a common origin\nt_c: the last surviving recovery point’s time on the same clock, in minutes\nt_r: the restoration time on the same clock, in minutes\nRPO: Recovery Point Objective, the most data loss allowed in minutes; here five minutes\nRTO: Recovery Time Objective, the most downtime allowed in minutes; here one hour is 60 minutes\n≤: \"is at most\"\nIn words: the data lost (from the last good copy to the disaster) must be no more than the RPO, and the outage (from the disaster to recovery) must be no more than the RTO.\n```\n\n1. \"Lose up to 5 minutes of orders\" looks *backwards* from the disaster to the last good copy: a **five-minute RPO**. This means replication or backups must keep a usable recovery point no more than five minutes behind; merely starting a copy every five minutes is insufficient.\n2. \"Back online within 1 hour\" looks *forwards*: a **one-hour RTO**. That rules out a multi-hour restore and points to pilot light or warm standby.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your 30 TB database is backed up nightly to another region. A restore runs at an effective **400 MB/s**, followed by about 2 hours of log replay and validation. The business asks for an RTO of 4 hours. Can backup-and-restore meet it?",
+    "options": [
+      {
+        "text": "Yes, it takes about 3 hours in total",
+        "explanation": "This underestimates the copy phase. 30 TB at 400 MB/s is about 21 hours, not 1 hour; check the unit conversion (TB to MB is a factor of 10⁶)."
+      },
+      {
+        "text": "Yes, because the backup is in another region",
+        "explanation": "Location determines whether the backup survives the disaster, not how fast it can be restored. RTO depends on restore throughput and steps."
+      },
+      {
+        "text": "No: around 23 hours in total; you need pilot light or warm standby with a live replica",
+        "explanation": "Correct. 30,000,000 MB / (400 MB/s) = 75,000 s ≈ 20.8 h, plus 2 h replay ≈ 23 h. A continuously replicated database in the DR region avoids the bulk restore entirely."
+      },
+      {
+        "text": "No, but only because the RPO is 24 hours",
+        "explanation": "Without usable intervening log archives, nightly snapshots can leave about 24 hours of data at risk, which may also be unacceptable, but the question is about RTO, which fails on restore time."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nT = D / B + T_replay\nT = 30 TB / (400 MB/s) + 2 h\nT = 30,000,000 MB / (400 MB/s) + 2 h\nT = 75,000 s + 2 h\nT ≈ 20.8 h + 2 h ≈ 22.8 h\nwhere\nT: the total time to recover from the backup, in hours (h)\nD: the data to restore, here 30 terabytes (TB)\nB: the effective restore throughput, here 400 megabytes per second (MB/s)\nT_replay: the time for log replay and validation after the copy, here about 2 h\nTB: terabytes; 1 TB = 1,000,000 MB (decimal units)\nMB: megabytes\nMB/s: megabytes per second\ns: seconds; 3,600 s = 1 h\nh: hours\n≈: approximately equal to (rounded)\nIn words: copying 30 TB at 400 MB/s takes about 21 hours, and replay adds 2 more, so recovery takes nearly a day against a 4-hour target.\n```\n\nCompared with the 4-hour RTO, it misses by about 19 hours.\n\nOptions: keep a cross-region replica (pilot light) so recovery is \"promote and scale the app tier\" (tens of minutes), or warm standby (minutes). Nightly snapshots without intervening log archives can leave about 24 hours of data at risk; compare that separately with the agreed RPO.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A developer accidentally commits `DELETE FROM customers;` without a `WHERE` clause on the primary database. The database has two synchronous replicas in other zones. What protects you?",
+    "options": [
+      {
+        "text": "The synchronous replicas, since they hold full copies of the data",
+        "explanation": "Synchronous replication copies the DELETE statement's effect to the replicas almost instantly. Replicas protect against hardware loss, not against logically valid but wrong operations."
+      },
+      {
+        "text": "Point-in-time recovery from backups and archived logs, restored to just before the DELETE statement",
+        "explanation": "Correct. PITR lets you restore a copy to the second before the mistake, then recover the deleted rows. This is why replication is not a backup."
+      },
+      {
+        "text": "Failing over to a replica",
+        "explanation": "Ordinary failover is not an undo mechanism: replicated committed changes will be replayed. Synchronous durability does not necessarily mean a replica has already applied the delete, but it still retains that committed history."
+      },
+      {
+        "text": "The database's transaction isolation level",
+        "explanation": "Isolation controls how concurrent transactions see each other. A committed DELETE statement is durable; isolation doesn't let you undo it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Classify the failure: **logical** (a valid command with a disastrous effect), not physical.\n2. Replication's job is to make replicas identical to the primary, so it propagates the committed DELETE statement according to replication and replay timing.\n3. You need a copy from *before* the event: a snapshot plus write-ahead log (WAL/binlog) archive.\n4. Restore a separate instance to a recovery target before the bad transaction commits. Reconcile recovered rows with subsequent legitimate changes and constraints before merging them into production.\n\nPrevention also helps: least-privilege access (no ad-hoc writes to prod), and immutable backups so the same mistake (or an attacker) can't also delete the backups.",
+    "link": {
+      "title": "Data integrity: what you read is what you wrote (Google SRE book)",
+      "url": "https://sre.google/sre-book/data-integrity/"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Ransomware compromises a production admin account and encrypts both the database and all backups in the same cloud account. Which backup design would most directly have prevented losing the backups?",
+    "options": [
+      {
+        "text": "Taking backups more frequently",
+        "explanation": "More frequent backups still live in the compromised account, so the attacker deletes or encrypts them all the same. Frequency improves RPO, not survivability."
+      },
+      {
+        "text": "Encrypting the backups at rest",
+        "explanation": "Encryption at rest protects against someone reading the backup media. An attacker with admin access can still delete or overwrite encrypted backups."
+      },
+      {
+        "text": "Immutable (write-once) backups in a separate account that production credentials cannot modify or delete",
+        "explanation": "Correct when immutability is properly enforced. S3 Object Lock compliance mode protects retained versions even from administrators; governance mode has privileged bypass. Separate account permissions and encryption-key protection are also needed."
+      },
+      {
+        "text": "Using RAID 10 on the database servers",
+        "explanation": "RAID protects against disk failure. It faithfully stores the attacker's encrypted data, offering no protection against logical or malicious changes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Threat model: the attacker has **production admin credentials**.\n2. Anything those credentials can delete is not a safe backup.\n3. Defences:\n   - **Isolation**: copy backups to a separate account or organisation with separate credentials and MFA, and no trust relationship that lets production delete them.\n   - **Immutability**: S3 Object Lock in compliance mode (or equivalent) blocks deletion for the retention period, even by the root user.\n   - **3-2-1**: three copies, two media, one off-site.\n4. Then *test restores* from the isolated copy so you know it works.",
+    "link": {
+      "title": "Data integrity: what you read is what you wrote (Google SRE book)",
+      "url": "https://sre.google/sre-book/data-integrity/"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Postgres database takes a full backup every night at 02:00 and successfully maintains a continuous, usable WAL archive in another region no more than **5 minutes** behind. The primary region is destroyed at 15:47. What is the worst-case data loss under these assumptions?",
+    "options": [
+      {
+        "text": "About 5 minutes, the gap since the last archived WAL segment",
+        "explanation": "Correct. Point-in-time recovery restores the 02:00 backup and replays WAL up to the last segment that left the region. Anything written after that, up to ~5 minutes, is lost."
+      },
+      {
+        "text": "About 14 hours, back to the nightly backup",
+        "explanation": "The nightly backup is only the starting point. Replaying archived WAL on top of it recovers changes up to the last archived segment."
+      },
+      {
+        "text": "Zero, because WAL records every change",
+        "explanation": "WAL records every change on the primary, but only archived segments survive the region's loss. Changes still in the current, unarchived segment are gone."
+      },
+      {
+        "text": "24 hours, because backups are daily",
+        "explanation": "The daily cadence sets RPO only if you have nothing but full backups. Continuous log archiving shrinks it to the archive interval."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. What survives in the other region: the 02:00 base backup plus every WAL segment archived since.\n2. Restore: base backup, then replay WAL up to the last archived segment (say 15:43).\n3. Lost: writes between 15:43 and 15:47. Worst case, the full archive interval: **~5 minutes**.\n4. RTO is a separate question: restoring the base backup plus replaying ~14 hours of WAL may take hours.\n\nRPO comes from how often data leaves the failure domain; RTO from how long recovery takes. Postgres archive_timeout limits segment-switch delay, not successful upload completion; failed archiving or transfer backlog can exceed it. Monitor the actual recoverable point.",
+    "link": {
+      "title": "Point-in-time recovery (Amazon RDS user guide)",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_PIT.html"
+    }
+  }
+]

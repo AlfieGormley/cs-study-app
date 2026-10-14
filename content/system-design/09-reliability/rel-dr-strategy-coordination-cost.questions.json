@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel-disaster-recovery-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A SaaS company needs an RPO of effectively zero and an RTO under 1 minute across a full regional failure. It runs Postgres in one region with an async replica in another, plus DNS failover with a 300 s TTL. Which statement best describes the gap?",
+    "options": [
+      {
+        "text": "It meets the targets, because the replica is in another region",
+        "explanation": "Having a cross-region copy is necessary but not sufficient. Async replication loses the lag window, and a 300 s TTL alone exceeds the 1-minute RTO."
+      },
+      {
+        "text": "Async replication can lose acknowledged writes and a 300 s cached address can delay failover beyond a minute; use appropriately replicated durable commits and a tested fast recovery path",
+        "explanation": "For zero acknowledged-write loss under a regional failure, commits need durable copies outside that failure domain. Fast failover may use an adequately provisioned standby with preconfigured routing; active-active is one option, not a requirement."
+      },
+      {
+        "text": "Lowering the TTL to 10 s would meet both targets",
+        "explanation": "A lower TTL helps RTO (though some resolvers ignore it), but it does nothing for RPO: async replication still loses unreplicated writes."
+      },
+      {
+        "text": "Taking backups every minute would give a near-zero RPO",
+        "explanation": "Minute-level backups give an RPO of up to a minute, not zero, and restoring from backup takes far longer than 1 minute."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Check the targets separately.\n\nFor data durability, an asynchronous standby can lack acknowledged writes when the primary region is lost. Measure recovery-point lag against the RPO; use synchronous cross-region replication or a correctly placed quorum if no acknowledged-write loss is required.\n\nFor recovery time, freshly cached DNS with a 300 s TTL can outlive the one-minute target. Include failure detection, fencing, promotion, routing and client reconnection in an end-to-end drill. An appropriately provisioned standby with preconfigured fast routing may meet the target; active-active is not intrinsically required.\n\nSpecific inter-region RTT figures are absent because no reliable measurement for the proposed locations and network was available. Measure the chosen deployment.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An order-management system needs an **RPO of at most 15 minutes** and an **RTO of at most 2 hours** for a regional disaster, at the lowest reasonable cost. Its database is 5 TB; backup restore throughput is 500 MB/s. A tested pilot-light failover takes 45 minutes and replication stays under the 15-minute target. Which DR strategy fits best?",
+    "options": [
+      {
+        "text": "Backup and restore from nightly snapshots",
+        "explanation": "Nightly snapshots give up to 24 h of data loss, and restoring 5 TB plus rebuilding everything can easily exceed 2 hours."
+      },
+      {
+        "text": "Warm standby running at 100% of production capacity",
+        "explanation": "That's effectively a second full production environment, paying for much more than a 2-hour RTO requires."
+      },
+      {
+        "text": "Multi-site active-active across three regions",
+        "explanation": "This can meet the targets if correctly designed and tested, but adds active application capacity and multi-region write complexity beyond the demonstrated pilot-light solution."
+      },
+      {
+        "text": "Pilot light: a continuously replicated database in the DR region, with the app tier defined in code and scaled up on failover",
+        "explanation": "Correct for the supplied measurements: the tested 45-minute failover and bounded recovery-point lag meet the targets while avoiding a continuously running full app tier."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Compare illustrative strategy ranges, then use the supplied test results:\n\n| Strategy | RPO | RTO |\n|---|---|---|\n| Backup/restore | hours | hours+ |\n| Pilot light | mins | 10s of mins |\n| Warm standby | secs–mins | mins |\n| Active-active | ~0 | ~0 |\n\n1. RPO 15 min rules out nightly backups.\n2. RTO 2 h rules out a 5 TB restore with everything rebuilt from scratch; the copy alone takes too long:\n\n```formula\nT = D / B\nT = 5,000,000 MB / (500 MB/s)\nT = 10,000 s ≈ 2.8 h\nwhere\nT: the time just to copy the data back, in seconds (s) or hours (h)\nD: the database size, 5 terabytes (TB) = 5,000,000 megabytes (MB)\nB: the restore throughput, here 500 megabytes per second (MB/s)\nMB: megabytes\nMB/s: megabytes per second\ns: seconds; 3,600 s = 1 h\nh: hours\n≈: approximately equal to (rounded)\nIn words: copying 5 TB at 500 MB/s takes nearly three hours, already over the 2-hour RTO before anything else is rebuilt.\n```\n\n3. Among these described options, the economical candidate meeting both: **pilot light**.\n4. Make it real: script and rehearse the scale-up, and check you can actually get the capacity in the DR region.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  }
+]

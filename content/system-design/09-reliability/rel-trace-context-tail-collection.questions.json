@@ -1,0 +1,130 @@
+[
+  {
+    "id": "rel-observability-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Checkout latency has doubled. Checkout calls cart, inventory, pricing and payment, each of which calls further services. Which signal most directly shows *which* downstream call is responsible?",
+    "options": [
+      {
+        "text": "A metric showing checkout's average latency",
+        "explanation": "This confirms the symptom but aggregates across all calls, so it can't tell you which dependency added the time."
+      },
+      {
+        "text": "A distributed trace of a slow checkout request",
+        "explanation": "Correct. A trace is a tree of spans with timings for each downstream call, so the waterfall shows exactly which span (e.g. inventory at 610 ms) accounts for the extra latency."
+      },
+      {
+        "text": "CPU utilisation of the checkout hosts",
+        "explanation": "CPU is a resource metric (USE). If checkout is waiting on a slow dependency, its CPU may actually be *low*; it won't point to the culprit."
+      },
+      {
+        "text": "The checkout service's error logs",
+        "explanation": "Slow requests often succeed, producing no errors. Logs also lack the cross-service causal structure a trace provides."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Symptom: checkout p99 went from 400 ms to 800 ms (from metrics).\n2. Pull an exemplar trace from the slow bucket.\n3. Read the waterfall: gateway 840, checkout 790, of which inventory is 610 ms, while cart (60) and payment (90) look normal.\n4. Drill into inventory's spans, then its logs (joined by `trace_id`) and its resource utilisation, saturation and error metrics.\n\nMetrics → traces → logs is the usual investigation flow.",
+    "link": {
+      "title": "Traces (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/"
+    }
+  },
+  {
+    "id": "rel-observability-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Traces for your order flow show the API span, then stop. The worker that consumes from a message queue produces its own separate traces with new trace IDs and no links to the producing traces. What's the most likely cause?",
+    "options": [
+      {
+        "text": "The worker's sampling rate is too low",
+        "explanation": "A sampling rate changes retained data, not by itself the propagated trace ID. A new ID can also be intentional across an asynchronous boundary when a span link preserves causality."
+      },
+      {
+        "text": "The trace context (`traceparent`) isn't propagated through the message headers",
+        "explanation": "Correct. HTTP instrumentation usually propagates context automatically, but for queues the producer must inject the context into message headers and the consumer must extract it. Without that, the consumer starts a new root trace."
+      },
+      {
+        "text": "Clocks on the worker hosts are out of sync",
+        "explanation": "Clock skew distorts span timings on the waterfall but doesn't change trace IDs; spans would still join the same trace."
+      },
+      {
+        "text": "Traces can't cross asynchronous boundaries by design",
+        "explanation": "They can. OpenTelemetry supports propagating context through message headers, and can also use span links when a consumer batches many messages."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A trace stays connected only if each hop receives the parent's `trace-id` and `span-id`.\n2. HTTP/gRPC auto-instrumentation injects `traceparent` into request headers.\n3. For a queue, the producer injects the current trace context into message headers. The consumer extracts it before creating its span as a child or adding a link. A native Python fragment, requiring `opentelemetry-api`, an application context and a writable header carrier, is:\n\n```python\nfrom opentelemetry.propagate import (\n  inject, extract,\n)\n# Carry context through the queue.\ninject(message.headers, context=context)\n# Use this parent for a child or a link.\nparent = extract(message.headers)\n```\n4. If either side skips this, the consumer sees no parent and starts a fresh root span, hence a new trace ID.\n\nCheck: inspect a message's headers. If the configured W3C carrier lacks traceparent, inspect producer instrumentation and any intermediate transport rewriting; also check for deliberately linked separate traces.\n\nOpenTelemetry API signatures differ by language. This fragment uses Python’s carrier-first call with a named context; it does not create a complete worker or configure an exporter.",
+    "link": {
+      "title": "Context propagation (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/context-propagation/"
+    }
+  },
+  {
+    "id": "rel-observability-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service handles 20,000 req/s. 0.05% of requests fail and 0.5% are slow (>1 s), with no overlap between these groups. Assume all spans reach the tail sampler before its decision and no buffer overflow. You can afford to store about 300 traces/s. Compare 1% head-based sampling with tail-based sampling that keeps all errors and slow traces plus a random sample of the rest. Which is true?",
+    "options": [
+      {
+        "text": "Head-based keeps ~200 traces/s but only ~0.1 error traces/s; tail-based keeps all ~10 errors/s and ~100 slow/s within budget",
+        "explanation": "Correct. Head sampling picks 1% before outcomes are known, so it keeps 1% of errors too. Tail sampling sees the full trace first, so it can keep every interesting one and fill the rest of the budget with normal traffic."
+      },
+      {
+        "text": "Both keep the same number of error traces, because sampling is random",
+        "explanation": "That's only true if both sample uniformly. Tail-based sampling deliberately biases towards errors and slow traces, which is its whole point."
+      },
+      {
+        "text": "Tail-based sampling is cheaper to run because it stores fewer spans",
+        "explanation": "Tail sampling stores roughly the same amount in the backend but needs a collector tier that buffers *all* spans of in-flight traces in memory before deciding, which costs more to run."
+      },
+      {
+        "text": "Head-based sampling at 1% keeps all errors because errors are propagated to the root",
+        "explanation": "With head sampling the keep/drop decision is made at the root span, before the error happens. A dropped trace isn't recorded no matter how it ends."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "**Head-based at 1%:** traces are kept at random before anyone knows how they end, so each kind is kept at the same 1% rate.\n\n```formula\nT = Rfh\nT_all = 20,000 /s × 1 × 0.01\nT_all = 200 /s\nT_err = 20,000 /s × 0.0005 × 0.01\nT_err = 0.1 /s\nT_slow = 20,000 /s × 0.005 × 0.01\nT_slow = 1 /s\nwhere\nT: traces of a given kind stored per second (/s)\nT_all: all traces stored per second (f = 1)\nT_err: error traces stored per second (f = 0.0005, i.e. 0.05%)\nT_slow: slow traces stored per second (f = 0.005, i.e. 0.5%)\nR: the request rate, here 20,000 per second\nf: the fraction of requests of that kind\nh: the head-sampling rate, here 1% = 0.01\n/s: per second\nIn words: 1% head sampling stores 200 traces a second, but only one error trace every 10 seconds.\n```\n\nYou'd see one error trace every 10 seconds.\n\n**Tail-based:**\n\n```formula\nT_err = 20,000 /s × 0.0005 = 10 /s\nT_slow = 20,000 /s × 0.005 = 100 /s\nT_norm = 300 /s − 110 /s = 190 /s\nwhere\nT_err: error traces kept per second (all of them)\nT_slow: slow traces kept per second (all of them)\nT_norm: normal traces that still fit in the 300-per-second budget\n/s: per second\nIn words: keep all 10 error and all 100 slow traces each second, and fill the remaining 190 slots with a random sample of normal traffic.\n```\n\nYou get 100× more error traces within the stated 300 traces/s budget (versus 200 traces/s for 1% head sampling). The cost is the collector: it must hold every span for, say, 30 s until the trace completes. At ~10 spans × 2 KB per trace:\n\n```formula\nM = Rwz\nM = 20,000 /s × 30 s × 20 KB\nM = 12,000,000 KB ≈ 12 GB\nwhere\nM: the memory the collectors need to hold in-flight traces\nR: new traces per second, here 20,000\nw: the decision window, here 30 seconds (s)\nz: the size of one trace, here 10 spans × 2 KB = 20 kilobytes (KB)\n/s: per second\ns: seconds\nKB: kilobytes; 1,000,000 KB = 1 GB\nGB: gigabytes\n≈: approximately equal to\nIn words: 20,000 traces a second held for 30 seconds is 600,000 traces in memory; at 20 KB each that is about 12 GB.\n```\n\nThat is raw span payload, before object/indexing overhead, spread across collectors that each receive whole traces.",
+    "link": {
+      "title": "Traces (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/"
+    }
+  },
+  {
+    "id": "rel-observability-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're rolling out OpenTelemetry with a collector tier that does tail-based sampling across 6 collector instances. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Policies can keep every trace with an error or with latency above a threshold, plus a small random share of the rest",
+        "explanation": "Correct as a policy goal if the relevant spans arrive before the decision and capacity limits are not exceeded; tail sampling cannot recover spans dropped upstream."
+      },
+      {
+        "text": "Tail sampling makes context propagation unnecessary",
+        "explanation": "Incorrect. Without propagated context the spans never join into one trace, so there is nothing whole to sample."
+      },
+      {
+        "text": "All spans of a given trace must reach the same collector instance, e.g. via a load-balancing exporter keyed on trace ID",
+        "explanation": "Correct. A tail-sampling decision needs the whole trace. If spans are spread over 6 collectors, none of them sees the full picture."
+      },
+      {
+        "text": "Collectors must buffer spans for a decision window, so memory scales with traffic × window",
+        "explanation": "Correct. Each collector holds in-flight traces until it decides. Longer windows catch slower traces but need more memory."
+      },
+      {
+        "text": "Switching from Jaeger to another backend requires re-instrumenting every service",
+        "explanation": "Incorrect as a general requirement. Compatible OTel instrumentation often needs only exporter configuration changes; backend-specific features may need extra migration work."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Think about what a tail-sampling decision needs: **the complete trace**.\n\n1. Spans arrive from many services at different times. Route by trace ID so one collector gets them all.\n2. Wait a decision window (e.g. 30 s) for late spans. Memory grows with traffic and with the window:\n\n```formula\nM ≈ rwz\nwhere\nM: the collector memory needed for in-flight spans, in bytes\nr: the span arrival rate, spans per second\nw: the decision window, in seconds\nz: the average span size, in bytes\n≈: approximately equal to (ignores overhead)\nIn words: double the traffic or double the wait and you need about twice the memory.\n```\n\n3. Apply policies: errors → keep; latency > 1 s → keep; otherwise keep ~1%.\n4. Export the kept traces to a supported backend via the collector's exporters.\n\nPropagation (`traceparent`) is still what makes the spans one trace in the first place.",
+    "link": {
+      "title": "Traces (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/traces/"
+    }
+  }
+]

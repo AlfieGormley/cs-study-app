@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel-safe-deployments-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need to be able to roll back a release in seconds, and you can afford double capacity during the deploy. Assume a router that switches new requests promptly and backward-compatible shared state. Which strategy fits best?",
+    "options": [
+      {
+        "text": "Rolling deployment",
+        "explanation": "Rolling deploys need little extra capacity, but rollback is another rolling deploy through every batch, which takes minutes or longer rather than seconds."
+      },
+      {
+        "text": "Blue-green deployment",
+        "explanation": "Correct. The old environment stays running, idle, after cutover. Rolling back is a router flip back to blue, which takes seconds. The cost is running two full environments."
+      },
+      {
+        "text": "Recreate (stop all v1, then start v2)",
+        "explanation": "Recreate causes downtime between stopping v1 and starting v2, and rolling back means repeating that in reverse. It fails both requirements."
+      },
+      {
+        "text": "Manual deploy over SSH to each server",
+        "explanation": "Manual per-server deploys are slow, inconsistent and error-prone, so a seconds-level rollback is out of the question."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Score each strategy against the two requirements:\n\n| Strategy | Rollback time | Extra capacity |\n|---|---|---|\n| Rolling | minutes+ | ~0 |\n| Blue-green | seconds | ~1× extra |\n| Canary | fast | small |\n| Recreate | minutes + downtime | 0 |\n\nBlue-green's fast routing rollback comes precisely from keeping the full old environment warm. Canary is also fast to roll back (route 0% to v2) and is often preferred because it limits exposure too; many teams combine them.",
+    "link": {
+      "title": "Blue-green deployment (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/BlueGreenDeployment.html"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a Kubernetes rolling deployment, v2 starts, passes its readiness probe (an HTTP `GET /healthz` returning 200), and the rollout completes. But v2 returns wrong prices because of a config bug. What's the most important gap in this pipeline?",
+    "options": [
+      {
+        "text": "The readiness probe interval is too long",
+        "explanation": "A faster probe still only checks that `/healthz` returns 200, which v2 does. Probe frequency can't catch wrong business results."
+      },
+      {
+        "text": "`maxUnavailable` should have been set to 0",
+        "explanation": "That controls capacity during the rollout, not correctness. v2 would still roll out fully with wrong prices."
+      },
+      {
+        "text": "Rolling deployments can't be used for pricing services",
+        "explanation": "Rolling deployments are used for all kinds of services; the issue is what's checked between batches, not the strategy itself."
+      },
+      {
+        "text": "This shallow readiness probe misses correctness; add business-level validation and canary comparison gates",
+        "explanation": "Correct. Validate known prices and compare relevant business metrics against a representative baseline. These improve detection but cannot guarantee every bug will be caught."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. What the readiness probe verified: the process started and serves HTTP. ✓\n2. What it didn't verify: prices are correct. ✗\n3. This is a wrong-answer failure; it won't show up in liveness or 5xx rates.\n4. Fixes:\n   - Canary a small slice and compare **business metrics** (conversion rate, average basket value, price-validation alerts) with the baseline.\n   - Add synthetic tests that check known products return expected prices after each batch.\n   - Pause between batches long enough for analysis; roll back automatically on divergence.\n5. Since it was a config bug: ship config through the same staged pipeline as code.",
+    "link": {
+      "title": "Canarying releases (Google SRE workbook)",
+      "url": "https://sre.google/workbook/canarying-releases/"
+    }
+  }
+]

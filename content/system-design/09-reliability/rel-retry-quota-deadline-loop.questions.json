@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rel-timeouts-retries-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service sends 10,000 req/s to a dependency and retries up to 2 times per request. The dependency degrades so that **50%** of attempts fail independently, with that probability unchanged by retry load. Compare dependency load (a) with no retry budget, and (b) with a retry budget capping retries at 10% of requests.",
+    "options": [
+      {
+        "text": "(a) 15,000/s, (b) 10,000/s",
+        "explanation": "(a) only counts the first retry. With 50% failure, the 5,000 failed retries are retried again, adding another 2,500. (b) ignores that the budget allows 10% extra, i.e. 1,000/s."
+      },
+      {
+        "text": "(a) 30,000/s, (b) 11,000/s",
+        "explanation": "30,000 assumes every request makes all 3 attempts, which would require a 100% failure rate. At 50%, half the requests succeed on the first try."
+      },
+      {
+        "text": "(a) 17,500/s, (b) 11,000/s",
+        "explanation": "Correct. Without a budget: 10,000 first tries + 5,000 first retries + 2,500 second retries = 17,500/s (+75%). With the 10% budget, total retries are capped at 1,000/s, so load is 11,000/s (+10%)."
+      },
+      {
+        "text": "(a) 17,500/s, (b) 17,500/s, since budgets only apply at 100% failure",
+        "explanation": "Retry budgets apply continuously; they cap retries as a fraction of traffic at any failure rate. That's their advantage over a fixed per-request limit."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "**(a) Per-request limit only (max 3 attempts):**\n\n```\nTry 1:    10,000  (50% fail → 5,000)\nRetry 1:   5,000  (50% fail → 2,500)\nRetry 2:   2,500\nTotal:    17,500 req/s  (+75%)\n```\n\nThe same total from the expected-attempts formula:\n\n```formula\nL = N × (1 + p + p^2)\nL = 10,000 /s × (1 + 0.5 + 0.25)\nL = 10,000 /s × 1.75 = 17,500 /s\nwhere\nL: attempts per second reaching the dependency\nN: original requests per second, here 10,000\np: the chance one attempt fails, here 0.5\np^2: p squared, the chance the first two attempts both fail (so a third is made)\nreq/s: requests (attempts) per second\n/s: per second\nIn words: with half of attempts failing, each request makes 1.75 attempts on average, 75% extra load.\n```\n\n**(b) Retry budget at 10% of requests:**\n\n```\nTry 1:    10,000\nRetries:   1,000 (capped)\nTotal:    11,000 req/s  (+10%)\n```\n\nAt a 90% failure rate, (a) grows to 10,000 + 9,000 + 8,100 = 27,100/s, nearly triple, while (b) stays at 11,000/s. Budgets keep retries useful for blips without letting them pile load onto a struggling dependency.",
+    "link": {
+      "title": "Handling overload (Google SRE book)",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  },
+  {
+    "id": "rel-timeouts-retries-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client uses the lesson's retry loop: deadline 1,000 ms, a 300-millisecond per-try limit, up to 3 attempts, full-jitter backoff with a 100-millisecond base delay. The jitter cap is at least 200 milliseconds and retry quota remains available. The dependency hangs, so every attempt times out. Ignoring execution and scheduling overhead, in the **worst case** for backoff (the random sleep is always the maximum), what per-try timeout does the third attempt get?",
+    "options": [
+      {
+        "text": "300 ms, the configured per-try timeout",
+        "explanation": "Each attempt uses `min(remaining, PER_TRY)`. By the third attempt less than 300 ms of the deadline is left."
+      },
+      {
+        "text": "400 ms, because unused backoff time is carried forward",
+        "explanation": "Nothing is carried forward. The deadline is absolute; time spent sleeping is gone."
+      },
+      {
+        "text": "0 ms; the loop raises Timeout before trying",
+        "explanation": "There are still 100 ms left at 900 ms, so the loop makes the attempt. It would raise only if the remaining time were zero or less."
+      },
+      {
+        "text": "100 ms",
+        "explanation": "Correct. Attempt 1 uses 0–300 ms, sleeps up to 100 ms; attempt 2 uses 400–700 ms, sleeps up to 200 ms; attempt 3 starts at 900 ms with only 100 ms remaining, so its timeout is 100 ms."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Two rules drive the trace: the largest full-jitter sleep doubles with each retry, and each attempt's timeout is whatever is smaller, the per-try limit or the time left.\n\n```formula\nw_max = B × 2^a\nw_max = 100 ms × 2^1 = 200 ms\nt_out = min(D − t, P)\nt_out = min(1000 − 900, 300) ms\nt_out = min(100, 300) ms = 100 ms\nwhere\nw_max: the longest sleep full jitter can pick after retry number a, in milliseconds (ms)\nB: the base delay (BASE), here 100 ms\na: the retry number, counting from 0\n2^a: 2 to the power a\nt_out: the timeout given to an attempt\nmin: the smaller of the values\nD: the deadline, 1,000 ms after the start\nt: the time now, in ms since the start (900 ms when the third attempt, attempt 2, begins)\nP: the per-try timeout (PER_TRY), here 300 ms\nms: milliseconds\nIn words: by the third attempt only 100 ms of the deadline remain, so that attempt gets 100 ms, not the full 300 ms.\n```\n\nTrace elapsed milliseconds from the start, with maximum sleeps and zero scheduling overhead:\n\n```\nStart: attempt 0 gets 300 ms\nAfter 300 ms: fails, sleeps 100 ms\nAfter 400 ms: attempt 1 gets 300 ms\nAfter 700 ms: fails, sleeps 200 ms\nAfter 900 ms: attempt 2 gets 100 ms\nAfter 1000 ms: fails, Exhausted\n```\n\nWith full jitter the average sleeps are half the maximum (50 ms, then 100 ms), so the third attempt would usually start around 750 ms and get a 250 ms timeout. This bounds intended waiting in the idealized loop. Actual completion can exceed the deadline because of scheduling delays or an RPC implementation that does not promptly observe cancellation.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "rel-timeouts-retries-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A client uses a retry token bucket: capacity 500 tokens, each retry costs 5 tokens, each first-try success refunds 1 token, and requests make up to 3 attempts. Ignoring attempt duration and backoff delay, it sends 100 req/s to a dependency that suddenly fails **100%** of attempts. Roughly how long until the client stops retrying, and what load does the dependency then see from it?",
+    "options": [
+      {
+        "text": "About 0.5 seconds; then about 100 attempts/s",
+        "explanation": "Correct. Each failing request spends 2 retries × 5 = 10 tokens, so 100 req/s drains 1,000 tokens/s and the 500-token bucket empties in about half a second. After that only first attempts are sent: 100/s instead of 300/s."
+      },
+      {
+        "text": "About 5 seconds; then 0 attempts/s",
+        "explanation": "5 s would need a bucket ten times larger. And the bucket only blocks retries: first attempts still go out, so the dependency still sees 100/s."
+      },
+      {
+        "text": "It never stops, because successes refund tokens",
+        "explanation": "With 100% failure there are no successes, so nothing refunds the bucket."
+      },
+      {
+        "text": "About 0.5 seconds; then about 300 attempts/s",
+        "explanation": "Once the bucket is empty, retries are refused. The client sends only first attempts, not three per request."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nc = r × k = 2 × 5 tokens = 10 tokens\nd = Rc\nd = 100 /s × 10 tokens = 1,000 tokens/s\nt = B / d\nt = 500 tokens / (1,000 tokens/s)\nt = 0.5 s\nwhere\nc: the tokens one fully failing request spends\nr: the retries per failing request, here 2\nk: the token cost of one retry, here 5\nd: the drain rate, tokens per second\nR: the request rate, here 100 requests per second (req/s)\nt: the time until the bucket is empty, in seconds (s)\nB: the bucket capacity, here 500 tokens\ntokens: units of the retry quota; a retry is allowed only if its cost can be paid from the bucket\nreq: requests\n/s: per second\ns: seconds\nIn words: each failing request spends 10 tokens; 100 of them a second spend 1,000 tokens a second, emptying a 500-token bucket in half a second.\n```\n\nSo, step by step: 1. each failing request costs 10 tokens; 2. the bucket drains at 1,000 tokens/s; 3. it is empty after 0.5 s.\n4. After that, every retry is refused:\n\n```formula\nL_before = Na\nL_before = 100 /s × 3 = 300 /s\nL_after = N × 1 = 100 /s\nwhere\nL_before: attempts sent per second while two retries per request remain available\nL_after: attempts sent per second once the retry quota is empty\nN: initial request rate, here 100 per second\na: attempts per fully failing request, here three\n/s: per second\nIn words: The quota blocks retries, so traffic falls from 300 attempts per second to the 100 original attempts per second.\n```\n\n5. When the dependency recovers, first-try successes refund 1 token each, so retries come back gradually.\n\nIn a simplified steady state where every request either succeeds immediately or fails every attempt, a request that fails every attempt costs 10 tokens and a first-try success refunds 1, so the bucket drains whenever more than about 1 in 11 requests fail outright:\n\n```formula\n10f > (1 − f)\n11f > 1\nf > 1/11 ≈ 9%\nwhere\nf: the fraction of requests that fail every attempt, from 0 to 1\n10: tokens spent by each fully failing request\n1: tokens refunded by each first-try success\n>: \"is greater than\"\n≈: approximately equal to (rounded)\n%: per cent, one part in a hundred\nIn words: the bucket shrinks when tokens spent exceed tokens refunded, which happens once more than about 9% of requests fail outright.\n```\n\nReal SDK costs vary by version and error type; the shape of the behaviour is the point.",
+    "link": {
+      "title": "Retry behaviour (AWS SDKs and Tools reference)",
+      "url": "https://docs.aws.amazon.com/sdkref/latest/guide/feature-retry-behavior.html"
+    }
+  }
+]

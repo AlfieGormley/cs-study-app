@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rel-designing-for-failure-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A backend node's disk starts failing. The process stays up and passes its TCP health check, but each request now takes 8 seconds instead of 20 ms. Which is the most specific description of this failure?",
+    "options": [
+      {
+        "text": "Crash failure",
+        "explanation": "A crash means the process stops responding entirely, which may yield a refused connection or merely a timeout; detection is not necessarily immediate. Here the node is still serving, just slowly, so it is not fail-stop."
+      },
+      {
+        "text": "Byzantine failure",
+        "explanation": "Byzantine means returning wrong or arbitrary answers. The responses here are correct, just late, a general Byzantine model can include arbitrary timing, but a timing failure is the most specific description here."
+      },
+      {
+        "text": "Timing (latency) failure, often called a gray failure",
+        "explanation": "Correct. The node is alive and returns correct results, but outside acceptable time bounds. Because it still passes a shallow health check, it keeps receiving traffic and ties up callers' resources, which is what makes gray failure so damaging."
+      },
+      {
+        "text": "Omission failure",
+        "explanation": "Omission means some messages are dropped and never answered. Here every request eventually gets a correct reply; the problem is lateness, not loss."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Classify by asking these questions in order:\n\n1. **Does it respond at all?** Yes, it eventually replies, so it is not a crash.\n2. **Does every request get a reply?** Yes, so it is not omission.\n3. **Is the reply correct?** Yes: the observed symptom is lateness, not a wrong answer. A fully arbitrary Byzantine model can also include timing faults.\n4. **Is it on time?** No: 8 s against a normal 20 ms.\n\nThat leaves a **timing failure**. Note the health check passes because it only tests that the port is open. A health check that performs a real read from disk with a short deadline would catch this and remove the node from rotation.",
+    "link": {
+      "title": "Addressing cascading failures (Google SRE book)",
+      "url": "https://sre.google/sre-book/addressing-cascading-failures/"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A storage service runs **5,000 disks** with an annual failure rate of about 4%. Roughly how often does a disk fail, and what does that imply for the design?",
+    "options": [
+      {
+        "text": "About once a year, so manual replacement is fine",
+        "explanation": "This treats 4% as the chance of *any* disk failing. It's per disk: 5,000 × 4% = 200 failures a year."
+      },
+      {
+        "text": "Never, if the disks are enterprise-grade",
+        "explanation": "Better disks lower the rate, but at fleet scale failures are a statistical certainty. Designs must assume them."
+      },
+      {
+        "text": "About 200 a day, so the fleet is unusable",
+        "explanation": "200 is the annual figure. Per day it's about 0.55."
+      },
+      {
+        "text": "About 4 a week, so detection, re-replication and replacement must be planned and routine, with automated detection and repair",
+        "explanation": "Correct. 5,000 × 0.04 = 200 a year, about 3.8 a week. At that rate a disk failure is a normal weekly event, so the system must heal itself without paging for each expected isolated fault; failed repair or reduced redundancy may still require alerts."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Expected failures scale with the number of disks:\n\n```formula\nF_year = Dr\nF_year = 5,000 × 0.04 = 200\nF_week = 200 / 52 ≈ 3.8\nF_day = 200 / 365 ≈ 0.55\nwhere\nF_year: expected disk failures per year\nF_week: expected disk failures per week (52 weeks a year)\nF_day: expected disk failures per day (365 days a year)\nD: the number of disks in the fleet, here 5,000\nr: the annual failure rate of one disk, here 4% = 0.04\n≈: approximately equal to (rounded)\nIn words: 4% of 5,000 disks is 200 a year, nearly 4 a week, or roughly one every other day.\n```\n\nAt this rate:\n- Replication (or erasure coding) must keep data safe while a disk is down.\n- Re-replication must start automatically and finish within the repair-risk budget for the affected redundancy group; a second failure elsewhere in the fleet is not automatically catastrophic.\n- Replacement is a routine maintenance task, not an incident.\n\nThis is the mindset shift at scale: failure is background noise to be designed for, not an exception.",
+    "link": {
+      "title": "AWS Well-Architected Reliability Pillar",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/welcome.html"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A leader sends heartbeats every second; followers declare it dead after 3 missed heartbeats and elect a new leader. The old leader then has a **5-second GC pause**, wakes up, and carries on writing to shared storage as if it were still leader. What has gone wrong, and what's the standard defence?",
+    "options": [
+      {
+        "text": "Nothing; 3 missed heartbeats proves the leader crashed",
+        "explanation": "Missed heartbeats prove only that none arrived in time. A paused process is indistinguishable from a crashed one, and here it wasn't crashed."
+      },
+      {
+        "text": "The heartbeat interval is too long; send heartbeats every 10 ms",
+        "explanation": "Faster heartbeats make detection quicker but don't stop a paused process from waking up and acting on stale beliefs. They can also cause more false positives."
+      },
+      {
+        "text": "The failure detector gave a false positive, giving two leaders; use leases plus fencing tokens so storage enforces the current ownership epoch and rejects stale writes",
+        "explanation": "Correct. This remote heartbeat detector uses a timeout and can be wrong; failure evidence need not always come from a timeout. A monotonically increasing fencing token (epoch) checked by storage makes stale-leader writes fail, whatever the old leader believes."
+      },
+      {
+        "text": "GC pauses are Byzantine failures, so BFT consensus is needed",
+        "explanation": "The observed GC pause fits a timing fault and leaves stale ownership information. Storage-enforced fencing addresses the stale writes under these assumptions; a GC pause alone does not require Byzantine consensus."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Timeline from the start of the pause (an epoch is the leadership term number):\n\n```\nStart: leader pauses for GC\nAfter 3s: three heartbeats missed\nThen: epoch 8 leader elected\nAfter 5s: epoch 7 leader resumes\n          and attempts stale writes\n```\n\n2. Two nodes now believe they lead: **split brain**, caused by a timing failure that looked like a crash.\n3. Defences:\n   - **Lease**: the leader may act only while its lease is valid; it must check before each action (clock assumptions apply).\n   - **Fencing token**: every write carries the epoch; the new owner first establishes epoch8 at storage before relying on exclusive effects. Thereafter storage atomically rejects epoch7. Merely issuing epoch8 in a separate coordinator is insufficient until storage observes/enforces it.\n\nThe lesson: design for detectors being wrong, not just slow.",
+    "link": {
+      "title": "Addressing cascading failures (Google SRE book)",
+      "url": "https://sre.google/sre-book/addressing-cascading-failures/"
+    }
+  }
+]

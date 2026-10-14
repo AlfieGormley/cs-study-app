@@ -1,0 +1,96 @@
+[
+  {
+    "id": "rel-overload-protection-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A server handling synchronous read requests is receiving 150% of its capacity. Results are useless to these callers after their deadlines. Which load-shedding practices are appropriate? Select all that apply.",
+    "options": [
+      {
+        "text": "Drop requests that have already waited in the queue longer than the client's timeout",
+        "explanation": "Correct. The client has already given up, so processing them is pure waste. Dropping them frees capacity for requests that can still succeed."
+      },
+      {
+        "text": "Reject before doing expensive work such as parsing the body or querying the database",
+        "explanation": "Correct. Shedding only protects capacity if rejecting is much cheaper than serving. Rejecting after the expensive part saves almost nothing."
+      },
+      {
+        "text": "Shed lower-priority traffic (e.g. batch, prefetch) before user-facing critical traffic",
+        "explanation": "Correct. Criticality-based shedding, as Google uses, preserves the most important work when you can't serve everything."
+      },
+      {
+        "text": "Queue all excess requests in an unbounded in-memory queue so none are lost",
+        "explanation": "Incorrect. An unbounded queue turns overload into ever-growing latency (every request now times out) and eventually out-of-memory. It defeats the purpose of shedding."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think in terms of **goodput**: completed requests that the client still wanted.\n\n1. At 150% load, the server can serve only 2/3 of requests. The question is *which* 2/3.\n2. Serving requests whose clients have timed out produces zero goodput; drop them.\n3. Rejecting late (after DB work) burns the capacity you're trying to save; reject early.\n4. If you must reject 1/3 of traffic, make it the 1/3 that matters least.\n5. An unbounded queue serves everyone, all late, so goodput heads to zero: congestive collapse.",
+    "link": {
+      "title": "Using load shedding to avoid overload (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After a traffic spike, a server's request queue holds about **2 seconds** of work, and clients time out after **1 second**. The server processes the queue first-in, first-out. Requests already queued are past their deadlines, results are useful only before those deadlines, and sustained new arrivals leave little spare capacity. What is the server's goodput, and what's the best fix?",
+    "options": [
+      {
+        "text": "Near zero until the backlog clears; drop requests older than the client timeout (or serve newest-first) so fresh requests succeed",
+        "explanation": "Correct. FIFO serves the oldest requests first, all of whose clients have given up, and new arrivals join the back to wait 2 s too. Dropping expired requests, or adaptive LIFO, spends capacity only on requests that can still succeed."
+      },
+      {
+        "text": "Normal goodput, because arrivals are back to normal",
+        "explanation": "The backlog is still there. Every request now waits about 2 s, longer than the 1 s timeout, so its client has gone by the time it's served."
+      },
+      {
+        "text": "Near zero; the fix is a longer queue so no request is ever rejected",
+        "explanation": "A longer queue means longer waits, so even more requests outlive their timeouts. Unbounded queueing is what caused this."
+      },
+      {
+        "text": "Half of normal, because half the queue is within the timeout",
+        "explanation": "With FIFO, a new request waits behind the full 2 s backlog. None of them is within the timeout until the backlog shrinks below 1 s."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The queued work exceeds the caller’s useful waiting limit:\n\n```formula\nW_q = 2 s\nD = 1 s\nW_q > D\nG ≈ 0 /s\nwhere\nW_q: approximate wait behind the queued work, in seconds\nD: the caller’s useful waiting limit, here one second\nG: goodput, useful completed reads per second\ns: seconds\n/s: per second\n>: greater than\n≈: approximately equal to; this is an overload illustration\nIn words: a two-second queue cannot serve reads usefully before a one-second deadline, so useful completions are nearly zero despite busy workers.\n```\n\n1. The backlog contains two seconds of work, so a new arrival waits about two seconds before service.\n2. The one-second client limit expires first, so processed queued requests are already abandoned even though the server stays busy.\n3. The backlog only drains at the rate spare capacity allows, so this can last a long time.\n4. Fixes:\n   - Check a queue-entry timestamp plus the useful waiting limit is earlier than the current time and drop expired synchronous requests without processing them; use the propagated absolute deadline rather than restarting the timeout at queue entry.\n   - **Adaptive LIFO**: when the queue is long, serve newest first; those clients are still waiting.\n   - Bound the queue to well under one timeout's worth of work.\n\nThis is the \"server does 100% work for 0% useful output\" collapse from the lesson.",
+    "link": {
+      "title": "Using load shedding to avoid overload (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For equal-cost requests, a backend can serve **1,000 req/s**. During a surge it receives 1,500 req/s: 600 req/s tagged `CRITICAL` (user checkouts) and 900 req/s tagged `SHEDDABLE` (prefetch and batch). With criticality-based shedding, what share of each class is served?",
+    "options": [
+      {
+        "text": "Both classes get 67%, since 1,000 / 1,500 = 67%",
+        "explanation": "That's uniform shedding, which drops a third of checkouts. Criticality exists precisely so the important class is protected first."
+      },
+      {
+        "text": "CRITICAL about 83%; SHEDDABLE about 56%",
+        "explanation": "This splits the shortfall by some proportional rule. With strict criticality, lower classes are shed completely before any critical request is rejected."
+      },
+      {
+        "text": "CRITICAL 100%; SHEDDABLE 0%",
+        "explanation": "Shedding removes only what's necessary. There are 400 req/s of spare capacity after critical traffic, which sheddable requests can use."
+      },
+      {
+        "text": "CRITICAL 100%; SHEDDABLE about 44%",
+        "explanation": "Correct. All 600 critical requests are served. The remaining 400 req/s of capacity goes to sheddable traffic: 400 / 900 ≈ 44%. All 500 rejections fall on the sheddable class."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Excess: `1,500 − 1,000 = 500 req/s` must be rejected.\n2. Shed from the lowest criticality first: sheddable has 900 req/s, enough to absorb all 500.\n3. Served:\n\n```formula\nf_c = S_c / R_c\nf_c = 600 / 600 = 100%\nf_s = S_s / R_s\nf_s = 400 / 900 ≈ 44%\nwhere\nf_c: fraction of critical requests served\nS_c: served critical request rate, 600 requests per second\nR_c: offered critical rate, 600 requests per second\nf_s: fraction of sheddable requests served\nS_s: served sheddable rate, 400 requests per second\nR_s: offered sheddable rate, 900 requests per second\n%: per cent\n≈: approximately equal to, rounded\nIn words: All critical traffic is served and remaining capacity serves about 44% of sheddable traffic.\n```\n\n4. Make each rejection cheap (before parsing and DB work), and return `503` with `Retry-After` so batch clients back off.\n\nIf critical traffic alone exceeded 1,000 req/s, you'd shed it too, but only after every sheddable request was gone.",
+    "link": {
+      "title": "Handling overload (Google SRE book)",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  }
+]

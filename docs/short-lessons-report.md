@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 11/76. Updated 2026-10-14.
+Verified modules: 12/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -16,6 +16,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | system-design/Messaging & Streaming | 8 | 34 | 96 | 55 | 291 | 185 | 42 |
 | system-design/API Design | 8 | 38 | 96 | 69 | 383 | 597 | 84 |
 | system-design/Architecture & Scaling Patterns | 9 | 41 | 108 | 84 | 262 | 495 | 26 |
+| system-design/Reliability, Operations & Security | 8 | 38 | 97 | 105 | 207 | 447 | 147 |
 | system-design/Case Studies I | 7 | 43 | 85 | 103 | 183 | 773 | 66 |
 | dsa/Complexity Analysis | 7 | 35 | 81 | 290 | 150 | 830 | 32 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
@@ -1047,6 +1048,48 @@ Low-confidence areas:
 - **medium** — arch-spark-shuffle-skew-plans: Shuffle skew ratios and mitigations. Arithmetic and SQL tuning docs checked. Physical-plan, partial aggregation, AQE operator support and actual scheduling determine realised cost; no Spark execution benchmark.
 - **medium** — arch-media-rendition-cdn-pipeline: 1.5-minute ideal parallel transcode example and chunk-safe publication. The arithmetic is checked under stated equal-cost/60-worker assumptions; no codec/transcoding, CDN or fault test validates realised speed or every format boundary.
 - **medium** — arch-lambda-kappa-replay-paths: Historical company/architecture examples and replay duration. Kreps primary essay independently fetched and 22.5-day model recomputed; retained-history volume, live rate, source/sink capacity and deployment semantics can differ.
+
+## system-design: Reliability, Operations & Security
+
+[Independent verification record](../content/system-design/09-reliability/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Qualified failure models, classical PBFT assumptions, crash/fail-stop distinctions and fencing enforcement, preserving question keys.
+- Corrected survivor-capacity rounding and numeric units; regrouped compound quotients/exponents and used conventional implicit algebraic products.
+- Removed undeclared inline algebra, defined standalone percent/time symbols, and repaired a closing formula fence.
+- Qualified retry deadline/cap/quota assumptions, 2026 AWS SDK policy and service-specific defaults; distinguished fraction budgets from token quotas.
+- Clarified adaptive-throttle denominator, queue/buffer units, resource-pool bounds and transient/permanent retry safety.
+- Qualified independent recovery overlap, regional lag/coordination, immutable-backup and retention assumptions.
+- Corrected metric cardinality affordability, cumulative versus native histogram buckets/interpolation, exemplar and tail-sampling guarantees.
+- Qualified burn-rate exhaustion, low-volume theoretical budgets and canary expected counts/statistical inference.
+- Clarified rolling/blue-green capacity and database assumptions, operations/experiment flags, dark launch and lock-safe DDL.
+- Corrected KMS small-call scale, key/nonce/cache limitations and CloudTrail/configuration caveats.
+- Distinguished reported Capital One WAF-role evidence from the illustrative metadata-credential question scenario.
+- Qualified historical Netflix tools and corrected Chaos Gorilla/Kong/Simian Army synonyms.
+- Replaced four inherited inaccessible glossary sources with accessible first-party documents; independently rechecked the fifth (Backblaze).
+- Removed opposite/unrelated aliases and added six precise entries; retained the author’s precise end-to-end data-verification entry.
+- Corrected kernel panic/OOM, TCP keepalive, Poisson, statistical-significance, dynamic-secret and related glossary meanings.
+- Clarified DDoS payload versus wire amplification and removed unsupported popularity claims.
+
+Remaining gaps:
+
+- No production fault injection, live cloud/KMS account calls, real regional/DNS failover, Kubernetes rollout or deployed collector/rollout-controller experiment was performed. Vendor/default/configuration and timing claims are qualified.
+- Executable examples are dependency-injected teaching fragments. Quota concurrency, durable cross-process idempotency, production admission fairness and full collector deployment are outside the examples; no untested complete service is claimed.
+- The declarative circuit-breaker YAML is an illustrative policy, parsed and checked for internal values; it is not a named library configuration or a live breaker execution.
+- The official ACM pages for Maurer and DiRT still return HTTP 403. Active links now use accessible first-party Google SRE evidence; the original Maurer article was independently read in a PDF reprint. The Backblaze 3-2-1 source now responds HTTP 200.
+- The 2019 DOJ complaint corroborates WAF-role credential acquisition, bucket listing and copying; it does not spell out the lower-level SSRF/metadata chain. Lesson history is narrowed to that primary evidence, and the metadata question is explicitly illustrative.
+- All 38 active lesson bodies, 97 question records, 105 formula occurrences and 207 glossary entries were read. Primary sources corroborate central/current/uncertain claims by topic, rather than one unique primary citation per prose sentence. All lesson records remain medium confidence.
+- Original archived lessons/questions intentionally remain byte-identical to baseline, including their old formula formatting. Active content has no remaining actual formula-lint violation.
+- Whole-release preview, phone navigation, app tests and publication are owned by the parent; this handoff certifies the scoped content review.
+
+Low-confidence areas:
+
+- **medium** — rel-identity-secrets-zero-trust: Capital One historical mechanism. Primary complaint supports WAF-role credentials, listing and copying, but not every lower-level SSRF/metadata step; history narrowed and question scenario identified as illustrative.
+- **medium** — rel-chaos-hypotheses-game-days: Historical Netflix chaos tools and DiRT. Original first-party engineering posts and Google SRE evidence reviewed; historical accounts are not guarantees of current private implementations. ACM access remains blocked.
+- **medium** — rel-breaker-recovery-static-fallbacks: Circuit-breaker policy/configuration examples. Illustrative declarative policy parsed; library state/threshold documents checked, with no live breaker or production integration experiment.
+- **medium** — rel-regional-failover-fencing-lag: Real deployment recovery and coordination timing. Primary product/architecture sources support mechanisms; numerical scenarios are teaching examples, not deployment benchmarks.
+- **medium** — rel-trace-context-tail-collection: Collector retention/routing behavior. OTel API propagation executed and collector primary documentation read; no full live distributed collector deployment or guaranteed complete trace retention is asserted.
 
 ## system-design: Case Studies I
 

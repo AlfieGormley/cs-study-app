@@ -1,0 +1,134 @@
+[
+  {
+    "id": "rel-disaster-recovery-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're running a regional failover from a primary to a standby database using async replication. Which risks must the runbook address? Select all that apply.",
+    "options": [
+      {
+        "text": "Split brain if the old primary is still accepting writes",
+        "explanation": "Correct. If the old primary is partitioned rather than dead, clients that can still reach it keep writing. You must fence it (revoke access, stop its writes) before promoting the standby."
+      },
+      {
+        "text": "Loss of writes that hadn't replicated before the failure",
+        "explanation": "Correct. With async replication, the replication lag at the moment of failure is lost on promotion. This is observed recovery-point loss, which must be compared with the agreed RPO."
+      },
+      {
+        "text": "Clients continuing to use the old address because of DNS caching",
+        "explanation": "Correct. Resolvers cache records for the TTL (and some ignore it), so traffic moves gradually. Low TTLs, global load balancers or anycast reduce this delay."
+      },
+      {
+        "text": "The standby having more recent data than the primary",
+        "explanation": "In the assumed healthy one-way replication history, the standby does not originate newer committed writes. It may receive uncommitted WAL; after failover or primary data loss, histories require reconciliation."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Walk through the failover:\n\n1. **Detect**: primary region unreachable. But is it dead, or partitioned? Assume it might be alive.\n2. **Fence**: enforce a fence that stops old-primary writes, including existing sessions and storage access. Credential or network-policy changes count only if their effect is verified; they may not terminate existing connections.\n3. **Promote**: the standby becomes primary. Any writes in the replication lag window (say 4 s) are lost: that is observed loss, not the RPO target.\n4. **Redirect**: update DNS or the global load balancer. Account for remaining TTL, health detection, connection reuse and measured client caching behavior.\n5. **Plan failback**: re-seed the old region from the new primary later.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're designing a regional failover that must work even if the primary region's cloud control plane is impaired. Which mechanisms rely only on the **data plane** and avoid incident-time provisioning or management edits? Select all that apply.",
+    "options": [
+      {
+        "text": "A standby already running at enough capacity to take the load",
+        "explanation": "Correct. Capacity that already exists doesn't need provisioning; failover is routing, not building."
+      },
+      {
+        "text": "DNS failover records configured in advance, switched automatically by health checks",
+        "explanation": "Correct. The records and health checks already exist; the DNS service's data plane answers queries differently when a check fails. Nothing is created during the event."
+      },
+      {
+        "text": "A global load balancer or anycast front end whose health checks remove an unhealthy region",
+        "explanation": "Correct when health-based routing is preconfigured and handled by the running routing service; validate its actual detection and recovery time."
+      },
+      {
+        "text": "Launching database instances from snapshots in the DR region during the incident",
+        "explanation": "Incorrect. Creating resources is a control-plane action, and capacity or API throttling problems are common during large events."
+      },
+      {
+        "text": "Logging in to the console to edit DNS records by hand",
+        "explanation": "Incorrect. Editing records is a control-plane operation, plus a manual step that depends on people having access at the worst moment."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "For each mechanism ask: *does it create or modify resources through a management API during the event?*\n\n| Mechanism | During event | Plane |\n|---|---|---|\n| Pre-set DNS failover | answers change | data ✓ |\n| Global LB health checks | routing change | data ✓ |\n| Launch from snapshot | create | control ✗ |\n| Edit DNS by hand | modify | control ✗ |\n| Running standby | none | data ✓ |\n\nAWS's guidance is to keep recovery paths on the data plane, and to rehearse them, because control planes are more complex and more likely to degrade in exactly the events you're planning for.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A primary database commits **2,000 writes/s** and replicates asynchronously to another region. Replication lag is usually 200 ms, but its p99 is **3 s** during peak. The primary region is lost at peak. Roughly how many acknowledged writes could be lost, and how should this be compared with the agreed RPO?",
+    "options": [
+      {
+        "text": "None, because the writes were acknowledged to clients",
+        "explanation": "With async replication, the primary acknowledges before the replica has the write. Acknowledged-but-unreplicated writes are exactly what's lost."
+      },
+      {
+        "text": "About 400 writes; RPO 200 ms",
+        "explanation": "That uses the typical lag. Disasters don't pick a quiet moment; at peak lag the gap is 15 times bigger. Report the tail, not the median."
+      },
+      {
+        "text": "At 3 s lag about 6,000 writes; larger losses are possible, so monitor actual recovery-point lag against the RPO target",
+        "explanation": "Correct. 2,000 × 3 = 6,000 writes under the constant-rate model. A p99 is not a worst-case bound and does not determine lag at this incident. RPO is the business target, not the observed lag."
+      },
+      {
+        "text": "About 2,000 writes; RPO 1 s",
+        "explanation": "There's no reason to assume 1 s. The data loss equals the write rate multiplied by the lag at the moment of failure."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Data loss is the write rate times the lag at the moment of failure:\n\n```formula\nN_lost = r × t_lag\nN_lost = 2,000 writes/s × 0.2 s = 400\nN_lost = 2,000 writes/s × 3 s = 6,000\nwhere\nN_lost: the acknowledged writes lost on promotion\nr: the write rate, here 2,000 writes per second (writes/s)\nt_lag: the replication lag when the region fails, in seconds (s): 0.2 s typical, 3 s at the p99 (the lag exceeded only 1% of the time)\nwrites/s: writes per second\ns: seconds\nIn words: a 3-second lag at 2,000 writes a second loses about 6,000 acknowledged writes; the typical 0.2 s lag would lose about 400.\n```\n\nThis assumes a constant write rate during the lag window.\n\n2. An incident can coincide with elevated lag, but p99 does not bound its worst case; validate the required failure model.\n3. Measure recoverable-point lag against the RPO target: export replication lag as a metric and alert when it exceeds the agreed RPO.\n4. If the business needs an RPO of effectively zero for this data, the write path must wait for a second region (synchronous or quorum replication), with coordination latency determined by region placement and protocol. Batching and overlapping operations change throughput; this is not a universal extra sequential round trip for every write.\n\nAlso reconcile after failover: lost orders may still exist in downstream systems such as payment providers.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "rel-disaster-recovery-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume equal-capacity regions, evenly distributed work, and no additional latency headroom. Peak traffic needs 100 units of capacity. You're choosing between active-active across **2 regions** or **3 regions**, where the service must survive losing any one region with no scaling. How much total capacity must you provision in each case?",
+    "options": [
+      {
+        "text": "200 units for 2 regions, 150 units for 3 regions",
+        "explanation": "Correct. With 2 regions, each must handle 100% alone: 2 × 100 = 200. With 3 regions, any 2 must carry 100, so each needs 50: 3 × 50 = 150."
+      },
+      {
+        "text": "100 units in both cases; traffic is just split differently",
+        "explanation": "Splitting traffic doesn't help when a region dies: the survivors must absorb its share instantly, so each must have headroom."
+      },
+      {
+        "text": "150 units for 2 regions, 200 units for 3 regions",
+        "explanation": "This is the wrong way round. More regions means each survivor absorbs a smaller share of the lost one."
+      },
+      {
+        "text": "300 units for 3 regions, since each must carry the full load",
+        "explanation": "Each region needs to carry only its share after one loss: 100 / 2 = 50 units, not the full 100."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "With N regions surviving 1 loss, the survivors share the whole peak:\n\n```formula\nc = P / (N − 1)\nC = Nc\nc = 100 / (3 − 1) = 50 units\nC = 3 × 50 = 150 units\nwhere\nc: the capacity each region needs, in units of capacity\nC: the total capacity provisioned across all regions\nP: the capacity peak traffic needs, here 100 units\nN: the number of equal regions, here 3\nunits: the question's abstract measure of capacity\nIn words: with three regions, the two survivors must carry 100 units between them, so each needs 50 and the total is 150. With two regions each needs the full 100, so the total is 200.\n```\n\nThe same formula for other region counts:\n\n| Regions | Per region | Total | Utilisation |\n|---|---|---|---|\n| 2 | 100 | 200 | 50% |\n| 3 | 50 | 150 | 67% |\n| 4 | 33⅓ | 133⅓ | 75% |\n\nMore regions cut the headroom cost but add operational complexity, more places for data to be replicated and potentially different synchronous quorum latency. More replicas do not necessarily add sequential round trips; topology and protocol determine the cost.",
+    "link": {
+      "title": "Static stability using Availability Zones (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
+    }
+  }
+]

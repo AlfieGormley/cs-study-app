@@ -1,0 +1,108 @@
+[
+  {
+    "id": "rel-timeouts-retries-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A client calls `POST /orders` and gets a timeout after 2 seconds. Why is it unsafe to simply retry the request as-is?",
+    "options": [
+      {
+        "text": "The server may have processed the first request; retrying could create a duplicate order",
+        "explanation": "Correct. A timeout only tells you the client stopped waiting. The server might have created the order and the reply was lost or slow. Without an idempotency key, a retry can create a second order."
+      },
+      {
+        "text": "HTTP forbids retrying POST requests",
+        "explanation": "HTTP doesn't forbid it; it just doesn't guarantee POST is idempotent. A server-enforced idempotency key can make retries safe within its retention window, with matching parameters and correctly coordinated effects."
+      },
+      {
+        "text": "Timeouts always mean the server is down, so the retry will fail too",
+        "explanation": "A timeout is ambiguous: the server could be slow, the reply could be lost, or one host could be bad. Many retries after timeouts succeed, which is why retries exist."
+      },
+      {
+        "text": "The retry will always be rejected with a 409 Conflict",
+        "explanation": "Nothing produces a 409 automatically. Without deduplication logic, the server happily accepts the duplicate, which is exactly the danger."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace elapsed time from the client sending its request:\n\n1. Client sends `POST /orders` at zero seconds.\n2. Server inserts the order after 1.5 seconds, but a GC pause delays the reply until 2.3 seconds.\n3. Client gave up after two seconds and retries.\n4. Server inserts a **second** order.\n\nFix: the client generates `Idempotency-Key: <uuid>` once per logical operation and sends it on every attempt. The server stores `key → result` and, on seeing the key again, returns the stored result instead of re-executing.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "rel-timeouts-retries-q4",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "For operations safe to repeat, with available deadline and retry budget, which failures are generally candidates for a later retry with backoff? Select all that apply.",
+    "options": [
+      {
+        "text": "`503 Service Unavailable`",
+        "explanation": "Correct. 503 signals a temporary condition such as overload or maintenance; a later attempt, ideally to a different host and after backoff, may succeed."
+      },
+      {
+        "text": "`429 Too Many Requests` with a `Retry-After` header",
+        "explanation": "Correct as a retry candidate. Honour Retry-After, but it is not a promise that capacity will be available."
+      },
+      {
+        "text": "`400 Bad Request`",
+        "explanation": "Incorrect. The request itself is malformed. Sending the identical request again will produce the identical error and waste capacity."
+      },
+      {
+        "text": "`403 Forbidden`",
+        "explanation": "Do not blindly retry the same permission failure. Access policy or credentials need correction, or an explicitly defined recovery protocol."
+      },
+      {
+        "text": "A TCP connection reset on an idempotent GET",
+        "explanation": "Correct. Connection resets are classic transient network faults, and a GET is safe to repeat; the retry will likely reach a healthy host."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Ask two questions for each failure:\n\n1. **Is it transient?** Could the same request succeed later? 503, 429 and connection resets: yes. 400 and 403: ordinarily fix the request or authorization rather than blindly retrying.\n2. **Is it safe?** Is the operation idempotent? A GET is; a POST needs verified repeat-safe semantics, such as a correctly implemented idempotency key.\n\nRetry only when both answers are yes, and always with backoff and jitter so retries don't amplify the overload that caused the 503 or 429 in the first place.",
+    "link": {
+      "title": "Limit retries (AWS Well-Architected)",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reliability-pillar/rel_mitigate_interaction_failure_limit_retries.html"
+    }
+  },
+  {
+    "id": "rel-timeouts-retries-q10",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "You're adding idempotency keys to `POST /payments` so clients can retry safely. Which design choices are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "The server must handle two requests with the same key arriving concurrently, e.g. by locking the key or returning a conflict while the first is in progress",
+        "explanation": "Correct. A client may retry while the first attempt is still running. Without a lock or unique constraint, both could execute."
+      },
+      {
+        "text": "Keys must be kept forever, or retries could double-charge",
+        "explanation": "Incorrect. Keys only need to outlive the retry window. Stripe, for example, may prune keys after at least 24 hours."
+      },
+      {
+        "text": "The client generates one key per logical payment and sends the same key on every retry",
+        "explanation": "Correct. The key identifies the *operation*, not the attempt. Reusing it is what lets the server recognise a retry."
+      },
+      {
+        "text": "The client generates a fresh key for each attempt",
+        "explanation": "Incorrect. A new key per attempt makes every retry look like a new payment, which is exactly the double charge you were trying to prevent."
+      },
+      {
+        "text": "The server stores the key with the result and returns the stored result when it sees the key again",
+        "explanation": "Correct. A repeated key gets the original response, without re-executing the charge."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Walk through a retry:\n\n1. Client creates `key = uuid4()` for \"pay £50 for order 123\".\n2. Attempt 1 times out. The server may or may not have charged.\n3. Attempt 2 sends the **same** key.\n4. The server coordinates insertion of the key under a unique constraint.\n   - Already done → return the stored response.\n   - In progress → wait, or return a conflict and let the client retry later.\n   - New → atomically commit local transactional effects and the key. For an external provider, reuse its idempotency key and reconcile uncertain outcomes; a local transaction cannot include its charge.\n\nKeys must cover all permitted replay/retry sources. Reject or reconcile attempts beyond retention, and reject reuse of a key with different payment parameters.",
+    "link": {
+      "title": "Idempotent requests (Stripe API reference)",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  }
+]

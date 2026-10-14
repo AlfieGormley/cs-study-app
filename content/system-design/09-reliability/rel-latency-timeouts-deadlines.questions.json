@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel-timeouts-retries-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A dependency’s measured latency percentiles are a 15-millisecond median, 80 milliseconds at p99, 140 milliseconds at p99.9 and two seconds at p99.99 (rare GC pauses). Each percentile is the latency at or below which that fraction of observations falls. You can tolerate about 0.1% of calls timing out and being retried. Which per-try timeout is most sensible?",
+    "options": [
+      {
+        "text": "20 ms, just above p50",
+        "explanation": "20 ms is below p99 and p99.9. These quantiles do not tell us exactly how many calls exceed 20 ms, but it is not justified by the 0.1% false-timeout target."
+      },
+      {
+        "text": "About 150–200 ms, at p99.9 plus some padding",
+        "explanation": "Correct. Setting the timeout at the percentile matching your acceptable false-timeout rate (0.1% → p99.9) bounds wasted waiting while only cutting off a tiny fraction of healthy calls. Padding allows for normal variation."
+      },
+      {
+        "text": "2.5 s, above p99.99 so nothing ever times out",
+        "explanation": "A 2.5 s timeout may still expire for the slowest calls and consumes more of the caller budget; resource exhaustion depends on concurrency and capacity."
+      },
+      {
+        "text": "No timeout; rely on TCP keepalive",
+        "explanation": "TCP keepalive probes an idle connection on configured intervals; Linux defaults wait two hours before the first probe when it is enabled. It does not bound the duration of an application response from a live peer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Decide your acceptable false-timeout rate: **0.1%**.\n2. Find the matching percentile: 0.1% of calls are slower than the **140-millisecond p99.9**.\n3. Add padding for variation (e.g. +10–40%): ~150–200 ms.\n4. Sanity check against the user budget: if the caller has a 1 s deadline, a 200 ms per-try timeout leaves room for a retry or two with backoff.\n\nThe 2 s p99.99 calls will time out and be retried, but retries are appropriate only when safe and within budget; correlated delays can make the retry slow too.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "rel-timeouts-retries-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user request has a 1-second budget. The edge calls service A with a 1 s timeout; A calls B with a 1 s timeout; B calls C with a 1 s timeout. Under load, C takes 3 s. What is the main problem, and the best fix?",
+    "options": [
+      {
+        "text": "Timeouts are too short; raise them all to 5 s",
+        "explanation": "Longer timeouts make B and A hold resources even longer for a user who has already given up after 1 s. It worsens resource exhaustion during overload."
+      },
+      {
+        "text": "Inner services keep working after the user's deadline has passed; propagate a deadline so each hop knows the time remaining",
+        "explanation": "Correct. Each hop starts a fresh 1 s clock, so B can still be waiting on C after the edge has timed out. Propagating a deadline (gRPC transmits remaining timeout to account for clock skew) lets each hop stop or skip work once there's no time left."
+      },
+      {
+        "text": "C needs a circuit breaker; the timeouts are fine",
+        "explanation": "A circuit breaker helps when C is consistently failing, but it doesn't fix the structural problem that independent per-hop timeouts don't add up to the user's budget."
+      },
+      {
+        "text": "Add retries at every layer to improve the chance of success",
+        "explanation": "Retries at every layer multiply load on C (the overloaded component), and with fresh timeouts per hop they extend the total time well past 1 s."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The edge starts the request and gives up one second later.\n2. A receives it after 0.1 seconds, then calls B after 0.3 seconds with a fresh one-second timeout, expiring 1.3 seconds after the start.\n3. B calls C after 0.6 seconds with a fresh one-second timeout, expiring after 1.6 seconds.\n4. The edge has already returned an error while those downstream waits can continue. Cancellation behaviour determines whether A and B stop their own work.\n\nWith deadline propagation, B receives the original operation limit and computes C’s remaining wait:\n\n```formula\nt_left = D − t_now\nt_left = 1.0 s − 0.6 s = 0.4 s\nwhere\nt_left: the remaining operation time, in seconds\nD: deadline on the request-start clock, here 1.0 second\nt_now: the current time on that clock, here 0.6 seconds\ns: seconds\nIn words: C gets at most 0.4 seconds rather than a new one-second wait.\n```\n\nB can skip C when that remaining budget is shorter than C’s median useful completion time. Handlers must observe cancellation and stop cancellable work; deadline propagation alone neither terminates every task nor rolls back already completed application effects.",
+    "link": {
+      "title": "Addressing cascading failures (Google SRE book)",
+      "url": "https://sre.google/sre-book/addressing-cascading-failures/"
+    }
+  }
+]

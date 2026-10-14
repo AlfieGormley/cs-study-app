@@ -1,0 +1,70 @@
+[
+  {
+    "id": "rel-security-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A penetration test finds that `GET /invoices/1234` returns any customer's invoice to any logged-in user, and that an image-fetch feature will fetch internal URLs like `http://169.254.169.254/`. Under the **OWASP Top 10:2025**, which category covers both findings?",
+    "options": [
+      {
+        "text": "A05 Injection",
+        "explanation": "Neither finding injects code or queries into an interpreter. One is a missing ownership check; the other is the server fetching attacker-chosen URLs."
+      },
+      {
+        "text": "A07 Authentication Failures",
+        "explanation": "The users are correctly authenticated. The flaw is what they're *allowed* to reach once logged in, which is authorisation."
+      },
+      {
+        "text": "A10 Server-Side Request Forgery",
+        "explanation": "SSRF was A10 in 2021. In 2025 it's part of A01, and A10 is the new Mishandling of Exceptional Conditions."
+      },
+      {
+        "text": "A01 Broken Access Control",
+        "explanation": "Correct. The invoice bug is an insecure direct object reference, and in the 2025 list server-side request forgery (SSRF) is folded into A01 too, rather than being its own category as in 2021."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Invoice bug: the user is authenticated, but the server never checks `invoice.owner == caller`. That's authorisation → A01.\n2. URL fetch: the server makes requests on the attacker's behalf to places the attacker can't reach directly. That's SSRF, which the 2025 list maps under A01.\n3. Fixes:\n   - one consistent authorisation layer checking ownership on every object;\n   - allow-list outbound destinations, block link-local and internal ranges, and require IMDSv2.\n\nRemember 2025's changes: SSRF merged into A01, supply chain broadened (A03), and A10 is new.",
+    "link": {
+      "title": "A01:2025 Broken Access Control (OWASP)",
+      "url": "https://top10.owasp.org/2025/A01_2025-Broken_Access_Control/"
+    }
+  },
+  {
+    "id": "rel-security-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "OWASP's new **A10:2025 Mishandling of Exceptional Conditions** covers failing open and poor error handling. Which of these are correct designs? Select all that apply.",
+    "options": [
+      {
+        "text": "Swallow exceptions in the rate limiter so a limiter bug never blocks traffic",
+        "explanation": "Incorrect. Silently disabling a protective control under error is failing open, and it will happen during exactly the overload it was meant to handle."
+      },
+      {
+        "text": "If the authorisation service times out, deny the request",
+        "explanation": "Correct. Failing closed means an outage of the policy service can't become an outage of your access control."
+      },
+      {
+        "text": "If JWT signature verification throws an unexpected exception, log it and continue processing the request",
+        "explanation": "Incorrect. That's failing open: any malformed or forged token that triggers the exception skips verification."
+      },
+      {
+        "text": "Return a generic error to clients and log the stack trace server-side",
+        "explanation": "Correct. Stack traces, SQL errors and internal hostnames in responses help attackers map your system."
+      },
+      {
+        "text": "On partial failure, preserve invariants with transactional rollback where available, or explicit compensation/reconciliation for external effects",
+        "explanation": "Correct. A local transaction can roll back its effects; multi-system operations may have irreversible steps and require a saga, compensation or reconciliation."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "For each case, ask: *when this check fails, does the system become more or less permissive?*\n\n| Case | On failure | Verdict |\n|---|---|---|\n| AuthZ timeout → deny | less | ✓ |\n| JWT exception → continue | more | ✗ |\n| Generic client error | less info | ✓ |\n| Rollback / reconciliation | preserve invariants | ✓ |\n| Limiter swallows errors | more | ✗ |\n\nSometimes failing open is a deliberate business choice (e.g. a non-critical recommendation filter), but it must be explicit, documented and monitored, never an accident of exception handling.",
+    "link": {
+      "title": "A10:2025 Mishandling of Exceptional Conditions (OWASP)",
+      "url": "https://top10.owasp.org/2025/A10_2025-Mishandling_of_Exceptional_Conditions/"
+    }
+  }
+]

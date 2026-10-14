@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel-overload-protection-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A product page service has one shared 200-thread pool for calls to pricing, reviews and recommendations. Recommendations starts hanging for 30 s per call. Within a minute, product pages fail completely, even though pricing and reviews are healthy. Which pattern most directly prevents this?",
+    "options": [
+      {
+        "text": "Exponential backoff on recommendation calls",
+        "explanation": "Backoff spaces out retries, but the problem is the *first* attempts holding threads for 30 s. Fewer retries still leave the pool filling with hung calls."
+      },
+      {
+        "text": "A larger thread pool of 2,000 threads",
+        "explanation": "A larger pool may handle this particular load, but increases shared resource consumption and does not isolate dependencies against larger or longer failures."
+      },
+      {
+        "text": "Bulkheads: a separate, bounded pool per dependency",
+        "explanation": "Correct. Giving recommendations its own pool (say 40 threads) means only that pool fills with hung calls. Pricing and reviews keep their own threads and the page still renders, just without recommendations."
+      },
+      {
+        "text": "Moving recommendations to a different programming language",
+        "explanation": "The language is irrelevant; the problem is shared resource exhaustion, which happens in any runtime that shares a pool."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Estimate exhaustion with Little's law:\n\n```formula\nL = λW\nL = 10 calls/s × 30 s = 300\nwhere\nL: the threads busy at once (calls in flight) in steady state\nλ: lambda, the call rate to recommendations, here 10 calls per second (calls/s)\nW: how long each call holds a thread, here 30 seconds (s)\ncalls/s: calls per second\ns: seconds\nIn words: 10 new hanging calls a second, each holding a thread for 30 s, need 300 threads, more than the whole 200-thread pool.\n```\n\n2. With a shared pool, all 200 threads end up stuck on recommendations; pricing and reviews calls queue and time out.\n3. With bulkheads, e.g. pricing 80, reviews 80, recommendations 40:\n   - Recommendations' 40 fill up; further calls are rejected immediately (fallback: hide the panel).\n   - Pricing and reviews are unaffected.\n4. Add a short timeout (say 300 ms) and a circuit breaker on recommendations as well, and the expected concurrency drops, although bursts can still fill it.",
+    "link": {
+      "title": "Bulkhead pattern (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A service calls a pricing dependency at 200 req/s, normally taking 50 ms. The calls run in a dedicated bulkhead pool of **20** threads, no waiting queue, and otherwise isolated resources. Pricing degrades and every call now takes 5 s. Roughly what happens to pricing calls?",
+    "options": [
+      {
+        "text": "All 200 req/s still complete, just slower",
+        "explanation": "Little's law says 200 req/s at 5 s needs 1,000 concurrent calls. A 20-thread pool can't hold that, so most calls can't even start."
+      },
+      {
+        "text": "The pool grows automatically to 1,000 threads to absorb the slowness",
+        "explanation": "A bulkhead is deliberately bounded. Growing it to match a slow dependency would just move the exhaustion to the whole process."
+      },
+      {
+        "text": "The whole service runs out of threads and stops",
+        "explanation": "That's what happens with a shared pool. The bulkhead caps pricing at 20 threads, so the rest of the service keeps its own."
+      },
+      {
+        "text": "The pool fills; about 4 calls/s get through and the rest are rejected immediately, while the service's other work is unaffected",
+        "explanation": "Correct. 20 threads ÷ 5 s per call = 4 calls/s of throughput. The remaining ~196 req/s are rejected (or served a fallback) at once, and the other pools keep working. That containment is the bulkhead's job."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Use **Little's law**, then the pool's maximum throughput:\n\n```formula\nL = λW\nL = 200 /s × 0.05 s = 10\nL = 200 /s × 5 s = 1,000\nX = N / W = 20 / (5 s) = 4 /s\nwhere\nL: calls in flight at once\nλ: lambda, the call rate, here 200 per second (/s)\nW: time per call: 50 ms = 0.05 s healthy, 5 s degraded\nX: the most calls per second the pool can complete\nN: the threads in the pool, here 20\ns: seconds; /s: per second\nIn words: healthy, 10 calls are in flight; degraded, 1,000 would be. A 20-thread pool with 5-second calls finishes at most 4 a second.\n```\n\n1. Healthy: 10 threads busy, so 20 is double the need, a sensible margin.\n2. Degraded: 1,000 would be needed, but only 20 exist.\n3. Throughput through the pool: `20 / (5 s) = 4 calls/s`.\n4. Everything else is rejected quickly; show list prices or hide the panel.\n\nA 200 ms timeout still implies up to 200 × 0.2 = 40 concurrent calls if all time out, exceeding 20 threads. The bulkhead remains necessary; a breaker can reduce new attempts after it trips.",
+    "link": {
+      "title": "Bulkhead pattern (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead"
+    }
+  }
+]

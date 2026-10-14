@@ -1,0 +1,100 @@
+[
+  {
+    "id": "rel-overload-protection-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A circuit breaker protecting calls to an inventory service is **open**. Its cool-down period expires. What happens next?",
+    "options": [
+      {
+        "text": "It closes and all traffic resumes immediately",
+        "explanation": "Jumping straight to closed would send full load to a dependency that may still be broken, possibly knocking it over again. That's what half-open exists to avoid."
+      },
+      {
+        "text": "It moves to half-open and lets a small number of trial requests through",
+        "explanation": "Correct. Half-open probes the dependency with limited traffic. If the trials succeed the breaker closes; if they fail it reopens for another cool-down."
+      },
+      {
+        "text": "It stays open until an operator resets it manually",
+        "explanation": "Some systems allow manual overrides, but the standard pattern recovers automatically via the half-open state, so no human has to intervene."
+      },
+      {
+        "text": "It starts retrying every request that failed while it was open",
+        "explanation": "Requests rejected while open have already failed back to the caller. Replaying them would create a burst of stale load, which breakers are designed to prevent."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Walk the state machine:\n\n1. **Closed**: inventory calls start failing; failure rate exceeds 50% over 10 s → trip.\n2. **Open** for 30 s: every call returns a fallback instantly; no new traffic passes this breaker; other clients and in-flight work may remain.\n3. Timer expires → **half-open**: allow e.g. 5 trial calls.\n4. If 5/5 succeed → **closed**, normal traffic resumes. If they fail → back to **open** for another 30 s.\n\nThe half-open state is a controlled experiment that avoids slamming a recovering service with full load.",
+    "link": {
+      "title": "Circuit breaker (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/CircuitBreaker.html"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "When the primary product database is slow, a team's fallback is to read from a rarely-used secondary search cluster. During the next database incident, the search cluster collapses under the sudden load and search breaks too. What design principle would have avoided this?",
+    "options": [
+      {
+        "text": "Prefer static or always-exercised fallbacks over ones that shift load onto rarely used systems",
+        "explanation": "Correct. The AWS Builders' Library warns that fallbacks which only run during outages may be insufficiently tested and can move a surge onto another system that isn't sized for it. A static fallback (precomputed data) or a path used all the time avoids the surprise."
+      },
+      {
+        "text": "Add more retries to the fallback path",
+        "explanation": "More retries multiply load on the overloaded search cluster, accelerating the collapse rather than preventing it."
+      },
+      {
+        "text": "Remove the circuit breaker so the primary database keeps receiving traffic",
+        "explanation": "Without a breaker the slow database gets hammered and callers hang; you trade one failure for a worse, slower one."
+      },
+      {
+        "text": "Make the fallback chain longer, adding a third and fourth backup",
+        "explanation": "Each additional rarely-used fallback has the same problems: untested code and unsized capacity. Longer chains increase complexity and surprise."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Normal state: search cluster handles 500 req/s of search traffic.\n2. Database incident: product reads (say 5,000 req/s) fall back to search.\n3. Search now gets ~5,500 req/s, 11× its usual load, and falls over. Two features are down instead of one.\n4. The fallback was effectively a new dependency that had never been load-tested in this mode.\n\nBetter options:\n- **Static fallback**: serve a cached snapshot from local memory or a CDN.\n- **Always-on path**: if search must be a source of product data, use it in normal operation too, and test the full failover load; normal usage alone does not prove sufficient capacity.\n- **Fail fast** with a clear error if neither is possible.",
+    "link": {
+      "title": "Avoiding fallback in distributed systems (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/avoiding-fallback-in-distributed-systems/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q10",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "You're configuring a circuit breaker for calls to a payments provider. Which settings are sensible? Select all that apply.",
+    "options": [
+      {
+        "text": "When half-open, immediately send all queued traffic to test recovery",
+        "explanation": "Incorrect. Half-open sends a few trial calls. Full load on a recovering dependency can knock it straight over again."
+      },
+      {
+        "text": "Use per-host breakers or proxy outlier ejection if the provider is reached via several hosts",
+        "explanation": "Correct. A single breaker might open for every host because one is bad; per-host control removes only the sick one."
+      },
+      {
+        "text": "A minimum number of calls in the window (e.g. 20) before the failure rate is evaluated",
+        "explanation": "Correct. Without it, one failure out of one call is a 100% failure rate and trips the breaker on noise."
+      },
+      {
+        "text": "Count calls slower than a threshold (e.g. 2 s) as failures",
+        "explanation": "Correct. Slow-call counting lets the breaker react to gray failure, where the provider is up but painfully slow."
+      },
+      {
+        "text": "Count `400 Bad Request` responses as failures",
+        "explanation": "Ordinary caller-invalid 400 responses should not count as dependency failures. A 400 alone does not prove the provider is healthy; classify failures according to the actual API contract."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Check each setting against what the breaker is for, *detecting an unhealthy dependency*:\n\n| Setting | Detects dependency health? |\n|---|---|\n| min_requests | ✓ avoids noise |\n| slow-call threshold | ✓ catches gray failure |\n| count 4xx | ✗ measures caller bugs |\n| full-load half-open | ✗ risks relapse |\n| per-host breakers | ✓ finer blast radius |\n\nIllustrative settings to validate for the workload: 10 s rolling window, at least 20 calls, open at 50% failures or slow calls, 30 s open, 5 trial calls.",
+    "link": {
+      "title": "Circuit Breaker pattern (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker"
+    }
+  }
+]

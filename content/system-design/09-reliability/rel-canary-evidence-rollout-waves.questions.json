@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rel-safe-deployments-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service handles 200 req/s with a baseline error rate of 0.1%. You canary a release on 1% of traffic. If the canary actually has a 0.5% error rate, roughly how long until you'd expect to have seen even **10** errors from the canary?",
+    "options": [
+      {
+        "text": "About 10 seconds",
+        "explanation": "This assumes the canary receives all 200 req/s. At 1% it only gets 2 req/s."
+      },
+      {
+        "text": "About 17 minutes",
+        "explanation": "Correct as an expected count: 2 × 0.005 = 0.01 errors/s, giving 1,000 s for ten errors on average. Detection confidence depends on the test, traffic independence and baseline evidence."
+      },
+      {
+        "text": "About 1 minute",
+        "explanation": "This is off by a factor of about 17. Work through the rates: 200 × 1% = 2 req/s, × 0.5% = 0.01 errors/s."
+      },
+      {
+        "text": "About 14 hours",
+        "explanation": "That would be the time at a 0.01% error rate (50 times lower) or at far lower traffic. At 0.01 errors/s, 10 errors arrive in about 1,000 s."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nr_c = Rf = 200 req/s × 0.01 = 2 req/s\nx = r_c × e = 2 req/s × 0.005 = 0.01 /s\nt = n / x = 10 / (0.01 /s) = 1,000 s\nt ≈ 17 min\nwhere\nr_c: the canary's request rate\nR: the service's total request rate, here 200 requests per second (req/s)\nf: the fraction sent to the canary, here 1% = 0.01\nx: the canary's error rate in errors per second\ne: the canary's error ratio, here 0.5% = 0.005\nt: the expected time to see n errors\nn: the number of errors wanted, here 10\nreq/s: requests per second\n/s: per second\ns: seconds\nmin: minutes\n≈: approximately equal to (rounded)\nIn words: a 1% canary gets 2 requests a second; at 0.5% errors that is one error every 100 seconds, so ten errors take about 17 minutes on average.\n```\n\nOver the same 1,000 s, a baseline group of equal size (2 req/s at 0.1% errors) would expect 2 × 0.001 × 1,000 = 2 errors. Ten versus two is suggestive but noisy at these counts.\n\nLesson from the SRE workbook: canary size and duration must give enough events for statistical significance. Options: a bigger canary (5% gives 10 errors in ~3.3 min), longer bake times, and a representative contemporaneous canary baseline group; equal sizing can reduce confounding but does not itself increase sample count.",
+    "link": {
+      "title": "Canarying releases (Google SRE workbook)",
+      "url": "https://sre.google/workbook/canarying-releases/"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A global service runs in 20 regions, each made of independent cells. A deploy with a latent bug triggers only under traffic patterns seen in some regions. Which rollout plan best limits blast radius while still finishing in reasonable time?",
+    "options": [
+      {
+        "text": "Deploy to all 20 regions at once, with automated rollback if errors rise",
+        "explanation": "Automated rollback helps, but all users have received the new version before the rollback triggers; actual impact depends on which traffic activates the bug. Exposure isn't limited at all."
+      },
+      {
+        "text": "Blue-green switch of the whole global fleet after testing in staging",
+        "explanation": "Staging didn't reproduce the regional traffic pattern, so the bug passes testing and then hits all users at the switch."
+      },
+      {
+        "text": "Waves: one box → one cell → one region → a few regions → the rest, with automated canary analysis and bake time at each stage",
+        "explanation": "Correct. Staged waves (as AWS describes) cap exposure at each step, give region-specific traffic a chance to trigger the bug while impact is small, and roll back automatically on regression. The cost is that full rollout takes hours to days."
+      },
+      {
+        "text": "Deploy to the smallest region only and, if fine after an hour, everywhere else",
+        "explanation": "Better than all-at-once, but a single small region may not exhibit the traffic pattern that triggers the bug, and the jump straight from one region to nineteen gives a huge blast radius."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare worst-case exposure when the bug triggers:\n\n| Plan | Users exposed |\n|---|---|\n| All at once | 100% |\n| Global blue-green | 100% |\n| 1 small region → rest | ~95% if missed |\n| Waves | cumulative deployed footprint |\n\nWave design:\n1. One box in one cell: catches crashes and obvious errors.\n2. One cell: real traffic mix for that cell's customers.\n3. One region, then 2–3 diverse regions: different traffic shapes, so the regional bug is likely triggered here, at a limited footprint determined by regional traffic; already-deployed regions also remain exposed.\n4. Remaining regions in larger waves.\n\nAutomated rollback at each stage, plus bake time long enough to see daily patterns, makes this hands-off.",
+    "link": {
+      "title": "Automating safe, hands-off deployments (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/automating-safe-hands-off-deployments/"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service handles **2,000 req/s** with a 0.2% error rate. A new release would double that to 0.4%. You canary it on **5%** of traffic for 10 minutes, compared with an equal-sized representative baseline group. Assume independent requests and stable rates. Roughly how many errors would you expect from each group?",
+    "options": [
+      {
+        "text": "Canary about 240, baseline about 120: a clear difference",
+        "explanation": "Correct in expectation: each group has 60,000 requests, giving 240 versus 120 expected errors. Independent rare-event counting gives a standard deviation of about 19 error counts for the difference; real correlated failures require a different uncertainty model."
+      },
+      {
+        "text": "Canary about 24, baseline about 12",
+        "explanation": "This is off by a factor of ten, typically from using 0.5% of traffic instead of 5%."
+      },
+      {
+        "text": "Canary about 4,800, baseline about 2,400",
+        "explanation": "These are the counts for the whole fleet over 10 minutes. Each group gets only 5% of traffic."
+      },
+      {
+        "text": "Canary about 240, baseline about 2,280",
+        "explanation": "This compares the canary with the rest of the fleet (95%) rather than an equal-sized baseline. Raw counts are then not comparable; you'd have to compare rates."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nn = Rft\nn = 2,000 req/s × 0.05 × 600 s = 60,000\nE_c = 60,000 × 0.4% = 240\nE_b = 60,000 × 0.2% = 120\nσ ≈ √(E_c + E_b) = √(360) ≈ 19\nz = (E_c − E_b) / σ ≈ 120 / 19 ≈ 6.3\nwhere\nn: requests each group receives in the test\nR: total traffic, here 2,000 requests per second (req/s)\nf: the share sent to each group, here 5% = 0.05\nt: the test length, 10 minutes = 600 seconds (s)\nE_c: expected errors in the canary (0.4% error rate)\nE_b: expected errors in the baseline (0.2% error rate)\nσ: sigma, the standard deviation (typical random spread) of the difference between the two counts\n√: square root\nz: how many standard deviations apart the two counts are\nreq/s: requests per second\ns: seconds\n≈: approximately equal to (rounded)\n%: per cent\nIn words: each group gets 60,000 requests; 240 versus 120 expected errors differ by about six times the random spread, a clear signal.\n```\n\nThe square-root rule comes from treating rare, independent errors as a Poisson count, whose variance equals its mean; the variance of a difference of two independent counts is the sum of their variances.\nCompare a 1% canary: 12,000 requests each, 48 vs 24 errors, still detectable but much noisier, and subtler regressions would be invisible.\n\nAn equal-sized baseline, started at the same time, helps control time-of-day effects; it does not remove cohort differences or correlated incidents.",
+    "link": {
+      "title": "Canarying releases (Google SRE workbook)",
+      "url": "https://sre.google/workbook/canarying-releases/"
+    }
+  }
+]

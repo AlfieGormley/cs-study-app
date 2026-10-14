@@ -50,11 +50,12 @@ author/independent-verifier process. Existing skipped-content decisions below re
   Its broad real-time aliases have also been independently narrowed to consistency-ordering phrases.
   API design's code-format follow-up is complete: four checked native examples, zero unresolved active
   pseudocode/format debt. Architecture is independently verified and its isolated full build/mobile checks
-  pass (41 units, 108 questions; ten-module preview version `925d0c7768db`). Reliability (38 units/97 questions)
-  remains under independent review. Case studies 1 is independently verified and stamped (43 units/85
+  pass (41 units, 108 questions; ten-module preview version `925d0c7768db`). Reliability is independently
+  verified and stamped (38 units/97 questions/105 cards/207 glossary terms). Case studies 1 is independently
+  verified and stamped (43 units/85
   questions/103 formula cards/183 glossary terms); its 12 compiled dictionary meaning probes pass.
   Complexity's required formula-format follow-up is verified and published. Case studies 2 (42 units/101
-  questions) is under independent review; DSA linear structures is being authored next in course order.
+  questions) is under independent review; DSA linear and hashing structures are being authored in course order.
   The user confirmed course order, with system design next. Remaining modules are queued.
 - Current reports: [short-lessons-report.md](short-lessons-report.md). Working queue and baseline snapshots:
   `/tmp/cs-study-short-lessons/queue.json`, `original-index.json`, `original-questions.json`; baseline commit
@@ -62,6 +63,13 @@ author/independent-verifier process. Existing skipped-content decisions below re
 - Case studies 1 integration candidate: verified eleven-module full build `48856bef26a5`, 83 originals
   → 400 units with 993 questions. All mobile renders and eleven actual lesson/quiz routes pass; 61 Node
   tests pass, all original questions survive, and all 964 original files remain byte-identical.
+- Published seventh-batch commit `d02b679`: Case Studies I. GitHub Pages succeeded and all four live
+  app/manifest/progress/index files match the tested `48856bef26a5` release. Installed-app update, offline
+  age practice and twelve compiled dictionary probes pass.
+- Reliability integration candidate: twelve-module verified full build `0136066f140a`, 91 originals →
+  438 units with 1,090 questions. All mobile renders and twelve actual lesson/quiz routes pass; 61 Node tests,
+  original question preservation and all 964 archival comparisons pass. All 18 compiled dictionary probes
+  pass, including precise definitions, intentional absence and representative inline contexts.
 - Root owns shared code and generated assets. `/tmp/cs-study-short-lessons/preview-verified.mjs` builds isolated
   previews from the last published release and overlays currently verified modules, allowing pending author
   files to stay out of releases. Previously converted modules retain their last verified units during follow-up

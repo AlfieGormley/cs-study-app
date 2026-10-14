@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rel-safe-deployments-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must rename `users.fullname` to `users.display_name` on a 200-million-row PostgreSQL table, with zero downtime and app rollback during the compatible migration stages, before deliberately retiring old versions. Which sequence is safe?",
+    "options": [
+      {
+        "text": "`ALTER TABLE users RENAME COLUMN fullname TO display_name`, then deploy the app that uses `display_name`",
+        "explanation": "Between the rename and the deploy finishing, every running old instance queries `fullname`, which no longer exists, so they all fail. Rolling back the app also breaks because the old name is gone."
+      },
+      {
+        "text": "Deploy the app using `display_name` first, then rename the column",
+        "explanation": "Now the new app fails until the rename happens, and during a rolling deploy you'd have both versions running against a schema only one of them understands."
+      },
+      {
+        "text": "Add `display_name`; dual-write both; backfill in batches; switch reads to `display_name`; stop writing `fullname`; drop it later",
+        "explanation": "Correct with safeguards: synchronize both columns in one transaction, retire all single-column writers before final backfill/read switch, verify consistency, and drop fullname only after old code and its rollback window are retired. Contraction is not automatically reversible."
+      },
+      {
+        "text": "Create a new table, copy all rows in one transaction, then swap table names",
+        "explanation": "Copying 200M rows in one transaction holds locks and resources for a long time, floods replication, and loses writes made during the copy unless they're captured. It also lacks a safe rollback path."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Check compatibility at each step (the old app reads and writes `fullname`):\n\n| Step | Schema | Old app OK? | New app OK? |\n|---|---|---|---|\n| 1 Add column | both | ✓ | ✓ |\n| 2 Dual-write | both | until read switch | ✓ |\n| 3 Backfill | both | ✓ | ✓ |\n| 4 Read new | both | only synchronized writers | ✓ |\n| 5 Stop old write | both | (retired) | ✓ |\n| 6 Drop old | new only | ✗, so only after old app is gone | ✓ |\n\nAssuming all writers now synchronize both columns and measured sustainable throughput permits it, backfill maths:\n\n```formula\nT = N / (b × k)\nT = 200,000,000 / (10,000 × 20 /s)\nT = 200,000,000 / (200,000 /s)\nT = 1,000 s ≈ 17 min\nwhere\nT: the time to backfill the whole table, in seconds (s) or minutes (min)\nN: the rows to update, here 200 million\nb: rows per batch, here 10,000\nk: batches per second, here 20\n/s: per second\ns: seconds\nmin: minutes\n≈: approximately equal to (rounded)\nIn words: 200,000 rows a second gets through 200 million rows in about 17 minutes.\n```\n\nIn practice the batches are throttled on replica lag so replicas don't fall behind, which can stretch this out.",
+    "link": {
+      "title": "Parallel change (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team runs `ALTER TABLE orders ADD COLUMN note text;` on a busy PostgreSQL table. The change is normally instant, but this time every query on `orders` hangs for minutes and the site goes down. A long-running analytics query was reading `orders` at the time. What happened, and what prevents it?",
+    "options": [
+      {
+        "text": "Adding a column rewrote the whole table",
+        "explanation": "Adding a nullable column is metadata-only in PostgreSQL. The table wasn't rewritten; the problem was waiting for a lock."
+      },
+      {
+        "text": "Analytics queries can't run while columns exist with NULL values",
+        "explanation": "There's no such restriction; NULL columns are normal."
+      },
+      {
+        "text": "The new column made every row larger, so queries slowed",
+        "explanation": "Existing rows aren't changed by adding a nullable column, and the queries weren't slow; they were blocked."
+      },
+      {
+        "text": "The ALTER waited for an exclusive lock behind the analytics query, and every new query queued behind the ALTER; set a short `lock_timeout` and retry",
+        "explanation": "Correct. ALTER TABLE needs a brief ACCESS EXCLUSIVE lock. While it waits for the long query, it blocks all later queries on the table. A `lock_timeout` of a few seconds makes the ALTER abort so a controlled retry can be scheduled instead of stalling the table."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The analytics query holds an ACCESS SHARE lock on `orders` for, say, 10 minutes.\n2. `ALTER TABLE` requests ACCESS EXCLUSIVE and must wait.\n3. PostgreSQL queues lock requests: new `SELECT`s and `INSERT`s now wait behind the ALTER.\n4. Result: the whole table is effectively locked for as long as the analytics query runs.\n\nFix:\n\nA PostgreSQL fragment for a coordinated migration runner:\n\n```sql\n-- Fail instead of waiting in the lock\n-- queue.\nSET lock_timeout = '3s';\nALTER TABLE orders\n  ADD COLUMN note text;\n-- Runner backs off and retries on\n-- timeout.\n```\n\nAlso keep long analytics queries off the primary (run them on a replica).",
+    "link": {
+      "title": "ALTER TABLE (PostgreSQL documentation)",
+      "url": "https://www.postgresql.org/docs/current/sql-altertable.html"
+    }
+  },
+  {
+    "id": "rel-safe-deployments-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team's 60 application instances each run pending database migrations on start-up. During a rolling deploy the first batch of 15 starts together, and a migration that adds an index locks the table and runs on several instances at once. What's the best practice?",
+    "options": [
+      {
+        "text": "Run migrations as a separate, single, observable pipeline step before the code that needs them is deployed, keeping each migration backwards compatible",
+        "explanation": "Correct. A single authorized runner with migration locking prevents competing pipeline runs; a separate step can be monitored, paused and retried; and because the migration is compatible with the running version, the app can deploy afterwards, or roll back, safely."
+      },
+      {
+        "text": "Keep migrations on start-up but add a random delay before each instance runs them",
+        "explanation": "Jitter reduces simultaneous starts but still lets several instances attempt the same DDL, and ties every start-up to migration success."
+      },
+      {
+        "text": "Run migrations after the deploy completes, from the last instance to start",
+        "explanation": "Then the new code runs against the old schema during the whole rollout, which breaks unless the code is compatible with both, and 'last instance' is hard to define reliably."
+      },
+      {
+        "text": "Use blue-green so the migration runs only in the green environment",
+        "explanation": "Blue and green normally share the database, so a migration in green changes blue's schema too. It doesn't avoid the problem."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Problems with migrate-on-start:\n   - concurrency: many instances race to run the same DDL;\n   - coupling: a slow or failed migration blocks start-up across the fleet;\n   - visibility: it's buried in app logs, not a pipeline stage.\n2. Better pipeline:\n\n```\n1 migrate (expand, compatible)\n2 deploy app (rolling/canary)\n3 later: contract migration\n```\n\n3. Make the DDL itself safe: CREATE INDEX CONCURRENTLY where supported and a short lock_timeout. Concurrent index creation must run outside a transaction block; inspect and clean up invalid indexes after a failed build.\n\nThe expand/contract discipline is what makes step 1 safe while the old code is still running.",
+    "link": {
+      "title": "Parallel change (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  }
+]

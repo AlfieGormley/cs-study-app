@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel-security-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your site comes under an application-layer (L7) DDoS: 200,000 req/s of valid-looking `GET /search?q=<random>` requests spread approximately evenly across ~50,000 residential IPs. Normal traffic is 5,000 req/s and each search costs ~50 ms of database CPU time. Which defence plan is strongest?",
+    "options": [
+      {
+        "text": "Rely on autoscaling the search tier to absorb the traffic",
+        "explanation": "Random queries defeat caching, so every request hits the database: 200,000 requests per second, each costing 50 milliseconds of database CPU time, demand 10,000 database CPU-seconds each second. Autoscaling app servers doesn't scale the database that fast, and you pay for the attack."
+      },
+      {
+        "text": "Block the top 100 source IPs",
+        "explanation": "With 50,000 IPs each sending about 4 req/s, the top 100 contribute well under 1% of the attack. Per-IP blocking alone barely dents a widely distributed botnet."
+      },
+      {
+        "text": "Edge protection (CDN/WAF) with bot detection and challenges, rate limits per IP and per session, origin locked to the edge, and load shedding plus a cheaper degraded search",
+        "explanation": "Correct. Layered defences: the edge filters and challenges bots before they reach you; rate limits cap each client; the origin can't be bypassed; and shedding protects the database while serving users a degraded but working search."
+      },
+      {
+        "text": "Switch search from GET to POST",
+        "explanation": "Attackers can send POSTs just as easily. It changes nothing about request volume or cost, and makes legitimate caching harder."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nC = rc\nC = 200,000 /s × 0.05 s = 10,000\nC_normal = 5,000 /s × 0.05 s = 250\nr_ip = r / N = 200,000 / 50,000 = 4 /s\nwhere\nC: database CPU-seconds needed per second, roughly the number of database cores kept busy\nr: the attack request rate, 200,000 per second (/s)\nc: database CPU time per search, 50 ms = 0.05 seconds (s)\nC_normal: the same at normal traffic of 5,000 requests per second\nr_ip: requests per second from each attacking IP address\nN: the number of attacking IP addresses, about 50,000\n/s: per second\ns: seconds\nIn words: the attack needs about 10,000 database cores against a normal 250, yet each IP sends only 4 requests a second, too few for a crude per-IP limit to catch without hurting real users behind NAT.\n```\n\nLayered plan:\n   - **Edge**: WAF and bot management score clients; challenge low-scoring ones (JS/proof-of-work). Challenges add friction but sophisticated bots can pass; measure false positives and attack adaptation.\n   - **Rate limit** per session/token as well as per IP, e.g. 1 search/s for unauthenticated users.\n   - **Origin lock**: restrict ingress and authenticate the intended edge; shared CDN IP ranges alone do not identify your own distribution.\n   - **Protect the DB**: concurrency limit on search, shed beyond it; serve a cached \"popular results\" fallback.\nGoal: keep origin load near the 250 DB-s/s it was built for.",
+    "link": {
+      "title": "AWS best practices for DDoS resiliency",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/aws-best-practices-ddos-resiliency/welcome.html"
+    }
+  },
+  {
+    "id": "rel-security-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An attacker controls machines with a combined **1 Gbps** of upstream bandwidth and finds thousands of internet-exposed memcached servers answering on UDP. With spoofed source addresses and an amplification factor of about **10,000×**, using the same accounting basis for both rates and ignoring protocol overhead, what traffic could arrive at the victim, and what's the root fix?",
+    "options": [
+      {
+        "text": "About 1 Gbps; amplification only changes packet sizes, not volume",
+        "explanation": "Amplification is exactly a volume multiplier: each small request triggers a much larger response sent to the spoofed victim."
+      },
+      {
+        "text": "About 10 Gbps, because only 1% of the reflectors respond",
+        "explanation": "No 1% response fraction is given. If only 1% of the request traffic elicited amplified responses, the ideal result would be 100 Gbps, not 10 Gbps."
+      },
+      {
+        "text": "Up to about 10 Tbps in theory (limited in practice by the reflectors' bandwidth); the root fix is not exposing UDP services like memcached to the internet",
+        "explanation": "Correct. 1 Gbps × 10,000 = 10 Tbps of potential reflected traffic. Real attacks are capped by how much the reflectors can send, which is still enough for record-breaking floods. Closing UDP 11211 to the internet removes the reflectors."
+      },
+      {
+        "text": "Nothing, because the victim's firewall drops unsolicited UDP",
+        "explanation": "A firewall at the victim drops the packets only after they've filled the victim's links. Volumetric floods have to be absorbed upstream, at the edge."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Attacker sends spoofed requests: 1 Gbps of tiny UDP packets whose source address is the victim's.\n2. Each reflector replies to the victim with a response ~10,000× larger.\n3. Theoretical volume:\n\n```formula\nB_victim = B_attack × A\nB_victim = 1 Gbps × 10,000\nB_victim = 10,000 Gbps = 10 Tbps\nwhere\nB_victim: traffic reflected at the victim\nB_attack: the attacker's request traffic, here 1 gigabit per second (Gbps)\nA: the amplification factor, here about 10,000\nGbps: gigabits per second\nTbps: terabits per second; 1 Tbps = 1,000 Gbps\nIn words: 1 Gbps of tiny spoofed requests could, in theory, trigger 10 Tbps of replies.\n```\n\n4. In practice the reflectors' own uplinks cap it, but in 2018 this technique produced attacks above 1 Tbps.\n5. Defences:\n   - **Root fix**: memcached shouldn't listen on public UDP (newer versions disable UDP by default).\n   - **Network**: providers filter spoofed source addresses (BCP 38).\n   - **Victim**: anycast DDoS protection absorbs the flood far from the origin.",
+    "link": {
+      "title": "February 28th DDoS incident report (GitHub)",
+      "url": "https://github.blog/news-insights/company-news/ddos-incident-report/"
+    }
+  }
+]

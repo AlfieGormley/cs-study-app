@@ -1,0 +1,122 @@
+[
+  {
+    "id": "rel-observability-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team adds a `user_id` label to `http_request_duration_seconds` (a classic Prometheus histogram with 12 buckets including +Inf, plus sum and count) so they can debug per-user latency. They have 20 routes, 5 status codes, 50 pods and 2 million active users. What's the problem?",
+    "options": [
+      {
+        "text": "Histograms don't support labels",
+        "explanation": "Histograms support labels like any other metric; that's how you break latency down by route or status. The problem is which label."
+      },
+      {
+        "text": "It will produce too few series for statistical significance",
+        "explanation": "The opposite: it produces an enormous number of series, most with a handful of samples each."
+      },
+      {
+        "text": "Worst-case cardinality exceeds a hundred billion time series; per-user detail should use an appropriately designed log or trace store",
+        "explanation": "Correct. Each unique label combination is a separate series, and each histogram bucket is a series too. Unbounded labels like user ID make cost scale with users instead of with system shape."
+      },
+      {
+        "text": "Nothing, as long as the scrape interval is increased",
+        "explanation": "Scrape interval affects how often samples are taken, not how many distinct series exist. Memory and index size are driven by series count."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each distinct combination of label values is its own set of series, so the counts multiply:\n\n```formula\nK = v_r v_s v_p\nK = 20 × 5 × 50 = 5,000\nN = K × (b + 2)\nN = 5,000 × (12 + 2) = 70,000\nN_u = N × u\nN_u = 70,000 × 2,000,000\nN_u = 1.4 × 10^11\nwhere\nK: label combinations without user_id\nv_r: distinct routes, here 20\nv_s: distinct status codes, here 5\nv_p: distinct pods, here 50\nN: time series without user_id\nb: histogram buckets per combination, here 12 (including +Inf); the 2 adds the _sum and _count series\nN_u: worst-case series with user_id, if every user appears on every combination\nu: distinct users, here 2,000,000\n10^11: 10 to the power 11, i.e. 100 billion\nIn words: 5,000 combinations × 14 series each is 70,000 series, requiring a backend capacity check; multiplying by 2 million users gives up to 140 billion series.\n```\n\n1. Without `user_id`: 70,000 series; assess that against the backend budget.\n2. With `user_id` in the worst case: about 1.4 × 10¹¹ (140 billion) series.\n3. Even if each user only hits a few combinations, it's still tens of millions of series.\n\nPut high-cardinality identifiers in **trace attributes** or **structured log fields**, with suitable retention, indexing and access controls; high-cardinality fields still have storage and query costs.",
+    "link": {
+      "title": "Metrics (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/metrics/"
+    }
+  },
+  {
+    "id": "rel-observability-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You have 3 hosts. Their p99 latencies are 100 ms, 100 ms and 1,000 ms. Host 3 serves only 1% of traffic. A dashboard shows the fleet p99 as the mean of the three: 400 ms. What's wrong?",
+    "options": [
+      {
+        "text": "Nothing; averaging host percentiles gives the fleet percentile",
+        "explanation": "Percentiles are not linear, so the mean of percentiles is not the percentile of the combined distribution. It ignores how much traffic each host serves."
+      },
+      {
+        "text": "It should use the maximum, 1,000 ms",
+        "explanation": "The maximum host p99 is not generally the fleet p99. A 1%-traffic host can still materially affect the fleet tail depending on all distributions."
+      },
+      {
+        "text": "Percentiles can't be averaged; merge the hosts' histograms and compute p99 from the combined distribution",
+        "explanation": "Correct. Aggregating raw bucket counts weights each host by its traffic. The fleet p99 can't be derived from the three p99 values at all; it depends on the shape of each host's distribution, with request counts providing the appropriate weighting."
+      },
+      {
+        "text": "It should use the median of the three, 100 ms, which is always correct",
+        "explanation": "The median of host p99 values is not generally correct; these three numbers cannot determine how close it is."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Suppose 10,000 requests: hosts 1 and 2 serve 4,950 each, host 3 serves 100.\n2. Fleet p99 is the latency of the 9,900th fastest request, i.e. the boundary of the slowest 100.\n3. Hosts 1 and 2 each have 1% of requests above 100 ms: about 99 slow requests between them. Host 3 adds up to 100 more slow ones.\n4. If all 100 requests on host 3 exceed 100 ms, roughly 199 are slower than 100 ms, and the slowest 100 of them set the fleet p99. Its value depends on how slow those tails are, which only the full distributions (histograms) reveal. The mean of host p99s (400 ms) has no meaning here: it gives host 3, with 1% of traffic, a third of the weight.\n\nFor a classic Prometheus histogram, take the rate of each host’s cumulative bucket counters over the same interval, sum matching upper-bound buckets across hosts, then apply the 99th-percentile histogram query. The original ellipsis was a metric-name placeholder, not a runnable query. This order preserves the fleet distribution rather than averaging host percentiles.",
+    "link": {
+      "title": "Monitoring distributed systems (Google SRE book)",
+      "url": "https://sre.google/sre-book/monitoring-distributed-systems/"
+    }
+  },
+  {
+    "id": "rel-observability-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You want to graph (a) how many requests per second a service handles and (b) how many jobs are waiting in its queue right now. Which metric types fit?",
+    "options": [
+      {
+        "text": "(a) gauge, (b) counter",
+        "explanation": "Swapped. A request total only ever increases (a counter), while queue depth rises and falls (a gauge)."
+      },
+      {
+        "text": "Both gauges, set by each request",
+        "explanation": "A gauge holding only the latest per-request update loses intervening events. A precomputed rate gauge is possible, but a cumulative request counter plus reset-aware rate calculation is the conventional choice."
+      },
+      {
+        "text": "Both histograms",
+        "explanation": "Histograms are for distributions of observations, such as latency. Neither a request rate nor a current depth needs buckets."
+      },
+      {
+        "text": "(a) counter, graphed as a rate; (b) gauge",
+        "explanation": "Correct. Count requests with a monotonically increasing counter and graph `rate()` to get requests per second. Queue depth is a current value that goes up and down: a gauge."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. **Counter metric**: a running total that only goes up (it resets to 0 on restart, which the PromQL rate function handles). Graph it as `rate(http_requests_total[5m])`, giving req/s.\n2. **Gauge metric**: a snapshot of a current value. Queue depth, memory in use and temperature are gauges.\n3. **Histogram**: a distribution, such as request duration, so you can compute percentiles.\n\nRule of thumb: if you'd ask \"how many per second?\", use a counter; if you'd ask \"how many right now?\", a gauge; if you'd ask \"how slow is the p99?\", a histogram.\n\nThe named PromQL counter query requires a Prometheus backend with that metric; no particular returned rate is claimed here.",
+    "link": {
+      "title": "Metrics (OpenTelemetry)",
+      "url": "https://opentelemetry.io/docs/concepts/signals/metrics/"
+    }
+  },
+  {
+    "id": "rel-observability-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your latency SLI is \"proportion of requests served in at most **300 ms**\". The service's classic Prometheus latency histogram has bucket boundaries at 100, 250, 500 and 1,000 ms. What's the problem, and the fix?",
+    "options": [
+      {
+        "text": "No problem; histograms record every value exactly",
+        "explanation": "Histograms record only counts per bucket. Requests between 250 and 500 ms are lumped together, so you can't tell which side of 300 ms they fell."
+      },
+      {
+        "text": "Use the average latency instead, which is exact",
+        "explanation": "An average is exact but answers a different question and hides the tail. The SLI is a ratio against a threshold."
+      },
+      {
+        "text": "The count of requests at most 300 ms has to be interpolated inside the 250–500 ms bucket; add a bucket boundary at exactly 300 ms",
+        "explanation": "Correct. With an edge at 300 ms, the good-event count is exact. Percentile and threshold estimates are only as precise as the bucket edges near them."
+      },
+      {
+        "text": "Switch to a gauge holding the latest request's latency",
+        "explanation": "A gauge would show one sample per scrape and lose almost every request. It can't produce a ratio over all requests."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Suppose there are 10,000 valid requests in total, and the cumulative buckets show 9,000 requests ≤ 250 ms and 9,800 ≤ 500 ms.\n2. Somewhere between 9,000 and 9,800 were at most 300 ms. Linear interpolation assumes requests are spread evenly across the bucket:\n\n```formula\nG ≈ L + ((H − L)(x − a)) / (b − a)\nG ≈ 9,000 + 800 × 50 ms / (250 ms)\nG ≈ 9,000 + 800 × 0.2 = 9,160\nwhere\nG: the estimated count of requests at most x\nL: the count at or below the lower bucket edge, here 9,000 at 250 ms\nH: the count at or below the upper edge, here 9,800 at 500 ms (so H − L = 800)\nx: the threshold, here 300 milliseconds (ms)\na: the lower bucket edge, here 250 ms\nb: the upper bucket edge, here 500 ms\nms: milliseconds\n≈: approximately equal to (an estimate)\nIn words: 300 ms is a fifth of the way through the 250–500 ms bucket, so interpolation guesses a fifth of its 800 requests (160) were fast enough. The real figure could be anywhere from 9,000 to 9,800.\n```\n\n3. As an SLI that's between 90% and 98% good: enough to show the 99% target was missed, but insufficient to measure the exact good-event ratio.\n4. Add a bucket at 300 ms: the ≤ 300 ms count is now exact.\n\nPrometheus's `histogram_quantile` interpolates within buckets the same way, so place bucket edges around the latencies your SLOs and alerts use.",
+    "link": {
+      "title": "Histograms and summaries (Prometheus)",
+      "url": "https://prometheus.io/docs/practices/histograms/"
+    }
+  }
+]

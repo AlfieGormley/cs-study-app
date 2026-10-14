@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel-overload-protection-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A server's mean service time is 10 ms. Modelled as an M/M/1 queue, what is the mean time in system at **90%** utilisation, and at **95%**?",
+    "options": [
+      {
+        "text": "11 ms and 10.5 ms",
+        "explanation": "This treats utilisation as a small additive overhead. Queueing delay is hyperbolic in utilisation, not linear, so it grows rather than shrinks as utilisation rises."
+      },
+      {
+        "text": "19 ms and 19.5 ms",
+        "explanation": "This adds 90% or 95% of the service time, a linear model that badly underestimates queueing near saturation."
+      },
+      {
+        "text": "100 ms and 200 ms",
+        "explanation": "Correct. Divide service time by the idle fraction: 10 milliseconds divided by 0.1 gives 100 milliseconds, and divided by 0.05 gives 200 milliseconds. Halving idle capacity doubles the model’s mean latency.\n\n```formula\nW = S / (1 − ρ)\nW = 10 ms / (1 − 0.9) = 100 ms\nW = 10 ms / (1 − 0.95) = 200 ms\nwhere\nW: the mean time in system (waiting plus service), in milliseconds (ms)\nS: the mean service time, here 10 ms\nρ: rho, the utilisation, the fraction of time the server is busy (0.9 = 90%)\n1 − ρ: the idle fraction\nms: milliseconds\nIn words: latency is the service time divided by the idle fraction, so halving the idle time from 10% to 5% doubles the mean latency.\n```"
+      },
+      {
+        "text": "90 ms and 95 ms",
+        "explanation": "This scales latency linearly with utilisation (10 ms × 9 and × 9.5). Queueing delay is hyperbolic: going from 90% to 95% doubles the time in system rather than adding 5%."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "M/M/1 mean time in system:\n\n```formula\nW = S / (1 − ρ)\nW = 10 ms / (1 − 0.9) = 100 ms\nW = 10 ms / (1 − 0.95) = 200 ms\nwhere\nW: the mean time in system (waiting plus service), in milliseconds (ms)\nS: the mean service time, here 10 ms\nρ: rho, the utilisation, the fraction of time the server is busy (0.9 = 90%)\n1 − ρ: the idle fraction\nms: milliseconds\nIn words: latency is the service time divided by the idle fraction, so halving the idle time from 10% to 5% doubles the mean latency.\n```\n\nThe same formula across a range of utilisations:\n\n| Utilisation | Idle fraction | Mean time |\n|---|---|---|\n| 0.50 | 0.50 | 20 ms |\n| 0.80 | 0.20 | 50 ms |\n| 0.90 | 0.10 | 100 ms |\n| 0.95 | 0.05 | 200 ms |\n| 0.99 | 0.01 | 1000 ms |\n\nLesson: if clients time out at 150 ms, a server at 95% has a mean of 200 ms. M/M/1 time in system is exponential, so the share slower than a timeout is:\n\n```formula\nF = e^(−t / W)\nF = e^(−150 ms / (200 ms))\nF = e^(−0.75) ≈ 0.47\nF = e^(−150 ms / (100 ms))\nF = e^(−1.5) ≈ 0.22\nwhere\nF: the fraction of requests slower than the timeout\nms: milliseconds\nt: the client timeout, here 150 ms\nW: the mean time in system: 200 ms at 95% busy, 100 ms at 90%\ne: Euler's number, about 2.718\n^: \"to the power of\"\n≈: approximately equal to (rounded)\nIn words: at 95% busy about 47% of requests outlast a 150 ms timeout; at 90% busy about 22% do.\n```\n\nNearly half of requests time out even though the server is \"only\" 5% short of full. That's why load shedding aims to keep the server below the knee of this curve.",
+    "link": {
+      "title": "Using load shedding to avoid overload (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/"
+    }
+  },
+  {
+    "id": "rel-overload-protection-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A server has a 20 ms mean service time and runs at **80%** utilisation. Model it as an M/M/1 queue, where time in system is exponentially distributed. Roughly what are the mean and p99 time in system?",
+    "options": [
+      {
+        "text": "Mean 25 ms, p99 about 50 ms",
+        "explanation": "25 ms is the service time divided by the utilisation (20 / 0.8). The correct formula divides by the idle fraction, 1 − 0.8 = 0.2."
+      },
+      {
+        "text": "Mean 100 ms, p99 about 200 ms",
+        "explanation": "The mean is right, but an exponential distribution has a long tail: p99 is about 4.6 times the mean (the natural logarithm of 100), not 2."
+      },
+      {
+        "text": "Mean 100 ms, p99 about 460 ms",
+        "explanation": "Correct. Dividing 20 milliseconds by the 20% idle fraction gives a 100-millisecond mean. The exponential model’s p99 is about 4.6 times that, around 460 milliseconds. The worked formula defines the quantities and assumptions.\n\n```formula\nW = S / (1 − ρ)\nW = 20 ms / (1 − 0.8) = 100 ms\ne^(−t / W) = 0.01\nt = W × ln(100)\nt ≈ 100 ms × 4.6 ≈ 460 ms\nwhere\nW: the mean time in system, in milliseconds (ms)\nS: the mean service time, here 20 ms\nρ: rho, the utilisation, here 0.8 (80%)\nt: the p99 time: only 1% (0.01) of requests take longer\ne: Euler's number, about 2.718; e^(−t / W) is the fraction of requests slower than t\nln: the natural logarithm, the inverse of e^; ln(100) ≈ 4.6\n≈: approximately equal to (rounded)\nms: milliseconds\nIn words: the mean is 100 ms, and because the exponential tail is long, the slowest 1% take more than about 460 ms.\n```"
+      },
+      {
+        "text": "Mean 20 ms, p99 about 92 ms",
+        "explanation": "20 ms is the bare service time with no queueing. At 80% busy, most requests wait behind others."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Mean time in system, then the p99 for an exponential distribution:\n\n```formula\nW = S / (1 − ρ)\nW = 20 ms / (1 − 0.8) = 100 ms\ne^(−t / W) = 0.01\nt = W × ln(100)\nt ≈ 100 ms × 4.6 ≈ 460 ms\nwhere\nW: the mean time in system, in milliseconds (ms)\nS: the mean service time, here 20 ms\nρ: rho, the utilisation, here 0.8 (80%)\nt: the p99 time: only 1% (0.01) of requests take longer\ne: Euler's number, about 2.718; e^(−t / W) is the fraction of requests slower than t\nln: the natural logarithm, the inverse of e^; ln(100) ≈ 4.6\n≈: approximately equal to (rounded)\nms: milliseconds\nIn words: the mean is 100 ms, and because the exponential tail is long, the slowest 1% take more than about 460 ms.\n```\n\n2. Solving the third line for t gives the fourth: take the natural log of both sides.\n3. Compare with the 20 ms service time: the p99 is 23× slower at 80% busy.\n\nM/M/c pooling and different arrival/service distributions change this curve; real servers must be measured. If your SLO is on p99, the headroom you need is larger than the mean suggests.",
+    "link": {
+      "title": "M/M/1 queue (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/M/M/1_queue"
+    }
+  }
+]

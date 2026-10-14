@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel-designing-for-failure-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A multi-tenant API has 8 workers. One tenant occasionally sends a \"poison\" request that crashes any worker that processes it. You assign each tenant a random **2 of the 8** workers (shuffle sharding). What fraction of other tenants share *both* workers with the poisonous tenant?",
+    "options": [
+      {
+        "text": "1 in 4 (25%)",
+        "explanation": "1 in 4 is what you'd get with simple sharding into 4 fixed pairs. Shuffle sharding chooses from all possible pairs, which is far more than 4."
+      },
+      {
+        "text": "1 in 8 (12.5%)",
+        "explanation": "This confuses the number of workers with the number of possible shards. The shard is a *pair*, and there are many more pairs than workers."
+      },
+      {
+        "text": "1 in 28 (about 3.6%)",
+        "explanation": "Correct. There are 28 distinct pairs of workers (\"8 choose 2\"). Only tenants assigned the exact same pair lose both their workers; others retain at least one unaffected worker; continued service also requires spare capacity and retry/rerouting."
+      },
+      {
+        "text": "All of them, since every tenant uses the same pool",
+        "explanation": "That describes a single shared pool with no isolation. The point of shuffle sharding is that tenants use different subsets, so most are unaffected."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Count the possible shards: the number of ways to choose 2 workers out of 8.\n\n```formula\nS = C(n, k) = n! / (k! × (n − k)!)\nS = C(8, 2) = (8 × 7) / (2 × 1) = 28\nP = 1 / S = 1 / 28 ≈ 3.6%\nwhere\nS: the number of distinct worker pairs (shuffle shards)\nC(n, k): \"n choose k\", the number of ways to pick k items from n when order doesn't matter\nn: the total number of workers, here 8\nk: the workers given to each tenant, here 2\n!: factorial; 3! = 3 × 2 × 1 = 6\nP: the chance that a randomly assigned other tenant got exactly the same pair\n≈: approximately equal to (rounded)\n%: per cent, one part in a hundred\nIn words: there are 28 possible pairs, so only about 1 tenant in 28 shares both workers with the poisonous one.\n```\n\n2. The poisonous tenant kills both its workers, say W2 and W5.\n3. A different tenant is fully down only if it was also assigned {W2, W5}: probability 1 in 28, about 3.6%.\n4. Tenants sharing one worker (e.g. {W2, W7}) lose half their capacity but stay available, assuming clients retry on the other worker.\n\nCompare with regular sharding into 4 fixed pairs: a poison request takes out a quarter of all tenants. Route 53 scales this up to 2,048 servers with 4 per domain, giving around 730 billion combinations.",
+    "link": {
+      "title": "Workload isolation using shuffle-sharding (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
+    }
+  },
+  {
+    "id": "rel-designing-for-failure-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A SaaS API is split into **20 cells**, each serving 5% of customers, behind a thin cell router. A bad config push and a poison-pill request both hit the same single cell. What is the blast radius, and what becomes the most important component to keep simple?",
+    "options": [
+      {
+        "text": "About 5% of customers; the cell router, because every request passes through it",
+        "explanation": "Correct. One cell of 20 is 5% of customers. The router is shared by all cells, so it's the one place a bug hits everyone. Keep it thin, mostly static and changed rarely."
+      },
+      {
+        "text": "100% of customers; cells only help with capacity",
+        "explanation": "Cells are full, independent copies. A failure confined to one cell affects only the customers mapped to it."
+      },
+      {
+        "text": "About 5% of customers; the database in each cell, because it holds the data",
+        "explanation": "Each cell's database only affects that cell. The shared component is the router."
+      },
+      {
+        "text": "About 50% of customers, since requests are retried in other cells",
+        "explanation": "Cells don't normally retry customers' requests in other cells; doing so could spread a poison pill to every cell."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Blast radius with equal-sized cells:\n\n```formula\nB = 1 / N\nB = 1 / 20 = 0.05 = 5%\nwhere\nB: the blast radius, the fraction of customers affected when one cell fails\nN: the number of equal-sized cells, here 20\n%: per cent; 0.05 = 5%\nIn words: one cell out of 20 holds a twentieth of customers, so a failure confined to it hits 5%.\n```\n\n2. Compare with a single shared fleet: a shared rollout or propagated poison request can affect the whole fleet.\n3. What's still shared? The **cell router** (and its mapping data). It's the cell architecture's remaining global component.\n4. Design it to be:\n   - minimal logic (look up customer → cell),\n   - statically stable (cached mapping),\n   - deployed more carefully than anything else.\n\nCombined with staged deploys (one cell first), a bad change usually stops at a few percent of customers.",
+    "link": {
+      "title": "Workload isolation using shuffle-sharding (AWS Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
+    }
+  }
+]

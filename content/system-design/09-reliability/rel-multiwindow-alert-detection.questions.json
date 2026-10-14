@@ -1,0 +1,130 @@
+[
+  {
+    "id": "rel-slos-error-budgets-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team alerts when the burn rate over the last **1 hour** exceeds 14.4. During an incident it fires correctly, and they fix the problem within 10 minutes. Yet the page keeps firing for a long time afterwards. What's the standard fix? Assume constant request volume, a clean prior history and negligible scrape/evaluation delay.",
+    "options": [
+      {
+        "text": "Increase the long window to 6 hours",
+        "explanation": "A longer window makes the problem worse: the elevated error rate stays in the window for up to 6 hours after the fix, so the alert resets even more slowly."
+      },
+      {
+        "text": "Lower the threshold to burn rate 1",
+        "explanation": "A lower threshold fires more often and stays firing longer; it addresses neither precision nor reset time."
+      },
+      {
+        "text": "Require a short window (e.g. 5 minutes) to also exceed 14.4 before alerting",
+        "explanation": "Correct. The long window proves the problem is significant; the short window proves it's still happening. Once errors stop, the 5-minute burn rate drops within minutes and the alert clears."
+      },
+      {
+        "text": "Disable alerting for an hour after each page",
+        "explanation": "Silencing after a page would hide a recurrence or a second incident. It masks the symptom rather than fixing the alert logic."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Suppose 100% errors for 10 minutes, then 0%.\n2. The 1-hour error rate is 10 bad minutes out of 60, about 16.7%, a burn rate of about 167 (16.7% ÷ 0.1%), until the bad minutes leave the window. It stays above 1.44% (burn rate 14.4) for nearly a full hour after the fix.\n3. Require the short lookback to remain above the threshold too:\n\n```formula\nb_5m > 14.4\nwhere\nb_5m: measured five-minute burn rate, a dimensionless multiple of the allowed error rate\n>: greater than\nIn words: The page remains eligible only while the five-minute lookback is still burning above 14.4.\n```\n\nFive minutes after the fix, the 5-minute window contains no errors, so the alert stops.\n4. The SRE workbook suggests a short window of 1/12 of the long window: 5 m for 1 h, 30 m for 6 h, 6 h for 3 days.",
+    "link": {
+      "title": "Alerting on SLOs (Google SRE workbook)",
+      "url": "https://sre.google/workbook/alerting-on-slos/"
+    }
+  },
+  {
+    "id": "rel-slos-error-budgets-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "SLO: 99.9% over 30 days. The page requires both measured burn rates above the threshold:\n\n```formula\nb_1h > 14.4 and b_5m > 14.4\nwhere\nb_1h: the one-hour lookback burn rate, dimensionless\nb_5m: the five-minute lookback burn rate, dimensionless\n>: greater than\nIn words: Both the long and short measured lookbacks must exceed 14.4 before paging.\n```\n\n A partial outage starts abruptly with a constant **5%** error rate. Roughly how long until the page fires, and how much of the monthly budget has been used by then? Assume constant request volume, a clean prior history and negligible scrape/evaluation delay.",
+    "options": [
+      {
+        "text": "About 52 seconds; about 0.1% of budget",
+        "explanation": "52 seconds is the detection time for a 100% error rate (burn rate 1,000). At 5% errors the 1-hour average takes much longer to climb past 1.44%."
+      },
+      {
+        "text": "About 17 minutes; about 2% of budget",
+        "explanation": "Correct. The burn rate is 5% / 0.1% = 50. The 1-hour average crosses 1.44% after about 17.3 minutes (1.44/5 of an hour). Burning at 50× for 17.3 minutes of a 43,200-minute month uses about 2% of the budget, which is exactly what this rule is designed to detect."
+      },
+      {
+        "text": "About 1 hour; about 7% of budget",
+        "explanation": "You don't need to wait for the full window. The 1-hour average is computed over a rolling alert window that includes good minutes from before the outage, and crosses the threshold well before an hour."
+      },
+      {
+        "text": "It never fires, because 5% is below the 14.4 threshold",
+        "explanation": "14.4 is a burn-rate threshold, not an error-rate percentage. A 5% error rate is a burn rate of 50, well above 14.4."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nb = e / (1 − SLO) = 0.05 / 0.001 = 50\ne_alert = 14.4 × 0.1% = 1.44%\ne × t / w > e_alert\n5% × t / 60 min > 1.44%\nt > 1.44 / 5 × 60 min ≈ 17.3 min\nf = bt / T\nf = 50 × 17.3 min / 43,200 min ≈ 2%\nwhere\nb: the burn rate, a plain multiplier\ne: the error rate since the outage began, here 5% = 0.05\nSLO: the objective, 99.9%, so 1 − SLO = 0.001 (0.1%)\ne_alert: the error rate the 14.4× rule fires at\nt: minutes since the outage began\nw: the long window, 60 minutes (min)\nf: the fraction of the 30-day budget used by the time the page fires\nT: the SLO period, 30 days = 43,200 min\n>: \"is greater than\"\n≈: approximately equal to (rounded)\nmin: minutes\n%: per cent\nIn words: the window holds t bad minutes and the rest clean, so its average error rate is 5% × t/60. That passes 1.44% after about 17 minutes, by which time 2% of the month's budget has gone.\n```\n\nThe 5-minute window passed 1.44% within about 1.5 minutes, so the 1-hour window is the binding condition.\n\nNotice the 2%: for any error rate above the threshold, this rule fires when about 2% of budget has gone (plus a little for the short window). Bigger outages page faster; smaller ones page slower; the cost at detection is roughly constant.",
+    "link": {
+      "title": "Alerting on SLOs (Google SRE workbook)",
+      "url": "https://sre.google/workbook/alerting-on-slos/"
+    }
+  },
+  {
+    "id": "rel-slos-error-budgets-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "SLO: 99.9% over 30 days, with the workbook's three rules (14.4× over 1h and 5m; 6× over 6h and 30m; 1× over 3d and 6h). A slow memory leak causes a steady **1%** error rate starting from a clean history. Which rule fires first, and roughly when? Assume constant request volume, a clean prior history and negligible scrape/evaluation delay.",
+    "options": [
+      {
+        "text": "The 14.4× page, after about 42 minutes",
+        "explanation": "Burn rate here is 1% / 0.1% = 10, below 14.4. The 1-hour average can never exceed the steady error rate, so this rule never fires."
+      },
+      {
+        "text": "The 1× ticket, after about 7.2 hours",
+        "explanation": "The 3-day rule would fire once 10 × hours burning ÷ 72 passes 1, about 7.2 h, but the 6× page has already fired at 3.6 h."
+      },
+      {
+        "text": "The 6× page, after about 3.6 hours, when about 5% of the budget has gone",
+        "explanation": "Correct. The incident burn rate of ten exceeds the threshold of six. Clean history dilutes the six-hour lookback until 3.6 hours of errors fill it; the paired short window has crossed earlier. At detection, 5% of the monthly budget has been spent, as shown in the worked card."
+      },
+      {
+        "text": "Nothing fires until the whole budget is gone, after 3 days",
+        "explanation": "Burn rate 10 exhausts the budget in 720 / 10 = 72 hours, but the multi-burn-rate rules are designed to catch it long before that."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Burn rate: `1% / 0.1% = 10`.\n2. 1-hour rule: needs > 14.4. A steady 10 never gets there. ✗\n3. 6-hour rule: with clean history, the window's average burn rate grows as bad hours fill it:\n\n```formula\nbt / w = 6\n10 × t / 6 h = 6\nt = 6 × 6 h / 10 = 3.6 h\nf = bt / T\nf = 10 × 3.6 h / 720 h = 5%\nwhere\nb: the burn rate since the leak began, here 10 (1% ÷ 0.1%)\nt: hours since the leak began\nw: the rule's long window, 6 hours (h)\nf: the fraction of the 30-day budget used at detection\nT: the SLO period, 720 h\nh: hours\n%: per cent\nIn words: the 6-hour average reaches 6× after 3.6 hours, when 5% of the monthly budget has gone, exactly what this rule is designed to catch.\n```\n\n4. Short window (30 m) passes 6× after 18 minutes (6/10 of 30 minutes), so the long window is the binding condition.\n\nWithout the 6-hour rule, this leak would raise only a ticket after ~7 hours, with the budget gone in 3 days.",
+    "link": {
+      "title": "Alerting on SLOs (Google SRE workbook)",
+      "url": "https://sre.google/workbook/alerting-on-slos/"
+    }
+  },
+  {
+    "id": "rel-slos-error-budgets-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about the workbook's multiwindow, multi-burn-rate alerts are true? Select all that apply. Assume constant request volume, a clean prior history and negligible scrape/evaluation delay.",
+    "options": [
+      {
+        "text": "The 1× / 3-day rule exists to catch slow burns that would still exhaust the budget before the period ends",
+        "explanation": "Correct. Anything above 1× spends the budget faster than it refills; the ticket rule catches these without waking anyone."
+      },
+      {
+        "text": "A guideline is to make the short window about 1/12 of the long window",
+        "explanation": "Correct. The workbook suggests 1/12: 5 minutes for 1 hour, 30 minutes for 6 hours, 6 hours for 3 days."
+      },
+      {
+        "text": "For an error rate that starts abruptly, the 14.4×/1h rule fires when roughly 2% of the budget has been used, whatever the (above-threshold) error rate",
+        "explanation": "Correct. A higher error rate fires the rule sooner but burns faster, and the two effects cancel: at detection the budget used is always 14.4 × 1 h / 720 h = 2%."
+      },
+      {
+        "text": "A steady burn rate of 10 is never caught, because it's below 14.4",
+        "explanation": "Incorrect. The 6× rule over 6 hours catches it after about 3.6 hours, which is why the rules come in tiers."
+      },
+      {
+        "text": "Moving from a 99.9% to a 99.95% SLO means recalculating the burn-rate multipliers",
+        "explanation": "Incorrect. The multipliers (14.4, 6, 1) are relative to the budget and stay the same. What changes is the error-rate threshold they imply: 14.4 × 0.05% = 0.72%."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each claim against the formulas:\n\n```formula\nf = bw / T\nf = 14.4 × 1 h / 720 h = 2%\nf = 6 × 6 h / 720 h = 5%\nf = 1 × 72 h / 720 h = 10%\nt_d = ((1 − SLO) / e)wb\nf = (b_e × t_d) / T = bw / T\nwhere\nf: the fraction of the 30-day budget used when a rule fires\nb: the rule's burn-rate threshold (14.4, 6 or 1)\nw: the rule's long window (1 h, 6 h or 72 h)\nT: the SLO period, 30 days = 720 hours (h)\nt_d: the detection time for an abrupt, steady error rate\nSLO: the objective as a fraction, e.g. 0.999\ne: the error rate, as a fraction\nb_e: the actual burn rate, e / (1 − SLO)\nh: hours\n%: per cent\nIn words: multiplying the actual burn rate by the detection time always gives the threshold times the window, so each rule fires after a fixed share of budget: 2%, 5% or 10%.\n```\n\n- Short windows: 1 hour ÷ 12 = 5 minutes, 6 hours ÷ 12 = 30 minutes, 3 days ÷ 12 = 6 hours. ✓\n- Burn rate 10: the 1 h rule ✗; the 6 h rule fires at 6/10 of 6 hours = 3.6 hours. So the claim it's never caught is false.\n- New SLO 99.95% (budget 0.05% = 0.0005): multipliers unchanged; thresholds become 14.4 × 0.05% = 0.72% and 6 × 0.05% = 0.3%.\n- 1×: the boundary between keeping and losing the budget.",
+    "link": {
+      "title": "Alerting on SLOs (Google SRE workbook)",
+      "url": "https://sre.google/workbook/alerting-on-slos/"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rel-security-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must encrypt 5 TB of objects using a key held in a symmetric AWS KMS encryption key. Why use **envelope encryption** rather than sending each object to KMS's Encrypt API?",
+    "options": [
+      {
+        "text": "KMS can only encrypt data up to 4,096 bytes per call and is a remote API; envelope encryption encrypts bulk data locally with a data key and only sends small keys to KMS",
+        "explanation": "Correct. KMS's direct Encrypt API is limited to small payloads (4,096 bytes), and sending terabytes through a network API would be slow and costly. A data key encrypts locally; KMS only wraps and unwraps that 32-byte key."
+      },
+      {
+        "text": "Envelope encryption is stronger because it applies two layers of AES to the data",
+        "explanation": "The data is encrypted once, with the data key. The second layer protects the *key*, not the data. Strength comes from AES-256 and the master key staying in the HSM."
+      },
+      {
+        "text": "KMS master keys can be exported, so envelope encryption hides them",
+        "explanation": "KMS master keys are designed never to leave the HSM in plaintext. Envelope encryption works *because* they stay inside, not to hide exported keys."
+      },
+      {
+        "text": "Envelope encryption avoids needing IAM permissions for KMS",
+        "explanation": "You still need IAM permission to call `GenerateDataKey` and `Decrypt`. That permission check and its audit log are key benefits."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `GenerateDataKey` → KMS returns a plaintext 256-bit DEK and the same DEK encrypted under the KMS key.\n2. Encrypt each object locally with AES-256-GCM using the DEK with a unique nonce per encryption under that key, using a vetted SDK and respecting per-key/message limits. Hardware throughput figures are absent because no reproducible benchmark was available.\n3. Store ciphertext, nonce, authentication tag and encrypted DEK; wipe the plaintext DEK.\n4. To read: call KMS `Decrypt` on the encrypted DEK (IAM-checked, logged in CloudTrail), then decrypt locally.\n\nCompare sending the data itself through KMS:\n\n```formula\nn = ceil(D / c)\nn = ceil((5 × 10^12 B) / (4,096 B))\nn ≈ 1.2 × 10^9\nwhere\nn: the number of KMS Encrypt calls needed\nD: the data size, 5 terabytes (TB) = 5 × 10^12 bytes (B)\nceil: round upward to the nearest whole call\nc: the symmetric KMS Encrypt plaintext limit, here 4,096 bytes (B); this is 4 kibibytes, not 4,000 bytes\n10^12: 10 to the power 12, a million million\nB: bytes\n≈: approximately equal to (rounded)\nIn words: 5 TB in 4-kibibyte pieces is about 1.2 billion remote API calls.\n```\n\nWith envelope encryption key generation uses one KMS call per data key, with additional unwrap calls when decrypting; data-key caching changes this count.",
+    "link": {
+      "title": "AWS Encryption SDK concepts: envelope encryption",
+      "url": "https://docs.aws.amazon.com/encryption-sdk/latest/developer-guide/concepts.html"
+    }
+  },
+  {
+    "id": "rel-security-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A multi-tenant SaaS stores each tenant's documents encrypted with a per-tenant data key, wrapped by a per-tenant customer managed KMS key generated in AWS KMS. A tenant leaves and demands that all their data be destroyed, including copies in backups going back 90 days. What's the most practical approach? Assume there are no retained plaintext DEKs, alternative wrapped data-key copies or recoverable key copies.",
+    "options": [
+      {
+        "text": "Restore every backup, delete the tenant's rows, and re-create the backups",
+        "explanation": "This is enormously expensive and risky, and immutable backups (which you should have) may forbid modification by design."
+      },
+      {
+        "text": "Wait 90 days for the backups to expire",
+        "explanation": "This may be acceptable under some policies, but it doesn't destroy the data promptly, and live replicas and logs still contain readable data in the meantime."
+      },
+      {
+        "text": "Re-encrypt the tenant's data under the platform's shared key",
+        "explanation": "This makes the data readable with the shared key: the opposite of destroying it."
+      },
+      {
+        "text": "Delete live data and schedule deletion of the tenant's KMS key (crypto-shredding), so every copy including backups becomes unreadable",
+        "explanation": "Correct. Once the per-tenant key is destroyed, every ciphertext encrypted under it, wherever it lives, can no longer be decrypted. This is a key design benefit of per-tenant envelope keys."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Every copy of the tenant's data (live DB, replicas, snapshots, backups) is ciphertext under DEKs that are wrapped by the tenant's KMS key.\n2. Without the KMS key, no DEK can be unwrapped; without a DEK, no ciphertext can be decrypted.\n3. Schedule key deletion (AWS KMS enforces a waiting period of 7–30 days to prevent accidents).\n4. After deletion, all copies are cryptographically shredded, without touching immutable backups.\n\nDesign implication: decide on per-tenant keys *up front*. Retrofitting may require re-encryption if tenants share DEKs. If existing DEKs are already tenant-isolated, re-wrapping them may suffice, but recoverable old wraps in backups must also be addressed.\n\nThe erasure conclusion depends on the stated key-copy assumptions. Cached/exported plaintext DEKs and any recoverable key versions must also be removed; this is a technical erasure mechanism, not a blanket conclusion about legal compliance.",
+    "link": {
+      "title": "AWS KMS concepts",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html"
+    }
+  },
+  {
+    "id": "rel-security-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You store 10 TB of objects, each encrypted with its own data key (DEK) that is wrapped by an eligible AWS KMS symmetric customer managed key with AWS-generated material and automatic rotation enabled. Policy requires the KMS key to be rotated every year. What does rotation involve?",
+    "options": [
+      {
+        "text": "Rotating the KMS key's material; KMS keeps the old material to unwrap existing DEKs, new DEKs are wrapped with the new material, and the 10 TB is untouched",
+        "explanation": "Correct. With AWS KMS automatic rotation, the key ID stays the same and previous key material is retained for decryption. Optionally you can re-wrap old DEKs, which means only re-encrypting tiny keys."
+      },
+      {
+        "text": "Decrypting and re-encrypting all 10 TB under new data keys",
+        "explanation": "That's what envelope encryption avoids. The bulk data is encrypted under DEKs, which don't need to change when the wrapping key rotates."
+      },
+      {
+        "text": "Deleting the old KMS key so the old material can't be used",
+        "explanation": "Deleting the key would make every existing DEK, and so all 10 TB, permanently unreadable. That's crypto-shredding, not rotation."
+      },
+      {
+        "text": "Nothing; KMS keys never need rotating because they never leave the HSM",
+        "explanation": "Keeping keys in HSMs reduces exposure, but rotation still limits how much data any single key version protects and is often a compliance requirement."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Layers: data → encrypted by DEK; DEK → wrapped by KMS key (KEK).\n2. Rotating the KEK changes what wraps *new* DEKs.\n3. Existing wrapped DEKs still decrypt, because KMS retains the old key material under the same key ID.\n4. Cost of rotation:\n\n```\nre-encrypt data: 10 TB, unnecessary\nplaintext DEK: 32 B for AES-256\nre-wrap: encrypted key blobs, optional\nKMS rotation: a key setting\n```\n\n5. If you must re-wrap (e.g. moving to a different key), `ReEncrypt` the encrypted DEKs: calls proportional to the number of DEKs; 10 TB alone does not determine that count.\n\nThe wrapped-key blob is larger than the 32-byte plaintext data key; its format and length depend on the encryption service. Automatic rotation does not require rewriting those blobs.",
+    "link": {
+      "title": "AWS KMS concepts",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html"
+    }
+  }
+]

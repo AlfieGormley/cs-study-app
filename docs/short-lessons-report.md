@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 13/76. Updated 2026-10-14.
+Verified modules: 14/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -20,6 +20,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | system-design/Case Studies I | 7 | 43 | 85 | 103 | 183 | 773 | 66 |
 | system-design/Case Studies II | 8 | 42 | 101 | 105 | 238 | 495 | 68 |
 | dsa/Complexity Analysis | 7 | 35 | 81 | 290 | 150 | 830 | 32 |
+| dsa/Hash Tables & Hashing | 6 | 37 | 73 | 103 | 158 | 371 | 76 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -1643,6 +1644,122 @@ Low-confidence areas:
 - **medium** — cx-amortised-latency: Resize latency and Redis incremental-rehash implementation. The data movement model and current Redis source are checked. The module does not claim a reproducible latency distribution or promise that every incremental step has a fixed wall-clock bound.
 - **medium** — cx-constants-locality: Practical performance ratios, sorting/multiplication crossover and cache-line assumptions. Algorithm and implementation structure are source-checked; the preserved qualitative several-times performance language has no reproducible target-specific benchmark.64-byte lines and8-byte elements are explicit illustrative assumptions where calculations depend on them.
 - **medium** — cx-measuring-algorithms: Historical Knuth quotation and deployment-specific timing interpretation. timeit measurement guidance is fetched and ratios recomputed. The original quotation attribution is retained but its primary paper was inaccessible through the web tool; the citation is not upgraded to high confidence.
+
+## dsa: Hash Tables & Hashing
+
+[Independent verification record](../content/dsa/03-hashing/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Closing formula fence is now standalone; following paragraph no longer leaks into card syntax.
+- Position sensitivity does not guarantee different hashes for every permutation.
+- Replaced universal swap guarantee with an independently executed pre-modulus collision counterexample.
+- Universal family domain explicitly contains distinct residues from zero through prime-minus-one.
+- Successful search counts the guaranteed matching comparison plus earlier colliders and the separate bucket access.
+- Clarified what successful-search cost counts; hashing/equality treated as unit operations.
+- Removed impossible sub-two-step successful search under the stated unit accounting.
+- C++ implementation convention is distinguished from the standard’s abstract contract.
+- Historical entry-size number is qualified by representation/build.
+- Negative hash perturbation requires unsigned machine-word reinterpretation.
+- Standalone probe card now states the unsigned domain used by actual C source.
+- Inline complement expressions use actual executable Python syntax.
+- Inline longest-range expression uses actual executable Python syntax.
+- Inline predecessor test uses executable Python rather than symbolic pseudo-code.
+- Removed stale whole-original-lesson promise from focused two-sum unit.
+- Broad introduction correctly locates later sketches in subsequent units.
+- Local overview includes conditions needed for Count-Min’s one-sided error.
+- Rounded Bloom denominator/numerator use approximate equality.
+- Count-Min bound applies to an independently fixed stream as well as fixed query.
+- HLL example clearly labels its raw estimator rather than implying all practical corrections are applied.
+- Removed implied near-2^64 accuracy guarantee and corrected sparse sketch terminology.
+- Separates exact set-cardinality identity from arithmetic on noisy estimates.
+- Defines estimated intersection explicitly.
+- Deletion question is self-contained and supplies its home-slot rule.
+- Removed undefined n/m from standalone option without changing meaning/key.
+- Worked answer now refers to its actual eight-key distractor.
+- Symbolic collision inequality remains in the standalone prompt card; explanation is verbal.
+- Java spreading is no blanket fix for aligned low-valued addresses.
+- Complement option uses genuine Python syntax.
+- Defines both Big-O variables and logarithm in the standalone complexity question.
+- Symbolic capacity relation stays in its card; prose rule is verbal.
+- Removed symbolic exponential relation outside prompt card.
+- Replaced undefined variables in standalone item-size distractor.
+- Rounded Bloom memory calculation uses approximate equality.
+- Exponential relation moved out of prose into its existing worked card.
+- Failure-probability symbol receives its own standalone card definition.
+- Per-query probability prose is verbal; its symbolic definition stays inside worked card.
+- Questions explicitly state the stream/query independence needed by the Count-Min theorem.
+- Separate bit/byte quantities avoid silently changing the same variable’s numeric unit.
+- {"owner":"glossary.json/separate-chaining","correction":{"example":"Java's HashMap and common C++ std::unordered_map implementations use separate chaining; C++ does not mandate one physical layout."}}
+- {"owner":"glossary.json/pre-sizing","correction":{"example":"HashMap.newHashMap(1000) in Java 19+ requests capacity for 1,000 entries; backing buckets are allocated lazily."}}
+- {"owner":"glossary.json/fractional-part","correction":{"definition":"The value left after subtracting the number’s floor (its greatest integer not larger than it). It is always at least zero and less than one, including for negative inputs.","example":"The fractional part of 4.944 is 0.944; the fractional part of −1.25 is 0.75."}}
+- {"owner":"glossary.json/compact-dict","correction":{"definition":"CPython’s dictionary layout since 3.6: sparse indices point into insertion-ordered entries. Ordinary combined tables with general keys store hash, key and value per entry; Unicode-only and shared-key tables use different entry layouts."}}
+- {"owner":"glossary.json/dict-entries","correction":{"definition":"The insertion-ordered entries area in CPython’s compact dictionary. General-key combined entries contain hash, key and value; Unicode-only and shared-key layouts differ. Deleted entries may leave holes until compaction."}}
+- {"owner":"glossary.json/perturbed-probing","correction":{"definition":"CPython’s dictionary probe sequence uses a signed hash interpreted as an unsigned word. It shifts that perturb value right by five bits before using it in the next-slot calculation, feeding high hash bits into early probes; after perturb reaches zero, the recurrence visits every slot."}}
+- {"owner":"glossary.json/cardinality","correction":{"example":"The set of distinct values in [a, b, a] has cardinality 2; the list itself has three positions."}}
+- {"owner":"glossary.json/dsa-ip","correction":{"definition":"The Internet Protocol: packet addressing and delivery across interconnected networks. IP addresses identify network interfaces or endpoints; a device can have multiple addresses."}}
+- {"owner":"glossary.json/mergeable","correction":{"aliases":["mergeable sketches"]}}
+- {"owner":"glossary.json/point-query","correction":{"definition":"A query about one item, such as how often it occurred. Count-Min’s per-item probabilistic bound assumes the query and update stream are fixed independently of the sampled suitable hash functions."}}
+- a particular bit is missed with probability 1 − 1/m. Adding n items sets bits k × n times → a particular bit is missed with probability one minus the reciprocal of the bit count. Adding the items makes hash-count times item-count position choices
+- | How often x? | Count-Min | w × d counters | → | How often x? | Count-Min | rows times counters per row |
+- when k is between 2 and u − 1, `max` when k = 1, and a full sort when k is u or more → when the requested count is at least two but less than the distinct-key count, `max` when requesting one, and a full sort when requesting every distinct key or more
+- pairs of positions i < j with → pairs with an earlier start boundary and a later end boundary satisfying
+- A hash table is an array of **hash buckets** (or slots). → The full hash in the drawing is illustrative, not a claim about Python’s process-dependent string hash. Its remainder after division by eight is one.
+
+A hash table is an array of **hash buckets** (or slots).
+- Verbalised out-of-card Euler relation and union-bound relations; exact symbolic cards retained.
+- P[j]: the prefix sum, the total of the first j elements of nums (P[0] = 0, the empty prefix) → P[j]: the prefix sum, the total of the first j elements of nums (P[0] = 0, the empty prefix)
+P[i]: the prefix total at the earlier start boundary
+- M_j: the value stored in register number j (its largest leading-zero count plus one); here every register holds 3 → M_j: the value stored in register number j, initially zero and then its largest leading-zero count plus one; here every register holds 3
+- so for short words the difference in real time is small; it matters for long strings → so practical timings for short words require measurement; the asymptotic difference becomes more relevant for long strings
+- Question symbols and expected-complexity accounting explicitly defined within their owning question.
+- Question symbols and expected-complexity accounting explicitly defined within their owning question.
+- Question symbols and expected-complexity accounting explicitly defined within their owning question.
+- Question symbols and expected-complexity accounting explicitly defined within their owning question.
+- Sequence adjacency uses precise substring/subarray terms, avoiding a shared memory-layout dictionary alias.
+- Arbitrary-count copying/placement bounds now use complete standalone formula cards in lesson and question.
+- Banker callout now explains half-capacity credits verbally without undefined symbolic m.
+- New standalone arbitrary-count derivation raises reading estimate to four minutes.
+- New Fibonacci question now supplies its actual executable expression rather than assuming a function declaration from another view.
+- Every entry is a separate heap node with a `next` pointer, and following pointers means cache misses: often the dominant cost on modern CPUs. → In a node-based linked-list implementation, each entry has a `next` pointer and may live in a separate allocation. Following those pointers can incur cache misses; their importance depends on representation and workload.
+- The catch: the load factor must stay below 1 (there can never be more keys than slots), and performance falls off sharply as it approaches 1. → The load factor cannot exceed one: there are no more key positions than slots. A completely full table can still search with a bounded complete probe cycle, but has no room for a new key. Designs that stop misses only at an empty slot keep spare slots, and performance falls off sharply as fullness approaches one.
+- must stay below 1 | → at most 1; normally kept below it |
+- Capacity cannot exceed one key per slot; a full table is not mathematically forbidden if lookup bounds complete cycles.
+- The counterexample now uses two actual anagrams, BAa and AaB, whose base-31 hashes both equal 65,538 before modulus.
+- Describes cached-hash capability without claiming an unmeasured fraction of implementations stores a full hash in every entry.
+- Sequence adjacency no longer opens a physical memory-layout definition.
+- Bold layout/array names use their precise existing glossary aliases.
+- Counter comment no longer implies Python Counter discards insertion order; scanning input selects the earliest position.
+
+Remaining gaps:
+
+- All substantive original topics are retained. This split does not add a full production hash-map implementation, a production-compatible Count-Min hash family, or a full HyperLogLog implementation.
+- Tombstone and Robin Hood examples remain explicit fragments with preconditions. Independent fixtures validate their demonstrated behaviours; they are not complete general-purpose containers.
+- No live cache/database/CDN I/O, distributed server movement, SIMD throughput, or workload latency benchmark was performed. Probe/formula numbers are models, not measurements.
+- No original unsupported 0.84% Bloom benchmark or comparisons-per-second throughput estimate was restored; their existing evidence-gap notes remain.
+- Full release build, generated dictionary integration, phone rendering, offline/PWA and publication are performed by the coordinator in an isolated release checkout. This verifier changes only its module source and verification record.
+
+Low-confidence areas:
+
+- **medium** — hash-table-interface: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-table-cost-model: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-exact-lookup-tradeoffs: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-function-fibonacci: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-function-polynomial: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-function-flooding: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-collision-chaining: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-collision-swiss-designs: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-resize-load-thresholds: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-resize-hysteresis-incremental: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-resize-cpython-layout: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-resize-java-bins: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-resize-java-presizing: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-pattern-frequency: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-prob-bloom-membership: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-prob-bloom-limits: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-prob-count-min: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-prob-hll-registers: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+- **medium** — hash-prob-hll-merging: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
 
 ## synth: Sound & Digital Audio
 

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "hash-resizing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Java `HashMap` doubles from 16 to 32 buckets. An entry whose (spread) hash is 53 sits in bucket 5 of the old table. Which bucket does it move to?",
+    "options": [
+      {
+        "text": "Bucket 5",
+        "explanation": "It stays at 5 only if the bit worth 16 in its hash is 0. For 53 that bit is set."
+      },
+      {
+        "text": "Bucket 10",
+        "explanation": "Doubling does not double the index. The new index is the hash's low 5 bits."
+      },
+      {
+        "text": "Bucket 21",
+        "explanation": "Correct. Masking with thirty-one selects bucket twenty-one, the old bucket five plus old capacity sixteen, because the newly exposed bit is set."
+      },
+      {
+        "text": "Bucket 53",
+        "explanation": "The index must be below the table size (32). It is the hash masked with 31, not the raw hash."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With a power-of-two table, the bucket is the hash's remainder, which is its low bits:\n\n```formula\nb = H mod m\nb = 53 mod 16 = 5\nb = 53 mod 32 = 21 = 5 + 16\nwhere\nb: the bucket index\nH: the spread hash, 53 (110101 in binary)\nm: the table size, 16 before and 32 after\nmod: \"modulo\", the remainder after division; for m = 16 it keeps the low 4 bits (0101 = 5), for m = 32 the low 5 bits (10101 = 21)\nIn words: doubling the table brings one more hash bit into the index; for 53 that bit is 1, so the entry moves up by 16, from bucket 5 to 21.\n```\n\n2. The only new bit is bit 4 (value 16): the bitwise AND of fifty-three and sixteen is sixteen, so the entry moves from bucket five to bucket twenty-one.\n3. Every entry in old bucket i goes to i or i + 16. Java 8 splits each chain into a \"lo\" list and a \"hi\" list in one pass, without recomputing any hashes.",
+    "link": {
+      "title": "HashMap — Java SE 21 API docs",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/HashMap.html"
+    }
+  },
+  {
+    "id": "hash-resizing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In OpenJDK 21, a HashMap has 32 buckets and a chain of eight entries. An ordinary put adds a ninth distinct key to that chain. What happens?",
+    "options": [
+      {
+        "text": "The chain is converted into a red–black tree",
+        "explanation": "Only if the table has at least 64 buckets (`MIN_TREEIFY_CAPACITY`). At 32, Java assumes the table is simply too small."
+      },
+      {
+        "text": "The table doubles to 64 buckets instead of treeifying",
+        "explanation": "Correct. `treeifyBin` checks the table size first; below 64 it calls `resize()`, which may also split the long chain across two buckets."
+      },
+      {
+        "text": "Nothing: chains are only treeified when they reach 64 entries",
+        "explanation": "64 is the minimum *table* capacity for treeifying. The chain threshold is 8."
+      },
+      {
+        "text": "The map throws an exception to signal a bad hash function",
+        "explanation": "Java never rejects keys for colliding; it degrades gracefully."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The ordinary putVal path invokes treeifyBin when appending to a chain that already has eight nodes.\n2. `treeifyBin` first checks: is `table.length < MIN_TREEIFY_CAPACITY` (64)? Here 32 < 64.\n3. So it resizes to 64 buckets. Entries in the long chain split between bucket i and i + 32 according to one more hash bit.\n4. If the chain is still 8+ long once the table has 64 or more buckets (e.g. all keys share the same full hash), the next insert into it converts it to a tree, giving O(log n) lookups for comparable keys, where n is the number of entries in that bin.",
+    "link": {
+      "title": "JEP 180: Handle Frequent HashMap Collisions with Balanced Trees",
+      "url": "https://openjdk.org/jeps/180"
+    }
+  }
+]

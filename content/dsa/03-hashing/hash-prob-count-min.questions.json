@@ -1,0 +1,92 @@
+[
+  {
+    "id": "hash-probabilistic-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Count-Min Sketch with 4 rows returns counters 120, 95, 103 and 97 for item x. What does it report, and why that one? Assume nonnegative updates, no counter overflow, and independently sampled suitable universal row hashes for the probabilistic bound. The update stream and queried item are fixed independently of the sampled hash functions.",
+    "options": [
+      {
+        "text": "103.75, the average, to smooth out noise",
+        "explanation": "Averaging includes the most polluted counters. Since every counter can only be too high, the smallest is the best estimate."
+      },
+      {
+        "text": "120, the maximum, to avoid undercounting",
+        "explanation": "Counters never undercount (with non-negative updates), so taking the maximum just picks the worst overestimate."
+      },
+      {
+        "text": "95, the minimum, because collisions can only add to a counter, so the smallest is the least inflated",
+        "explanation": "Correct. Each counter is the true count plus other items that collided there. The minimum is closest to the truth and is still an upper bound."
+      },
+      {
+        "text": "100, the median, because it is robust to outliers",
+        "explanation": "The median is used by a variant (Count Sketch, with ± updates). For Count-Min, all errors are one-sided, so the minimum is best."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each touched counter contains the item’s true count plus nonnegative updates from colliding items.\n2. Other items only *add*, so every counter ≥ the true count.\n3. The minimum, 95, has the least pollution and is still ≥ the true count.\n4. So the true count is at most 95. The sketch's guarantee bounds it from below too:\n\n```formula\nc_true ≥ c_est − εN\nc_true ≥ 95 − εN\nwhere\nc_true: x's real count\nc_est: the sketch's estimate, the minimum counter, 95\nε: epsilon, the error fraction the sketch was sized for\nN: the total of all counts in the stream\nδ: delta, the configured failure probability\n≥: \"is at least\"; this lower bound holds with probability at least 1 − δ, where δ (delta) is the failure probability the sketch was sized for\nIn words: the true count lies between 95 − εN and 95, with high probability.\n```",
+    "link": {
+      "title": "Count–min sketch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want a Count-Min Sketch whose estimates are within 1% of the total stream count (an error fraction of 0.01) with 99.9% probability (a failure probability of 0.001). Use:\n\n```formula\nw = ⌈e / ε⌉\nd = ⌈ln(1 / δ)⌉\nwhere\nw: the width, counters per row\nd: the depth, the number of rows\nε: epsilon, the allowed error as a fraction of the stream total\nδ: delta, the allowed failure probability\ne: Euler's number, about 2.718\nln: the natural logarithm (base e)\n⌈ ⌉: ceiling, round up to a whole number\nIn words: the width controls the error size and the depth how rarely it is exceeded.\n```\n\nHow many counters does it need? This is a fixed point query with independent suitable universal row hashes, nonnegative updates and no overflow. The update stream and queried item are fixed independently of the sampled hash functions.",
+    "options": [
+      {
+        "text": "About 100 (100 per row, one row)",
+        "explanation": "This uses 1 / 0.01 = 100 counters in one row. The bound needs Euler’s number divided by 0.01, rounded up to 272 per row, and the confidence needs several rows."
+      },
+      {
+        "text": "About 272,000 (272 per row, 1,000 rows)",
+        "explanation": "d is the *logarithm* of 1/δ, not 1/δ itself. Each extra row cuts the failure probability by a factor of about e."
+      },
+      {
+        "text": "It depends on the number of distinct items",
+        "explanation": "The sketch's size depends only on ε and δ, not on how many distinct items appear. That is what makes it useful for huge streams."
+      },
+      {
+        "text": "About 1,904 (272 per row, seven rows)",
+        "explanation": "Correct. The allowed error gives a width of two hundred and seventy-two counters, and the desired confidence needs seven independent rows, giving one thousand nine hundred and four counters."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```formula\nw = ⌈2.718 / 0.01⌉ = ⌈271.8⌉ = 272\nd = ⌈ln(1 / 0.001)⌉ = ⌈ln(1000)⌉\nd = ⌈6.91⌉ = 7\nC = w × d = 272 × 7 = 1904\nwhere\nw: the width, counters per row\nd: the depth, rows\nC: the total number of counters\nln: the natural logarithm (base e ≈ 2.718); ln(1000) ≈ 6.91\n⌈ ⌉: ceiling, round up to a whole number\nIn words: 7 rows of 272 counters, 1,904 counters in all.\n```\n\nAt 4 bytes each, 1,904 × 4 = 7,616 bytes, under 8 kB; choose wider counters if updates may overflow.\n\nThe guarantee is per fixed query, over the hash choices: the estimate is at most the true count plus 1% of the stream total, with probability at least 99.9%. For a stream of 10 million events, that is within 100,000.",
+    "link": {
+      "title": "Count–min sketch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch"
+    }
+  },
+  {
+    "id": "hash-probabilistic-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Count-Min Sketch sized for an error fraction epsilon of 0.001 of the stream total processes a stream of ten million page views. Page A was viewed 2 million times; page B was viewed 50 times. Which statement best describes the estimates? Assume the usual nonnegative-update, nonoverflowing, independent-row model. Which describes the per-query error bound that holds with probability at least one minus the configured failure probability delta? The update stream and queried item are fixed independently of the sampled hash functions.",
+    "options": [
+      {
+        "text": "Both estimates are accurate to within 0.1% of their true values",
+        "explanation": "The error bound is εN, relative to the whole stream, not to each item's count."
+      },
+      {
+        "text": "On the bound event, A has at most 0.5% relative overestimate, while B can be overestimated by 10,000",
+        "explanation": "Correct. The error bound is 0.001 × 10,000,000 = 10,000; compare this with 2,000,000 and 50. This is a probabilistic per-query bound, not an absolute maximum."
+      },
+      {
+        "text": "B's estimate may be too low, because rare items get overwritten",
+        "explanation": "Counters are only incremented; nothing is overwritten. Estimates are never below the true count (with non-negative updates)."
+      },
+      {
+        "text": "The bound is 10 million regardless of epsilon",
+        "explanation": "The stated high-probability bound is 0.001 × 10,000,000 = 10,000; larger errors remain possible on its failure event."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nE_max = εN\nE_max = 0.001 × 10,000,000 = 10,000\nE_max / 2,000,000 = 0.005 = 0.5%\nE_max / 50 = 200\nwhere\nE_max: the additive error bound: the most the estimate can exceed the true count, with probability at least one minus the configured failure probability\nε: epsilon, the sketch's error fraction, 0.001\nN: the total of all counts in the stream, 10 million\nδ: delta, the failure probability the sketch was sized for\nIn words: every item's estimate may be up to 10,000 too high, which is tiny for page A (0.5%) but 200 times page B's real count.\n```\n\nThis holds for either fixed query with probability at least one minus the configured failure probability over the sketch's hash choices. For both bounds together, a union bound gives at least one minus twice that failure probability. The sketch cannot enumerate candidates; heavy-hitter tracking needs additional candidate management.",
+    "link": {
+      "title": "Count-min sketch — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/data-types/probabilistic/count-min-sketch/"
+    }
+  }
+]

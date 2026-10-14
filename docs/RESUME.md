@@ -83,6 +83,20 @@ author/independent-verifier process. Existing skipped-content decisions below re
   all mobile renders, thirteen actual module lesson/quiz routes, 61 Node tests, original question preservation
   and 964 archive comparisons pass. Case Studies II's twelve dictionary ID/definition/negative probes pass,
   and earlier Reliability/Case Studies I meanings remain correct in the new compiled subject dictionary.
+- Published ninth-batch commit `a108c72`: all system-design modules are converted. GitHub Pages succeeded,
+  and all four live app/manifest/progress/index files match the tested `75de57f32921` release.
+- Terminal permissions are now full access with approval policy never. Do not pass `sandbox_permissions`
+  to commands. Linear and trees resumed after the settings interruption; hashing review continues.
+- Hashing is independently verified and stamped: 37 units/73 questions/103 cards/158 glossary terms.
+  All original questions, twelve archives, native code and fourteen drawings/traces are preserved.
+  Verified fourteen-module preview `95bc1aa0dc67` has 105 originals → 517 units/1,264 questions; all phone
+  renders and fourteen real lesson/quiz routes, 61 Node tests, eighteen dictionary probes, question
+  preservation and 964 archive comparisons pass. Installed-app and completion-age checks are complete.
+- Linear is finishing independent review. Parent executed its Java and bounded GCC14/ASan fixtures and
+  fetched primary/supplemental sources; the 44-link check passes. Trees is finishing author handoff; its
+  isolated parent-network source evidence is `sources-parent-network.json` (144/144 HTTP 200).
+  Sorting/searching is being authored next. Older worker network restrictions are handled from the enabled
+  parent without requesting approvals; do not rerun failed transport unnecessarily.
 - Root owns shared code and generated assets. `/tmp/cs-study-short-lessons/preview-verified.mjs` builds isolated
   previews from the last published release and overlays currently verified modules, allowing pending author
   files to stay out of releases. Previously converted modules retain their last verified units during follow-up

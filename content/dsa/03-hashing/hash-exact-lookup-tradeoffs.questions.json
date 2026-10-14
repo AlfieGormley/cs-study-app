@@ -1,0 +1,122 @@
+[
+  {
+    "id": "hash-maps-sets-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A script checks 100,000 incoming emails against a blocklist of 100,000 addresses:\n\n```python\n# Supplied functions and email fixtures.\n# Every membership test scans this list.\nblocked = load_list()  # a list\nfor e in emails:\n    if e in blocked:\n        reject(e)\n```\n\nRoughly how many comparisons can this make in the worst case, and what is the fix?",
+    "options": [
+      {
+        "text": "About 200,000; it is already linear",
+        "explanation": "This treats `in` on a list as O(1). A list membership test scans element by element, so each check can cost up to 100,000 comparisons."
+      },
+      {
+        "text": "About 10 billion; convert `blocked` to a set first",
+        "explanation": "The list can make 10¹⁰ (ten billion) comparisons. Building a set once and then querying it costs O(n + m) expected hash-table operations, where n is the number of emails and m the blocklist size, under ordinary hash assumptions; that is not a measured speed-up."
+      },
+      {
+        "text": "About 1.7 million; sort the list and the `in` operator will binary search",
+        "explanation": "List membership does not switch to binary search when sorted. bisect can implement binary search, with different memory and comparison costs."
+      },
+      {
+        "text": "About 10 billion; there is no faster approach",
+        "explanation": "There is: a hash set makes each lookup O(1) on average, which removes the quadratic factor."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. There are 100,000 membership tests, and each can scan the whole list:\n\n```formula\nC = n × m\nC = 100,000 × 100,000\nC = 10^10\nwhere\nC: the worst-case number of comparisons\nn: the number of emails checked, 100,000\nm: the number of blocklist entries, 100,000\n^: \"to the power of\"; 10^10 is 1 followed by 10 zeros\nIn words: every one of 100,000 emails can be compared with every one of 100,000 blocked addresses, which is ten billion comparisons.\n```\n\n2. Build the set once, then query it: O(n + m) expected hash-table operations, about 200,000 for these sizes.\n3. String hashing and equality, collisions, allocation and caching determine the actual time; Big-O does not imply exactly 200,000 primitive operations or a 50,000-times speed-up.",
+    "link": {
+      "title": "Time complexity of Python operations — Python wiki",
+      "url": "https://wiki.python.org/moin/TimeComplexity"
+    }
+  },
+  {
+    "id": "hash-maps-sets-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You store 50 million orders keyed by timestamp. The main query is \"all orders between 09:00 and 09:05\". Which structure fits best?",
+    "options": [
+      {
+        "text": "A sorted structure such as a balanced BST or B-tree index on timestamp",
+        "explanation": "Correct. Keys are kept in order, so with n stored orders you find 09:00 in O(log n) steps and walk forward until 09:05, costing O(log n + k) for k results."
+      },
+      {
+        "text": "A hash map from timestamp to order",
+        "explanation": "A hash map only answers exact-match lookups. Hashing scatters neighbouring timestamps across the table, so a range query would have to scan every entry."
+      },
+      {
+        "text": "A hash set of timestamps",
+        "explanation": "A set has the same problem as a map: no ordering, so no efficient range scan."
+      },
+      {
+        "text": "An unsorted array, scanned each time",
+        "explanation": "That works but costs O(n) per query: 50 million checks to return a few thousand rows."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Identify the query type: a **range** query, not an exact lookup.\n2. A good hash function deliberately destroys ordering: `09:00:01` and `09:00:02` end up in unrelated buckets.\n3. A sorted structure keeps neighbours together. Search for the first key ≥ 09:00, then iterate in order. The search takes about:\n\n```formula\nS ≈ log_2(n)\nS ≈ log_2(5 × 10^7) ≈ 25.6\nwhere\nS: the number of halving steps a binary search (or balanced tree) needs to find a position\nn: the number of stored keys, here 50 million\nlog_2: logarithm to base 2, the number of times you can halve n before reaching 1; log_2(1024) = 10\n^: \"to the power of\"; 10^7 = 10 million\n≈: approximately equal to\nIn words: halving 50 million keys about 26 times narrows the search to a single position.\n```\n\n4. Cost: O(log n + k), where k is the number of orders returned. This is why databases use B-tree indexes for range predicates and hash indexes only for equality.",
+    "link": {
+      "title": "Hash table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hash_table"
+    }
+  },
+  {
+    "id": "hash-maps-sets-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You count events by error code. Codes are integers from 0 to 999, and you process 100 million events. Which representation uses direct addressing and avoids hashing these keys?",
+    "options": [
+      {
+        "text": "`collections.Counter()`",
+        "explanation": "It works and is O(1) average per event, but each increment hashes the key and probes a table. With small dense integer keys, that work is unnecessary."
+      },
+      {
+        "text": "`counts = [0] * 1000` and `counts[code] += 1`",
+        "explanation": "Correct. When keys are dense small integers, the key *is* the index. No hashing, no collisions, no resizing, and 1,000 slots use far less memory than a dict of 1,000 entries."
+      },
+      {
+        "text": "A sorted list with `bisect` to find each code",
+        "explanation": "Binary search is unnecessary to locate a known dense index; actual speed of complete implementations still needs measurement."
+      },
+      {
+        "text": "A `set` of codes seen",
+        "explanation": "A set records presence, not counts, so it cannot answer \"how many\"."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A hash table is a general way to map arbitrary keys to array slots.\n2. Here the keys are already array indices: 0 to 999. This is called direct addressing.\n3. `counts[code] += 1` reads and updates an indexed slot. A dict increment hashes the key, finds the slot, compares, and stores.\n4. Both are O(1), but over 10⁸ events implementation constants matter and should be measured, and the array needs no per-entry overhead.\n5. Rule of thumb: dense small integer keys → array; sparse or non-integer keys → hash map.",
+    "link": {
+      "title": "Hash table — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hash_table"
+    }
+  },
+  {
+    "id": "hash-maps-sets-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service holds `big`, a list of 10 million product IDs that rarely changes. Thousands of times a day it receives a list of about 10 IDs and must return those present in `big`. Assume enough memory for a set and bounded-cost well-distributed hashes. Which gives expected O(len(small)) per-request work while preserving small-list order and duplicates?",
+    "options": [
+      {
+        "text": "`set(big) & set(small)` for each request",
+        "explanation": "This rebuilds the large set for each request and returns a set, losing input order and duplicate occurrences."
+      },
+      {
+        "text": "`[x for x in small if x in big]` for each request",
+        "explanation": "No set at all: each `x in big` scans the list, so a request costs about 10 × 10⁷ = 10⁸ comparisons."
+      },
+      {
+        "text": "Build `big_set = set(big)` once at start-up, then `[x for x in small if x in big_set]` per request",
+        "explanation": "Correct. Pay O(N) once, where N is the 10 million IDs in `big`, then each request costs about 10 O(1) lookups. This is the build-once, query-many pattern."
+      },
+      {
+        "text": "Sort `big` once, then binary search each ID",
+        "explanation": "Sorting once gives logarithmic comparisons per lookup. It may offer memory or locality advantages, but not the requested expected constant lookup bound."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Build big_set once in expected O(N), where N is the length of `big`, then retain each small-list item if it belongs to that set. This preserves request order and duplicates with expected O(len(small)) table work. A sorted representation remains a valid trade-off; the asymptotic bound is not a wall-clock benchmark.",
+    "link": {
+      "title": "Time complexity of Python operations — Python wiki",
+      "url": "https://wiki.python.org/moin/TimeComplexity"
+    }
+  }
+]

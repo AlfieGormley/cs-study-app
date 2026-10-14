@@ -1,0 +1,130 @@
+[
+  {
+    "id": "hash-maps-sets-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\n# Equality decides whether a key is new.\nd = {}\nd[1] = \"int\"\nd[1.0] = \"float\"\nd[True] = \"bool\"\nprint(len(d), d[1])\n```",
+    "options": [
+      {
+        "text": "`3 int`",
+        "explanation": "This assumes `1`, `1.0` and `True` are different keys. They compare equal and hash equally in Python, so they are one key."
+      },
+      {
+        "text": "`1 int`",
+        "explanation": "Right length, wrong value. Assigning to an existing key replaces the value; only the original key object (`1`) is kept."
+      },
+      {
+        "text": "`1 bool`",
+        "explanation": "Correct. `1 == 1.0 == True` and their hashes match, so all three assignments hit the same entry. The last write wins, giving the value `\"bool\"`."
+      },
+      {
+        "text": "`TypeError`",
+        "explanation": "Float and bool are hashable. Lists are not; mutability alone is not the general hashability criterion."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A dict finds a key by its hash, then confirms with `==`.\n2. `hash(1) == hash(1.0) == hash(True) == 1`, and `1 == 1.0 == True`.\n3. So `d[1.0] = ...` finds the existing key `1` and overwrites its value; so does `d[True] = ...`.\n4. The dict holds a single entry, `{1: 'bool'}`.\n\n```\nd[1]    = 'int'    {1: 'int'}\nd[1.0]  = 'float'  {1: 'float'}\nd[True] = 'bool'   {1: 'bool'}\n```\n\nOutput: `1 bool`.",
+    "link": {
+      "title": "Mapping types: dict — Python docs",
+      "url": "https://docs.python.org/3/library/stdtypes.html#mapping-types-dict"
+    }
+  },
+  {
+    "id": "hash-maps-sets-q3",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these can be used as keys in a Python `dict`? Select all that apply.",
+    "options": [
+      {
+        "text": "`(1, 2)`",
+        "explanation": "Correct. A tuple of hashable items is hashable, because the tuple cannot change after creation."
+      },
+      {
+        "text": "`\"abc\"`",
+        "explanation": "Correct. Strings are immutable, so their hash never changes."
+      },
+      {
+        "text": "`[1, 2]`",
+        "explanation": "Lists are mutable. If a list key changed after insertion its hash would change and the entry would be lost, so lists are unhashable."
+      },
+      {
+        "text": "`frozenset({1, 2})`",
+        "explanation": "Correct. `frozenset` is the immutable version of `set` and exists precisely so sets can be keys or set members."
+      },
+      {
+        "text": "`(1, [2])`",
+        "explanation": "A tuple is only hashable if everything inside it is. This one contains a list, so `hash()` raises `TypeError`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Ask of each candidate: can it change after creation, and can everything inside it be hashed?\n\n| Key | Immutable? | Hashable? |\n|---|---|---|\n| `(1, 2)` | yes | yes |\n| `\"abc\"` | yes | yes |\n| `[1, 2]` | no | no |\n| `frozenset` | yes | yes |\n| `(1, [2])` | contains list | no |\n\nThe rule exists because the table finds a key by recomputing its hash. A key whose hash could change would sit in the wrong bucket.\nFor arbitrary classes, mutability alone does not determine hashability. Custom identity-based mutable objects can be hashable; keys must keep hash and equality behaviour stable.",
+    "link": {
+      "title": "Data model: __hash__ — Python docs",
+      "url": "https://docs.python.org/3/reference/datamodel.html"
+    }
+  },
+  {
+    "id": "hash-maps-sets-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In Java, a `Point` class overrides `equals` to compare `x` and `y`, but does not override `hashCode`. Assume the two objects have different full hash codes. What does this print?\n\n```java\n// Track equality and hash separately.\nSet<Point> s = new HashSet<>();\ns.add(new Point(1, 2));\nSystem.out.println(\n  s.contains(new Point(1, 2)));\n```",
+    "options": [
+      {
+        "text": "`true`, because `equals` says the points are equal",
+        "explanation": "HashSet uses the full stored hash as well as equality. Under the stated different-hash assumption it does not find the equal object, even if both reduce to the same bucket."
+      },
+      {
+        "text": "`false`, because the two objects have different identity-based hash codes",
+        "explanation": "The stated different hashes violate the equal-objects/equal-hashes contract, so the lookup returns false."
+      },
+      {
+        "text": "A compile error, because `hashCode` is required",
+        "explanation": "Java compiles this fine; `Object` provides a default `hashCode`. The bug only shows up at run time, which is why it is so common."
+      },
+      {
+        "text": "`true`, because `HashSet` compares every element with `equals`",
+        "explanation": "That would make `contains` O(n). A hash set only compares within one bucket."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Java requires equal objects to have equal hash codes.\n2. Object.hashCode does not guarantee distinct codes for distinct identities, so this question explicitly assumes different codes.\n3. Those unequal full hashes cause the lookup to miss; different bucket indices are not necessary.\n4. Override equals and hashCode consistently, and keep equality-relevant coordinates stable while the object is stored.",
+    "link": {
+      "title": "HashMap — Java SE 21 API docs",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/HashMap.html"
+    }
+  },
+  {
+    "id": "hash-maps-sets-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On CPython 3.14, what does this print? This deliberately violates the hash-key contract; do not rely on the outcome portably.\n\n```python\n# Changing equality state breaks lookup.\nclass P:\n    def __init__(s, x): s.x = x\n    def __eq__(s, o): return s.x == o.x\n    def __hash__(s): return hash(s.x)\n\np = P(1)\ns = {p}\np.x = 2\nprint(p in s, P(1) in s)\n```",
+    "options": [
+      {
+        "text": "`True True`",
+        "explanation": "This assumes the set tracks the object after mutation. The set stored `p` in the bucket for hash 1 and never moves it."
+      },
+      {
+        "text": "`True False`",
+        "explanation": "`p in s` now hashes to `hash(2)` and looks in a different bucket from where `p` sits, so it does not find it."
+      },
+      {
+        "text": "`False True`",
+        "explanation": "`P(1)` hashes to the right bucket and finds `p` there, but then compares with `==`: `p.x` is now 2, which is not equal to 1."
+      },
+      {
+        "text": "`False False`",
+        "explanation": "Correct. The entry is stranded: its stored position matches hash 1, but its value now equals 2. Neither lookup can find it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `s = {p}` stores `p` at the slot chosen by `hash(1)`.\n2. `p.x = 2` changes the object, but the set does not know.\n3. `p in s`: computes `hash(2)`, looks in that slot, finds nothing: `False`.\n4. `P(1) in s`: computes `hash(1)`, finds `p` in that slot, then checks `p == P(1)`, i.e. `2 == 1`: `False`.\n5. Output: `False False`. The entry is still in the set (`len(s)` is 1) but unreachable by lookup. This is why keys must not change their hash while stored.",
+    "link": {
+      "title": "Data model: __hash__ — Python docs",
+      "url": "https://docs.python.org/3/reference/datamodel.html"
+    }
+  }
+]

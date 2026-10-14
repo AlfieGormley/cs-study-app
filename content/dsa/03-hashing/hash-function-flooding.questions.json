@@ -1,0 +1,130 @@
+[
+  {
+    "id": "hash-functions-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You run `python3 -c 'print(hash(\"abc\"))'` twice and get two different numbers. Why?",
+    "options": [
+      {
+        "text": "Python's string hash is randomised per process with a secret seed, to defend against hash flooding",
+        "explanation": "Per-process randomisation makes reusable precomputed attacks harder; PYTHONHASHSEED can override it."
+      },
+      {
+        "text": "`hash()` includes the object's memory address",
+        "explanation": "String hashes use contents and a process secret. Default object hashing is identity-based; an address relationship is an implementation detail."
+      },
+      {
+        "text": "It is a bug: hash functions must be deterministic",
+        "explanation": "They must be deterministic *within one process*, which this is. Across processes, Python deliberately varies them."
+      },
+      {
+        "text": "Strings are hashed with SHA-256, which includes a random nonce",
+        "explanation": "Common recent CPython builds use SipHash-1-3 for strings, configurable by the build; SHA-256 itself has no random nonce."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A stored key needs a stable hash while its table uses it.\n2. CPython normally chooses a process hash secret at startup; string hashes can consequently differ across runs.\n3. This impedes reusable collision attacks but is not a proof that all adversarial inputs are harmless.\n4. Do not persist Python hash values as stable identifiers; use an explicitly chosen stable digest when needed.",
+    "link": {
+      "title": "PEP 456: Secure and interchangeable hash algorithm",
+      "url": "https://peps.python.org/pep-0456/"
+    }
+  },
+  {
+    "id": "hash-functions-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Java's String.hashCode multiplies the running hash by thirty-one and adds each next UTF-16 code unit, with signed thirty-two-bit overflow. `\"AaBB\".hashCode()` is 2,031,744. Which of these have the same hash code? Select all that apply. (`A`=65, `B`=66, `a`=97, `C`=67, `#`=35)",
+    "options": [
+      {
+        "text": "`\"AaAa\"`",
+        "explanation": "Correct. `Aa` and `BB` both hash to 2112 as two-character blocks, so any 4-character string built from those blocks gives 2112 × 31² + 2112."
+      },
+      {
+        "text": "`\"BBBB\"`",
+        "explanation": "Correct. Same reason: two blocks each hashing to 2112."
+      },
+      {
+        "text": "`\"ABBa\"`",
+        "explanation": "This mixes the letters across block boundaries: `AB` hashes to 65 × 31 + 66 = 2081, not 2112, so the total differs (2,001,984)."
+      },
+      {
+        "text": "`\"C#BB\"`",
+        "explanation": "Correct. `C#` is 67 × 31 + 35 = 2077 + 35 = 2112, another block equivalent to `Aa`."
+      },
+      {
+        "text": "`\"aABB\"`",
+        "explanation": "Swapping the case moves weight between positions: `aA` is 97 × 31 + 65 = 3072, not 2112."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Java's string hash is a polynomial with base 31. For a 4-character string, split it into two pairs:\n\n```formula\nH = H_1 × 31^2 + H_2\nH(\"AaBB\") = 2112 × 961 + 2112\nH(\"AaBB\") = 2031744\nwhere\nH: the hash of the 4-character string\nH_1: the hash of its first two characters as a pair, c × 31 + c′\nH_2: the hash of its last two characters as a pair\n^: \"to the power of\"; 31^2 = 961\nIn words: the first pair's hash is multiplied by 961 and the second pair's hash is added, so two strings collide whenever their pairs hash the same.\n```\n\n2. Pair hashes (code of first character × 31, plus code of second):\n\n```formula\nH(\"Aa\") = 65 × 31 + 97 = 2112\nH(\"BB\") = 66 × 31 + 66 = 2112\nH(\"C#\") = 67 × 31 + 35 = 2112\nH(\"AB\") = 65 × 31 + 66 = 2081\nH(\"aA\") = 97 × 31 + 65 = 3072\nwhere\nH: the Java polynomial hash of the quoted two-character block, dimensionless\nIn words: Three different two-character blocks share the same hash, while AB and aA do not.\n```\n\n3. `AaAa`, `BBBB` and `C#BB` use only 2112-pairs: they collide. `ABBa` and `aABB` do not.\n4. With a fixed number of blocks, each position doubles the choices (or triples them when C# is also allowed): the raw material of the 2011 flooding attacks.",
+    "link": {
+      "title": "Denial of Service via Algorithmic Complexity Attacks (USENIX 2003)",
+      "url": "https://www.usenix.org/legacy/events/sec03/tech/full_papers/crosby/crosby.pdf"
+    }
+  },
+  {
+    "id": "hash-functions-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An API server parses JSON request bodies into a hash table using a fixed, public, unkeyed string hash with chaining. An attacker sends one 2 MB body containing 50,000 distinct keys with identical full hash values. Roughly how many key comparisons does parsing that one request cost, and what is the appropriate primary defence among these choices?",
+    "options": [
+      {
+        "text": "About 50,000; reject bodies over 1 MB",
+        "explanation": "50,000 is the cost with no collisions. Colliding keys make each insert scan the existing chain. A size limit helps, but a few thousand colliding keys still fit in a small body."
+      },
+      {
+        "text": "About 1.25 billion; switch to a keyed hash with a secret random seed, such as SipHash",
+        "explanation": "Correct. Checking for duplicates on each chained insert costs 50,000 × 49,999 / 2 ≈ 1.25 billion comparisons. A secret keyed hash stops attackers predicting collisions; bound parsing resources as well."
+      },
+      {
+        "text": "About 2.5 billion; use SHA-256 as the table hash",
+        "explanation": "The count is 50,000 × 49,999 / 2, not 50,000². And an unkeyed hash, even SHA-256, is public: the attacker only needs keys that share a *bucket* (the low bits of the hash), which they can brute-force offline. It is also much slower than a table hash."
+      },
+      {
+        "text": "About 1.25 billion; increase the table's initial size",
+        "explanation": "A larger table does not help: the keys collide on the full hash value, so they share a bucket at any table size."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Every key lands in the same chain, and each insert compares the new key with every key already there:\n\n```formula\nC = n(n − 1) / 2\nC = 50,000 × 49,999 / 2\nC = 1,249,975,000\nwhere\nC: the total key comparisons for the whole request\nn: the number of colliding keys, 50,000\nIn words: the k-th key is compared with the k − 1 keys before it, adding up to about 1.25 billion comparisons for one 2 MB request.\n```\n\n2. Equal full hashes remain equal after any bucket reduction, so enlarging the table does not separate them.\n3. Use a keyed, randomised hash, explicit JSON member and body limits, and resource budgets. Java tree bins give logarithmic lookup when hashes or a consistent comparable order distinguish keys. PHP's `max_input_vars` limits input parameters, not arbitrary decoded JSON members.\n\n> [!note] Evidence gap\n> The former comparisons-per-second estimate is omitted: no measured language, key length, CPU or benchmark supports it.",
+    "link": {
+      "title": "Denial of Service via Algorithmic Complexity Attacks (USENIX 2003)",
+      "url": "https://www.usenix.org/legacy/events/sec03/tech/full_papers/crosby/crosby.pdf"
+    }
+  },
+  {
+    "id": "hash-functions-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team sets `PYTHONHASHSEED=0` in its production containers so that log output involving sets is identical across restarts. The service accepts arbitrary JSON from the internet. What is the main risk?",
+    "options": [
+      {
+        "text": "None: Python 3.4+ uses SipHash, which is immune to collisions",
+        "explanation": "No finite hash is collision-free. A fixed known seed removes process-secret randomisation, though this alone does not establish a practical collision attack."
+      },
+      {
+        "text": "String hashes become reproducible, removing per-process randomisation as a defence",
+        "explanation": "This permits environment-specific precomputation. Practical attack cost still depends on hash width and the actual table probe algorithm."
+      },
+      {
+        "text": "Integer keys become randomised and break the service",
+        "explanation": "The opposite: the setting turns randomisation *off*, and integer hashes are never randomised anyway."
+      },
+      {
+        "text": "Dict iteration order becomes random",
+        "explanation": "Dict order is insertion order regardless of the seed. The seed only affects hash values (and so set iteration order)."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `PYTHONHASHSEED=0` disables string-hash randomisation.\n2. A known seed does not by itself make large sets of full 64-bit SipHash collisions easy to find.\n3. Sharing an initial bucket alone also does not prove quadratic CPython insertion: its perturbation sequence uses higher hash bits.\n4. Retain randomisation for untrusted input, and sort supported values explicitly for deterministic logs. Fixed seeds do not make set order a language guarantee.",
+    "link": {
+      "title": "PEP 456: Secure and interchangeable hash algorithm",
+      "url": "https://peps.python.org/pep-0456/"
+    }
+  }
+]

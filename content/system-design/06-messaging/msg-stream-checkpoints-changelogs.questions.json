@@ -1,0 +1,70 @@
+[
+  {
+    "id": "msg-stream-processing-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kafka Streams service holds a 40 GB RocksDB state store. When an instance dies, the partition moves to another instance, and processing for those keys stalls for **12 minutes** while state is restored. What is the most direct fix?",
+    "options": [
+      {
+        "text": "Disable the changelog topic so there is nothing to restore",
+        "explanation": "Wrong. Without the changelog the state is lost on failure, so restarted tasks would produce wrong results. The changelog is what makes the state fault-tolerant."
+      },
+      {
+        "text": "Increase the topic's retention.ms",
+        "explanation": "Wrong. Changelog topics are compacted, and input retention does not affect how quickly a new instance rebuilds the store."
+      },
+      {
+        "text": "Switch processing.guarantee to at_least_once",
+        "explanation": "Wrong. The guarantee affects transactions and duplicates, not how much state must be rebuilt. Restoration would still take 12 minutes."
+      },
+      {
+        "text": "Configure num.standby.replicas ≥ 1 so another instance keeps a warm copy of the store",
+        "explanation": "Correct. Standby replicas continuously apply the changelog on another instance. On failover, the task moves to an instance that is already (nearly) up to date and can resume after catching up its remaining changelog; recovery time depends on standby lag, assignment and available capacity."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Restore rate:\n\n```formula\nr = D / T\nr = 40000 MB / (720 s) ≈ 55 MB/s\nwhere\nr: the restore rate, in megabytes per second (MB/s)\nD: the size of the state store, 40 gigabytes (GB), which is 40,000 megabytes (MB)\nT: the restore time, 12 minutes, which is 720 seconds (s)\nMB: megabytes, millions of bytes\ns: seconds; \"MB/s\" means megabytes per second\n≈: approximately equal to\nIn words: rebuilding 40 GB in 12 minutes means reading and writing about 55 MB every second.\n```\n\n   It is limited by fetching the changelog and writing to RocksDB.\n2. Without standbys, the new owner starts from empty (or a stale local copy) and replays the compacted changelog.\n3. With `num.standby.replicas=1`, a second instance has been applying the changelog all along. Its actual lag must be monitored and may grow under load.\n4. On failover, the assignor prefers the instance with the standby → it catches up its remaining changelog and resumes.\n5. Cost: double the state storage and some extra network to replicate the changelog.\n\n(Flink's equivalent concern is checkpoint restore time; local recovery and incremental checkpoints address it.)",
+    "link": {
+      "title": "Kafka Streams documentation",
+      "url": "https://kafka.apache.org/documentation/streams/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A Flink job reads Kafka, aggregates per key, and writes results to another Kafka topic. You need **end-to-end exactly-once** results. Which of these are required? Select all that apply.",
+    "options": [
+      {
+        "text": "A transactional sink, such as Flink's Kafka sink in exactly-once mode, which commits its writes when a checkpoint completes",
+        "explanation": "Correct. Without it, output written after the last checkpoint is emitted again when the job restores and replays, producing duplicates downstream."
+      },
+      {
+        "text": "Processing-time windows",
+        "explanation": "Wrong. The time domain is about what results mean, not about fault tolerance. Event-time windows work with exactly-once just as well."
+      },
+      {
+        "text": "Checkpointing enabled, with a replayable source whose offsets are stored in the checkpoint",
+        "explanation": "Correct. Restoring state and rewinding the source to the matching offsets is what makes each input affect state exactly once."
+      },
+      {
+        "text": "Downstream consumers reading with `isolation.level=read_committed`",
+        "explanation": "Correct. Flink's transactional Kafka writes are visible to read_uncommitted readers before commit, including data from transactions later aborted. Readers must wait for committed data."
+      },
+      {
+        "text": "Committing Kafka consumer-group offsets after every record",
+        "explanation": "Wrong. Flink's correctness comes from offsets stored in its checkpoints, not from the consumer group's committed offsets, which it commits only for monitoring. Per-record commits would just add load."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Follow a record through failure and recovery:\n\n1. **Source**: offsets live in the checkpoint → on restore, rewind exactly to the matching position. ✓ required.\n2. **State**: restored from the same checkpoint → consistent with the offsets. ✓ (comes with checkpointing).\n3. **Sink**: output since the last checkpoint must not be visible yet → a transaction committed on checkpoint completion (two-phase commit). ✓ required.\n4. **Readers**: must ignore uncommitted or aborted transactions → `read_committed`. ✓ required.\n5. Window type and group-offset commits are irrelevant to the guarantee.\n\nCost: results become visible only at each checkpoint, so added visibility delay depends on the time until the next successful checkpoint and transaction commit; a record arriving just before it can wait less than one interval.",
+    "link": {
+      "title": "Apache Kafka connector (Apache Flink docs)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/connectors/datastream/kafka/"
+    }
+  }
+]

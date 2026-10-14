@@ -1,0 +1,62 @@
+[
+  {
+    "id": "msg-message-queues-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Three workers consume from the same SQS standard queue. A producer sends one message. In normal operation, how many workers process it?",
+    "options": [
+      {
+        "text": "All three, because each worker is subscribed to the queue",
+        "explanation": "Wrong. That is publish/subscribe behaviour. A point-to-point queue hands each message to one consumer; to get a copy per consumer you would need a topic (such as SNS) feeding a queue each."
+      },
+      {
+        "text": "Exactly one, and it is guaranteed never to be delivered again",
+        "explanation": "Wrong. Normally one worker gets it, but SQS standard queues are at-least-once: a visibility timeout expiring or a rare duplicate means the message can be delivered again. 'Never again' is too strong."
+      },
+      {
+        "text": "One of them, usually exactly once, with occasional redelivery possible",
+        "explanation": "Correct. Workers compete for messages and SQS hides a received message from the others. Under failures or timeouts it can be redelivered, which is why consumers should be idempotent."
+      },
+      {
+        "text": "None until all three acknowledge readiness",
+        "explanation": "Wrong. There is no group readiness handshake in a queue. Any worker that calls ReceiveMessage can take the next available message."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A queue is a **point-to-point** channel: one message, one consumer.\n2. When worker A calls `ReceiveMessage`, SQS returns the message and makes it **invisible** to B and C.\n3. A processes it and calls `DeleteMessage`. Done; B and C never see it.\n4. Edge case: if A does not delete it before the visibility timeout ends, it becomes visible and B or C may receive it.\n5. Separately, standard queues may occasionally deliver a duplicate even without a timeout.\n\nSo the honest answer is \"one, at least once\".",
+    "link": {
+      "title": "Competing Consumers pattern (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/competing-consumers"
+    }
+  },
+  {
+    "id": "msg-message-queues-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A RabbitMQ consumer receives a message with **manual acknowledgements** enabled, starts processing, and its process is killed before it sends `basic.ack`. Assume it has not expired or reached a delivery limit. What happens to the message?",
+    "options": [
+      {
+        "text": "It is requeued when the channel closes and delivered to another consumer",
+        "explanation": "Correct. RabbitMQ tracks unacknowledged deliveries per channel. When the connection drops, those messages go back to the queue and are redelivered with the `redelivered` flag set."
+      },
+      {
+        "text": "It is lost, because it was already delivered",
+        "explanation": "Wrong. That would happen with auto-ack, where the broker considers the message done as soon as it is sent. With manual acks the broker keeps it until it is acknowledged."
+      },
+      {
+        "text": "It moves straight to the dead-letter exchange",
+        "explanation": "Wrong. Dead-lettering happens on reject/nack without requeue, TTL expiry, length limits or exceeding a quorum queue's delivery limit. A single consumer crash simply requeues the message."
+      },
+      {
+        "text": "It stays invisible until a 30-second visibility timeout expires",
+        "explanation": "Wrong. Visibility timeouts are how SQS works, because SQS has no persistent connection. RabbitMQ detects the dead consumer directly through the closed connection."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. With manual acks, RabbitMQ marks the delivery as **unacked** and keeps the message.\n2. The process dies, so its TCP connection closes (or, if the machine vanished without closing it, the heartbeat times out, typically within a minute or two with the default 60-second heartbeat timeout).\n3. RabbitMQ sees the channel close and returns every unacked message on it to the queue.\n4. Another consumer gets it with `redelivered=true`. A careful consumer can use that flag as a hint to check for duplicate work.\n\nContrast: in SQS the equivalent safety net is the visibility timeout.",
+    "link": {
+      "title": "RabbitMQ tutorial: work queues, acks and fair dispatch",
+      "url": "https://www.rabbitmq.com/tutorials/tutorial-two-python"
+    }
+  }
+]

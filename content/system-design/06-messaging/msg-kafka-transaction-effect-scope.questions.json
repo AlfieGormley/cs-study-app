@@ -1,0 +1,122 @@
+[
+  {
+    "id": "msg-delivery-semantics-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kafka Streams app reads `payments`, aggregates per merchant, and writes to `merchant-totals` with `processing.guarantee=exactly_once_v2`. It also calls an external fraud API for each payment. After a broker restart, the fraud team reports some payments were **scored twice**. The totals are correct. Explain.",
+    "options": [
+      {
+        "text": "exactly_once_v2 is buggy; switch back to at_least_once",
+        "explanation": "Wrong. at_least_once would make things worse: the totals could also double-count. The behaviour is the expected limit of EOS, not a bug."
+      },
+      {
+        "text": "Kafka EOS makes Kafka writes and offset commits atomic, but external calls are outside the transaction, so an aborted and retried transaction repeats them",
+        "explanation": "Correct. When a transaction aborts, its output records are discarded for read_committed consumers and the input is reprocessed. Kafka cannot undo an HTTP call, so the fraud API sees it twice. Pass an idempotency key (such as the payment ID) to the API."
+      },
+      {
+        "text": "The fraud API received duplicates because read_committed was not set on the producer",
+        "explanation": "Wrong. isolation.level is a consumer setting, and it governs which Kafka records are visible. It has no effect on HTTP calls made during processing."
+      },
+      {
+        "text": "The broker restart caused unclean leader election, which duplicated input records",
+        "explanation": "Wrong. Unclean election can lose data, not duplicate it, and it is disabled by default. Correct totals alone do not prove absence of input duplication; the stated failure is consistent with transaction retries outside the external API boundary."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Transaction T reads offsets 500–599, calls fraud API for each, writes totals, then tries to commit.\n2. Suppose the failure causes T to abort (a restart alone does not imply every transaction aborts).\n3. Kafka's view: aborted output is invisible to `read_committed` readers; offsets were not committed → reprocess 500–599. **Totals stay correct.**\n4. Fraud API's view: it already received 100 calls from the aborted attempt, and now receives them again. **Duplicates.**\n5. Fix: send `Idempotency-Key: payment-<id>` so the API returns the earlier score, or move the call into a separate consumer that uses provider-enforced idempotency and reconciles uncertain outcomes. A local dedup record alone cannot atomically cover an external API call.",
+    "link": {
+      "title": "Transactions in Apache Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/transactions-apache-kafka/"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a transactional Kafka read-process-write app, instance A pauses for 60 seconds in a GC pause. The group rebalances and instance B takes over A's partitions with the same transactional.id and successfully calls initTransactions(). A then wakes up and tries to commit its open transaction. What happens?",
+    "options": [
+      {
+        "text": "Both A's and B's outputs are committed, producing duplicates",
+        "explanation": "Wrong. This is exactly the zombie scenario that transactional IDs are designed to prevent."
+      },
+      {
+        "text": "A's commit succeeds and B's transaction is aborted instead",
+        "explanation": "Wrong. Fencing always favours the newer epoch. Letting the older instance win would allow a paused zombie to overwrite the current owner's work."
+      },
+      {
+        "text": "A's commit is rejected because B's initTransactions() bumped the producer epoch, fencing A",
+        "explanation": "Correct. The coordinator tracks an epoch per transactional.id. B's initTransactions() incremented it and aborted A's open transaction; A's requests carry the old epoch and fail with a fencing error."
+      },
+      {
+        "text": "The consumer group blocks until A either commits or times out",
+        "explanation": "Wrong. The rebalance already completed when A missed its deadline. B proceeds; Kafka does not wait for A."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A: `transactional.id = app-p3`, epoch 5. Opens transaction, writes some output.\n2. A pauses; the group gives P3 to B.\n3. B calls `initTransactions()` with `app-p3` → coordinator **aborts** any open transaction for that ID and bumps the epoch to 6.\n4. A wakes and sends commit with epoch 5 → `ProducerFencedException`. A must shut down.\n5. Result: A's partial output is aborted (invisible to read_committed), and B reprocesses from the last committed offset, so each input produces output once.\n\n(Since KIP-447, fencing also uses the consumer group generation, so apps no longer need a static transactional.id per partition.)",
+    "link": {
+      "title": "Transactions in Apache Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/transactions-apache-kafka/"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A consumer reads `payments` from Kafka and adds each amount to a `merchant_totals` row in Postgres. It commits offsets to Kafka **after** the database transaction commits. After crashes, totals are occasionally too high. Without using Kafka transactions, which design gives exactly-once effects?",
+    "options": [
+      {
+        "text": "Store the partition's next offset in Postgres in the same transaction as the totals update, atomically guard that update by the expected previous offset or ownership epoch, and on startup/rebalance seek to the stored offset",
+        "explanation": "Correct. Totals and position now commit atomically in one database, so after a crash the consumer resumes exactly where its last applied batch ended. Kafka's own committed offsets are no longer the source of truth."
+      },
+      {
+        "text": "Turn on `exactly_once_v2` or Kafka transactions for the consumer",
+        "explanation": "Wrong. Kafka transactions make Kafka writes and Kafka offset commits atomic. The Postgres update is outside them, so a crash between the database commit and the offset commit still replays the batch."
+      },
+      {
+        "text": "Commit offsets to Kafka before the database transaction",
+        "explanation": "Wrong. That swaps duplicates for loss: a crash after the offset commit but before the database commit skips the batch."
+      },
+      {
+        "text": "Set `isolation.level=read_committed` on the consumer",
+        "explanation": "Wrong. That only hides records from aborted Kafka transactions on the input. It does nothing about the gap between the Postgres commit and the offset commit."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Find the gap: `COMMIT` in Postgres → crash → offset never committed → batch replayed → totals added twice.\n2. Close it by putting both in **one** database, updated in one transaction:\n\nThis is application-bound SQL: substitute parameters and enforce the affected-row rollback check in the driver.\n\n```sql\nBEGIN;\n-- Apply the batch's external effect.\nUPDATE merchant_totals\n  SET total = total + :amt\n  WHERE id = :m;\n-- Claim progress only from our start.\nUPDATE kafka_offsets SET next = :o\n  WHERE topic = 'payments'\n    AND part = :p AND next = :expected;\n-- If row count != 1: ROLLBACK.\n-- Commit the guarded result and offset.\nCOMMIT;\n```\n\n3. On partition assignment, read `kafka_offsets` and `seek(partition, next)`.\n4. Atomically require the expected offset/ownership guard to match; roll back both changes otherwise. With this guard, a stale consumer cannot apply the batch twice. Crash anywhere: either both updates committed (resume after the batch) or neither did (replay it). Each payment counts once.\n5. This is the \"store offsets with the results\" pattern the lesson mentions for external sinks.",
+    "link": {
+      "title": "Kafka consumer design (Confluent docs)",
+      "url": "https://docs.confluent.io/kafka/design/consumer-design.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kafka Streams app with `processing.guarantee=exactly_once_v2` writes invoices to an `invoices` topic. Another team's plain Java consumer of `invoices`, built with default settings, sometimes receives duplicate invoices after broker restarts. Reading the same topic with a `read_committed` consumer shows no duplicates. What is the cause?",
+    "options": [
+      {
+        "text": "The Streams app's idempotent producer is disabled",
+        "explanation": "Wrong. exactly_once_v2 requires and enables idempotence and transactions. The fact that a read_committed reader sees clean output shows the producer side is working."
+      },
+      {
+        "text": "Unclean leader election duplicated records during the restart",
+        "explanation": "Wrong. Unclean election can lose records; it does not duplicate them, and it is off by default. A read_committed reader would also see any such problem."
+      },
+      {
+        "text": "The other team's consumer group has more members than partitions",
+        "explanation": "Wrong. Extra members sit idle; they never share a partition or cause duplicates."
+      },
+      {
+        "text": "The Java consumer defaults to `isolation.level=read_uncommitted`, so it also reads output from transactions that were later aborted and retried",
+        "explanation": "Correct. When a transaction aborts, its records stay in the log with an abort marker, and the retry writes them again. Only read_committed consumers skip the aborted copy. Exactly-once output needs read_committed readers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Transaction T1 writes invoices 1–50, then suppose a broker failure causes T1 to abort.\n2. The records from T1 remain in the log, followed by an **abort marker**.\n3. The Streams app retries in T2 and writes invoices 1–50 again, then commits.\n4. A `read_committed` consumer skips T1's records → each invoice once.\n5. A `read_uncommitted` consumer (the Java client default) returns T1's and T2's records → duplicates.\n6. Fix: set `isolation.level=read_committed` on every consumer of transactional topics. Expect slightly higher latency, since records become visible only at commit.",
+    "link": {
+      "title": "Transactions in Apache Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/transactions-apache-kafka/"
+    }
+  }
+]

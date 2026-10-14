@@ -1,0 +1,62 @@
+[
+  {
+    "id": "msg-kafka-log-streaming-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bank publishes account events (`Deposited`, `Withdrew`) to Kafka and needs each account's events processed in producer send order. Assume one ordered producer stream per account, stable partition count, key-respecting partitioning and ordered consumer processing. Which choice preserves that order while allowing different accounts to be processed in parallel?",
+    "options": [
+      {
+        "text": "Use a single-partition topic so everything is ordered",
+        "explanation": "Wrong. This works for ordering, but it caps the whole system at one consumer and one partition's throughput. You only need ordering per account, not globally."
+      },
+      {
+        "text": "Use the account ID as the record key",
+        "explanation": "Correct. The default partitioner hashes the key, so all events for one account land in one partition, which Kafka keeps in order. Different accounts spread across partitions for parallelism."
+      },
+      {
+        "text": "Leave the key empty and rely on timestamps to reorder on the consumer",
+        "explanation": "Wrong. Unkeyed records are spread across partitions, and consumers would have to buffer and sort, which never quite works because they cannot know when a late record has stopped arriving."
+      },
+      {
+        "text": "Set the topic's retention to infinite",
+        "explanation": "Wrong. Retention controls how long data is kept, not the order it is delivered in."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Requirement: **per-account** order, not global order.\n2. Kafka guarantees order **within a partition**.\n3. So route every event for an account to the same partition by using the account ID as the record key. The producer then picks the partition like this:\n\n```formula\np = h(k) mod N\nwhere\np: the partition number, from 0 to N − 1\nh: the hash function (murmur2 in the default Java client), which turns the key into a large positive number\nk: the record key, here the account ID\nmod: modulo: the remainder after whole-number division\nN: the number of partitions, here 24\nIn words: one account ID always gives the same hash, so all of that account's events land on one partition, where Kafka keeps them in order.\n```\n\n4. With 24 partitions, up to 24 consumers process accounts in parallel, each seeing its accounts' events in order.\n5. Keep idempotence on (the default) so producer retries cannot reorder records within the partition.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An `orders` topic keyed by order ID has 8 partitions. To add consumers, an operator increases it to 12 partitions during peak. Shortly afterwards, a consumer processes `OrderShipped` for an order before `OrderPlaced`. Why?",
+    "options": [
+      {
+        "text": "Adding partitions triggers unclean leader election, which reorders records",
+        "explanation": "Wrong. Adding partitions does not change leadership of existing partitions, and unclean election is about data loss, not reordering."
+      },
+      {
+        "text": "Consumers always reprocess from the earliest offset after a rebalance",
+        "explanation": "Wrong. After a rebalance consumers resume from the last committed offset, not the beginning. The ordering problem is about which partition each record went to."
+      },
+      {
+        "text": "Idempotent producers stop guaranteeing order when partitions are added",
+        "explanation": "Wrong. Idempotence guarantees in-order, de-duplicated writes per partition. It knows nothing about key placement across partitions."
+      },
+      {
+        "text": "The new partitions changed `hash(key) % N`, so later events for in-flight orders went to different partitions from their earlier events",
+        "explanation": "Correct. With 8 partitions an order might map to P3; with 12 it may map to P7. OrderPlaced sits in P3 and OrderShipped in P7, and since there is no ordering across partitions, a different consumer can process P7 first."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The producer picks a partition from the key's hash. Take an illustrative hash value of 19 and compare 8 partitions with 12:\n\n```formula\np = h(k) mod N\np = 19 mod 8 = 3\np = 19 mod 12 = 7\nwhere\np: the partition number the record goes to\nh: the hash function, which turns the key into a large positive number\nk: the record key, here the order ID; h(k) is 19 in this example\nmod: modulo: the remainder after whole-number division; 19 = 1 × 12 + 7\nN: the number of partitions: 8 before the change, 12 after\nIn words: the same key gives the same hash, but dividing by a different partition count gives a different remainder, so the order's events move partition.\n```\n\n2. Before the change, `OrderPlaced` went to P3 (partition 3).\n3. After the change, `OrderShipped` for the same order goes to P7.\n4. P3's consumer is behind at peak; P7's consumer (new, empty partition) is not. P7 is read first.\n5. Mitigations:\n   - Over-provision partitions up front for keyed topics.\n   - If you must grow, create a new topic with more partitions and migrate consumers after draining the old one.\n   - Make consumers tolerate out-of-order events (for example, a state machine that parks early events).",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  }
+]

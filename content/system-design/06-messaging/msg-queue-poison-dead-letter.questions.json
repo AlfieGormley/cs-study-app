@@ -1,0 +1,138 @@
+[
+  {
+    "id": "msg-message-queues-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are adding a dead-letter queue to an SQS-based order pipeline. Which practices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Alarm whenever the DLQ's visible message count is above zero",
+        "explanation": "Correct. Every message in the DLQ needs investigation; an effect may already have committed before its acknowledgement was lost. A non-zero count needs a human, so it should page or at least notify someone."
+      },
+      {
+        "text": "Give the DLQ a longer retention period than the source queue",
+        "explanation": "Correct. In SQS standard queues, a message's age is counted from when it was originally enqueued, so a short DLQ retention can delete it soon after it arrives. AWS recommends a longer DLQ retention."
+      },
+      {
+        "text": "Set maxReceiveCount to 1 so failures are surfaced immediately",
+        "explanation": "Wrong. One failure is often a transient error such as a database failover or throttling. Dead-lettering on the first attempt sends recoverable messages aside and creates manual work."
+      },
+      {
+        "text": "Record the failure reason (error and stack trace) alongside the message ID in logs",
+        "explanation": "Correct. When someone inspects the DLQ, knowing why each message failed is what lets them fix the bug and redrive confidently rather than guessing."
+      },
+      {
+        "text": "Automatically redrive DLQ messages back to the source queue every minute",
+        "explanation": "Wrong. That recreates the infinite retry loop the DLQ was meant to break. Redrive deliberately, after fixing the cause."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Think about what a DLQ is for: it is a **holding area for messages that need human attention**.\n\n1. Humans must find out: alarm on depth > 0.\n2. Messages must still be there when they look: longer retention (SQS allows up to 14 days).\n3. Humans need context: log the error with the message ID.\n4. Transient failures should not land there: use a `maxReceiveCount` of roughly 3–10 with backoff.\n5. Redrive is a deliberate act after a fix, using the SQS redrive feature, not a timer.",
+    "link": {
+      "title": "Using dead-letter queues in Amazon SQS",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An SQS consumer writes orders to Postgres. The queue has a 30-second visibility timeout and `maxReceiveCount = 3`. On failure the consumer does nothing; assume prompt polling as each timeout ends and ignore duplicate receives. A database failover makes every write fail for **2 minutes**. What happens to messages received at the start of the outage, and what is the best improvement?",
+    "options": [
+      {
+        "text": "They are retried until the database returns, then succeed; no change needed",
+        "explanation": "Wrong. With a 30-second timeout and 3 receives, the attempts happen at about 0, 30 and 60 seconds. All three fail inside the 2-minute outage and the message is moved to the DLQ before the database returns."
+      },
+      {
+        "text": "They are dead-lettered after about 90 seconds; add increasing backoff using ChangeMessageVisibility so retries span the outage",
+        "explanation": "Correct. Receives at 0 s, 30 s and 60 s all fail; on the next receive (about 90 s) SQS moves the message to the DLQ. Backing off to, say, 30 s, 2 min and 8 min means the third attempt lands after the database is back."
+      },
+      {
+        "text": "They are lost, because SQS deletes messages that fail three times",
+        "explanation": "Wrong. With a redrive policy, SQS moves messages to the DLQ, it does not delete them. Without one, they would keep retrying until the retention period expired."
+      },
+      {
+        "text": "They are dead-lettered; the fix is to set the visibility timeout to 12 hours",
+        "explanation": "Wrong. A 12-hour timeout would survive the outage, but it also means any message whose worker crashes is stuck for 12 hours. Backoff that grows only on failure gives patience without hurting normal failover."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "**Current behaviour** (seconds after the first receive; receive count in brackets):\n\n```\n0 s    receive (1) fail\n30 s   receive (2) fail\n60 s   receive (3) fail\n90 s   count would be 4 > 3: DLQ\n120 s  database back. Too late.\n```\n\n**With backoff**: on each failure, call ChangeMessageVisibility with a delay that grows with the receive count:\n\n```formula\nV = 30 s × 4^(c − 1)\nc = 1: V = 30 s × 4^0 = 30 s\nc = 2: V = 30 s × 4^1 = 120 s\nc = 3: V = 30 s × 4^2 = 480 s\nwhere\nV: how long the message stays hidden after this failed attempt (its new visibility timeout), in seconds (s)\nc: the message's receive count (ApproximateReceiveCount): 1 on the first receive, 2 on the second, and so on\n^: to the power of; 4^2 = 4 × 4 = 16, and any number to the power 0 is 1\ns: seconds\nIn words: each failure makes the next wait four times longer: 30 seconds, then 2 minutes, then 8 minutes.\n```\n\n```\n0 s    receive (1) fail, hide 30 s\n30 s   receive (2) fail, hide 120 s\n150 s  receive (3) succeeds\n```\n\n1. Total patience is now 2.5 minutes before the third try instead of 1 minute, and still fast for the first retry.\n2. Add jitter (randomise each delay by up to 20% either way) so thousands of messages do not retry in lockstep when the database returns.\n3. Note the cap: visibility can be extended to at most 12 hours from the start of the current ReceiveMessage attempt; extending visibility does not reset that attempt's 12-hour limit.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (Amazon Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "msg-message-queues-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are moving a RabbitMQ 3.x cluster that uses classic mirrored queues to **RabbitMQ 4.x**. Assume default quorum delivery-limit settings. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Classic mirrored queues remain a supported option for high availability on 4.x",
+        "explanation": "Wrong. Classic queue mirroring was deprecated for years and removed in RabbitMQ 4.0. Replicated queues on 4.x are quorum queues (or streams), so the migration must happen before or during the upgrade."
+      },
+      {
+        "text": "A quorum queue confirms a publish only once a majority of its replicas have written it",
+        "explanation": "Correct. Quorum queues use Raft. A message is committed when a majority of members have it, which is what lets the queue survive a minority of node failures without losing confirmed messages."
+      },
+      {
+        "text": "With no dead-letter exchange configured, a message that keeps crashing its consumers is eventually dropped",
+        "explanation": "Correct. Since 4.0, quorum queues have a default delivery limit of 20. A message redelivered more than that is dead-lettered if a dead-letter exchange is configured and otherwise removed, so set up a DLX for anything you cannot afford to lose."
+      },
+      {
+        "text": "A 3-replica quorum queue keeps accepting publishes with two of its three nodes down",
+        "explanation": "Wrong. With one of three members left there is no majority, so the queue cannot commit new messages. Three replicas tolerate one failure; tolerating two needs five."
+      },
+      {
+        "text": "Quorum queues are always durable and cannot be exclusive, so a temporary per-connection reply queue should stay a classic queue",
+        "explanation": "Correct. Quorum queues are designed for data that must survive failures. Short-lived, exclusive queues, such as RPC reply queues, are a job for classic queues."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "1. **Mirroring is gone**: 4.0 removed classic queue mirroring. Quorum queues replace it.\n2. **Raft majority**: a quorum queue keeps working only while a majority of its replicas are up:\n\n```formula\nf = ⌊(n − 1) / 2⌋\nwhere\nf: the number of replica failures the queue survives while still accepting writes\nn: the number of replicas\n⌊ ⌋: floor: round down to a whole number\nIn words: you can lose just under half of the replicas, so 3 replicas survive 1 failure and 5 survive 2.\n```\n\n\n| Replicas | Failures tolerated |\n|---|---|\n| 3 | 1 |\n| 5 | 2 |\n\n3. **Poison messages**: the default `delivery-limit` of 20 means repeated failures counted by that RabbitMQ version eventually remove the message; explicit requeue counting differs across 4.x releases. Without a DLX, removed means gone.\n4. **Durability by design**: quorum queues cannot be exclusive or transient, so keep throwaway reply queues classic.",
+    "link": {
+      "title": "Quorum queues (RabbitMQ docs)",
+      "url": "https://www.rabbitmq.com/docs/quorum-queues"
+    }
+  },
+  {
+    "id": "msg-message-queues-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An SQS FIFO queue uses `MessageGroupId = accountId`. A malformed message for account 77 makes the consumer throw every time it is received. The queue has **no redrive policy**. Assume single-message receives and an order-preserving consumer. What do you observe?",
+    "options": [
+      {
+        "text": "Account 77's later messages are stuck behind it while other accounts flow normally, until the bad message expires at the end of the retention period",
+        "explanation": "Correct. An in-flight message blocks additional receives for its group until deletion or visibility expiry. On retry the consumer must handle the failed head before later effects. The bad message keeps reappearing after each visibility timeout, blocking account 77 for up to the retention period (4 days by default). Add a redrive policy so it moves to a DLQ after a few attempts."
+      },
+      {
+        "text": "The entire queue stops, because FIFO queues deliver strictly one message at a time",
+        "explanation": "Wrong. FIFO ordering is per message group. Messages for other accounts are in other groups and continue to be delivered."
+      },
+      {
+        "text": "SQS skips the bad message after the visibility timeout and delivers account 77's next message",
+        "explanation": "Wrong. Skipping would break the per-group ordering guarantee. SQS redelivers the same message until it is deleted or expires."
+      },
+      {
+        "text": "SQS moves it to a DLQ automatically after 10 attempts",
+        "explanation": "Wrong. SQS has no default DLQ. Dead-lettering happens only when you configure a redrive policy with a `maxReceiveCount`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FIFO semantics: multiple same-group messages can be returned in one batch. Further receives wait while the batch is in flight; application processing must preserve order and stop at failures.\n2. The consumer throws, never deletes, so after each visibility timeout the **same** message reappears.\n3. Account 77 is stuck. Other groups are independent, so they flow.\n4. Without a redrive policy this continues until the message passes the queue's retention period (default 4 days, up to 14) and is deleted. Lost **and** blocking.\n5. Fix: add a DLQ with `maxReceiveCount` of, say, 5. After five failures the message moves aside and account 77's queue unblocks. Alarm on DLQ depth.\n\nNote that skipping the message unblocks the group but means account 77's later messages are processed without it; the consumer should be able to cope, or the key should be parked as described in the ordering lesson.",
+    "link": {
+      "title": "Using dead-letter queues in Amazon SQS (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html"
+    }
+  }
+]

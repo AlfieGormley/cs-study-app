@@ -1,0 +1,152 @@
+[
+  {
+    "id": "msg-event-driven-architecture-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An event-sourced `Account` aggregate has streams of up to 2 million events. Loading an account now takes several seconds. What is the standard fix?",
+    "options": [
+      {
+        "text": "Store periodic snapshots of the aggregate's state and replay only events after the latest snapshot",
+        "explanation": "Correct. A snapshot at, say, every 1,000 events means loading replays at most 1,000 events instead of 2 million. Snapshots are a cache; they can be rebuilt from events."
+      },
+      {
+        "text": "Delete events older than 30 days",
+        "explanation": "Wrong. In event sourcing the events are the source of truth. Deleting them loses the audit history and makes state impossible to rebuild correctly."
+      },
+      {
+        "text": "Switch to CQRS so reads do not touch the event store",
+        "explanation": "Wrong. CQRS helps queries, but command handling still needs the aggregate's current state to validate a command. The write side would still replay 2 million events."
+      },
+      {
+        "text": "Replay the events in parallel across many threads",
+        "explanation": "Wrong. Applying events is inherently sequential: each depends on the state after the previous one. You cannot parallelise a fold over an ordered stream like this in general."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Cost today: replay 2,000,000 events. At about 1 µs (one microsecond) per apply that is already 2 seconds, and deserialisation adds more: several seconds.\n2. Snapshot every 1,000 events: `snapshot(v=1,999,000, state)`.\n3. To load, read the snapshot, then replay events 1,999,001 onwards: at most 1,000 events, far fewer; actual load latency still depends on storage, deserialisation and snapshot freshness.\n4. Snapshots are **derived data**: if a snapshot's schema changes, discard it and rebuild from the events.\n5. Also question the model: a stream with 2 million events may indicate an aggregate boundary that is too large (for example, split by month or by sub-account).",
+    "link": {
+      "title": "Event Sourcing (Martin Fowler)",
+      "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With CQRS, a user updates their display name; the command succeeds, and the page reloads from the read model, which still shows the **old** name for about 500 ms. Which approach fixes the user experience **without** giving up the separate, asynchronously maintained read model?",
+    "options": [
+      {
+        "text": "Have the command return the new version number, and have the client read with 'at least that version', waiting briefly or reading the write side until the projection catches up",
+        "explanation": "Correct. This gives read-your-own-writes for the user who made the change, while other readers still use the eventually consistent projection. It targets the actual problem with minimal coupling."
+      },
+      {
+        "text": "Write to the read model synchronously inside the command handler using a distributed transaction",
+        "explanation": "Wrong. This couples the write and read stores tightly and reintroduces distributed transactions, adding avoidable coupling for this asynchronous projection design. CQRS itself does not prohibit synchronous projections or a shared database."
+      },
+      {
+        "text": "Add a 2-second sleep after every command",
+        "explanation": "Wrong. A fixed delay is slow for everyone and still wrong when the projection lags by more than 2 seconds under load."
+      },
+      {
+        "text": "Cache the old name in the browser so it does not flicker",
+        "explanation": "Wrong. This shows even staler data. The user wants to see their new name, not a stable old one."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Root cause: projection lag (event → projector → read DB) of ~500 ms.\n2. This question requires read-your-own-writes for the writer; whether other readers can tolerate staleness is a separate product requirement.\n3. Approach:\n   - Command returns `{version: 42}`.\n   - Client sends `GET /profile?minVersion=42`.\n   - Read API checks the projection's version; if it is below 42, waits up to ~1 s for it or falls back to the write model.\n4. Simpler alternative: the UI applies the change optimistically from the command response.\n5. Result: correct UX, separate models preserved.",
+    "link": {
+      "title": "CQRS (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/CQRS.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An append-only event log already stores personal fields encrypted with a dedicated per-customer key. Which technique can make those encrypted fields computationally inaccessible without rewriting the log, assuming all usable key copies are irreversibly destroyed?",
+    "options": [
+      {
+        "text": "Append CustomerDeleted while leaving the keys usable",
+        "explanation": "Wrong. Hiding a projection does not prevent decryption of historical ciphertext."
+      },
+      {
+        "text": "Rewrite plaintext fields in every historical event",
+        "explanation": "Wrong for this question: it asks for a technique preserving the append-only log, whose personal fields are already encrypted."
+      },
+      {
+        "text": "Crypto-shredding: irreversibly destroy all usable copies of the per-customer decryption key",
+        "explanation": "Correct under the stated cryptographic/key-management assumptions. Plaintext projections, exports, cached keys and backups require separate handling."
+      },
+      {
+        "text": "Keep the keys because encrypted logs contain no personal information",
+        "explanation": "Wrong. Encryption with available keys does not make the data irrecoverable."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Encrypt personal fields before they enter the log; this does not retroactively erase previously stored plaintext.\n2. Destroy every usable decryption-key copy, including recoverable backups and cached key material. AWS KMS scheduled deletion has a waiting period; scheduling is not immediate irreversible destruction.\n3. Handle plaintext projections, exports and other identifying metadata separately.\n4. Replay code must explicitly handle erased fields; every historical projection may no longer be reconstructible.\n\nA conclusion that this design satisfies a particular GDPR erasure obligation is absent because this audit has not established the deployment-specific legal and technical conditions.",
+    "link": {
+      "title": "Delete an AWS KMS key",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/deleting-keys.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Event-sourced account `acct-42` has a balance of £100, and its stream is at version 7. Two requests to withdraw £80 arrive at the same moment. Each handler loads the stream, checks the balance, and appends `Withdrew {80}` with `expectedVersion = 7`. What should happen?",
+    "options": [
+      {
+        "text": "Both events are appended and the balance becomes −£60",
+        "explanation": "Wrong. That is what happens without concurrency control, and it is why event stores check the expected version on append."
+      },
+      {
+        "text": "The first append succeeds; the second fails with a version conflict, so its handler reloads the stream (version 8, balance £20), re-checks and rejects the withdrawal",
+        "explanation": "Correct. Optimistic concurrency makes the append conditional on the stream not having changed since it was read. The loser retries against the new state, and the business rule is enforced."
+      },
+      {
+        "text": "The event store merges the two withdrawals into one event",
+        "explanation": "Wrong. Event stores never merge events. Each append is either accepted as is or rejected."
+      },
+      {
+        "text": "Both appends fail, because two writers conflicted",
+        "explanation": "Wrong. The first writer's append matched the expected version and succeeds. Only the writer whose expectation is now stale is rejected."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Both handlers read version 7 and balance £100. Both check that £80 is no more than £100 ✓.\n2. Handler A: `append(acct-42, expected=7, Withdrew 80)` → stream at 7 ✓ → now version 8.\n3. Handler B: `append(acct-42, expected=7, ...)` → stream is at 8 ✗ → **concurrency conflict**.\n4. B reloads: the balance is now £100 − £80 = £20. £80 is more than £20 ✗ → reject: insufficient funds.\n5. This is the same idea as `UPDATE ... WHERE version = 7` in a relational table: no locks are held while the handler thinks, only a check at write time.",
+    "link": {
+      "title": "Event Sourcing (Martin Fowler)",
+      "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An event-sourced payments service has stored `PaymentTaken v1 {amount: 12.5}` (pounds, as a float) for three years. New code uses `PaymentTaken v2 {amountPence: 1250, currency: \"GBP\"}`. What is the best way to handle the old events?",
+    "options": [
+      {
+        "text": "Write an upcaster that converts v1 events to v2 as they are read, so handlers only ever deal with v2",
+        "explanation": "Correct. Upcasting keeps the stored history immutable and puts the conversion in one place. Replays, projections and new read models all see a consistent v2 shape."
+      },
+      {
+        "text": "Rewrite every historical v1 event in the store as v2",
+        "explanation": "Wrong. This breaks the immutability that event sourcing relies on, is risky to run on three years of history, and leaves copies elsewhere (downstream topics, backups) inconsistent."
+      },
+      {
+        "text": "Keep v1 and v2 handling in every handler, branching on the version",
+        "explanation": "Wrong. It works, but every handler and projection must know every historical version forever. An upcaster does this once."
+      },
+      {
+        "text": "Take a snapshot of current state and delete the v1 events",
+        "explanation": "Wrong. Deleting events loses the audit trail and the ability to rebuild new read models from history, which are the main reasons to event-source."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Events are immutable facts about the past, so the stored v1 records stay as they are.\n2. An **upcaster** sits between the store and the handlers:\n\n```python\ndef upcast(e):\n    # Adapt the payload at read time.\n    if e[\"v\"] == 1:\n        return {\"v\": 2,\n          \"amountPence\":\n            # Convert pounds to pence.\n            round(e[\"amount\"] * 100),\n          \"currency\": \"GBP\"}\n    # Other versions pass through\n    # unchanged.\n    return e\n```\n\n3. This illustrative conversion assumes original amounts had at most two decimal places and GBP was implicit. A production migration must define decimal rounding, preserve other event fields/IDs and validate historical precision; rounding cannot recover information already lost to floats. Note the `round`: `12.5 * 100` is safe, but values such as `0.29 * 100` give `28.999…` in floating point, which is exactly why v2 uses integer pence.\n4. Chain upcasters (v1→v2→v3) as the schema evolves, and test them against samples of real historical events.",
+    "link": {
+      "title": "Event Sourcing (Martin Fowler)",
+      "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
+    }
+  }
+]

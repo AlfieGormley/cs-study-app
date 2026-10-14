@@ -1,0 +1,62 @@
+[
+  {
+    "id": "msg-message-queues-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your SQS consumer resizes videos. The queue's visibility timeout is the default 30 seconds, and jobs take between 20 and 90 seconds. Users complain about receiving some processed videos twice and the worker fleet seems busier than expected. What is going on, and what is the best fix?",
+    "options": [
+      {
+        "text": "SQS standard queues randomly duplicate messages; switch to a FIFO queue",
+        "explanation": "Wrong. Standard queues can occasionally duplicate, but that is rare. Here the cause is systematic: every job longer than 30 seconds reappears. FIFO deduplication only covers producer-side duplicates within 5 minutes and would not stop visibility-timeout redelivery."
+      },
+      {
+        "text": "Workers are deleting messages too early; they should delete before starting work",
+        "explanation": "Wrong. Deleting before processing would stop duplicates but lose the job whenever a worker crashes mid-way. That swaps at-least-once for at-most-once, which is a bad trade for paid video processing."
+      },
+      {
+        "text": "Jobs longer than 30 seconds become visible again and are picked up by a second worker; raise the timeout above the worst case or extend it with ChangeMessageVisibility while working",
+        "explanation": "Correct. A job over 30 seconds can be redelivered while the first worker is still running, so two workers do the same work and both publish a result. A timeout of several minutes, or a heartbeat that extends the lease, reduces timeout-driven duplicates, but does not eliminate all redelivery."
+      },
+      {
+        "text": "Long polling is causing workers to receive the same message",
+        "explanation": "Wrong. Long polling only controls how long ReceiveMessage waits for a message to arrive. It does not make an invisible message visible to other consumers."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace a 60-second job (times in seconds after the first receive):\n\n```\n0 s   worker A receives m (hidden)\n30 s  timeout expires, m visible\n31 s  worker B receives m\n60 s  A finishes, tries delete with old\n      handle (deletion not guaranteed)\n91 s  B finishes: second result\n```\n\n1. Every job over 30 s becomes eligible for redelivery, and some 90 s jobs could even be picked up three times.\n2. Fleet utilisation rises because the same work is done repeatedly.\n3. Fix options:\n   - Set the timeout to comfortably exceed the worst case, for example 5 minutes.\n   - Or keep it short and have the worker call `ChangeMessageVisibility` every ~20 s as a heartbeat. This keeps fast failover if a worker dies.\n4. Still make the consumer idempotent (for example, key the output on the job ID), because at-least-once delivery remains.",
+    "link": {
+      "title": "Amazon SQS visibility timeout",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q10",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An SQS queue triggers an AWS Lambda function whose timeout is **2 minutes**, with no batching window. Following AWS's guidance, what is the minimum visibility timeout you should give the queue?",
+    "options": [
+      {
+        "text": "The default 30 seconds",
+        "explanation": "Wrong. Lambda would not even accept this: the function timeout must not exceed the queue's visibility timeout. Any batch taking longer than 30 seconds would also reappear while still being processed."
+      },
+      {
+        "text": "2 minutes, the same as the function timeout",
+        "explanation": "Wrong. This is the bare minimum Lambda allows, but it leaves no time for Lambda to retry a batch if the function is throttled, so messages can reappear and be processed twice."
+      },
+      {
+        "text": "4 minutes, double the function timeout",
+        "explanation": "Wrong. Better than equal, but AWS's guidance is larger still, to cover throttling retries inside the event source mapping."
+      },
+      {
+        "text": "12 minutes, six times the function timeout",
+        "explanation": "Correct. AWS recommends a visibility timeout of at least six times the function timeout (plus any batching window), which gives Lambda room to retry a throttled batch before the messages become visible again."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Apply the rule from the AWS docs:\n\n```formula\nV ≥ 6 × T_fn + T_batch\nV ≥ 6 × 2 min + 0 min\nV ≥ 12 min\nwhere\nV: the queue's visibility timeout\n≥: is at least\nT_fn: the Lambda function's timeout, here 2 minutes\nT_batch: the batching window (MaximumBatchingWindowInSeconds), 0 because none is set\nmin: minutes\nIn words: the visibility timeout should be at least six times the function timeout plus any batching window, here 12 minutes.\n```\n\n2. So 12 minutes is the minimum.\n3. Why so much? The event source mapping receives a batch, which starts the visibility clock. If the function is throttled, Lambda retries the invocation; all of that must fit before the messages reappear.\n4. Also set `maxReceiveCount` on the redrive policy to at least 5, so throttling alone does not push messages into the DLQ.",
+    "link": {
+      "title": "Configuring an SQS event source for Lambda (AWS docs)",
+      "url": "https://docs.aws.amazon.com/lambda/latest/dg/services-sqs-configure.html"
+    }
+  }
+]

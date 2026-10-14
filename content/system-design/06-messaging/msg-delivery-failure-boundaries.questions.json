@@ -1,0 +1,62 @@
+[
+  {
+    "id": "msg-delivery-semantics-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume a broker that never redelivers after successful acknowledgement, no duplicate publishes, and no lost acknowledgements. A consumer **acknowledges a message as soon as it receives it**, then processes it. Which delivery semantics does this give?",
+    "options": [
+      {
+        "text": "At-most-once",
+        "explanation": "Correct. If the consumer crashes after the ack but before finishing, the broker will not redeliver, so the message is lost. It will never be processed twice, so it is at most once."
+      },
+      {
+        "text": "At-least-once",
+        "explanation": "Wrong. At-least-once needs the ack to happen after processing, so a crash causes redelivery. Here the broker has already forgotten the message before work begins."
+      },
+      {
+        "text": "Exactly-once",
+        "explanation": "Wrong. Exactly-once processing would require both no loss and no duplicates. Early acking removes duplicates only by accepting loss."
+      },
+      {
+        "text": "It depends on the broker's replication factor",
+        "explanation": "Wrong. Replication protects messages stored on the broker. Once the consumer has acked, the broker discards the message however many replicas it had, so replication cannot save it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Order of operations: **ack → process**.\n2. Crash between them: broker thinks done, work not done → **lost**.\n3. Can it be processed twice? Only if redelivered, and the broker has no reason to redeliver after an ack → **no duplicates**.\n4. Loss possible, duplicates impossible → **at-most-once**.\n\nSwap the order (process → ack) and the analysis flips to at-least-once.",
+    "link": {
+      "title": "Kafka message delivery semantics (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/delivery-semantics.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why is true exactly-once **delivery** between a broker and a consumer over a network considered impossible in general?",
+    "options": [
+      {
+        "text": "Because networks reorder packets",
+        "explanation": "Wrong. TCP already restores packet order within a connection. Reordering is not the obstacle; uncertainty about whether the other side completed is."
+      },
+      {
+        "text": "Because it would require global clocks",
+        "explanation": "Wrong. The impossibility does not depend on clocks. Even with perfect clocks, a lost ack is indistinguishable from lost processing."
+      },
+      {
+        "text": "Because brokers do not replicate messages",
+        "explanation": "Wrong. Most production brokers replicate. Replication protects against broker failure but does nothing about the ambiguity of an unacknowledged delivery."
+      },
+      {
+        "text": "Because after a timeout the sender cannot know whether the receiver processed the message, so it must either risk loss or risk a duplicate",
+        "explanation": "Correct. A missing ack could mean the message never arrived or that only the ack was lost. No finite protocol removes that uncertainty (the Two Generals' Problem), so systems get exactly-once effects through deduplication instead."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Broker sends message m. It waits for an ack.\n2. No ack arrives. Possible worlds:\n   - (a) m never arrived → must resend.\n   - (b) m processed, ack lost → must not resend.\n3. The broker cannot distinguish (a) from (b).\n4. Resend → duplicates in world (b). Don't resend → loss in world (a).\n5. Way out: resend always (at-least-once), and have the receiver recognise m's ID and ignore it the second time. Delivery is still 'at least once'; **effects** are once.",
+    "link": {
+      "title": "Exactly-once semantics in Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/exactly-once-semantics-are-possible-heres-how-apache-kafka-does-it/"
+    }
+  }
+]

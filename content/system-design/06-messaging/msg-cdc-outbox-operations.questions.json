@@ -1,0 +1,70 @@
+[
+  {
+    "id": "msg-event-driven-architecture-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You implement a transactional outbox with a single PostgreSQL Debezium connector in its at-least-once mode, stable aggregate-key partitioning and ordered outbox relay processing. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Consumers must handle duplicate events, because the relay is at-least-once",
+        "explanation": "Correct. If the connector publishes to Kafka and then restarts before recording its log position, it republishes from the last recorded position. Consumers should dedup on the outbox row ID."
+      },
+      {
+        "text": "The outbox insert and the business update commit atomically",
+        "explanation": "Correct. They are in the same local database transaction, which is the whole point: the event exists if and only if the state change happened."
+      },
+      {
+        "text": "The application must call Kafka directly after committing",
+        "explanation": "Wrong. The application only writes to its database. Debezium reads committed outbox rows from the database log and publishes them."
+      },
+      {
+        "text": "Events for one aggregate are published in commit order if keyed by aggregate ID",
+        "explanation": "Correct. Debezium reads the log in commit order, and the outbox router keys records by aggregate ID, so all events for one aggregate land in one partition in commit order."
+      },
+      {
+        "text": "If Debezium is down for a long time, Postgres is unaffected",
+        "explanation": "Wrong. The replication slot forces Postgres to retain WAL until the connector confirms it. A long outage can fill the disk unless slot size is capped and monitored."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Walk the data path:\n\n```\nTX: orders + outbox → WAL\nDebezium ← WAL (slot)\nDebezium → Kafka (key=aggregateid)\n```\n\n1. Atomicity is local: ✓ statement 2.\n2. App never talks to Kafka: ✗ statement 3.\n3. Connector restarts replay from last committed source offset → duplicates: ✓ statement 1.\n4. Logical decoding produces committed transaction changes; physical WAL also interleaves uncommitted record activity. This configured relay and keying preserve per-aggregate order in a partition: ✓ statement 4.\n5. Slot retains WAL while the connector is down: ✗ statement 5. Monitor `pg_replication_slots` and set `max_slot_wal_keep_size`.",
+    "link": {
+      "title": "Reliable microservices data exchange with the outbox pattern (Debezium)",
+      "url": "https://debezium.io/blog/2019/02/19/reliable-microservices-data-exchange-with-the-outbox-pattern/"
+    }
+  },
+  {
+    "id": "msg-event-driven-architecture-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team wants to feed their `products` table into Elasticsearch for search **and** let other teams react to product changes. They plan to point Debezium at the raw `products` table for both. What is the strongest objection to using raw table CDC for the service-to-service events?",
+    "options": [
+      {
+        "text": "Debezium cannot capture updates, only inserts",
+        "explanation": "Wrong. Debezium captures inserts, updates and deletes, with before and after images where the database provides them."
+      },
+      {
+        "text": "CDC events arrive out of commit order",
+        "explanation": "Wrong. The connector can preserve source transaction order for a given stream; topic partitioning and downstream concurrency still determine observed order."
+      },
+      {
+        "text": "Raw CDC makes the internal table schema a public contract and emits row changes rather than meaningful business events",
+        "explanation": "Correct. Every column rename or table split would break other teams, and consumers have to infer intent ('was this a price change or a restock?') from diffs. An outbox lets the team publish deliberate, versioned events while still using CDC for delivery."
+      },
+      {
+        "text": "Raw CDC adds significant write load to the database",
+        "explanation": "Wrong. Log-based CDC reads the replication log the database already writes; logical decoding, snapshots, WAL retention and network transmission add workload-dependent overhead. It can be material; schema coupling remains the central objection here. The objection is about coupling, not performance."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Separate the two use cases:\n\n| Use | Consumer | Raw CDC? |\n|---|---|---|\n| Search index | Same team | Good fit |\n| Other teams | External | Use outbox |\n\n1. For Elasticsearch, the consumer is owned by the same team and wants the full row: raw CDC is ideal.\n2. For other teams, events are an API. Raw table CDC leaks internal schema and carries no intent.\n3. Outbox events like `ProductPriceChanged {productId, oldPrice, newPrice, v2}` are explicit and versioned.\n4. Both can run on the same Debezium deployment: one connector for the table, the outbox event router for the outbox table.",
+    "link": {
+      "title": "Reliable microservices data exchange with the outbox pattern (Debezium)",
+      "url": "https://debezium.io/blog/2019/02/19/reliable-microservices-data-exchange-with-the-outbox-pattern/"
+    }
+  }
+]

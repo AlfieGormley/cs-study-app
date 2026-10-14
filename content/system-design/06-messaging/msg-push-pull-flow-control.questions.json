@@ -1,0 +1,70 @@
+[
+  {
+    "id": "msg-pubsub-fanout-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about **pull** consumers compared with HTTP **push** delivery are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Pull consumers get natural backpressure, because they request messages only when they have capacity",
+        "explanation": "Correct. A slow pull consumer simply asks less often. The backlog accumulates in the broker, subject to the broker's retention/capacity limits and visible as queue depth or lag."
+      },
+      {
+        "text": "Push delivery requires the consumer to expose an endpoint the broker can reach",
+        "explanation": "Correct. For SNS HTTPS or Pub/Sub push, the broker makes inbound requests, so the endpoint must be publicly reachable or otherwise routable from the broker."
+      },
+      {
+        "text": "Push always gives lower throughput than pull",
+        "explanation": "Wrong. Push can be very fast and RabbitMQ pushes at high rates. The difference is who controls the rate, not an inherent throughput ceiling."
+      },
+      {
+        "text": "Pull consumers can run inside a private network with only outbound connectivity",
+        "explanation": "Correct. Pull consumers initiate connections to the broker, so they work behind firewalls and NAT without opening inbound ports."
+      },
+      {
+        "text": "With push, the broker can never adapt its rate to the consumer",
+        "explanation": "Wrong. Push systems do adapt, but indirectly: Google Pub/Sub push uses slow start and backs off on errors, and RabbitMQ limits in-flight messages with prefetch."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Frame it as **who initiates** and **who controls flow**:\n\n| | Push | Pull |\n|---|---|---|\n| Initiator | Broker | Consumer |\n| Network | Inbound to consumer | Outbound only |\n| Flow control | Inferred by broker | Explicit, by consumer |\n\n1. Backpressure: pull is explicit, so statement 1 is true.\n2. Reachability: push needs an endpoint, so statement 2 is true.\n3. Private networks: pull works outbound-only, so statement 4 is true.\n4. 'Always lower throughput' and 'never adapts' are absolutes that real systems (RabbitMQ prefetch, Pub/Sub slow start) contradict.",
+    "link": {
+      "title": "Push subscriptions (Google Cloud Pub/Sub)",
+      "url": "https://cloud.google.com/pubsub/docs/push"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Google Pub/Sub **push** subscription delivers to an HTTPS endpoint that writes each message to a database. During a database slowdown the endpoint holds each request for up to 60 seconds before failing, the service runs out of connections, and the outage spreads. What should the endpoint do?",
+    "options": [
+      {
+        "text": "Return `200` immediately and do the database write in a background thread",
+        "explanation": "Wrong. Acknowledging before the work is done turns delivery into at-most-once: if the process crashes, the message is gone. It also removes the only signal Pub/Sub has that you are overloaded."
+      },
+      {
+        "text": "Raise the subscription's acknowledgement deadline to 10 minutes",
+        "explanation": "Wrong. Holding requests even longer ties up more connections and memory. The problem is that the endpoint accepts work it cannot do, not that it is given too little time."
+      },
+      {
+        "text": "Fail fast with an error status such as 503 or 429 when it is overloaded, so Pub/Sub slows its push rate and retries later",
+        "explanation": "Correct. Push delivery has no explicit demand signal; the broker infers capacity from responses. Quick errors make Pub/Sub back off, while the unacknowledged messages wait safely in the subscription."
+      },
+      {
+        "text": "Disable retries on the subscription so failed messages do not come back",
+        "explanation": "Wrong. That converts a temporary slowdown into data loss. Retries with backoff are what let the backlog drain once the database recovers."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With **push**, the broker controls the rate and guesses your capacity from success, failure and latency.\n2. A slow failure (60 s) is the worst signal: it consumes resources and tells the broker little.\n3. A fast `503`/`429` tells Pub/Sub to reduce its rate quickly; its push flow control backs off on failures.\n4. Messages stay unacknowledged in the subscription, durable and visible as backlog.\n5. If heavy processing is the norm, consider a **pull** subscription instead: the consumer then asks only when it has capacity, which is explicit backpressure.",
+    "link": {
+      "title": "Push subscriptions (Google Cloud Pub/Sub)",
+      "url": "https://cloud.google.com/pubsub/docs/push"
+    }
+  }
+]

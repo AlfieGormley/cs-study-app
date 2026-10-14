@@ -1,0 +1,129 @@
+[
+  {
+    "id": "msg-kafka-log-streaming-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A producer uses `acks=1`. It sends a record; the leader writes it to its log and acknowledges. Before any follower fetches the record, the leader's machine dies and a follower becomes leader. What happens to the record?",
+    "options": [
+      {
+        "text": "The producer automatically resends it, because the follower never acknowledged",
+        "explanation": "Wrong. The producer already got a success response, so it has no reason to retry. That is exactly what makes acks=1 dangerous."
+      },
+      {
+        "text": "It is safe, because the old leader will replay it when it restarts",
+        "explanation": "Wrong. When the old broker rejoins as a follower, it truncates its log back to the new leader's state. The record is discarded, not replayed."
+      },
+      {
+        "text": "It is lost, even though the producer was told it succeeded",
+        "explanation": "Correct. With acks=1 only the leader had the record. The new leader never received it, and when the old leader returns it truncates its log to match, so the acknowledged write disappears."
+      },
+      {
+        "text": "Kafka blocks the leader election until a replica with the record returns",
+        "explanation": "Wrong. The follower was in the ISR, so its election is a normal clean election. The record was never committed (never reached the high watermark), so Kafka does not wait for it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\n1. P → leader b1: write r (offset 100)\n2. b1 → P: ack   (acks=1)\n3. b1 crashes; b2 has up to 99\n4. b2 elected leader (clean)\n5. b1 returns, truncates to 99\n```\n\n1. The record was **acknowledged** but never **committed** (not on all ISR replicas).\n2. Committed data survives leader failover; uncommitted data may not.\n3. Fix: `acks=all` with `min.insync.replicas=2`, so the ack implies at least two copies.\n4. Cost: produce latency rises by roughly one replication round trip, with latency depending on replication lag, batching, load and network conditions.",
+    "link": {
+      "title": "Kafka replication design (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/replication.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A topic has `replication.factor=3` and `min.insync.replicas=2`. Producers use `acks=all`. All three replicas were in sync; both followers fail while the leader and controller quorum remain available. What do producers and consumers of that partition experience?",
+    "options": [
+      {
+        "text": "Producers get NotEnoughReplicas errors; consumers can still read committed records from the surviving leader",
+        "explanation": "Correct. min.insync.replicas enforces durability on writes: with ISR size 1 < 2, acks=all writes are refused. Reads are unaffected, so consumers keep reading data that was already committed."
+      },
+      {
+        "text": "Both producers and consumers carry on normally using the surviving replica",
+        "explanation": "Wrong. The surviving leader would be the only ISR member, which is below min.insync.replicas=2, so it rejects acks=all writes."
+      },
+      {
+        "text": "Kafka elects an out-of-sync replica so writes can continue",
+        "explanation": "Wrong. That is unclean leader election, which is disabled by default. In any case one replica survives and is already in the ISR, so no unclean election is needed; the issue is ISR size, not leadership."
+      },
+      {
+        "text": "Producers succeed but their writes are silently stored on only one broker",
+        "explanation": "Wrong. That would happen with acks=1. With acks=all and min.insync.replicas=2, Kafka refuses rather than silently weakening durability."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Start: ISR = {b1, b2, b3}. Writes need ≥ 2 in ISR.\n2. b2 and b3 fail and drop out of the ISR → ISR = {b1}.\n3. A producer sends with `acks=all`. The leader checks the rule:\n\n```formula\n|ISR| ≥ m\n1 < 2 ✗\nwhere\n|ISR|: the number of replicas in the in-sync replica set, here 1 (just the leader)\nISR: in-sync replica set\nm: min.insync.replicas, here 2\n≥: is greater than or equal to\n<: is less than\n✗: the rule fails\nIn words: only one replica is in sync but the topic demands two, so the write is refused.\n```\n\n   The producer gets the error `NOT_ENOUGH_REPLICAS`.\n4. Consumers fetch from b1 up to the high watermark, which is unaffected.\n\n**Trade-off**: you chose consistency (no acknowledged write on a single disk) over write availability. With a replication factor of 3 and `min.insync.replicas=2` you tolerate **one** failure while preserving data and eventual write availability after recovery/election; another failure blocks writes. The surviving copy must remain intact; this is not immunity to further disk loss.",
+    "link": {
+      "title": "Kafka replication design (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/replication.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A topic has `replication.factor=3`, and nobody changed `min.insync.replicas` from the broker default. Producers use a recent client with default settings. During a network problem both followers stop fetching and fall out of the ISR for several minutes, and the leader keeps acknowledging writes. Then the leader's disk fails. What happens to the writes acknowledged during those minutes?",
+    "options": [
+      {
+        "text": "They are safe: the default `acks=all` means all three replicas had them",
+        "explanation": "Wrong. `acks=all` waits for every replica **currently in the ISR**, not every replica that exists. With both followers out, the ISR was just the leader."
+      },
+      {
+        "text": "They never happened: the leader rejected them with NotEnoughReplicas",
+        "explanation": "Wrong. That needs `min.insync.replicas=2`. The broker default is 1, and an ISR of one leader satisfies it, so the writes were accepted."
+      },
+      {
+        "text": "They can be lost: with `min.insync.replicas=1`, the leader alone satisfied `acks=all`, so those writes existed only on the failed disk",
+        "explanation": "Correct. This is the trap in Kafka's defaults: the producer is safe by default since 3.0, but the broker's min ISR is not. Setting `min.insync.replicas=2` would have refused the writes instead, so producers would have retried rather than lost data."
+      },
+      {
+        "text": "They are lost only if unclean leader election is enabled",
+        "explanation": "Wrong. Unclean election only decides what happens next: promote an out-of-sync follower (available, missing those writes) or stay offline until the old leader returns (which it cannot, its disk is gone). Either way, the writes existed nowhere else."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Defaults in play:\n   - producer `acks=all` (default since 3.0)\n   - broker `min.insync.replicas=1` (default)\n2. Followers drop out → ISR = {leader}.\n3. Each write: the leader appends it and checks the rule:\n\n```formula\n|ISR| ≥ m\n1 ≥ 1 ✓\nwhere\n|ISR|: the number of replicas in the in-sync replica set, here 1 (just the leader)\nISR: in-sync replica set\nm: min.insync.replicas, here the broker default of 1\n≥: is greater than or equal to\n✓: the rule holds\nIn words: one in-sync replica is enough when the minimum is one, so the leader alone acknowledges every write.\n```\n\n   All ISR members (just the leader) have the record ✓ → **ack**.\n4. Leader's disk dies. Followers never fetched those records.\n5. Result: acknowledged writes are gone, whatever happens to leadership.\n\n**Fix**: set `min.insync.replicas=2` on important topics (or as the broker default). Now step 3 fails with `NOT_ENOUGH_REPLICAS`, the producer retries, and no write is acknowledged on a single disk.",
+    "link": {
+      "title": "Kafka replication design (Confluent docs)",
+      "url": "https://docs.confluent.io/kafka/design/replication.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q10",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these are true of a **Kafka 4.x** cluster with default broker and client settings? Select all that apply.",
+    "options": [
+      {
+        "text": "Producers default to `acks=1`",
+        "explanation": "Wrong. `acks=1` was the default before Kafka 3.0. Since 3.0 the producer defaults to `acks=all`."
+      },
+      {
+        "text": "Producers default to `enable.idempotence=true`",
+        "explanation": "Correct. Since 3.0 the idempotent producer is on by default (as long as no conflicting setting such as `acks=1` is configured), so retries do not create duplicates or reorder records within a partition."
+      },
+      {
+        "text": "Producers default to `acks=all`",
+        "explanation": "Correct. The leader waits for every in-sync replica before acknowledging."
+      },
+      {
+        "text": "Brokers default to `min.insync.replicas=2`",
+        "explanation": "Wrong. The broker default is 1, which is why you must set it explicitly for durable topics. Otherwise `acks=all` can be satisfied by the leader alone."
+      },
+      {
+        "text": "Partition leadership is stored in a ZooKeeper ensemble",
+        "explanation": "Wrong. Kafka 4.0 removed ZooKeeper. Metadata, including partition leaders and ISRs, lives in the KRaft controller quorum's metadata log."
+      }
+    ],
+    "answer": [
+      1,
+      2
+    ],
+    "workedExample": "Sort the settings by **where** they live and **when** they changed:\n\n| Setting | Default | Since |\n|---|---|---|\n| producer `acks` | all | 3.0 |\n| producer idempotence | true | 3.0 |\n| broker min ISR | 1 | unchanged |\n| metadata store | KRaft | ZK gone in 4.0 |\n\n1. The producer side became safe by default in 3.0.\n2. The broker side did not: `min.insync.replicas` still needs setting.\n3. ZooKeeper was removed in 4.0, so a 4.x cluster always runs KRaft controllers.",
+    "link": {
+      "title": "Kafka producer configuration reference (Confluent docs)",
+      "url": "https://docs.confluent.io/platform/current/installation/configuration/producer-configs.html"
+    }
+  }
+]

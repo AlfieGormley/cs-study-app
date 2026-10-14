@@ -1,0 +1,130 @@
+[
+  {
+    "id": "msg-sync-vs-async-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are designing an e-commerce checkout whose immediate success response requires payment authorisation and whose loyalty points may appear later. Which of these steps are good candidates to move **off** the synchronous request path and onto a queue? Select all that apply.",
+    "options": [
+      {
+        "text": "Sending the order confirmation email",
+        "explanation": "Correct. The user does not need the email to arrive before the page loads, and email providers are slow and occasionally unavailable. A queue with retries is a natural fit."
+      },
+      {
+        "text": "Authorising the card payment",
+        "explanation": "Wrong. The user needs to know immediately whether the payment succeeded before you can show 'order placed'. This is the classic case where synchronous communication is the right choice."
+      },
+      {
+        "text": "Updating the recommendation model with the purchase",
+        "explanation": "Correct. Recommendations can lag by seconds or minutes without harming the user, and the ML pipeline should not be able to slow down or fail checkout."
+      },
+      {
+        "text": "Awarding loyalty points",
+        "explanation": "Correct. Points can be applied eventually. The UI can say 'points will appear shortly', and failures can be retried from the queue rather than failing the purchase."
+      },
+      {
+        "text": "Checking the basket total against the price the user saw",
+        "explanation": "Wrong. This is a validation that must pass **before** you charge the customer, so it belongs on the synchronous path. Doing it later would mean charging the wrong amount and fixing it afterwards."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Ask one question of each step: **does the user's immediate response depend on the result?**\n\n| Step | Needed for response? | Placement |\n|---|---|---|\n| Price check | Yes, before charging | Sync |\n| Card auth | Yes, shows success | Sync |\n| Email | No | Async |\n| Recommendations | No | Async |\n| Loyalty points | No | Async |\n\nThe pattern is **sync at the edge, async inside**: validate and charge synchronously, write the order, publish `OrderPlaced`, and let everything else react to that event.",
+    "link": {
+      "title": "Event-driven architecture style (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/guide/architecture-styles/event-driven"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A reporting endpoint takes 2–8 minutes to build a spreadsheet. Clients currently hold an HTTP connection open and frequently hit the load balancer's 60-second idle timeout. What is the most robust redesign?",
+    "options": [
+      {
+        "text": "Raise the load balancer idle timeout to 10 minutes",
+        "explanation": "Wrong. This papers over the problem. Long-held connections tie up server resources, may encounter intermediary timeouts. Without durable job identity and idempotent submission, disconnects can lose access to results and retries can duplicate work."
+      },
+      {
+        "text": "Have the client retry the request automatically whenever it times out",
+        "explanation": "Wrong. Each retry starts another 2–8 minute job while the first may still be running, multiplying load. Without idempotency it can also produce duplicate reports."
+      },
+      {
+        "text": "Return 202 Accepted with a job ID, enqueue the work, and let the client poll a status URL or receive a callback",
+        "explanation": "Correct. This is asynchronous request-reply. The request can be acknowledged after durable acceptance, the work is load-levelled by a queue, and the result survives client disconnects because it is stored against the job ID."
+      },
+      {
+        "text": "Run the report on a bigger server so it finishes inside 60 seconds",
+        "explanation": "Wrong. Vertical scaling may help a little but will not reliably cut an 8-minute job below 60 seconds, and the problem returns as data grows. It also leaves bursts of requests able to overload the service."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Identify the mismatch**: the work takes minutes, but the existing request path has timeouts shorter than the job duration.\n2. **Split acceptance from completion**: `POST /reports` validates the request, atomically records a job (`status = PENDING`) and an outbox entry for `{jobId}`, then returns `202 Accepted` with `Location: /reports/{jobId}`.\n3. **Process asynchronously**: an outbox relay publishes committed outbox entries; workers pull from the queue, build the file, upload it to object storage and set `status = DONE`.\n4. **Deliver the result**: the client polls `GET /reports/{jobId}` (with a `Retry-After` hint) or registers a webhook.\n5. **Failure behaviour**: after durable acceptance, the job survives client disconnects; a retry uses the same idempotency key. Worker crashes can trigger redelivery within retention limits, so processing and completion updates must tolerate duplicates.\n\nWebhooks themselves are covered in the API design module.",
+    "link": {
+      "title": "Queue-Based Load Leveling pattern (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A settings page used to save notification preferences synchronously. To \"improve resilience\", a team changed it to publish `PreferencesChanged` to a queue and return `200 OK` at once; a worker writes the database a few hundred milliseconds later. Users now report that after saving, the page reloads and shows their **old** settings. What is the best response?",
+    "options": [
+      {
+        "text": "Add more workers so the queue is drained faster",
+        "explanation": "Wrong. More workers shrink the window but cannot remove it: there is always some delay between the response and the write, and under load or during a worker outage it grows to seconds or minutes."
+      },
+      {
+        "text": "Switch the queue to FIFO",
+        "explanation": "Wrong. FIFO controls the order messages are processed in, not when. The reload can still happen before the worker has written anything."
+      },
+      {
+        "text": "Have the client wait one second before reloading",
+        "explanation": "Wrong. A fixed sleep is slow for everyone and still wrong whenever the backlog exceeds one second. It hides the design problem rather than fixing it."
+      },
+      {
+        "text": "Write the preferences synchronously, because the user needs to read their own write, then publish an event for other systems that react to it",
+        "explanation": "Correct. The user is waiting for this answer and immediately reads it back, which is the case where synchronous is right. Systems that merely react to the change, such as an email digest, can still consume an event published afterwards (ideally via an outbox)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Apply the lesson's question: **does the user need the result now?** Here, yes. They save and immediately read back.\n2. \"Strong read-after-write needed\" is in the *Sync* column of the decision table.\n3. The async version returns before the write exists, so a reload races the worker.\n4. Better split:\n   - Sync: validate and commit the preferences row, return the saved state, and route immediate reads to an authority that includes that commit.\n   - Async: publish `PreferencesChanged` for search, analytics or notification services.\n5. Resilience still improves where it matters: the downstream consumers are decoupled, while the user-facing path stays correct.",
+    "link": {
+      "title": "Queue-Based Load Leveling pattern (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your distributed traces show the checkout request ending at the moment it publishes `OrderPlaced` to a queue. The email worker's spans appear as separate, unconnected traces, so support cannot follow one order from click to confirmation email. What fixes this?",
+    "options": [
+      {
+        "text": "Propagate the trace context (for example a W3C `traceparent` value) in the message attributes, and have consumers continue the trace from it",
+        "explanation": "Correct. Tracing links spans through a shared trace ID passed along with each request. Over HTTP that travels in a header; over a broker it must travel in the message, and consumer instrumentation uses a parent relationship or span links as appropriate, especially for batched or multiple-message processing."
+      },
+      {
+        "text": "Make the email call synchronous so it appears in the checkout trace",
+        "explanation": "Wrong. This sacrifices the benefits of async (checkout now waits for email) just to fix observability. Context propagation solves the tracing gap without changing the architecture."
+      },
+      {
+        "text": "Record 100% of traces instead of a sample",
+        "explanation": "Wrong. Sampling decides how many traces are recorded, not whether spans in different processes are linked. Two unconnected traces sampled at 100% are still unconnected."
+      },
+      {
+        "text": "Log the queue name in every service",
+        "explanation": "Wrong. The queue name is the same for every order, so it cannot link one order's spans together. You need an identifier unique to the request, carried across the hop."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A trace is held together by a **trace ID** that each hop passes to the next.\n2. Instrumented HTTP clients and servers can propagate it in headers such as `traceparent`.\n3. A message broker is a hop too, but the trace context only crosses it if you put it **in the message**: SQS message attributes, Kafka record headers, AMQP headers.\n4. The consumer extracts it and connects processing using a parent relationship or span links according to the instrumentation conventions.\n5. Check the specific producer and consumer instrumentation for supported propagation and span relationships; do not assume propagation is automatic.",
+    "link": {
+      "title": "Trace Context (W3C Recommendation)",
+      "url": "https://www.w3.org/TR/trace-context/"
+    }
+  }
+]

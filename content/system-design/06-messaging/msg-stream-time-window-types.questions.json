@@ -1,0 +1,130 @@
+[
+  {
+    "id": "msg-stream-processing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need to bill API customers per fixed UTC clock hour, with every request counted in exactly one hour. Which window type fits?",
+    "options": [
+      {
+        "text": "Session windows with a 1-hour gap",
+        "explanation": "Wrong. Session windows are bounded by inactivity, not the clock. A busy customer's session could run for days, and window boundaries would not line up with calendar hours."
+      },
+      {
+        "text": "Tumbling windows of 1 hour",
+        "explanation": "Correct. Tumbling windows are fixed-size, aligned and non-overlapping, so each request falls into exactly one hourly window."
+      },
+      {
+        "text": "Hopping windows of 1 hour advancing every 5 minutes",
+        "explanation": "Wrong. Hopping windows overlap, so each request would appear in 12 windows and be billed 12 times."
+      },
+      {
+        "text": "A global window with no trigger",
+        "explanation": "Wrong. A global window spans all time and, without a trigger, never emits a result, so you would never produce an hourly bill."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Requirements: (a) fixed 1-hour buckets aligned to the clock, (b) each event in exactly one bucket.\n2. Tumbling: 1-hour size, no overlap → (a) ✓ (b) ✓.\n3. Hopping: overlap → (b) ✗.\n4. Session: gap-based → (a) ✗.\n5. Also choose **event time** so a request made at 09:59:58 but processed at 10:00:03 is billed in the 09:00 hour.",
+    "link": {
+      "title": "Windows (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A job counts orders per minute using **processing time**. After a 20-minute outage, it restarts and works through the backlog in 2 minutes. Assume charts render empty intervals as zero and no prior partial-window state. What do the per-minute charts show?",
+    "options": [
+      {
+        "text": "Zero for the outage minutes, then a huge spike in the 2 minutes of catch-up",
+        "explanation": "Correct. Nothing was processed during the outage, so those windows are empty; then 20 minutes of orders land in the 2 processing-time minutes of catch-up. Event-time windows would put each order in the minute it occurred."
+      },
+      {
+        "text": "Accurate counts, because every order is eventually counted",
+        "explanation": "Wrong. Every order is counted, but in the wrong minute. Processing-time windows assign records by when the job read them, not when the orders happened."
+      },
+      {
+        "text": "The same chart as event time, just delayed by 20 minutes",
+        "explanation": "Wrong. Processing time does not just shift results; it compresses the 20-minute backlog into 2 minutes, which distorts the shape."
+      },
+      {
+        "text": "Missing orders, because processing-time windows drop late data",
+        "explanation": "Wrong. Processing-time windows have no notion of 'late': everything belongs to the window in which it is read. The problem is misattribution, not loss."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Orders arrive steadily at ~100/minute in event time.\n2. Outage 10:00–10:20: job reads nothing → processing-time windows 10:00–10:19 show **0**.\n3. 10:20–10:22: job reads 20 × 100 = 2,000 backlog orders plus new ones → ~1,100 per minute in each catch-up window.\n4. With event time: each order carries its timestamp, so 10:07's orders go into the 10:07 window when processed. With suitable watermark/replay handling accepting all records, the chart shows a flat ~100/minute.\n5. This is why event time is the default for anything business-facing.",
+    "link": {
+      "title": "Timely stream processing (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A product team uses **session windows with a 30-minute gap** per user, event time and the default event-time trigger. Assume candidate sessions are still retained when bridging late events arrive. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A session can last much longer than 30 minutes if the user keeps acting",
+        "explanation": "Correct. The gap bounds inactivity, not duration. A user active every 10 minutes for 4 hours forms one 4-hour session."
+      },
+      {
+        "text": "All users' sessions start and end at the same clock times",
+        "explanation": "Wrong. Session windows are per key and data-driven; each user's sessions have their own boundaries, unlike aligned tumbling windows."
+      },
+      {
+        "text": "A late event can merge two previously separate sessions into one",
+        "explanation": "Correct. If events at 10:00 and 10:40 formed two sessions, a late event at 10:20 falls within 30 minutes of both and bridges them, so the processor merges the windows and their state."
+      },
+      {
+        "text": "A session result is emitted only once the watermark passes the last event time plus the gap",
+        "explanation": "Correct for the default event-time trigger: the first firing occurs when the watermark reaches the session window's last included millisecond, approximately the last event time plus 30 minutes. Accepted late events can still merge retained sessions and emit updates."
+      },
+      {
+        "text": "Each event belongs to several overlapping sessions for the same user",
+        "explanation": "Wrong. For one key, sessions do not overlap; overlapping candidates are merged. Overlap within a key is a property of hopping windows."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Model one user's events: 10:00, 10:10, 10:35, then 11:30.\n\n1. 10:00 → 10:10 (gap 10 m) → 10:35 (gap 25 m): all within 30 minutes, so they form **session A**, spanning 10:00–10:35.\n2. 11:30 is 55 minutes after 10:35 → a new **session B**.\n3. Session A fires when the watermark passes its last event time plus the gap:\n\n```formula\nT_fire = t_last + g − 1 ms\nT_fire ≈ 10:35 + 30 min ≈ 11:05\nwhere\nT_fire: the event time the watermark must pass before the session fires\nt_last: the time of the session's last event, 10:35\ng: the session gap, 30 minutes\nmin: minutes\nms: milliseconds\n≈: approximately equal to (times rounded to minutes)\nIn words: the default trigger fires when the watermark reaches the last millisecond before 11:05; accepted late data can still extend retained state.\n```\n\n   This holds under the watermark's completeness assumption; later accepted data may still merge/refine sessions.\n4. Now suppose the events were 10:00 and 10:40 (two sessions, since the gap is 40 m) and a late 10:20 arrives. It is within 30 minutes of both → the sessions **merge** into one.\n5. Different users' sessions are entirely independent, so their boundaries need not line up; coincident activity can still produce equal boundaries.",
+    "link": {
+      "title": "Windows (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You compute \"distinct users in the last hour, updated every 5 minutes\" using hopping windows of size 60 minutes and slide 5 minutes. Compared with a 60-minute tumbling window, in a naive implementation, how many window memberships/updates does each event create? Actual byte usage depends on state representation and retention.",
+    "options": [
+      {
+        "text": "The same, because the stream window size is the same",
+        "explanation": "Wrong. With overlap, many windows are open at once and each holds its own state for the same events."
+      },
+      {
+        "text": "About 5 times as much, because of the 5-minute slide",
+        "explanation": "Wrong. The multiplier is size ÷ slide, not the slide itself. 60 ÷ 5 = 12."
+      },
+      {
+        "text": "Twelve memberships per event, because 60 ÷ 5 = 12",
+        "explanation": "Correct. At any moment 12 overlapping windows are open, and each event is added to all 12. Naive implementations store 12 copies of state; smarter ones use panes or pre-aggregation to share work."
+      },
+      {
+        "text": "About one-twelfth as much, because each window is updated more often",
+        "explanation": "Wrong. Update frequency does not shrink state. More frequent, overlapping windows mean more concurrent state, not less."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Windows open at 10:00, 10:05, 10:10, …, each lasting 60 minutes.\n2. An event at 10:32 belongs to windows starting 09:35, 09:40, …, 10:30: that is **12** windows.\n3. The multiplier is the size divided by the slide:\n\n```formula\nm = S / H = 60 min / (5 min) = 12\nwhere\nm: the number of windows each event belongs to\nS: the stream window size, 60 minutes\nH: the slide (hop) between window starts, 5 minutes\nmin: minutes\nIn words: with a new 60-minute window every 5 minutes, 12 windows are open at once, so each event is added 12 times.\n```\n\n4. For distinct users, each window keeps a set (or a HyperLogLog sketch). With exact sets:\n\n```formula\nM = m × u × b\nM = 12 × 2000000 × 8 B ≈ 192 MB\nwhere\nM: memory for the exact sets of one key group\nm: open windows, 12\nu: distinct user IDs per window, 2 million\nb: bytes per user ID, 8\nB: bytes\nMB: megabytes, millions of bytes\n≈: approximately equal to\nIn words: 12 windows each holding 2 million 8-byte IDs need about 192 MB.\n```\n\n   That is per key group; HLL memory depends on precision and implementation. The exact-set arithmetic counts raw IDs only, excluding hash-table and object overhead.\n5. Optimisations: compute per 5-minute **panes** (tumbling) and merge 12 panes on output; or use sketches that merge cheaply.",
+    "link": {
+      "title": "Windows (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
+    }
+  }
+]

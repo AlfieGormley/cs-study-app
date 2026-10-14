@@ -1,0 +1,122 @@
+[
+  {
+    "id": "msg-pubsub-fanout-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An `OrderPlaced` message is published to an SNS topic with three SQS queue subscriptions (billing, shipping, email). Each queue has 4 workers. How many times is the message processed assuming all subscriptions match, delivery succeeds and no duplicates occur?",
+    "options": [
+      {
+        "text": "Once in total, by whichever of the 12 workers is fastest",
+        "explanation": "Wrong. That is how a single queue behaves. A topic copies the message into every subscription, so each of the three queues gets its own copy."
+      },
+      {
+        "text": "12 times, once per worker",
+        "explanation": "Wrong. Within each SQS queue the 4 workers compete for messages, so only one of them processes each copy. Copies are made per subscription, not per worker."
+      },
+      {
+        "text": "3 times, once per subscription",
+        "explanation": "Correct. SNS delivers one copy to each of the three queues, and in each queue one of the competing workers processes it: pub/sub between subscriptions, competing consumers within one."
+      },
+      {
+        "text": "4 times, once per worker in a single queue",
+        "explanation": "Wrong. This mixes up the two levels. The number of workers per queue changes throughput, not how many copies are processed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Separate the two levels:\n\n1. **Topic to subscriptions** (pub/sub): SNS copies the message into each of the 3 queues. 3 copies.\n2. **Queue to workers** (point-to-point): within a queue, one of the 4 workers receives each copy. 1 processing per copy.\n3. Total: 3 × 1 = **3** processings (plus possible duplicates under failure, since both SNS and SQS standard are at-least-once).",
+    "link": {
+      "title": "Fanout SNS notifications to SQS queues",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team subscribes their service directly to an SNS topic via HTTPS. During a 3-hour outage of their service, what is the main risk compared with putting an SQS queue between SNS and the service?",
+    "options": [
+      {
+        "text": "There is no difference; SNS stores messages for 14 days for every subscriber",
+        "explanation": "Wrong. That retention is a property of SQS queues, not SNS topics. Confusing the two is exactly why the fan-out pattern puts a queue in front of each subscriber."
+      },
+      {
+        "text": "SNS will deliver messages out of order",
+        "explanation": "Wrong. Standard SNS does not guarantee ordering in either design, so this is not a difference caused by the outage or by adding a queue."
+      },
+      {
+        "text": "The publisher will be blocked until the service recovers",
+        "explanation": "Wrong. SNS accepts the publish independently of subscriber health. The publisher is unaffected; the risk is on the subscriber side."
+      },
+      {
+        "text": "Messages published during the outage may be lost once SNS exhausts its delivery retries",
+        "explanation": "Correct. SNS retries HTTP/S endpoints according to a delivery policy, but it is not a long-term store. After retries are exhausted the message is dropped (or sent to a subscription DLQ if one is configured). An SQS queue would hold it for up to 14 days."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Standard SNS delivery retries are bounded; optional FIFO archive/replay is a separate feature. It pushes each message to each subscription and retries failures for a bounded period.\n2. A 3-hour outage exceeds the documented one-hour maximum HTTP/S retry-policy duration, so messages can be dropped.\n3. With `SNS → SQS → service`, SNS delivers successfully to SQS (which is up), and SQS holds messages until the service returns.\n4. On recovery, the service drains the backlog at its own pace.\n\nThis is the main reason the fan-out pattern uses a queue per subscriber.",
+    "link": {
+      "title": "Fanout SNS notifications to SQS queues",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your SQS consumer, subscribed to an SNS topic, fails to parse messages: the body looks like `{\"Type\":\"Notification\",\"MessageId\":...,\"Message\":\"{\\\"orderId\\\":...}\"}`. What is the cleanest fix?",
+    "options": [
+      {
+        "text": "Change the publisher to send plain text instead of JSON",
+        "explanation": "Wrong. The wrapping is added by SNS regardless of payload format. Changing the publisher does not remove the envelope and may break other subscribers."
+      },
+      {
+        "text": "Enable raw message delivery on the SNS subscription",
+        "explanation": "Correct. By default SNS wraps the payload in a JSON envelope with metadata. Raw message delivery passes the original payload straight through as the SQS message body."
+      },
+      {
+        "text": "Switch the queue to FIFO",
+        "explanation": "Wrong. FIFO affects ordering and deduplication, not the message envelope. The envelope would still be there."
+      },
+      {
+        "text": "Add a filter policy so only well-formed messages are delivered",
+        "explanation": "Wrong. Every message is well formed; it is just wrapped. Filter policies decide which messages are delivered, not their format."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Recognise the shape: `Type`, `MessageId`, `TopicArn`, `Message` is the SNS **notification envelope**.\n2. Your actual payload is the string in `Message`, JSON-encoded a second time (hence the escaped quotes).\n3. Two options:\n   - Unwrap in code: `JSON.parse(JSON.parse(body).Message)`.\n   - Set `RawMessageDelivery=true` on the subscription so the body is the original payload.\n4. Raw delivery is cleaner and smaller. Include required metadata in the payload or compatible attributes. Raw SNS-to-SQS delivery allows at most 10 message attributes; messages exceeding that limit are discarded for the raw subscription.",
+    "link": {
+      "title": "Fanout SNS notifications to SQS queues",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Billing and Email each consume `OrderPlaced` through their own SQS queue subscribed to one SNS topic. Email's handler calls Billing's API to fetch the invoice PDF. About 2% of confirmation emails fail with \"invoice not found\", then succeed on retry. What is happening, and what is the best fix?",
+    "options": [
+      {
+        "text": "SNS sometimes delivers to Email before Billing; use an SNS FIFO topic so Billing is always delivered first",
+        "explanation": "Wrong. FIFO orders messages within a message group; it says nothing about which **subscription** is processed first. Each subscriber's queue and workers run at their own pace."
+      },
+      {
+        "text": "The subscribers are independent, so Email sometimes runs before Billing has created the invoice; have Email react to an `InvoiceIssued` event that Billing publishes once the invoice exists",
+        "explanation": "Correct. Fan-out gives each subscriber its own pace, so there is no ordering between them. If Email depends on Billing's result, the dependency should be explicit: Billing publishes a fact when the invoice is ready and Email consumes that."
+      },
+      {
+        "text": "Email is processing duplicate deliveries of OrderPlaced",
+        "explanation": "Wrong. A duplicate can race the original and does not prove Billing has finished. Duplicates alone do not explain the missing dependency ordering. The failure is about timing between two subscribers."
+      },
+      {
+        "text": "Email's visibility timeout is too short",
+        "explanation": "Wrong. A short visibility timeout causes redelivery during processing, not a missing invoice. The symptom comes from Billing not having finished yet."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. With fan-out, each subscription is a separate stream with its own backlog, workers and retries.\n2. So for any one order, \"Billing has processed OrderPlaced\" and \"Email has processed OrderPlaced\" happen in either order.\n3. Email assumed Billing was always first: an **implicit** dependency between subscribers. It holds 98% of the time, which makes it dangerous.\n4. Make the dependency explicit:\n\n```\nOrderPlaced ─▶ Billing\nBilling ─▶ InvoiceIssued ─▶ Email\n```\n\n5. Alternative: put the data Email needs in the event (event-carried state transfer), if it does not truly depend on Billing's output.",
+    "link": {
+      "title": "What do you mean by \"Event-Driven\"? (Martin Fowler)",
+      "url": "https://martinfowler.com/articles/201701-event-driven.html"
+    }
+  }
+]

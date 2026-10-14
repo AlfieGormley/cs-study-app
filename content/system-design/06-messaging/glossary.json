@@ -79,7 +79,7 @@
       "a schema registry"
     ],
     "definition": "A service that stores the versions of each message schema and checks that a new version is compatible with older ones before producers may use it. Producers and consumers look schemas up by ID instead of embedding them in every message.",
-    "example": "Confluent Schema Registry rejects a new Avro schema that removes a required field if the topic is set to backward compatibility.",
+    "example": "Under backward compatibility, adding an Avro field with no default is rejected because a new reader cannot fill it from old records. Rules differ by format and compatibility mode.",
     "source": "https://docs.confluent.io/platform/current/schema-registry/index.html"
   },
   {
@@ -135,7 +135,7 @@
       "depth of the queue",
       "queue length"
     ],
-    "definition": "The number of messages currently waiting in a queue. Dashboards show it directly; Little's Law turns it into an average waiting time when you also know the arrival rate.",
+    "definition": "The number of messages waiting in a queue, with in-flight work counted separately when the metric distinguishes it. Little's Law estimates average waiting time from long-run average waiting depth and arrival rate in a stable system.",
     "example": "A queue depth of 12,000 with 400 arrivals per second means messages wait about 30 seconds on average.",
     "source": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-available-cloudwatch-metrics.html"
   },
@@ -147,7 +147,7 @@
       "oldest-message age",
       "age of the oldest message"
     ],
-    "definition": "How long the oldest message still in a queue has been waiting. It shows delay directly, which is why teams alarm on it as well as on depth. Amazon SQS reports it as the ApproximateAgeOfOldestMessage metric.",
+    "definition": "How long the oldest eligible message in a queue has been waiting, used as a backlog alarm signal. SQS ApproximateAgeOfOldestMessage excludes some repeatedly received poison messages and reports age since movement into a DLQ, so it is not the delay of every message.",
     "example": "An alarm when the oldest message is over 10 minutes old catches a stuck consumer even if the queue depth looks small.",
     "source": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-available-cloudwatch-metrics.html"
   },
@@ -499,7 +499,7 @@
       "visibility window"
     ],
     "definition": "In Amazon SQS, how long a received message stays hidden from other consumers. If the consumer does not delete it within that time, it becomes visible again and can be received by someone else. The default is 30 seconds and the maximum 12 hours.",
-    "example": "With a 30-second visibility timeout, a job that takes 60 seconds will be picked up by a second worker after 30 seconds.",
+    "example": "With a 30-second visibility timeout, an unfinished 60-second job becomes eligible for another receive after 30 seconds. Standard queues can also deliver duplicates within the visibility window.",
     "source": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-visibility-timeout.html"
   },
   {
@@ -2434,8 +2434,8 @@
   {
     "id": "derived-data",
     "term": "Derived data",
-    "definition": "Data computed from other data, such as a cache, index, projection or snapshot. It can always be thrown away and rebuilt from its source.",
-    "source": "https://dataintensive.net/"
+    "definition": "Data computed from source data, such as a cache, index, projection or snapshot. It can be rebuilt when the required source history and processing logic remain available; deleting those sources can make rebuilding impossible.",
+    "source": "https://martinfowler.com/eaaDev/EventSourcing.html"
   },
   {
     "id": "msg-utc",
@@ -2489,7 +2489,7 @@
       "event-time",
       "event timestamp"
     ],
-    "definition": "The time an event actually happened, recorded in the event itself (for example on the device). Windowing by event time gives results that mean something about the real world and are reproducible on replay.",
+    "definition": "The timestamp assigned to represent when an event happened, for example on a device. It makes window membership independent of processing speed; reproducible final results also require trustworthy timestamps, deterministic processing, the same accepted inputs and compatible lateness handling.",
     "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
   },
   {
@@ -2536,7 +2536,7 @@
     "aliases": [
       "hopping windows"
     ],
-    "definition": "A fixed-size time window that starts every 'hop' (step) smaller than its size, so windows overlap and each event is in size ÷ hop windows. Flink calls these sliding windows.",
+    "definition": "A fixed-size time window that starts every hop (step) smaller than its size, so windows overlap. Each event belongs to size divided by hop windows when the size is an exact multiple of the hop. Flink calls these sliding windows.",
     "example": "A 5-minute window every 1 minute puts each event in 5 windows.",
     "source": "https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html#hopping-time-windows"
   },
@@ -2745,8 +2745,8 @@
       "compacted changelog",
       "changelog of the store"
     ],
-    "definition": "A compacted Kafka topic recording every update to a Kafka Streams state store, so the store can be rebuilt by replaying it on another instance.",
-    "source": "https://kafka.apache.org/documentation/streams/architecture#streams_architecture_recovery"
+    "definition": "A Kafka topic used to recover a Kafka Streams state store by replaying its recorded changes. Fault-tolerant stores normally use changelogs, but caching can combine updates, source topics can be reused, logging can be disabled, and window-store retention differs from an ordinary compacted table.",
+    "source": "https://kafka.apache.org/42/streams/developer-guide/dsl-api/"
   },
   {
     "id": "standby-replica",
@@ -2787,8 +2787,8 @@
       "temporal joins",
       "FOR SYSTEM_TIME AS OF"
     ],
-    "definition": "Joining each event with the version of a table that was valid at the event's own timestamp, so replays give the same answer. Flink SQL writes it with FOR SYSTEM_TIME AS OF.",
-    "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/sql/queries/joins/#temporal-joins"
+    "definition": "Joining each event with a table version selected for a specified time, such as the event's timestamp. Flink SQL uses FOR SYSTEM_TIME AS OF; historical replay also requires retained table history, deterministic processing and time/lateness handling that accepts the required inputs.",
+    "source": "https://nightlies.apache.org/flink/flink-docs-release-2.3/docs/sql/reference/queries/joins/"
   },
   {
     "id": "ktable",
@@ -2925,5 +2925,42 @@
     "definition": "Not requiring the sender and the receiver of a message to be running at the same time: a queue or log holds the message until the receiver is back.",
     "example": "Orders keep being accepted while the email service is down; its queue simply grows until it returns.",
     "source": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/Messaging.html"
+  },
+  {
+    "id": "msg-flink-time-attribute",
+    "term": "Time attribute (Flink SQL)",
+    "aliases": [
+      "time attribute",
+      "time attributes"
+    ],
+    "definition": "A Flink SQL table column declared to represent event time or processing time, so time-based operations can use it. Event-time attributes are paired with watermark information to track progress through timestamped records.",
+    "source": "https://nightlies.apache.org/flink/flink-docs-release-2.3/docs/concepts/sql-table-concepts/time_attributes/"
+  },
+  {
+    "id": "msg-zk-abbreviation",
+    "term": "ZooKeeper abbreviation (ZK)",
+    "aliases": [
+      "ZK"
+    ],
+    "definition": "ZK is the abbreviation used here for Apache ZooKeeper, a service that coordinates distributed applications. Older Kafka deployments used ZooKeeper for cluster coordination; Kafka 4.x uses KRaft instead.",
+    "source": "https://kafka.apache.org/42/getting-started/zk2kraft/"
+  },
+  {
+    "id": "msg-kafka-sliding-window",
+    "term": "Kafka Streams sliding window",
+    "aliases": [
+      "Kafka Streams sliding windows"
+    ],
+    "definition": "A Kafka Streams time window whose records fit within a configured maximum timestamp difference. Its lower and upper bounds are inclusive, and new windows are created when records enter or leave the moving range. It differs from fixed-step hopping windows.",
+    "source": "https://kafka.apache.org/42/streams/developer-guide/dsl-api/"
+  },
+  {
+    "id": "msg-stream-window-size",
+    "term": "Stream window size",
+    "aliases": [
+      "stream window sizes"
+    ],
+    "definition": "The event-time or processing-time interval covered by a fixed time window. For a five-minute hopping window that starts every minute, the window size is five minutes and the hop is one minute.",
+    "source": "https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/"
   }
 ]

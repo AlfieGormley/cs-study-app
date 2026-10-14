@@ -1,0 +1,122 @@
+[
+  {
+    "id": "msg-kafka-log-streaming-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A topic has 6 partitions. You scale the `billing` consumer group to 8 instances to handle a backlog. What happens?",
+    "options": [
+      {
+        "text": "Throughput rises by about a third, because work is spread over 8 consumers instead of 6",
+        "explanation": "Wrong. Kafka assigns each partition to only one consumer in a group, so at most 6 consumers can be active. The extra two receive no partitions."
+      },
+      {
+        "text": "Two partitions are shared by two consumers each, so some records are processed twice",
+        "explanation": "Wrong. Partitions are never shared within one group. Duplicates in Kafka come from reprocessing after a crash or rebalance, not from shared ownership."
+      },
+      {
+        "text": "Kafka automatically splits partitions so each consumer gets one",
+        "explanation": "Wrong. Kafka never changes a topic's partition count automatically. An operator must add partitions, and doing so remaps keys."
+      },
+      {
+        "text": "6 consumers each own one partition and 2 sit idle",
+        "explanation": "Correct. Within a group, a partition has exactly one owner. Parallelism is capped at the partition count; idle consumers act only as hot standbys for a rebalance."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Rule: in one consumer group, each partition → exactly one consumer.\n2. 6 partitions can be spread over at most 6 consumers.\n3. 8 − 6 = **2 idle** consumers.\n4. To use 8 (or more) consumers, the topic needs at least 8 partitions, Alternatively, increase processing concurrency inside the assigned consumers (for example, a per-key worker pool as in Confluent's parallel consumer).\n\nThis is why partition count is chosen with future consumer parallelism in mind.",
+    "link": {
+      "title": "Kafka consumer design (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/consumer-design.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A consumer uses `enable.auto.commit=true`. Its poll loop hands each record to a thread pool and immediately polls again. After a crash, the team discovers some records were **never processed**. What happened?",
+    "options": [
+      {
+        "text": "Auto-commit committed offsets for records that had been polled but were still queued in the thread pool, so the restart resumed past them",
+        "explanation": "Correct. Auto-commit can commit offsets for records that were polled but remain unfinished in the worker pool. The default interval is 5 seconds; scheduling differs between the classic and new consumer protocols. Polling does not mean processed, so a crash can leave recovery past unfinished work."
+      },
+      {
+        "text": "Kafka deleted the records because retention expired during the crash",
+        "explanation": "Wrong. Retention can remove older records even during a short outage, but it does not explain the demonstrated commit-ahead race. And expired records would affect every group, not just skip a few in the middle."
+      },
+      {
+        "text": "A rebalance assigned those partitions to two consumers, each of which skipped half",
+        "explanation": "Wrong. A partition has one owner per group. Rebalances cause duplicates (reprocessing from the last commit), not skipped records."
+      },
+      {
+        "text": "The broker's high watermark moved backwards",
+        "explanation": "Wrong. The high watermark only advances for committed data. Consumers never see records beyond it, and it would not cause skipping of records already read."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline for partition 0:\n\n```\npoll() → offsets 100–599\nhand to pool; pool done up to 250\npoll() → auto-commit 600\ncrash\nrestart: resume at 600\n251–599 never processed\n```\n\n1. Kafka's committed offset is a promise: \"everything before this is done\".\n2. Auto-commit makes that promise based on what was **polled**, not what was **processed**.\n3. With synchronous processing inside the poll loop, auto-commit is effectively at-least-once. With asynchronous hand-off it can lose unprocessed work as well as duplicate processed work; it is not a clean end-to-end at-most-once guarantee.\n4. Fix: disable auto-commit and commit the next offset after the highest contiguous processed record per partition (track completions, commit with `commitSync`/`commitAsync`).",
+    "link": {
+      "title": "Kafka consumer design (Confluent)",
+      "url": "https://docs.confluent.io/kafka/design/consumer-design.html"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A consumer group of 30 instances uses the classic protocol with the eager `RangeAssignor`. Every rolling deploy causes several minutes during which the **whole group** processes nothing, and lag spikes on every partition. Which change helps most directly?",
+    "options": [
+      {
+        "text": "Move to incremental rebalancing (the KIP-848 protocol with `group.protocol=consumer` on Kafka 4.0+, or the `CooperativeStickyAssignor`) and add static membership with `group.instance.id`",
+        "explanation": "Correct. Eager rebalancing revokes every partition from every consumer on each membership change, and a rolling deploy triggers dozens of them. Incremental protocols pause only the partitions that move, and static membership lets a restarted instance reclaim its partitions without triggering a rebalance at all."
+      },
+      {
+        "text": "Add partitions so each rebalance has less work per consumer",
+        "explanation": "Wrong. The pause comes from every consumer stopping during each rebalance, not from the amount of work per partition. More partitions can make rebalances slower, and they remap keys."
+      },
+      {
+        "text": "Raise `max.poll.interval.ms` to 30 minutes",
+        "explanation": "Wrong. That setting controls how long a consumer may go between polls before it is considered stuck. It does not change the stop-the-world behaviour of eager rebalancing, and a large value delays detection of genuinely stuck consumers."
+      },
+      {
+        "text": "Enable auto-commit so offsets are saved during rebalances",
+        "explanation": "Wrong. Commit strategy affects how much work is repeated after a rebalance, not how long the group stops for. Auto-commit can also skip records with asynchronous processing."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A rolling deploy of 30 instances = 30 departures + 30 arrivals = up to **60 membership changes**.\n2. **Eager**: each change makes every consumer revoke everything → 60 group-wide pauses.\n3. **Cooperative / KIP-848**: only partitions that actually move are paused; consumers retaining unaffected assignments can continue; the number affected depends on the assignment.\n4. **Static membership**: an instance restarting within the session timeout with the same `group.instance.id` can retain its assignment if membership and subscriptions otherwise remain stable; this reduces avoidable rebalances.\n5. On Kafka 4.0+ the new protocol is enabled on brokers by default; clients opt in with `group.protocol=consumer`.",
+    "link": {
+      "title": "KIP-848: the next generation of the consumer rebalance protocol",
+      "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol"
+    }
+  },
+  {
+    "id": "msg-kafka-log-streaming-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 6-partition topic carries **independent** thumbnail jobs that take 2–30 seconds each. You want 60 workers, per-job retries and delivery counts, and you do not care about order. You run Kafka 4.2. What is the best fit?",
+    "options": [
+      {
+        "text": "A consumer group with 60 instances",
+        "explanation": "Wrong. A consumer group assigns each partition to one consumer, so 54 of the 60 instances would sit idle. And one 30-second job would still block everything behind it in its partition."
+      },
+      {
+        "text": "Give each worker its own consumer group",
+        "explanation": "Wrong. Every group receives every record, so all 60 workers would generate every thumbnail. That is pub/sub, not work sharing."
+      },
+      {
+        "text": "Increase the topic to 60 partitions and keep a consumer group",
+        "explanation": "Wrong. This makes 60 consumers possible, but each slow job still blocks its partition, retries remain do-it-yourself, and you have created many partitions just to work around the consumption model."
+      },
+      {
+        "text": "A share group, in which consumers acquire and acknowledge individual records and can outnumber the partitions",
+        "explanation": "Correct. Share groups (KIP-932, production-ready in Kafka 4.2) give queue semantics on a Kafka topic: records are locked to one consumer at a time, acknowledged or released individually, and delivery attempts are counted. Ordering is given up, which this workload does not need."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. List the requirements: more workers than partitions, per-record ack and retry, no ordering.\n2. **Consumer groups** are built for ordered streams: one owner per partition and one committed offset per partition. Those defaults do not provide per-record broker acknowledgement or let 60 group members own 6 partitions. An application worker pool can add concurrency, but must coordinate retries and commits itself.\n3. **Share groups** are built for job queues:\n   - many consumers per partition\n   - each record acquired with a time-limited lock\n   - acknowledge, release or reject per record\n   - delivery count per record, so poison records can be capped\n4. Before Kafka 4.x the usual answers were more partitions plus an in-consumer worker pool, or a separate queue such as SQS or RabbitMQ.",
+    "link": {
+      "title": "KIP-932: Queues for Kafka",
+      "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-932%3A+Queues+for+Kafka"
+    }
+  }
+]

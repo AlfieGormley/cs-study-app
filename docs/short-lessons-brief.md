@@ -60,6 +60,12 @@ comments and any new questions. Check factual claims against fetched primary sou
 and preserve the verified original facts. Existing glossary entries need no rewriting, but their
 verification records must remain present and their hashes valid.
 
+Check ambiguous glossary names in the compiled dictionary as well as local source entries. A phrase may
+resolve to another module's definition. Prefer precise existing aliases or narrow local terms: for example,
+`server processing time` for request-handling duration, rather than bare `processing time`, which denotes
+a stream processor's clock timestamp in system design. Time-window sizes, algorithm sliding windows,
+instruction windows and TCP windows likewise need the definition appropriate to their context.
+
 Update `verification.json` so `lessons` contains precisely the active new ids, with genuine confidence
 scores, sources and a record of the split/comment changes. Original verification entries may be retained
 under `archivedLessons` for provenance. Stamp only after reviewing. Run the scoped build, formula lint,

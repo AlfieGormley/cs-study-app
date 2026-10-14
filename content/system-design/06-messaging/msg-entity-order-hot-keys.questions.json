@@ -1,0 +1,122 @@
+[
+  {
+    "id": "msg-ordering-backpressure-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An SQS FIFO queue carries order events with `MessageGroupId = orderId`. There are 10,000 groups with available work and 50 single-job consumers. Ignore quotas and receive-distribution limitations. How much parallelism can the consumers achieve?",
+    "options": [
+      {
+        "text": "Up to 50, because there are many more active groups than consumers",
+        "explanation": "Correct. SQS holds back further messages only for a group with a message in flight. With 10,000 groups, there is enough independent group work for up to 50 consumers to work on (subject to FIFO throughput limits)."
+      },
+      {
+        "text": "1, because FIFO queues process one message at a time",
+        "explanation": "Wrong. FIFO ordering applies within each message group, not across the whole queue. Different groups can be processed concurrently."
+      },
+      {
+        "text": "Up to 10,000, one per order",
+        "explanation": "Wrong. 10,000 groups could support 10,000 concurrent consumers, but you have only 50. Parallelism is the minimum of available consumers and active groups."
+      },
+      {
+        "text": "It depends on the number of partitions configured on the queue",
+        "explanation": "Wrong. SQS FIFO queues have no user-configured partitions like Kafka. Parallelism is driven by message groups."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FIFO rule: one receive may contain multiple same-group messages; further receives for the group wait for deletion or visibility expiry. Process same-group effects in order.\n2. Across groups: independent.\n3. Effective parallelism is limited by whichever is scarcer, consumers or groups with work:\n\n```formula\nP = min(C, G)\nP = min(50, 10000) = 50\nwhere\nP: how many consumers can work at the same time\nmin: the smaller of the two values\nC: the number of single-job consumers, here 50\nG: the number of message groups with available work, here 10,000\nIn words: each consumer needs a group of its own to work on, so parallelism is capped by the consumers or by the groups, whichever is smaller: here 50.\n```\n\n4. Contrast: if `MessageGroupId` were a constant like `\"all\"`, parallelism would be **1**, a very common mistake.\n5. Throughput ceiling still applies: 300 API calls/s per action without batching (3,000 messages/s with batches of 10), or higher in high-throughput mode.",
+    "link": {
+      "title": "Amazon SQS FIFO queues",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A chat app uses `userId` as the Kafka key for message events. One celebrity user generates 35% of all traffic across thousands of similarly active conversations. Their partition's consumer is pinned at 100% CPU and lagging, while others idle. Ordering is only needed **within a conversation**. What is the best change?",
+    "options": [
+      {
+        "text": "Change the key to conversationId",
+        "explanation": "Correct. Ordering is required per conversation, not per user. The celebrity takes part in thousands of conversations, so keying by conversation spreads their load across all partitions while keeping each conversation in order."
+      },
+      {
+        "text": "Add more partitions so the celebrity's traffic is spread out",
+        "explanation": "Wrong. All records with one key hash to one partition however many partitions exist. More partitions spread other users but leave the celebrity's 35% on a single partition."
+      },
+      {
+        "text": "Remove the key so records are spread round-robin",
+        "explanation": "Wrong. That fixes the skew but loses ordering within conversations, which is a stated requirement."
+      },
+      {
+        "text": "Give that one consumer a bigger machine",
+        "explanation": "Wrong. Vertical scaling buys a little time, but 35% of all traffic will keep growing on one partition and one thread. The key choice is the root cause."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. **Find the real ordering requirement**: messages in one conversation must be in order. Messages across conversations need not be.\n2. **Current key** (`userId`) is coarser than needed, so one heavy user maps to one partition.\n3. **Finer key** (`conversationId`): the celebrity's 35% is split across, say, 5,000 conversations, which hash across all 48 partitions → roughly 0.7% each from that user.\n4. **Check the new risk**: a single huge group conversation could become a hot key itself. Route a still-hot conversation to a dedicated pipeline or increase its lane capacity. Salting would weaken the stated conversation-order requirement and needs an explicit reordering protocol.\n5. Remember that changing the key mid-stream can reorder in-flight conversations; use an explicit migration barrier/drain or sequence-aware merge. A quiet time alone is not a correctness guarantee.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A pipeline counts likes per post, keyed by `postId`, on a 48-partition topic. A viral post sends 40% of all events to one partition, whose consumer is saturated. The count is a sum, so the order of likes does not matter. What is the best change?",
+    "options": [
+      {
+        "text": "Salt the hot key: send its events to `postId#0` … `postId#15` at random, count each sub-key, and sum the partial counts downstream",
+        "explanation": "Correct. Because the aggregate is a sum, ordering across sub-keys does not matter. Sixteen sub-keys spread the viral post over up to 16 partitions, and a small second stage adds the partials."
+      },
+      {
+        "text": "Add more partitions",
+        "explanation": "Wrong. Every event with the same key hashes to the same partition, however many partitions exist. More partitions spread other posts but leave the viral one where it is."
+      },
+      {
+        "text": "Move the viral post to an SQS FIFO queue with `MessageGroupId = postId`",
+        "explanation": "Wrong. One message group is processed strictly in sequence, so this reproduces the same single-lane bottleneck in a different system."
+      },
+      {
+        "text": "Give the hot partition's consumer a bigger machine",
+        "explanation": "Wrong. It buys a little time, but one consumer thread is still handling 40% of all traffic, and the next viral post may be bigger."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. **What ordering is needed?** None: addition is commutative.\n2. So the single-key constraint is self-imposed. Salt it:\n\nThis Python fragment requires `import random` and an existing `post_id`. The chosen suffix is random, so it has no fixed output.\n\n```python\n# Choose one of 16 sub-keys for this\n# like.\nsalt = random.randrange(16)\n# Route using the finer, salted key.\nkey = f\"{post_id}#{salt}\"\n```\n\n3. Stage 1 counts per salted key (spread over up to 16 partitions).\n4. Stage 2 re-keys by `postId` and combines 16 partial counts without double-counting updates: replace each versioned partial snapshot or apply deduplicated deltas. That stage handles one small update per sub-key per window, not every like.\n5. Each evenly used salt contributes about 40% / 16 = 2.5%, but salts can collide on a partition and other traffic adds load; this is not a hottest-partition guarantee.\n6. Salt only keys known or detected to be hot, so normal posts are unaffected.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A provisioned Kinesis stream, with evenly distributed partition keys and no KPL record aggregation, must ingest **4,000 records per second** averaging **500 bytes** each. Each shard accepts up to 1 MB/s or 1,000 records per second of writes. What is the minimum number of shards?",
+    "options": [
+      {
+        "text": "2, because 4,000 × 500 bytes = 2 MB/s",
+        "explanation": "Wrong. That satisfies the byte limit but ignores the record limit. Two shards accept only 2,000 records per second."
+      },
+      {
+        "text": "1, because the data volume is small",
+        "explanation": "Wrong. One shard accepts 1,000 records per second, a quarter of what is needed, and 1 MB/s, half the bytes."
+      },
+      {
+        "text": "8, to allow for the 2 MB/s read limit",
+        "explanation": "Wrong. Read capacity per shard is 2 MB/s, which is higher than the write limit, so reads do not force extra shards here."
+      },
+      {
+        "text": "4, because the record-count limit binds before the byte limit",
+        "explanation": "Correct. By bytes you need 2 MB/s ÷ 1 MB/s = 2 shards; by records 4,000 ÷ 1,000 = 4. The larger figure wins."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Size against **both** write limits and take the larger:\n\n```formula\nW = 4000/s × 500 B = 2 MB/s\nS_W = 2 MB/s / (1 MB/s) = 2\nS_R = 4000/s / (1000/s) = 4\nS = max(S_W, S_R) = 4\nwhere\nW: bytes written per second: 4,000 records of 500 bytes is 2,000,000 B/s, about 2 MB/s\nB: bytes\nS_W: shards needed for the byte limit of 1 MB/s per shard\nS_R: shards needed for the record limit of 1,000 records per second per shard\nS: the minimum number of shards\nmax: the larger of the values\nMB: megabytes, millions of bytes; \"MB/s\" is megabytes per second\ns: seconds; \"/s\" means per second\nIn words: bytes need 2 shards but records need 4, and the stream must satisfy both, so it needs 4.\n```\n\nSmall records hit the record limit first; large records hit the byte limit. In practice add headroom and check for hot partition keys, since the limits apply per shard, not to the stream on average.",
+    "link": {
+      "title": "Amazon Kinesis Data Streams quotas and limits (AWS docs)",
+      "url": "https://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html"
+    }
+  }
+]

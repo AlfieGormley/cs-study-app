@@ -1,0 +1,70 @@
+[
+  {
+    "id": "msg-ordering-backpressure-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A consumer polls Kafka and submits each record to a thread pool backed by an **unbounded** queue. During a slow-database incident, consumers run out of memory, rejoin, and immediately run out again. What is the best fix?",
+    "options": [
+      {
+        "text": "Give the consumers more heap",
+        "explanation": "Wrong. More heap only delays the crash. With an unbounded queue, polling outpaces processing indefinitely during the incident, so any finite memory eventually fills."
+      },
+      {
+        "text": "Increase max.poll.records so each poll brings more work",
+        "explanation": "Wrong. Fetching more per poll worsens the problem: even more records pile into memory faster than the database can handle."
+      },
+      {
+        "text": "Bound the work queue and pause() partitions when it is full, resuming when it drains, while still calling poll()",
+        "explanation": "Correct. This restores backpressure: the consumer stops fetching when it cannot process, leaving the backlog safely in Kafka. Calling poll() while paused keeps the consumer in the group without fetching records."
+      },
+      {
+        "text": "Switch to auto-commit so offsets keep advancing",
+        "explanation": "Wrong. Auto-commit has nothing to do with memory use, and with asynchronous processing it would commit records not yet processed, risking loss after the crash."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Root cause**: Kafka's pull model gives you backpressure for free, but an unbounded in-memory queue throws it away. The consumer keeps pulling at network speed while the database processes at incident speed.\n2. **Memory maths**:\n\n```formula\ng = (r_in − r_out) × b\ng = (20000/s − 2000/s) × 2 KB\ng = 36000 KB/s = 36 MB/s\nT = M / g\nT = 4000 MB / (36 MB/s) ≈ 111 s\nwhere\ng: how fast the in-memory queue grows, in megabytes per second (MB/s)\nr_in: records fetched per second, 20,000\nr_out: records processed per second, 2,000\nb: the size of one record, 2 kilobytes (KB)\nT: the time until memory is full, in seconds (s)\nM: the heap memory available, 4 gigabytes (GB), which is 4,000 MB\nKB: kilobytes, thousands of bytes\nMB: megabytes, millions of bytes\ns: seconds; \"/s\" means per second\n≈: approximately equal to\nIn words: fetching 18,000 more records a second than it can process fills 36 MB a second, so a 4 GB heap is full in under 2 minutes.\n```\n\n3. **Fix**:\n   - `ArrayBlockingQueue(capacity = 1000)`.\n   - When it is above 80%: `consumer.pause(assignment())`.\n   - When it is below 20%: `consumer.resume(...)`.\n   - Keep calling `poll()` (which returns nothing for paused partitions) so heartbeats and `max.poll.interval.ms` are satisfied.\n4. Commit only the next offset after the highest contiguous completed record per partition; account for tasks still running when ownership changes.\n5. Now the backlog sits in Kafka as lag, visible and durable, instead of in RAM.",
+    "link": {
+      "title": "Kafka consumer (Confluent)",
+      "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine **backpressure** mechanisms, where slowness downstream causes upstream to slow down or stop? Select all that apply.",
+    "options": [
+      {
+        "text": "A Kafka producer's send() blocking when buffer.memory is full",
+        "explanation": "Correct. When the broker cannot accept records fast enough, the producer's buffer fills and send() blocks the calling thread for up to max.block.ms, pushing the slowdown into the application."
+      },
+      {
+        "text": "A Reactive Streams subscriber calling request(10)",
+        "explanation": "Correct. Demand is signalled upstream explicitly; this adds demand for 10 more items; total emissions must not exceed cumulative requested demand."
+      },
+      {
+        "text": "RabbitMQ consumer prefetch",
+        "explanation": "Correct. Prefetch caps unacknowledged messages per consumer, so a slow consumer receives no more until it acks some."
+      },
+      {
+        "text": "Autoscaling consumers based on lag",
+        "explanation": "Wrong. Autoscaling increases downstream capacity; it does not tell upstream to slow down. It is a complementary response to load, not backpressure, and it stops helping once consumers reach the partition count."
+      },
+      {
+        "text": "Retrying failed messages immediately in a tight loop",
+        "explanation": "Wrong. This is the opposite of backpressure: it adds load to a struggling dependency. Retries need backoff with jitter."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask of each mechanism: **when the downstream is slow, does the upstream end up sending less?**\n\n1. Producer buffer full → `send()` blocks → application produces less. ✓\n2. `request(n)` → the publisher may send only as many items as have been requested. ✓\n3. Prefetch full → broker stops pushing to that consumer. ✓\n4. Autoscaling → downstream gets faster; upstream unchanged. ✗ (useful, but different)\n5. Tight retries → upstream sends **more**. ✗",
+    "link": {
+      "title": "Reactive Streams specification",
+      "url": "https://www.reactive-streams.org/"
+    }
+  }
+]

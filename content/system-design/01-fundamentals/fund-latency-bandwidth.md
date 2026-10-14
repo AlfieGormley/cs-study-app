@@ -58,7 +58,7 @@ k: the number of round trips that must happen one after another (each waits for 
 RTT: round-trip time, the time for a message to go to the other end and a reply to come back, in s
 D: the amount of data to send, in bits (multiply bytes by 8)
 B: the bandwidth of the link, in bits per second (bps)
-≈: approximately equal to; the model ignores processing time and protocol overhead
+≈: approximately equal to; the model ignores server processing time and protocol overhead
 In words: time is the round trips paid one after another plus the data divided by how fast the pipe carries it.
 ```
 

@@ -1,0 +1,69 @@
+[
+  {
+    "id": "msg-pubsub-fanout-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Publishers attach `eventType` and `region` as SNS **message attributes**. The EU fulfilment service should receive only `OrderPlaced` events for region `eu`. Which subscription filter policy achieves that?",
+    "options": [
+      {
+        "text": "`{\"eventType\": [\"OrderPlaced\", \"eu\"]}`",
+        "explanation": "Wrong. Values in one array are OR'd for the same attribute, so this matches eventType OrderPlaced or eventType eu. It does not check region at all."
+      },
+      {
+        "text": "`{\"region\": [\"eu\"]}`",
+        "explanation": "Wrong. This matches every EU event, including cancellations and refunds, so the service would receive far more than OrderPlaced."
+      },
+      {
+        "text": "`{\"eventType\": [\"OrderPlaced\"], \"region\": [\"eu\"]}`",
+        "explanation": "Correct. Different keys are AND'd, so a message must have eventType OrderPlaced and region eu. This is exactly the requirement."
+      },
+      {
+        "text": "`{\"eventType\": [{\"anything-but\": [\"OrderPlaced\"]}], \"region\": [\"eu\"]}`",
+        "explanation": "Wrong. anything-but inverts the match, so this delivers every EU event **except** OrderPlaced: the opposite of what is wanted."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "SNS filter policy semantics:\n\n1. **Across keys: AND.** Every key in the policy must match.\n2. **Within a key's array: OR.** Any listed value matches.\n3. Requirement: `eventType` is `OrderPlaced` **and** `region` is `eu`.\n4. So: two keys, one value each: `{\"eventType\":[\"OrderPlaced\"],\"region\":[\"eu\"]}`.\n\nSince the data is in attributes, the default filter policy scope (`MessageAttributes`) applies. If the fields were in the JSON body, you would set the scope to `MessageBody`.",
+    "link": {
+      "title": "Amazon SNS message filtering",
+      "url": "https://docs.aws.amazon.com/sns/latest/dg/sns-message-filtering.html"
+    }
+  },
+  {
+    "id": "msg-pubsub-fanout-q8",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "A RabbitMQ topic exchange receives a message with routing key `order.uk.physical`. Which of these bindings deliver it to their queue? Select all that apply.",
+    "options": [
+      {
+        "text": "`order.#`",
+        "explanation": "Correct. `#` matches zero or more words, so it matches `uk.physical` after `order.`."
+      },
+      {
+        "text": "`order.*`",
+        "explanation": "Wrong. `*` matches exactly one word. `order.*` matches `order.uk` but not the three-word key `order.uk.physical`."
+      },
+      {
+        "text": "`*.uk.*`",
+        "explanation": "Correct. Each `*` matches one word: `order` and `physical`, with `uk` matched literally."
+      },
+      {
+        "text": "`*.physical`",
+        "explanation": "Wrong. This pattern has two words and the key has three. `*` cannot stretch to cover `order.uk`."
+      },
+      {
+        "text": "`#.digital`",
+        "explanation": "Wrong. `#` could absorb `order.uk`, but the last word must be literally `digital`, and the key ends in `physical`."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Split the key into words: `order` · `uk` · `physical` (three words).\n\n| Pattern | Words | Match? |\n|---|---|---|\n| `order.#` | order + any | ✓ |\n| `order.*` | exactly 2 | ✗ |\n| `*.uk.*` | exactly 3 | ✓ |\n| `*.physical` | exactly 2 | ✗ |\n| `#.digital` | ends digital | ✗ |\n\nRules:\n1. `*` = exactly one word.\n2. `#` = zero or more words.\n3. Everything else must match literally.\n\nA message matching several bindings to **different** queues is copied to each; that is fan-out with filtering.",
+    "link": {
+      "title": "RabbitMQ tutorial: topics",
+      "url": "https://www.rabbitmq.com/tutorials/tutorial-five-python"
+    }
+  }
+]

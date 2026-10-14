@@ -1,0 +1,32 @@
+[
+  {
+    "id": "msg-message-queues-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A RabbitMQ classic queue using manual acknowledgements holds 50,000 messages. You start one consumer with **no prefetch limit**, then 30 seconds later start nine more. The nine new consumers sit idle while the first one is overwhelmed. Why?",
+    "options": [
+      {
+        "text": "RabbitMQ only allows one consumer per queue at a time",
+        "explanation": "Wrong. RabbitMQ supports many consumers per queue and round-robins deliveries among them. (Single active consumer is an opt-in feature, not the default.)"
+      },
+      {
+        "text": "The queue is a FIFO queue, so ordering forces a single consumer",
+        "explanation": "Wrong. RabbitMQ queues are FIFO by nature but still distribute messages to multiple consumers. Ordering across consumers is lost, but distribution still happens."
+      },
+      {
+        "text": "The new consumers need to use basic.get polling instead",
+        "explanation": "Wrong. Polling with basic.get is less efficient and would not reclaim the messages already pushed to the first consumer. The fix is to limit unacked messages per consumer."
+      },
+      {
+        "text": "The first consumer was pushed almost every message as unacked deliveries, so there is little left in the queue for the others",
+        "explanation": "Correct. With unlimited prefetch, RabbitMQ pushes messages as fast as the network allows. The first consumer buffers tens of thousands of unacked messages, and the new consumers only get what arrives afterwards."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. RabbitMQ pushes messages to consumers. In this explicitly unlimited classic-queue configuration, there is no prefetch cap. Broker default prefetch settings and quorum-queue limits can differ.\n2. In 30 seconds, the first consumer can be sent most of the 50,000 messages, which sit in its client buffer.\n3. Those messages remain retained as unacknowledged deliveries but are not ready for assignment to other consumers, so new consumers see an almost empty queue.\n4. Fix: set prefetch, for example `basic.qos(prefetch_count=50)`. Now each consumer holds at most 50 unacked messages and the rest stay in the queue to be shared.\n5. Choosing the value: if processing takes 20 ms and the network round trip is 2 ms, even a prefetch of 10 keeps a consumer busy; larger values may add buffering with little benefit in this example; measure with the actual workload.",
+    "link": {
+      "title": "RabbitMQ tutorial: work queues, acks and fair dispatch",
+      "url": "https://www.rabbitmq.com/tutorials/tutorial-two-python"
+    }
+  }
+]

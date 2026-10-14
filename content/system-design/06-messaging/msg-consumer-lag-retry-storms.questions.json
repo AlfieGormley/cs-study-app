@@ -1,0 +1,130 @@
+[
+  {
+    "id": "msg-ordering-backpressure-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kafka consumer group's lag dashboard shows 11 of 12 partitions near zero, and partition 7 with lag growing steadily for an hour. Consumer CPU is low. What is the **most likely** cause?",
+    "options": [
+      {
+        "text": "The group needs more consumers",
+        "explanation": "Wrong. Overall capacity shortage can appear unevenly, but a single lagging partition suggests checking its work and dependencies first. Adding consumers does not split a partition, although it may free its owner from other assigned work, since only one consumer per group can own it."
+      },
+      {
+        "text": "Retention on the topic is too short",
+        "explanation": "Wrong. Short retention deletes old data; it does not slow consumption. Retention can advance the log start and cause out-of-range offsets; an end-minus-committed-offset metric need not shrink until offsets reset."
+      },
+      {
+        "text": "The broker hosting partition 7 has run out of disk",
+        "explanation": "Wrong. Full disk would stop producers writing to partition 7, which would make its lag shrink or stay flat, not grow."
+      },
+      {
+        "text": "A poison message or a hot key on partition 7",
+        "explanation": "Correct. A single lagging partition points at something specific to it: a record that fails and is retried forever (low CPU, stuck offset) or a key with disproportionate traffic. Check whether the committed offset is moving at all."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Use the diagnosis checklist:\n\n1. **All partitions or one?** One → partition-specific cause.\n2. **Is the committed offset moving?**\n   - Not moving + errors in logs → **poison message** stuck in a retry loop. CPU is low because the consumer spends its time in backoff sleeps.\n   - Moving slowly with high CPU on that one consumer → **hot key**.\n3. Low CPU here points to the poison message.\n4. Fix: route the failing record to a retry/dead-letter topic (or park its key) so the partition can proceed; add an alert on 'offset not advancing for, say, 10 minutes'.",
+    "link": {
+      "title": "Error handling patterns in Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a steady 2,000 records per second, balanced partitions, no compaction/offset gaps, and commits tracking completed work. A consumer group's total lag is 180,000 records and has been flat for 20 minutes. Roughly how far behind real time is the group, and is it keeping up?",
+    "options": [
+      {
+        "text": "About 90 seconds behind and falling further behind",
+        "explanation": "Wrong. The 90 seconds is right, but flat lag means the gap is not growing. Falling further behind would show as rising lag."
+      },
+      {
+        "text": "About 90 seconds behind; it is keeping up, since lag is flat",
+        "explanation": "Correct. Time lag ≈ 180,000 ÷ 2,000 = 90 seconds. Flat lag means the consumption rate equals the production rate: it is keeping pace, but carrying a steady 90-second delay."
+      },
+      {
+        "text": "About 3 minutes behind; it is keeping up",
+        "explanation": "Wrong. This seems to divide by 1,000 instead of 2,000. The incoming rate is 2,000 per second, so 180,000 records is 90 seconds of traffic."
+      },
+      {
+        "text": "It cannot be judged without knowing the number of partitions",
+        "explanation": "Wrong. Total lag and total rate are enough for an average estimate. Partition count matters for diagnosing skew, not for converting lag to time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Estimate average backlog age under these assumptions**, then how long catching up would take if the group could consume at 2,500 a second:\n\n```formula\nt_lag ≈ lag / λ\nt_lag ≈ 180000 / (2000/s) = 90 s\nT_catch = lag / (μ − λ)\nT_catch = 180000 / (2500/s − 2000/s)\nT_catch = 180000 / (500/s) = 360 s\nwhere\nt_lag: how far behind real time the group is, in seconds (s)\nlag: the total consumer lag, 180,000 records\nλ: lambda, the rate records arrive, 2,000 per second\nT_catch: the time to clear the lag, in seconds\nμ: mu, a faster consumption rate you might provision, 2,500 per second\n≈: approximately equal to\ns: seconds; \"/s\" means per second\nIn words: the group is 90 seconds of traffic behind; consuming 500 a second faster than records arrive would clear that in 6 minutes.\n```\n\n2. **Read the trend**: flat lag means the consumption rate equals the production rate, about 2,000 per second.\n3. **Interpretation**: steady state with a 90-second delay. The group is not falling behind, but it is not catching up either.\n4. **If 90 s is too slow** for the product, you need consumption above 2,000 per second for a while, as in the catch-up line above.",
+    "link": {
+      "title": "Kafka consumer (Confluent)",
+      "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Consumer logs show partitions being revoked every few minutes, and lag is growing on **all** partitions. Each `poll()` returns up to 500 records, and each record takes about 700 ms because of a slow API, so a batch takes about 6 minutes. `max.poll.interval.ms` is at its default. Which changes address the root cause? Select all that apply.",
+    "options": [
+      {
+        "text": "Reduce `max.poll.records`, for example to 100",
+        "explanation": "Correct. 100 × 0.7 s = 70 s per batch, comfortably inside the 5-minute default, so the consumer polls in time and stays in the group."
+      },
+      {
+        "text": "Increase `max.poll.records` to 2,000 to make better use of each poll",
+        "explanation": "Wrong. A batch would take about 23 minutes, making the problem four times worse."
+      },
+      {
+        "text": "Lower `session.timeout.ms` so failures are detected faster",
+        "explanation": "Wrong. Heartbeats run on a background thread, so the session timeout is not what is being breached here. Lowering it only adds spurious rebalances."
+      },
+      {
+        "text": "Raise `max.poll.interval.ms` above the worst-case batch time",
+        "explanation": "Correct. If long batches are genuinely needed, the interval must exceed them. The cost is slower detection of a consumer that is truly stuck."
+      },
+      {
+        "text": "Process records in a bounded worker pool, using `pause()` and `resume()` while continuing to call `poll()`",
+        "explanation": "Correct. The poll loop stays fast, so processing need not violate the poll interval; other failures and ownership changes remain possible, while the bounded pool and pause/resume keep backpressure intact."
+      }
+    ],
+    "answer": [
+      0,
+      3,
+      4
+    ],
+    "workedExample": "1. Default `max.poll.interval.ms` = **5 minutes** (300 s).\n2. Compare the batch time with the limit:\n\n```formula\nT_batch = n × t\nT_batch = 500 × 0.7 s = 350 s\n350 s > 300 s\nwhere\nT_batch: the time to process one poll's batch, in seconds (s)\nn: records returned per poll (max.poll.records), here 500\nt: processing time per record, here 0.7 s (700 ms)\n>: is greater than\ns: seconds\nIn words: 500 records at 0.7 seconds each take 350 seconds, longer than the 300-second (5-minute) poll interval.\n```\n\n3. The client leaves the group → rebalance → partitions move → the new owner reprocesses from the last commit and hits the same limit. Lag grows everywhere.\n4. The batch time must stay below `max.poll.interval.ms`, so the fixes act on one side or the other:\n   - smaller batches (`max.poll.records = 100` → 70 s)\n   - a larger interval\n   - decouple processing from polling (pool + pause/resume)\n5. `session.timeout.ms` is the heartbeat liveness check, a separate mechanism.",
+    "link": {
+      "title": "Kafka consumer (Confluent docs)",
+      "url": "https://docs.confluent.io/platform/current/clients/consumer.html"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A database outage lasts 4 minutes. Each of 200 consumer instances retries failed messages after a **fixed** 30-second delay. When the database comes back, it is immediately overwhelmed and fails again, and the cycle repeats several times. What is the best fix?",
+    "options": [
+      {
+        "text": "Shorten the fixed delay to 5 seconds so messages are processed sooner after recovery",
+        "explanation": "Wrong. Shorter fixed delays mean more retries during the outage and an even sharper synchronised spike at recovery."
+      },
+      {
+        "text": "Add more consumer instances to clear the backlog faster",
+        "explanation": "Wrong. The bottleneck is the recovering database. More consumers mean more simultaneous retries hitting it."
+      },
+      {
+        "text": "Use exponential backoff with jitter, and a circuit breaker that pauses consumption while the database is unhealthy and resumes gradually",
+        "explanation": "Correct. Retry jitter spreads retries out so they do not arrive in lockstep, backoff reduces pressure the longer the outage lasts, and the breaker stops consumers hammering a known-bad dependency. The backlog waits safely in the broker."
+      },
+      {
+        "text": "Increase the database connection pool size",
+        "explanation": "Wrong. A larger pool lets even more concurrent queries reach an already struggling database. It worsens the stampede rather than preventing it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Fixed delays synchronise clients: everything that failed at the same moment retries exactly 30 seconds later, together.\n2. 200 instances × their in-flight batches all retrying at once is a **retry storm**, landing just as the database is weakest.\n3. Fix in layers:\n   - **Exponential backoff**: 1 s, 2 s, 4 s … capped.\n   - **Retry jitter**: randomise each delay (for example \"full jitter\": uniform between 0 and the backoff).\n   - **Circuit breaker**: after a set number of consecutive failures (say 5), stop consuming for a period; probe with a few requests; resume gradually.\n4. For a log or queue, pausing is cheap: the data waits in the broker as lag.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (Amazon Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  }
+]

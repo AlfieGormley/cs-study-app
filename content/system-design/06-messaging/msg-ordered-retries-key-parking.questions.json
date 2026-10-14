@@ -1,0 +1,62 @@
+[
+  {
+    "id": "msg-ordering-backpressure-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kafka consumer for **account state snapshots** (`Opened`, `Frozen`, `Closed`), applied as unconditional state assignments uses retry topics: on failure it publishes the record to `retry-5m` and commits. A transient error hits `Frozen` for account 9; seconds later `Closed` for account 9 succeeds. Five minutes later `Frozen` is retried and succeeds. What is the end state, and what should the design have done?",
+    "options": [
+      {
+        "text": "Frozen, which is wrong; the design should park account 9 so later events for it are diverted until the failed one succeeds",
+        "explanation": "Correct. The retry topic let Closed overtake Frozen, leaving the account Frozen even though it was closed. For state transitions, block the key (send its subsequent events behind the failed one) or use version checks so stale events are ignored."
+      },
+      {
+        "text": "Closed; retry topics preserve ordering because the retry consumer checks timestamps",
+        "explanation": "Wrong. The retry consumer only waits until the record is old enough to retry; it does not reorder against the main topic. The older event is applied last."
+      },
+      {
+        "text": "Closed, because Kafka guarantees per-key ordering in every topic",
+        "explanation": "Wrong. Kafka orders records within a partition. Once a record is republished to a different topic, there is no ordering relationship with records left on the original topic."
+      },
+      {
+        "text": "Frozen, which is correct, because the latest processed event should always win",
+        "explanation": "Wrong. 'Last processed wins' is precisely the bug. The business order was Frozen then Closed, so the correct final state is Closed."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nmain  P2: Frozen(9) ✗ → retry-5m\nmain  P2: Closed(9) ✓ state=Closed\nretry  +5m: Frozen(9) ✓ state=Frozen\n```\n\n1. Retry topics trade **per-key order** for **partition throughput**.\n2. For independent events (send email) that trade is fine; for a state machine it is not.\n3. Option A, **park the key**: on failure, record `blocked[9]`. Any later event for account 9 is also sent to the retry path, behind Frozen. When Frozen succeeds, release the key.\n4. Option B, **version checks**: each event carries a per-account sequence number; apply only if `seq > current_seq`. The late Frozen (seq 2) is ignored after Closed (seq 3).\n5. Option B works for superseding snapshots; if every transition or delta has a required effect, detect gaps and replay/park instead of skipping it.",
+    "link": {
+      "title": "Error handling patterns in Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"
+    }
+  },
+  {
+    "id": "msg-ordering-backpressure-q10",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A consumer retries **every** failure 5 times with exponential backoff (about 30 minutes in total) before dead-lettering. Most DLQ entries turn out to be `JSONDecodeError`s, and during long dependency outages some HTTP 503 errors also end up in the DLQ. What is the best change?",
+    "options": [
+      {
+        "text": "Retry everything 20 times instead of 5",
+        "explanation": "Wrong. Parse errors will never succeed, so more retries just waste more time and capacity, and in an ordered partition they block everything behind them for longer."
+      },
+      {
+        "text": "Classify errors: send permanent ones such as parse errors straight to the DLQ, and retry transient ones such as 503s with backoff and jitter, pausing consumption if the dependency stays down",
+        "explanation": "Correct. Permanent and transient failures need opposite handling. Parse errors should fail fast; 503s deserve patience, and a circuit breaker stops a long outage from dead-lettering healthy messages."
+      },
+      {
+        "text": "Send every failure straight to the DLQ on the first attempt",
+        "explanation": "Wrong. Transient errors such as a brief 503 would be dead-lettered unnecessarily, creating manual redrive work for messages that would have succeeded seconds later."
+      },
+      {
+        "text": "Catch the exceptions and acknowledge the messages so the queue keeps moving",
+        "explanation": "Wrong. Silently acknowledging failures loses data with no trace. The DLQ exists so that failures are kept and investigated."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask of each error: **could retrying ever succeed?**\n\n| Error | Kind | Handling |\n|---|---|---|\n| JSONDecodeError | Permanent | DLQ now |\n| HTTP 503 | Transient | Back off |\n| Timeout | Transient | Back off |\n\n2. Permanent: retrying is pure waste. Dead-letter with the error attached.\n3. Transient: exponential backoff with jitter. If the dependency is down for minutes, a circuit breaker pauses consumption so messages wait in the broker instead of exhausting their retries.\n4. Classify explicitly, by exception type or status code, rather than treating every failure the same.",
+    "link": {
+      "title": "Error handling patterns in Kafka (Confluent)",
+      "url": "https://www.confluent.io/blog/error-handling-patterns-in-kafka/"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 6/76. Updated 2026-10-14.
+Verified modules: 7/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -8,10 +8,11 @@ The material is divided by concept while retaining substantive explanations, exa
 
 | Subject/module | Original lessons | Short lessons | Questions | Formulas | Glossary | Review items | Corrections |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| system-design/Fundamentals | 7 | 27 | 84 | 107 | 379 | 252 | 37 |
+| system-design/Fundamentals | 7 | 27 | 84 | 107 | 379 | 254 | 38 |
 | system-design/Networking & Traffic | 8 | 34 | 96 | 62 | 433 | 192 | 12 |
 | system-design/Caching | 7 | 39 | 84 | 75 | 352 | 200 | 65 |
 | system-design/Databases & Storage | 8 | 37 | 98 | 55 | 311 | 239 | 33 |
+| system-design/Messaging & Streaming | 8 | 34 | 96 | 55 | 291 | 185 | 42 |
 | dsa/Complexity Analysis | 7 | 35 | 81 | 144 | 150 | 260 | 6 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
@@ -62,6 +63,7 @@ Corrections and qualifications in this conversion:
 - Qualified strong-read coordination instead of claiming every implementation must read a leader or quorum.
 - Clarified that idempotent jobs address duplicate execution, not recovery of lost queued jobs.
 - Described ACID C and CAP C as different properties, avoiding the overstatement that transactional invariants and operation ordering are wholly unrelated.
+- Root changed the transfer-model assumption from processing time to server processing time. Independently confirmed it still means omitted request-handling duration, and the compiled System Design dictionary now resolves the phrase to server-processing-time instead of the Messaging clock-timestamp entry processing-time.
 
 Remaining gaps:
 
@@ -457,6 +459,118 @@ Low-confidence areas:
 - **medium** — glossary: innodb-flush-log confidence provenance. Original medium record retained without upgrading. This pass fetched the primary MySQL manual and checked values 0/1/2, including the non-guaranteed approximate one-second flush interval; this does not test physical crash behaviour.
 - **medium** — glossary: resume-driven-development. Inherited informal industry term with no authoritative formal standard; original confidence and source retained.
 - **medium** — glossary: io-optimized pricing description. Inherited pricing/configuration description remains time-sensitive; no current regional price comparison or billing benchmark performed.
+
+## system-design: Messaging & Streaming
+
+[Independent verification record](../content/system-design/06-messaging/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Single-partition distractor also preserved order; require per-account parallelism explicitly.
+- Auto-commit scheduling is protocol-dependent; remove universal claim that it runs during poll().
+- Consumer groups can have application worker pools; narrow the comparison to native group ownership and per-record acknowledgements.
+- Preserve asynchronous projection requirement explicitly so synchronous distributed updates are not an equally valid answer.
+- An indefinite retention answer was defensible without a finite duplicate horizon; add the enforced bound and remove the misleading retention-plus-replay shortcut.
+- Remove stale within-lesson reference introduced by splitting the outbox and CDC sections.
+- The introduction promised flow control inside a unit that now teaches ordering and hot keys; point to later prerequisites accurately.
+- Renumber the remaining local subsection after external idempotency became its own unit.
+- Distinguish AWS visibility recommendation from the hard Lambda validation constraint.
+- The 24-hour idempotency horizon is documented for API v1; scope the product claim.
+- Scope the 24-hour Stripe key-retention example to API v1.
+- A timestamp at or before the watermark is not alone Flink window rejection; retain the window-end/cleanup distinction.
+- A separate consumer with only local dedup still has an external-call crash window; require provider idempotency or reconciliation.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Group compound rate/time divisors explicitly in formula substitutions; calculations and units unchanged.
+- Rounded availability 0.997003 needs an approximation sign rather than exact equality.
+- Correct inherited definition/example scope against the independently fetched primary reference.
+- Correct inherited definition/example scope against the independently fetched primary reference.
+- Correct inherited definition/example scope against the independently fetched primary reference.
+- Correct inherited definition/example scope against the independently fetched primary reference.
+- Correct inherited definition/example scope against the independently fetched primary reference.
+- Correct inherited definition/example scope against the independently fetched primary reference.
+- Correct inherited definition/example scope against the independently fetched primary reference.
+- Correct inherited definition/example scope against the independently fetched primary reference.
+- Add precise local stream-window entries and phrases to avoid unrelated cross-subject TCP/instruction-window fallback definitions.
+- Rebuilding derived data requires preserved source data and processing logic; remove unconditional always claim.
+- Remove unsupported majority-of-brokers assertion and state the participant/support and failure-coordination boundary.
+- Flink default event-time trigger fires at maxTimestamp(), one millisecond before exclusive end; qualify minute-rounded session example and possible late updates.
+
+Remaining gaps:
+
+- Kafka Java transaction success-path fragment and Flink Java watermark strategy were primary API/source reviewed but not executed. No Java framework runtime was installed.
+- Flink temporal-join SQL was checked against official versioned-table/event-time documentation; no Flink planner/cluster execution.
+- Two ellipsis SQL examples are schema sketches rather than runnable programs. The outbox atomicity claim was checked using an explicitly completed independent fixture.
+- No live AWS, Google Cloud or Stripe calls; no broker failover, checkpoint recovery, consumer fencing or throughput experiment.
+- Version-specific Kafka/RabbitMQ defaults and SQS/Kinesis quotas were fetched, but remain deployment/release dependent; no production sizing benchmark.
+- Legacy monetary upcasting checks only illustrate conversion; validate historical precision, metadata and currency conventions.
+- Crypto-shredding requires destruction of all usable keys and handling plaintext-derived copies; no legal compliance determination.
+- All substantive source examples remain; a deliberately short 2-minute unit is allowed for naturally narrow topics.
+- Existing glossary source/confidence records are preserved without upgrades; standalone glossary definitions do not establish deployment guarantees. Cross-module fallback concerns need compiled-dictionary integration inspection.
+- Broader source accessibility audit fetched 283 references, including inherited secondary glossary URLs. Some were rate-limited/blocked; factual checks use the reviewed primary sources and glossary records are not upgraded because a URL returned 200. Scoped lesson/question links passed 68/68.
+- No exhaustive new per-sentence source ledger for inherited prose: source review groups are enumerated by topic, lesson, question and formula. Module confidence remains medium.
+
+Low-confidence areas:
+
+- **medium** — msg-synchronous-dependency-risks: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-asynchronous-decoupling: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-burst-backlog-draining: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-queue-wait-littles-law: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-async-product-tracing: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-queue-delivery-acknowledgements: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-sqs-visibility-leases: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-sqs-polling-payload-throughput: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-rabbitmq-prefetch-quorums: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-queue-poison-dead-letter: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-subscriptions-sns-sqs: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-subscription-routing-filters: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-push-pull-flow-control: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-fanout-cost-replay-buses: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-kafka-offsets-key-order: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-kafka-consumer-progress-groups: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-kafka-replica-durability: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-kafka-retention-capacity: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-delivery-failure-boundaries: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-consumer-dedup-transactions: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-external-idempotency-publish-retries: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-kafka-transaction-effect-scope: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-entity-order-hot-keys: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-ordered-retries-key-parking: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-bounded-consumer-backpressure: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-consumer-lag-retry-storms: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-event-notification-state-contracts: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-event-sourcing-cqrs-evolution: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-transactional-outbox-polling: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-cdc-outbox-operations: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-stream-time-window-types: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-stream-watermarks-late-results: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-stream-checkpoints-changelogs: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-stream-joins-keyed-fraud: Inherited and current evidence scope. Primary core semantics, every question field, comments, formula definitions and independent arithmetic were reviewed; inherited medium confidence retained. Runtime/source/deployment limits are listed in gaps and linked evidence.
+- **medium** — msg-stream-time-window-types: glossary processing-time keeps the bare alias 'Processing time'. Inherited qualification (no upgrade): Networks lessons use 'server processing time' (a duration) 4 times without their own entry, so those fall back to this stream-processing definition; left because the lesson bolds the bare phrase.
+- **medium** — msg-stream-watermarks-late-results: glossary processing-time keeps the bare alias 'Processing time'. Inherited qualification (no upgrade): Networks lessons use 'server processing time' (a duration) 4 times without their own entry, so those fall back to this stream-processing definition; left because the lesson bolds the bare phrase.
+- **medium** — msg-stream-checkpoints-changelogs: glossary processing-time keeps the bare alias 'Processing time'. Inherited qualification (no upgrade): Networks lessons use 'server processing time' (a duration) 4 times without their own entry, so those fall back to this stream-processing definition; left because the lesson bolds the bare phrase.
+- **medium** — msg-stream-joins-keyed-fraud: glossary processing-time keeps the bare alias 'Processing time'. Inherited qualification (no upgrade): Networks lessons use 'server processing time' (a duration) 4 times without their own entry, so those fall back to this stream-processing definition; left because the lesson bolds the bare phrase.
+- **medium** — msg-synchronous-dependency-risks: glossary queue-backlog keeps bare 'backlog'. Inherited qualification (no upgrade): Other subjects use 'backlog' (TCP listen backlog, work backlog); the generic 'work waiting to be processed' meaning fits most uses but not a Scrum product backlog.
+- **medium** — msg-asynchronous-decoupling: glossary queue-backlog keeps bare 'backlog'. Inherited qualification (no upgrade): Other subjects use 'backlog' (TCP listen backlog, work backlog); the generic 'work waiting to be processed' meaning fits most uses but not a Scrum product backlog.
+- **medium** — msg-burst-backlog-draining: glossary queue-backlog keeps bare 'backlog'. Inherited qualification (no upgrade): Other subjects use 'backlog' (TCP listen backlog, work backlog); the generic 'work waiting to be processed' meaning fits most uses but not a Scrum product backlog.
+- **medium** — msg-queue-wait-littles-law: glossary queue-backlog keeps bare 'backlog'. Inherited qualification (no upgrade): Other subjects use 'backlog' (TCP listen backlog, work backlog); the generic 'work waiting to be processed' meaning fits most uses but not a Scrum product backlog.
+- **medium** — msg-async-product-tracing: glossary queue-backlog keeps bare 'backlog'. Inherited qualification (no upgrade): Other subjects use 'backlog' (TCP listen backlog, work backlog); the generic 'work waiting to be processed' meaning fits most uses but not a Scrum product backlog.
+- **medium** — msg-kafka-transaction-effect-scope: Java Kafka transaction/fencing behavior. Primary APIs/source reviewed; incomplete success path explicitly labelled; no live Kafka runtime or fault experiment.
+- **medium** — msg-stream-watermarks-late-results: Flink Java source-watermark/idleness behavior. Primary strategy/API and generator reviewed; no Flink job execution.
+- **medium** — msg-stream-joins-keyed-fraud: Flink temporal join SQL and illustrative state sizing. Versioned table/time attribute/watermark prerequisites checked; no Flink execution or measured event-list/checkpoint capacity.
 
 ## dsa: Complexity Analysis
 

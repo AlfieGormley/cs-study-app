@@ -1,0 +1,130 @@
+[
+  {
+    "id": "msg-delivery-semantics-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A consumer handles `PaymentReceived {paymentId, orderId, amount}` by running `UPDATE orders SET paid_total = paid_total + :amount`. Delivery is at-least-once. What is the risk, and what is the simplest robust change?",
+    "options": [
+      {
+        "text": "No risk; at-least-once delivery means each message is processed exactly once",
+        "explanation": "Wrong. At-least-once explicitly permits duplicates. A redelivered message would add the amount a second time."
+      },
+      {
+        "text": "Duplicates will over-count; check a Redis set for the ID before updating and add it afterwards",
+        "explanation": "Wrong. The check and the write are not atomic with the database update. A crash after the update but before the Redis write, or two concurrent deliveries, still double-counts."
+      },
+      {
+        "text": "Duplicates will over-count; record the payment ID in a processed table with a unique constraint in the same transaction as the update",
+        "explanation": "Correct. The increment is not idempotent. Recording a stable payment ID atomically with the update makes a duplicate fail the unique insert and roll back, so the total changes once."
+      },
+      {
+        "text": "Messages may be lost; switch to at-most-once to be safe",
+        "explanation": "Wrong. At-least-once does not lose messages; it duplicates them. At-most-once would make lost payments possible, which is worse."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `paid_total + amount` applied twice adds twice: **not idempotent**.\n2. Options, best first:\n   - Make it absolute: store each payment as a row keyed by `paymentId` (`INSERT ... ON CONFLICT DO NOTHING`) and compute the total with `SUM`.\n   - Or dedup: `INSERT INTO processed(payment_id)` plus the `UPDATE` in **one transaction**.\n3. Walk through a duplicate: first delivery commits both. Second delivery's insert hits the primary key → rollback → consumer acks. Total unchanged.\n4. The key requirement is **atomicity** between 'remember I did it' and 'do it'.",
+    "link": {
+      "title": "Idempotent Receiver (EIP)",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/IdempotentReceiver.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these operations are **naturally idempotent**, so a duplicate message causes no harm for the illustrated state effect, ignoring interleaved newer writes, triggers and external side effects? Select all that apply.",
+    "options": [
+      {
+        "text": "`UPDATE users SET email = 'a@x.com' WHERE id = 7`",
+        "explanation": "Correct. Setting a field to an absolute value gives the same final state however many times it runs (ignoring interleaving with other updates)."
+      },
+      {
+        "text": "`INSERT INTO orders(...) VALUES (...)` with an auto-increment primary key",
+        "explanation": "Wrong. Each run creates a new row with a new ID, so duplicates create duplicate orders. Keying the insert on a natural or producer-supplied ID would fix this."
+      },
+      {
+        "text": "`PUT /carts/9/items/sku-1 {qty: 2}`",
+        "explanation": "Correct. PUT replaces the resource with the given state; quantity is 2 after one call or ten."
+      },
+      {
+        "text": "Sending a push notification to a phone",
+        "explanation": "Wrong. Each send produces another notification the user sees. A local sent record alone has a crash window around an external send; use provider-enforced deduplication or reconcile uncertain outcomes."
+      },
+      {
+        "text": "`DELETE FROM sessions WHERE id = 'abc'`",
+        "explanation": "Correct. After the first delete the row is gone; later deletes affect zero rows and leave the same state."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Test each by running it twice and comparing the end state with running it once:\n\n| Op | Once | Twice | Same? |\n|---|---|---|---|\n| SET email | a@x | a@x | ✓ |\n| INSERT auto-id | 1 row | 2 rows | ✗ |\n| PUT qty 2 | 2 | 2 | ✓ |\n| Push | 1 alert | 2 alerts | ✗ |\n| DELETE | gone | gone | ✓ |\n\nDesign messages to carry **absolute state or stable keys** so consumers can use the idempotent forms.",
+    "link": {
+      "title": "Idempotence (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Idempotence"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A producer publishes `RefundIssued` to an SQS standard queue and retries `SendMessage` whenever a call times out. The consumer deduplicates on the SQS `MessageId`, recording it in the same database transaction as the refund. Some refunds are still applied twice. Why?",
+    "options": [
+      {
+        "text": "SQS gives a redelivered message a new MessageId each time it is received",
+        "explanation": "Wrong. A message keeps its MessageId across redeliveries; it is the **receipt handle** that changes on each receive. Broker redeliveries are caught by this dedup."
+      },
+      {
+        "text": "When a timed-out send had actually succeeded, the retry creates a second message with a different MessageId; dedup should use a producer-assigned ID such as the refund ID",
+        "explanation": "Correct. SQS assigns MessageId when it accepts a message, so two successful sends of the same refund get two IDs and look unrelated. A stable, producer-assigned ID is the same for both copies."
+      },
+      {
+        "text": "SQS standard queues do not support deduplication, so consumer-side dedup cannot work",
+        "explanation": "Wrong. Standard queues have no broker-side dedup, which is exactly why consumer-side dedup is needed. It works as long as it keys on an ID that is stable across producer retries."
+      },
+      {
+        "text": "The visibility timeout is too short",
+        "explanation": "Wrong. A short visibility timeout causes broker redelivery of the same message, which keeps the same MessageId and would be caught by this dedup."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Track the two kinds of duplicate:\n\n| Source | MessageId |\n|---|---|\n| Broker redelivery | Same |\n| Producer retry | **New** |\n\n1. Producer sends; SQS stores it as `MessageId = A`; the response is lost.\n2. Producer retries; SQS stores another copy, `MessageId = B`.\n3. The consumer sees A and B as different and applies both.\n4. Fix: the producer puts `refundId` (or an event UUID generated **once**, before the first attempt) in the message, and the consumer dedups on that.",
+    "link": {
+      "title": "Idempotent Receiver (Enterprise Integration Patterns)",
+      "url": "https://www.enterpriseintegrationpatterns.com/patterns/messaging/IdempotentReceiver.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kafka consumer applies payments to Postgres with a dedup table whose rows expire after **1 hour**. The topic retains 7 days of data. During an incident, an operator resets the consumer group's offsets **3 days back** to reprocess possibly missed records. Afterwards, many payments have been applied twice. The team can enforce an audited finite bound on every allowed retry and replay path. How long should dedup records be kept?",
+    "options": [
+      {
+        "text": "1 hour is fine; the operator should not have reset offsets",
+        "explanation": "Wrong. Replaying from an earlier offset is a normal recovery tool for a log, and the consumer should survive it. The dedup window was too short for the duplicates the system can produce."
+      },
+      {
+        "text": "As long as `max.poll.interval.ms`, since that bounds how long a record can be in flight",
+        "explanation": "Wrong. That covers only redelivery after a stuck consumer. Replays and late producer retries can bring back records from days earlier."
+      },
+      {
+        "text": "At least as long as a duplicate can plausibly arrive: here at least the documented replay/retry horizon, with a bound on deletion lag and replay duration",
+        "explanation": "Correct. Any record still in the topic can be replayed, so dedup records must outlive it. A configured 7-day retention is not an exact deadline: segment deletion can lag and replays take time. An 8-day TTL is safe only if all permitted retry/replay paths are proven bounded by it."
+      },
+      {
+        "text": "Forever, because there is no safe bound",
+        "explanation": "Wrong. Keeping them forever works but grows without limit. A finite bound requires an explicit replay/retry policy, including archives, republishing, segment deletion lag and replay duration; topic retention alone is insufficient."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Records replayed: offsets from **3 days** ago onwards.\n2. Dedup memory: **1 hour**. Anything older than that is unrecognised → applied again.\n3. So roughly 3 days minus 1 hour of payments double-applied.\n4. Keep dedup state for the full enforced duplicate horizon: retained records, deletion lag, archives, producer retries and time spent replaying.\n   - A configured 7-day topic retention alone does not establish a safe 7- or 8-day TTL.\n5. Cost check: how many dedup rows does an 8-day window hold?\n\n```formula\nN = λ × 86400 s × d\nN = 500/s × 86400 s × 8\nN ≈ 346000000 rows\nwhere\nN: the number of dedup records kept at once\nλ: lambda, payments processed per second, here 500\nd: the number of days of records kept, here 8\nrows: database rows, one per payment\ns: seconds; \"/s\" means per second; a day has 86,400 s\n≈: approximately equal to\nIn words: 500 payments a second for 8 days is about 346 million dedup rows.\n```\n\n   Store a compact key (16-byte UUID) and partition the table by day to make expiry cheaper. PostgreSQL partitioned unique constraints must include the partition key; preserve global payment-ID uniqueness through an appropriate schema or separate durable payment table.\n6. Better still, make the effect naturally idempotent (upsert keyed by payment ID), so no TTL is needed.",
+    "link": {
+      "title": "Kafka message delivery semantics (Confluent docs)",
+      "url": "https://docs.confluent.io/kafka/design/delivery-semantics.html"
+    }
+  }
+]

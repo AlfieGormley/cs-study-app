@@ -17,14 +17,32 @@ author/independent-verifier process. Existing skipped-content decisions below re
 - Second-batch integration: full verified-snapshot build version `0e1dfffd8410`, 56 tests and all 204 new
   lesson/512 question mobile renders pass. An unlabelled Cypher query's accidental diagram classification was
   fixed; real diagrams remain. Precise database glossary terms prevent incorrect cross-subject definitions.
-- Distributed systems, messaging and API design are being authored; remaining modules are queued.
+- Published second-batch commit `3a834e9`: GitHub Pages succeeded and live app, assets, progress migration
+  helper and course index match the tested build. Installed-app update and offline completion-age practice pass.
+- Further mobile integration checks confirm successive release migrations preserve earlier deliberate
+  unmarking, exact dates and reading/answer/bookmark history; saved quizzes resolve original question IDs;
+  re-completion dates only that child today, and age filters count active units without archived duplicates.
+- Messaging is independently verified and stamped. The current verified snapshot has seven converted modules:
+  51 originals became 238 short lessons with 608 focused questions. Version `d25fe18527e2` passes 61 tests,
+  all lesson/question mobile renders, actual lesson/quiz routes in every converted module, original answer-key
+  preservation, completion-age controls, offline practice and installed-app update checks.
+- Distributed systems, API design and architecture are undergoing independent verification. Remaining modules
+  and the scoped Complexity formula follow-up are queued.
 - Current reports: [short-lessons-report.md](short-lessons-report.md). Working queue and baseline snapshots:
   `/tmp/cs-study-short-lessons/queue.json`, `original-index.json`, `original-questions.json`; baseline commit
   `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`. The full original course has 482 lessons and 5,565 questions.
 - Root owns shared code and generated assets. `/tmp/cs-study-short-lessons/preview-verified.mjs` builds isolated
-  previews from verified modules and the original baseline, allowing pending author files to stay out of releases.
+  previews from the last published release and overlays currently verified modules, allowing pending author
+  files to stay out of releases. Previously converted modules retain their last verified units during follow-up
+  drafts; the original baseline remains fixed for preservation audits.
   Do not publish generated data built from unverified content. The final whole-course migration audit is
-  `scripts/audit-short-lessons.mjs` with the original index and question snapshots as arguments.
+  `scripts/audit-short-lessons.mjs` with the original index and question snapshots as arguments. Add
+  `--partial` for interim releases: every original course question must survive, and converted modules also
+  preserve original answer keys, question types and option counts. The final audit must omit `--partial`.
+- Integration follow-ups are recorded in the working queue. The request-duration glossary phrase is now
+  independently verified. Complexity Analysis still needs a scoped author and different verifier to resolve
+  actual inherited prose/table formula-format violations; the prior review explicitly did not classify all
+  542 active heuristic hits as Rule 6 exceptions. Complete that follow-up before declaring the whole task done.
 
 Historical notes below are superseded where they conflict with this active task or already published changes.
 

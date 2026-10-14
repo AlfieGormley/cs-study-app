@@ -1,0 +1,69 @@
+[
+  {
+    "id": "msg-delivery-semantics-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An SQS FIFO producer times out on `SendMessage` and retries **7 minutes later** with the same `MessageDeduplicationId`. The first attempt had actually succeeded. What happens?",
+    "options": [
+      {
+        "text": "SQS accepts the retry as a new message, so the consumer receives a duplicate",
+        "explanation": "Correct. The deduplication window is 5 minutes. A retry outside it is treated as a fresh message, so the consumer must still be idempotent for late retries."
+      },
+      {
+        "text": "SQS discards the retry as a duplicate",
+        "explanation": "Wrong. SQS FIFO deduplication only applies within a 5-minute interval. After 7 minutes the ID is no longer remembered."
+      },
+      {
+        "text": "SQS rejects the retry with an error",
+        "explanation": "Wrong. Within the window SQS silently accepts the duplicate and does not deliver it; outside it, SQS accepts it as new. Neither case is an error."
+      },
+      {
+        "text": "SQS merges both messages into one",
+        "explanation": "Wrong. Messages are never merged. Each is either deduplicated (dropped) or delivered."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FIFO dedup: same `MessageDeduplicationId` within **5 minutes** → accepted but not delivered again.\n2. Retry at 7 minutes: 7 > 5 → window expired → new message.\n3. Consumer receives two messages with the same business content.\n4. Lessons:\n   - Broker dedup windows are finite; they cover quick retries, not slow ones.\n   - Keep consumer-side dedup (keyed on the same ID) for as long as late duplicates are possible.\n   - Retry promptly with backoff measured in seconds, not minutes, when relying on broker dedup.",
+    "link": {
+      "title": "Amazon SQS FIFO queues",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/FIFO-queues.html"
+    }
+  },
+  {
+    "id": "msg-delivery-semantics-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A consumer charges customers through Stripe API v1 when it receives `ChargeRequested {orderId, amount}` from an at-least-once queue. Assume one charge per order, identical request parameters, and all automatic retries occur within the provider's retained-key window. Which designs make duplicate delivery harmless? Select all that apply.",
+    "options": [
+      {
+        "text": "Acknowledge the message before calling Stripe, so it cannot be redelivered",
+        "explanation": "Wrong. Acking first gives at-most-once: a crash after the ack but before the charge means the customer is never charged. Duplicates disappear only by accepting loss."
+      },
+      {
+        "text": "Send `Idempotency-Key: charge-<orderId>` with the request",
+        "explanation": "Correct. The key is stable across redeliveries, so Stripe returns the original result for a repeated key instead of charging again. The external system does the dedup."
+      },
+      {
+        "text": "Check a Redis flag for the order, call Stripe, then set the flag",
+        "explanation": "Wrong. Check-then-act is racy: two concurrent deliveries both see no flag, and a crash after the charge but before setting the flag also lets the next delivery charge again."
+      },
+      {
+        "text": "Insert a row into `charges(order_id UNIQUE)` before calling Stripe; if the row exists and is complete, skip; otherwise call Stripe with the same idempotency key",
+        "explanation": "Correct. The unique insert is an atomic claim, and reusing the same idempotency key makes a retry after a crash safe. The row also gives you a local record of charge state."
+      },
+      {
+        "text": "Use the SQS receipt handle as the idempotency key",
+        "explanation": "Wrong. The receipt handle changes on every receive, so each redelivery would present a new key and Stripe would charge again."
+      }
+    ],
+    "answer": [
+      1,
+      3
+    ],
+    "workedExample": "1. The effect (a charge) lives in an **external** system, so a local transaction cannot cover it.\n2. The tool is an **idempotency key** that is:\n   - derived from business data (`orderId`), so it is identical on every delivery\n   - sent on every attempt\n3. A local claim row adds coordination and visibility, but must reuse the **same** key so a crash between claim and charge is safe on retry.\n4. What fails:\n   - early ack → possible loss\n   - Redis check-then-set → race and crash window\n   - receipt handle → changes per delivery\n\nRemember the provider's window: Stripe API v1 keeps keys for at least 24 hours, so after the provider may have pruned the key, a completed local record can suppress retries, but an uncertain pending charge requires reconciliation with the provider before another charge is attempted.",
+    "link": {
+      "title": "Making retries safe with idempotent APIs (Amazon Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+    }
+  }
+]

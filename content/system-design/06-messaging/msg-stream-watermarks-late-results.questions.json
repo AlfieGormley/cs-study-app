@@ -1,0 +1,122 @@
+[
+  {
+    "id": "msg-stream-processing-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Flink job uses 1-minute tumbling event-time windows with `forBoundedOutOfOrderness(10 s)` on a single source. The largest event time seen so far is **10:05:07**. An event with timestamp **10:04:58** now arrives. What happens?",
+    "options": [
+      {
+        "text": "It is late and dropped, because 10:04:58 is before the latest event",
+        "explanation": "Wrong. Being older than the latest event is normal out-of-orderness. The emitted watermark is about 10:04:57 (10:04:56.999 in Flink), and this event is newer. Window acceptance depends on the window end and its allowed-lateness cleanup time, not just being older than the newest record."
+      },
+      {
+        "text": "It is added to the 10:05–10:06 window",
+        "explanation": "Wrong. Event-time windows assign records by their own timestamp. 10:04:58 belongs to 10:04–10:05, whenever it arrives."
+      },
+      {
+        "text": "It is added to the 10:04–10:05 window, which has not fired yet",
+        "explanation": "Correct. The watermark is about 10:05:07 − 10 s = 10:04:57; Flink subtracts one additional millisecond. The 10:04–10:05 window fires only when the watermark reaches its end, 10:05:00, so it is still open and the event is included."
+      },
+      {
+        "text": "The 10:04–10:05 window has fired, so the event creates a duplicate window",
+        "explanation": "Wrong. The window has not fired: the watermark (10:04:57) is still below the window end (10:05:00)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Watermark**: the newest event time minus the bound, minus the extra millisecond Flink subtracts:\n\n```formula\nW = t_max − δ − 1 ms\nW = 10:05:07 − 10 s − 1 ms\nW = 10:04:56.999\nwhere\nW: the watermark: the event time up to which Flink assumes it has seen everything\nt_max: the largest event time seen so far, 10:05:07\nδ: delta, the out-of-orderness bound, 10 seconds (s)\nms: milliseconds\ns: seconds\nIn words: Flink assumes nothing older than about 10:04:57 is still to come.\n```\n\n2. **Target window** for 10:04:58: the window from 10:04:00 up to (but not including) 10:05:00.\n3. **Has it fired?** The window fires once the watermark reaches its last millisecond, 10:04:59.999. The watermark is only about 10:04:57, so not yet.\n4. **Is the event late?** An event behind the watermark is late in event-time progress, but whether this window accepts it depends on its end, trigger and allowed-lateness cleanup time. 10:04:58 is after the watermark of about 10:04:57, so it is on time.\n5. So it joins the open window. The window will fire after an event at 10:05:10 or later has been seen and the corresponding periodic watermark has been emitted.",
+    "link": {
+      "title": "Timely stream processing (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Flink job reads a 12-partition Kafka topic and emits per-minute event-time aggregates. After a producer change, partition 11 stops receiving data. Soon **no windows fire at all**, although 11 partitions still have plenty of traffic. Why, and what fixes it?",
+    "options": [
+      {
+        "text": "The operator's watermark is the minimum across its inputs, and the idle partition's watermark is stuck; configure idleness detection (withIdleness) so idle inputs are excluded",
+        "explanation": "Correct. Watermarks combine by taking the minimum. Partition 11 has no new events, so its watermark never advances and holds the overall watermark back. Marking it idle after, say, 1 minute lets the watermark follow the active partitions."
+      },
+      {
+        "text": "Flink crashed on partition 11; restart the job",
+        "explanation": "Wrong. The job is running and consuming; restarting would not change the watermark logic, so windows would stall again immediately."
+      },
+      {
+        "text": "Increase the out-of-orderness bound so windows close sooner",
+        "explanation": "Wrong. A larger bound delays windows further. And no bound helps when one input's watermark is not moving at all."
+      },
+      {
+        "text": "Switch to processing-time windows permanently",
+        "explanation": "Wrong. That would make windows fire, but it gives up correct, reproducible event-time results, which is a big price for an idle partition that idleness detection handles."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nW_op = min(W_0, W_1, …, W_11)\nW_op = min(10:31, 10:31, …, 09:58)\nW_op = 09:58\nwhere\nW_op: the watermark of the operator that reads all 12 partitions\nW_0: the watermark of partition 0, here 10:31\nW_1: the watermark of partition 1, here 10:31\nW_11: the watermark of partition 11, stuck at 09:58\n…: and so on for the partitions in between\nmin: the smallest of the values\nIn words: the operator can only be as far along as its slowest input, so one stuck partition holds everything at 09:58.\n```\n\n1. Each source split (partition) generates its own watermark from the events it sees.\n2. Downstream operators take the **minimum**, because they can only claim completeness up to the least advanced input.\n3. P11's last event put its watermark at 09:58, and with no new events it never advances.\n4. Windows ending after 09:58 never fire.\n5. Fix: `WatermarkStrategy...withIdleness(Duration.ofMinutes(1))`. After a minute without events, P11 is marked idle and excluded from the minimum until data returns.\n6. Alerting idea: monitor the watermark lag (`currentInputWatermark` vs wall clock) per operator.",
+    "link": {
+      "title": "Timely stream processing (Apache Flink)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Flink job uses allowed lateness of 5 minutes on 1-minute event-time windows, so a late event re-fires its window with an **updated** count. The sink **appends** every result to a warehouse table, and analysts see revenue slightly higher than the true total. What is the fix?",
+    "options": [
+      {
+        "text": "Remove allowed lateness so late events are dropped",
+        "explanation": "Wrong. This stops duplicate rows, but at the cost of undercounting: the late events' revenue would be lost. It trades one inaccuracy for another."
+      },
+      {
+        "text": "Make the sink upsert by (window start, key) with ordered or revision-checked updates so each newer re-firing replaces the earlier result",
+        "explanation": "Correct. With accumulating updates, each firing is the complete current value for that window. Appending adds the early and the updated values together; upserting keeps only the latest, which is correct."
+      },
+      {
+        "text": "Increase the watermark bound to 5 minutes and keep appending",
+        "explanation": "Wrong. A bigger bound reduces late updates but never eliminates them, and it adds 5 minutes of latency to every result. Any remaining late update still double-counts with an append sink."
+      },
+      {
+        "text": "Deduplicate events at the source",
+        "explanation": "Wrong. The events are not duplicated; the window's result is emitted more than once by design. Dedup at the source does nothing about multiple firings."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Window 10:00–10:01 fires at watermark 10:01 with revenue **£900**. Sink appends row A.\n2. A late £100 order arrives at 10:03 (within allowed lateness). The window re-fires with **£1,000** (accumulating mode). Sink appends row B.\n3. Analysts `SUM` → £1,900 instead of £1,000: overcount.\n4. Fix: `MERGE`/upsert keyed by `(window_start, key)`. Row A is replaced by row B → £1,000. ✓\n5. Alternative: emit **deltas** (+£100, a retraction style) and append, but that requires consistent delta semantics end to end. The Dataflow model calls this choice 'how do refinements relate': discarding, accumulating, or accumulating and retracting.",
+    "link": {
+      "title": "The Dataflow Model (Google Research)",
+      "url": "https://research.google/pubs/the-dataflow-model-a-practical-approach-to-balancing-correctness-latency-and-cost-in-massive-scale-unbounded-out-of-order-data-processing/"
+    }
+  },
+  {
+    "id": "msg-stream-processing-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Card payment events: 99% arrive within 5 seconds and all remaining records arrive within a validated 10-minute bound relative to event-time progress. Assume trustworthy timestamps, progressing active inputs and no duplicates. A live dashboard needs per-minute totals within about 10 seconds, and finance needs the final per-minute totals to be exact. What configuration fits both?",
+    "options": [
+      {
+        "text": "A 10-minute out-of-orderness bound, so no events are late",
+        "explanation": "Wrong. Every window would then fire about 10 minutes after it ends, far too slow for a dashboard that needs results within seconds."
+      },
+      {
+        "text": "A 5-second bound, dropping late events",
+        "explanation": "Wrong. The dashboard is fast, but the roughly 1% of payments that arrive more than 5 seconds late would be missing from finance's totals for good."
+      },
+      {
+        "text": "A 5-second bound with 10 minutes of allowed lateness, emitting updated results to an upsert sink keyed by window and key",
+        "explanation": "Correct. Windows fire quickly for the dashboard, then re-fire when late events arrive, and the upsert sink replaces each window's row with its latest total. Finance reads the converged figures once the lateness period has passed."
+      },
+      {
+        "text": "Processing-time windows, which never have late data",
+        "explanation": "Wrong. There is no late data only because events are counted in whichever minute they are read. Offline payments would land in the wrong minute, so finance's totals would be wrong."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Watermark bound** sets when a window first fires: approximately window end + 5 s under steady event-time progress, plus emission and processing delays; not a hard wall-clock latency guarantee.\n2. **Allowed lateness** (10 min) keeps window state so late events produce **updated** results.\n3. **Sink** must upsert by `(window_start, key)`; an append sink would add every re-fired total on top of the earlier ones and double-count.\n4. **Finance** reads a window once event-time progress has passed the window end plus allowed lateness and output is durably committed; wall-clock age alone does not prove finality.\n5. Alternative: route late events to a **side output** and have a correction job adjust finance's figures. Fine, but more moving parts.\n\nCost check: allowed lateness keeps each window's state 10 minutes longer, so state grows by roughly 10 windows per key.",
+    "link": {
+      "title": "Timely stream processing: event time and watermarks (Apache Flink docs)",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  }
+]

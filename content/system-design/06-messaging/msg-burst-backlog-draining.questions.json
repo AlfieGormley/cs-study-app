@@ -1,0 +1,62 @@
+[
+  {
+    "id": "msg-sync-vs-async-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A video-upload service receives 1,500 jobs per second for 20 seconds during a burst, then a steady 100 per second afterwards. You run 4 workers behind a queue, each processing 75 jobs per second. Roughly how long **after the burst ends** is the backlog cleared?",
+    "options": [
+      {
+        "text": "About 80 seconds",
+        "explanation": "Wrong. This divides the 24,000 backlog by the full 300 per second capacity, forgetting that 100 new jobs per second keep arriving. Only 200 per second of capacity is available for the backlog."
+      },
+      {
+        "text": "About 2.5 minutes",
+        "explanation": "Wrong. This assumes the backlog is the whole burst (1,500 × 20 = 30,000), ignoring that the workers were already processing 300 per second during the burst. The real backlog is 24,000."
+      },
+      {
+        "text": "Never, because 1,500 per second exceeds capacity",
+        "explanation": "Wrong. The burst exceeds capacity only temporarily. Draining depends on the arrival rate **after** the burst (100 per second) being below capacity (300 per second), which it is."
+      },
+      {
+        "text": "About 2 minutes",
+        "explanation": "Correct. The backlog is (1,500 − 300) × 20 = 24,000 jobs, the net drain rate is 300 − 100 = 200 per second, and 24,000 ÷ 200 = 120 seconds."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Work out the capacity, the backlog the burst leaves behind, then how fast spare capacity clears it:\n\n```formula\nμ = 4 × 75/s = 300/s\nB = (λ_burst − μ) × T\nB = (1500/s − 300/s) × 20 s\nB = 1200/s × 20 s = 24000 jobs\nT_clear = B / (μ − λ_after)\nT_clear = 24000 jobs / (300/s − 100/s)\nT_clear = 24000 jobs / (200/s) = 120 s\nwhere\nμ: mu, the total processing capacity: 4 workers × 75 jobs per second each\nB: the backlog: jobs waiting in the queue when the burst ends\nλ_burst: lambda, the arrival rate during the burst, 1,500 jobs per second\nT: how long the burst lasts, 20 seconds\nT_clear: the time after the burst ends until the queue is empty, in seconds (s)\nλ_after: lambda, the arrival rate after the burst, 100 jobs per second\njobs: video-upload jobs\ns: seconds; \"/s\" means per second\nIn words: the burst leaves 24,000 jobs; only 200 a second of capacity is spare once new arrivals are served, so clearing takes 120 seconds, which is 2 minutes.\n```\n\nUnder FIFO, the last job in the burst waits roughly 24,000 ÷ 300 = 80 seconds. The queue becomes empty only after 120 seconds because later arrivals join behind that job. If that is acceptable for your product, 4 workers is enough; without a queue you would need 1,500 ÷ 75 = 20 workers to avoid dropping work during the burst.",
+    "link": {
+      "title": "Queue-Based Load Leveling pattern (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A queue sits in front of a PDF-rendering service. Every weekday, depth climbs from 9am and **never quite returns to zero overnight**; each morning starts higher than the last. Arrivals average 180 per second for 10 working hours and 20 per second for the other 14 hours. Workers process 80 per second in total. What is the right diagnosis and fix?",
+    "options": [
+      {
+        "text": "Capacity is below the average daily arrival rate (about 87 per second), so add enough workers to exceed it with headroom",
+        "explanation": "Correct. Daily arrivals are about 7.49 million versus capacity of about 6.91 million, so roughly 576,000 messages carry over each day. Capacity must exceed the daily average, ideally with margin to catch up after incidents."
+      },
+      {
+        "text": "Load levelling is working as intended; the backlog is just the daytime peak being smoothed",
+        "explanation": "Wrong. Load levelling only smooths a peak if capacity exceeds the **average** arrival rate across the whole cycle. A backlog that ratchets up day after day is the signature of genuine overload."
+      },
+      {
+        "text": "The queue's maximum size is too small; raise it so it can hold the daily backlog",
+        "explanation": "Wrong. Size is not the constraint. With capacity below the daily average arrival rate, the backlog grows every day however big the queue is, until messages exceed their retention period and are lost."
+      },
+      {
+        "text": "Consumers are processing messages out of order, which slows them down",
+        "explanation": "Wrong. Ordering requirements can constrain throughput, but nothing here attributes the deficit to ordering. Nothing in the symptoms points to ordering; the arithmetic shows a pure capacity deficit."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Count a day's arrivals, the day's capacity and the difference. A 10-hour working day is 36,000 s and the other 14 hours are 50,400 s:\n\n```formula\nN_in = 180/s × 36000 s + 20/s × 50400 s\nN_in = 6480000 + 1008000 = 7488000\nλ_avg = 7488000 / (86400 s) ≈ 86.7/s\nN_out = 80/s × 86400 s = 6912000\nN_carry = N_in − N_out = 576000\nwhere\nN_in: messages arriving in one day\nλ_avg: lambda, the average arrival rate over the whole day, in messages per second\nN_out: messages the workers can process in one day at 80 per second\nN_carry: messages left over at the end of each day\ns: seconds; \"/s\" means per second; a day has 86,400 s\n≈: approximately equal to\nIn words: about 7.49 million messages arrive a day but only about 6.91 million can be processed, so 576,000 carry over every day.\n```\n\n2. Check it against the symptoms: during the day the queue grows at 180 − 80 = 100 per second (3.6 million in 10 hours). Overnight it drains at 80 − 20 = 60 per second (3.02 million in 14 hours). It never catches up, exactly as observed.\n3. **Fix**: provision above 86.7 per second. For illustration, 120 per second gives 33.3 per second of daily average capacity headroom; whether it recovers from a particular incident within one night depends on the extra backlog, and alarm on oldest-message age, not just depth.\n\nWithout the fix, SQS's default 4-day retention (maximum 14 days) means old jobs would eventually be silently deleted.",
+    "link": {
+      "title": "Avoiding insurmountable queue backlogs (Amazon Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/avoiding-insurmountable-queue-backlogs/"
+    }
+  }
+]

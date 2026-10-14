@@ -1,0 +1,92 @@
+[
+  {
+    "id": "msg-message-queues-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Twenty idle SQS consumers each loop on `ReceiveMessage` with short polling and a 100 ms sleep between calls. Ignoring the free tier and request/network duration, and assuming an illustrative $0.40 per million requests and a 30-day month, roughly how much do the **empty** receives cost per month, and what would long polling with `WaitTimeSeconds=20` cost instead?",
+    "options": [
+      {
+        "text": "Nothing, because empty receives are free",
+        "explanation": "Wrong. SQS bills every API request, including ReceiveMessage calls that return no messages. That is exactly why AWS recommends long polling."
+      },
+      {
+        "text": "About $21 per month versus about $10 per month",
+        "explanation": "Wrong. This undercounts short polling by a factor of ten (perhaps using 1 request/s per consumer) and overstates long polling. Long polling reduces empty requests by roughly 200×, not 2×, in this setup."
+      },
+      {
+        "text": "About $207 per month versus about $1 per month",
+        "explanation": "Correct. 20 consumers × 10 requests/s = 200 requests/s, about 518 million a month, which is about $207. With 20-second long polls each consumer makes 1 request per 20 s, so 1 request/s in total, about 2.6 million a month, about $1."
+      },
+      {
+        "text": "About $207 per month either way, because long polling makes the same number of calls",
+        "explanation": "Wrong. A long poll holds the request open for up to 20 seconds waiting for a message, so an idle consumer makes 1 call every 20 seconds instead of 10 per second."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count requests per second, scale to a month (86,400 seconds a day × 30 days), then price them.\n\n**Short polling**\n\n```formula\nr = n × f = 20 × 10/s = 200/s\nN = r × 86400 s × 30\nN = 200/s × 2592000 s = 518400000\nC = N / 1000000 × $0.40 ≈ $207\nwhere\nr: requests per second from the whole fleet\nn: the number of consumers, here 20\nf: requests per second from one consumer: one call every 100 ms is 10 per second\nN: requests in a 30-day month\nC: the monthly cost in US dollars ($), at an illustrative $0.40 per million requests\ns: seconds; \"/s\" means per second\n≈: approximately equal to\nIn words: 20 consumers each polling 10 times a second make about 518 million requests a month, about $207.\n```\n\n**Long polling (20 s)**\n\n```formula\nf = 1 / (20 s) = 0.05/s\nr = 20 × 0.05/s = 1/s\nN = 1/s × 2592000 s = 2592000\nC = N / 1000000 × $0.40 ≈ $1.04\nwhere\nf: requests per second from one idle consumer: each long poll waits up to 20 seconds before returning empty\nr: requests per second from the whole fleet of 20 consumers\nN: requests in a 30-day month\nC: the monthly cost in US dollars ($), at $0.40 per million requests\ns: seconds; \"/s\" means per second\n≈: approximately equal to\nIn words: a long poll waits up to 20 seconds, so an idle fleet makes 200 times fewer requests and pays about $1.\n```\n\nLong polling also reduces false-empty responses, because short polling queries only a subset of SQS servers.",
+    "link": {
+      "title": "Amazon SQS short and long polling",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users upload scanned contracts of up to 20 MB. The API base64-encodes each PDF and sends it in an SQS message to an OCR worker. Sends for larger files fail. What is the best design?",
+    "options": [
+      {
+        "text": "Split each PDF into 1 MiB chunks across several messages and reassemble them in the worker",
+        "explanation": "Wrong. Competing consumers would receive chunks of the same file on different workers, in any order, and a single lost or dead-lettered chunk breaks the whole file. You would be rebuilding a file transfer protocol on top of a queue."
+      },
+      {
+        "text": "Compress the PDF before base64-encoding it",
+        "explanation": "Wrong. Many scanned PDFs already contain compressed image data, and base64 adds about a third. Compression cannot reliably guarantee every allowed 20 MB file fits under the 1 MiB message limit."
+      },
+      {
+        "text": "Upload the PDF to S3 and send a small message containing the bucket and key",
+        "explanation": "Correct. This is the claim check pattern. The queue carries a small reference and the large payload lives in object storage. AWS's extended client libraries for SQS automate it."
+      },
+      {
+        "text": "Switch to an SQS FIFO queue, which allows larger messages",
+        "explanation": "Wrong. FIFO queues have the same maximum message size as standard queues. FIFO changes ordering and deduplication, not payload limits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Check the limit: an SQS message can be at most **1 MiB** (it was 256 KB until 2025).\n2. Estimate the payload. Base64 writes every 3 bytes of binary as 4 text characters:\n\n```formula\nS_b64 = S × 4 / 3\nS_b64 = 20 MB × 4 / 3 ≈ 27 MB\nwhere\nS_b64: the size of the message body after base64 encoding, in megabytes (MB)\nS: the size of the original PDF, up to 20 MB\nMB: megabytes, millions of bytes\n≈: approximately equal to (26.7 rounded)\nIn words: base64 makes data about a third bigger, so a 20 MB file becomes about 27 MB, far over the 1 MiB limit.\n```\n\n3. Claim check:\n   - `PUT s3://contracts/in/abc.pdf`\n   - send `{\"bucket\":\"contracts\", \"key\":\"in/abc.pdf\"}`\n   - the worker downloads and processes an immutable object version; retain it until retries and DLQ redrive can no longer need it.\n4. Bonus: messages stay small, so receives are cheap and fast, and the S3 object can have its own lifecycle and encryption policy.\n5. Make the worker idempotent on a unique job ID and immutable object version (a reused object key alone is insufficient), since the message is still delivered at least once.",
+    "link": {
+      "title": "Amazon SQS message quotas (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html"
+    }
+  },
+  {
+    "id": "msg-message-queues-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An order pipeline in eu-west-1 must sustain **6,000 messages per second** through an SQS FIFO queue, ordered per customer. Producers send batches of 10 with `MessageGroupId = \"orders\"` on every message, using default queue settings. Sends throttle at about 3,000 messages per second. What change is needed?",
+    "options": [
+      {
+        "text": "Switch to a standard queue, which has nearly unlimited throughput",
+        "explanation": "Wrong. A standard queue would meet the throughput but gives only best-effort ordering, breaking the per-customer ordering requirement."
+      },
+      {
+        "text": "Enable high-throughput mode and set `MessageGroupId` to the customer ID",
+        "explanation": "Correct. High-throughput mode raises the per-action limit, but SQS scales it by spreading message groups across partitions. With a single group everything stays on one partition; with one group per customer the load spreads and per-customer order is kept."
+      },
+      {
+        "text": "Increase the batch size to 20 messages per call",
+        "explanation": "Wrong. SQS batch calls are capped at 10 messages. The 3,000 figure is exactly 300 calls per second × 10 messages."
+      },
+      {
+        "text": "Enable high-throughput mode and keep the single message group",
+        "explanation": "Wrong. Messages in one group must be kept in order, so they map to one partition and are limited to that partition's throughput. SQS may return several group messages in one batch; the application must apply their effects in the required order."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Diagnose the 3,000 ceiling:\n\n```formula\nR_max = C × b\nR_max = 300/s × 10 = 3000 msg/s\nwhere\nR_max: the most messages per second a FIFO action (here SendMessage) can carry\nC: API calls per second per action for a FIFO queue in default mode, 300\nb: messages per batch call, at most 10\nmsg: messages\ns: seconds; \"/s\" means per second\nIn words: 300 calls a second with 10 messages each caps sends at 3,000 messages a second, exactly where the producers throttle.\n```\n\n2. High-throughput mode raises the limit (up to tens of thousands of calls per second in the largest regions), but only by spreading **message groups** across partitions.\n3. A constant group ID means one group mapped to one partition; batch delivery remains possible, with ordered application processing required. That is a global ordering requirement nobody actually has.\n4. The real requirement is **per customer**, so `MessageGroupId = customerId`.\n5. Now thousands of groups spread across partitions, and many consumers can work in parallel on different customers.",
+    "link": {
+      "title": "High throughput for FIFO queues (AWS docs)",
+      "url": "https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/high-throughput-fifo.html"
+    }
+  }
+]

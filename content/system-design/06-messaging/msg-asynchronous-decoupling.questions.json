@@ -1,0 +1,100 @@
+[
+  {
+    "id": "msg-sync-vs-async-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is the **main** thing a durable message queue gives you that a direct HTTP call does not?",
+    "options": [
+      {
+        "text": "Temporal decoupling: the consumer can be offline when the producer sends",
+        "explanation": "Correct. The broker stores the message durably until a consumer is ready, so producer and consumer no longer need to be up at the same moment."
+      },
+      {
+        "text": "Freedom to change the message format without breaking consumers",
+        "explanation": "Wrong. A queue does not decouple schemas. If the producer changes the payload shape, consumers still break. You need versioned schemas or a schema registry for that."
+      },
+      {
+        "text": "Lower end-to-end latency for each piece of work",
+        "explanation": "Wrong. A broker adds at least one extra hop and often a polling delay, so the work usually completes later, not sooner. What gets faster is the producer's response, not the work itself."
+      },
+      {
+        "text": "Strong consistency between producer and consumer state",
+        "explanation": "Wrong. Asynchronous messaging makes the consumer's state lag behind the producer's. It gives you eventual consistency, not strong consistency."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Walk through what a queue physically does:\n\n1. The producer writes a message to the broker, and the broker persists it.\n2. The producer gets an acknowledgement from the **broker**, not from the consumer, and moves on.\n3. The consumer reads the message whenever it is next running.\n\nStep 2 is the key: the producer depends only on the broker being up. If the consumer is mid-deploy or has crashed, messages simply wait. That is temporal decoupling. Latency, schema compatibility and consistency are unchanged or made worse.",
+    "link": {
+      "title": "What is a message queue? (AWS)",
+      "url": "https://aws.amazon.com/message-queue/"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After checkout, the orders service sends three messages: `SendReceiptEmail` to the email queue, `AwardPoints` to the loyalty queue and `ReserveStock` to the warehouse queue. Every new team that wants to react to orders needs a change and a redeploy of the orders service. Which redesign best addresses this?",
+    "options": [
+      {
+        "text": "Bundle the three commands into one message so there is only one send to maintain",
+        "explanation": "Wrong. The orders service would still know every consumer and what each must do. Adding a fourth team still means changing the bundle and redeploying orders."
+      },
+      {
+        "text": "Publish a single `OrderPlaced` event to a topic and let each team subscribe and decide what to do with it",
+        "explanation": "Correct. An event states a fact rather than instructing a particular handler. The publisher no longer knows who reacts, so new teams add a subscription without touching the orders service: fan-out decoupling."
+      },
+      {
+        "text": "Let each downstream team poll the orders database for new rows",
+        "explanation": "Wrong. This removes the sends but couples every team to the orders table's internal schema and adds polling load to the orders database. The schema becomes an accidental public contract."
+      },
+      {
+        "text": "Replace the queues with synchronous HTTP calls so failures are visible to orders",
+        "explanation": "Wrong. That re-couples availability, latency and load: a slow warehouse would now slow checkout. It also keeps the orders service aware of every consumer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Spot the smell: the producer is sending **commands**, each addressed to one specific handler. So the producer must know every consumer.\n2. Ask what the producer actually knows: *an order was placed*. That is an **event**.\n3. Publish `OrderPlaced` once to a pub/sub topic.\n4. Email, loyalty and warehouse each subscribe and translate the event into their own work.\n5. A new fraud team? It adds a subscription. The orders service is unchanged.\n\nCommands still have their place (one intended handler, for example `ShipOrder` to the warehouse), but facts that many teams care about should be events.",
+    "link": {
+      "title": "Publish–subscribe pattern (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern"
+    }
+  },
+  {
+    "id": "msg-sync-vs-async-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A team replaces a direct HTTP call from Orders to Invoicing with a single SQS queue that Invoicing consumes. Which kinds of decoupling have they gained? Select all that apply.",
+    "options": [
+      {
+        "text": "Fan-out: a new Analytics service can also receive every order without changing Orders",
+        "explanation": "Wrong. A queue gives each message to **one** consumer. If Analytics read from the same queue it would compete with Invoicing and steal some of its messages. Fan-out needs a topic, such as SNS feeding a queue per subscriber."
+      },
+      {
+        "text": "Temporal: Invoicing can be down while Orders keeps sending",
+        "explanation": "Correct. SQS stores the messages durably, so Orders only needs the queue to be available. Invoicing catches up when it returns."
+      },
+      {
+        "text": "Format: Invoicing keeps working if Orders renames payload fields",
+        "explanation": "Wrong. A queue carries bytes; it does nothing about schemas. Renamed fields still break Invoicing. That needs versioned schemas and compatibility rules."
+      },
+      {
+        "text": "Rate: Orders can burst above Invoicing's processing speed",
+        "explanation": "Correct. The backlog builds in the queue and Invoicing drains it at its own pace. This is queue-based load levelling."
+      },
+      {
+        "text": "Location: Orders needs only the queue's URL, not Invoicing's hosts",
+        "explanation": "Correct. Invoicing can move, scale or change its address and Orders never notices, because both sides only know the queue."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Go through the four kinds of decoupling from the lesson, plus schema:\n\n| Kind | Queue gives it? |\n|---|---|\n| Temporal | Yes |\n| Rate | Yes |\n| Location | Yes |\n| Fan-out | No, needs a topic |\n| Format | No, never |\n\n1. Temporal, rate and location all come from the broker sitting in the middle and storing messages.\n2. Fan-out needs one **copy** per consumer. A point-to-point queue makes no copies.\n3. A plain queue does not supply schema compatibility; schema tooling and compatibility rules must be explicitly designed.",
+    "link": {
+      "title": "What is a message queue? (AWS)",
+      "url": "https://aws.amazon.com/message-queue/"
+    }
+  }
+]

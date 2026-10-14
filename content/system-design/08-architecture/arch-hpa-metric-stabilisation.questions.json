@@ -1,0 +1,62 @@
+[
+  {
+    "id": "arch-stateless-web-tier-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kubernetes HPA targets 60% average CPU. The Kubernetes Deployment currently has 4 pods averaging 90% CPU. Assume identical CPU requests and valid metrics for every pod. Ignoring tolerances and limits, how many replicas will the HPA ask for?",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "Wrong. Adding just one pod spreads the same 360% of total CPU over 5 pods, about 72% each, still above the 60% target."
+      },
+      {
+        "text": "6",
+        "explanation": "Correct. 4 pods at 90% scaled to a 60% target is 4 × 90 / 60 = 6.0, which rounds up to 6. Spreading the same total load over 6 pods gives about 60% each."
+      },
+      {
+        "text": "8",
+        "explanation": "Wrong. That would just double the count. HPA scales in proportion to how far the metric is from the target, not by a fixed factor."
+      },
+      {
+        "text": "4, because HPA only reacts to memory by default.",
+        "explanation": "Wrong. CPU utilisation is the classic HPA metric, and it's configured here explicitly."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The HPA picks the pod count that would bring the average metric back to its target:\n\n```formula\nR_new = ⌈R × M / T⌉\nwhere\nR_new: the replica (pod) count the HPA asks for\nR: the pods running now, here 4\nM: the current average metric, here 90 % CPU\nT: the target metric, here 60 % CPU\n⌈ ⌉: ceiling: round up to a whole number\n%: per cent of each pod's CPU request\nIn words: grow the pod count by how far the metric is over target, rounding up.\n```\n\n2. Plug in the numbers:\n\n```formula\nR_new = ⌈4 × 90 % / 60 %⌉\nR_new = ⌈360 % / 60 %⌉\nR_new = ⌈6.0⌉ = 6\nwhere\nR_new: the replica (pod) count the HPA asks for\n⌈ ⌉: ceiling: round up to a whole number\n%: per cent of one pod's CPU request\nIn words: 4 pods at 90 % become 6 pods.\n```\n\n3. Sanity check: total CPU demand is 4 × 90% = 360% of one pod's request. Over 6 pods that's 60% each, which hits the target.\n4. In practice the HPA also applies a tolerance (10% by default) and stabilisation windows to avoid flapping.",
+    "link": {
+      "title": "Kubernetes: Horizontal Pod Autoscaling",
+      "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Traffic drops for 2 minutes during a TV advert break and then returns. Your HPA has `behavior.scaleDown.stabilizationWindowSeconds: 0`, and after each break you see a burst of 5xx errors while pods come back. What's the most likely fix?",
+    "options": [
+      {
+        "text": "Increase the CPU target from 60% to 90% so fewer pods are needed.",
+        "explanation": "Wrong. Higher utilisation means less headroom, making spikes worse, and it doesn't stop the flapping."
+      },
+      {
+        "text": "Restore a scale-down stabilisation window (the default is 5 minutes) so the HPA keeps pods through short dips.",
+        "explanation": "Correct. The HPA uses the highest recommendation over the window before scaling down, so a 2-minute dip doesn't remove capacity you need again straight away."
+      },
+      {
+        "text": "Switch the HPA to scale on memory instead of CPU.",
+        "explanation": "Wrong. The problem is how quickly it scales down after a dip, not which metric it reads."
+      },
+      {
+        "text": "Use sticky sessions so returning users go back to their old pods.",
+        "explanation": "Wrong. Those pods were removed, and sticky sessions don't add capacity."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Window 0: dip → scale down at once → traffic returns → pods start again (seconds to minutes) → errors meanwhile.\n2. Default 300 s window: the HPA scales down only to the highest replica count recommended in the last 5 minutes.\n3. A 2-minute dip following an in-window high recommendation preserves that recommendation; an older high recommendation that has already expired does not provide this protection.\n4. Scale-up stays fast (no window by default), so real growth is still handled.\n5. Trade-off: you pay for some idle pods for a few minutes.",
+    "link": {
+      "title": "Kubernetes: Horizontal Pod Autoscaling",
+      "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    }
+  }
+]

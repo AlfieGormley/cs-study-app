@@ -1,0 +1,70 @@
+[
+  {
+    "id": "arch-scaling-reads-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're designing a home timeline for 200M users. Most follow about 200 accounts, but 0.01% of accounts have over 10M followers. Users load the timeline far more often than they post. Which design fits best?",
+    "options": [
+      {
+        "text": "Pure fan-out on read: at load time, query the latest posts of every followed account and merge.",
+        "explanation": "Wrong. With about 200 followees and very frequent timeline loads, doing a 200-way merge per load is expensive at this read volume."
+      },
+      {
+        "text": "Pure fan-out on write: on each post, push the post ID into every follower's precomputed timeline.",
+        "explanation": "Wrong. This is great for normal users, but a single celebrity post would trigger more than 10M timeline writes, causing huge write spikes and delays."
+      },
+      {
+        "text": "Hybrid: fan out on write for normal accounts into cached per-user timelines, and merge posts from the few celebrity accounts in at read time.",
+        "explanation": "Correct. Most of the timeline is precomputed and cheap to read, while the few high-follower accounts avoid write amplification by being fetched on read. This is the approach Twitter described."
+      },
+      {
+        "text": "Store all posts in one table and add read replicas until the queries are fast enough.",
+        "explanation": "Wrong. Replicas add throughput, but each timeline query is still an expensive multi-account merge. It doesn't fix the cost per query."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Read:write ratio is high, which favours precomputing timelines (fan-out on write).\n2. Write cost for a normal user: if a particular normal account has 200 followers, it requires about 200 list inserts. The stated 200 followees per user does not establish that every normal account has 200 followers. Fine.\n3. Write cost for a celebrity: 10M+ followers means 10M+ inserts per post. Too much.\n4. Hybrid:\n   - Normal posts are pushed into each follower's Redis timeline list (capped at, say, 800 entries).\n   - At read time, fetch the precomputed list plus recent posts from the handful of celebrities you follow, then merge.\n5. Read cost: 1 list fetch + a few celebrity lookups. Use an explicit fan-out threshold and queue admission budget to bound per-post work; total work still depends on posting rates and recipients.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A leaderboard for a game with 20 million players shows the top 100 and \"your rank\". It currently runs `ORDER BY score DESC` on every request. Which improvements are sound? Select all that apply. The product needs live personal ranks, with deterministic tie-breaking and no personalised filtering; the common top-100 list may lag by a few seconds.",
+    "options": [
+      {
+        "text": "Keep scores in a Redis sorted set (`ZADD` on each score change) and read the top 100 with `ZREVRANGE` and a player's rank with `ZREVRANK`.",
+        "explanation": "Correct. Sorted sets keep members ordered, so rank and range queries cost O(log N) plus the size of the result, where N is the number of players in the set (20 million here). That is far less than sorting 20 million rows."
+      },
+      {
+        "text": "Cache the top-100 list for a few seconds, since every player sees the same one.",
+        "explanation": "Correct. It's identical for everyone, so even a short TTL removes almost all repeated work."
+      },
+      {
+        "text": "Add read replicas and keep sorting 20 million rows per request.",
+        "explanation": "Wrong. Replicas spread the load, but each request still does a huge sort. The problem is the work per read, not the number of machines."
+      },
+      {
+        "text": "Recompute every player's rank in a nightly batch and show only that.",
+        "explanation": "Wrong for this product. 'Your rank' would be up to a day old, which is poor for a live game, while sorted sets give it live at low cost."
+      },
+      {
+        "text": "Add an index on `score` so the top 100 can be read without a full sort.",
+        "explanation": "Correct as a step. An index makes the top-N read cheap, but computing an arbitrary player's rank still needs a count of everyone above them, which is why the sorted set is better."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. Top 100: same for everyone → cache it, or read it from an ordered structure.\n2. Redis ZREVRANK returns a zero-based position including a member-order tie-break; add 1 for ordinal display. Equal-score competition/dense ranks require a different policy.\n   - SQL with an index: still O(rank) to count, i.e. work that grows with the number of players above you.\n   - Redis sorted set: `ZREVRANK` is O(log N), where N is the number of players in the set: doubling the players adds only about one more step.\n3. Memory and node fit are not established here. Measure representative member lengths, encodings, allocator overhead, persistence/fork headroom and replica requirements; no universal bytes-per-member estimate is included.\n4. Write path: one `ZADD` per score change. That's precomputation: do the work on write.",
+    "link": {
+      "title": "Redis ZREVRANK",
+      "url": "https://redis.io/docs/latest/commands/zrevrank/"
+    }
+  }
+]

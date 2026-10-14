@@ -1,0 +1,92 @@
+[
+  {
+    "id": "arch-stateless-web-tier-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "During every Kubernetes rolling deploy, a small number of clients get connection-reset errors, even though readiness probes are configured. Which explanation and fix is most likely right?",
+    "options": [
+      {
+        "text": "Pods exit immediately on SIGTERM while in-flight requests are running, and endpoint removal is still propagating; handle SIGTERM by draining in-flight requests (and optionally a short preStop delay) before exiting.",
+        "explanation": "Correct as a likely cause. Endpoint updates and local termination proceed concurrently; preStop runs before the stop signal and shares the grace-period budget. Draining reduces this failure mode but must be validated."
+      },
+      {
+        "text": "The liveness probe is too slow; make it run every second.",
+        "explanation": "Wrong. Liveness probes decide when to restart unhealthy pods. They have nothing to do with how a pod is shut down during a deploy."
+      },
+      {
+        "text": "Rolling deploys always drop some requests; switch to deleting all pods and recreating them.",
+        "explanation": "Wrong. Recreating everything causes a full outage. Rolling deploys can be lossless with proper graceful shutdown."
+      },
+      {
+        "text": "The Kubernetes Deployment has too many replicas; reduce it to one.",
+        "explanation": "A single replica is fragile, but a rolling update with surge capacity can overlap old and new pods; one replica does not by itself imply every deployment has downtime."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Termination starts concurrent endpoint updates and kubelet shutdown. Normal terminating endpoints become not ready; propagation is not instantaneous.\n2. The kubelet runs any preStop hook before sending the configured stop signal (normally SIGTERM). Both hook and draining consume the grace period.\n3. An app exiting immediately can drop routed or in-flight work.\n4. Measure propagation, continue serving during an appropriate preStop delay, then stop accepting new work and drain with a bounded deadline. Reconnect long-lived clients.\n5. Load-test rollouts and failure paths. This reduces avoidable resets but does not guarantee zero errors under every failure.",
+    "link": {
+      "title": "Kubernetes Pod lifecycle",
+      "url": "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "For an ordinary Kubernetes Deployment using normal Service endpoint routing, what is the difference when a readiness or liveness probe reaches its configured failure threshold?",
+    "options": [
+      {
+        "text": "Readiness failure restarts the container; liveness failure removes it from the Service.",
+        "explanation": "Wrong. It's the other way round."
+      },
+      {
+        "text": "Both restart the container; liveness just checks more often.",
+        "explanation": "Wrong. Only a liveness failure triggers a restart. Readiness controls traffic."
+      },
+      {
+        "text": "Readiness failure only logs a warning; liveness failure deletes the Kubernetes Deployment.",
+        "explanation": "Wrong. Neither deletes the Kubernetes Deployment. Readiness takes the pod out of rotation; liveness restarts it."
+      },
+      {
+        "text": "Readiness failure removes normal endpoint eligibility without itself restarting the container; liveness failure can cause its restart under the configured policy",
+        "explanation": "Correct. Readiness answers 'should traffic come here now?'; liveness answers 'is this process stuck and in need of a restart?'"
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Pod warming its cache at startup: not ready yet, but not broken. Readiness fails, so it gets no traffic. No restart.\n2. Pod deadlocked: liveness fails, so the kubelet restarts it.\n3. Common mistake: making liveness check the database. If the DB blips, every pod restarts at once and makes the outage worse.\n4. Rolling update behavior uses availability and maxUnavailable/maxSurge settings; it need not wait for every new pod before removing any old pod.",
+    "link": {
+      "title": "Kubernetes: Liveness, readiness and startup probes",
+      "url": "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A healthy Kubernetes Deployment has 10 replicas, maxSurge: 2 and maxUnavailable: 0. What limits does the rolling-update controller aim to maintain, excluding independent failures and allowing terminating pods to finish?",
+    "options": [
+      {
+        "text": "Up to 12 non-terminating pods and at least 10 available pods under normal rollout control; total existing pods can be higher while termination finishes",
+        "explanation": "Correct. Surge and unavailability constrain rollout decisions; terminating pods can temporarily consume extra resources, and node/app failures can still reduce actual availability."
+      },
+      {
+        "text": "At most 10 pods exist, and at least 8 are ready.",
+        "explanation": "Wrong. That describes maxSurge 0 and maxUnavailable 2."
+      },
+      {
+        "text": "At most 20 pods exist, because all new pods start before any old one stops.",
+        "explanation": "Wrong. That would be a blue-green style switch. maxSurge caps extras at 2."
+      },
+      {
+        "text": "At most 12 pods exist, and the number of ready pods may drop to 0 briefly.",
+        "explanation": "The controller does not intentionally remove all available capacity with maxUnavailable: 0. It does not provide an unconditional minimum under failures or an absolute total-pod cap."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Desired count: 10.\n2. Surge allowance: 2 additional non-terminating pods during normal rollout.\n3. maxUnavailable: 0 directs the controller to retain desired available capacity as it replaces pods.\n4. Availability can differ from readiness when minReadySeconds applies.\n5. Terminating old pods can remain present and consume resources beyond the nominal 12 until their grace periods end.\n6. These are controller policies, not a promise against node outages, probe failures, insufficient capacity or incompatible versions.",
+    "link": {
+      "title": "Kubernetes: Deployments",
+      "url": "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/"
+    }
+  }
+]

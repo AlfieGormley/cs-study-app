@@ -1,0 +1,92 @@
+[
+  {
+    "id": "arch-scaling-writes-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a single-writer architecture with full read replicas, why does replication not partition the write stream?",
+    "options": [
+      {
+        "text": "Every replica must apply every write, so adding copies multiplies the total write work instead of dividing it.",
+        "explanation": "Each full replica replays the write stream. Read offload can free primary headroom, but replication does not assign independent subsets of writes to additional primaries."
+      },
+      {
+        "text": "Replicas are read-only, so they reject writes, and the primary then has to retry them.",
+        "explanation": "A correctly routed application sends writes to the primary. Rejected misrouted writes are not the architectural reason."
+      },
+      {
+        "text": "Replicas use a different storage engine that is slower at writes.",
+        "explanation": "Replication need not change the engine. Replaying writes can cost differently from executing transactions on the primary."
+      },
+      {
+        "text": "They do increase write capacity, linearly with the number of replicas.",
+        "explanation": "Neither replication nor sharding guarantees linear scaling; sharding can divide write ownership when load and other resources permit."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Suppose the primary handles 10,000 writes/s.\n2. Each of 5 replicas also applies those 10,000 writes/s.\n3. Add up the work across the cluster:\n\n```formula\nW_total = W × (1 + r)\nW_total = 10000 /s × (1 + 5)\nW_total = 60000 /s\nwhere\nW_total: write applications per second across all nodes\nW: writes per second from the application, 10,000\nr: the number of full replicas, 5\n/s: per second\nIn words: 6 nodes each apply all 10,000 writes a second: 60,000 applies a second of work for 10,000 useful writes.\n```\n\nThe *useful* write throughput is still 10,000/s.\n4. Contrast with 4 shards: each takes 2,500 of 10,000 writes/s, so they could support more writes if each has spare capacity and no shared bottleneck dominates.\n5. Copying helps reads; splitting helps writes.",
+    "link": {
+      "title": "Azure Architecture Center: Sharding pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A messaging app is sharding its `messages` table. The most common query is \"load the latest 50 messages in conversation X\". Which shard key is best?",
+    "options": [
+      {
+        "text": "`message_id` (random UUID)",
+        "explanation": "Wrong. It spreads writes evenly, but a conversation's messages would be scattered across every shard, so the common query becomes a scatter-gather across all of them."
+      },
+      {
+        "text": "`sent_date`",
+        "explanation": "Wrong. All of today's messages land on one shard, a hot partition, and conversations still span many shards over time."
+      },
+      {
+        "text": "`conversation_id`",
+        "explanation": "Correct. All messages for one conversation live on one shard, so the main query hits a single shard, and there are millions of conversations to spread load across."
+      },
+      {
+        "text": "`sender_country`",
+        "explanation": "Wrong. Low cardinality and very skewed (a few countries dominate), and conversations between countries would span shards."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Criteria: (a) even spread of writes, (b) the hot query hits one shard.\n2. `message_id`: (a) yes, (b) no.\n3. `sent_date`: (a) no, today is hot; (b) no.\n4. `sender_country`: (a) no, (b) no.\n5. `conversation_id`: (a) yes, many conversations; (b) yes.\n6. Caveat: a giant group chat could become hot. Discord, for example, buckets messages by channel *and* time window to bound partition size.",
+    "link": {
+      "title": "Discord: How Discord stores trillions of messages",
+      "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users are sharded with `hash(user_id) % 4`. You add a fifth shard and switch to `% 5`. Roughly what fraction of users now map to a different shard? Assume hash values are approximately uniform.",
+    "options": [
+      {
+        "text": "About 20%, the share the new shard should take.",
+        "explanation": "Wrong. That's the ideal amount to move, but modulo hashing doesn't achieve it: changing N reshuffles almost every key."
+      },
+      {
+        "text": "None; existing keys stay where they are.",
+        "explanation": "Wrong. The shard is recomputed from the new modulus, so most keys get a new answer."
+      },
+      {
+        "text": "About 80%: a key stays put only if `h % 4 == h % 5`, which holds for 4 of every 20 hash values.",
+        "explanation": "Correct. Only about 1 in 5 keys keeps its shard, so roughly 80% of the data must move. Logical shards or consistent hashing avoid this."
+      },
+      {
+        "text": "Exactly 50%.",
+        "explanation": "Wrong. There's no reason for half; work it out over one full cycle of 20 hash values."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The shard is the remainder after dividing the hash by the shard count. Both patterns repeat together every 20 hash values:\n\n```formula\nL = lcm(4, 5) = 20\nwhere\nL: the length of the repeating cycle\nlcm: least common multiple: the smallest number both 4 and 5 divide into exactly\nIn words: after every 20 hash values, both remainders start again from 0.\n```\n\n2. Count hash values from 0 through 19 whose remainders agree: only 0, 1, 2 and 3 do, so 4 values.\n3. Turn that into fractions:\n\n```formula\nF_same = 4 / 20 = 0.2 = 20 %\nF_moved = 1 − F_same = 80 %\nwhere\nF_same: the fraction of keys whose shard is unchanged\nF_moved: the fraction that move to a new shard\n%: per cent; 0.2 = 20 %\nIn words: only 1 key in 5 stays; 4 in 5 move.\n```\n4. Fix: thousands of logical shards, mapped to physical servers in a lookup table. Adding a server moves whole logical shards, about 1/5 of them.\n\n```python\n# Count hashes keeping their shard.\nsum(h % 4 == h % 5\n    for h in range(20))  # 4\n# 4 stay; the other 16 move.\n```",
+    "link": {
+      "title": "Azure Architecture Center: Sharding pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/sharding"
+    }
+  }
+]

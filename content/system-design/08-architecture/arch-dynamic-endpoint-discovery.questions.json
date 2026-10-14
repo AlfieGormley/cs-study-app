@@ -1,0 +1,92 @@
+[
+  {
+    "id": "arch-service-communication-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a Kubernetes cluster, the Orders service calls `http://payments:8080`. Which discovery style is this? Assume payments is a normal ClusterIP Service in the same namespace, with ordinary readiness routing and kube-proxy forwarding.",
+    "options": [
+      {
+        "text": "Server-side discovery: the Service name resolves to a virtual IP and kube-proxy forwards to a ready pod.",
+        "explanation": "Correct. The client calls a stable address and the platform's routing layer picks the instance. That's server-side discovery."
+      },
+      {
+        "text": "Client-side discovery, because Orders chooses which pod to call.",
+        "explanation": "Wrong. Orders never sees the list of pods. It calls one stable name and something else decides which pod gets the request."
+      },
+      {
+        "text": "No discovery; the IP is hard-coded.",
+        "explanation": "Wrong. `payments` is a DNS name managed by Kubernetes, and the pods behind it change constantly. That's dynamic discovery."
+      },
+      {
+        "text": "Peer-to-peer gossip discovery.",
+        "explanation": "Wrong. Kubernetes Services use the API server's endpoint lists and node-level forwarding rules, not gossip between services."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Who picks the instance? Not Orders, which only knows `payments`.\n2. DNS returns the Service's ClusterIP.\n3. kube-proxy rules on the node rewrite that to one of the ready pod IPs.\n4. Because a component other than the client chooses the instance, this is server-side discovery.\n5. Contrast: in client-side discovery the client would fetch `[ip1, ip2, ip3]` and choose itself.",
+    "link": {
+      "title": "Kubernetes: Service",
+      "url": "https://kubernetes.io/docs/concepts/services-networking/service/"
+    }
+  },
+  {
+    "id": "arch-service-communication-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A company has services in Java, Go, Python and Node.js and uses client-side discovery with a Java-only library. What's the main drawback they'll hit, and a common fix?",
+    "options": [
+      {
+        "text": "Client-side discovery always adds an extra network hop; switch to UDP.",
+        "explanation": "Wrong. Client-side discovery *avoids* the extra hop, and switching transport protocol doesn't address the problem."
+      },
+      {
+        "text": "The discovery and load-balancing logic must be reimplemented and maintained in every language; move that logic into a sidecar proxy or use server-side discovery.",
+        "explanation": "Correct. This is the classic weakness of client-side discovery. Sidecars provide the same smart client behaviour in a language-agnostic way."
+      },
+      {
+        "text": "Client-side discovery can't do health checks; replace the registry with static IPs.",
+        "explanation": "Wrong. Registries do track health (heartbeats or platform readiness), and static IPs don't work with autoscaling."
+      },
+      {
+        "text": "Non-Java services can't make HTTP calls at all.",
+        "explanation": "Wrong. They can make HTTP calls; what they lack is the library for registry lookups, balancing and retry behaviour."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Client-side discovery puts logic in the client: registry lookup, caching, instance selection, retries.\n2. With four languages, you need four implementations kept consistent, which is where bugs and drift creep in.\n3. Options:\n   - Server-side discovery: clients call a stable name; logic lives in the LB.\n   - Sidecar: same smart balancing, but in one proxy shared by all languages.\n4. This is an architectural trade-off; no single historical cause for a specific company migration is asserted here.",
+    "link": {
+      "title": "microservices.io: Client-side discovery",
+      "url": "https://microservices.io/patterns/client-side-discovery.html"
+    }
+  },
+  {
+    "id": "arch-service-communication-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Java service calls `inventory.internal`, a DNS name with a 30-second TTL pointing at a set of VMs. After a deploy replaces all the VMs, this one service keeps calling the old, now-dead IPs for hours, while other services recover within a minute. What's the most likely cause?",
+    "options": [
+      {
+        "text": "The DNS server ignored the TTL and kept serving old records.",
+        "explanation": "Other clients recovering makes a process-local cache a plausible explanation, but different resolvers and cache paths mean it does not logically rule out every DNS-side issue."
+      },
+      {
+        "text": "The new VMs failed their health checks.",
+        "explanation": "Wrong. Other services reach them fine."
+      },
+      {
+        "text": "The client runtime is caching DNS results beyond the TTL; the JVM, for instance, can cache lookups indefinitely depending on its security settings.",
+        "explanation": "Correct. The record changed, but this process never asked again. Set the JVM's `networkaddress.cache.ttl` to a short value, or use a discovery mechanism that doesn't rely on client DNS caching."
+      },
+      {
+        "text": "Long-lived connections from a pool were still connected to the old VMs.",
+        "explanation": "An already established connection to a terminated VM fails, but reconnecting can reuse a retained address list. Inspect both the connection pool and resolver; a reconnect does not guarantee a fresh DNS query."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Check the addresses resolved and retained inside the affected process and client library.\n2. In Java 25 InetAddress, successful lookup caching defaults to an implementation-specific period; `networkaddress.cache.ttl=-1` means cache forever. Older security-manager defaults should not be assumed for modern JDKs.\n3. Also inspect negative/stale caches and address lists retained by connection pools. Reconnection need not force a new DNS lookup.\n4. Configure and test discovery refresh and failure behavior; a stable load-balancer name can reduce instance churn but its own addresses can also change.",
+    "link": {
+      "title": "Java 25 InetAddress caching policy",
+      "url": "https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/net/InetAddress.html"
+    }
+  }
+]

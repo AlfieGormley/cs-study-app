@@ -1,0 +1,138 @@
+[
+  {
+    "id": "arch-scaling-reads-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A social app's post page shows each post's like count. It currently runs `SELECT COUNT(*) FROM likes WHERE post_id = ?`, which takes 800 ms on viral posts with millions of likes. What's the most appropriate fix? The product accepts briefly delayed counts but not day-old counts.",
+    "options": [
+      {
+        "text": "Add another read replica so the count runs on a less busy machine.",
+        "explanation": "Wrong. The query is inherently expensive (counting millions of rows). A less busy replica still has to count them, so it's still slow."
+      },
+      {
+        "text": "Denormalise: keep a `like_count` column (or a Redis counter) updated when likes are added or removed, and read that.",
+        "explanation": "Correct. Maintaining the aggregate avoids an O(number of likes) recount. The point-lookup cost depends on the store/index; update atomically with like changes or reconcile an idempotent projection."
+      },
+      {
+        "text": "Normalise the schema further, splitting likes into more tables.",
+        "explanation": "Wrong. More normalisation means more work at read time, the opposite of what you need."
+      },
+      {
+        "text": "Cache each count for 24 hours.",
+        "explanation": "Wrong. It helps load, but the first read after expiry still costs 800 ms, and counts that are a day out of date on viral posts are visibly wrong."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Cost of the read: scanning millions of index entries per view.\n2. Read:write ratio is high (many views per like), so moving the work to write time pays off.\n3. On each like: `UPDATE posts SET like_count = like_count + 1 WHERE id = ?` (or Redis `INCR`).\n4. Read: one indexed row/key lookup; measure latency. Couple the count update atomically to the like record, or use reliable deduplicated projection and reconciliation.\n5. Watch out: a viral post's counter row becomes a hot key for writes. Shard the counter (N sub-counters summed on read) or batch increments.",
+    "link": {
+      "title": "Wikipedia: Denormalization",
+      "url": "https://en.wikipedia.org/wiki/Denormalization"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You have an analytics dashboard that aggregates 2 billion order rows by region and day. Users accept data up to 1 hour old. Which approaches can reduce repeated aggregation if their refresh duration, source lag and cache age are budgeted to stay within that hour? Select all that apply.",
+    "options": [
+      {
+        "text": "A precomputed view or rollup refreshed often enough that source age plus refresh interval/duration stays below one hour",
+        "explanation": "Correct. Refreshing every hour alone can exceed a one-hour data-age budget because refresh work and source lag add time."
+      },
+      {
+        "text": "Run the full aggregation on the primary database for every dashboard load.",
+        "explanation": "Wrong. Scanning 2 billion rows per view is slow and steals capacity from transactional writes."
+      },
+      {
+        "text": "Stream order events into a projector that incrementally updates per-region daily counters.",
+        "explanation": "Correct. Incremental maintenance keeps the read model fresh with small per-event updates, which is CQRS-style precomputation."
+      },
+      {
+        "text": "Cache the shared result with a freshness policy that accounts for its source snapshot age and refresh duration, not just time since insertion",
+        "explanation": "Correct. A one-hour TTL by itself does not prove one-hour source freshness; misses still pay the aggregation cost and need controlled refresh."
+      },
+      {
+        "text": "Denormalise the region name into every order row and keep running the full aggregation per request.",
+        "explanation": "Wrong. Removing a join barely helps when the real cost is scanning and aggregating 2 billion rows on every request."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Identify the cost: aggregating 2 billion rows, not joins.\n2. Staleness budget: 1 hour, so precomputing is allowed.\n3. Options that avoid repeating the aggregate per request: rollup/materialised view (0), incremental projector (2), and cache (3, though it still pays the full cost on each miss).\n4. Options that still aggregate everything per request: 1 and 4.\n5. A good design: a rollup maintained incrementally or refreshed within a measured age budget, plus a cache that preserves that budget.",
+    "link": {
+      "title": "Azure Architecture Center: Materialized View pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/materialized-view"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An Order History service builds a read model from `OrderPlaced`, `OrderShipped` and `UserRenamed` events published by three services. Users sometimes see an order as 'placed' even though the shipping email arrived an hour ago. Logs confirm that OrderShipped was applied before an older OrderPlaced event overwrote its status. Which diagnosis and repair best address this?",
+    "options": [
+      {
+        "text": "The projector consumes events out of order or dropped an event; process events per order in order, make the projector idempotent with versions, and rebuild the view by replaying events when a bug is fixed.",
+        "explanation": "Correct. Read models are only as good as their event handling. Per-key ordering, idempotent upserts with version checks, and the ability to replay are what make CQRS views trustworthy."
+      },
+      {
+        "text": "The read model is denormalised; normalise it so it joins the source services' databases.",
+        "explanation": "Wrong. Joining across services' databases recreates the shared-database coupling that CQRS read models exist to avoid."
+      },
+      {
+        "text": "Materialised views are always out of date; there's nothing to fix.",
+        "explanation": "Some lag is expected, but acceptable age is a product requirement. An hour can arise from backlog, unavailable dependencies or event-handling errors; investigate rather than infer a unique cause."
+      },
+      {
+        "text": "Add a cache in front of the read model.",
+        "explanation": "Wrong. A cache adds another layer of staleness and does nothing about a projector that missed or misapplied an event."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Symptom: the view never caught up to `Shipped` for some orders.\n2. Likely causes:\n   - `OrderShipped` processed before `OrderPlaced`, then overwritten by it.\n   - Event dropped by a consumer that acknowledged before processing.\n3. Fixes:\n   - Partition related events consistently and define causal/version rules. Matching keys in separate topics or from independent producers do not create a cross-service total order.\n   - Use ordered per-entity versions for complete snapshots. Partial events/deltas need gap handling or separate source versions; dropping every older delta can lose required updates.\n   - Acknowledge only after the view is written (at-least-once), and make updates idempotent.\n   - Keep the event log so the view can be rebuilt from scratch.\n4. Monitor projector lag to catch problems early.",
+    "link": {
+      "title": "Azure Architecture Center: CQRS pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You maintain a Postgres materialised view `daily_sales` that takes 4 minutes to refresh, and dashboards query it constantly. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A plain `REFRESH MATERIALIZED VIEW` blocks dashboard reads of the view until it completes.",
+        "explanation": "Correct. It takes an exclusive lock, so dashboards stall for the 4 minutes."
+      },
+      {
+        "text": "CONCURRENTLY allows SELECTs during refresh, requiring a populated view and a unique plain-column index covering all rows",
+        "explanation": "Correct. It builds the new result and applies the differences, so readers keep seeing the old data meanwhile."
+      },
+      {
+        "text": "Postgres updates the view automatically as orders are inserted.",
+        "explanation": "Wrong. Postgres materialised views only change when you refresh them. Incremental maintenance needs other tools or your own triggers or rollups."
+      },
+      {
+        "text": "Visible source data can be older than one refresh interval because refresh duration, upstream lag and failures also contribute",
+        "explanation": "Correct. An hourly start schedule plus a 4-minute successful refresh can expose a prior snapshot for about 64 minutes; missed refreshes can be older still."
+      },
+      {
+        "text": "A materialised view is just a saved query that runs on every SELECT.",
+        "explanation": "Wrong. That's a regular view. A materialised view stores the result."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Regular view: query text, rerun every time.\n2. Materialised view: stored result, refreshed on demand.\n3. Plain refresh: exclusive lock, readers wait.\n4. CONCURRENTLY: needs a qualifying unique index and a populated view; permits concurrent SELECTs and is not universally slower.\n5. Hourly refresh → data up to about 1 h old (plus the 4 min refresh time).",
+    "link": {
+      "title": "PostgreSQL REFRESH MATERIALIZED VIEW",
+      "url": "https://www.postgresql.org/docs/current/sql-refreshmaterializedview.html"
+    }
+  }
+]

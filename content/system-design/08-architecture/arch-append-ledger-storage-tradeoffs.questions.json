@@ -1,0 +1,70 @@
+[
+  {
+    "id": "arch-scaling-writes-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A metrics system needs to ingest 2 million data points per second with mostly time-range reads. The team is choosing between a B-tree–based relational store with in-place updates and an LSM-tree–based store. Which reasoning is most accurate?",
+    "options": [
+      {
+        "text": "B-trees are always faster for writes because they keep data sorted on disk.",
+        "explanation": "B-tree pages may be cached and buffered; neither B-trees nor LSM trees universally win on write throughput."
+      },
+      {
+        "text": "LSM trees buffer writes and flush sorted files, which can suit heavy ingestion; reads and compaction add costs, so benchmark the workload and sustained compaction behavior.",
+        "explanation": "This states the trade-off without promising a universal winner. Time partitioning can help locality and retention, depending on layout and compaction policy."
+      },
+      {
+        "text": "LSM trees avoid all write amplification because they never rewrite data.",
+        "explanation": "Wrong. Compaction rewrites data repeatedly as files merge, so LSM trees do have write amplification. They just turn it into sequential I/O done in the background."
+      },
+      {
+        "text": "The storage engine makes no difference; only the number of servers matters.",
+        "explanation": "Wrong. The engine's write path determines per-node throughput by a large factor, which determines how many servers you need."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. B-tree inserts traverse and modify pages, potentially from cache, and may split pages; durable engines also log changes.\n2. A typical LSM engine logs writes, updates a memtable, flushes sorted files and later compacts them.\n3. Measure sustained ingestion, read latency, write amplification and stalls with the chosen durability settings.\n4. Time windows can help range locality and expiry, but late data and compaction policy affect repeated work.",
+    "link": {
+      "title": "Wikipedia: Log-structured merge-tree",
+      "url": "https://en.wikipedia.org/wiki/Log-structured_merge-tree"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A wallet service stores balances as one row per account, updated with `UPDATE ... SET balance = balance - x`. Popular merchant accounts receive thousands of payments per second and lock contention is high. The team considers an append-only ledger instead. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Appending independent entries can reduce contention on the balance row, though indexes, constraints and balance validation can still contend.",
+        "explanation": "The original update lock can be avoided on this path; this does not make the entire write operation conflict-free."
+      },
+      {
+        "text": "Current balances must be derived, for example by a running projection or periodic snapshots plus the entries since.",
+        "explanation": "Correct. Reads now need a projection; a naive SUM over millions of entries per read would be slow."
+      },
+      {
+        "text": "Every change becomes auditable history, which suits financial data.",
+        "explanation": "Retained entries support history, but these three fields alone do not establish a complete, tamper-resistant or balanced double-entry accounting system."
+      },
+      {
+        "text": "Overdraft checks become trivial, since appends never conflict.",
+        "explanation": "A fresh read alone cannot prevent two simultaneous debits from overspending; validation and spending must be atomic or use safely reserved rights."
+      },
+      {
+        "text": "Append-only means you can never correct a mistake.",
+        "explanation": "Wrong. You correct by appending a compensating entry, which keeps the history intact."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Update-in-place: every payment locks the same row, so payments are serialised.\n2. Ledger: every payment inserts a row, potentially avoiding that shared row lock while other contention remains.\n3. The current balance is derived:\n\n```formula\nbalance = S + Σ e_i\nwhere\nbalance: the account's current balance, in its currency\nS: the balance stored in the latest snapshot, in the same currency\ne_i: each ledger entry since that snapshot, in the same currency (negative for debits)\ni: counts through those entries\nΣ: sigma, \"the sum of\": add up every e_i\nIn words: last snapshot plus every change since.\n```\n4. Crediting a merchant needs no balance check, which is the hot path here.\n5. Debits that must not overdraw need atomic balance validation and spending: serialise per account, or reserve funds.\n6. Corrections: append `-x` with a reference to the original entry.",
+    "link": {
+      "title": "Martin Fowler: Event Sourcing",
+      "url": "https://martinfowler.com/eaaDev/EventSourcing.html"
+    }
+  }
+]

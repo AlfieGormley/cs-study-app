@@ -1,0 +1,122 @@
+[
+  {
+    "id": "arch-search-systems-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An Elasticsearch index has 5 primary shards and 1 replica on a 5-node cluster. p50 search latency is 20 ms, but p99 is 900 ms, and one node shows long garbage-collection pauses. Why does one bad node hurt so many searches? Assume unrestricted searches with no shard pruning and equal placement, giving the slow node two copies of different shards.",
+    "options": [
+      {
+        "text": "Every search scatters to a copy of all 5 shards and must wait for all of them, so any search that touches a shard copy on the slow node is slow.",
+        "explanation": "The query phase can be delayed by any participating slow shard. End-to-end latency also includes coordination, fetch and networking."
+      },
+      {
+        "text": "Elasticsearch routes all searches through the slow node because it holds the master role.",
+        "explanation": "Wrong. The elected master manages cluster state. It doesn't coordinate or execute every search."
+      },
+      {
+        "text": "Replicas must be searched together with primaries, doubling the work.",
+        "explanation": "Wrong. Each search uses *one* copy of each shard, primary or replica. Replicas give choice, not double work."
+      },
+      {
+        "text": "Only searches for documents stored on that node are affected, so the effect must be small.",
+        "explanation": "Wrong. A search doesn't know which shard holds the matches, so it has to query every shard."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Search: query every shard (one copy each) → merge → fetch.\n2. A simplified query-phase model is:\n\n```formula\nT_q = max(t_1, t_2, ..., t_5) + t_m\nwhere\nT_q: query-phase time for one search, in milliseconds (ms)\nt_1: response time of the copy chosen for shard 1, in ms\nt_2: likewise for shard 2\n...: and so on\nt_5: response time for shard 5\nmax: the largest of the values listed\nt_m: time to merge the shard results\nms: milliseconds\nIn words: a search waits for its slowest shard.\n```\n\n   Fetch and network work add further cost.\n3. The bad node holds 2 of the 10 shard copies, each the primary or replica of a different shard. If copies are picked at random, each of those two shards avoids the slow node half the time:\n\n```formula\nP_avoid = (1/2) × (1/2) = 0.25 = 25 %\nP_hit = 1 − P_avoid = 75 %\nwhere\nP_avoid: probability a search misses the slow node entirely; each 1/2 is the chance of picking the other copy of one affected shard\nP_hit: probability it touches the slow node at least once\n%: per cent\nIn words: a search dodges the slow node only if it dodges it for both affected shards: 1 time in 4.\n```\n\n4. So roughly 75% of searches may touch the slow node. Even if it's only slow during GC pauses, the tail gets very bad.\n5. Mitigations: fix the GC issue (heap sizing), use adaptive replica selection (default in recent versions) to prefer faster copies, and avoid oversharding.",
+    "link": {
+      "title": "Elasticsearch: Scalability and resilience",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A seller creates a listing; your API indexes it into Elasticsearch and immediately redirects to \"My listings\", which runs a search. About one time in three the new listing is missing, then appears on reload. Nothing is failing. What's going on? Assume an ordinary Elastic Stack index with the default interval and a query that includes the listing regardless of score.",
+    "options": [
+      {
+        "text": "The write went to a replica that hasn't caught up with the primary.",
+        "explanation": "Wrong. Writes use the primary and in-sync replication protocol; failed copies can be removed before acknowledgment. Having an operation does not itself make it searchable: shard-copy refresh timing controls search visibility."
+      },
+      {
+        "text": "The document has been indexed but not yet refreshed into a searchable segment; searches only see it after the next refresh, about 1 second by default.",
+        "explanation": "Correct. Elasticsearch is near-real-time. Until a refresh writes the buffer into a new segment, the document can be fetched by ID but doesn't appear in searches."
+      },
+      {
+        "text": "The translog was lost, so the document had to be re-sent.",
+        "explanation": "Wrong. Losing the translog would lose data, not delay it by a second, and nothing is failing here."
+      },
+      {
+        "text": "BM25 scored the new listing too low to appear on the first page.",
+        "explanation": "Wrong. 'My listings' is a filter on the seller, and the listing appears on reload with the same query, so ranking isn't the issue."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Index request → in-memory buffer + translog → acknowledged.\n2. Searchable only after a **refresh** creates a segment: about every 1 s by default.\n3. A redirect that searches within that second can miss the new document.\n4. Options:\n   - Use `refresh=wait_for` on this write, so the API responds only once it's searchable (waits for visibility; excessive wait_for listeners can force a refresh).\n   - Or show the listing from the database/your response on the next page.\n   - Avoid `refresh=true` on every write at volume: it creates lots of tiny segments.\n5. Don't shrink the refresh interval cluster-wide to fix one page.",
+    "link": {
+      "title": "Elasticsearch: Near real-time search",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/near-real-time.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 6-node cluster hosts a write-heavy logging index with 6 primaries and 2 replicas. Indexing throughput is the bottleneck and searches are rare. Which change most directly frees indexing capacity without reindexing?",
+    "options": [
+      {
+        "text": "Increase the number of primary shards on the existing index to 12.",
+        "explanation": "Wrong. The primary count is fixed at creation because routing depends on it. Changing it needs a reindex, split or shrink."
+      },
+      {
+        "text": "Add a third replica so writes are spread over more copies.",
+        "explanation": "Wrong. Every replica indexes every document, so more replicas multiply write work rather than spreading it."
+      },
+      {
+        "text": "Lower `refresh_interval` from 1 s to 100 ms.",
+        "explanation": "Wrong. More frequent refreshes create more small segments and more merging, which costs indexing throughput."
+      },
+      {
+        "text": "Reduce replicas from 2 to 1 (a live setting), and consider a longer `refresh_interval`.",
+        "explanation": "Correct. Each document is currently indexed on 3 copies; with 1 replica it's 2, a third less work. Fewer refreshes also mean fewer segments to create and merge."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Write path: primary indexes the doc, then each replica indexes it too.\n2. 2 replicas → 3 copies → 3× indexing work. 1 replica → 2×.\n3. `number_of_replicas` is a dynamic setting; primaries are not.\n4. Refresh: a 30 s interval for a rarely searched log index cuts segment churn.\n5. Keep at least 1 replica for redundancy, verify it is assigned and in sync, and check acknowledgment/durability settings; merely configuring a replica is not a loss guarantee. Then future daily indexes can get a better primary count via the index template.",
+    "link": {
+      "title": "Elasticsearch: Scalability and resilience",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A product search has 20 primary shards. A scraper requests `from=9990&size=10` (page 1,000). Why is this expensive, and what do you offer instead?",
+    "options": [
+      {
+        "text": "Each shard may return up to 10,000 candidate hits: up to 200,000 across 20 shards. Offer search_after with stable sort values and a point-in-time view for consistent traversal.",
+        "explanation": "Correct. Each shard can't know which of its hits land in the global positions 9,990–9,999, so each returns its top `from + size`. `search_after` pages by the last seen sort values instead."
+      },
+      {
+        "text": "Only one shard holds page 1,000, so the cost is in finding which one.",
+        "explanation": "Wrong. Results are spread across all shards by score, not stored in page order on one shard."
+      },
+      {
+        "text": "Deep pages are cheap; Elasticsearch caches every page of every query.",
+        "explanation": "Wrong. The request cache helps repeated identical requests, but deep pagination still forces every shard to rank and return large top-N lists."
+      },
+      {
+        "text": "The fetch phase loads 10,000 full documents from every shard.",
+        "explanation": "Wrong. The query phase returns only IDs and scores. The fetch phase loads just the 10 documents on the requested page."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Global top 10,000 requires each shard's top 10,000 (any of them could be in it).\n2. Query phase, if enough matches exist:\n\n```formula\nC = S × (from + size)\nC = 20 × (9990 + 10) = 200000\nwhere\nC: candidate hits the coordinating node must sort\nS: number of shards queried, 20\nfrom: results skipped before the page, 9,990\nsize: results per page, 10\nIn words: 20 shards each send their top 10,000, so 200,000 entries are sorted to keep 10.\n```\n3. Fetch phase: only 10 documents.\n4. Default guard: `index.max_result_window=10000` (`from + size`).\n5. Alternative: use supported sort fields with a stable tie-breaker and a point-in-time view, then pass the last hit's sort values as search_after. This avoids the growing offset window but does not guarantee identical page latency.\n6. Product decision: choose a navigation or export limit from actual product needs, rather than an unsupported universal user-behavior claim.",
+    "link": {
+      "title": "Elasticsearch: Paginate search results",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html"
+    }
+  }
+]

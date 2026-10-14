@@ -1,0 +1,92 @@
+[
+  {
+    "id": "arch-multi-region-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A company's RPO is 5 minutes and RTO is 1 hour. What does that mean?",
+    "options": [
+      {
+        "text": "They can lose at most 5 minutes of data and must be back up within 1 hour of a disaster.",
+        "explanation": "These are recovery objectives, not proof that the deployed system can meet them. Validate recovery point and duration in the relevant failure scenarios."
+      },
+      {
+        "text": "They can be down for at most 5 minutes and lose at most 1 hour of data.",
+        "explanation": "Wrong. This swaps the two. RPO is about data loss (the point you recover *to*); RTO is about time to recover."
+      },
+      {
+        "text": "Backups run every hour and take 5 minutes.",
+        "explanation": "Wrong. RPO and RTO are objectives, not backup schedules. Hourly backups alone might leave roughly an hour of changes uncovered; retained logs can support a much newer recovery point. Backup cadence does not by itself determine achieved recovery."
+      },
+      {
+        "text": "Replication lag must always be exactly 5 minutes.",
+        "explanation": "Wrong. RPO is a maximum tolerable loss. Normal replication lag should be well below it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A five-minute RPO is the target maximum loss window; test that backups/logs or surviving replicas can provide it. A five-minute backup schedule alone is not proof.\n2. A one-hour RTO is the target restoration time; include detection, decisions, provisioning, restore, validation and routing.\n3. Stricter objectives may require durable synchronous replication and ready capacity, but do not uniquely require active-active.",
+    "link": {
+      "title": "AWS: Disaster recovery options in the cloud",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  },
+  {
+    "id": "arch-multi-region-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A UK-based service has growing numbers of users in Australia, who complain about slowness. Each page makes 4 sequential API round trips to London (about 280 ms each). What's the main benefit of serving them from an Australian region? Treat 280 ms as the measured existing RTT and assume the proposed local path measures 20 ms and does not call London synchronously.",
+    "options": [
+      {
+        "text": "It removes most of the ~1.1 s of network latency per page, because round trips to a nearby region take a few tens of milliseconds instead of ~280 ms.",
+        "explanation": "Correct. Distance sets a hard floor on round-trip time. Four 280 ms round trips (about 1.1 s) become four round trips of about 20 ms (about 80 ms) when served locally."
+      },
+      {
+        "text": "It makes the London servers' CPUs faster.",
+        "explanation": "Wrong. Server CPU speed isn't the issue. The delay is propagation time over about 17,000 km of fibre."
+      },
+      {
+        "text": "Nothing; the speed of light is fast enough that distance doesn't matter.",
+        "explanation": "Wrong. A hypothetical 17,000 km fibre route at 200 km/ms takes 85 ms one way before other delays. Actual routes differ; use the measured RTTs supplied in the question."
+      },
+      {
+        "text": "It guarantees strong consistency with London.",
+        "explanation": "Wrong. Adding a region makes consistency *harder*. Cross-region replication is either slow (sync) or lagging (async)."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Use the hypothetical measured path values in the question, not a generic geographic latency claim.\n2. Serial round trips add up:\n\n```formula\nT = n × RTT\nT_London = 4 × 280 ms = 1120 ms\nT_local = 4 × 20 ms = 80 ms\nΔT = (1120 − 80) ms = 1040 ms\nwhere\nT: network wait per page, in milliseconds (ms)\nn: sequential round trips per page, 4\nRTT: round-trip time for one request, in ms\nT_London: page wait when served from London\nT_local: page wait from an Australian region\nΔT: the saving; Δ (delta) means \"change in\"\nms: milliseconds\nIn words: four 280 ms trips cost about 1.1 s; four 20 ms trips cost 80 ms, saving about a second per page.\n```\n\n3. The modeled saving is 1,040 ms. Remote database calls could erase it.\n4. Also consider fewer serial requests and caching.",
+    "link": {
+      "title": "Azure Architecture Center: Geode pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/geodes"
+    }
+  },
+  {
+    "id": "arch-multi-region-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A payments database in London synchronously replicates every commit to a replica in Virginia before acknowledging (RTT about 75 ms). A checkout flow performs 4 sequential commits. Compared with async replication, roughly how much latency does sync replication add to checkout, and what do you get for it? Treat the 75 ms RTT as a hypothetical measured input, assume a durable acknowledgment in Virginia, and ignore additional remote processing costs.",
+    "options": [
+      {
+        "text": "About 75 ms in total, because replication happens once per checkout.",
+        "explanation": "Wrong. Each commit waits for its own round trip, so the cost is per commit, not per flow."
+      },
+      {
+        "text": "Nothing noticeable, because replication runs in the background.",
+        "explanation": "Wrong. That describes async replication. Sync means the commit isn't acknowledged until the remote replica confirms."
+      },
+      {
+        "text": "About 300 ms (4 × 75 ms), in exchange for a zero-data-loss objective if London is lost; and if Virginia is unreachable, commits stall unless you fall back to async.",
+        "explanation": "The simplified added wait is 4 × 75 = 300 ms. Surviving durable copies protect acknowledged commits under this one-region-loss model; failover must fence the old writer. Async fallback changes the loss guarantee."
+      },
+      {
+        "text": "About 4 × 1–2 ms, the same as cross-AZ replication.",
+        "explanation": "This contradicts the supplied 75 ms RTT. There is no universal 1–2 ms cross-AZ latency applicable to this deployment."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each synchronous commit waits for one round trip to Virginia, and the commits run one after another:\n\n```formula\nΔT = n × RTT\nΔT = 4 × 75 ms = 300 ms\nwhere\nΔT: extra latency added to checkout; Δ (delta) means \"change in\"\nn: sequential commits, 4\nRTT: London–Virginia round-trip time, 75 ms\nms: milliseconds\nIn words: four commits each waiting 75 ms for Virginia add about 0.3 s.\n```\n\n2. Gain: a recovery point objective (RPO) of zero for London's loss: every acknowledged commit is already durable in Virginia.\n3. Cost: if the link fails, you choose between stopping writes (consistency) or degrading to async (availability). This illustrates a partition-time consistency/availability trade-off; outside partitions, remote coordination also adds latency.\n4. Alternatives: fewer commits per flow, or sync to a nearby region (e.g. a measured lower-latency pair) and async further away.",
+    "link": {
+      "title": "AWS: Disaster recovery options in the cloud",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  }
+]

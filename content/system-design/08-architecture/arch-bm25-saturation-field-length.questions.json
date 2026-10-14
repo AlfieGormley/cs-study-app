@@ -1,0 +1,73 @@
+[
+  {
+    "id": "arch-search-systems-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements correctly describe how **BM25** differs from plain TF-IDF? Select all that apply.",
+    "options": [
+      {
+        "text": "Term frequency saturates: each extra occurrence adds less, controlled by `k1`.",
+        "explanation": "Correct. Under raw TF-IDF, 50 mentions score 50× one mention; under BM25 the TF part tends towards a ceiling, which blunts keyword stuffing."
+      },
+      {
+        "text": "Document length is normalised, controlled by `b`, so matches in short fields count more.",
+        "explanation": "With positive b, equal TF and other factors equal within the same field, a shorter field gets less length penalty. Cross-field scores also use different statistics and boosts."
+      },
+      {
+        "text": "BM25 ignores how rare a term is in the corpus.",
+        "explanation": "Wrong. BM25 keeps an IDF component. Rare terms still contribute more."
+      },
+      {
+        "text": "BM25 understands synonyms and meaning through embeddings.",
+        "explanation": "Wrong. BM25 is purely lexical. Synonyms come from analysis (synonym filters) and semantic matching from vector search, often combined with BM25 in hybrid search."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. The classic BM25 score for one query term:\n\n```formula\ns = IDF × tf × (k1 + 1) / D\nD = tf + k1 × (1 − b + b × L / L_avg)\nwhere\ns: the term's contribution to the document's score\nIDF: inverse document frequency (rarer term, bigger value)\ntf: term frequency: occurrences in the field\nk1: saturation parameter, default 1.2\nb: length-normalisation strength, 0 to 1, default 0.75\nD: the denominator, split out to fit\nL: this field's length, in terms\nL_avg: average length of that field in the index\nIn words: rarity times a term-frequency factor that levels off and shrinks for long fields.\n```\n\n2. Saturation: with k1 set to 1.2 and b set to zero and IDF set aside, the length part drops out of the denominator:\n\n```formula\nf(n) = n × 2.2 / (n + 1.2)\nf(1) = 2.2 / 2.2 = 1.0\nf(2) = 4.4 / 3.2 ≈ 1.38\nf(10) = 22 / 11.2 ≈ 1.96\nwhere\nf(n): the term-frequency factor for n occurrences\nn: occurrences of the term (tf): 1, 2 or 10\n≈: approximately equal to\nIn words: going from 1 to 10 occurrences doesn't even double the score.\n```\n\n3. Length: with b set to 0.75, a document twice the average length has a larger denominator D, so the same tf scores less.\n4. IDF is still there, and nothing in the formula involves meaning.\n5. Answer: options 0 and 1.\nThese numbers use the classic formula displayed here. Current Lucene omits its constant saturation multiplier, so raw scores differ while this relative saturation behavior remains.",
+    "link": {
+      "title": "Wikipedia: Okapi BM25",
+      "url": "https://en.wikipedia.org/wiki/Okapi_BM25"
+    }
+  },
+  {
+    "id": "arch-search-systems-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You index product `title` (average 8 words) and `description` (average 300 words) as separate fields with BM25 defaults. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A one-word match in a 4-word title tends to score higher than the same match in a 16-word title, because BM25 normalises by field length.",
+        "explanation": "Correct. A shorter-than-average field gets a smaller BM25 denominator, so the same term frequency scores more (with the default b of 0.75)."
+      },
+      {
+        "text": "Length is compared with the average length of the *same field*, so titles aren't penalised for being shorter than descriptions.",
+        "explanation": "Correct. Lucene keeps length statistics per field, so a title is compared with other titles."
+      },
+      {
+        "text": "A description that repeats \"headphones\" 40 times scores 40× one that mentions it once.",
+        "explanation": "Term frequency saturates rather than scaling linearly. The classic formula has a constant saturation multiplier that current Lucene omits."
+      },
+      {
+        "text": "Setting b to zero on the title field turns off length normalisation for that field.",
+        "explanation": "Correct. With b set to 0, the field-length part of the BM25 denominator disappears, so the score no longer depends on length. Some teams do this for short fields where length carries no signal."
+      },
+      {
+        "text": "BM25 will match \"earphones\" to documents containing only \"headphones\".",
+        "explanation": "Wrong. BM25 is lexical; that needs a synonym filter or semantic (vector) search."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Classic per-term BM25 score:\n\n```formula\ns = idf × tf × (k1 + 1) / D\nD = tf + k1 × (1 − b + b × L / L_avg)\nwhere\ns: the term's score contribution\nidf: inverse document frequency of the term\ntf: occurrences of the term in the field\nk1: saturation parameter, 1.2\nb: length-normalisation strength, 0.75\nD: the denominator, written separately\nL: this field's length, in words\nL_avg: average length of the same field\nIn words: a long field makes D bigger and the score smaller.\n```\n\n2. Title field, average 8 words, one occurrence (idf set aside):\n\n```formula\nD_4 = 1 + 1.2 × (0.25 + 0.75 × 4/8)\nD_4 = 1 + 1.2 × 0.625 = 1.75\nf_4 = 2.2 / 1.75 ≈ 1.26\nD_16 = 1 + 1.2 × (0.25 + 0.75 × 16/8)\nD_16 = 1 + 1.2 × 1.75 = 3.1\nf_16 = 2.2 / 3.1 ≈ 0.71\nwhere\nD_4: denominator for a 4-word title\nf_4: score factor for a 4-word title\nD_16: denominator for a 16-word title\nf_16: score factor for a 16-word title\n≈: approximately equal to\nIn words: half-average length scores about 1.26; double-average length only about 0.71.\n```\n\n3. L_avg is per field, so titles compete with titles.\n4. Cap: as tf grows without limit, the fraction approaches 2.2 under the displayed parameter values, never more.\n5. No semantics: synonyms need analysis or embeddings.\nThe arithmetic uses the displayed classic BM25 formula, not current Lucene's raw score scale; Lucene omits the constant saturation multiplier.",
+    "link": {
+      "title": "Wikipedia: Okapi BM25",
+      "url": "https://en.wikipedia.org/wiki/Okapi_BM25"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "arch-search-systems-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does an **inverted index** map?",
+    "options": [
+      {
+        "text": "Each term to the list of documents (and often positions) that contain it.",
+        "explanation": "Correct. Posting lists per term let the engine jump straight to matching documents and combine terms with fast sorted-list intersection or union."
+      },
+      {
+        "text": "Each document to the list of words it contains.",
+        "explanation": "Wrong. That's a forward index. Answering 'which documents contain X?' with it means scanning every document."
+      },
+      {
+        "text": "Each document ID to its row in the database.",
+        "explanation": "Wrong. That's a primary-key index. It doesn't help find documents by their content."
+      },
+      {
+        "text": "Each query to its cached results.",
+        "explanation": "Wrong. That's a query cache. An inverted index works for any query, including ones never seen before."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Documents: d1 'red wireless headphones', d2 'wireless mouse'.\n2. Invert: `wireless → [d1, d2]`, `mouse → [d2]`, `red → [d1]`, `headphones → [d1]`.\n3. Query 'wireless mouse' with AND: intersect [d1, d2] and [d2] → [d2].\n4. The cost depends on posting list lengths, not the total number of documents, which is why search engines are fast.",
+    "link": {
+      "title": "Wikipedia: Inverted index",
+      "url": "https://en.wikipedia.org/wiki/Inverted_index"
+    }
+  },
+  {
+    "id": "arch-search-systems-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A product search indexes descriptions with an English stemming analyser, but the query uses a plain keyword analyser (no lowercasing or stemming). A user searches `Running`. A document says \"great for running\". What happens?",
+    "options": [
+      {
+        "text": "It matches, because search engines always normalise queries automatically.",
+        "explanation": "Wrong. Query normalisation comes from the query-time analyser. With a keyword analyser, the query stays exactly 'Running'."
+      },
+      {
+        "text": "It doesn't match: the index holds the token `run`, but the query looks for the exact token `Running`.",
+        "explanation": "Correct. Index-time analysis turned 'running' into 'run'. The unanalysed query term 'Running' (capital R, unstemmed) doesn't equal any indexed token."
+      },
+      {
+        "text": "It matches only if the document is short.",
+        "explanation": "Wrong. Length affects scoring (BM25 length normalisation), not whether a term matches at all."
+      },
+      {
+        "text": "It throws an error because the analysers differ.",
+        "explanation": "Wrong. Mismatched analysers fail silently, returning no or poor results, which is what makes this bug easy to miss."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Index time: 'great for running' → tokenise → lowercase → stem → [great, run] (the standard English stop list removes for).\n2. Query time with a keyword analyser: 'Running' → ['Running'].\n3. Lookup: is 'Running' in the term dictionary? No, only 'run' is.\n4. Zero results.\n5. Fix: use the same (or compatible) analyser for the field at query time, which Elasticsearch does by default for `match` queries unless you override it.",
+    "link": {
+      "title": "Elasticsearch: Text analysis",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis.html"
+    }
+  },
+  {
+    "id": "arch-search-systems-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're adding search-as-you-type for a 50-million-document catalogue so that typing `headp` suggests \"headphones\". Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Indexing edge n-grams (`h`, `he`, `hea`, ...) on the field lets a prefix be a plain term lookup at query time.",
+        "explanation": "Correct. The work moves to index time: prefixes within the configured min_gram/max_gram range become terms; queries outside that range need a defined fallback."
+      },
+      {
+        "text": "Edge n-grams make the index noticeably larger, because each word produces many extra terms.",
+        "explanation": "Correct. A 10-letter word produces up to 10 edge n-grams. You usually apply them to a dedicated short field, such as the title, not to long descriptions."
+      },
+      {
+        "text": "You should apply the edge n-gram filter at query time as well, so the query `headp` is split into n-grams.",
+        "explanation": "Wrong. Splitting the query too would make `h` match almost everything. Use the n-gram analyser at index time and a standard analyser at search time."
+      },
+      {
+        "text": "A `LIKE 'headp%'` query on the database scales just as well for 50 million rows.",
+        "explanation": "An indexed prefix query can scale well for some workloads, but this claim does not establish support for analyzed mid-title tokens and relevance. It need not hit a primary if replicas or caches serve it."
+      },
+      {
+        "text": "Debouncing keystrokes in the client reduces query load without changing the index.",
+        "explanation": "Correct. Sending a request after a short pause (say 100–200 ms) instead of on every keystroke can cut query volume substantially."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. Goal: prefix → candidates within a measured latency budget.\n2. Edge n-grams at index time: 'headphones' → h, he, hea, head, headp, ...\n3. Query `headp` (standard analyser) is one term lookup.\n4. Cost: more terms, so a bigger index. Keep it to short fields.\n5. Elasticsearch's search_as_you_type combines shingle subfields and an edge-ngram prefix subfield; it is not just every possible prefix of every token.\n6. Client side: debounce and cancel stale requests.",
+    "link": {
+      "title": "Elasticsearch: Text analysis",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis.html"
+    }
+  }
+]

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "arch-multi-region-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your user profiles are stored in DynamoDB global tables replicated across eu-west-1 and us-east-1. A user updates their display name in the EU at the same moment a support agent in the US updates the same user's email address. Both write the whole item. What does DynamoDB global tables do by default?",
+    "options": [
+      {
+        "text": "It merges both changes field by field, so the item ends up with the new name and the new email.",
+        "explanation": "Wrong. Global tables don't merge fields. Conflicting writes to the same item are resolved for the item as a whole."
+      },
+      {
+        "text": "It applies last-writer-wins: one whole-item write survives and the other's change is silently lost.",
+        "explanation": "Correct. Global tables (in their default multi-region eventual consistency mode) reconcile concurrent writes with last-writer-wins, so one of the two updates disappears with no error."
+      },
+      {
+        "text": "It rejects the second write with a conflict error.",
+        "explanation": "Wrong. Both regions accept the writes locally. The conflict is resolved later during replication, without errors to either writer."
+      },
+      {
+        "text": "It keeps both versions as siblings for the application to resolve.",
+        "explanation": "Wrong. That's the Riak/Dynamo-paper approach, not DynamoDB global tables."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. EU writes `{name: 'Sam', email: old}`; US writes `{name: old, email: new}` at the same moment.\n2. Each region accepts its own write locally and replicates asynchronously.\n3. Conflict resolution: the write with the later timestamp wins everywhere.\n4. Outcome: either the new name or the new email is lost.\n5. Mitigations:\n   - UpdateItem does not give attribute-wise merging across MREC Regions: conflicts are resolved per item, so different attributes can still lose updates.\n   - Route writes for a user to their home region.\n   - Choose an appropriate strongly consistent design if needed. Current AWS documentation permits MRSC tables using three supported Regions, including cross-continent combinations. A global table's consistency mode cannot be changed after creation, so this existing MREC table still needs a migration rather than an in-place switch.",
+    "link": {
+      "title": "AWS: DynamoDB global tables",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GlobalTables.html"
+    }
+  },
+  {
+    "id": "arch-multi-region-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You need a global \"likes\" counter per post that every region can increment locally, with no lost increments, even during a network partition. Which statements are true? Select all that apply. Assume each replica has a stable unique identity, durable counter state and atomic local increments; application retries are deduplicated separately.",
+    "options": [
+      {
+        "text": "A G-Counter CRDT works: each region increments only its own slot, and the value is the sum of all slots.",
+        "explanation": "Correct. Merging takes the maximum of each slot, which is commutative and idempotent, so all replicas converge without losing increments."
+      },
+      {
+        "text": "Last-writer-wins on a single integer works just as well.",
+        "explanation": "Wrong. If EU writes 101 and US writes 101 from 100, LWW keeps one 101, losing an increment."
+      },
+      {
+        "text": "A PN-Counter can represent increments and decrements using two G-Counters, whose value is total increments minus total decrements; one-like-per-user needs separate identity semantics.",
+        "explanation": "This is one counter design, not the only way to implement likes/unlikes. Retried user actions and duplicate likes need additional modeling."
+      },
+      {
+        "text": "Totals may differ without a fixed small bound during a partition, then converge once updates are eventually exchanged.",
+        "explanation": "Correct. That's the eventual consistency you accept for availability and local writes."
+      },
+      {
+        "text": "An ordinary unconstrained G-Counter alone enforces a global limit of 1,000 accepted increments.",
+        "explanation": "Ordinary convergence does not enforce a cap. Escrow/bounded-counter designs can preallocate rights for local operations, with safe coordination to transfer rights."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. G-Counter state: `{eu: 40, us: 61}` → value 101.\n2. EU +1 → `{eu: 41, us: 61}`; US +1 → `{eu: 40, us: 62}`.\n3. Merge each slot by taking the larger value, then sum:\n\n```formula\nm_eu = max(41, 40) = 41\nm_us = max(61, 62) = 62\nV = m_eu + m_us = 103\nwhere\nm_eu: merged EU slot\nm_us: merged US slot\nmax: the larger of the two values\nV: the counter's value after merging\nIn words: keep each region's highest count and add them: 103, with no increment lost.\n```\n4. LWW on an int: both write 102 from 101, one wins, so 102. Lost.\n5. Un-like needs decrements, so use two grow-only counters:\n\n```formula\nV = P − N\nwhere\nV: the PN-Counter's value\nP: a G-Counter of all increments (likes)\nN: a separate G-Counter of all decrements (un-likes)\nIn words: the value is total likes minus total un-likes, and both parts merge safely.\n```\n6. Invariant enforcement needs a suitable protocol: atomic ownership/consensus, or bounded local rights where the invariant allows escrow.",
+    "link": {
+      "title": "Wikipedia: Conflict-free replicated data type",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  }
+]

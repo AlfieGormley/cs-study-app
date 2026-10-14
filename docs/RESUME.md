@@ -32,11 +32,21 @@ author/independent-verifier process. Existing skipped-content decisions below re
   Full verified-snapshot version `d63a1a489233`, 61 tests, all mobile lesson/question renders and actual
   lesson/quiz routes in all nine modules pass. All 5,565 original course question IDs/keys/types/option counts
   are preserved. Previously published Complexity units remain active while its format follow-up is authored.
+- Published fourth-batch commit `8ffe365`: distributed systems and API design. GitHub Pages succeeded;
+  four live app/manifest/progress/index files match `d63a1a489233`. Installed-app and offline age-practice
+  checks pass. Architecture is verified but remains pending integration/publication.
+- Architecture release candidate: ten converted modules, 76 originals → 357 units with 908 questions.
+  Verified full build `925d0c7768db`, 61 tests, all mobile renders and ten real module lesson/quiz routes pass.
+  Installed-app update, progress preservation and offline age controls pass; all 964 archival files remain
+  byte-identical. Complexity retains its published version while the format follow-up is reviewed.
 - Distributed systems is independently verified and stamped (40 short units, 96 preserved questions).
   Its broad real-time aliases have also been independently narrowed to consistency-ordering phrases.
   API design's code-format follow-up is complete: four checked native examples, zero unresolved active
-  pseudocode/format debt. Architecture is undergoing independent verification, reliability is being authored,
-  and Complexity's required formula-format follow-up is being authored. Remaining modules are queued.
+  pseudocode/format debt. Architecture is independently verified and its isolated full build/mobile checks
+  pass (41 units, 108 questions; ten-module preview version `925d0c7768db`). Reliability (38 units/97 questions)
+  and case studies 1 (43 units/85 questions) are now under separate independent reviews. Complexity's required
+  formula-format follow-up is also under independent review.
+  The user confirmed course order, with system design next. Remaining modules are queued.
 - Current reports: [short-lessons-report.md](short-lessons-report.md). Working queue and baseline snapshots:
   `/tmp/cs-study-short-lessons/queue.json`, `original-index.json`, `original-questions.json`; baseline commit
   `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`. The full original course has 482 lessons and 5,565 questions.

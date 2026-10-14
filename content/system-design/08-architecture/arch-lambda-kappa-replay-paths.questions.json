@@ -1,0 +1,78 @@
+[
+  {
+    "id": "arch-batch-vs-stream-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about the **Lambda architecture** and the **Kappa architecture** are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "The Lambda architecture runs a batch layer and a speed layer in parallel and merges their results at query time.",
+        "explanation": "Correct. The batch layer gives accurate recomputed views; the speed layer covers recent data; the serving layer merges them."
+      },
+      {
+        "text": "The Lambda architecture's main drawback is maintaining the same business logic in two systems.",
+        "explanation": "Correct. Two codebases with different semantics drift apart, and discrepancies are painful to debug. This was Jay Kreps' central criticism."
+      },
+      {
+        "text": "Kappa recomputes results by replaying the retained event log through a new version of the stream job.",
+        "explanation": "Correct. Reprocessing means starting a new job from an early offset, building a new output, then switching readers over."
+      },
+      {
+        "text": "Kappa requires no long-term storage of events.",
+        "explanation": "Wrong. Kappa depends on keeping enough history in the log (or tiered storage) to replay. Without retention you can't recompute."
+      },
+      {
+        "text": "The Lambda architecture is only used for serverless AWS Lambda functions.",
+        "explanation": "Wrong. The name is unrelated to AWS Lambda. It refers to the shape of the two data paths."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Lambda architecture: a batch layer plus a speed layer, merged by the serving layer. Strength: accuracy from batch recomputation. Weakness: duplicated logic.\n2. Kappa: one streaming path; recompute by replay.\n   - Requires retention: e.g. Kafka with tiered storage holding 1 year of events.\n   - Needs a replay/state/output design meeting the application's correctness requirements; built-in exactly-once support alone does not cover arbitrary external systems.\n3. Check each option against these definitions: 0, 1 and 2 match; 3 contradicts Kappa's replay requirement; 4 is a naming confusion.",
+    "link": {
+      "title": "Jay Kreps: Questioning the Lambda Architecture",
+      "url": "https://www.oreilly.com/radar/questioning-the-lambda-architecture/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You run a Kappa-style pipeline: a Flink job reads `clicks` (Kafka, 90-day retention) and writes per-campaign aggregates to table `agg_v1`. You've found a bug in the attribution logic. Which steps are part of a correct fix? Select all that apply.",
+    "options": [
+      {
+        "text": "Deploy the fixed job as a second job with a new consumer group, starting from the earliest retained offset, writing to `agg_v2`.",
+        "explanation": "Correct. This is Kreps's reprocessing recipe: a parallel job replays history into a fresh output, while v1 keeps serving."
+      },
+      {
+        "text": "Stop v1 and restart it from offset 0 writing into `agg_v1`.",
+        "explanation": "Wrong. Readers would see a mix of old, wrong totals and partly recomputed ones while the replay runs, and v1's output stops updating."
+      },
+      {
+        "text": "After verified catch-up, switch readers through a supported atomic output-table switch; retain and keep v1 current during any required rollback window before retiring it.",
+        "explanation": "Catch-up and a coordinated cutover avoid serving partial recomputation. Dropping the old output immediately would remove the proposed rollback path."
+      },
+      {
+        "text": "Accept that only the last 90 days can be recomputed unless older raw events are also kept, for example in tiered storage or a data lake.",
+        "explanation": "Correct. Replay can only go as far back as the log retains. Kappa's reprocessing promise depends on retention."
+      },
+      {
+        "text": "Run v2 with the same consumer group as v1 so they share the work.",
+        "explanation": "Use independent consumer identity and offset management. Kafka group-managed consumers would divide partitions, while modern Flink sources can assign partitions themselves; sharing group identity is not a safe way to run independent replay jobs."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Kappa: a 'batch' recompute is just a replay of the log.\n2. v2: new group, `earliest`, new table.\n3. Catch-up: source-reading concurrency is limited by Kafka partitions, while downstream processing and sink capacity also matter. With a constant live arrival rate, new events keep arriving while v2 replays, so it only gains on the live end at its spare rate:\n\n```formula\nT = D / (k − 1)\nT = 90 days / (5 − 1)\nT = 22.5 days\nwhere\nT: time for v2 to catch up with live traffic, in days\nD: history to replay, 90 days' worth of events\nk: v2's processing speed as a multiple of the live arrival rate, here 5\ndays: the unit of time here\nIn words: at 5× the live rate, v2 gains 4 days of backlog per day, so 90 days takes 22.5 days.\n```\n\n   So size the replay cluster for the cut-over date you need.\n4. Cut-over: repoint `agg` → `agg_v2`.\n5. Clean-up: retire v1 and its output only after the required rollback window and verification.\n6. Limit: data older than retention can't be replayed.",
+    "link": {
+      "title": "Jay Kreps: Questioning the Lambda Architecture",
+      "url": "https://www.oreilly.com/radar/questioning-the-lambda-architecture/"
+    }
+  }
+]

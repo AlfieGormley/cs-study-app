@@ -1,0 +1,62 @@
+[
+  {
+    "id": "arch-object-storage-media-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users upload a 5 GB file using 100 MB parts (decimal units). Parts 1–32 are confirmed complete before a connection failure; no other parts completed. What happens when the client reconnects?",
+    "options": [
+      {
+        "text": "The client lists which parts were completed, re-uploads only the missing or failed ones, then calls CompleteMultipartUpload.",
+        "explanation": "Completed parts remain under the upload ID until completion or abort. The 18 missing parts need uploading; retain and reconcile part numbers and ETags."
+      },
+      {
+        "text": "The whole 5 GB upload must restart from zero.",
+        "explanation": "Wrong. That's the problem with single-request uploads. With multipart, completed parts are already stored."
+      },
+      {
+        "text": "S3 automatically finishes the upload by fetching the rest from the client.",
+        "explanation": "Wrong. S3 never pulls data from clients. The client must upload the remaining parts and complete the upload."
+      },
+      {
+        "text": "The partial 3.2 GB object becomes visible immediately as a truncated file.",
+        "explanation": "Wrong. Parts don't form a visible object until CompleteMultipartUpload succeeds, so there's no truncated object."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Count the parts and the ones still missing:\n\n```formula\nP = F / S\nP = 5000 MB / 100 MB = 50\nM = P − C = 50 − 32 = 18\nwhere\nP: total number of parts\nF: file size, 5 GB = 5,000 MB (decimal)\nS: part size, 100 MB\nM: parts still to upload\nC: parts confirmed complete, 32\nMB: megabyte, a million bytes\nGB: gigabyte, 1,000 MB\nIn words: 50 parts in all, 32 done, so 18 left.\n```\n2. The premise confirms 32 complete parts, totaling 3.2 GB. Transferred byte count alone would not prove this with parallel uploads.\n3. On reconnect: call ListParts with the upload ID and find parts 33–50 missing.\n4. Upload those 18 parts, in parallel if bandwidth allows.\n5. Call CompleteMultipartUpload with the list of part numbers and ETags.\n6. Housekeeping: a lifecycle rule aborts multipart uploads left incomplete after, say, 7 days, so orphaned parts don't accumulate charges.",
+    "link": {
+      "title": "AWS: Uploading objects using multipart upload",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're building a client that uploads backups of up to 2 TB with S3 multipart upload. A colleague proposes a fixed 100 MB part size. What's the problem, and what part size works? Use decimal TB and MB in this calculation.",
+    "options": [
+      {
+        "text": "No problem: S3 allows unlimited parts, so 100 MB is fine for any size.",
+        "explanation": "Wrong. Multipart upload allows at most 10,000 parts, so part size bounds the object size."
+      },
+      {
+        "text": "100 MB parts cap the file at about 1 TB (10,000 parts); use at least 200 MB parts, e.g. 256 MB, giving roughly 8,000 parts for 2 TB.",
+        "explanation": "Correct. 2 TB ÷ 10,000 = 200 MB minimum. Rounding up to 256 MB leaves headroom while keeping parts small enough to retry cheaply."
+      },
+      {
+        "text": "Parts must be exactly 5 GiB for files over 1 TB.",
+        "explanation": "Wrong. Parts can be anywhere from 5 MiB to 5 GiB; you only need parts big enough to fit the file within 10,000 of them."
+      },
+      {
+        "text": "100 MB is below the minimum part size; parts must be at least 1 GB.",
+        "explanation": "Wrong. The minimum part size is 5 MiB (and the last part can be smaller)."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Limits: 10,000 parts; each 5 MiB to 5 GiB; the last part may be smaller.\n2. The largest file a part size allows:\n\n```formula\nF_max = N_max × S\nF_max = 10000 × 100 MB\nF_max = 1000000 MB = 1 TB\nwhere\nF_max: largest uploadable file\nN_max: maximum parts per upload, 10,000\nS: part size, 100 MB\nMB: megabyte, a million bytes\nTB: terabyte, a million MB\nIn words: 100 MB parts cap you at 1 TB, so 2 TB doesn't fit.\n```\n\n3. Rearranged, the smallest part size that fits the file:\n\n```formula\nS_min = F / N_max\nS_min = 2000000 MB / 10000\nS_min = 200 MB\nwhere\nS_min: the minimum part size\nF: file size, 2 TB = 2,000,000 MB\nN_max: maximum parts, 10,000\nMB: megabyte\nTB: terabyte, a million MB\nIn words: 2 TB split into at most 10,000 parts needs parts of at least 200 MB.\n```\n\n4. Choose 256 MB and check the count:\n\n```formula\nP = ⌈F / S⌉\nP = ⌈2000000 MB / 256 MB⌉\nP = ⌈7812.5⌉ = 7813\nwhere\nP: number of parts\nF: file size, 2,000,000 MB\nS: chosen part size, 256 MB\nMB: megabyte\n⌈ ⌉: ceiling: round up to a whole number\nIn words: about 7,800 parts, comfortably under 10,000.\n```\n5. Trade-off: bigger parts mean fewer requests but more work lost per failed part; compute part size from file size rather than hard-coding it.\n\nThis partial Python check assumes `ceil` from `math` and `size` and `part` measured in the same unit:\n\n```python\n# Round up to include the final part.\nparts = ceil(size / part)\n# Reject a size exceeding the part cap.\nassert parts <= 10_000\n```",
+    "link": {
+      "title": "AWS: Uploading objects using multipart upload",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html"
+    }
+  }
+]

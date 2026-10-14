@@ -1,0 +1,92 @@
+[
+  {
+    "id": "arch-service-communication-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "After a customer places an order, the system must send a confirmation email. The email provider sometimes takes 5 seconds or is briefly down. How should the Orders service trigger the email?",
+    "options": [
+      {
+        "text": "Call the Email service synchronously and fail the order if the email fails.",
+        "explanation": "Wrong. This makes the order depend on a non-critical side effect, so an email outage would block revenue."
+      },
+      {
+        "text": "Call the Email service synchronously with no timeout.",
+        "explanation": "Wrong. With no timeout, a hung email provider ties up Orders' threads and can bring Orders down too."
+      },
+      {
+        "text": "Publish an `OrderPlaced` event; the Email service consumes it asynchronously and retries independently.",
+        "explanation": "Correct. Email is a side effect that doesn't need to finish before replying to the user. A broker buffers messages during outages and decouples the two services in time."
+      },
+      {
+        "text": "Have the browser call the email provider directly after checkout.",
+        "explanation": "Wrong. It exposes provider credentials, is unreliable (users close tabs), and can't be retried server-side."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Does the user need the email result to finish checkout? No.\n2. Is the dependency slow or unreliable? Yes, up to 5 s and occasional outages.\n3. Those two facts point to async messaging.\n4. Orders commits the order and an outbox record atomically, then returns. A relay publishes later; monitor retries and retention, and make consumers tolerate duplicate delivery.\n5. Email consumes the event, retries with backoff, and catches up after outages.",
+    "link": {
+      "title": "microservices.io: Transactional outbox",
+      "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+    }
+  },
+  {
+    "id": "arch-service-communication-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Orders publishes `OrderPlaced`, and Inventory, Email and Loyalty each react to it. Separately, Orders sends `ChargeCard` to Payments. What's the key difference between these two messages?",
+    "options": [
+      {
+        "text": "`OrderPlaced` is synchronous and `ChargeCard` is asynchronous.",
+        "explanation": "Wrong. Both can travel through a broker asynchronously. The difference is in what they mean, not how they travel."
+      },
+      {
+        "text": "`OrderPlaced` is an event (a fact, with no specific recipient); `ChargeCard` is a command (a request for a specific service to do something).",
+        "explanation": "Correct. Events describe facts without prescribing one recipient; consumers still depend on event schema and meaning. Commands request an action from an intended handler."
+      },
+      {
+        "text": "Commands can only be sent over gRPC; events only over Kafka.",
+        "explanation": "Wrong. Either can use any transport; the distinction is semantic."
+      },
+      {
+        "text": "Events must be processed exactly once; commands may be dropped.",
+        "explanation": "Wrong. Both need reliable handling, and both are usually delivered at least once, so consumers must be idempotent."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Event: past tense, a fact: `OrderPlaced`, `PaymentFailed`.\n2. Command: imperative, to a target: `ChargeCard`, `SendEmail`.\n3. Adding Analytics as a new listener to `OrderPlaced` needs no change to Orders. That's the loose coupling.\n4. A command couples sender to receiver: Orders knows Payments exists and expects a reply event.",
+    "link": {
+      "title": "Azure Architecture Center: Asynchronous messaging options",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/guide/technology-choices/messaging"
+    }
+  },
+  {
+    "id": "arch-service-communication-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Orders writes a new order to its database and then publishes `OrderPlaced` to Kafka. Very occasionally the process crashes between the two steps, and the order exists but no email or stock reservation ever happens. What's the standard fix?",
+    "options": [
+      {
+        "text": "Publish to Kafka first, then write to the database.",
+        "explanation": "Wrong. Now a crash between the steps produces an event for an order that doesn't exist."
+      },
+      {
+        "text": "Wrap the database write and the Kafka publish in a two-phase commit across both systems.",
+        "explanation": "Kafka producer transactions do not enlist an arbitrary external database in shared atomic commit. The described setup needs an outbox or another explicitly supported coordination protocol."
+      },
+      {
+        "text": "Retry the Kafka publish three times before giving up.",
+        "explanation": "Wrong. Retries don't help if the process has already crashed."
+      },
+      {
+        "text": "Use a transactional outbox: write the order and an `outbox` row in the same database transaction, and have a relay (or CDC) publish outbox rows to Kafka.",
+        "explanation": "Correct. The two writes now commit atomically. The relay publishes at least once, so consumers must be idempotent."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Problem: two systems, no shared transaction, the dual-write problem.\n2. Outbox:\n   - `BEGIN; INSERT order; INSERT outbox(event); COMMIT;`\n   - Relay polls or tails the WAL (e.g. Debezium) and publishes.\n   - Marks rows sent, or relies on log offsets.\n3. Crash after commit: the relay publishes later. The durable pending event remains available to the relay; delivery still depends on recovery, retention and retry policy.\n4. Crash after publish but before marking sent: published twice, so consumers deduplicate by event ID.",
+    "link": {
+      "title": "microservices.io: Transactional outbox",
+      "url": "https://microservices.io/patterns/data/transactional-outbox.html"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "arch-batch-vs-stream-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A company dumps raw JSON from 40 sources into S3. Analysts complain that queries are slow, nobody knows which files are current, concurrent jobs sometimes see incomplete multi-file table updates, and a schema change broke a dashboard. What's the most appropriate evolution?",
+    "options": [
+      {
+        "text": "Move everything into the production Postgres database so analysts can use SQL.",
+        "explanation": "Wrong. A row-oriented OLTP database isn't built for scanning terabytes, and analytical queries would compete with production traffic."
+      },
+      {
+        "text": "Adopt a lakehouse table format (e.g. Apache Iceberg or Delta Lake) over columnar Parquet files, with a catalogue, layered raw/cleaned/aggregated tables, and schema evolution rules.",
+        "explanation": "Columnar files can reduce scan work, and compatible table-format readers use atomic metadata commits for consistent snapshots. Catalog and schema governance remain necessary; this does not fix every slow query."
+      },
+      {
+        "text": "Add more JSON files with clearer names.",
+        "explanation": "Wrong. Naming doesn't provide atomic commits, columnar efficiency or schema management. It just makes the swamp slightly better labelled."
+      },
+      {
+        "text": "Replace S3 with a larger network file share.",
+        "explanation": "Wrong. The storage medium isn't the problem. The issues are format, transactions and metadata, which a file share doesn't solve either."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Map each complaint to a cause:\n   - Slow queries: row-based JSON, so every query parses whole files. Columnar Parquet reads only the needed columns, compressed.\n   - Which files are current: no table metadata. A table format tracks the exact file list per snapshot.\n   - Incomplete table updates: S3 objects are individually atomic, but an arbitrary set of files is not a table transaction. Iceberg/Delta commit a new snapshot atomically; compatible readers see one committed snapshot; bypassing the table metadata loses that guarantee.\n   - Schema breakage: no schema governance. Table formats support explicit, compatible schema evolution.\n2. Organise as bronze (raw) → silver (cleaned) → gold (aggregates), with SQL engines (Trino, Spark, Snowflake) on top.\n3. Result: warehouse-like reliability on cheap object storage.",
+    "link": {
+      "title": "Apache Iceberg documentation",
+      "url": "https://iceberg.apache.org/docs/latest/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Analysts query a 2 TB table of events with 200 columns of roughly equal size. A typical query sums one column, filtered by date. Moving from row-oriented JSON to compressed columnar Parquet, partitioned by date, roughly how much data does a one-day query read? Assume 365 days of data and 5× compression. Assume equal per-day volume, decimal units, the date predicate is fully resolved by partition pruning, and ignore metadata/encoding overhead. Compare with an unpartitioned JSON scan.",
+    "options": [
+      {
+        "text": "About 2 TB, because every query must parse the whole table.",
+        "explanation": "Wrong. That's the JSON case. Columnar layout and partitioning both let the engine skip most of the data."
+      },
+      {
+        "text": "About 10 GB: one column out of 200 is 10 GB uncompressed for the whole year.",
+        "explanation": "Wrong. That ignores partition pruning by date and compression, both of which shrink it further."
+      },
+      {
+        "text": "About 5.5 GB: one day is 1/365 of the table.",
+        "explanation": "Wrong. That applies partition pruning but still reads all 200 columns of that day."
+      },
+      {
+        "text": "About 5–6 MB: one column, one day, compressed.",
+        "explanation": "Correct. 2 TB ÷ 200 columns = 10 GB per column; ÷ 365 days ≈ 27 MB; ÷ 5 compression ≈ 5.5 MB."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Row JSON: read everything, about 2 TB.\n2. Columnar, pruned and compressed: divide by each saving in turn:\n\n```formula\nB_col = S / C = 2 TB / 200 = 10 GB\nB_day = B_col / D\nB_day = 10 GB / 365 ≈ 27.4 MB\nB = B_day / k\nB ≈ 27.4 MB / 5 ≈ 5.5 MB\nwhere\nB_col: one column for all days, before compression\nB_day: one column for one day, before compression\nB: bytes the one-day, one-column query reads\nS: table size, 2 terabytes (TB)\nC: number of columns, 200 (only 1 is read)\nD: days of data, 365 (only 1 is read)\nk: compression ratio, 5\nTB: terabyte, 1,000 GB\nGB: gigabyte, 1,000 MB\nMB: megabyte, a million bytes\n≈: approximately equal to\nIn words: one column out of 200, one day out of 365, compressed 5×: about 5.5 MB instead of 2 TB.\n```\n\n3. The ideal ratio is 200 × 365 × 5 = 365,000× fewer payload bytes under these assumptions; actual I/O includes metadata and layout effects. This is why warehouses and lakehouses store columnar data.\n\n```\n2e12 / 200 / 365 / 5\n  ≈ 5.5e6 bytes\n```",
+    "link": {
+      "title": "Wikipedia: Column-oriented DBMS",
+      "url": "https://en.wikipedia.org/wiki/Column-oriented_DBMS"
+    }
+  }
+]

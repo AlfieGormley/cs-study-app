@@ -1,0 +1,100 @@
+[
+  {
+    "id": "arch-object-storage-media-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do video platforms transcode uploads into several renditions (240p up to 1080p or 4K) cut into short segments, rather than serving the original file?",
+    "options": [
+      {
+        "text": "To enable adaptive bitrate streaming: the player selects renditions as bandwidth and buffer conditions change, reducing startup delay and stalls when conditions permit.",
+        "explanation": "Correct. HLS and DASH serve a playlist of renditions split into segments a few seconds long. The player switches up or down per segment as network conditions change."
+      },
+      {
+        "text": "Because object storage can't store files larger than 100 MB.",
+        "explanation": "S3 supports large objects; the current multipart maximum is listed as 48.8 TiB. Transcoding addresses playback needs, not a 100 MB storage limit."
+      },
+      {
+        "text": "Because CDNs can't cache video files.",
+        "explanation": "CDNs can cache video files and segments; segment size trades switching flexibility against request overhead and caching behavior."
+      },
+      {
+        "text": "To make the original video higher quality.",
+        "explanation": "Encoding can increase bitrate or change resolution without recovering original detail that was never captured. A rendition is not necessarily lower bitrate."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Viewers range from 1 Mbit/s mobile links to 50 Mbit/s fibre.\n2. A single 4K file at 20 Mbit/s would stall on mobile; a single 480p file wastes a big TV.\n3. A ladder (e.g. 240p @ 0.4, 480p @ 1.5, 720p @ 3, 1080p @ 6 Mbit/s) covers the range.\n4. Segmenting into roughly 4–6 s chunks lets the player change rung every few seconds.\n5. Startup: begin with a low rung for a fast first frame, then climb as the buffer fills.",
+    "link": {
+      "title": "Wikipedia: HTTP Live Streaming",
+      "url": "https://en.wikipedia.org/wiki/HTTP_Live_Streaming"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your transcoding pipeline takes 90 minutes to process a 2-hour 4K upload on one worker. Workers run on spot instances that are sometimes reclaimed mid-job, which restarts the whole 90-minute job. What redesign best cuts both latency and wasted work?",
+    "options": [
+      {
+        "text": "Move all transcoding to one very large on-demand instance.",
+        "explanation": "A larger instance or accelerator could reduce encode time, but it does not by itself provide fine-grained recovery from interrupted work."
+      },
+      {
+        "text": "Upload the raw file directly to the CDN and let the player transcode.",
+        "explanation": "Wrong. Players don't transcode, and shipping raw 4K to every viewer defeats adaptive streaming."
+      },
+      {
+        "text": "Split the video into short chunks (e.g. 1 minute), encode chunks in parallel as independent, idempotent tasks with deterministic output keys, track progress in a workflow, then stitch and publish.",
+        "explanation": "Bounded tasks allow parallelism and smaller retries. Correct boundaries and publication control are required; deterministic keys alone do not guarantee safe retries or a particular speedup."
+      },
+      {
+        "text": "Keep one worker per video but checkpoint to the database every frame.",
+        "explanation": "Wrong. Per-frame checkpoints are a huge overhead and the job is still serial, so latency doesn't improve."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The original measured job takes 90 minutes. Splitting a 2-hour input into 120 one-minute chunks creates 120 tasks per rendition.\n2. In an ideal model with equal-cost chunks and 60 available workers:\n\n```formula\nt_chunk = T / n = 90 min / 120\nt_chunk = 0.75 min\nk = ⌈n / w⌉ = ⌈120 / 60⌉ = 2\nT_par = k × t_chunk\nT_par = 2 × 0.75 min = 1.5 min\nwhere\nt_chunk: time to encode one chunk on one worker, in minutes (min)\nT: the measured single-worker job time, 90 min\nn: number of chunks, 120 (one per minute of video)\nk: rounds needed when chunks outnumber workers\nw: workers available, 60\n⌈ ⌉: ceiling: round up to a whole number\nT_par: ideal parallel encoding time\nmin: minutes\nIn words: 120 chunks of 0.75 min each, run 60 at a time, take 2 rounds: about 1.5 minutes.\n```\n\n   This ignores splitting, encoding boundary effects, scheduling, transfer and assembly.\n3. A failed worker repeats unfinished chunks, not necessarily the whole video.\n4. Use valid GOP/keyframe boundaries and preserve timestamps and audio alignment.\n5. Identify output by source version and encoding settings; validate temporary artifacts and conditionally publish the manifest to block stale retries.\n6. The workflow tracks completion, assembly and publication. Measure actual end-to-end latency.",
+    "link": {
+      "title": "AWS MediaConvert: Input clipping and stitching",
+      "url": "https://docs.aws.amazon.com/mediaconvert/latest/ug/specifying-inputs.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q11",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You serve private course videos to paying subscribers from S3 through a CDN. Which choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Keep the bucket private and let only the CDN read from it, using signed CDN URLs or cookies for subscribers.",
+        "explanation": "Correct. The bucket stays locked down, and the CDN checks a signature you issue per subscriber, so content is cached at the edge but still access-controlled."
+      },
+      {
+        "text": "Make the bucket public but use long random keys so nobody can guess them.",
+        "explanation": "Wrong. Obscure keys aren't access control. Once a URL is shared or leaked, anyone can use it forever."
+      },
+      {
+        "text": "Publish each encoded rendition under a versioned, content-addressed key and cache it for a long time.",
+        "explanation": "Versioned immutable keys avoid invalidation for routine new encodings; removal and access-policy changes can still need separate controls."
+      },
+      {
+        "text": "Overwrite `course/7/intro.mp4` in place when you re-encode, and rely on the CDN noticing.",
+        "explanation": "Wrong. The CDN keeps serving the cached old copy until its TTL expires or you pay for an invalidation."
+      },
+      {
+        "text": "Add a lifecycle rule that aborts incomplete multipart uploads after a few days.",
+        "explanation": "Correct. Abandoned uploads leave invisible parts that you still pay for; the rule cleans them up."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Access: private origin + CDN-only read + signed URLs/cookies for users.\n2. Caching: immutable keys like `c/7/v3/a1b2.m3u8` can be cached for a year.\n3. Updating: a new version is a new key; the playlist or DB row points to it.\n4. Hygiene: abort incomplete multipart uploads so orphaned parts don't accrue charges.\n5. Security by obscurity (public bucket, random names) fails the moment a link is shared.\n6. Signed URLs/cookies are bearer capabilities; scope and expire them appropriately. They cannot revoke a copy already downloaded.",
+    "link": {
+      "title": "CloudFront: Serve private content",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/PrivateContent.html"
+    }
+  }
+]

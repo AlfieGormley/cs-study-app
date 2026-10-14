@@ -1,0 +1,101 @@
+[
+  {
+    "id": "arch-multi-region-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An EU healthcare customer requires that patient data never leaves the EU. Your platform runs in eu-central-1 and us-east-1. Which copies of data must you check? Select all that apply.",
+    "options": [
+      {
+        "text": "Database backups and snapshots, including cross-region DR copies.",
+        "explanation": "Correct. Backups are full copies of personal data. Automatic cross-region snapshot copy to us-east-1 would breach the requirement."
+      },
+      {
+        "text": "Application logs and error-tracking events that include request payloads.",
+        "explanation": "Correct. Logs often contain names, IDs or health details and are frequently shipped to a central (possibly US) logging service."
+      },
+      {
+        "text": "The search index and caches built from patient records.",
+        "explanation": "Correct. Derived copies are still personal data. A global search cluster or a cache in the US would break residency."
+      },
+      {
+        "text": "The global product catalogue of software features, which contains no personal data.",
+        "explanation": "Wrong. Data without personal information isn't in scope for this requirement, so it can be replicated globally."
+      },
+      {
+        "text": "Analytics events flowing into the data warehouse.",
+        "explanation": "Correct. Analytics pipelines frequently centralise data. Events about EU patients must be processed and stored in EU-resident infrastructure."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "1. Residency applies to *every* copy of in-scope data, not just the primary database.\n2. List the places data flows: primary DB, replicas, backups, DR copies, caches, search indexes, queues, logs, traces, analytics, support tools, third-party processors.\n3. For each, ask: does it contain patient data, and where is it stored or processed?\n4. Keep EU tenants' cells, backups and DR pairs inside the EU (e.g. Frankfurt ↔ Ireland), and scrub or regionalise logs and analytics.\n5. The catalogue has no personal data, so it's out of scope.\n6. Answer: 0, 1, 2 and 4.",
+    "link": {
+      "title": "Azure Architecture Center: Deployment Stamps pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/deployment-stamp"
+    }
+  },
+  {
+    "id": "arch-multi-region-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A SaaS company already runs in three regions, yet most of its major outages last year were caused by bad deploys and one large customer's runaway workload, each affecting every customer in a region. Which change most directly reduces the impact of these incidents?",
+    "options": [
+      {
+        "text": "Add a fourth region.",
+        "explanation": "Wrong. The incidents weren't regional infrastructure failures. A bad deploy or noisy tenant would hit the fourth region's customers in the same way."
+      },
+      {
+        "text": "Move to a cell-based architecture: split each region into independent, size-capped cells with no shared state, map each customer to one cell, and deploy to cells in waves.",
+        "explanation": "Cell isolation and staged deployment reduce potential impact, provided dependencies are isolated and monitoring catches the problem before rollout expands."
+      },
+      {
+        "text": "Switch from active-passive to active-active.",
+        "explanation": "Wrong. Active-active changes how regions share traffic. Within each region, every customer still shares the same deployment and the same noisy neighbours."
+      },
+      {
+        "text": "Increase the size of each region's database.",
+        "explanation": "Wrong. More capacity may delay saturation from the runaway tenant, but it doesn't isolate it and does nothing about bad deploys."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Classify the incidents: self-inflicted (deploys) and noisy neighbour (one tenant). Neither is a region outage.\n2. Multi-region protects against region failure; what's needed is isolation *within* regions.\n3. Cells: say 10 cells per region, each a full stack (app, DB, cache, queues), sized to a tested maximum.\n   - Bad deploy → one first-wave cell among 30 equally populated cells contains about 1/30 of customers; detection and safe rollback are still required.\n   - Runaway tenant → only its cell's customers are affected; move it to a dedicated cell.\n4. Keep the cell router very thin and static (customer → cell lookup) to reduce, not eliminate, shared failure risk.\n5. Shuffle sharding can shrink overlap between customers even further.",
+    "link": {
+      "title": "AWS: What is a cell-based architecture?",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/reducing-scope-of-impact-with-cell-based-architecture/what-is-a-cell-based-architecture.html"
+    }
+  },
+  {
+    "id": "arch-multi-region-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service has 100 workers. With plain sharding, customers are split into 25 groups of 4 workers each, and one customer's poison requests crash all 4 workers in its group. With shuffle sharding, each customer is instead assigned a random combination of 4 of the 100 workers. Why is the blast radius so much smaller? Assume independent uniform assignments and enough surviving worker capacity for retries.",
+    "options": [
+      {
+        "text": "Shuffle sharding gives each customer more workers, so the bad customer can't crash them all.",
+        "explanation": "Wrong. Each customer still has 4 workers, and the poison customer still crashes its own 4."
+      },
+      {
+        "text": "Other customers almost never share all 4 of the same workers, so nearly all still have healthy workers to retry on; with about 3.9 million possible combinations, a full overlap is very unlikely.",
+        "explanation": "Correct. In plain sharding, everyone in the bad group loses all their workers. In shuffle sharding, most customers overlap with the bad customer on at most one or two workers, so retries reach healthy ones."
+      },
+      {
+        "text": "Shuffle sharding detects and blocks poison requests automatically.",
+        "explanation": "Wrong. It doesn't recognise bad requests; it limits how many others share the same fate."
+      },
+      {
+        "text": "It moves the bad customer to a different region.",
+        "explanation": "Wrong. It's an assignment scheme within a fleet, not cross-region routing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Plain: 25 groups, so a bad customer takes down one group entirely: 1/25 = about 4% of customers if group populations are equal.\n2. Shuffle: count the possible 4-worker combinations:\n\n```formula\nC(n, k) = n! / (k! × (n − k)!)\nC(100, 4) = (100 × 99 × 98 × 97) / 24\nC(100, 4) = 3921225\nwhere\nC(n, k): \"n choose k\": the number of ways to pick k items from n, ignoring order\nn: workers in the fleet, 100\nk: workers per customer, 4\n!: factorial: n! = n × (n − 1) × … × 1, e.g. 4! = 24\nIn words: there are about 3.9 million different ways to pick 4 workers out of 100.\n```\n\n3. The chance another customer has exactly the same 4 workers is about 1 in 3.9 million.\n4. Most customers share 0 or 1 workers with the bad one, so they lose at most a quarter of their capacity, and retry elsewhere.\n5. Requires clients to retry across their assigned workers.",
+    "link": {
+      "title": "AWS Builders' Library: Workload isolation using shuffle-sharding",
+      "url": "https://aws.amazon.com/builders-library/workload-isolation-using-shuffle-sharding/"
+    }
+  }
+]

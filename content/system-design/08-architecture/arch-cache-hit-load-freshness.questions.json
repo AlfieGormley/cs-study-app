@@ -1,0 +1,62 @@
+[
+  {
+    "id": "arch-scaling-reads-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Product reads take 20 ms from the database and 0.5 ms from Redis. The cache hit rate is 90%, and the database is near capacity at 10,000 reads/s reaching it. If you raise the hit rate to 99% with the same traffic, how many reads/s reach the database?",
+    "options": [
+      {
+        "text": "1,000 reads/s",
+        "explanation": "Correct. At 90% hit rate, misses are 10% of total traffic, so total traffic is 100,000 reads/s. At 99%, misses are 1% of 100,000 = 1,000 reads/s."
+      },
+      {
+        "text": "9,000 reads/s",
+        "explanation": "Wrong. That treats the gain as 10% of current DB load. Misses fall from 10% to 1% of traffic, a tenfold reduction, not a 10% one."
+      },
+      {
+        "text": "100 reads/s",
+        "explanation": "Wrong. That would require a 99.9% hit rate (0.1% of 100,000)."
+      },
+      {
+        "text": "5,000 reads/s",
+        "explanation": "Wrong. Hit rate improvements don't halve misses here. The miss rate goes from 10% to 1%."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The database only sees the misses. A miss rate of 10% producing 10,000 reads/s tells you the total traffic:\n\n```formula\nR_total = R_db / (1 − h)\nR_total = (10000 / (1 − 0.90)) req/s\nR_total = 100000 req/s\nwhere\nR_total: all product reads per second, hits and misses\nR_db: reads per second reaching the database (the misses), here 10,000\nh: the cache hit rate as a fraction, here 90 % = 0.90\n1 − h: the miss rate, here 0.10 (10 %)\n%: per cent\nreq: requests\ns: seconds; req/s is requests per second\nIn words: if 10 % of traffic is 10,000 reads a second, all of it is 100,000.\n```\n\n2. Now raise the hit rate to 99%, with the same total traffic:\n\n```formula\nR_db = (1 − h) × R_total\nR_db = (1 − 0.99) × 100000 req/s\nR_db = 1000 req/s\nwhere\nR_db: reads per second reaching the database\nh: the new hit rate, 99 % = 0.99\nR_total: total reads per second, 100,000\n%: per cent\nreq: requests\ns: seconds; req/s is requests per second\nIn words: a 1 % miss rate sends 1,000 of the 100,000 reads a second to the database.\n```\n\n3. Average latency also improves (a miss pays for the cache check and the database):\n\n```formula\nT = h × t_c + (1 − h) × (t_c + t_db)\nT = (0.9 × 0.5 + 0.1 × 20.5) ms\nT = 2.5 ms\nT = (0.99 × 0.5 + 0.01 × 20.5) ms\nT = 0.7 ms\nwhere\nT: average time per read, in milliseconds (ms); the first result is at 90 % hits, the second at 99 %\nh: hit rate as a fraction\nt_c: Redis lookup time, 0.5 ms\nt_db: database read time, 20 ms\nms: milliseconds\n≈: approximately equal to (rounded)\nIn words: more hits pull the average read time down towards the cache's 0.5 ms.\n```\n\n4. Lesson: think in *miss rate*. Going from 90% to 99% hits cuts misses from 10% to 1% of traffic: a 10× cut in DB load.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Each of 40 app servers keeps an in-process cache of product prices with a 10-minute TTL, in front of Redis and the database. After a price change, customers see different prices on successive page loads for up to 10 minutes. What's the best explanation and fix?",
+    "options": [
+      {
+        "text": "Redis is inconsistent; replace it with Memcached.",
+        "explanation": "Wrong. Redis isn't the issue. Each server's local copy expires at a different time, so servers disagree."
+      },
+      {
+        "text": "The 40 local caches each hold their own copy with independent expiry; shorten the local TTL (say 10–30 s) or publish an invalidation message on price changes that every server subscribes to.",
+        "explanation": "These reduce local residency or trigger eviction, but neither alone guarantees source freshness: Redis may refill stale data, invalidation can be lost, and a concurrent load can repopulate an old value."
+      },
+      {
+        "text": "The load balancer should use sticky sessions so each user always sees the same server's prices.",
+        "explanation": "Wrong. Each user then sees a consistent price, but it may still be the stale one, and you lose the benefits of stateless routing."
+      },
+      {
+        "text": "Remove Redis and query the database directly.",
+        "explanation": "Wrong. That raises database load and doesn't touch the local caches that cause the disagreement."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 40 servers = 40 independent copies, each loaded at a different moment.\n2. After the change, server 7 may refresh in 1 minute, server 23 in 9.\n3. A user bouncing between servers sees prices flip.\n4. Options:\n   - Local TTL 10–30s bounds local entry age, not database-data age if upstream Redis is stale.\n   - Pub/sub (Redis channel `price-changed`): each connected server evicts on receipt; add recovery for missed messages and guard concurrent stale repopulation.\n   - For checkout, authorize and persist the charge using an authoritative price/version under the intended transaction; an earlier read can race a price change.\n5. Rule: the closer the cache, the harder it is to invalidate.",
+    "link": {
+      "title": "Redis: Client-side caching",
+      "url": "https://redis.io/docs/latest/develop/reference/client-side-caching/"
+    }
+  }
+]

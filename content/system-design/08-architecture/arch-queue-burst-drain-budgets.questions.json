@@ -1,0 +1,62 @@
+[
+  {
+    "id": "arch-scaling-writes-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Ticket sales open and 30,000 orders/s arrive for 5 minutes. The orders database can sustain 6,000 writes/s. Orders are put on an initially empty durable queue and drained by workers at 6,000/s. After the 5-minute burst, traffic drops to almost zero. Roughly how long after the burst ends is the backlog cleared?",
+    "options": [
+      {
+        "text": "About 5 minutes",
+        "explanation": "Wrong. That would only be true if the drain rate equalled the excess arrival rate. Here the excess is 4× the drain rate."
+      },
+      {
+        "text": "About 1 minute",
+        "explanation": "Wrong. That badly underestimates the backlog: 24,000 excess orders/s for 300 s is millions of orders."
+      },
+      {
+        "text": "About 20 minutes",
+        "explanation": "Correct. The queue grows by 24,000 orders a second (30,000 in, 6,000 out) for 300 seconds, a backlog of 7.2 million orders. At 6,000 a second, that takes 1,200 seconds, or 20 minutes, to drain."
+      },
+      {
+        "text": "Never, because queues grow without bound.",
+        "explanation": "Wrong. Queues only grow without bound when arrivals exceed the drain rate *indefinitely*. Here the burst ends, so the backlog drains."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. During the burst the backlog grows by arrivals minus drain, every second:\n\n```formula\nB = (A − D) × T\nB = (30000 − 6000) /s × 300 s\nB = 24000 /s × 300 s = 7200000\nwhere\nB: peak backlog, in orders\nA: the arrival rate: 30,000 orders per second (/s)\nD: the drain rate: 6,000 orders per second\nT: burst length: 5 minutes = 300 seconds (s)\ns: seconds\n/s: per second\nIn words: 24,000 extra orders a second for 300 seconds leaves 7.2 million queued.\n```\n\n2. After the burst, arrivals are about zero, so the workers drain at full rate:\n\n```formula\nT_drain = B / D\nT_drain = 7200000 / (6000 /s)\nT_drain = 1200 s = 20 min\nwhere\nT_drain: time to clear the backlog\nB: backlog, 7.2 million orders\nD: the drain rate, 6,000 orders per second (/s)\ns: seconds\nmin: minutes; 1,200 s = 20 min\nIn words: 7.2 million orders at 6,000 a second take 20 minutes.\n```\n\n3. Design implications:\n   - The queue must hold more than 7.2M messages.\n   - Users wait up to 20 min for confirmation, so show 'order received, confirming…'.\n   - If that's unacceptable, add write capacity (shard) or shed load with a waiting room.",
+    "link": {
+      "title": "Azure Architecture Center: Queue-Based Load Leveling",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your queue-based ingest dashboard shows the worker drain rate is steady at 5,000/s, but the age of the oldest message has grown steadily throughout the observation period. Input averages 5,300/s. What should you conclude?",
+    "options": [
+      {
+        "text": "The queue is doing its job; it absorbs load and will drain on its own.",
+        "explanation": "Wrong. Queues absorb *temporary* bursts. Here input exceeds drain on average, so the backlog grows forever."
+      },
+      {
+        "text": "This is sustained overload: arrivals exceed the drain rate by about 300/s on average, so the backlog grows by about 26 million a day. Add consumer and database capacity, or shed or degrade load.",
+        "explanation": "The measured average arrival rate exceeds the drain rate. Rising age alone could have other causes, but these rates imply backlog growth while they persist."
+      },
+      {
+        "text": "The workers are crashing; restart them.",
+        "explanation": "Wrong. The drain rate is steady at 5,000/s, so workers are running. They just aren't fast enough."
+      },
+      {
+        "text": "Increase the queue's retention so messages aren't lost.",
+        "explanation": "Wrong as a fix. It may avoid data loss for a while, but latency keeps rising without limit."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The backlog grows by the difference, for as long as it lasts:\n\n```formula\nG = (A − D) × T\nG = (5300 − 5000) /s × 86400 s\nG = 300 /s × 86400 s ≈ 25900000\nwhere\nG: messages added to the backlog in one day\nA: the average arrival rate, 5,300 per second (/s)\nD: the drain rate, 5,000 per second\nT: one day in seconds: 24 × 60 × 60 = 86,400 s\ns: seconds\n/s: per second\n≈: approximately equal to\nIn words: 300 extra messages a second is about 25.9 million more waiting each day.\n```\n\n2. Age keeps rising because the backlog never drains.\n3. Options: scale workers if the DB has headroom; batch writes to raise per-worker throughput; shard the DB; drop or sample low-value events.\n4. Alert on oldest-message age, not just queue length.",
+    "link": {
+      "title": "Azure Architecture Center: Queue-Based Load Leveling",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  }
+]

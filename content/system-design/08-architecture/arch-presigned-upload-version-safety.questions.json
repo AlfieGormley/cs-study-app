@@ -1,0 +1,100 @@
+[
+  {
+    "id": "arch-object-storage-media-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does a presigned S3 URL let a client do?",
+    "options": [
+      {
+        "text": "Access any object in the bucket indefinitely without credentials.",
+        "explanation": "Wrong. A presigned URL is scoped to one operation on one key and expires after a set time. It isn't a general bucket credential."
+      },
+      {
+        "text": "Perform one specific operation (e.g. PUT to one key) for a limited time, using the signer's permissions, without having AWS credentials itself.",
+        "explanation": "The signature authenticates the operation and signed parameters; applicable permissions and policy must still allow it. The same URL can be reused while valid."
+      },
+      {
+        "text": "Bypass encryption on the object.",
+        "explanation": "Wrong. Presigning controls authorisation, not encryption. Server-side encryption still applies."
+      },
+      {
+        "text": "Upload a file to the app server, which then forwards it to S3.",
+        "explanation": "Wrong. The whole point is that the client talks to S3 *directly*, so the bytes never pass through the app server."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The app authenticates the user and decides they may upload an avatar.\n2. It signs a URL with its own credentials for `PUT avatars/42/new.jpg`, expiring in 15 minutes.\n3. It returns the URL to the client.\n4. The client PUTs the bytes straight to S3; S3 checks the signature, method, key and expiry.\n5. Anyone holding the URL can use it until it expires, so keep expiry short and scope narrow.",
+    "link": {
+      "title": "AWS: Sharing objects with presigned URLs",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're designing the upload flow for user profile pictures using presigned PUT URLs. Which practices are important? Select all that apply.",
+    "options": [
+      {
+        "text": "Give the presigned URL a short expiry and scope it to a server-chosen key.",
+        "explanation": "Correct. Short expiry limits the damage if the URL leaks; a server-chosen key stops users overwriting each other's files or choosing paths."
+      },
+      {
+        "text": "Mark the photo as live as soon as the client says the upload finished.",
+        "explanation": "Wrong. The client could lie or fail mid-upload. Confirm with an S3 event or a HEAD request first."
+      },
+      {
+        "text": "Validate the object after upload (real image type, size limit, malware or content scan) before others can see it.",
+        "explanation": "Validate the exact source version and publish protected processed output. A still-valid upload URL can otherwise overwrite the key after validation."
+      },
+      {
+        "text": "Make the bucket publicly writable so the presigned URL isn't needed.",
+        "explanation": "Wrong. A publicly writable bucket lets anyone upload anything anywhere, the opposite of scoped access."
+      },
+      {
+        "text": "Serve the processed images through a CDN using versioned, immutable keys.",
+        "explanation": "Versioned keys avoid routine invalidation for new encodings; removal or access changes may still require cache controls."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Authenticate, choose a server-owned upload key and issue a short-lived PUT URL. A presigned POST policy is an alternative upload mechanism for content-length-range constraints, not a policy attached to this PUT.\n2. Confirm and identify the uploaded source version; deduplicate notifications and reject stale work.\n3. Decode and validate that version, then generate variants.\n4. Publish validated outputs under protected immutable keys and conditionally update the database pointer.\n5. Do not expose a mutable upload key after scanning: a reusable presigned URL could replace its bytes.",
+    "link": {
+      "title": "Azure Architecture Center: Valet Key pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/valet-key"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API runs on Amazon ECS (Elastic Container Service) with an IAM task role. It generates presigned GET links for invoice PDFs with `ExpiresIn=86400` (24 hours) and emails them. Customers report the links often fail after an hour or two with `ExpiredToken`. Why?",
+    "options": [
+      {
+        "text": "S3 caps every presigned URL at 1 hour regardless of what you request.",
+        "explanation": "Wrong. With long-term IAM user credentials and SigV4, a presigned URL can last up to 7 days."
+      },
+      {
+        "text": "Email clients rewrite the URL and break the signature.",
+        "explanation": "Wrong. That would give `SignatureDoesNotMatch`, not `ExpiredToken`, and wouldn't depend on time."
+      },
+      {
+        "text": "The URL was signed with the role's temporary credentials, and a presigned URL can't outlive the credentials that signed it.",
+        "explanation": "Correct. Task role credentials rotate every few hours. When the session token behind the signature expires, the URL dies, even though you asked for 24 hours."
+      },
+      {
+        "text": "The objects are encrypted with SSE-S3, which shortens presigned URL lifetimes.",
+        "explanation": "Wrong. Default server-side encryption doesn't affect presigned URL expiry."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A presigned URL embeds a signature made with the signer's credentials.\n2. Long-term IAM user keys: up to 7 days with SigV4.\n3. Temporary credentials (IAM role, Amazon ECS task role, EC2 instance profile, STS): the URL expires when those credentials do, whichever comes first.\n4. Inspect the signing credentials' actual expiration. Refreshing a task's current credentials is not itself credential revocation of an older still-valid STS session; that STS session's expiration caps the link.\n5. Fixes: issue short-lived links on demand (the email links to your app, which presigns a fresh 5-minute URL when clicked), or use a CDN signed URL whose lifetime you control.",
+    "link": {
+      "title": "AWS: Download and upload objects with presigned URLs",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html"
+    }
+  }
+]

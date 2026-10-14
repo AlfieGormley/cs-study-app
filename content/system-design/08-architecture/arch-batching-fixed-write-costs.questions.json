@@ -1,0 +1,62 @@
+[
+  {
+    "id": "arch-scaling-writes-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An ingest service inserts telemetry rows one per transaction. Each commit costs about 2 ms of fsync on networked storage, and commits are effectively serialised. What's the approximate maximum rate, and what's the rate if you batch 500 rows per transaction (assume the fsync still dominates)?",
+    "options": [
+      {
+        "text": "About 500 rows/s unbatched; about 250,000 rows/s batched.",
+        "explanation": "Correct under the stated simplified assumptions: 500 commits/s multiplied by 500 rows/commit gives 250,000 rows/s. This is a model, not a measured throughput prediction."
+      },
+      {
+        "text": "About 2,000 rows/s unbatched; about 4,000 rows/s batched.",
+        "explanation": "Wrong. 2,000/s would need 0.5 ms commits, and batching 500 rows per commit multiplies throughput by roughly 500, not by 2."
+      },
+      {
+        "text": "About 500 rows/s either way, because the disk is the bottleneck.",
+        "explanation": "Wrong. The disk bottleneck is per *flush*, not per row. Batching puts many rows into one flush."
+      },
+      {
+        "text": "Batching reduces throughput because transactions are larger.",
+        "explanation": "Wrong. Larger transactions take a little longer to write, but they amortise the fixed fsync cost over many rows, so total throughput rises sharply."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. With serialised commits, throughput is commits per second times rows per commit:\n\n```formula\nX = (B / t_c) × 1000 ms/s\nwhere\nX: rows written per second (rows/s)\nt_c: time for one commit's fsync, here 2 ms\nB: rows per transaction (batch size)\nms: milliseconds\ns: seconds; 1000 ms/s converts a per-millisecond rate to a per-second rate\nIn words: count how many commits fit in a second, then multiply by the rows in each.\n```\n\n2. Unbatched, each transaction writes just one row:\n\n```formula\nX = (1 / (2 ms)) × 1000 ms/s\nX = 500 /s\nwhere\nX: rows per second\nms: milliseconds\ns: seconds; 1000 ms/s is the conversion factor\n/s: per second\nIn words: 500 commits a second, one row each.\n```\n\n3. Batched, 500 rows share one commit, assuming the fsync still dominates:\n\n```formula\nX = (500 / (2 ms)) × 1000 ms/s\nX = 250000 /s\nwhere\nX: rows per second\nms: milliseconds\ns: seconds; 1000 ms/s is the conversion factor\n/s: per second\nIn words: still 500 commits a second, but each carries 500 rows.\n```\n4. In reality CPU, network and index maintenance cap it lower, and no typical gain is asserted without a representative benchmark.\n5. Trade-off: rows wait in the batch buffer (say up to 100 ms), and an unflushed batch can be lost on crash unless it was read from a durable queue.",
+    "link": {
+      "title": "Azure Architecture Center: Queue-Based Load Leveling",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/queue-based-load-leveling"
+    }
+  },
+  {
+    "id": "arch-scaling-writes-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kafka producer sends 50,000 small messages per second and is CPU-bound on request overhead. It uses `linger.ms=0`. What does raising `linger.ms` to 10 do?",
+    "options": [
+      {
+        "text": "It makes each message durable 10 ms sooner.",
+        "explanation": "Wrong. Linger adds a wait before sending; it doesn't speed up durability."
+      },
+      {
+        "text": "It permits up to 10 ms of batching delay for an unfilled batch, potentially reducing request overhead; measure the resulting throughput and latency.",
+        "explanation": "The batch may send earlier when full. Backpressure can delay it longer, and reduced overhead can improve total latency under load; linger is not an end-to-end bound."
+      },
+      {
+        "text": "It drops messages that wait longer than 10 ms.",
+        "explanation": "Wrong. Lingering delays sending; nothing is dropped."
+      },
+      {
+        "text": "It has no effect unless `acks=0`.",
+        "explanation": "Wrong. Batching works with any `acks` setting."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Even `linger.ms=0` can batch records when records accumulate before sending.\n2. `linger.ms=10` permits waiting for an unfilled per-partition batch, normally until its delay expires or it fills.\n3. At a uniform rate, records arriving during the linger window:\n\n```formula\nn = r × t\nn = 50000 /s × 0.010 s = 500\nwhere\nn: records that arrive during one linger window\nr: the send rate, 50,000 records per second (/s)\nt: the linger time, 10 ms = 0.010 seconds (s)\nms: milliseconds\ns: seconds\n/s: per second\nIn words: 10 ms at 50,000 a second is 500 records, spread across the partitions' batches.\n```\n4. Measure request counts, compression and end-to-end latency; broker backpressure and queues can delay sends beyond linger.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  }
+]

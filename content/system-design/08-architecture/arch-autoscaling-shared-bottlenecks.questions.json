@@ -1,0 +1,62 @@
+[
+  {
+    "id": "arch-stateless-web-tier-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A flash sale doubles traffic in 20 seconds. Your web tier autoscales on CPU and new VMs take about 3 minutes to boot and pass health checks. Error rates spike for 3 minutes, and then the database falls over as the new instances come online. What's the best set of changes?",
+    "options": [
+      {
+        "text": "Lower the CPU target from 60% to 30% and change nothing else.",
+        "explanation": "Wrong. A lower target adds headroom, which helps the first spike, but the 3-minute boot time is unchanged and the database connection storm is not addressed at all."
+      },
+      {
+        "text": "Pre-scale on a schedule before the sale, switch to faster-starting containers on warm nodes, put a connection pooler in front of the database, and shed or queue excess load.",
+        "explanation": "These changes address provisioning delay and connection pressure; validate readiness time and query capacity rather than assuming containers and a pooler guarantee recovery."
+      },
+      {
+        "text": "Turn on sticky sessions so each user stays on one server.",
+        "explanation": "Wrong. Sticky sessions don't add capacity or speed up scaling, and they make load distribution worse during a spike."
+      },
+      {
+        "text": "Remove autoscaling and permanently run 10× the normal capacity.",
+        "explanation": "Wrong. It's very expensive, and the database still faces 10× the connections. It treats the symptom rather than the bottlenecks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Separate the failures:\n   - 0–3 min: not enough capacity because scaling is slower than the spike.\n   - After 3 min: the DB falls over, because new instances each open a connection pool.\n2. Capacity timing: the sale is planned, so use scheduled scaling to have the instances ready beforehand. Pre-provisioned nodes can reduce some startup delay; measure application readiness, image loading and dependencies.\n3. DB: suppose each instance has a 20-connection pool and you go from 20 to 60 instances:\n\n```formula\nC = N × P\nC = 60 × 20 = 1200\nwhere\nC: total connections the database is asked to hold\nN: app instances, 20 before and 60 after\nP: connections in each instance's pool, 20\nIn words: 20 × 20 = 400 connections becomes 60 × 20 = 1,200.\n```\n\nA pooler like PgBouncer multiplexes them onto, say, 200 real connections.\n4. Residual overflow: return 429/503 quickly, or admit orders into a bounded queue with explicit acceptance, deduplication and inventory semantics, rather than letting latency grow without bound.\n5. Principle: autoscaling is a control loop with lag. Plan for the lag and for the next bottleneck down.",
+    "link": {
+      "title": "Kubernetes: Horizontal Pod Autoscaling",
+      "url": "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You scale a Node.js API from 10 to 60 pods for a sale. Each pod attempts to open its full 25-connection database pool simultaneously, and the Postgres server is configured with `max_connections = 500`. What happens, and what's the fix?",
+    "options": [
+      {
+        "text": "Nothing: Postgres queues extra connections until one frees up.",
+        "explanation": "Wrong. Beyond `max_connections`, Postgres refuses new connections with an error rather than queueing them."
+      },
+      {
+        "text": "60 × 25 = 1,500 connections are requested, far above 500, so many pods fail to connect; put a pooler such as PgBouncer or RDS Proxy in front and shrink per-pod pools.",
+        "explanation": "Correct. The app tier scaled, but the database's connection limit didn't. A pooler multiplexes many client connections onto a small number of real ones."
+      },
+      {
+        "text": "Postgres automatically raises `max_connections` under load.",
+        "explanation": "Wrong. It's a static setting that needs a restart to change, and each connection is a backend process with real memory cost."
+      },
+      {
+        "text": "Only CPU on the pods matters; connections are free.",
+        "explanation": "Wrong. Each Postgres connection is a separate process using memory, so thousands of them hurt even below the limit."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Every pod opens its own full pool, so the database sees:\n\n```formula\nC = N × P\nC_before = 10 × 25 = 250\nC_after = 60 × 25 = 1500\nC_after = 1500 > 500\nwhere\nC: total connections requested from Postgres\nC_before: C with 10 pods, before the sale\nC_after: C with 60 pods, during the sale\nN: number of pods, 10 before and 60 after\nP: connections in each pod's pool, 25\n>: is greater than\nIn words: 60 pods × 25 connections asks for 1,500 connections, three times the 500 allowed by max_connections.\n```\n\n2. Before, 250 is below the configured ceiling (though not necessarily below sustainable query load). After, the requests beyond 500 are refused with connection errors.\n3. Each server connection consumes resources; actual memory and query cost depend on configuration and activity.\n4. Fix: PgBouncer in transaction mode, perhaps 100 real connections shared by all pods; per-pod limits chosen from measured concurrency. Transaction pooling requires application compatibility with connection-specific state restrictions.\n5. General lesson: scaling one tier moves the bottleneck to the next.",
+    "link": {
+      "title": "PostgreSQL connection settings",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-connection.html"
+    }
+  }
+]

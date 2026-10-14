@@ -1,0 +1,122 @@
+[
+  {
+    "id": "arch-batch-vs-stream-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A mobile game counts taps per minute with a stream processor. Phones on the Underground buffer events offline and send them minutes later. The team groups by the time each event *arrives* at the server. What goes wrong, and what's the fix?",
+    "options": [
+      {
+        "text": "Nothing; arrival time is always close enough to when the tap happened.",
+        "explanation": "Wrong. For offline phones the gap is minutes, so taps are counted in the wrong windows and peaks are smeared out."
+      },
+      {
+        "text": "Taps are attributed to the minute they arrived (processing time), not when they happened; window by event time with watermarks, and decide how to handle data that arrives after the watermark.",
+        "explanation": "Correct. Event-time windows place each tap in the minute it happened. Watermarks decide when a window is complete enough to emit, and an allowed-lateness policy handles stragglers."
+      },
+      {
+        "text": "The processor will crash because events are out of order.",
+        "explanation": "Wrong. Out-of-order events are normal and stream processors handle them. The problem is silent miscounting, not crashing."
+      },
+      {
+        "text": "Switch to batch processing once a day; streaming can't handle offline devices.",
+        "explanation": "Wrong. Event-time processing in streams is designed for exactly this. Batch would also add a day of latency."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A tap happens at 08:00:30 (event time) and arrives at 08:06:10 (processing time).\n2. Processing-time windows count it in 08:06; the 08:00 count is too low and the 08:06 count too high.\n3. Event-time windows use the timestamp in the event, so it goes in 08:00.\n4. When can the 08:00 window be emitted? When the configured event-time trigger fires for that window. A simplified watermark can lag observed event time; actual generators, input minima and idle-input handling matter.\n5. Events still later than that: either update the result (allowed lateness, emitting a correction) or route them to a side output.\n6. Trade-off: a longer watermark delay means more complete results but higher latency.",
+    "link": {
+      "title": "Apache Flink: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Flink job reads payments from Kafka, keeps a running total per merchant in state, and writes totals to a database. It checkpoints every 60 s. The job crashes 45 s after the last checkpoint and restarts. What must be true for the database totals to be exactly right afterwards?",
+    "options": [
+      {
+        "text": "Nothing; Flink guarantees exactly-once delivery to any external database automatically.",
+        "explanation": "Wrong. Flink's exactly-once guarantee covers its internal state. End-to-end exactly-once needs a compatible checkpoint-coordinated transactional sink or a proven idempotent protocol that also enforces output ordering and rejects stale attempts."
+      },
+      {
+        "text": "Restore state and source positions consistently; use a supported checkpoint-coordinated transactional sink, or a proven idempotent versioned output protocol that rejects stale attempts.",
+        "explanation": "A plain merchant-key upsert can expose rewound totals or let stale retries overwrite newer output. State recovery plus arbitrary upserts is not sufficient for exactly-once observable results."
+      },
+      {
+        "text": "Checkpoints must be taken every second so no events are ever replayed.",
+        "explanation": "Wrong. More frequent checkpoints shrink the amount of data replayed but don't eliminate it. Correctness comes from consistent restore plus sink semantics, not frequency."
+      },
+      {
+        "text": "The sink should increment the database total by each event's amount (`total = total + amount`).",
+        "explanation": "Wrong. Non-idempotent increments double-count replayed events whose effects reached the database before failure; the duplicated interval can be up to the 45 seconds since the checkpoint."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Restore merchant state and Kafka positions from the same completed checkpoint, then replay.\n2. Bare increments can double count output already written before failure.\n3. A bare assignment of the total can temporarily regress and race stale retries. A versioned, fenced idempotent protocol must define and enforce output ordering.\n4. A compatible transactional sink coordinates commit/abort with checkpoints and recovery; validate its actual guarantees and timeouts.\n5. Internal state consistency and externally observable effects are separate guarantees.",
+    "link": {
+      "title": "Apache Flink: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A dashboard shows \"orders in the last 10 minutes\", updated every minute. Which window type fits?",
+    "options": [
+      {
+        "text": "A tumbling window of 10 minutes.",
+        "explanation": "A tumbling window partitions time into disjoint blocks, so it cannot represent the trailing ten minutes at every minute boundary. Early triggers may still emit partial results more often."
+      },
+      {
+        "text": "A session window with a 10-minute gap.",
+        "explanation": "Wrong. Session windows group bursts of activity per key separated by inactivity. They don't give a fixed 10-minute span."
+      },
+      {
+        "text": "A sliding (hopping) window of 10 minutes that advances every 1 minute.",
+        "explanation": "Correct. Each window covers 10 minutes and a new one starts every minute, so each event belongs to 10 overlapping windows."
+      },
+      {
+        "text": "No window: keep one running total since the job started.",
+        "explanation": "Wrong. A running total never forgets old orders, so it can't answer 'in the last 10 minutes'."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Requirement: a 10-minute span with a result each minute.\n2. Tumbling: non-overlapping fixed blocks; trigger frequency is separate. Doesn't fit.\n3. Sliding: span 10, slide 1. Windows [12:00, 12:10), [12:01, 12:11), ...\n4. Each event counts in 10 windows: more state and work than tumbling.\n5. Session windows: driven by gaps in a user's activity, e.g. a burst of browsing activity.",
+    "link": {
+      "title": "Apache Flink: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  },
+  {
+    "id": "arch-batch-vs-stream-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your stream job uses a watermark of \"max event time seen − 10 s\". About 3% of events arrive more than 10 s late and are dropped, so hourly totals don't match the nightly batch. Product wants both fast dashboards and exact totals. What's the best approach?",
+    "options": [
+      {
+        "text": "Set the watermark delay to 24 hours so nothing is ever late.",
+        "explanation": "A 24-hour delay still does not prove that nothing arrives later. It also delays watermark-driven final output and increases retained state."
+      },
+      {
+        "text": "Switch from event time to processing time so no event is ever late.",
+        "explanation": "Wrong. Nothing is late, but every delayed event is counted in the wrong window, so totals are still wrong, just differently."
+      },
+      {
+        "text": "Keep the short watermark for an early result, allow lateness (say 1 hour) with updated results emitted as late events arrive, and send anything later to a side output.",
+        "explanation": "Early and corrected results can meet freshness needs; retained side-output events must actually be reconciled to achieve eventual completeness. Use versioned window outputs or transactional updates."
+      },
+      {
+        "text": "Drop late events; 3% is within normal error.",
+        "explanation": "Wrong. The requirement is exact totals, and the error is systematic: it always undercounts the windows that mobile users fall into."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A watermark trades completeness for latency.\n2. Short watermark → fast, incomplete first answer.\n3. Allowed lateness → the window's state is kept for 1 h more; each late event re-emits a corrected total.\n4. Beyond that → side output, reconciled by a batch job.\n5. Publish corrections with defined semantics: for example versioned (window, key) replacements that reject stale retries. A changelog with retractions/deltas can also work; blindly summing appended replacement totals double-counts.",
+    "link": {
+      "title": "Apache Flink: Timely stream processing",
+      "url": "https://nightlies.apache.org/flink/flink-docs-stable/docs/concepts/time/"
+    }
+  }
+]

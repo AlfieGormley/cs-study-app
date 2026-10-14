@@ -1,0 +1,100 @@
+[
+  {
+    "id": "arch-stateless-web-tier-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An e-commerce site stores shopping baskets in each app server's memory and uses sticky sessions. During a deploy, servers are restarted one at a time. What do users experience?",
+    "options": [
+      {
+        "text": "Nothing, because the load balancer copies sessions to the new server.",
+        "explanation": "Wrong. A load balancer routes traffic; it doesn't replicate in-memory application state between servers."
+      },
+      {
+        "text": "Users pinned to each restarted server lose their baskets and may be logged out.",
+        "explanation": "Correct. With in-memory sessions, the state dies with the process. Sticky routing then sends those users to a new server that has never seen them."
+      },
+      {
+        "text": "All users across all servers lose their baskets at once.",
+        "explanation": "Wrong. Only users pinned to the restarted server are affected each time, though over a full rolling deploy that ends up being everyone."
+      },
+      {
+        "text": "Users are unaffected because sticky sessions store the basket in the cookie.",
+        "explanation": "Wrong. Sticky sessions only store a routing hint in the cookie (which server to use), not the basket data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Where does the basket live? In server A's RAM.\n2. Deploy restarts A, so the RAM is wiped.\n3. Users stuck to A are now routed elsewhere with no session data.\n4. Over the whole rolling deploy, every server restarts, so eventually every user loses their basket once.\n5. Fix: store sessions in Redis (or a signed token) so restarts don't matter.",
+    "link": {
+      "title": "The Twelve-Factor App: Processes",
+      "url": "https://12factor.net/processes"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API uses JWT access tokens valid for 24 hours. A user reports their laptop was stolen, and you need to cut off access immediately. What's the core problem, and what's the standard mitigation?",
+    "options": [
+      {
+        "text": "JWTs are encrypted, so they can't be read; nothing more is needed.",
+        "explanation": "Wrong. Most JWTs are signed, not encrypted, and the issue isn't secrecy anyway. A valid signed token is accepted by every server until it expires."
+      },
+      {
+        "text": "Rotate the signing key; this is the normal way to revoke one user.",
+        "explanation": "A key rotation only invalidates old tokens once every verifier stops accepting the old key. It is broad rather than per-user token revocation, and cached keys or overlap can delay cut-off."
+      },
+      {
+        "text": "Self-contained tokens can't be revoked before expiry without a server-side check; use short-lived access tokens (for example 15 minutes) with revocable refresh tokens, or a denylist for emergencies.",
+        "explanation": "Correct as a design approach. Token revocation for refresh credentials prevents future refresh once observed, but existing access tokens continue until expiry or a separate enforced token revocation check."
+      },
+      {
+        "text": "Delete the user's session from Redis.",
+        "explanation": "Wrong. A pure JWT design has no server-side session to delete; that's the trade-off you made to avoid the lookup."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Why JWTs scale: any server can verify the signature with no shared lookup.\n2. The cost: the server has no record to delete, so the token stays valid until `exp`.\n3. With a 24 h lifetime, a stolen token works for up to 24 h.\n4. Mitigation:\n   - Access token lifetime 15 min.\n   - Refresh token stored server-side, revoked on 'log out everywhere'.\n   - After refresh is disabled, existing 15-minute access tokens can remain usable until expiry (plus configured clock tolerance); merely changing the policy does not shorten already-issued 24-hour tokens.\n5. For prompt cut-off, require every authorization to consult a consistently enforced denylist of revoked token IDs in Redis, accepting a lookup on each request.",
+    "link": {
+      "title": "OAuth 2.0 Security Best Current Practice",
+      "url": "https://www.rfc-editor.org/rfc/rfc9700.html"
+    }
+  },
+  {
+    "id": "arch-stateless-web-tier-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your login service issues 15-minute JWT access tokens and 30-day refresh tokens. Which design choices are sound? Select all that apply. Assume asymmetrically signed access tokens and a validated issuer/audience/expiry policy.",
+    "options": [
+      {
+        "text": "Keep refresh tokens in a server-side store so they can be revoked, and check it whenever a refresh is attempted.",
+        "explanation": "Correct. A server-side refresh-session record (often storing a token hash rather than raw token) supports token revocation checks at refresh. Refresh frequency depends on client activity and policy."
+      },
+      {
+        "text": "Put the user's full profile and basket in the access token so no service needs to look anything up.",
+        "explanation": "Wrong. Tokens travel on every request; a bloated token costs bandwidth, may exceed header limits, and the data inside goes stale."
+      },
+      {
+        "text": "Rotate refresh tokens on each use and treat reuse of an old one as a sign of theft.",
+        "explanation": "Correct. Reuse detection is evidence of replay, though legitimate concurrent clients can also reuse a token. Family invalidation must be atomic and does not automatically revoke issued access tokens."
+      },
+      {
+        "text": "Let any app server verify access tokens with the public key, without calling the auth service.",
+        "explanation": "Correct with trusted key distribution and the stated validation policy. Signature validity alone is insufficient; enforce issuer, audience, expiry and required claims."
+      },
+      {
+        "text": "Make access tokens valid for 30 days so users don't need refresh tokens.",
+        "explanation": "Wrong. A long-lived bearer token that can't be revoked is a 30-day window for anyone who steals it."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Access token: short-lived, small, verified locally with the public key.\n2. Refresh token: long-lived, stored server-side, revocable.\n3. After token revocation for refresh credentials is enforced, already-issued access tokens can remain usable for their remaining lifetime plus allowed clock tolerance; stronger cut-off needs additional checks.\n4. Rotation: each refresh returns a new refresh token; presenting an already-used one revokes the family.\n5. Refresh lookup frequency depends on active clients and their refresh schedules; it is not exactly one lookup per user per 15 minutes.",
+    "link": {
+      "title": "OAuth 2.0 Security Best Current Practice",
+      "url": "https://www.rfc-editor.org/rfc/rfc9700.html"
+    }
+  }
+]

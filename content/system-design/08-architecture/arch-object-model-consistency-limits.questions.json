@@ -1,0 +1,130 @@
+[
+  {
+    "id": "arch-object-storage-media-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A photo-sharing app needs to store user photos and answer queries like \"show user 42's photos, newest first\". Which design is most appropriate? Assume large media volume, independently scalable delivery and indexed metadata filtering are required.",
+    "options": [
+      {
+        "text": "Store the image bytes as BLOB columns in the relational database alongside the metadata.",
+        "explanation": "BLOB columns can be valid for some workloads, but coupling large media delivery to this database increases its scaling and operational burden under these requirements."
+      },
+      {
+        "text": "Store image bytes in object storage (e.g. S3) and keep a metadata row (owner, key, size, created_at) in the database.",
+        "explanation": "Correct. Object storage handles durable, cheap, scalable byte storage; the database handles the indexed queries. Each does what it's good at."
+      },
+      {
+        "text": "Save images on the app servers' local disks, organised into folders by user.",
+        "explanation": "Wrong. Local disks make the app tier stateful (other servers can't see the files), and you lose the files when an instance is replaced."
+      },
+      {
+        "text": "Store everything in object storage and answer queries with LIST on the key prefix.",
+        "explanation": "General purpose S3 listings are lexicographic and paginated. Carefully designed keys can support some ordering, but arbitrary metadata filters need additional indexing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Two different needs: storing big bytes and querying small metadata.\n2. Bytes: S3 Standard has an eleven-nines annual durability design target; this is not every storage class's guarantee. Object storage works well with a CDN.\n3. Metadata: a database index on `(owner_id, created_at DESC)` supports the requested access pattern; measure query latency.\n4. Link them by storing the S3 key in the row.\n5. Serving: client fetches via CDN URL built from that key.",
+    "link": {
+      "title": "AWS: What is Amazon S3?",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An S3 log writer sees 503 Slow Down during sharp request-rate increases. Monitoring points to S3 request scaling rather than KMS throttling. Which response is appropriate?",
+    "options": [
+      {
+        "text": "S3 has a hard bucket-wide limit of 100 writes/s; create one bucket per hour.",
+        "explanation": "Wrong. There's no 100/s bucket limit. S3 scales request rates per prefix (at least 3,500 PUTs/s per prefix) and buckets aren't the unit of scaling."
+      },
+      {
+        "text": "Retry with backoff and jitter, control the ramp-up, and measure whether parallel request distribution across prefixes or batching small logs improves sustained performance.",
+        "explanation": "S3 scales automatically and gradually. Prefix distribution can help; 3,500 writes/s is documented as at least, not a fixed ceiling, and random prefixing is not universally required."
+      },
+      {
+        "text": "Objects are too small; S3 rejects objects under 1 MB.",
+        "explanation": "Wrong. S3 accepts objects from 0 bytes. Small objects mean more requests, which matters, but size itself isn't rejected."
+      },
+      {
+        "text": "The UUIDs collide, causing overwrite conflicts.",
+        "explanation": "Wrong. UUID collisions are astronomically unlikely and wouldn't produce 503 Slow Down errors, which signal request-rate throttling."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Check actual peak requests/s and the failing dependency; objects/hour does not establish the instantaneous limit.\n2. S3 documents at least 3,500 write requests/s per partitioned prefix, with gradual automatic scaling.\n3. Use bounded retries with backoff and jitter, and ramp load while observing errors.\n4. If warranted, distribute requests or combine small log records into larger objects. Neither prefix count nor hashing guarantees proportional throughput.",
+    "link": {
+      "title": "AWS: Best practices for S3 performance",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/optimizing-performance.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A worker writes `reports/9.pdf` to S3, gets `200 OK`, then immediately publishes a message. Another service receives the message and does `GET reports/9.pdf` within milliseconds. What does it see today? Assume an authorized direct request to the same bucket, with no intervening overwrite/delete, CDN cache or cross-Region replica.",
+    "options": [
+      {
+        "text": "Possibly a 404, because S3 is eventually consistent for new objects, so the consumer should sleep and retry.",
+        "explanation": "Modern S3 object reads are strongly consistent. The older consistency model had operation-specific exceptions, so it should not be summarized as every new object being eventually consistent."
+      },
+      {
+        "text": "The complete new object, because S3 provides strong read-after-write consistency for object PUTs.",
+        "explanation": "For this same-bucket direct read, the completed write is visible. This guarantee does not make a different bucket's cross-Region replication synchronous."
+      },
+      {
+        "text": "A partially written object if the GET races the replication between Availability Zones.",
+        "explanation": "Wrong. Updates to a single key are atomic: a reader gets the old data or the new data, never a partial object."
+      },
+      {
+        "text": "Only the object metadata; the bytes become readable after a few seconds.",
+        "explanation": "Wrong. There's no split like that. Object data and metadata (HEAD) are both strongly consistent after a successful PUT."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Order of events: PUT succeeds, *then* the message is sent, *then* the GET runs.\n2. S3's model since December 2020: a direct same-bucket read after this successful PUT returns that write, absent a later modification and given valid authorization.\n3. So the consumer sees the full object. No sleep-and-retry hack is needed.\n4. What still isn't guaranteed: if two writers PUT the same key concurrently, the last one wins, and bucket *configuration* changes are eventually consistent.",
+    "link": {
+      "title": "AWS: What is Amazon S3?",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html"
+    }
+  },
+  {
+    "id": "arch-object-storage-media-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Two instances of a config service both read `settings.json` from S3, modify it and write it back. Occasionally one instance's change disappears. Which statements are true? Select all that apply. Assume the first completed write changes the object ETag.",
+    "options": [
+      {
+        "text": "This is a lost update: both PUTs succeed and the last writer wins, silently discarding the other change.",
+        "explanation": "Unconditional read-modify-write can lose a change from the current version. S3 Object Lock concerns retention, not mutual exclusion between these edits."
+      },
+      {
+        "text": "Strong read-after-write consistency prevents this, so the bug must be in the CDN.",
+        "explanation": "Wrong. Strong consistency means reads see completed writes. It doesn't stop two read-modify-write cycles interleaving."
+      },
+      {
+        "text": "A conditional PUT with `If-Match` checks the ETag you read; a mismatch fails with 412, while concurrent conflicts also need documented handling before retry.",
+        "explanation": "An ETag mismatch produces 412. This checks ETag equality, not every possible version/metadata change; concurrent conflicts or deletion can also produce 409 or 404."
+      },
+      {
+        "text": "S3 can update two keys atomically if you send them in one multipart upload.",
+        "explanation": "Wrong. Updates are per key; S3 has no multi-key transactions. Multipart builds one object."
+      },
+      {
+        "text": "If this needs frequent concurrent updates, a database with transactions may be a better home for the data.",
+        "explanation": "Correct. Object storage suits large, mostly-immutable blobs. Frequently mutated shared state belongs in a database."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Timeline: A reads v1, B reads v1, A writes v2a, B writes v2b. the current version lacks A's change; enabled versioning may retain older versions.\n2. Strong consistency doesn't help: every read was correct when it ran.\n3. Fix: read with its ETag, then PUT with `If-Match: <etag>`.\n4. If the ETag changed, S3 returns 412 Precondition Failed; also handle documented conflict/deletion outcomes; re-read, re-apply, retry.\n5. `If-None-Match: *` is the create-only variant, useful for 'write once' keys.",
+    "link": {
+      "title": "AWS: Conditional writes",
+      "url": "https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html"
+    }
+  }
+]

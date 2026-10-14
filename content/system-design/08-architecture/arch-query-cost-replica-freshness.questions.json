@@ -1,0 +1,122 @@
+[
+  {
+    "id": "arch-scaling-reads-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user updates their display name, the page reloads, and the old name appears for a few seconds. Reads go to asynchronous read replicas. What's going on? The primary confirms the committed update immediately; an uncached read from the replica still shows the older value.",
+    "options": [
+      {
+        "text": "The write failed and was silently retried.",
+        "explanation": "Wrong. The new name appears a few seconds later, so the write succeeded. The read simply happened before the replica caught up."
+      },
+      {
+        "text": "Replication lag: the read hit a replica that hadn't yet applied the write, violating read-your-writes consistency.",
+        "explanation": "Correct. Asynchronous replicas trail the primary. Reading from one straight after writing to the primary can return stale data."
+      },
+      {
+        "text": "The browser cached the old page, which replicas can't cause.",
+        "explanation": "Wrong. Browser caching is possible in principle, but the setup described (async replicas serving reads) is the textbook cause of exactly this symptom."
+      },
+      {
+        "text": "The primary and replica have permanently diverged.",
+        "explanation": "Wrong. The data converges after a few seconds, which is eventual consistency, not permanent divergence."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Write path: UPDATE goes to the primary at 0 seconds.\n2. Replication: the change reaches the replica at about 2 seconds under load.\n3. Read path: the reload at 0.3 seconds goes to the replica, which still shows the old name.\n4. Fix: route the required fresh read to the primary, or wait until the replica has replayed at least the write's commit position. A fixed 10-second primary window is a heuristic, not a bound on lag.",
+    "link": {
+      "title": "AWS: Working with read replicas",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which change primarily offloads reads while retaining the same single-writer primary and a complete write stream on each full replica?",
+    "options": [
+      {
+        "text": "Adding read replicas.",
+        "explanation": "Correct among these options. Replicas can indirectly free primary resources by offloading reads, but full replicas still replay the complete write stream rather than partition it."
+      },
+      {
+        "text": "Sharding the data across several primaries.",
+        "explanation": "Wrong choice. Sharding does scale writes, because each primary handles only its share of keys."
+      },
+      {
+        "text": "Batching many small writes into fewer larger ones.",
+        "explanation": "Wrong choice. Batching reduces per-write overhead (round trips, fsyncs), so it increases effective write throughput."
+      },
+      {
+        "text": "Moving to a larger primary instance.",
+        "explanation": "Wrong choice. Vertical scaling does raise write capacity, at least until you reach the largest instance size available."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Read replicas copy *all* data and apply *all* writes.\n2. So with 1 primary + 5 replicas, every full replica replays the write stream, though execution/replay costs differ.\n3. They're excellent for the 95% read share: reads spread across 6 nodes.\n4. But as writes grow, the primary (and each replica) hits a write ceiling.\n5. Offloading reads can free primary headroom. Sharding, batching and larger hardware can address other write bottlenecks, but none guarantees a fixed scaling factor.",
+    "link": {
+      "title": "AWS: Working with read replicas",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q8",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A page lists 50 posts with their authors. The ORM runs one query for the posts and then one query per post for its author. Each query is a ~1 ms round trip. What's the cost, and the fix?",
+    "options": [
+      {
+        "text": "About 2 ms; ORMs batch these automatically.",
+        "explanation": "Wrong. Many ORMs load related rows lazily, one query each, unless you ask for eager loading."
+      },
+      {
+        "text": "About 51 ms of serial network round trips; batching authors takes two queries (~2ms network), while an appropriate join can use one",
+        "explanation": "Correct. This is the N+1 query problem: 1 query for the list plus N for related rows."
+      },
+      {
+        "text": "About 51 ms, and the only fix is a read replica.",
+        "explanation": "Wrong. A replica spreads load but each read still takes 51 round trips."
+      },
+      {
+        "text": "About 1 ms, because the database caches repeated queries.",
+        "explanation": "Wrong. Each query is a separate network round trip, whether or not the data is in memory."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Count the queries: 1 for the list of posts, plus 1 per post for its author.\n\n```formula\nQ = N + 1\nQ = 50 + 1 = 51\nT = Q × t\nT = 51 × 1 ms ≈ 51 ms\nwhere\nQ: the number of queries, each its own round trip\nN: posts on the page, here 50\nT: total time spent on round trips, in milliseconds (ms)\nt: one round trip, about 1 ms here\nms: milliseconds\n≈: approximately equal to\nIn words: 51 queries at about 1 ms each is about 51 ms of waiting on the network.\n```\n\n2. Fix: collect the author IDs, run `SELECT ... WHERE id IN (...)`: 2 queries ≈ 2 ms.\n3. ORM terms: eager loading, `select_related` / `prefetch_related` in Django, `includes` in Rails.\n4. Do this before adding any infrastructure.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "arch-scaling-reads-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Reads are spread randomly across 3 async replicas. A user refreshes a comment thread twice in a row: the first refresh shows a new reply, the second doesn't. What's this anomaly, and the simplest fix?",
+    "options": [
+      {
+        "text": "A read-your-writes violation; route the user to the primary after they write.",
+        "explanation": "Wrong. The user didn't write anything. They saw someone else's data appear and then vanish."
+      },
+      {
+        "text": "Lost update; use transactions.",
+        "explanation": "Wrong. No write was lost; the reply exists on the primary and will reach every replica."
+      },
+      {
+        "text": "Split brain between replicas; fail over the primary.",
+        "explanation": "Wrong. Replicas being at slightly different positions is normal async replication, not split brain."
+      },
+      {
+        "text": "A monotonic reads violation (time appeared to go backwards); pin each user's reads to one replica, for example by hashing the user ID.",
+        "explanation": "Correct as a simple mitigation while the chosen replica only advances. Failover/reassignment can regress; carry a minimum observed version and wait or route to an eligible replica for a guarantee."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Refresh 1 → replica A (lag 0.2 s): reply visible.\n2. Refresh 2 → replica B (lag 3 s): reply not there yet.\n3. Monotonic reads: once you've seen a value, you never see an older one.\n4. Fix: choose the replica from a hash of the user ID, so the same user always lands on the same replica:\n\n```formula\nr = hash(u) mod 3\nwhere\nr: the replica number, 0, 1 or 2\nhash: a hash function: turns the user ID into a big, evenly spread number, always the same for the same input\nu: the user's ID\nmod: modulo: the remainder after dividing, so the answer is always 0, 1 or 2\nIn words: hash the user ID and take the remainder after dividing by 3 to pick one of the 3 replicas.\n```\n\nIn one Python process: `replica = replicas[hash(user_id) % 3]`. Python string hashes are randomised between processes, so production routing across instances needs an explicitly stable hash function and consistent replica membership.\n5. If that replica fails, the user moves to another and may see one backwards step; that is a policy choice, not a monotonic-read guarantee. Preserve an observed-version token across reassignment if the product requires monotonic reads.",
+    "link": {
+      "title": "AWS: Working with read replicas",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ReadRepl.html"
+    }
+  }
+]

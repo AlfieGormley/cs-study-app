@@ -14,14 +14,13 @@ Here n is the number of stored elements or appends. Amortised bounds depend on t
 Suppose instead the array grows by a **fixed amount**, say 10 slots each time. Resizes happen at sizes 10, 20, 30, ..., and each copies the whole array:
 
 ```formula
-copies = 10 + 20 + 30 + … + n
-copies = 10 × (1 + 2 + … + n / 10)
+copies = 10 + 20 + … + (n − 10)
+copies = 10 × (1 + 2 + … + (n/10 − 1))
 copies ≈ 10 × (n / 10)^2 / 2 = n^2 / 20
 n = 10^6:  copies ≈ 10^12 / 20 = 5 × 10^10
 where
 copies: the total number of element copies over n appends
-n: the number of appends (a multiple of 10 here)
-n^2: n squared, n × n
+n: the number of appends, a multiple of 10 of at least 20 here, starting with capacity 10; filling the last block does not yet trigger another resize
 …: "and so on"
 ≈: approximately equal to (lower-order terms dropped)
 In words: the copy sizes grow in a straight line rather than doubling, so they add up to a quadratic total, about n squared over 20.
@@ -34,19 +33,23 @@ The factor doesn't have to be 2. Suppose each resize multiplies the capacity by 
 ```formula
 copies = 1 + g + g^2 + … + C / g
 copies = (C − 1) / (g − 1)
-n ≤ C < g × n
+n ≤ C < g n
+copies < gn / (g − 1)
+copies ≈ n / (g − 1) when C ≈ n
+g = 2: copies ≈ n
+g = 1.5: copies ≈ 2n
 where
 copies: the total number of element copies over all resizes
 g: the growth factor, any fixed number greater than 1 (2 for doubling, 1.5, 1.125, …)
-g^2: g × g
 C: the final capacity after n appends
 n: the number of appends
 …: "and so on"
 ≤: less than or equal to
+≈: approximately, near full final capacity and ignoring rounding
 In words: each resize copies the old capacity, those capacities form a geometric series, and the series adds up to a constant multiple of the final capacity, which is itself within a factor g of n.
 ```
 
-So the copying is at most about g × n / (g − 1), a constant times n. Since n ≤ C < g × n, a bound in terms of arbitrary n needs the extra factor g. The smaller estimate n / (g − 1) applies near a full final capacity. With g = 2 it gives about n copies; with g = 1.5 about 2n. Real implementations differ:
+The bound in terms of an arbitrary append count needs the growth-factor multiplier because final capacity may exceed current size. Near a full final capacity, the smaller estimate applies. Doubling gives roughly one copy per stored element, while growth by one-half gives roughly two, as the card shows. Real implementations differ:
 
 | Implementation | Growth |
 |---|---|
@@ -61,7 +64,18 @@ CPython's comment in `listobject.c` gives the capacities as 0, 4, 8, 16, 24, 32,
 
 If the array also supports `pop`, you may want to free memory as it empties. The obvious rule, "halve the capacity when it becomes half full", has a nasty failure.
 
-Suppose the array is exactly full at capacity k. Append: double to 2k (k copies). Pop: now half full, halve back to k (k copies). Append again: full, double again. Alternating push and pop at that boundary makes **every operation cost Θ(n)**, proportional to the number of elements n (which is about k).
+Suppose the array is exactly full. Append doubles its capacity, copying the old contents. Pop makes it half full, triggering a shrink back to the original capacity and another full copy. Append again doubles it once more. Alternating push and pop at that boundary makes **every operation cost Θ(n)**, where n is the element count, close to the original capacity.
+
+```formula
+C_before = k, C_grow = 2k
+C_shrink = k
+W_grow = k, W_shrink = k
+where
+C_before, C_grow, C_shrink: the capacities before append, after growth and after the following shrink, in element slots
+k: the original full capacity, in slots
+W_grow, W_shrink: the element-copy counts for those two resizes
+In words: Alternating append and pop repeatedly copies the whole original array, because the growth and shrink thresholds meet at the same boundary.
+```
 
 The fix is **hysteresis**: grow when full, but shrink only when the array is a **quarter** full, and then halve. After any resize the array is half full, so at least Θ(capacity) cheap operations must happen before the next resize. Both push and pop are then O(1) amortised.
 

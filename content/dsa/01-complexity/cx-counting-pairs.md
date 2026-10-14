@@ -25,13 +25,15 @@ def has_dup(xs):
     return False
 ```
 
-In the worst case (no duplicates), how many comparisons? Here n is the number of items in the list, and `i` and `j` are the two positions being compared. When `i = 0`, the inner loop runs n − 1 times; when `i = 1`, n − 2 times; and so on down to 0. Adding these up:
+In the worst case (no duplicates), how many comparisons? Here n is the item count; `i` and `j` are positions in the code. The first outer pass compares with every later position, the second skips one more position, and the final pass has no later positions. The series below records those shrinking counts.
 
 ```formula
 C(n) = (n − 1) + (n − 2) + … + 1 + 0
-C(n) = n × (n − 1) / 2
+C(n) = n(n − 1) / 2
 C(5) = 5 × 4 / 2 = 10
 C(1000) = 1000 × 999 / 2 = 499500
+C(1000000) = 1000000 × 999999 / 2
+C(1000000) = 499999500000
 where
 C(n): the number of comparisons has_dup makes in the worst case (no duplicates), on a list of n items
 n: the number of items in the list; a whole number with no unit
@@ -39,11 +41,11 @@ n: the number of items in the list; a whole number with no unit
 In words: every pair of different positions is compared exactly once, and a list of n items has n × (n − 1) / 2 pairs.
 ```
 
-Where does the second line come from? Write the sum forwards and then backwards underneath it. Each column adds up to n − 1, and there are n columns, so twice the sum is n × (n − 1). Halve it to get the sum itself. Another way to see it: each of the n items is paired with the n − 1 others, and that counts every pair twice.
+Where does the second line come from? Write the series forwards and backwards underneath itself. Each column totals one less than the item count, and there is one column per item. That counts every pair twice, so halve the product. Equivalently, pair every item with every other item and remove that same double count.
 
-So for 5 items that is 10 comparisons, for 1,000 items 499,500, and for 1,000,000 items about 500 billion (1,000,000 × 999,999 / 2 ≈ 5 × 10^11). Doubling n roughly **quadruples** the work, because n appears twice in the product: twice as many items, each compared with twice as many others.
+So for 5 items that is 10 comparisons, for 1,000 items 499,500, and for a million items about 500 billion, as the card shows. Doubling the list roughly **quadruples** the work: twice as many items, each compared with twice as many others.
 
-A different approach is to sort the list first and then compare neighbours, since duplicates end up next to each other. Good sorting algorithms take about n × log_2(n) operations ("n log n", where log_2 is the base-2 logarithm, explained in the following growth-rate lesson; later modules show how). Another is to put each item in a hash set and stop if it is already there, which is about n operations on average. Same problem, three very different growth rates.
+A different approach sorts first and compares neighbours, since duplicates become adjacent. Good sorting algorithms take O(n log n) time, where n is the item count and log is the base-2 logarithm introduced next. A hash set gives O(n) expected time under the usual hashing assumptions. Same problem, three different growth rates.
 
 ## Key takeaways
 - Compare each pair of distinct positions once.

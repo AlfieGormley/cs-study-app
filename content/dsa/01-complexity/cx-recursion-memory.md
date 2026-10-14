@@ -31,34 +31,39 @@ fact(4)   waiting to multiply by 4
 fact(5)   waiting to multiply by 5
 ```
 
-Counting frames and treating arithmetic values as atomic, `fact` uses Θ(n) auxiliary space (n frames for `fact(n)`); an iterative version keeps a constant number of values. Actual Python integers are not fixed-size: n! (n factorial) alone needs Θ(n log n) bits, because the number of bits is the logarithm of the value and log(n!) grows like n log n.
+Counting frames and treating values as atomic, `fact` has Θ(n) auxiliary space, where n is its argument; an iterative version keeps a constant number of values. Python integers are not fixed-size: a factorial alone needs Θ(n log n) bits. Its bit length follows the logarithm of its value, and the logarithm of a factorial has that growth rate.
 
 Note that it's **depth**, not the total number of calls, that matters. Naive `fib(n)` makes an exponential number of calls, but at any moment only one path from the root to a leaf is active:
 
 ```formula
-time(n) = Θ(φ^n) ≈ Θ(1.618^n)
+time(n) = Θ(φ^n)
+φ ≈ 1.618
 space(n) = Θ(n)
+C_fib(n) = Θ(φ^n)
+C_merge(n) ≈ 2n
 where
 time(n): the number of calls naive fib(n) makes, which sets its running time
 space(n): the maximum number of stack frames alive at once, which sets its memory use
-n: the argument passed to fib, which is also the depth of the deepest path in the recursion tree
+n: the positive Fibonacci argument, or merge-sort item count for C_merge; fib’s deepest path has n frames
 φ: phi, the golden ratio, about 1.618
 φ^n: n copies of φ multiplied together
 Θ: Big-Theta: grows at exactly this rate, up to a constant factor
 ≈: approximately equal to
+C_fib(n): the naive Fibonacci call count
+C_merge(n): the merge-sort call count with one-item leaves
 In words: naive Fibonacci takes exponential time but only linear space, because each finished branch hands its stack frames back before the next branch starts.
 ```
 
-In the table below, n is the input (the argument, or the list length) and log n is the base-2 logarithm of n:
+In the table below, n is the input (the argument, or the list length) and logarithmic means base-two logarithmic growth:
 
-| Function | Calls | Max depth (space) |
+| Function | Calls | Maximum live depth |
 |---|---|---|
-| fact(n) | n | n |
-| naive fib(n) | ~1.618^n | n |
-| binary search | log n | log n |
-| merge sort | ~2n | log n |
+| Factorial | linear | linear |
+| Naive Fibonacci | exponential | linear |
+| Binary search | logarithmic | logarithmic |
+| Merge sort | about twice the item count | logarithmic |
 
-(Merge sort's stack is only log n deep, because each call halves the list, but its merge step needs an O(n) buffer, so its total auxiliary space is O(n).)
+Merge sort’s stack has Θ(log n) depth, where n is the list length, because each call halves its range. The merge buffer needs O(n) space, so total auxiliary space is O(n).
 
 > [!warning] Python stops at 1,000
 > CPython's default recursion limit is 1,000 frames (`sys.getrecursionlimit()`). `fact(5000)` raises `RecursionError`. You can raise the limit with `sys.setrecursionlimit`, but very deep recursion stays fragile: every frame costs memory, and recursion that passes through C code can still overflow the real thread stack and crash the interpreter. Python doesn't do **tail-call optimisation**, so even tail-recursive functions use one frame per call. For deep linear recursion, rewrite it as a loop.

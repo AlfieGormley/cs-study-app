@@ -9,14 +9,14 @@ summary: Separate recursive subproblem costs from each call’s own work.
 
 Loops can be analysed by counting. Recursive algorithms, especially **divide and conquer** (split the problem, solve the pieces recursively, combine), need a different tool. Their running time is naturally described by a **recurrence**: an equation that defines T(n), the running time on an input of size n, in terms of T on smaller inputs.
 
-This lesson is about writing those recurrences and solving them quickly. Throughout, n is the input size, O, Ω and Θ are the upper, lower and tight bounds from the asymptotic-notation lessons, and log n is the base-2 logarithm of n unless another base is written.
+This lesson is about writing those recurrences and solving them quickly. Throughout, n is the input size, O, Ω and Θ are the upper, lower and tight bounds from the asymptotic-notation lessons, and logarithms use base two unless another base is written.
 
 ## From code to recurrence
 
 Every recursive function's cost splits into the calls it makes and the work it does itself:
 
 ```formula
-T(n) = r × T(m) + w(n)
+T(n) = r T(m) + w(n)
 where
 T(n): the running time on an input of size n, in basic steps
 r: how many recursive calls one call makes
@@ -46,7 +46,7 @@ Binary search makes one recursive call on half the range, plus a constant amount
 
 ```formula
 T_bs(n) = T_bs(n / 2) + O(1)
-T_ms(n) = 2 × T_ms(n / 2) + Θ(n)
+T_ms(n) = 2T_ms(n / 2) + Θ(n)
 where
 T_bs(n): the running time of binary search on a range of n items
 T_ms(n): the running time of merge sort on n items
@@ -56,19 +56,42 @@ O(1): at most a constant amount of work, however large n is
 In words: binary search does a constant amount of work and then searches one half; merge sort sorts both halves and then does a linear merge.
 ```
 
-Some common recurrences and their solutions (the first column is T(n), shorthand for "T(n) = this expression"; 2^n is n copies of 2 multiplied together):
+Some common recurrence/solution pairs follow. Each pair uses T for its own cost function with a fixed positive base case:
 
-| Recurrence | Example | Solution |
+```formula
+T(n) = T(n/2) + 1
+T(n) = Θ(log(n))
+T(n) = T(n/2) + n
+T(n) = Θ(n)
+T(n) = 2T(n/2) + 1
+T(n) = Θ(n)
+T(n) = 2T(n/2) + n
+T(n) = Θ(n log(n))
+T(n) = T(n − 1) + 1
+T(n) = Θ(n)
+T(n) = T(n − 1) + n
+T(n) = Θ(n^2)
+T(n) = 2T(n − 1) + 1
+T(n) = Θ(2^n)
+where
+T(n): the cost in each independent pair, in basic steps
+n: the current input size
+log: the base-2 logarithm
+Θ: a tight growth bound
+In words: The first four pairs are half-size recursion; the last three reduce size by one. Their ordering matches the examples below.
+```
+
+| Pair | Example | Growth |
 |---|---|---|
-| T(n/2) + 1 | binary search | Θ(log n) |
-| T(n/2) + n | halving + scan | Θ(n) |
-| 2T(n/2) + 1 | tree traversal | Θ(n) |
-| 2T(n/2) + n | merge sort | Θ(n log n) |
-| T(n-1) + 1 | linear recursion | Θ(n) |
-| T(n-1) + n | selection sort | Θ(n^2) |
-| 2T(n-1) + 1 | Towers of Hanoi | Θ(2^n) |
+| 1 | Binary search | logarithmic |
+| 2 | Halving then scanning | linear |
+| 3 | Tree traversal | linear |
+| 4 | Merge sort | linear times log |
+| 5 | Linear recursion | linear |
+| 6 | Selection sort | quadratic |
+| 7 | Towers of Hanoi | exponential |
 
-The following recurrence lessons derive these bounds. The **base case** (such as T(1) = Θ(1), the cost when the input is too small to split) is almost always constant, so it is usually left implicit. Floors and ceilings (n/2 versus n/2 rounded up) don't change the asymptotic answer, so we ignore them too.
+The following recurrence lessons derive these bounds. The **base case** costs a fixed amount when input is too small to split, so it is usually left implicit. Rounding fractional input sizes up or down does not change these asymptotic answers.
 
 ## Key takeaways
 - A recurrence adds recursive subproblem costs to the work outside those calls.

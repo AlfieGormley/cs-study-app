@@ -11,11 +11,11 @@ The previous unit defined the critical exponent from the number of subproblems a
 
 ## Case 2
 
-**Case 2: f is about the same as n^c.** Every level does roughly equal work, so you multiply by the number of levels, which adds a log factor:
+**Case 2: outside work matches the critical growth.** Every level does roughly equal work, so you multiply by the number of levels, which adds a log factor:
 
 ```formula
-f(n) = Θ(n^c × (log n)^k)  for some k ≥ 0
-T(n) = Θ(n^c × (log n)^{k+1})
+f(n) = Θ(n^c(log(n))^k)  for some k ≥ 0
+T(n) = Θ(n^c(log(n))^{k+1})
 where
 f(n): the work outside the recursive calls
 n: the input size
@@ -28,7 +28,7 @@ T(n): the running time on input size n
 In words: if the root's work matches the leaf count (up to log factors), every level costs about the same and the answer gains one more log factor.
 ```
 
-(Levels are exactly equal only when k = 0; for larger k, summing the slowly changing level costs still adds one log power.)
+(Levels are exactly equal only when the log-factor exponent is zero; for larger k, summing the slowly changing level costs still adds one log power.)
 
 ## Key takeaways
 - Matching root and leaf costs adds a logarithmic factor across the levels.

@@ -32,7 +32,7 @@ In-place algorithms save memory and often run faster (less allocation, better ca
 - **They can be harder to get right.** Swapping elements around inside one array is fiddlier than building a new one.
 - **They don't play well with sharing.** Mutating a list that other code (or another thread) holds a reference to causes surprising bugs.
 
-Sorting is the familiar case. Heapsort sorts in place with O(1) auxiliary space. Quicksort partitions in place, but its recursion needs a stack: O(log n) expected depth, O(n) in the worst case. A standard trick bounds it at O(log n) even in the worst case: **recurse into the smaller partition and loop on the larger one**, because the smaller side is at most half the size. Python's `list.sort()` mutates its input, but is not in-place in the strict O(1)-auxiliary-space sense; it may allocate a temporary buffer of up to half the list (n/2 items for a list of n) while merging.
+Sorting is the familiar case. Heapsort sorts in place with O(1) auxiliary space. Quicksort partitions in place, but its recursion needs a stack: O(log n) expected depth, O(n) in the worst case. A standard trick bounds it at O(log n) even in the worst case: **recurse into the smaller partition and loop on the larger one**, because the smaller side is at most half the size. Python's `list.sort()` mutates its input, but is not in-place in the strict O(1)-auxiliary-space sense; it may allocate a temporary buffer of up to half the list (half the items) while merging.
 
 Why does recursing into the smaller side bound the depth? Each recursive call at least halves the size of the part it works on:
 
@@ -45,7 +45,6 @@ s_k: the size of the partition handled at recursion depth k
 s_{k+1}: the size handled one level deeper
 k: the recursion depth (0 for the first call)
 n: the number of items being sorted
-2^k: k copies of 2 multiplied together
 depth: the maximum number of quicksort frames on the stack at once, including the initial call
 ⌊x⌋: floor: round x down to the nearest whole number
 log_2(n): the base-2 logarithm of n, the number of halvings that take n down to 1

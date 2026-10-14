@@ -11,17 +11,17 @@ The previous unit introduced the balancing exponent and outside-work integral. H
 
 ## Two applications
 
-**Example 2: median of medians.** The linear-time selection algorithm satisfies T(n) = T(n/5) + T(7n/10) + n.
+**Example 2: median of medians.** Linear-time selection has one child a fifth of the size, another seven tenths, and linear outside work:
 
 ```formula
 (1/5)^1 + (7/10)^1 = 0.9 < 1
 (1/5)^p + (7/10)^p = 1  gives  p ≈ 0.84
 I ≈ n^{1−p} / (1 − p)
-T(n) = Θ(n^p × n^{1−p}) = Θ(n)
+T(n) = Θ(n^p n^{1−p}) = Θ(n)
+T(n) = T(n/5) + T(7n/10) + n
 where
 p: the balancing exponent; since the sum is below 1 at p = 1, p must be smaller than 1
 I: the Akra–Bazzi integral, here ∫ of u / u^(p+1) = u^(−p) from 1 to n
-n^{1−p}: n raised to the power 1 − p
 T(n): the running time of median-of-medians selection on n items
 n: the input size
 Θ: Big-Theta, exactly this rate up to constants
@@ -29,12 +29,15 @@ n: the input size
 In words: the two subproblems together are only 90% of the input, so the work per level shrinks geometrically and the root's linear work dominates.
 ```
 
-**Example 3: the gap case.** T(n) = 2T(n/2) + n / log n. Here p = 1, since 2 × (1/2)^1 = 1:
+**Example 3: the gap case.** Two half-size calls and linear work divided by a logarithm balance at exponent one. Use natural logarithms in the integral; changing base rescales outside work by a fixed factor:
 
 ```formula
-I = ∫_2^n 1 / (u × ln(u)) du = ln(ln(n)) + C
+I = ∫_2^n 1 / (u ln(u)) du = ln(ln(n)) + C
 T(n) = Θ(n × (1 + ln(ln(n))))
-T(n) = Θ(n × log log n)
+T(n) = Θ(n log(log(n)))
+T(n) = 2T(n/2) + n/log(n)
+2(1/2)^1 = 1, p = 1
+ln(1) = 0
 where
 I: the Akra–Bazzi integral with g(u) = u / ln(u) and p = 1
 ∫_2^n … du: the integral from 2 to n with respect to u, the area under the curve
@@ -45,10 +48,12 @@ T(n): the running time
 n: the input size
 log log n: the logarithm of the logarithm of n, which grows extremely slowly (log_2 log_2 of a billion is about 5)
 Θ: Big-Theta, exactly this rate up to constants
+p: the balancing exponent, here one
+log: any fixed logarithm base greater than one
 In words: the outside work is just a log factor below n, and summed over all levels that adds only a log-log factor.
 ```
 
-The integral starts at 2 rather than 1 to avoid dividing by ln(1) = 0; the lower limit only changes constants.
+The integral starts at two rather than one because the logarithm at one is zero; the lower limit only changes constants.
 
 ## Key takeaways
 - Subproblem fractions whose total is below one can lead to geometrically shrinking outside work.

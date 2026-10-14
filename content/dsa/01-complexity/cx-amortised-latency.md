@@ -11,10 +11,10 @@ Here n counts operations or stored items, as stated in each example. Separate to
 
 ## More examples
 
-- **Binary counter.** Incrementing a binary counter can flip many bits (`0111 -> 1000`), but over n increments bit 0 flips n times, bit 1 about n/2 times, bit 2 about n/4 times:
+- **Binary counter.** Incrementing a binary counter can flip many bits (`0111 -> 1000`), but over the sequence the lowest bit flips each time, the next about half as often, and the next about a quarter as often:
 
 ```formula
-flips ≤ n + n/2 + n/4 + … < 2 × n
+flips ≤ n + n/2 + n/4 + … < 2n
 where
 flips: the total number of bit flips over n increments
 n: the number of increments, starting from 0

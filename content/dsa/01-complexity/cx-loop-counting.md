@@ -9,15 +9,15 @@ summary: Add sequential work and count the true length of dependent inner loops.
 
 You now have the notation. This lesson is about using it: looking at a piece of code and working out its time complexity quickly and correctly. Most code reduces to a handful of patterns, plus a few traps that catch even experienced engineers.
 
-Throughout, n is the input size (for example the length of the list), and m is the size of a second input when there is one. O(...) is Big-O, an upper bound on growth; Θ(...) is Big-Theta, a tight bound; and log n is the base-2 logarithm of n, roughly how many times you can halve n before reaching 1.
+Throughout, n is the input size (for example the length of the list), and m is the size of a second input when there is one. O(...) is Big-O, an upper bound on growth; Θ(...) is Big-Theta, a tight bound; and logarithms use base two, roughly how many times you can halve n before reaching 1.
 
 ## The basic rules
 
 1. **Cost model.** Treat fixed-size arithmetic, comparison and indexing as O(1). Python arbitrary-precision integers, long strings, user-defined comparisons and output can cost more; the counts below abstract those costs unless stated otherwise.
-2. **Sequential blocks add.** O(n) followed by O(n^2) is O(n + n^2) = O(n^2), because the n × n term dominates.
-3. **Nested loops multiply**, if the inner loop's length doesn't depend on the outer variable. n iterations of an O(m) body is O(n × m).
-4. **Branches take the worse side** for worst-case analysis. `if cond: O(n) else: O(1)` is O(n) in the worst case.
-5. **Function calls cost whatever the function costs.** A one-line call to `sorted()` is O(n log n), not O(1).
+2. **Sequential blocks add.** A linear block followed by a quadratic block has quadratic overall growth, because the quadratic term dominates.
+3. **Nested independent loops multiply.** O(n) iterations, each doing O(m) work, give O(nm), where n and m are the separate input sizes.
+4. **Branches take the worse side.** For the worst case, choose the more expensive branch.
+5. **Function calls cost whatever the function costs.** A one-line call to `sorted()` is O(n log n), where n is the list length.
 
 Those cover simple code. The interesting cases are loops whose bounds change.
 
@@ -33,12 +33,12 @@ for i in range(n):
         work()
 ```
 
-The inner loop runs 0, 1, 2, ..., n − 1 times, so add those up:
+The inner loop lengths rise from zero to one less than the outer bound. Add those lengths:
 
 ```formula
 W(n) = 0 + 1 + 2 + … + (n − 1)
 W(n) = Σ_{i=0}^{n−1} i
-W(n) = n × (n − 1) / 2 = Θ(n^2)
+W(n) = n(n − 1) / 2 = Θ(n^2)
 W(10) = 10 × 9 / 2 = 45
 where
 W(n): the number of times work() runs
@@ -55,12 +55,11 @@ Halving the work does not change the class.
 Three nested loops over `i < j < k` do one step per triple of different positions:
 
 ```formula
-W_3(n) = n × (n − 1) × (n − 2) / 6
+W_3(n) = n(n − 1) × (n − 2) / 6
 W_3(n) ≈ n^3 / 6 = Θ(n^3)
 where
 W_3(n): the number of steps the three nested loops take
 n: the input size
-n^3: n cubed, n × n × n
 ≈: approximately equal to, for large n
 Θ(n^3): Big-Theta of n cubed: grows at exactly the rate of n × n × n, up to a constant factor
 In words: there are about a sixth of n cubed ways to choose three positions in order, which is still cubic.

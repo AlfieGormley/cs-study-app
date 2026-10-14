@@ -11,31 +11,35 @@ Here n is the original input size. For the exact counts below, take n to be a po
 
 ## The recursion tree
 
-The most intuitive method is to draw the tree of calls and add up the work at each level. For merge sort, T(n) = 2T(n/2) + n:
+The most intuitive method is to draw the tree of calls and add up the work at each level. For merge sort, two half-size calls are followed by a linear merge:
 
 ```
-level 0:        n                 = n
+level 0:       whole         same total
              /     \
-level 1:   n/2     n/2            = n
+level 1:   half    half      same total
           /  \     /  \
-level 2: n/4 n/4  n/4 n/4         = n
+level 2: 1/4 1/4  1/4 1/4   same total
           ...
-level k: 2^k nodes of n/2^k       = n
+each level: more nodes, smaller inputs
           ...
-leaves:  n nodes of size 1        = n
+leaves: one-item nodes       same total
 ```
 
 Each level does n work in total, and the size halves at each level. Add the levels:
 
 ```formula
 W_k = 2^k × (n / 2^k) = n
+N_k = 2^k, s_k = n / 2^k
+N_leaf = n
 L = log_2(n) + 1
-T(n) = L × n = Θ(n × log n)
+T(n) = Ln = Θ(n log(n))
+T(n) = 2T(n/2) + n
 where
 W_k: the total work done on level k of the tree
+N_k: the node count on level k
+s_k: the item count in each level-k node
+N_leaf: the number of one-item leaf calls
 k: the level number, 0 at the root
-2^k: the number of calls on level k (it doubles each level)
-n / 2^k: the input size of each call on level k
 n: the input size of the original call
 L: the number of levels, from size n down to size 1
 log_2(n): the base-2 logarithm of n, the number of halvings from n to 1
@@ -45,55 +49,61 @@ log: logarithm (base 2 here; the base only changes a constant)
 In words: every level does n work, and halving takes log_2(n) steps to reach size 1, so the total is about n log n.
 ```
 
-For n = 1,024 that is 11 levels of 1,024 work each, about 11,000 steps. Total: **Θ(n log n)**.
+For an input of 1,024 that is 11 levels of 1,024 work each, about 11,000 steps. Total: **Θ(n log n)**.
 
-Now try T(n) = 3T(n/2) + n (the shape of Karatsuba's multiplication algorithm). The work per level now changes from level to level:
+Now try three half-size calls plus linear outside work, the shape of Karatsuba multiplication. Level work changes as shown below:
 
 ```formula
 W_k = 3^k × (n / 2^k) = n × (3/2)^k
 leaves = 3^{log_2(n)} = n^{log_2(3)}
 n^{log_2(3)} ≈ n^{1.585}
+a^{log_b(n)} = n^{log_b(a)}
+a = 3, b = 2
+T(n) = Θ(n^{log_2(3)})
+T(n) = 3T(n/2) + n
 where
 W_k: the total work on level k
 k: the level number, 0 at the root
-3^k: the number of calls on level k (it triples each level)
-n / 2^k: the input size of each call on level k
-(3/2)^k: k copies of 1.5 multiplied together
 leaves: the number of calls at the bottom level, size 1
 log_2(n): the base-2 logarithm of n, the depth of the tree
 log_2(3): the base-2 logarithm of 3, about 1.585
 n: the input size
 ≈: approximately equal to
+a: the branching factor in the identity
+b: the split factor and logarithm base, greater than one
+log_b: logarithm to base b
+log_b(a): the critical exponent
+T(n): the running time on the original input
+Θ: a tight growth bound
 In words: each level does 1.5 times the work of the level above, so the bottom level, with n^1.585 tiny calls, outweighs everything above it.
 ```
 
-The second line uses the identity a^(log_b n) = n^(log_b a): both sides equal b to the power log_b(a) × log_b(n) (here b = 2 and a = 3). A *growing* geometric series is dominated by its **last** term, the leaves, so T(n) = Θ(n^(log_2 3)), an exponent of about 1.585.
+The second line exchanges the roles of logarithm base and exponent in the identity shown in the card. Here branching uses three children and splitting halves each input. A growing geometric series is dominated by its **last** term, so leaf growth determines the cost.
 
-And T(n) = 2T(n/2) + n^2:
+Now take two half-size calls with quadratic outside work:
 
 ```formula
 W_k = 2^k × (n / 2^k)^2 = n^2 / 2^k
-T(n) ≤ n^2 × (1 + 1/2 + 1/4 + …) = 2 × n^2
+T(n) ≤ n^2 × (1 + 1/2 + 1/4 + …) = 2n^2
+T(n) = 2T(n/2) + n^2
 where
 W_k: the total work on level k
 k: the level number, 0 at the root
-2^k: the number of calls on level k
-n / 2^k: the input size of each call on level k
-n^2: n squared, n × n, the root's own work
 T(n): the total running time
 …: "and so on", halving each time
+n: the original input size, a positive power of two in the exact counts here
 ≤: less than or equal to
 In words: each level does half the work of the level above, so the whole tree costs less than twice the root.
 ```
 
-The work *shrinks* by half per level. A shrinking geometric series is dominated by its **first** term, the root: T(n) = Θ(n^2).
+The work *shrinks* by half per level. A shrinking geometric series is dominated by its **first** term, the root, giving Θ(n^2) work, where n is the original size.
 
 These three behaviours are the whole idea behind the Master Theorem.
 
 > [!tip] The three shapes
-> - Work per level **shrinks** geometrically: the root dominates. T(n) = Θ(f(n)), where f(n) is the root's own work.
-> - Work per level is **equal**: multiply one level by the number of levels, log n.
-> - Work per level **grows** geometrically: the leaves dominate. T(n) = Θ(number of leaves).
+> - Work per level **shrinks** geometrically: the root dominates, so total work has the same tight growth as the root’s own work.
+> - Work per level is **equal**: multiply one level’s work by the logarithmic number of levels.
+> - Work per level **grows** geometrically: the leaves dominate, so total work has the same tight growth as the leaf count (with constant-cost leaves).
 
 ## Key takeaways
 - Count the work on each level, then add the levels.

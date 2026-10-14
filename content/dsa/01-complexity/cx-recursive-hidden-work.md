@@ -23,7 +23,7 @@ def fact(n):
     return n * fact(n - 1)
 ```
 
-Θ(n) calls and multiplications in the unit-cost model. Actual Python integer multiplications become more expensive as n! (n factorial, n × (n − 1) × … × 1) grows.
+Θ(n) calls and multiplications in the unit-cost model, where n is the recursive argument. Actual Python multiplication gets more expensive as the factorial grows; factorial means the product of all positive integers up to the argument.
 
 Branching recursion is where things explode. Naive Fibonacci makes two calls per level:
 
@@ -53,8 +53,8 @@ Draw the **recursion tree**:
 (Here `f5` means `fib(5)`.) `fib(5)` makes 15 calls. In general:
 
 ```formula
-calls(n) = 2 × F(n + 1) − 1
-calls(5) = 2 × F(6) − 1 = 2 × 8 − 1 = 15
+calls(n) = 2F(n + 1) − 1
+calls(5) = 2F(6) − 1 = 2 × 8 − 1 = 15
 calls(n) = Θ(φ^n)
 φ = (1 + √5) / 2 ≈ 1.618
 where
@@ -80,7 +80,7 @@ Divide-and-conquer recursion (halving the problem) needs the tools in the recurr
 
 ## Hidden costs
 
-Many "one-line" operations aren't O(1). In Python (CPython):
+Many "one-line" operations aren't O(1). In this CPython table, n is the list length:
 
 | Operation | Cost |
 |---|---|
@@ -110,7 +110,19 @@ def unique(items):
 The membership test scans `seen`, so the function is Θ(n^2) when most items are distinct. Changing `seen` to a `set` makes it Θ(n) on average. The algorithm didn't change; the data structure did.
 
 > [!warning] Slicing in recursion
-> `binary_search(arr[mid:], target)` looks logarithmic, but each slice copies up to half the array. For an array of n items the total copying is n/2 + n/4 + n/8 + …, which adds up to just under n, so the "O(log n)" search is actually O(n). Pass indices (`lo`, `hi`) instead of slices.
+> `binary_search(arr[mid:], target)` looks logarithmic, but each slice copies the chosen half. The shrinking halves add to just under the original length, so a search on n items is O(n) rather than O(log n). Pass indices (`lo`, `hi`) instead.
+
+```formula
+C(n) ≈ n/2 + n/4 + n/8 + …
+C(n) < n
+where
+C(n): the copied element slots over an absent-target search
+n: the original list length
+…: continue halving
+≈: approximately, ignoring integer rounding
+<: less than
+In words: The series of copied halves is linear in the original length.
+```
 
 ## Key takeaways
 - Count all recursive calls and the work performed outside those calls.

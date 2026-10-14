@@ -12,7 +12,7 @@ summary: Find the critical exponent and recognise leaf-dominated recurrences.
 The Master Theorem solves recurrences of this shape, where every recursive call gets the same fraction of the input:
 
 ```formula
-T(n) = a × T(n / b) + f(n)
+T(n) = aT(n / b) + f(n)
 a ≥ 1,  b > 1
 where
 T(n): the running time on an input of size n
@@ -42,11 +42,11 @@ log_b(a): the logarithm of a to base b
 In words: the tree branches a ways at each of log_b(n) levels, which makes n^c leaves; n^c is the total cost of the leaf level.
 ```
 
-The leaf level costs n^c in total, and the root costs f(n). The theorem compares them. Each case says which end of the tree wins.
+The leaf-count term in the card gives the total bottom-level cost; the root costs the outside-work function. Comparing them says which end of the tree wins.
 
 ## Case 1
 
-**Case 1: f is polynomially smaller than n^c.** The leaves dominate:
+**Case 1: outside work is polynomially smaller than leaf growth.** The leaves dominate:
 
 ```formula
 f(n) = O(n^{c − ε})  for some ε > 0
@@ -67,13 +67,16 @@ In words: if the root's work is smaller than the leaf count by at least a fixed 
 Here is the Strassen recurrence worked through in full:
 
 ```formula
-T(n) = 7 × T(n / 2) + Θ(n^2)
+T(n) = 7T(n / 2) + Θ(n^2)
 c = log_2(7) ≈ 2.807
 d = 2 < 2.807
-T(n) = Θ(n^{log_2(7)}) ≈ Θ(n^{2.807})
+T(n) = Θ(n^{log_2(7)})
+T_K(n) = 3T_K(n/2) + n
+T_K(n) = Θ(n^{log_2(3)})
+log_2(8) = 3
 where
 T(n): the time to multiply two n-by-n matrices
-n: the side length of the matrices
+n: the input size in each example: matrix side length or integer digit count
 a = 7: seven half-size matrix multiplications per call
 b = 2: each subproblem has half the side length
 c: the critical exponent, log_b(a)
@@ -81,10 +84,12 @@ log_2(7): the base-2 logarithm of 7, about 2.807
 d: the power of n in the outside work (adding matrices of side n costs about n^2)
 Θ: Big-Theta, exactly this rate up to constants
 ≈: approximately equal to
+T_K(n): Karatsuba’s operation count on n-digit integers
+log_2(3): the base-2 logarithm of three; Karatsuba’s exponent
 In words: the outside work grows more slowly than the leaf count, so case 1 applies and the leaves set the cost at about n^2.807.
 ```
 
-Two of these are famous. 7T(n/2) + n^2 is **Strassen's** matrix multiplication: by using 7 half-size multiplications instead of 8, it beats the naive Θ(n^3). 3T(n/2) + n is **Karatsuba's** integer multiplication, which uses 3 half-size products instead of 4 and beats the schoolbook Θ(n^2). In both, cutting the number of subproblems lowers log_b(a), which is the exponent that matters in case 1: with 8 products Strassen's recurrence would give log_2(8) = 3, no better than naive.
+Two examples are famous. **Strassen** uses seven half-size matrix products instead of eight, beating cubic multiplication. **Karatsuba** uses three half-size integer products instead of four, beating quadratic multiplication. The card also gives Karatsuba’s recurrence. Reducing the number of subproblems lowers the critical exponent; with eight matrix products the exponent would be three, matching naive multiplication.
 
 ## Key takeaways
 - The Master Theorem compares outside work with the recursion tree’s leaf count.

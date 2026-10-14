@@ -11,27 +11,29 @@ Keep the time budget fixed and ask how much larger the input can become. The gro
 
 ## Faster hardware does not save you
 
-It is tempting to think a faster computer fixes a slow algorithm. Look at what a machine that is **10 times faster** buys you, in terms of the largest input you can handle in the same time. In the table, N stands for the largest input size the old machine could handle; n^3 means n × n × n:
+It is tempting to think faster hardware fixes a slow algorithm. Here N is the old input limit and N_new the new one, with the same time budget. The table compares growth shapes for a **10-times-faster** machine.
 
-| Growth | Old max n | New max n |
+| Growth | Original limit | New limit |
 |---|---|---|
-| n | N | 10N |
-| n^2 | N | ~3.16N |
-| n^3 | N | ~2.15N |
-| 2^n | N | N + 3.3 |
+| Linear | original | ten times original |
+| Quadratic | original | about 3.16 times original |
+| Cubic | original | about 2.15 times original |
+| Exponential | original | about 3.3 extra items |
 
 Where do these numbers come from? Set the work the new machine can do in the same time equal to 10 times the old work, and solve for the new input size:
 
 ```formula
-N_new^2 = 10 × N^2
-N_new = √(10) × N ≈ 3.16 × N
+N_new^2 = 10N^2
+N_new = √(10) × N ≈ 3.16N
 2^{N_new} = 10 × 2^N
 N_new = N + log_2(10) ≈ N + 3.3
+N_new = 10N
+N_new^3 = 10N^3
+N_new = 10^{1/3}N ≈ 2.15N
 where
 N: the largest input the old machine can handle in the time budget
 N_new: the largest input the 10-times-faster machine can handle in the same time
 √(10): the square root of 10, the number that multiplied by itself gives 10, about 3.16
-2^N: N copies of 2 multiplied together
 log_2(10): the base-2 logarithm of 10, the power you raise 2 to in order to get 10, about 3.32
 ≈: approximately equal to (rounded)
 In words: for quadratic work, 10 times the speed buys only √10 ≈ 3.16 times the input; for exponential work, it buys only about 3 more items.

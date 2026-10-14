@@ -11,7 +11,7 @@ Here n is the input size. The earlier lessons established how to count extra sto
 
 ## Time-space trade-offs
 
-Many speed-ups work by spending memory:
+Here n is the input item count. Many speed-ups work by spending memory:
 
 - **Hashing for lookups.** Checking for duplicates with a set takes expected O(n) time and O(n) space. Sorting in place, then scanning neighbours, takes O(n log n) time with little extra space.
 - **Precomputation.** A prefix-sum array (n extra numbers) answers "sum of `xs[a:b]`" in O(1) instead of O(b − a), the length of the range (formula below).
@@ -23,6 +23,8 @@ The prefix-sum trick stores running totals once, then answers any range sum with
 P[0] = 0
 P[i + 1] = P[i] + xs[i]
 sum(xs[a:b]) = P[b] − P[a]
+sum(xs[1:4]) = P[4] − P[1]
+sum(xs[1:4]) = 9 − 3 = 6
 where
 P: the prefix-sum array, n + 1 numbers; P[i] is the total of the first i items
 xs: the original list of n numbers; xs[i] is the item at position i (counting from 0)
@@ -34,7 +36,7 @@ n: the number of items in xs
 In words: the total of a range is "everything up to b" minus "everything up to a", so each query is one subtraction, at the cost of storing n + 1 extra numbers.
 ```
 
-For xs = [3, 1, 4, 1, 5], P = [0, 3, 4, 8, 9, 14], and the sum of xs[1:4] is P[4] − P[1] = 9 − 3 = 6 (that is 1 + 4 + 1).
+For input `[3, 1, 4, 1, 5]`, the running totals are `[0, 3, 4, 8, 9, 14]`. The card’s substitution adds the middle three values, giving 6:
 
 ## Constants matter for memory
 

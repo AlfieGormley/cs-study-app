@@ -13,7 +13,7 @@ Here n is the input size unless an example names another dimension. The asymptot
 
 Big-O hides constants, but the computer doesn't. Two algorithms in the same class can differ by 10x, and an asymptotically worse one can win for all inputs you'll ever see.
 
-The standard example is sorting small arrays. Insertion sort is Θ(n^2), but its inner loop is tiny, branch-predictable and works entirely in cache. For small n it beats merge sort and quicksort, so real libraries use **hybrid sorts**:
+For sorting here, n is the item count. Insertion sort is Θ(n^2), but its inner loop is tiny, branch-predictable and works entirely in cache. For small n it beats merge sort and quicksort, so real libraries use **hybrid sorts**:
 
 - **Timsort-style natural merge sorts** extend short runs with binary insertion sort, then merge them. Thresholds differ by implementation; modern CPython uses a Powersort merge policy, so a single threshold/policy should not be attributed to both Python and Java.
 - **Introsort** (C++ `std::sort` in common implementations) runs quicksort, switches to heapsort if the recursion gets too deep (guaranteeing O(n log n) worst case), and leaves small partitions (16 elements in libstdc++) for a final insertion sort pass.
@@ -30,7 +30,15 @@ The RAM model treats memory accesses uniformly, but real machines have caches, m
 So **access patterns** matter enormously:
 
 - **Arrays vs linked lists.** Summing an array and summing a linked list are both Θ(n). But the array is contiguous: a 64-byte cache line holds eight 8-byte values and the prefetcher streams the rest. A linked list's nodes can be scattered across memory, and each `next` pointer must be loaded before the following address is known, so ordinary demand loads form a dependency chain and are harder to overlap. The list is often several times slower, and much worse when nodes are scattered.
-- **Traversal order.** C stores 2D arrays row by row. For an N by N array of 8-byte values, both loops below are Θ(N^2), touching all N × N elements once:
+- **Traversal order.** C stores 2D arrays row by row. For an N by N array of 8-byte values, both loops below are Θ(N^2), touching every matrix element once:
+
+```formula
+E = N^2
+where
+E: the number of elements visited by either traversal
+N: the matrix side length, in elements
+In words: Both orders visit every cell once; their locality differs.
+```
 
 ```c
 /* row order: sequential */
@@ -48,7 +56,7 @@ for (j = 0; j < N; j++)
 
 For large N (so the matrix doesn't fit in cache), the column-order loop touches a new cache line on almost every access and can be several times slower, sometimes by an order of magnitude.
 
-This is why B-trees, with hundreds of keys per node, beat binary search trees for databases and file systems: they need far fewer memory or disk accesses for the same Θ(log n) search. Cache-aware and **cache-oblivious** algorithms are designed around counting cache misses instead of instructions.
+For search here, n is the key count. B-trees, with hundreds of keys per node, need fewer memory or disk accesses than binary search trees for the same Θ(log n) search. Cache-aware and **cache-oblivious** algorithms are designed around counting cache misses instead of instructions.
 
 ## Galactic algorithms
 

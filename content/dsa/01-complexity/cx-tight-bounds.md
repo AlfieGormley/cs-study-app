@@ -15,7 +15,10 @@ Here n is the input size. A lower bound and a tight bound add information that a
 
 ```formula
 f(n) = Ω(g(n))  means:
-f(n) ≥ c × g(n) ≥ 0  for all n ≥ n_0
+f(n) ≥ c g(n) ≥ 0  for all n ≥ n_0
+f(n) = 3n^2 + 5n + 2
+f(n) ≥ 3n^2 for n ≥ 0
+c = 3
 where
 f(n): the function being described, usually an operation count
 g(n): the simple comparison function
@@ -27,7 +30,7 @@ n_0: a threshold input size; the inequality must hold from there on
 In words: beyond some starting point, f never drops below a fixed fraction of g.
 ```
 
-For f(n) = 3n^2 + 5n + 2, take c = 3: the extra terms 5n and 2 are never negative, so f(n) ≥ 3n^2 for every n ≥ 0. Hence f = Ω(n^2).
+The quadratic polynomial from the upper-bound example also has a quadratic lower bound: its remaining terms are nonnegative. The example follows the definition below.
 
 Omega is used to say "at least this much work is unavoidable". A famous example you will meet later: any sorting algorithm that only compares elements needs Ω(n log n) comparisons in the worst case, where n is the number of items being sorted.
 
@@ -39,6 +42,8 @@ Omega is used to say "at least this much work is unavoidable". A famous example 
 f(n) = Θ(g(n))  means:
 c_1 × g(n) ≤ f(n) ≤ c_2 × g(n)
 for all n ≥ n_0
+3n^2 ≤ 3n^2 + 5n + 2 ≤ 10n^2
+c_1 = 3, c_2 = 10, n_0 = 1
 where
 f(n): the function being described, usually an operation count
 g(n): the simple comparison function
@@ -51,14 +56,14 @@ n_0: a threshold input size; both inequalities must hold from there on
 In words: beyond some point, f stays between two fixed multiples of g, so it grows at exactly g's rate.
 ```
 
-We showed 3n^2 ≤ 3n^2 + 5n + 2 ≤ 10n^2 for every n of at least 1, so c_1 = 3, c_2 = 10 and n_0 = 1 give f = Θ(n^2). Theta is the most informative statement: it pins the growth rate down exactly, up to constants.
+The same polynomial is squeezed between the two quadratic multiples below. This makes Theta the most informative statement: it pins growth down up to constants.
 
 > [!note] Industry "Big-O" usually means Theta
 > Strictly, O is only an upper bound. Binary search on n items is O(log n), but it is also O(n) and O(n^2), because those are bigger. All true, the last two useless. When engineers say "this is O(n)", they almost always mean "this is Θ(n)": the bound is tight. In interviews and code reviews, give the tightest bound you can.
 
 ## Not every function has a tidy Theta
 
-Consider a function that does n units of work when n is even and 1 unit of work when n is odd. It is O(n) and Ω(1), but it is neither Θ(n) nor Θ(1). A tight bound still exists: trivially f = Θ(f), or use the same piecewise expression as g. It simply does not match one of the usual monotone (steadily increasing) growth classes.
+Consider a function doing one step on odd input sizes and as many steps as the input size on even sizes. It is O(n) and Ω(1), where n is the input size, but neither Θ(n) nor Θ(1). A tight bound still exists: every function has its own growth rate as a tight bound, or use that same piecewise cost as the comparison. It simply does not match a familiar monotone growth class.
 
 ## Big-O is not "worst case"
 

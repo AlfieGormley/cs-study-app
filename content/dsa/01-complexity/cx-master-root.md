@@ -11,12 +11,14 @@ Here n is the input size. After the leaf-dominated and balanced cases, the final
 
 ## Case 3
 
-**Case 3: f is polynomially larger than n^c**, *and* a **regularity condition** holds. Then the root dominates:
+**Case 3: outside work is polynomially larger than leaf growth**, *and* a **regularity condition** holds. Then the root dominates:
 
 ```formula
 f(n) = Ω(n^{c + ε})  for some ε > 0
-a × f(n / b) ≤ q × f(n),  q < 1
+af(n / b) ≤ qf(n),  q < 1
 T(n) = Θ(f(n))
+a = 2, b = 2, f(n) = n^2
+a f(n/b) = 2(n/2)^2 = n^2/2
 where
 f(n): the work outside the recursive calls
 f(n / b): the work outside the calls in one child call
@@ -33,14 +35,17 @@ T(n): the running time on input size n
 In words: if the root's work beats the leaf count by a fixed power of n, and the children together always do a fixed fraction less work than their parent, the root's own work dominates.
 ```
 
-The regularity condition says that the work really does shrink from one level to the next. It holds automatically for ordinary polynomial f, such as f(n) = n^2 with a = 2, b = 2 (two children do 2 × (n/2)^2 = n^2 / 2, half the parent's work); it exists to rule out pathological, wildly oscillating functions.
+Regularity means outside work really shrinks down the tree. It holds for ordinary polynomial outside work, such as the example below, where two children together do half the parent’s work. The condition rules out pathological, wildly oscillating functions.
 
 ### The simple version
 
-Most recurrences you'll meet have f(n) = Θ(n^d), a plain power of n. Then just compare d with log_b(a):
+Most textbook recurrences have polynomial outside work. Compare its exponent with the critical exponent, as the three conditions below show:
 
 ```formula
-T(n) = a × T(n / b) + Θ(n^d)
+T(n) = aT(n / b) + Θ(n^d)
+d < log_b(a): T(n) = Θ(n^{log_b(a)})
+d = log_b(a): T(n) = Θ(n^d log(n))
+d > log_b(a): T(n) = Θ(n^d)
 where
 T(n): the running time on input size n
 a: the number of subproblems
@@ -48,31 +53,72 @@ b: the shrink factor; each subproblem has size n / b
 d: the power of n in the outside work, a constant of at least 0 (d = 1 for a linear merge)
 n: the input size
 Θ: Big-Theta, exactly this rate up to constants
+log_b: logarithm to base b
+log_b(a): the critical exponent
+log: the base-2 logarithm
+<, >: less than, greater than
 In words: the special case where the work outside the calls is a simple power of n, which covers almost every textbook recurrence.
 ```
 
-| Compare | Result |
+| Outside-work exponent | Result |
 |---|---|
-| d < log_b a | Θ(n^(log_b a)) |
-| d = log_b a | Θ(n^d log n) |
-| d > log_b a | Θ(n^d) |
+| Below critical exponent | leaves dominate |
+| Equal to critical exponent | add a logarithm |
+| Above critical exponent | root dominates |
 
-Equivalently, compare a with b^d: the ratio a / b^d is exactly how fast the work per level grows. Above 1, the leaves win; equal to 1, every level ties; below 1, the root wins.
+Equivalently, compare branching with the shrink factor raised to the outside-work exponent. Their ratio determines whether level costs grow, stay equal or shrink:
+
+```formula
+R = a / b^d
+where
+R: the ratio between consecutive level costs
+a: the number of recursive subproblems
+b: the factor shrinking each input, greater than one
+d: the outside-work exponent
+In words: Above one, leaves win; at one, levels tie; below one, the root wins.
+```
 
 ### Worked examples
 
-In the table, the first column is the right-hand side of T(n) = …, and log_b a is the critical exponent:
+The following independent recurrence/solution pairs use the parameter values in the table beneath them. Exponents printed as decimals are rounded:
 
-| Recurrence | a, b | log_b a | f | Case | T(n) |
-|---|---|---|---|---|---|
-| T(n/2) + 1 | 1, 2 | 0 | 1 | 2 | log n |
-| 2T(n/2) + n | 2, 2 | 1 | n | 2 | n log n |
-| 3T(n/2) + n | 3, 2 | 1.585 | n | 1 | n^1.585 |
-| 7T(n/2) + n^2 | 7, 2 | 2.807 | n^2 | 1 | n^2.807 |
-| 4T(n/2) + n^2 | 4, 2 | 2 | n^2 | 2 | n^2 log n |
-| 2T(n/2) + n^2 | 2, 2 | 1 | n^2 | 3 | n^2 |
-| T(n/2) + n | 1, 2 | 0 | n | 3 | n |
-| 2T(n/2) + n log n | 2, 2 | 1 | n log n | 2, k=1 | n log^2 n |
+```formula
+T(n) = T(n/2) + 1
+T(n) = Θ(log(n))
+T(n) = 2T(n/2) + n
+T(n) = Θ(n log(n))
+T(n) = 3T(n/2) + n
+T(n) = Θ(n^{log_2(3)})
+T(n) = 7T(n/2) + n^2
+T(n) = Θ(n^{log_2(7)})
+T(n) = 4T(n/2) + n^2
+T(n) = Θ(n^2 log(n))
+T(n) = 2T(n/2) + n^2
+T(n) = Θ(n^2)
+T(n) = T(n/2) + n
+T(n) = Θ(n)
+T(n) = 2T(n/2) + n log(n)
+T(n) = Θ(n(log(n))^2)
+log_2(3) ≈ 1.585, log_2(7) ≈ 2.807
+where
+T(n): running time in each independent example
+n: the current input size
+log, log_2: the base-2 logarithm
+Θ: a tight growth bound
+≈: approximately equal
+In words: Apply the three cases to each pair: matching work adds one log factor, smaller work leaves the leaf exponent, and larger regular work leaves the root cost.
+```
+
+| Pair | Children; shrink factor | Critical exponent | Outside work; case |
+|---|---|---|---|
+| 1 | 1; 2 | 0 | constant; 2 |
+| 2 | 2; 2 | 1 | linear; 2 |
+| 3 | 3; 2 | about 1.585 | linear; 1 |
+| 4 | 7; 2 | about 2.807 | quadratic; 1 |
+| 5 | 4; 2 | 2 | quadratic; 2 |
+| 6 | 2; 2 | 1 | quadratic; 3 |
+| 7 | 1; 2 | 0 | linear; 3 |
+| 8 | 2; 2 | 1 | linear times log; 2, log exponent one |
 
 ## Key takeaways
 - Polynomially larger outside work dominates only when the regularity condition also holds.

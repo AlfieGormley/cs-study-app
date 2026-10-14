@@ -20,7 +20,6 @@ S(100000) = 10^5 × 10^5 = 10^10
 where
 S(n): the number of cells in the table
 n: the number of rows (and of columns), here 100,000 = 10^5
-n^2: n squared, n × n
 B: bytes; each cell here is assumed to be one 8-byte number
 GB: gigabytes; 1 GB = 10^9 bytes
 In words: a square table of side 100,000 has ten billion cells, which at 8 bytes each is about 80 gigabytes.

@@ -39,13 +39,19 @@ author/independent-verifier process. Existing skipped-content decisions below re
   Verified full build `925d0c7768db`, 61 tests, all mobile renders and ten real module lesson/quiz routes pass.
   Installed-app update, progress preservation and offline age controls pass; all 964 archival files remain
   byte-identical. Complexity retains its published version while the format follow-up is reviewed.
+- Published fifth-batch commit `2657005`: Architecture. GitHub Pages succeeded, and all four live
+  app/manifest/progress/index files match the tested `925d0c7768db` release.
+- Complexity's formula-format follow-up is independently verified and stamped: 290 cards, 208 independent
+  maths assertions and no unresolved active formatting hits. All 35 IDs, 81 questions, 44 native fences,
+  confidence records and 14 archival files are preserved. The new full preview `1f3f05933373` passes 61 tests,
+  all 357 unit/908 question mobile renders and ten actual module lesson/quiz routes; publication is pending.
 - Distributed systems is independently verified and stamped (40 short units, 96 preserved questions).
   Its broad real-time aliases have also been independently narrowed to consistency-ordering phrases.
   API design's code-format follow-up is complete: four checked native examples, zero unresolved active
   pseudocode/format debt. Architecture is independently verified and its isolated full build/mobile checks
   pass (41 units, 108 questions; ten-module preview version `925d0c7768db`). Reliability (38 units/97 questions)
   and case studies 1 (43 units/85 questions) are now under separate independent reviews. Complexity's required
-  formula-format follow-up is also under independent review.
+  formula-format follow-up is verified. Case studies 2 is being authored.
   The user confirmed course order, with system design next. Remaining modules are queued.
 - Current reports: [short-lessons-report.md](short-lessons-report.md). Working queue and baseline snapshots:
   `/tmp/cs-study-short-lessons/queue.json`, `original-index.json`, `original-questions.json`; baseline commit
@@ -60,10 +66,9 @@ author/independent-verifier process. Existing skipped-content decisions below re
   preserve original answer keys, question types and option counts. The final audit must omit `--partial`.
   `/tmp/cs-study-short-lessons/audit-archives.mjs` compares all 964 original MD/question files against the fixed
   baseline using Git blobs; all currently remain byte-identical. Repeat after final content work.
-- Integration follow-ups are recorded in the working queue. The request-duration glossary phrase is now
-  independently verified. Complexity Analysis still needs a scoped author and different verifier to resolve
-  actual inherited prose/table formula-format violations; the prior review explicitly did not classify all
-  542 active heuristic hits as Rule 6 exceptions. Complete that follow-up before declaring the whole task done.
+- Integration follow-ups are recorded in the working queue. The request-duration glossary phrase and
+  Complexity's formula-format follow-up are independently verified. Complexity's 198 remaining active
+  matches are individually documented exceptions/false positives; no actual active violation remains.
 
 Historical notes below are superseded where they conflict with this active task or already published changes.
 

@@ -16,7 +16,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | system-design/Messaging & Streaming | 8 | 34 | 96 | 55 | 291 | 185 | 42 |
 | system-design/API Design | 8 | 38 | 96 | 69 | 383 | 597 | 84 |
 | system-design/Architecture & Scaling Patterns | 9 | 41 | 108 | 84 | 262 | 495 | 26 |
-| dsa/Complexity Analysis | 7 | 35 | 81 | 144 | 150 | 260 | 6 |
+| dsa/Complexity Analysis | 7 | 35 | 81 | 290 | 150 | 830 | 32 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -1049,9 +1049,7 @@ Low-confidence areas:
 
 ## dsa: Complexity Analysis
 
-[Independent verification record](https://github.com/AlfieGormley/cs-study-app/blob/8ffe365c00010440d5b41c5aeeaf3387590d6963/content/dsa/01-complexity/verification.json)
-
-A scoped follow-up is underway. This section describes the previously published version.
+[Independent verification record](../content/dsa/01-complexity/verification.json)
 
 Corrections and qualifications in this conversion:
 
@@ -1061,13 +1059,38 @@ Corrections and qualifications in this conversion:
 - cx-recursion-trees: its new introductory bounded-positive-base-case wording did not justify the retained exact level sums and2n² upper bound. Explicitly use powers of two and base-case cost one for exact examples; fixed positive alternatives have the same asymptotic bounds.
 - cx-recurrences-q12: the internal-level arithmetic sum was stated as exact total running time despite omitting a linear leaf cost. Marked the sum approximate and explained the excluded fixed-base-case leaf cost; answer remains Theta(n log²n).
 - Corrected subject/verb agreement in four rewritten cross-references after singular long lessons became plural short lessons.
+- Canonicalised five closing fences whose trailing explanatory text was on the delimiter line; preserved that text as separate paragraphs and every native program byte.
+- cx-recursion-trees: defined n in the shrinking-work card rather than relying on a previous card.
+- cx-recursion-trees: restored explicit general level node counts, per-node sizes and leaf counts beside the verbal diagram labels; the compiled six branch connectors remain exact.
+- cx-simplifying-bounds: a shared upper bound does not force unequal functions; made the unequal-function demonstration an explicit n versus n-squared example.
+- cx-resizing-policies: fixed ten-slot growth copies end at n minus ten, not n; defined the starting capacity, multiple-of-ten endpoint and exact series.
+- cx-master-leaves and cx-recurrences-q9: retained exact logarithmic exponents inside Theta bounds and separated rounded decimal exponents; approximate exponents do not define the identical growth class.
+- cx-master-limits and cx-recurrences-q7: exact triangular and Towers sums now state the zero base cost required by those equalities.
+- cx-master-limits and cx-recurrences-q11: induction applies the hypothesis only from the four-item case; the two-item case is checked separately.
+- cx-akra-bazzi-examples: explicitly selected natural logarithms in the integral and explained constant rescaling for another base.
+- cx-growth-rates-q10: propagated the rounded pair-count approximation through seconds and hours instead of assigning exact equalities to rounded results.
+- cx-asymptotic-notation-q10: removed an erroneous multiplication sign inserted after the word when.
+- cx-asymptotic-notation-q2: defined the two log functions with their own base, rather than defining each as both bases.
+- cx-asymptotic-notation-q3: general growth comparisons now use a growing positive input; the separate numerical worked example keeps its fixed input.
+- cx-analysing-code-q3: the nine-position average lists positions up to nine rather than introducing an undefined n.
+- cx-amortised-analysis-q7: push and pop costs and resulting stack sizes each name their own operation.
+- cx-amortised-analysis-q8: the strict capacity-factor inequality explicitly uses the ideal fixed-factor model without integer rounding.
+- cx-recurrences-q9: defined log-base-three as a function and named the alternative recurrence in each distractor instead of labelling all candidates Toom-3.
+- cx-recurrences-q8: defined log-base-two for general arguments rather than defining every use as the logarithm of n.
+- cx-recurrences-q10: level work is an upper bound once base-case branches are pruned; equality is reserved for complete levels.
+- cx-recurrences-q10: the critical exponent uses the exact root before the rounded numerical substitution.
+- cx-in-practice-q6: bounded insertion-sort work using each fragment length and the sum of lengths; unequal fragments do not imply a run count exactly equal to n divided by the maximum length.
+- cx-in-practice-q3: renamed the exponential doubling quantity as a dimensionless ratio rather than a work count.
+- cx-analysing-code-q5: separated the exact ceiling sum of 8053 from the unrounded harmonic approximation of about 7485.
+- cx-analysing-code-q6: the deduplication triangular count is an upper bound, with equality for all-distinct inputs rather than every mostly-distinct input.
+- Added section-local input-size context in memory tradeoffs, hidden recursive costs, locality comparisons and measurement advice so retained asymptotic prose has an explicit variable meaning.
+- cx-constants-locality: the B-tree comparison claims fewer memory or disk accesses rather than an unmeasured universal speed win.
 
 Remaining gaps:
 
 - Universal cross-language speed ratios and memory latency figures lack reproducible measurements and are explicitly omitted.
 - No benchmark-derived crossover recommendation for a particular deployment.
 - Code execution uses small representative inputs and explicit harness assumptions; it is not a proof for arbitrary inputs.
-- Formula lint retains inherited prose/table mathematics alongside valid Big-O and real-code exceptions. Its542 active heuristic hits are not represented as zero findings or all as Rule6 exceptions; this split/comment scope did not rewrite the existing formula presentation everywhere.
 - The35 units preserve the depth of the seven originals. Two naturally small units retain honest two-minute estimates;33 units use three-to-five-minute estimates. Some focused units have one question rather than padding them with unrelated questions.
 
 Low-confidence areas:

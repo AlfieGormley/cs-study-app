@@ -9,7 +9,7 @@ summary: Bound the total writes and copies over a sequence of dynamic-array appe
 
 Some operations are usually cheap but occasionally very expensive. Appending to a Python list is the standard example: almost every `append` writes one slot, but now and then the list runs out of room and copies every element to a bigger block of memory.
 
-Here n is the number of elements in the list (or the number of operations in a sequence). If you judged each operation by its worst case, you'd call `append` O(n), and a loop of n appends O(n^2), growing like n × n. O(n²) is a valid but unnecessarily loose upper bound; the tight bound (Θ, Big-Theta) for n appends from an empty list is Θ(n). **Amortised analysis** gives the right answer by bounding the total cost of a *sequence* of operations, then dividing by the length of the sequence.
+Here n is the number of elements in the list (or the number of operations in a sequence). If you judged each operation by its worst case, you'd call `append` O(n), and a loop of n appends O(n^2), with quadratic growth. O(n²) is a valid but unnecessarily loose upper bound; the tight bound (Θ, Big-Theta) for n appends from an empty list is Θ(n). **Amortised analysis** gives the right answer by bounding the total cost of a *sequence* of operations, then dividing by the length of the sequence.
 
 > [!note] Amortised is not average-case
 > Average-case analysis assumes a probability distribution over inputs. Amortised analysis uses **no probability at all**. It says: for *any* sequence of n operations, even one chosen by an adversary, the total cost is at most n times the amortised cost. It's a worst-case guarantee about sequences.
@@ -28,7 +28,7 @@ append i:
   alloc cap 16, copy 8
 ```
 
-Count the cost of appending n = 9 items, starting from capacity 1, as one unit per element written or copied:
+Count the cost of appending nine items, starting from capacity 1, as one unit per element written or copied:
 
 | Append # | Copies | Write | Capacity after |
 |---|---|---|---|
@@ -65,14 +65,15 @@ Bound the total cost of n operations directly, then divide.
 
 ```formula
 copies = 1 + 2 + 4 + … + 2^k
-copies = 2^{k+1} − 1 < 2 × n
-T(n) = n + copies < 3 × n
+copies = 2^{k+1} − 1 < 2n
+T(n) = n + copies < 3n
 a = T(n) / n < 3
+n = 9, k = 3
+copies = 2^4 − 1 = 15
+T(9) = 24 < 3 × 9 = 27
 where
 copies: the total number of element copies over all resizes
 k: the number of the last resize, so 2^k is the largest power of 2 below n
-2^k: k copies of 2 multiplied together
-2^{k+1}: k + 1 copies of 2 multiplied together
 n: the number of appends
 T(n): the total cost of n appends: n writes plus all the copies
 a: the amortised cost per append
@@ -80,7 +81,7 @@ a: the amortised cost per append
 In words: the copies add up to less than 2n and the writes to exactly n, so n appends cost less than 3n in total and less than 3 each on average.
 ```
 
-Check against the table: n = 9 gives k = 3, copies = 2^4 − 1 = 15 and total 24, below 3 × 9 = 27. So the amortised cost per append is at most 3: **O(1)**, a constant that does not grow with n.
+Check against the nine-append table: four copy rounds total 15 copies, plus nine writes. The aggregate card confirms that the 24-unit total stays below the 27-unit bound. Thus the amortised cost is at most three units: **O(1)**, independent of sequence length.
 
 Aggregate analysis is the simplest method, but it gives every operation the same amortised cost. When a data structure supports several operations with different costs, the next two methods are more flexible.
 

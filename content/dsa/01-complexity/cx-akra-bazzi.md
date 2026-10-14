@@ -12,7 +12,7 @@ summary: Balance unequal subproblems and account for work across their scales.
 The **Akra–Bazzi** method handles recurrences with several subproblem sizes under regularity assumptions: nonnegative g with suitable polynomial growth, bounded positive base cases, and sufficiently small perturbations of the subproblem sizes. The smooth polynomial/logarithmic examples here satisfy these conditions. The recurrence looks like this:
 
 ```formula
-T(n) = g(n) + Σ_{i=1}^{m} a_i × T(b_i × n)
+T(n) = g(n) + Σ_{i=1}^{m} a_i T(b_i n)
 a_i > 0,  0 < b_i < 1
 where
 T(n): the running time on input size n
@@ -54,19 +54,21 @@ I: an integral that measures how much the outside work g adds across all scales
 ∫_1^n … du: the integral from 1 to n with respect to u: the area under the curve between u = 1 and u = n, a continuous version of summing
 g(u): the outside work at input size u
 u: a stand-in variable for the input size, running from 1 to n
-u^{p+1}: u raised to the power p + 1
 Θ: Big-Theta, exactly this rate up to constants
 In words: start from n^p, the cost if the leaves dominated, and multiply by a correction that grows when the outside work is comparable to or bigger than n^p.
 ```
 
-The intuition: p plays the role of log_b(a). It is the exponent at which the subproblems' total "weight" exactly balances. Then you compare g with n^p, much like the Master Theorem, but the integral handles the in-between cases smoothly. (It also tolerates small perturbations such as floors and ceilings in the subproblem sizes.)
+The balancing exponent plays the same role as the critical exponent in the Master Theorem. It balances the total weight of the subproblems. Comparing outside work with the resulting leaf-growth term gives the correction, but the integral handles in-between cases smoothly. The theorem also tolerates small perturbations such as floors and ceilings.
 
-**Example 1: uneven split.** T(n) = T(n/3) + T(2n/3) + n.
+**Example 1: uneven split.** Split into one third and two thirds, with linear outside work:
 
 ```formula
 (1/3)^p + (2/3)^p = 1  gives  p = 1
 I = ∫_1^n u / u^2 du = ∫_1^n 1/u du = ln(n)
-T(n) = Θ(n × (1 + ln(n))) = Θ(n × log n)
+T(n) = Θ(n(1 + ln(n))) = Θ(n log(n))
+L_early ≈ log_3(n)
+L_deep ≈ log_{3/2}(n)
+T(n) = T(n/3) + T(2n/3) + n
 where
 p: the balancing exponent; at p = 1 the fractions 1/3 and 2/3 add up to exactly 1
 I: the Akra–Bazzi integral
@@ -77,10 +79,15 @@ log: the logarithm in any base; it differs from ln by a constant factor
 T(n): the running time
 n: the input size
 Θ: Big-Theta, exactly this rate up to constants
+L_early: the number of complete early levels
+L_deep: the depth of the longest path, always taking the two-thirds child
+log_3: logarithm to base three
+log_{3/2}: logarithm to base one and a half
+≈: approximately equal, with integer rounding
 In words: the two pieces add up to the whole input, so every level does about n work, and there are about log n levels.
 ```
 
-The recursion tree agrees: no level does more than n work, the first log_3(n) levels are complete and do exactly n each, and the deepest path (always taking 2/3) has log_{3/2}(n) levels (the logarithm of n to base 1.5). Both counts are Θ(log n).
+The recursion tree agrees: complete early levels each do linear work, and even the deepest chain has logarithmic depth. The card records the respective logarithm bases; rounding only changes these level counts by constants.
 
 ## Key takeaways
 - Akra–Bazzi allows different subproblem fractions under its regularity assumptions.

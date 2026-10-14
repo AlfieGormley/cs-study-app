@@ -15,6 +15,12 @@ A quick way to compare two functions is to look at what their ratio does as n gr
 
 ```formula
 L = lim_{n→∞} f(n) / g(n)
+L = 0: f(n) = O(g(n))
+L = 0: f(n) = o(g(n))
+L = 0: f(n) ∉ Ω(g(n))
+0 < L < ∞: f(n) = Θ(g(n))
+L = ∞: f(n) = Ω(g(n))
+L = ∞: f(n) ∉ O(g(n))
 where
 L: the value the ratio settles towards
 lim_{n→∞}: "the limit as n tends to infinity": the value f(n) / g(n) gets closer and closer to as n grows without bound
@@ -22,20 +28,27 @@ n: the input size
 f(n), g(n): the two functions being compared, both positive for large n
 ∞: infinity: growing without any upper limit
 →: "tends to", "heads towards"
+O: an eventual upper growth bound
+Ω: an eventual lower growth bound
+Θ: matching upper and lower growth bounds
+o: strictly slower growth
+∉: is not a member of the indicated growth class
+<: less than
 In words: divide one function by the other and watch what the answer heads towards as n gets enormous.
 ```
 
-| L | Conclusion |
+| Ratio limit | Conclusion |
 |---|---|
-| 0 | f = O(g), not Ω(g) |
-| constant > 0 | f = Θ(g) |
-| ∞ | f = Ω(g), not O(g) |
+| Zero | upper bound, no lower bound |
+| Finite positive constant | tight bound |
+| Infinity | lower bound, no upper bound |
 
-For example, with f(n) = n and g(n) = n^2:
+For example, compare the linear and quadratic functions in the following substitution:
 
 ```formula
 f(n) / g(n) = n / n^2 = 1 / n
 1 / n → 0   as n → ∞
+f(n) = n, g(n) = n^2
 where
 f(n): here n, a linear function
 g(n): here n^2, n × n
@@ -45,17 +58,17 @@ n: the input size
 In words: n divided by n squared shrinks towards zero, so n grows strictly slower than n squared.
 ```
 
-So n = O(n^2) but not Θ(n^2). When the limit is 0 we also write f = o(g) ("little-o", a lower-case o): f grows strictly slower than g. The limit test only works when the limit exists; for oscillating functions go back to the definitions.
+The linear function therefore has a quadratic upper bound but no quadratic tight bound. A zero ratio limit is also called **little-o**: strictly slower growth. The limit test only works when a limit exists; for oscillating functions, return to the definitions.
 
 ## The ladder of common classes
 
-From slowest-growing to fastest, with typical examples (most are covered properly in later modules). n is the input size; log n is log_2(n); √n is the square root of n; n! is n factorial, n × (n − 1) × … × 2 × 1:
+From slowest to fastest, these classes use n for input size. Logarithms are base two, a square root means the nonnegative root, and factorial is the product of all positive integers up to the item count. Most example algorithms are studied later.
 
 | Class | Name | Example |
 |---|---|---|
 | O(1) | constant | array index |
 | O(log n) | logarithmic | binary search |
-| O(√n) | square root | divisors up to √n |
+| O(√n) | square root | divisors up to the square root |
 | O(n) | linear | scan a list |
 | O(n log n) | linearithmic | merge sort |
 | O(n^2) | quadratic | all pairs |
@@ -67,11 +80,11 @@ A few points worth knowing:
 
 - **O(1)** means bounded by a constant, not "one step". Reading 1,000 fixed fields is still O(1).
 - **O(log n)** is what you get by repeatedly halving the problem. The base-2 log of a billion is about 30, because 2^30 ≈ 1.07 billion.
-- **n!** (factorial) grows faster than c^n for any fixed number c. Stirling's approximation gives the size of a factorial, and taking its logarithm shows where the sorting lower bound comes from:
+- **Factorial** grows faster than any exponential with a fixed base. Stirling’s approximation gives its size; taking its logarithm gives the comparison-sorting lower bound:
 
 ```formula
-n! = n × (n − 1) × … × 2 × 1
-log(n!) = Θ(n × log(n))
+n! = n(n − 1) × … × 2 × 1
+log(n!) = Θ(n log(n))
 20! ≈ 2.4 × 10^18
 25! ≈ 1.6 × 10^25
 where

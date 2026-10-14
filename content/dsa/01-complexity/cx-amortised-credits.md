@@ -19,11 +19,11 @@ For the dynamic array, charge **3 units** per append:
 2. 1 unit is stored on the new element, to pay for copying it at the next resize.
 3. 1 unit is stored on an element from the *older half* of the array, which already spent its credit in the previous resize.
 
-Why it works: look at the append that triggers a resize from capacity k to 2k, plus the k − 1 appends after it that fill the new array. Those k appends each bank 2 units:
+Why it works: consider the append that doubles capacity, plus the subsequent appends filling the new block. Together they number the old capacity and each banks two units:
 
 ```formula
-banked = k × 2 = 2 × k
-needed = 2 × k
+banked = k × 2 = 2k
+needed = 2k
 banked − needed = 0 ≥ 0
 where
 banked: the credit saved by the k appends between two resizes, in units

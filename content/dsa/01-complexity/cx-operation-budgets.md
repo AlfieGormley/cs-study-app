@@ -25,7 +25,7 @@ r: the assumed speed, 10^8 (a hundred million) operations per second
 In words: divide the operation count by the speed; anything that comes out near 1 second or less fits the budget.
 ```
 
-In the table, n! is n factorial (n × (n − 1) × … × 1), 2^n is n copies of 2 multiplied together, and log n is the base-2 logarithm of n:
+In the table, factorial means the product of all positive integers up to n; exponential growth uses a fixed base of two. Here n is the input size and log is the base-2 logarithm.
 
 | Largest n (about 1 s) | Affordable complexity |
 |---|---|
@@ -44,7 +44,7 @@ The table comes straight from the arithmetic:
 2^25 ≈ 3.4 × 10^7
 500^3 = 1.25 × 10^8
 (10^4)^2 = 10^8
-10^6 × log_2(10^6) ≈ 2 × 10^7
+10^6log_2(10^6) ≈ 2 × 10^7
 where
 11!: 11 factorial, 11 × 10 × … × 1 = 39,916,800
 2^25: 25 copies of 2 multiplied together, 33,554,432
@@ -54,7 +54,7 @@ log_2(10^6): the base-2 logarithm of a million, about 19.9
 In words: at each table row's largest n, the operation count comes out at about 10^7 to 10^8, which is about a second or less at 10^8 operations per second.
 ```
 
-Read it backwards too. If a problem says n is up to 200,000, a quadratic algorithm needs about 200,000 × 200,000 = 4 × 10^10 operations, 400 seconds at the assumed rate (minutes rather than a second), so you need O(n log n) or better. If n is at most 20, exponential brute force over subsets may be the simplest correct answer.
+Read it backwards too. A 200,000-item quadratic problem needs 40 billion counted operations: 400 seconds at the assumed rate, far above a second. So seek O(n log n) or better, where n is the item count. At no more than 20 items, exponential subset search may instead be the simplest correct answer.
 
 > [!note] Content gap: cross-language timings
 > A reproducible benchmark for the claimed universal Python-to-compiled speed ratio is absent, so that ratio is omitted. Interpreter version, operation type, data and hardware matter. Native built-ins or vectorisation can reduce interpreter overhead; measure the actual workload.

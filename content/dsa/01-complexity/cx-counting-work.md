@@ -47,13 +47,15 @@ Counting one operation per commented line gives a simple formula for the work:
 ```formula
 T(n) = n + 2
 T(1000) = 1000 + 2 = 1002
+T_loop(n) = 2n + 2
 where
 T(n): the number of basic operations total() performs on a list of n items (a count of steps, not seconds)
 n: the input size, here the number of items in the list xs; a whole number with no unit
+T_loop(n): the operation count when each loop pass also charges one overhead step
 In words: one operation for each item in the list, plus two more for setting s to 0 and returning it.
 ```
 
-You could argue the loop itself costs something per pass, making it 2 × n + 2. It doesn't matter: either way, doubling the list doubles the work. That is what we care about.
+You could also count one extra loop-overhead step per pass, as the second cost in the card does. Either way, doubling the list doubles the work. That is what we care about.
 
 ## Key takeaways
 - A correct algorithm for a total problem uses unambiguous steps and terminates on every valid input.

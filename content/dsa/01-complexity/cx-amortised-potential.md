@@ -45,24 +45,40 @@ So if Φ starts at 0 and is never negative, the total actual cost is at most the
 For the dynamic array, use
 
 ```formula
-Φ = 2 × s − c
+Φ = 2s − c
+Φ_0 = 0
+s ≥ c/2, so Φ ≥ 0
 where
 Φ: phi, the potential of the array, in cost units
 s: the size: how many elements are stored
 c: the capacity: how many slots are allocated
+Φ_0: the initial potential
+≥: greater than or equal to
 In words: the potential is zero when the array is exactly half full and rises by 2 with every element added after that.
 ```
 
-Start with an empty array of capacity 0, so Φ = 0. After the first append, the array is always at least half full (s ≥ c / 2), so Φ is never negative.
+Start with an empty array of capacity zero. After the first append, it is at least half full, so potential stays nonnegative:
 
-**Append without resize** (size s to s + 1, capacity c unchanged): actual cost 1, Φ goes up by 2. Amortised = 1 + 2 = **3**.
-
-**Append with resize** (size = capacity = k, capacity becomes 2k): actual cost is k copies plus 1 write.
+**Append without resize:** size rises by one while capacity stays fixed. Actual cost is one unit, potential rises by two, and their sum is three.
 
 ```formula
-Φ_before = 2 × k − k = k
-Φ_after = 2 × (k + 1) − 2 × k = 2
+s_new = s + 1
+c_new = c
+a = 1 + 2 = 3
+where
+s, s_new: the stored item count before and after the append
+c, c_new: capacity before and after, in slots
+a: the amortised cost, in element-write/copy units
+In words: A cheap append stores two units of potential in addition to its one-unit write.
+```
+
+**Append with resize:** the array is full, so its size equals its capacity. It doubles capacity, copies all existing elements and writes one new element:
+
+```formula
+Φ_before = 2k − k = k
+Φ_after = 2 × (k + 1) − 2k = 2
 a = (k + 1) + 2 − k = 3
+k = 8: a = 9 + 2 − 8 = 3
 where
 Φ_before: the potential just before the append, when the array is full (size k, capacity k)
 Φ_after: the potential just after, with size k + 1 and capacity 2k
@@ -71,7 +87,7 @@ a: the amortised cost of this append: actual cost k + 1 plus the change in poten
 In words: the copy costs k, but the potential drops by about k at the same moment, so the amortised cost is still 3.
 ```
 
-For example, with k = 8: actual cost 9 (8 copies, 1 write), Φ falls from 8 to 2, so the amortised cost is 9 + 2 − 8 = 3. Every append has amortised cost at most 3, whatever k is (the very first append, from capacity 0 to 1, costs only 2). The potential built up by the cheap appends is precisely what pays for the copy.
+For capacity eight, actual cost is nine units; potential falls from eight to two, leaving amortised cost three, as the substitution below shows. Every append has amortised cost at most three; the very first append from zero to one capacity costs only two. Cheap appends build the potential that pays for copying.
 
 ## Key takeaways
 - Amortised cost includes actual cost and the change in stored potential.

@@ -32,16 +32,15 @@ where
 i: the loop variable, which doubles every pass, so after k passes it equals 2^k
 k: the number of loop iterations; the loop stops at the first k with 2^k ≥ n
 n: the input size, the value the loop counts up to
-2^k: k copies of 2 multiplied together
 log_2(n): the base-2 logarithm of n, the power you raise 2 to in order to get n
 ⌈x⌉: ceiling: round x up to the next whole number
 ≥: greater than or equal to
 In words: doubling from 1 reaches n after about log_2(n) steps, rounded up.
 ```
 
-For n = 16 that's 4 iterations (1, 2, 4, 8); for n = 17 it's 5.
+For a bound of 16, the loop has four passes through 1, 2, 4 and 8; a bound of 17 requires a fifth pass.
 
-The same holds for halving (`n //= 2`), and for any constant factor: multiplying by 3 gives log_3(n) steps (the base-3 logarithm), still Θ(log n), because logarithms in different bases differ only by a constant factor. This is the shape behind binary search and balanced trees.
+The same logarithmic growth holds for halving (`n //= 2`) or another fixed factor. Tripling uses a base-three logarithm, but fixed log bases differ only by a constant factor. Here n is the positive input bound. This is the shape behind binary search and balanced trees.
 
 A loop that stops at a square root is different again:
 
@@ -52,11 +51,26 @@ while i * i <= n:
     i += 1
 ```
 
-This runs about √n times (the square root of n): the loop stops when i × i passes n, so i only gets as far as √n. For n = 1,000,000 that is about 1,000 iterations.
+This loop stops when the square of its variable passes the bound, so its iteration count follows the square root. A bound of a million gives about a thousand iterations. Here is that count, followed by the independent-loop product:
 
 ## Mixed loops and two classic traps
 
-A linear outer loop around a logarithmic inner loop gives n × log_2(n) ("n log n") steps:
+```formula
+K(n) = ⌊√(n)⌋
+K(1000000) = 1000
+W(n) = n⌈log_2(n)⌉
+where
+K(n): the square-root loop’s iteration count
+W(n): the number of doublings in the nested example below
+n: the positive whole-number loop bound
+√: the nonnegative square root
+⌊ ⌋: floor: round down
+⌈ ⌉: ceiling: round up
+log_2: the base-2 logarithm
+In words: The first loop counts up to the square root; restarting a doubling loop on every outer pass multiplies its count by the input size.
+```
+
+A linear outer loop around an independently restarted logarithmic inner loop has Θ(n log n) work, where n is its bound:
 
 ```python
 for i in range(n):        # n times
@@ -77,18 +91,16 @@ while i < n:
     i *= 2
 ```
 
-It looks like "log n outer times n inner", so n log n. But the inner loop runs 1, then 2, then 4 times, and so on up to the last power of 2 below n. Adding these is a **geometric series** (each term is double the last), and a geometric series is dominated by its last term:
+Multiplying the logarithmic outer count by the maximum inner length would overestimate it. The actual inner lengths double from one through the last power of two below the bound. Adding them gives a **geometric series**, dominated by its last term:
 
 ```formula
 W = 1 + 2 + 4 + … + 2^k
 W = 2^{k+1} − 1
-2^k < n,  so  W < 2 × n
+2^k < n,  so  W < 2n
 n = 100:  W = 1 + … + 64 = 127
 where
 W: the total number of work() calls
 k: the number of the last outer pass; on that pass i = 2^k, the largest power of 2 below n
-2^k: k copies of 2 multiplied together
-2^{k+1}: k + 1 copies of 2 multiplied together
 n: the input size
 …: "and so on"
 In words: each power of 2 is one more than the sum of all the smaller ones, so the whole sum is just under twice the last term, and the last term is less than n.

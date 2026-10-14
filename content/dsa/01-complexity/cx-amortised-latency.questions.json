@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cx-amortised-analysis-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A binary counter starts at 0 and is incremented **8 times**. Each increment flips the trailing 1s to 0 and the next 0 to 1. How many bit flips happen in total?",
+    "options": [
+      {
+        "text": "15",
+        "explanation": "Correct. The flips per increment are 1, 2, 1, 3, 1, 2, 1, 4: total 15, which is under 2 × 8 = 16."
+      },
+      {
+        "text": "8",
+        "explanation": "This counts one flip per increment. Some increments flip several bits, e.g. 3 to 4 (011 to 100) flips three."
+      },
+      {
+        "text": "32",
+        "explanation": "This assumes every increment could flip all 4 bits. That worst case is rare; most increments flip only one or two bits."
+      },
+      {
+        "text": "24",
+        "explanation": "This assumes 3 flips per increment on average. Half of all increments flip just one bit (the even-to-odd ones)."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace each increment:\n\n| From | To | Flips |\n|---|---|---|\n| 0000 | 0001 | 1 |\n| 0001 | 0010 | 2 |\n| 0010 | 0011 | 1 |\n| 0011 | 0100 | 3 |\n| 0100 | 0101 | 1 |\n| 0101 | 0110 | 2 |\n| 0110 | 0111 | 1 |\n| 0111 | 1000 | 4 |\n\nTotal = 15.\n\nAggregate view: count flips per bit position instead of per increment.\n\n```formula\nflips = n + n/2 + n/4 + n/8\nflips = 8 + 4 + 2 + 1 = 15 < 2 × n\nwhere\nflips: the total number of bit flips\nn: the number of increments, here 8\nIn words: bit 0 flips every time, bit 1 every second time, bit 2 every fourth time, and so on, so the total is less than twice the number of increments.\n```\n\nSo each increment is O(1) amortised (a constant on average), even though one costs as much as log_2(n) + 1 = 4 flips.",
+    "link": {
+      "title": "Amortized analysis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Amortized_analysis"
+    }
+  },
+  {
+    "id": "cx-amortised-analysis-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A queue is implemented with two stacks: `enqueue` pushes onto `inbox`; `dequeue` pops from `outbox`, first moving all of `inbox` into `outbox` (pop then push, one element at a time) if `outbox` is empty. Starting empty, you do **n enqueues followed by n dequeues**. How many individual stack push/pop operations happen in total?",
+    "options": [
+      {
+        "text": "2n",
+        "explanation": "This counts only the enqueue pushes and the final outbox pops. It misses the transfer, which pops each element from inbox and pushes it onto outbox."
+      },
+      {
+        "text": "n^2",
+        "explanation": "This assumes each dequeue moves everything (n × n operations). The transfer only happens when outbox is empty, so here it happens once, on the first dequeue."
+      },
+      {
+        "text": "4n",
+        "explanation": "Correct. Each element is pushed onto inbox once, popped from inbox once, pushed onto outbox once and popped from outbox once: 4 operations per element."
+      },
+      {
+        "text": "3n",
+        "explanation": "This counts the transfer as one operation per element, but moving an element between stacks is a pop *and* a push."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Follow one element through its life:\n\n1. `enqueue`: push onto inbox (1).\n2. First `dequeue`, outbox empty: pop from inbox (1), push onto outbox (1).\n3. Its own `dequeue`: pop from outbox (1).\n\n```formula\nops = 4 × n\nops / (2 × n) = 2\nwhere\nops: the total number of stack push and pop operations\nn: the number of elements enqueued (and dequeued)\nIn words: 4 stack operations per element, shared over 2n queue operations, is 2 stack operations per queue operation.\n```\n\nThe first dequeue alone costs 2n + 1, so the worst single operation is Θ(n), proportional to n. But each element is transferred at most once in its life, so for **any** sequence the total is at most 4 per element: O(1) amortised per operation. (Potential-method version: let Φ = 2 × the number of items in inbox.)",
+    "link": {
+      "title": "Accounting method — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Accounting_method_(computer_science)"
+    }
+  },
+  {
+    "id": "cx-amortised-analysis-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A low-latency trading service appends market events to a C++ `std::vector`. Mean latency is excellent, but the p99.99 latency shows rare multi-millisecond spikes that line up with the vector growing past a few hundred MB. What is the most appropriate fix?",
+    "options": [
+      {
+        "text": "Nothing: append is O(1) amortised, so the spikes must come from somewhere else",
+        "explanation": "Amortised O(1) bounds the total, not each call. The append that triggers growth copies the entire vector, and at hundreds of MB that takes milliseconds."
+      },
+      {
+        "text": "Reserve capacity up front (or use a chunked structure that never moves existing elements)",
+        "explanation": "Correct. `reserve()` with the expected peak size means no reallocation on the hot path. Alternatively, a segmented structure (like a deque of fixed-size blocks) adds blocks without copying old data."
+      },
+      {
+        "text": "Switch to growing by a fixed 1 MB each time, so each resize is smaller",
+        "explanation": "Each resize would still copy the whole vector (the copy is of existing data, not the new space), and resizes would become far more frequent. Total cost becomes quadratic."
+      },
+      {
+        "text": "Use a growth factor of 4 instead of 2",
+        "explanation": "A larger factor reduces resize frequency but retains occasional full relocation and increases spare capacity. It does not guarantee a latency bound."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Amortised O(1) means the **total** over n appends is O(n), proportional to n. It allows individual appends of Θ(n).\n2. When a vector of, say, 400 MB reallocates, it must copy all of it:\n\n```formula\nt = D / B\nt = 400 MB / (10 GB/s)\nt = 0.04 s = 40 ms\nwhere\nt: the time the single reallocating append spends copying, in seconds (s)\nD: the amount of data copied, 400 megabytes (MB)\nB: the memory copy bandwidth, assumed to be of the order of 10 gigabytes per second (GB/s)\nMB: megabytes; 1 MB = 10^6 bytes\nGB: gigabytes; 1 GB = 1,000 MB\ns: seconds\nms: milliseconds; 1 ms = 0.001 s\nIn words: copying 400 MB at about 10 GB per second takes tens of milliseconds, all inside one append.\n```\n\n3. For latency-sensitive paths, remove the expensive operation from the hot path:\n   - `events.reserve(expected_max)` at start-up, so there are no reallocations during trading.\n   - Or a block-based structure (`std::deque`, a list of fixed chunks) that never copies existing data.\n4. Growing by a fixed amount turns total cost into Θ(n^2) and keeps the full copies; a bigger factor still permits large copies.\n\nThe same idea appears in Redis, which rehashes its hash tables incrementally rather than in one go.",
+    "link": {
+      "title": "Dynamic array — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_array"
+    }
+  }
+]

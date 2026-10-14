@@ -1,0 +1,152 @@
+[
+  {
+    "id": "fund-approach-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is a **non-functional** requirement for a photo-sharing app?",
+    "options": [
+      {
+        "text": "The home feed loads with p99 latency under 300 ms",
+        "explanation": "Correct. This describes how well the system performs a function (latency), and it is measurable, which is exactly what a good non-functional requirement looks like."
+      },
+      {
+        "text": "Users can follow other users",
+        "explanation": "Incorrect. Following is a feature, i.e. a functional requirement. It says nothing about speed, availability or scale."
+      },
+      {
+        "text": "Users can upload a photo with a caption",
+        "explanation": "Incorrect. This describes a behaviour the user can observe (what the system does), so it is a functional requirement."
+      },
+      {
+        "text": "Users can delete their own photos",
+        "explanation": "Incorrect. Deletion is a capability of the system, so it is functional. A related NFR might be 'deleted photos are purged from all caches within 24 hours'."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask of each option: does it describe **what** the system does, or **how well** it does it?\n\n1. Upload with caption: *what*. Functional.\n2. Follow users: *what*. Functional.\n3. Feed p99 < 300 ms: *how well* (latency). Non-functional.\n4. Delete photos: *what*. Functional.\n\nA quick test: NFRs usually contain a number or an '-ility' (latency, availability, durability, scalability).",
+    "link": {
+      "title": "Non-functional requirement (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Non-functional_requirement"
+    }
+  },
+  {
+    "id": "fund-approach-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An interviewer says: \"Design a URL shortener.\" What should you do **first**?",
+    "options": [
+      {
+        "text": "Draw the load balancer, app servers and database",
+        "explanation": "Incorrect. Drawing boxes before knowing scale and requirements means you can't justify any of them; you may design something massively over- or under-sized."
+      },
+      {
+        "text": "Write the code for base-62 encoding",
+        "explanation": "Incorrect. Encoding is a detail for the deep-dive stage. Starting there skips requirements, estimation and the high-level design."
+      },
+      {
+        "text": "Choose a database, e.g. Cassandra for scale",
+        "explanation": "Incorrect. Picking a technology before knowing the requirements is the classic 'jumping to technology' mistake. Cassandra might be wildly unnecessary for a small internal tool."
+      },
+      {
+        "text": "Ask clarifying questions about features, scale and non-functional targets",
+        "explanation": "Correct. Requirements (features, expected traffic, latency and availability targets, constraints) determine every later decision, so clarifying them is the first step."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The standard sequence is:\n\n1. Clarify requirements (functional, non-functional, constraints)\n2. Estimate scale\n3. API and data model\n4. High-level design\n5. Deep dives\n6. Bottlenecks and trade-offs\n\nFor a URL shortener, clarifying might reveal: 100M new links/month, 100:1 read:write ratio, redirects must be very fast and highly available, links never expire. Those answers drive caching, storage and ID-generation choices later.",
+    "link": {
+      "title": "The System Design Primer (GitHub)",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "fund-approach-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A product manager states the requirement: \"The system must be highly available and fast.\" What is the main problem with this requirement?",
+    "options": [
+      {
+        "text": "Availability and speed are functional requirements, not non-functional",
+        "explanation": "Incorrect. Availability and latency are classic non-functional requirements. The categorisation is fine; the wording is the problem."
+      },
+      {
+        "text": "You can't have both high availability and low latency",
+        "explanation": "Incorrect. Many systems achieve both. There are trade-offs (PACELC describes latency vs consistency), but availability and speed are not mutually exclusive."
+      },
+      {
+        "text": "It isn't measurable, so it can't drive design decisions or be verified",
+        "explanation": "Correct. Without numbers (e.g. 99.95% monthly availability, p99 < 200 ms) you can't decide whether you need multi-region failover or a cache, and you can't test whether you've succeeded."
+      },
+      {
+        "text": "Availability should only be specified by the infrastructure team",
+        "explanation": "Incorrect. Availability targets are a business decision based on the cost of downtime; product owners should be involved in setting them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Rewrite the vague requirement into testable ones:\n\n- \"Highly available\" -> \"99.95% of minutes per month the checkout API returns non-5xx\" (about 22 minutes of downtime allowed per month).\n- \"Fast\" -> \"p50 < 80 ms, p99 < 300 ms for product page loads at 5k req/s.\"\n\nNow you can reason: 99.95% probably needs multiple availability zones; p99 < 300 ms with a slow database suggests caching. Vague words can't produce these conclusions.",
+    "link": {
+      "title": "Service Level Objectives (Google SRE book)",
+      "url": "https://sre.google/sre-book/service-level-objectives/"
+    }
+  },
+  {
+    "id": "fund-approach-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a URL shortener, the redirect path must be 99.99% available, while the click-analytics dashboard is only 99.5%. Which design consequence follows most directly from setting **different** targets per path?",
+    "options": [
+      {
+        "text": "Both paths must share the same database so they stay consistent",
+        "explanation": "Incorrect. Sharing a database couples their availability: a heavy analytics query could degrade redirects. Different targets argue for separation, not sharing."
+      },
+      {
+        "text": "The analytics dashboard needs multi-region active-active deployment",
+        "explanation": "Incorrect. That's the expensive option you'd reserve for the 99.99% path. 99.5% allows about 3.6 hours of downtime a month, achievable in a single region."
+      },
+      {
+        "text": "Analytics events should be recorded asynchronously so analytics failures can't block redirects",
+        "explanation": "Correct. If the redirect handler synchronously writes click data to the analytics store, the redirect's availability is capped by the analytics store's. Emitting events to a queue or log decouples them, so the 99.5% component can't drag down the 99.99% path."
+      },
+      {
+        "text": "Redirects should be served from the analytics store to reduce duplication",
+        "explanation": "Incorrect. This puts the critical path on the less reliable component, which is exactly backwards."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Components in series multiply availability. If a redirect synchronously depends on both the link store (99.99%) and the analytics store (99.5%):\n\n```formula\nA = A_link × A_an\nA = 0.9999 × 0.995 ≈ 0.9949\nwhere\nA: the redirect path's availability when it needs both stores, as a fraction (0.9949 = 99.49%)\nA_link: the link store's availability, 99.99% = 0.9999\nA_an: the analytics store's availability, 99.5% = 0.995\n≈: approximately equal to (rounded)\nIn words: a request that needs both stores works only when both are up, so multiply their availabilities.\n```\n\nThat's ~99.5%, far below the 99.99% target. Remove analytics from the synchronous path (fire-and-forget to a buffered queue) and analytics-store failures need not block redirects, but the app, link store and any required enqueue acknowledgement still affect availability. Decide whether analytics can be dropped or durably buffered when the queue is unavailable. Separate targets -> separate failure domains.",
+    "link": {
+      "title": "Embracing Risk (Google SRE book)",
+      "url": "https://sre.google/sre-book/embracing-risk/"
+    }
+  },
+  {
+    "id": "fund-approach-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your URL shortener must report accurate click counts per link. A colleague wants redirects to return `301 Moved Permanently` \"because it's the correct status for a permanent link\". What is the main problem?",
+    "options": [
+      {
+        "text": "Browsers may cache a 301, so repeat clicks never reach your servers and go uncounted",
+        "explanation": "Correct. A 301 is cacheable by default, so a browser that has seen it can redirect locally next time. That saves you load but silently breaks the click-analytics requirement. A 302 or 307 can also be cached when explicit freshness permits it; set a suitable policy such as `Cache-Control: no-store` if each request must reach the service."
+      },
+      {
+        "text": "A 301 is slower for users than a 302",
+        "explanation": "Incorrect. On the first visit both cost one round trip. A cached 301 is actually faster for repeat visits, which is exactly why it hides clicks from you."
+      },
+      {
+        "text": "Search engines ignore 301 redirects",
+        "explanation": "Incorrect. Search engines follow 301s and treat them as permanent moves. SEO isn't the issue; analytics accuracy is."
+      },
+      {
+        "text": "A 301 cannot carry a `Location` header",
+        "explanation": "Incorrect. Both 301 and 302 use the `Location` header to name the target URL."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace a user clicking the same short link twice:\n\n```\n301: click 1 -> server -> counted\n     click 2 -> browser cache -> lost\n302: click 1 -> server -> counted\n     click 2 -> server -> counted\n```\n\nThe analytics requirement shapes both redirect semantics and cache policy. The 302 trace assumes caching is prohibited (for example with `Cache-Control: no-store`); status 302 alone does not guarantee every click reaches the server.",
+    "link": {
+      "title": "302 Found (MDN)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/302"
+    }
+  }
+]

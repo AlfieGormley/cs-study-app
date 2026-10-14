@@ -37,7 +37,8 @@ For every lesson `.md` and `.questions.json` in your module:
    - Soften or remove claims you can't verify.
    - Rewrite misleading explanations.
    - Keep question ids unchanged. If a question can't be fixed, rewrite it to test the same idea correctly.
-   - Don't shorten lessons unnecessarily.
+   - Preserve substantive explanations and examples. For a requested lesson split, follow
+     `docs/short-lessons-brief.md`: check each short unit's focus, prerequisites and question placement.
 7. Write the verification record `content/<subject>/<module-dir>/verification.json` exactly as specified in
    `docs/CONTENT_PROCESS.md` section 4:
    - a confidence score for every lesson and every glossary term (high/medium/low);

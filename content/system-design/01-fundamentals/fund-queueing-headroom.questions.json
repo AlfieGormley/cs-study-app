@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fund-latency-throughput-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A worker has a mean service time of 10 ms per request. Using the M/M/1 queueing approximation below, what's the average time in the system at 90% utilisation, and what happens if load rises to 95%?\n\n```formula\nW = S / (1 − ρ)\nwhere\nW: the average time a request spends in the system, waiting plus being served, in milliseconds (ms)\nS: the mean service time, the work time per request with no queue, in ms\nρ: rho, the utilisation, the fraction of time the worker is busy, from 0 to just under 1\nms: millisecond, one thousandth of a second\nIn words: latency is the service time divided by the fraction of time the worker is idle.\n```",
+    "options": [
+      {
+        "text": "100 ms at 90%; 200 ms at 95%",
+        "explanation": "Correct. 10 / (1 − 0.9) = 100 ms; 10 / (1 − 0.95) = 200 ms. A 5-point rise in utilisation doubles latency, which is why running near capacity is dangerous."
+      },
+      {
+        "text": "11 ms at 90%; 10.5 ms at 95%",
+        "explanation": "Incorrect. This multiplies the service time by 1 plus the idle fraction (1.1 at 90%, 1.05 at 95%), which would make latency fall as load rises. The formula divides by (1 − ρ), which explodes as ρ approaches 1."
+      },
+      {
+        "text": "90 ms at 90%; 95 ms at 95%",
+        "explanation": "Incorrect. This treats latency as linear in utilisation. Queueing delay is non-linear: it grows like 1/(1 − ρ)."
+      },
+      {
+        "text": "10 ms in both cases, since service time is constant",
+        "explanation": "Incorrect. Mean service time stays fixed, but mean waiting time grows with utilisation in this model. Time in the system includes both waiting and service."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Apply the formula at each utilisation:\n\n```formula\nW = S / (1 − ρ)\nρ = 0.90: W = 10 ms / 0.10 = 100 ms\nρ = 0.95: W = 10 ms / 0.05 = 200 ms\nρ = 0.50: W = 10 ms / 0.50 = 20 ms\nwhere\nW: the average time in the system (waiting plus service), in milliseconds (ms)\nS: the mean service time, 10 ms\nρ: rho, the utilisation, the fraction of time the worker is busy\nms: millisecond, one thousandth of a second\nIn words: halving the idle fraction doubles the latency, so the last few points of utilisation are the most expensive.\n```\n\nGoing from 50% to 90% load increases latency 5×; from 90% to 95% doubles it again. Real systems are not necessarily M/M/1; arrival/service variability, scheduling and admission control change the curve. That's why you plan peak utilisation around 50–70%.",
+    "link": {
+      "title": "Queueing theory (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Queueing_theory"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Peak traffic is 45,000 req/s. Each server saturates at 1,000 req/s. Servers are spread evenly over **3 availability zones**. You want peak utilisation at or below **60%** normally, and at or below **90%** if a whole AZ is lost. What is the minimum server count?",
+    "options": [
+      {
+        "text": "45",
+        "explanation": "Incorrect. 45 servers would run at 100% utilisation at peak, deep in the queueing cliff, with nothing left for an AZ failure."
+      },
+      {
+        "text": "50",
+        "explanation": "Incorrect. 50 is how many must *survive* an AZ loss (at 90%). Since an AZ holds a third of the fleet, you need 50 in the other two AZs, i.e. 75 in total."
+      },
+      {
+        "text": "75",
+        "explanation": "Correct. Normal: 45,000 / 75 = 600 req/s per server = 60%. After losing one AZ: 50 servers left, 45,000 / 50 = 900 req/s = 90%. Both targets are met exactly."
+      },
+      {
+        "text": "113",
+        "explanation": "Incorrect. This keeps utilisation at 60% even after an AZ loss (75 survivors). That's safe but over-provisioned against the stated 90% failure target."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Check each constraint separately and take the larger answer.\n\n```formula\nN_1 = Q / (c × 0.6) = 45,000 / 600 = 75\nN_s = Q / (c × 0.9) = 45,000 / 900 = 50\nN_2 = N_s × 3 / 2 = 75\nwhere\nQ: peak traffic, 45,000 requests per second\nc: the requests per second at which one server saturates, 1,000\nN_1: servers needed to stay at or below 60% utilisation normally\nN_s: servers that must survive a zone loss to stay at or below 90%\nN_2: total servers so that two of the three zones still hold N_s (each zone holds a third of the fleet)\nIn words: both rules happen to need 75 servers, 25 per zone.\n```\n\nBoth give 75 (25 per AZ). The exercise permits 90% during failure; whether that is acceptable in production depends on measured latency and overload behaviour, not only duration.",
+    "link": {
+      "title": "Handling Overload (Google SRE book)",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  }
+]

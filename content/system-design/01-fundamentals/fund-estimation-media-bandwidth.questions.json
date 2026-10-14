@@ -1,0 +1,66 @@
+[
+  {
+    "id": "fund-estimation-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A colleague's estimate for a photo app concludes: \"1 M uploads/day × 2 MB = 2 TB/day, so a 4 TB database disk lasts two days; we need to shard Postgres.\" Which criticisms are valid? Select all that apply.",
+    "options": [
+      {
+        "text": "At this scale, consider object storage for photo blobs and keep metadata in the database before deciding to shard",
+        "explanation": "Correct. Blobs in a relational database bloat backups, replication and the buffer cache. Store images in S3-style object storage and keep a ~1 KB metadata row per photo: 1 M × 1 KB = 1 GB/day, which Postgres handles easily."
+      },
+      {
+        "text": "The estimate ignores replication of the stored photos",
+        "explanation": "Correct. Physical storage planning must include the chosen replication or erasure-coding scheme; managed object-storage billing may already include that redundancy. It doesn't change the conclusion about where to store them, but it's a real omission."
+      },
+      {
+        "text": "The arithmetic is wrong: 1 M × 2 MB is 2 GB",
+        "explanation": "Incorrect. 1 million × 2 million bytes = 2,000,000,000,000 bytes = 2 TB. The arithmetic is right; the architectural conclusion is what's wrong."
+      },
+      {
+        "text": "The estimate doesn't consider multiple resized versions (thumbnails) per photo",
+        "explanation": "Correct. Most photo apps store several renditions (thumbnail, medium, full). Thumbnails are small, but they add storage and, more importantly, they're what most reads fetch, which affects CDN and bandwidth planning."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. **Check the arithmetic:** 1 million × 2 MB = 2 million MB = 2 TB a day. Correct.\n2. **Check the architecture:** large blobs go to object storage + CDN; the database holds metadata.\n```formula\nV_d = 1 M × 1 KB = 1 GB\nV_y = 1 GB × 365 ≈ 365 GB\nwhere\nV_d: metadata added per day: 1 million rows of about 1 KB\nV_y: metadata added per year\nM: million\nKB: kilobyte, 1,000 bytes\nGB: gigabyte, 10^9 bytes\n≈: approximately equal to\nIn words: a kilobyte of metadata per photo is only a gigabyte a day, small for one database.\n```\n   This storage estimate alone does not establish a need for sharding; validate query throughput, maintenance, backups and retention.\n3. **Check multipliers:** the configured redundancy scheme and measured rendition sizes. Any numerical overhead factor must be stated as an assumption rather than a universal property of object stores.\n\nSo the problem isn't the maths; it's putting the wrong data in the wrong store.",
+    "link": {
+      "title": "The System Design Primer (GitHub)",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "fund-estimation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A video platform receives 500,000 uploads a day, averaging 100 MB each. What **average ingress bandwidth** must it handle?",
+    "options": [
+      {
+        "text": "About 500 Mbps",
+        "explanation": "Incorrect. 500 is the figure in megabytes per second. Network bandwidth is quoted in bits, so multiply by 8."
+      },
+      {
+        "text": "About 40 Gbps",
+        "explanation": "Incorrect. That's 10x too high. Re-check the division: 50 TB/day spread over ~86,400 seconds."
+      },
+      {
+        "text": "About 4–5 Gbps",
+        "explanation": "Correct. 500k × 100 MB = 50 TB/day. 50 TB / 86,400 s ≈ 580 MB/s, and × 8 ≈ 4.6 Gbps (the 100,000-seconds-a-day shortcut gives 4 Gbps)."
+      },
+      {
+        "text": "About 4 Tbps",
+        "explanation": "Incorrect. This is 1,000x too high, probably from mixing up MB and GB somewhere along the way."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nV = 5 × 10^5 × 10^8 B = 5 × 10^13 B\nV = 50 TB\nR_B = 5 × 10^13 B / 86,400 s ≈ 580 MB/s\nR_b = 580 MB/s × 8 ≈ 4.6 Gbps\nwhere\nV: bytes uploaded per day: 500,000 (5 × 10^5) uploads of 100 MB (10^8 bytes)\nB: byte\nTB: terabyte, 10^12 bytes\nR_B: average ingress in bytes per second\ns: second; a day has 86,400 s\nMB/s: megabytes per second\nR_b: average ingress in bits per second (8 bits per byte)\nGbps: gigabits per second\n10^n: powers of ten, n copies of ten multiplied together: 10^5 = 100,000, 10^6 = a million, 10^9 = a billion\n≈: approximately equal to (rounded)\nIn words: 50 TB a day is about 580 MB every second, which is about 4.6 gigabits per second.\n```\n\nThen apply a peak factor (say 3x, about 14 Gbps). Design implication: uploads should go straight to object storage (e.g. presigned URLs) rather than through app servers, and transcoding workers pull from there.",
+    "link": {
+      "title": "Data-rate units (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Data-rate_units"
+    }
+  }
+]

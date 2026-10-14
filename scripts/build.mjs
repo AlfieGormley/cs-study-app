@@ -10,6 +10,7 @@ import { plainText } from '../markdown.js';
 import { compileCatalogue } from './diagram-compiler.mjs';
 import { checkVerification, lessonHash, readGlossary } from './verification.mjs';
 import { checkFormula } from '../formula.js';
+import { migrationProblems } from '../lesson-progress.js';
 import { glossary as coreGlossary } from '../glossary-data.js';
 import { aliasKey } from '../glossary-rules.js';
 
@@ -124,8 +125,14 @@ for (const subjectName of dirs(contentDir)) {
       continue;
     }
 
-    const full = { id: mod.id, subject: subject.id, title: mod.title, summary: mod.summary, lessons: [] };
-    const entry = { id: mod.id, title: mod.title, summary: mod.summary, order: mod.order, lessons: [] };
+    const migrations = mod.migrations ?? {};
+    for (const problem of migrationProblems(mod)) err(moduleFile, problem);
+    if (migrations && typeof migrations === 'object' && !Array.isArray(migrations)) for (const oldId of Object.keys(migrations)) {
+      if (!fs.existsSync(path.join(modulePath, `${oldId}.md`))) err(moduleFile, `migration ${oldId} has no archival source lesson`);
+    }
+    const migrationOwners = new Map(Object.entries(migrations).flatMap(([original, ids]) => Array.isArray(ids) ? ids.map((id) => [id, original]) : []));
+    const full = { id: mod.id, subject: subject.id, title: mod.title, summary: mod.summary, ...(mod.migrations ? { migrations } : {}), lessons: [] };
+    const entry = { id: mod.id, title: mod.title, summary: mod.summary, order: mod.order, ...(mod.migrations ? { migrations } : {}), lessons: [] };
 
     for (const lessonId of mod.lessons) {
       const mdFile = path.join(modulePath, `${lessonId}.md`);
@@ -143,6 +150,9 @@ for (const subjectName of dirs(contentDir)) {
       if (!meta.title) err(mdFile, 'missing title');
       if (!LEVELS.includes(meta.level)) err(mdFile, `bad level "${meta.level}"`);
       if (!meta.minutes) err(mdFile, 'missing minutes');
+      if (meta.sourceLesson && (!Number.isInteger(meta.minutes) || meta.minutes < 1 || meta.minutes > 5)) err(mdFile, 'split lessons need a reading time between 1 and 5 minutes');
+      if (meta.sourceLesson && !migrations[meta.sourceLesson]?.includes?.(lessonId)) err(mdFile, 'sourceLesson must have a migration containing this lesson');
+      if (migrationOwners.has(lessonId) && meta.sourceLesson !== migrationOwners.get(lessonId)) err(mdFile, 'migration targets must name their original sourceLesson in frontmatter');
       if (!meta.summary) err(mdFile, 'missing summary');
       for (const problem of formulaProblems(body)) err(mdFile, problem);
       const wideL = tooWide(body, 44);
@@ -163,7 +173,8 @@ for (const subjectName of dirs(contentDir)) {
         questions.forEach((q) => validateQuestion(q, qFile, questionIds));
       }
 
-      const head = { id: lessonId, title: meta.title, level: meta.level, minutes: meta.minutes, summary: meta.summary };
+      if (meta.sourceLesson && !questions.length) err(qFile, 'a short lesson needs at least one relevant question');
+      const head = { id: lessonId, title: meta.title, level: meta.level, minutes: meta.minutes, summary: meta.summary, ...(meta.sourceLesson ? { sourceLesson: meta.sourceLesson } : {}) };
       full.lessons.push({ ...head, body, questions });
       entry.lessons.push({ ...head, questionCount: questions.length });
     }
@@ -320,7 +331,7 @@ for (const [rel, obj] of Object.entries(outputs)) {
 }
 
 // App shell + data files for the service worker to precache.
-const shell = ['./', 'index.html', 'update.html', 'styles.css', 'app.js', 'practice.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'glossary-rules.js', 'glossary-terms.js', 'formula.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
+const shell = ['./', 'index.html', 'update.html', 'styles.css', 'app.js', 'practice.js', 'lesson-progress.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'glossary-rules.js', 'glossary-terms.js', 'formula.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 for (const f of shell.slice(1)) {
   const p = path.join(root, f);

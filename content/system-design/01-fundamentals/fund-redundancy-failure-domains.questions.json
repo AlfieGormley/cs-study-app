@@ -1,0 +1,131 @@
+[
+  {
+    "id": "fund-availability-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run three independent app servers behind a load balancer; each is 98% available, and one is enough to serve the traffic. Ignoring the load balancer, what's the availability of the app tier?",
+    "options": [
+      {
+        "text": "94.1%",
+        "explanation": "Incorrect. 0.98 × 0.98 × 0.98 = 0.941 is the *series* formula, as if all three had to be up. With redundancy only one needs to be up."
+      },
+      {
+        "text": "98%",
+        "explanation": "Incorrect. This ignores redundancy entirely. Extra replicas that can each serve traffic raise availability above a single server's."
+      },
+      {
+        "text": "99.96%",
+        "explanation": "Incorrect. That's 1 − 0.02 × 0.02, the result for **two** servers. With three, you cube the failure probability."
+      },
+      {
+        "text": "99.9992%",
+        "explanation": "Correct. The tier fails only if all three are down: 0.02 × 0.02 × 0.02 = 0.000008, so availability is 1 − 0.000008 = 99.9992%."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Parallel formula: the system fails only when **all** fail.\n\n```formula\nu = 1 − 0.98 = 0.02\nU = u^3 = 0.02^3 = 0.000008\nA = 1 − U = 0.999992\nwhere\nu: the probability one server is down, 1 minus its 98% availability\nU: the probability all three are down at once\n^: \"to the power of\": u^3 means u × u × u\nA: the availability of the app tier\nIn words: three independent servers that are each down 2% of the time are all down together only 8 millionths of the time.\n```\n\nSo 99.9992%, from servers that are individually only 98%.\n\nCaveat: this assumes failures are independent. If all three share a rack, an AZ, or a bad deploy, the real figure is much lower. That's why replicas are spread across availability zones and deploys are staged.",
+    "link": {
+      "title": "Availability and Beyond (AWS whitepaper)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/availability-and-beyond-improving-resilience/availability-and-beyond-improving-resilience.html"
+    }
+  },
+  {
+    "id": "fund-availability-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are likely to make real-world availability **lower** than the parallel-redundancy formula predicts? Select all that apply.",
+    "options": [
+      {
+        "text": "All replicas run in the same rack on the same top-of-rack switch",
+        "explanation": "Correct. A switch or power failure takes out all replicas together: a correlated failure the formula (which assumes independence) doesn't model."
+      },
+      {
+        "text": "A config change is pushed to all replicas simultaneously",
+        "explanation": "Correct. A bad config is a common-mode failure that breaks every replica at once, so redundancy provides no protection. Staged rollouts mitigate this."
+      },
+      {
+        "text": "Failover takes 3 minutes to detect a failure and promote a standby",
+        "explanation": "Correct. The formula assumes switching is instant. Three minutes of failover per incident is real downtime."
+      },
+      {
+        "text": "Replicas are spread across three availability zones",
+        "explanation": "Incorrect. This *reduces* correlation by putting replicas in separate failure domains, bringing reality closer to the formula's prediction."
+      },
+      {
+        "text": "All replicas share an identical software bug triggered by a specific date",
+        "explanation": "Correct. Identical software fails identically. Leap-second and date-rollover bugs have taken down whole fleets at once."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "The parallel formula for redundant replicas is:\n\n```formula\nA = 1 − ∏(1 − A_i)\nwhere\nA: the availability of the redundant group\nA_i: the availability of replica number i, as a fraction\ni: counts through the replicas, 1, 2, 3 and so on\n∏: capital pi, \"multiply together over every replica i\"\nIn words: the group is down only when every replica is down at once.\n```\n\nIt assumes:\n\n1. Failures are **independent**.\n2. Failover is **instant and always works**.\n\nCheck each option against those assumptions:\n\n| Option | Violates |\n|---|---|\n| Same rack | Independence |\n| Global config push | Independence |\n| 3-min failover | Instant failover |\n| 3 AZs | Neither (it helps) |\n| Shared date bug | Independence |\n\nExample: two 99% replicas → formula says 99.99%. If an additional independent shared cause is down 0.5% of the time, on top of the modelled individual failures, it sits in series with the pair:\n\n```formula\nA = A_sh × A_pair\nA = 0.995 × 0.9999 ≈ 0.9949\nwhere\nA: the real availability of the replicated service\nA_sh: the availability of the shared cause (a rack switch, say), 99.5% = 0.995\nA_pair: the formula's prediction for the pair, 99.99% = 0.9999\n≈: approximately equal to (rounded)\nIn words: a shared single point of failure caps the pair at roughly its own availability, 99.49% instead of 99.99%.\n```\n\n Do not add a common-cause rate twice if it is already included in the individual availability figures.",
+    "link": {
+      "title": "Embracing Risk (Google SRE book)",
+      "url": "https://sre.google/sre-book/embracing-risk/"
+    }
+  },
+  {
+    "id": "fund-availability-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You have three app servers, each 99% available and failing independently. At peak, **any two** together can carry the load, but one alone cannot. What is the tier's availability at peak?",
+    "options": [
+      {
+        "text": "About 99.9999%, because only one server needs to be up",
+        "explanation": "Incorrect. That's the parallel formula, which assumes one survivor can carry everything. Here one server alone is overloaded at peak."
+      },
+      {
+        "text": "About 97.0%, because all three must be up",
+        "explanation": "Incorrect. 0.99 × 0.99 × 0.99 ≈ 97.03% is the probability all three are up, but the tier survives losing one."
+      },
+      {
+        "text": "About 99.97%",
+        "explanation": "Correct. The tier is up when at least two are up: the chance all three are up plus the chance exactly two are up, 0.970299 + 0.029403, which is 0.999702."
+      },
+      {
+        "text": "About 99.99%, the same as two servers in parallel",
+        "explanation": "Incorrect. Two-in-parallel assumes either one can carry the load alone. This is a 2-of-3 system, a different calculation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count the states where at least 2 of 3 are up.\n\n```formula\nP_3 = a^3 = 0.99^3 = 0.970299\nP_2 = 3 × a^2 × (1 − a)\nP_2 = 3 × 0.99^2 × 0.01 = 0.029403\nA = P_3 + P_2 = 0.999702\nwhere\na: one server's availability, 0.99\n^: \"to the power of\": a^3 means a × a × a\nP_3: the probability all three servers are up\nP_2: the probability exactly two are up and one is down\n3: the number of ways to choose which server is the one that is down\nA: the tier's availability at peak (≈ 99.97%)\nIn words: add the chance that all three are up to the chance that exactly one is down.\n```\n\nLesson: redundancy only counts if the survivors have the capacity. This is why capacity planning is N+1: size the fleet so it still copes with one server or one zone gone.",
+    "link": {
+      "title": "N+1 redundancy (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/N%2B1_redundancy"
+    }
+  },
+  {
+    "id": "fund-availability-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service runs active-passive across two regions, each 99.9% available, with independent failures and enough standby capacity. The primary region has about **4 incidents a year**, and each failover to the standby (detect, decide, promote, update DNS) takes **15 minutes** of downtime. Roughly what yearly availability should you expect?",
+    "options": [
+      {
+        "text": "99.9999%, from 1 − 0.001²",
+        "explanation": "Incorrect. The parallel formula assumes instant failover. Here each switch costs 15 minutes, which dwarfs the time both regions are down together."
+      },
+      {
+        "text": "Just under 99.99%, about an hour of downtime a year",
+        "explanation": "Correct. 4 × 15 min = 60 min a year from failovers alone. 1 − 60 / 525,960 ≈ 99.989%. The failover time, not the regions' availability, sets the result."
+      },
+      {
+        "text": "99.9%, the same as one region",
+        "explanation": "Incorrect. 99.9% allows about 8.8 hours a year. Failing over in 15 minutes recovers most of that, so the pair does much better than one region."
+      },
+      {
+        "text": "99.8%, because two regions in series multiply",
+        "explanation": "Incorrect. Active-passive regions are redundant, not in series: a request needs only one of them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nD = n × t_f = 4 × 15 min = 60 min\nA = 1 − D / T\nA = 1 − 60 min / 525,960 min\nA ≈ 0.99989\nwhere\nD: yearly downtime from failovers, in minutes (min)\nn: failovers per year, 4\nt_f: downtime per failover, 15 min\nA: the yearly availability (≈ 99.989%)\nT: minutes in a 365.25-day year, 525,960\nmin: minute\n≈: approximately equal to (rounded)\nIn words: an hour of failover downtime in a year of 525,960 minutes leaves you just under four nines.\n```\n\nThe time both regions are down at once is negligible next to this. To improve, cut **MTTR** of the failover itself: automated detection, pre-warmed standby capacity, low DNS TTLs, or active-active so there is nothing to promote.",
+    "link": {
+      "title": "Disaster recovery options in the cloud (AWS)",
+      "url": "https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html"
+    }
+  }
+]

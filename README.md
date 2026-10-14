@@ -23,10 +23,17 @@ Pages. A desktop can use offline mode at `http://localhost:8000`. Over plain loc
 
 ## Reading and examples
 
+Lessons cover one small learning objective, usually 3–5 minutes, with a few questions about that unit.
+When an older long lesson is split, its saved completion date carries into its shorter lessons. Each short
+lesson can then be completed or revisited independently. Existing question answers and bookmarks remain,
+and old lesson links lead to the first unfinished replacement (or the first replacement when all are complete).
+
 The layout adapts to phone, tablet and desktop, with automatic dark mode and adjustable reading text.
 Lessons include a section navigator. Example panels support copying and an expanded view with zoom;
 real SVG diagrams use shapes, connectors and arrowheads, and keep the original text as a reference.
 Wide diagrams scroll within their panel; Expand provides a larger view with zoom. Reading, diagrams and expansion work offline once the app is cached. Copy also depends on browser clipboard support, permission and a secure context.
+Code comments explain meaningful operations and what demonstrated outputs show; copying an example includes
+those comments.
 
 Run `node --test scripts/test-renderer.mjs scripts/test-diagrams.mjs` to check example escaping, source preservation and safe
 rendering inside quiz choices, diagram topology and all generated diagram definitions. See `CONTENT_SPEC.md` for diagram and sequential-flow authoring.

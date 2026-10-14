@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fund-scalability-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API handles 1,200 requests/s. Each request holds a database connection for an average of 25 ms. Using Little's law, how many connections are in use on average?",
+    "options": [
+      {
+        "text": "300",
+        "explanation": "Incorrect. This is off by 10×, probably from using 0.25 s instead of 0.025 s. Always convert milliseconds to seconds carefully."
+      },
+      {
+        "text": "48",
+        "explanation": "Incorrect. 1,200 / 25 = 48 divides instead of multiplying, and mixes seconds with milliseconds."
+      },
+      {
+        "text": "30",
+        "explanation": "Correct. Little's law: 1,200 requests/s × 0.025 s = 30 connections in use on average. Size the pool with headroom above this, e.g. 40–50."
+      },
+      {
+        "text": "30,000",
+        "explanation": "Incorrect. This multiplies by 25 without converting ms to seconds. The units must match: requests per *second* × *seconds*."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Little's law says the number of things inside a system equals their arrival rate multiplied by how long each stays.\n\n```formula\nL = λ × W\nL = 1,200 /s × 0.025 s = 30\nwhere\nL: the average number of connections in use at once\nλ: lambda, the arrival rate, 1,200 requests per second (/s)\nW: the time each request holds a connection, 25 ms = 0.025 s\ns: second\nIn words: 1,200 requests a second, each holding a connection for a fortieth of a second, keep 30 connections busy.\n```\n\nSo on average 30 connections are busy. Add headroom for bursts and variance (say 40–50). If you run 6 app instances, that's ~8 connections each.\n\nSanity check on units: (requests/s) × s = requests, i.e. a count of things in flight.",
+    "link": {
+      "title": "Little's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Little%27s_law"
+    }
+  },
+  {
+    "id": "fund-scalability-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service runs at 2,000 req/s, 50 ms per request, with a 150-thread pool per instance across 2 instances. A downstream dependency degrades, and request time rises to 400 ms. What happens, according to Little's law?",
+    "options": [
+      {
+        "text": "Nothing; the thread pools have plenty of spare capacity",
+        "explanation": "Incorrect. That was true at 50 ms (100 threads needed out of 300). At 400 ms the required concurrency jumps 8×."
+      },
+      {
+        "text": "The service autoscales out of trouble immediately",
+        "explanation": "Incorrect. Autoscaling may not react quickly enough, and extra instances add more load to the already-degraded dependency. Timeouts, circuit breakers and bulkheads are the proper defence."
+      },
+      {
+        "text": "Throughput drops to 1,000 req/s but latency stays at 400 ms",
+        "explanation": "Incorrect. Maximum throughput with 300 threads at 400 ms is 750 req/s, and the excess queues, so latency rises well beyond 400 ms."
+      },
+      {
+        "text": "The service needs 800 concurrent threads but has 300, so requests queue, latency spirals and the service effectively fails",
+        "explanation": "Correct. By Little's law, 2,000 requests/s × 0.4 s = 800 threads are needed. With only 300 threads, each busy for 0.4 s, throughput is capped at 300 / 0.4 s = 750 req/s; the remaining load queues up and times out. A slow dependency has exhausted the caller's thread pool."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Use Little's law: multiply the arrival rate by the time each request holds a thread (symbols defined below).\n\n**Before:**\n```formula\nL = λ × W = 2,000 /s × 0.050 s = 100\nC = 2 × 150 = 300\nwhere\nL: the threads in use on average\nλ: lambda, the arrival rate, 2,000 requests per second (/s)\nW: the time each request holds a thread, 50 ms = 0.050 s\nC: the thread capacity, 2 instances × 150 threads\ns: second\nIn words: 100 of the 300 threads are busy. Comfortable.\n```\n\n**After degradation:**\n```formula\nL = 2,000 /s × 0.400 s = 800\nwhere\nL: the threads now needed on average\ns: second; each request now holds a thread for 400 ms = 0.400 s\nIn words: eight times the holding time needs eight times the threads.\n```\n\n**Max throughput** with 300 threads at 400 ms each, rearranging Little's law:\n```formula\nλ_max = C / W = 300 / 0.4 s = 750 /s\nwhere\nλ_max: the most requests per second the pool can complete\nC: the thread capacity, 300\nW: the time each request holds a thread, 0.4 s\ns: second\nIn words: 300 threads that each finish a request every 0.4 s complete at most 750 requests a second.\n```\n\n2,000 arrive, 750 can be served. 1,250 req/s pile into the queue, so waiting time grows every second until clients time out (and possibly retry, making it worse).\n\nDefences: aggressive timeouts on the dependency, a circuit breaker to fail fast, a separate bulkhead pool for that dependency, and load shedding.",
+    "link": {
+      "title": "Little's Law (Marc Brooker)",
+      "url": "https://brooker.co.za/blog/2018/06/20/littles-law.html"
+    }
+  }
+]

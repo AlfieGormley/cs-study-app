@@ -1,0 +1,69 @@
+[
+  {
+    "id": "fund-cap-pacelc-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A Cassandra table has replication factor **3**: every row is stored on 3 replicas. Which (write level, read level) combinations guarantee that a read overlaps with at least one replica holding the latest successful write? Select all that apply.",
+    "options": [
+      {
+        "text": "Write `QUORUM`, read `QUORUM`",
+        "explanation": "Correct. 2 replicas written plus 2 replicas read is 4, more than the 3 replicas, so every read set shares at least one replica with every write set."
+      },
+      {
+        "text": "Write `ONE`, read `ONE`",
+        "explanation": "Incorrect. 1 + 1 = 2 ≤ 3. The read can land on a replica the write hasn't reached yet. Fast and highly available (PA/EL), but reads can be stale."
+      },
+      {
+        "text": "Write `ALL`, read `ONE`",
+        "explanation": "Correct. 3 + 1 > 3: every replica has the write, so any one replica will do. The cost is availability: a write fails if any single replica is down."
+      },
+      {
+        "text": "Write `ONE`, read `QUORUM`",
+        "explanation": "Incorrect. 1 + 2 = 3, which is not greater than 3. The write may sit on the one replica the quorum read skips."
+      },
+      {
+        "text": "Write `QUORUM`, read `ONE`",
+        "explanation": "Incorrect. 2 + 1 = 3, not greater than 3. The single replica read may be the one that missed the write."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "The overlap rule:\n\n```formula\nW + R > N\nwhere\nW: the number of replicas that must acknowledge a write (ONE = 1, QUORUM = 2, ALL = 3 here)\nR: the number of replicas a read consults\nN: the replication factor, the number of replicas holding each row, 3\n>: is greater than\nIn words: if the replicas written plus the replicas read add up to more than the total, the two groups must share at least one replica.\n```\n\n| W | R | W+R | Overlap? |\n|---|---|---|---|\n| 2 | 2 | 4 | Yes |\n| 1 | 1 | 2 | No |\n| 3 | 1 | 4 | Yes |\n| 1 | 2 | 3 | No |\n| 2 | 1 | 3 | No |\n\nOverlap is necessary but not sufficient for linearisability: with last-write-wins timestamps and concurrent writes, Cassandra needs lightweight transactions for that. In PACELC terms, higher W and R move you from EL towards EC, paying latency on every request.",
+    "link": {
+      "title": "Dynamo-style replication and tunable consistency (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Service A updates a feature flag in ZooKeeper and then sends Service B a message saying \"flag updated\". Service B, connected to a different ZooKeeper server, reads the flag and sees the **old** value. ZooKeeper is usually called CP. What's going on?",
+    "options": [
+      {
+        "text": "ZooKeeper has lost the write because of a partition",
+        "explanation": "Incorrect. The write was committed by a quorum before A was told it succeeded. It isn't lost; B's server simply hasn't applied it yet."
+      },
+      {
+        "text": "ZooKeeper reads can lag; B should require at least the version A observed, waiting until it is visible",
+        "explanation": "Correct. A follower read can be stale. Passing A's version lets B reject older results. sync() improves freshness but is not a strict guarantee under all failures because it is not a quorum operation."
+      },
+      {
+        "text": "This can't happen in a CP system, so there must be a bug",
+        "explanation": "Incorrect. A 'CP' label says how a system behaves during a partition. It doesn't promise every read is linearisable in normal operation. That's exactly why the lesson says to describe actual guarantees."
+      },
+      {
+        "text": "Service B's clock is behind Service A's",
+        "explanation": "Incorrect. ZooKeeper orders updates with its own transaction IDs, not client wall clocks. The issue is replication lag on B's server."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the events:\n\n```\n1. A -> leader: set flag=on\n2. quorum commits, A gets OK\n3. A -> B: \"flag updated\"\n4. B -> follower F: get flag\n5. F hasn't applied step 2 yet\n   -> returns flag=off\n```\n\nThe message in step 3 travels outside ZooKeeper, so ZooKeeper's per-client ordering doesn't cover it. Fix: A includes the version number so B can wait for at least that version. A preceding `sync()` alone is not a strict linearisability guarantee under all failures.\n\nLesson: two systems both labelled CP can have very different read guarantees. That's the E branch of PACELC at work.",
+    "link": {
+      "title": "ZooKeeper Programmer's Guide",
+      "url": "https://zookeeper.apache.org/doc/current/zookeeperProgrammers.html"
+    }
+  }
+]

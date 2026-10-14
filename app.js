@@ -3,6 +3,7 @@ import { installExampleTools } from './examples.js';
 import { loadDiagrams } from './diagrams.js';
 import { installGlossary, searchGlossary, glossary } from './glossary.js';
 import { daysSinceCompletion, normalizeCompletionRange } from './practice.js';
+import { migrateLessonProgress, migratedLessonId, updateOriginalCompletion } from './lesson-progress.js';
 installGlossary();
 installExampleTools();
 
@@ -30,7 +31,7 @@ const badge = (level) => `<span class="badge ${esc(level)}">${esc(level)}</span>
 
 // ---------- Persistent state (per device) ----------
 const STORE_KEY = 'csstudy.v1';
-const defaults = () => ({ done: {}, answers: {}, bookmarks: {}, pos: {}, last: null, days: [], fontScale: 1, session: null, practiceMode: 'all', practiceAge: normalizeCompletionRange() });
+const defaults = () => ({ done: {}, answers: {}, bookmarks: {}, pos: {}, last: null, days: [], fontScale: 1, session: null, practiceMode: 'all', practiceAge: normalizeCompletionRange(), lessonMigrations: {} });
 let state = defaults();
 try {
   state = { ...defaults(), ...JSON.parse(localStorage.getItem(STORE_KEY) || '{}') };
@@ -69,7 +70,10 @@ const qKey = (s, q) => `${s}/${q}`;
 let index = null;
 const modules = new Map();
 async function getIndex() {
-  if (!index) index = await (await fetch('data/index.json')).json();
+  if (!index) {
+    index = await (await fetch('data/index.json')).json();
+    if (migrateLessonProgress(state, index)) save(true);
+  }
   return index;
 }
 async function getModule(s, m) {
@@ -274,7 +278,13 @@ async function moduleView(s, m) {
 async function lessonView(s, m, l) {
   const navigation = navigationId;
   await getIndex();
+  if (navigation !== navigationId) return;
   const meta = findModuleMeta(s, m);
+  if (meta?.migrations?.[l]) {
+    const canonical = migratedLessonId(s, meta, l, state.done);
+    location.replace(`#/l/${s}/${m}/${canonical}`);
+    return;
+  }
   const mod = await getModule(s, m).catch(() => null);
   if (navigation !== navigationId) return;
   const lesson = mod?.lessons.find((x) => x.id === l);
@@ -322,6 +332,7 @@ async function lessonView(s, m, l) {
   $('#done').onclick = (e) => {
     if (state.done[key]) delete state.done[key];
     else { state.done[key] = Date.now(); markDay(); }
+    updateOriginalCompletion(s, meta, lesson, state.done);
     save();
     const on = !!state.done[key];
     e.currentTarget.textContent = on ? '✓ Completed' : 'Mark as complete';
@@ -348,7 +359,9 @@ function startSession(items, title, back, { shuffle: mix = false, limit = 0 } = 
 
 async function resolveItem(item) {
   const mod = await getModule(item.s, item.m);
-  const lesson = mod.lessons.find((x) => x.id === item.l);
+  const lesson = mod.lessons.find((x) => x.id === item.l)
+    ?? mod.lessons.find((x) => x.questions.some((q) => q.id === item.qid));
+  if (lesson && item.l !== lesson.id) { item.l = lesson.id; save(); }
   return { lesson, q: lesson?.questions.find((x) => x.id === item.qid) };
 }
 
@@ -802,7 +815,7 @@ async function settingsView() {
     </div>
     <div class="section-label">Progress</div>
     <div class="list">
-      <div class="setting"><span>Lessons completed</span><b>${Object.keys(state.done).length}</b></div>
+      <div class="setting"><span>Lessons completed</span><b>${idx.subjects.reduce((n, s) => n + subjectProgress(s).done, 0)}</b></div>
       <div class="setting"><span>Questions answered</span><b>${st.answered}</b></div>
       <div class="setting"><span>Total attempts</span><b>${st.attempts}</b></div>
       <div class="setting"><button class="danger" id="reset">Reset all progress</button></div>

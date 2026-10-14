@@ -1,0 +1,130 @@
+[
+  {
+    "id": "fund-estimation-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Peak load is 30,000 req/s. Each request uses 15 ms of CPU. Servers have 32 cores and you target 50% peak CPU utilisation. You run in 3 availability zones and must survive losing one whole zone at peak. How many servers in total?",
+    "options": [
+      {
+        "text": "About 45",
+        "explanation": "Correct. 450 cores busy; at 50% target, 16 usable cores/server → ~28.1 servers. After losing a zone, the two survivors must carry it all, so each zone needs 28.1 / 2 ≈ 14.1 → 15 servers; × 3 zones = 45."
+      },
+      {
+        "text": "About 28",
+        "explanation": "Incorrect. This applies the 50% utilisation target (450 / 16 ≈ 28) but forgets that after losing a zone, the remaining two zones must carry everything."
+      },
+      {
+        "text": "About 15",
+        "explanation": "Incorrect. 450 cores / 32 ≈ 14 assumes 100% utilisation and no zone redundancy. At 100% CPU, latency explodes (queueing), and losing a zone would be an outage."
+      },
+      {
+        "text": "About 84",
+        "explanation": "Incorrect. This provisions the full load in every zone (3 × 28), as if two zones could fail at once. You only need to survive one zone failure, so the two survivors share the load."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "**Step 1: CPU needed** (multiply request rate by CPU time per request)\n```formula\nC = Q × t = 30,000 /s × 0.015 s = 450\nwhere\nC: CPU cores busy on average at peak\nQ: peak requests per second, 30,000\nt: CPU time per request, 15 ms = 0.015 s\ns: second\nIn words: 30,000 requests a second each needing 15 ms of CPU keep 450 cores busy.\n```\n\n**Step 2: usable cores per server**\n```formula\nc = 32 × 0.5 = 16\nn = C / c = 450 / 16 ≈ 28.1\nwhere\nc: usable cores per server: 32 cores at the 50% utilisation target\nC: busy cores needed, 450\nn: servers' worth of capacity needed\n≈: approximately equal to\nIn words: 450 cores of work spread over 16 usable cores per server needs about 28 servers.\n```\n\n**Step 3: zone failure (N+1 zones)**\nWith one zone gone, 2 zones must handle 28.1 servers' worth:\n```formula\nn_z = n / 2 = 28.1 / 2 ≈ 14.1 → 15\nn_t = n_z × 3 = 15 × 3 = 45\nwhere\nn_z: servers per zone, rounded up to a whole server\nn: servers' worth of capacity needed, 28.1\n→: rounds up to\nn_t: total servers across the 3 zones\n≈: approximately equal to\nIn words: each of the two surviving zones must carry half the load, and all three zones are built that big.\n```\n\nRounding each zone up gives 45. The general rule:\n```formula\nk = z / (z − 1) = 3 / 2 = 1.5\nwhere\nk: how many times the base capacity to provision so that losing one zone still leaves enough\nz: the number of zones, 3\nIn words: spread over z zones, the z − 1 survivors must carry everything, so provision z / (z − 1) times the base: 1.5× for 3 zones.\n```",
+    "link": {
+      "title": "Static stability using Availability Zones (Amazon Builders' Library)",
+      "url": "https://aws.amazon.com/builders-library/static-stability-using-availability-zones/"
+    }
+  },
+  {
+    "id": "fund-estimation-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You review a colleague's capacity estimate. The storage design uses three full replicas with an assumed 20–50% per-copy index/metadata overhead. Which of these steps are **errors** that need fixing? Select all that apply.",
+    "options": [
+      {
+        "text": "Converted a 1 Gbps link to 1 GB/s of capacity",
+        "explanation": "Correct, this is an error. 1 Gbps is 125 MB/s. Treating it as 1 GB/s overstates capacity eightfold."
+      },
+      {
+        "text": "Sized the database cluster for average QPS",
+        "explanation": "Correct, this is an error. Capacity must cover peak load, often 2–10x the average, or the system falls into the queueing cliff every busy hour."
+      },
+      {
+        "text": "Rounded 86,400 seconds per day to 100,000",
+        "explanation": "Not an error. This is a standard simplification, about 16% off, and well within the factor-of-2–3 tolerance of an estimate."
+      },
+      {
+        "text": "Treated 6 TB of raw records as needing 6 TB of disk",
+        "explanation": "Correct, this is an error. If the chosen design uses 3 full replicas and an assumed 20–50% per-copy index/metadata overhead, the estimate is 21.6–27 TB; actual factors must come from the design."
+      },
+      {
+        "text": "Reported the result as \"about 5k QPS\" rather than \"4,629.6 QPS\"",
+        "explanation": "Not an error. Rounding to a sensible figure is the right presentation; false precision misleads."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Go through the lesson's pitfall list:\n\n| Step | Pitfall? |\n|---|---|\n| 1 Gbps = 1 GB/s | Bits vs bytes |\n| Average QPS | Forgot peaks |\n| 86,400 -> 100,000 | Fine |\n| 6 TB raw = 6 TB | Forgot replicas |\n| \"about 5k\" | Fine |\n\nFor the storage one:\n\n```formula\nV_3 = 6 TB × 3 = 18 TB\nV_lo = 18 TB × 1.2 ≈ 22 TB\nV_hi = 18 TB × 1.5 = 27 TB\nwhere\nV_3: raw records stored as 3 full replicas\nV_lo, V_hi: the total with the low (20%) and high (50%) assumed index and metadata overhead\nTB: terabyte, 10^12 bytes\n≈: approximately equal to\nIn words: three copies triple the 6 TB, and overhead adds another fifth to a half.\n```",
+    "link": {
+      "title": "Back-of-the-envelope calculation (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Back-of-the-envelope_calculation"
+    }
+  },
+  {
+    "id": "fund-estimation-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A chat app has 50 M DAU. The average user keeps the app connected for 30 minutes a day, and peak concurrency is 2x the average. Each WebSocket server holds up to 50,000 connections. Roughly how many connection servers do you need at peak?",
+    "options": [
+      {
+        "text": "About 1,000",
+        "explanation": "Incorrect. 50 M / 50,000 = 1,000 assumes every daily user is connected at the same moment. Users are only online for 30 of the day's 1,440 minutes."
+      },
+      {
+        "text": "About 21",
+        "explanation": "Incorrect. That's enough for the *average* concurrency of ~1 M. You were told peak is twice that."
+      },
+      {
+        "text": "About 42",
+        "explanation": "Correct. Average concurrent = 50 M × (30 / 1,440) ≈ 1.04 M. Peak ≈ 2.1 M. 2.1 M / 50,000 ≈ 42 servers, before adding redundancy."
+      },
+      {
+        "text": "About 1",
+        "explanation": "Incorrect. This divides 30 *minutes* by 86,400 *seconds* (50 M × 30 / 86,400 ≈ 17k online). Mixing units makes the online share 60x too small."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Little's law: the number connected at once equals the rate at which users arrive multiplied by how long each stays.\n\n```formula\nL = λ × W\nL = 50 M / 1,440 min × 30 min\nL ≈ 1.04 M\nL_pk = 2 × L ≈ 2.1 M\nn = L_pk / 50,000 ≈ 42\nwhere\nL: average users connected at once\nλ: lambda, the arrival rate: 50 million users per day, i.e. per 1,440 minutes\nW: the time each user stays connected, 30 minutes\nM: million\nmin: minute; a day has 1,440 min\nL_pk: peak concurrent users, twice the average\nn: connection servers needed, at 50,000 connections each\n≈: approximately equal to\nIn words: each user is online about 2.1% of the day, so about a million are connected at once on average, two million at peak.\n```\n\nAdd headroom (servers shouldn't run at their connection limit) and zone redundancy, so perhaps 60–70 in practice.",
+    "link": {
+      "title": "Little's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Little%27s_law"
+    }
+  },
+  {
+    "id": "fund-estimation-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "10 million IoT devices each send one reading every 10 seconds. The time-series store replicates every write to **3 nodes**, and each node can sustain 20,000 writes/s at your target utilisation. How many nodes do you need for writes?",
+    "options": [
+      {
+        "text": "About 50",
+        "explanation": "Incorrect. 1 M writes/s / 20,000 = 50 counts each write once, but replication means every write is applied on 3 nodes."
+      },
+      {
+        "text": "About 150",
+        "explanation": "Correct. 10 M / 10 s = 1 M writes/s. With replication factor 3, nodes perform 3 M writes/s in total. 3 M / 20,000 = 150 nodes."
+      },
+      {
+        "text": "About 1,500",
+        "explanation": "Incorrect. This is 10x too many, probably from using 10 M writes/s, forgetting each device writes only once every 10 seconds."
+      },
+      {
+        "text": "About 25",
+        "explanation": "Incorrect. This divides by 60 as if devices reported once a minute (10 M / 60 × 3 / 20k ≈ 25). They report every 10 seconds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nw = 10 M / 10 s = 1 M /s\nw_3 = w × 3 = 3 M /s\nn = w_3 / c = 3,000,000 / 20,000 = 150\nwhere\nw: readings written per second: 10 million devices, one reading every 10 seconds each\nM: million\ns: second\nw_3: node-writes per second, since each write lands on 3 replicas\nc: writes per second one node sustains, 20,000\nn: nodes needed\nIn words: a million writes a second, each done three times, spread over nodes that manage 20,000 each, needs 150 nodes.\n```\n\nDesign implications: with the given 20,000 node-writes/s capacity, a single primary cannot keep up, so this design must partition the workload (e.g. by device ID). Batching readings on the device or at an ingest tier (say 6 readings per write) would cut the number of write operations sixfold if one operation stores six readings, but would not reduce the raw reading bytes sixfold; node throughput must be remeasured for the larger batches.",
+    "link": {
+      "title": "Dynamo-style replication (Apache Cassandra docs)",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  }
+]

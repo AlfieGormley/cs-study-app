@@ -1,0 +1,125 @@
+[
+  {
+    "id": "snd-waves-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An oscillator resets phase to zero every 64-sample block at 48 kHz while attempting a 440 Hz sine. The same truncated waveform repeats each block. What is its repetition frequency?",
+    "options": [
+      {
+        "text": "440 Hz",
+        "explanation": "440 Hz is the intended oscillator setting. Resetting every block replaces it with a waveform repeating at the block rate."
+      },
+      {
+        "text": "64 Hz",
+        "explanation": "64 is the block size in samples, not a frequency."
+      },
+      {
+        "text": "24,000 Hz",
+        "explanation": "That's the Nyquist frequency for 48 kHz, which isn't related to how often the reset happens."
+      },
+      {
+        "text": "750 Hz",
+        "explanation": "Correct. The identical 64-sample block repeats 48,000/64 = 750 times per second, producing a 750 Hz harmonic series rather than preserving a separate 440 Hz tone."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The repeated block is a waveform in its own right, and its frequency is how often it repeats.\n\n```formula\nt_b = N_b / fs\nt_b = 64 / 48000 s ≈ 1.333 ms\nr = 1 / t_b\nr = 48000 / 64 = 750 Hz\nwhere\nt_b: the duration of one block, in seconds (s) or milliseconds (ms)\nN_b: the block size, in samples; here 64\nfs: the sample rate, in samples per second; here 48,000\nr: the repetition rate of the block, in hertz (Hz)\ns: seconds\nms: milliseconds, thousandths of a second\nHz: hertz, repetitions per second\n≈: approximately equal to (rounded)\nIn words: one block lasts 64/48,000 of a second, so a waveform that restarts every block repeats 750 times a second.\n```\n\nA 440 Hz cycle is about 109.1 samples long, so 64 samples isn't a whole number of cycles. Each reset cuts the wave at a non-zero point, producing a click 750 times a second.\n\nThe fix is to store `phase` in the oscillator object so it carries over from one block to the next.",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  },
+  {
+    "id": "snd-waves-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An oscillator on a chip that only has fast 32-bit floats computes each sample directly from a sample counter `n`, which is a float32 incremented by 1 each sample:\n\n```formula\nx[n] = sin(2 × π × f × n / fs)\nwhere\nx[n]: the output sample number n\nsin: the sine function, taking radians\nπ: pi, about 3.14159\nf: the oscillator frequency, in hertz (Hz)\nn: the sample counter, stored as a 32-bit float\nfs: the sample rate, in samples per second; here 96,000\nIn words: the phase is recomputed from the ever-growing sample counter every sample.\n```\n\nAt a sample rate of 96 kHz, after about how long does `n + 1` stop changing `n`?",
+    "options": [
+      {
+        "text": "About 21.8 seconds",
+        "explanation": "This would correspond to 2²¹ at 96 kHz. float32 has a 24-bit significand (23 bits stored plus an implicit leading 1), so the limit is 2²⁴."
+      },
+      {
+        "text": "About 2.9 minutes",
+        "explanation": "Correct. float32 represents every integer exactly up to 2²⁴ = 16,777,216. At 96,000 samples per second that's 16,777,216 / 96,000 ≈ 174.8 s ≈ 2.9 min. Beyond it, adding 1 rounds back to the same value."
+      },
+      {
+        "text": "About 12.4 hours",
+        "explanation": "This is 2³²/96,000, the limit of a 32-bit unsigned *integer* counter. A float32 has only 24 bits of precision."
+      },
+      {
+        "text": "Never, because floats have a huge range",
+        "explanation": "The *range* of float32 goes up to about 3.4 × 10³⁸, but its *precision* is fixed at 24 significant bits. Large values have large gaps between neighbours."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. float32 = 1 sign bit, 8 exponent bits, 23 stored fraction bits plus an implicit leading 1 → 24 bits of precision.\n2. All integers up to 2²⁴ = 16,777,216 are exact. Above that, the spacing between floats is 2, so 2²⁴ + 1 rounds to 2²⁴.\n3. Convert that sample count to time:\n\n```formula\nt = 2^24 / fs\nt = 16777216 / 96000 s\nt ≈ 174.8 s ≈ 2.9 min\nwhere\nt: the time until the counter stops increasing, in seconds (s)\nfs: the sample rate, in samples per second; here 96,000\ns: seconds\nmin: minutes\n≈: approximately equal to (rounded)\nIn words: the counter runs out of exact integers after 16,777,216 samples, which at 96,000 samples a second is just under 3 minutes.\n```\n\nIn practice the phase loses precision well before that, because the calculation multiplies a large number (n) by a small one (f/fs). A wrapped phase accumulator in [0, 1) avoids the ever-growing counter problem, while ordinary increment and accumulation rounding remain.",
+    "link": {
+      "title": "Single-precision floating-point format — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Single-precision_floating-point_format"
+    }
+  },
+  {
+    "id": "snd-waves-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An oscillator is playing 440 Hz and must change to 880 Hz partway through a note. Which methods avoid a sudden jump in the *output value* (a click)? Select all that apply.",
+    "options": [
+      {
+        "text": "Keep the phase accumulator and set the increment to the 880 Hz value at once",
+        "explanation": "Correct for the output-value discontinuity asked about: phase is retained. The abrupt change in slope can still create a transient; smoothing pitch makes the transition gentler."
+      },
+      {
+        "text": "Keep the phase accumulator and ramp the increment from the 440 Hz value to the 880 Hz value over 50 ms",
+        "explanation": "Correct. This is a glide (portamento). The phase stays continuous throughout."
+      },
+      {
+        "text": "From the change onwards, compute `sin(2π·880·t)` using the absolute time t",
+        "explanation": "Wrong: a 880 Hz sine and a 440 Hz sine both computed from absolute time are at unrelated phases at the moment of the switch, so the output generally jumps."
+      },
+      {
+        "text": "Reset the phase to 0 and start the 880 Hz cycle from there",
+        "explanation": "Wrong: the output jumps from wherever the 440 Hz wave was to the sine of zero, which is 0. Unless the old wave happened to be at a zero crossing, that's a step."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Keeping phase continuous guarantees the same waveform value at a frequency switch. Specially timed phase resets can also leave that value unchanged, but do not guarantee continuity at arbitrary switch times.\n\n- Accumulator, instant increment change: phase at the change point is unchanged → output continuous. ✓\n- Accumulator, ramped increment: same, plus a smooth pitch change. ✓\n- Recomputing from absolute time: the phase jumps from one formula to the other. ✗\n- Resetting the phase: a deliberate discontinuity. ✗\n\nFor the absolute-time method, compare the phase just before and just after the switch:\n\n```formula\nθ_before = 2 × π × 440 × t\nθ_after = 2 × π × 880 × t\nwhere\nθ_before: the phase in radians used just before the switch\nθ_after: the phase in radians used just after it\nπ: pi, about 3.14159\nt: the absolute time since the note (or the program) started, in seconds\nIn words: at the switch the new phase is double the old one, so the two only point to the same place in the cycle by coincidence; usually the output steps.\n```\n\nThis is why oscillators are designed around a phase accumulator.",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  },
+  {
+    "id": "snd-waves-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A developer makes a glide by computing each output value directly from absolute time:\n\n```formula\nx = sin(2 × π × f(t) × t)\nwhere\nx: the output value\nsin: the sine function, taking radians\nπ: pi, about 3.14159\nf(t): the glide's frequency setting at time t, in hertz (Hz); it rises in a straight line from 440 Hz to 880 Hz between t = 10.0 s and t = 10.1 s\nt: the absolute time, in seconds (s)\nIn words: the code multiplies the current frequency setting by the total elapsed time to get the phase.\n```\n\nWhat is the *instantaneous* frequency halfway through, at t = 10.05 s?",
+    "options": [
+      {
+        "text": "660 Hz, the value of f(t) at that moment",
+        "explanation": "This assumes the instantaneous frequency equals f(t). It's actually the rate of change of the phase, and the phase here is f(t) × t, whose rate of change has a second term."
+      },
+      {
+        "text": "880 Hz, because the glide is heading there",
+        "explanation": "The target is reached at 10.1 s. And even then, the formula gives a different answer."
+      },
+      {
+        "text": "About 4,400 Hz",
+        "explanation": "4,400 Hz per second is the slope of f(t), how fast the setting rises. You need to multiply it by t (10.05 s) and add f(t)."
+      },
+      {
+        "text": "About 44,880 Hz",
+        "explanation": "Correct. The phase in cycles is f(t) × t. Its rate of change is f(t) plus t times the slope of f(t): 660 + 10.05 × 4,400 = 44,880 Hz. That's above the audio band, so the glide comes out as a burst of garbage."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Instantaneous frequency is the rate of change (the derivative) of phase, measured in cycles, with respect to time. The phase here is a product of two things that both depend on time, so the product rule from calculus gives two terms.\n\n```formula\nφ(t) = f(t) × t\ndφ/dt = f(t) + t × f′(t)\nf′(t) = (880 − 440) / 0.1 = 4400 Hz/s\ndφ/dt = 660 + 10.05 × 4400\ndφ/dt = 44880 Hz\nwhere\nφ(t): phi, the phase in cycles at time t\nf(t): the frequency setting at time t, in hertz (Hz); 660 Hz halfway through the glide\nt: the absolute time, in seconds (s); here 10.05 s\ndφ/dt: the rate of change of phase with respect to time (d means \"a tiny change in\"), which is the instantaneous frequency, in hertz (Hz)\nf′(t): f prime, the slope of the frequency setting: how fast it rises, in hertz per second (Hz/s)\nHz: hertz, cycles per second\nHz/s: hertz per second\nIn words: because the code multiplies the frequency setting by the total elapsed time, the frequency you hear is the setting plus elapsed time times how fast the setting is changing, which is enormous 10 seconds in.\n```\n\nThe later in the piece the glide happens, the worse it gets, because t multiplies the slope. A phase accumulator integrates the frequency sample by sample (adding the frequency divided by the sample rate each sample), so it follows the requested frequency sample by sample, subject to ordinary arithmetic rounding.",
+    "link": {
+      "title": "Numerically controlled oscillator — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Numerically_controlled_oscillator"
+    }
+  }
+]

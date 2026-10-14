@@ -14,11 +14,11 @@ computer science. Project: /Users/alfiegormley/Github/cs-study-app
 4. Write module.json, then each lesson's .md and .questions.json.
 
 Depth and quantity:
-- Each lesson is substantial (roughly 1,000–1,800 words): intuition first, then mechanics, then real-world use,
-  trade-offs and pitfalls. Use worked examples, code (Python unless the topic needs C/SQL/etc.), ASCII
-  diagrams, tables and callouts.
-- 10–12 questions per lesson, mixing levels (about 3 basic, 4–5 intermediate, 3–4 advanced) with at least two
-  `multi`. Favour applied questions: "what does this code output?", "what's the complexity of...?", "trace this
+- Each lesson covers one coherent learning objective in roughly 3–5 minutes. Preserve depth by using
+  several short lessons for a large topic. Use intuition, mechanics, real-world use, trade-offs, worked
+  examples, code (Python unless the topic needs C/SQL/etc.), diagrams, tables and callouts as relevant.
+- Aim for 2–4 focused questions per lesson. Use `multi` where useful. Favour applied questions:
+  "what does this code output?", "what's the complexity of...?", "trace this
   algorithm", scenario and calculation questions. Every workedExample walks through the reasoning step by step.
   Every option explanation names the specific misconception.
 - Lessons in a module go basic → advanced.
@@ -26,7 +26,8 @@ Depth and quantity:
 Formulas and glossary (mandatory, enforced by the build):
 - Read and follow `.claude/skills/writing-formulas/SKILL.md`. Every equation, relation or calculation that uses a
   symbol goes in a ```formula block that defines **every** symbol, unit and function, plus an "In words:" line.
-  Assume the reader knows no symbol. Run `node scripts/lint-formulas.mjs content/<subject>/<module-dir>` and
+  Assume basic algebra; define symbols' roles and units, use conventional multiplication and make grouping
+  explicit. Run `node scripts/lint-formulas.mjs content/<subject>/<module-dir>` and
   resolve every hit.
 - Read and follow `.claude/skills/glossary-terms/SKILL.md`. Write `glossary.json` for the module with an entry for
   every acronym, bolded term, unit, named component/protocol/algorithm and piece of jargon a beginner could pause
@@ -35,6 +36,8 @@ Formulas and glossary (mandatory, enforced by the build):
 
 Accuracy: be correct above all. Check facts you're unsure of. Trace any code you write by hand and make sure
 stated outputs and complexities are right.
+Add useful comments explaining non-obvious operations and the meaning of shown outputs. Verify those outputs,
+and keep comments within the code-width limits.
 
 Links: verify every URL with curl (200 only) or `node scripts/check-links.mjs content/<subject>/<module-dir>`.
 Use a scratch folder named after your module so you don't clash with other authors.

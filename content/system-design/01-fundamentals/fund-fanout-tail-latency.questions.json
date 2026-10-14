@@ -1,0 +1,100 @@
+[
+  {
+    "id": "fund-latency-throughput-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A search service fans each query out to 50 index shards in parallel and waits for all of them. Each shard independently has a 1% chance of responding slowly (> 500 ms). Roughly what fraction of **user queries** are slow?",
+    "options": [
+      {
+        "text": "1%",
+        "explanation": "Incorrect. That's the per-shard rate. Because the query waits for all 50 shards, it's slow if *any* shard is slow, which is far more likely."
+      },
+      {
+        "text": "About 39%",
+        "explanation": "Correct. The chance that no shard is slow is 0.99 raised to the power 50, about 0.605, so the chance that at least one is slow is about 1 − 0.605 = 0.395, i.e. 39.5%. Fan-out turns a per-server tail into a common user experience."
+      },
+      {
+        "text": "50%",
+        "explanation": "Incorrect. This simply multiplies 50 × 1%, which overcounts cases where several shards are slow at once. The correct calculation uses the complement: 1 minus the chance that all 50 are fast (0.99 raised to the power 50)."
+      },
+      {
+        "text": "0.01 to the power 50: effectively zero",
+        "explanation": "Incorrect. 0.01 raised to the power 50 is the probability that *all* 50 shards are slow simultaneously. The query only needs *one* slow shard to be slow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The query is slow if **at least one** shard is slow. It's easier to compute the complement, the chance that every shard is fast, and subtract it from 1:\n\n```formula\nP_all = (1 − q)^n = 0.99^50\nP_all = e^{n × ln(1 − q)}\nP_all ≈ e^{50 × (−0.01005)}\nP_all ≈ e^{−0.5025} ≈ 0.605\nP_slow = 1 − P_all ≈ 0.395\nwhere\nq: the probability that one shard is slow, 1% = 0.01\nn: the number of shards the query waits for, 50\nP_all: the probability that all 50 shards are fast\nP_slow: the probability that the query is slow (at least one shard slow)\n^: \"to the power of\": 0.99^50 means 50 copies of 0.99 multiplied together\ne: Euler's number, about 2.718, the base of natural logarithms\nln: the natural logarithm, the inverse of raising e to a power; ln(0.99) ≈ −0.01005\n≈: approximately equal to (rounded)\nIn words: each shard is fast 99% of the time, all fifty are fast only about 60% of the time, so about 40% of queries wait for a slow shard. The e and ln lines are just a way to work out 0.99^50 without a calculator's power key.\n```\n\nSo ~39.5% of queries are slow. This assumes shards are slow independently of each other. Mitigations: hedged requests to replica shards, returning partial results after a deadline, or reducing per-shard variance (GC tuning, isolating background work).",
+    "link": {
+      "title": "The Tail at Scale (Dean and Barroso, PDF)",
+      "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service's p95 latency is 40 ms and p99.9 is 900 ms, mostly due to occasional GC pauses on random replicas. You add **hedged requests**: if no response arrives within 40 ms, send a duplicate to another replica and take the first reply. What is the main effect and cost?",
+    "options": [
+      {
+        "text": "Tail latency gets worse because of the extra load",
+        "explanation": "Incorrect. With a ~5% load increase and independent slowness, hedging reduces the tail. It could backfire only if the system is near saturation or slowness is correlated across replicas."
+      },
+      {
+        "text": "Median latency halves, for 100% extra load",
+        "explanation": "Incorrect. Duplicating every request would double load; hedging only after the p95 time leaves the median unaffected because most requests finish before the hedge fires."
+      },
+      {
+        "text": "Tail latency drops sharply, for roughly 5% extra load",
+        "explanation": "Correct. Only requests slower than p95 (≈5%) trigger a hedge, so extra load is about 5%. Because slowness is caused by random, independent pauses, the duplicate usually lands on a healthy replica and returns quickly, cutting the tail dramatically. Google reported large p99.9 reductions with a few percent additional requests in the cited experiment; resource overhead depends on cancellation and the duplicated work."
+      },
+      {
+        "text": "No effect, because GC pauses affect all replicas simultaneously",
+        "explanation": "Incorrect. The scenario says pauses hit *random* replicas, i.e. they're independent. Hedging works precisely because a second replica is unlikely to be paused at the same moment."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Extra load:** a hedge fires only when the first attempt exceeds 40 ms (the p95), so ~5% of requests are duplicated: ~5% extra load.\n2. **Effect on the tail:** suppose a request hits a paused replica (the cause of the 900 ms tail). After 40 ms we send to another replica. If pauses are independent and affect, say, 1% of replicas at any instant, the hedge lands on a healthy replica about 99% of the time.\n3. **New tail:** a hedged request finishes in about 40 ms (the wait) plus one normal response time, so typically under ~100 ms instead of 900 ms. In *The Tail at Scale*, Google reports hedging cut a p99.9 from 1,800 ms to 74 ms for only 2% more requests.\n\nCaveats: requests must be idempotent (safe to send twice), and you should cancel the loser where possible. Tied requests specifically link duplicate requests so that when one starts processing, its queued counterpart can be cancelled.",
+    "link": {
+      "title": "The Tail at Scale (Dean and Barroso, PDF)",
+      "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"
+    }
+  },
+  {
+    "id": "fund-latency-throughput-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A search service fans out to 100 shards and its p99 is dominated by occasional slow shards. Traces confirm independent per-replica pauses dominate the tail, with no saturated CPU, I/O or worker-pool bottleneck; average CPU utilisation is about 25%. Which changes are likely to **reduce p99**? Select all that apply.",
+    "options": [
+      {
+        "text": "Hedge requests to a replica shard after the p95 time has elapsed",
+        "explanation": "Correct. Independent slow shards are exactly the case hedging fixes, for a few percent additional requests in the cited experiment; resource overhead depends on cancellation and the duplicated work."
+      },
+      {
+        "text": "Return partial results after a deadline if a few shards haven't replied",
+        "explanation": "Correct. For search, a result missing 1 of 100 shards is usually acceptable, and the deadline caps the tail directly."
+      },
+      {
+        "text": "Run compaction and other background work on a schedule or on isolated cores",
+        "explanation": "Correct. Background work is a common source of variability. Reducing variance at the source is one of Dean and Barroso's main recommendations."
+      },
+      {
+        "text": "Double the number of servers per shard while keeping fan-out the same",
+        "explanation": "Incorrect. The stated traces rule out saturation as the main cause here; 25% average CPU alone would not prove that. More capacity won't stop individual servers having pauses, so the fan-out maths is unchanged."
+      },
+      {
+        "text": "Raise the client timeout from 1 s to 5 s",
+        "explanation": "Incorrect. A longer timeout lets slow requests take even longer, which makes the tail worse, not better."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Use the stated trace evidence to identify the bottleneck. Low average CPU alone cannot rule out queueing at a lock, an I/O device, a hot core or a constrained worker pool. The tail comes from per-shard variability amplified by fan-out:\n\n```formula\nP_slow = 1 − 0.99^n\nP_slow = 1 − 0.99^100 ≈ 0.63\nwhere\nP_slow: the probability that a query waits on at least one slow shard\nn: the number of shards each query fans out to, 100\n0.99: the chance one shard responds in time (it is slow 1% of the time)\n^: \"to the power of\": 0.99^100 means 100 copies of 0.99 multiplied together\n≈: approximately equal to\nIn words: with 100 shards each slow 1% of the time, about 63% of queries meet at least one slow shard.\n```\n\nSo fix variability (isolate background work) or stop waiting for the slowest shard (hedging, deadlines with partial results). Adding capacity treats a queueing problem you don't have.",
+    "link": {
+      "title": "The Tail at Scale (Dean and Barroso, PDF)",
+      "url": "https://www.barroso.org/publications/TheTailAtScale.pdf"
+    }
+  }
+]

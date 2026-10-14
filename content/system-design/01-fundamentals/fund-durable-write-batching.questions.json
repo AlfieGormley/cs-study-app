@@ -1,0 +1,152 @@
+[
+  {
+    "id": "fund-tradeoffs-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team sets Postgres `synchronous_commit = off` to speed up writes. What's the risk?",
+    "options": [
+      {
+        "text": "A crash can lose the most recently acknowledged transactions (a fraction of a second's worth)",
+        "explanation": "Correct. Commits are acknowledged before the WAL is flushed to disk. If the server crashes, transactions in that window (up to about 3× `wal_writer_delay`, ~600 ms by default) are lost even though clients were told they succeeded."
+      },
+      {
+        "text": "The database may become corrupted after a crash",
+        "explanation": "Incorrect. Postgres docs are explicit: asynchronous commit doesn't risk corruption. The WAL is still written in order; only the most recent commits may be missing."
+      },
+      {
+        "text": "Reads will return stale data",
+        "explanation": "Incorrect. This setting affects when commits are acknowledged relative to disk flushing, not what readers on the same server see."
+      },
+      {
+        "text": "Writes will be rejected when the disk is busy",
+        "explanation": "Incorrect. The opposite: writes are acknowledged sooner because they don't wait on the disk flush."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline of one commit:\n\n```\non:  write WAL -> fsync -> ack\noff: write WAL -> ack\n     ... fsync later\n```\n\nWith `off`, if the machine crashes between the ack and the background flush, that transaction disappears. The window is bounded:\n\n```formula\nt_loss ≈ 3 × d_w = 3 × 200 ms = 600 ms\nwhere\nt_loss: the longest stretch of acknowledged commits a crash can lose, roughly\nd_w: the `wal_writer_delay` setting, how often the background WAL writer flushes; 200 ms by default\nms: millisecond, one thousandth of a second\n≈: approximately equal to; the Postgres documentation gives three times the delay as the worst case\nIn words: with the default settings, a crash can lose up to about the last 0.6 seconds of commits.\n```\n\nWhen it's acceptable: click logs, metrics, session touches. When it isn't: payments, orders. Postgres lets you set it per transaction, so you can use `off` only where losing a moment's data is tolerable.",
+    "link": {
+      "title": "Asynchronous commit (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/wal-async-commit.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Kafka producer for payment events uses `acks=1`. The topic has replication factor 3. What failure can lose an acknowledged event, and what's the fix?",
+    "options": [
+      {
+        "text": "Nothing can lose it; replication factor 3 guarantees three copies",
+        "explanation": "Incorrect. Replication factor says how many replicas exist eventually. With `acks=1`, the producer is acknowledged as soon as the leader writes it, before followers have copied it."
+      },
+      {
+        "text": "A consumer crash; fix by increasing the number of partitions",
+        "explanation": "Incorrect. Consumer crashes don't delete data from Kafka; the consumer resumes from its committed offset. Partition count affects parallelism, not durability."
+      },
+      {
+        "text": "The leader crashes after acknowledging but before followers replicate; fix with `acks=all` and `min.insync.replicas=2`",
+        "explanation": "Correct. A follower that hadn't yet copied the event becomes leader, and the event is gone. `acks=all` waits for all in-sync replicas, and `min.insync.replicas=2` ensures at least two copies exist before the ack, at the cost of slightly higher latency."
+      },
+      {
+        "text": "A network partition between producer and broker; fix with `acks=0`",
+        "explanation": "Incorrect. `acks=0` is less durable: the producer doesn't wait for any acknowledgement, so it can't even know a write failed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Sequence with `acks=1`:\n\n1. Producer sends event E to the leader (broker 1).\n2. Broker 1 appends E and acks.\n3. Broker 1 crashes before brokers 2 and 3 fetch E.\n4. Broker 2 becomes leader without E. **E is lost**, though the producer believes it succeeded.\n\nWith `acks=all` + `min.insync.replicas=2`:\n\n- The leader acks only after E is on at least 2 in-sync replicas.\n- Losing any one broker still leaves a copy.\n- Cost: extra in-cluster replication round trip (~1–2 ms across zones), and if fewer than 2 replicas are in sync, writes are rejected (choosing consistency over availability).\n\nNote: since Kafka 3.0 the producer defaults to `acks=all`, so `acks=1` here is an explicit choice someone made for speed. `min.insync.replicas` still defaults to 1 and must be raised on the topic.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Redis instance used as a job store has AOF persistence with `appendfsync everysec`. The server loses power. What loss window is normally associated with this setting, assuming healthy storage and normal background flushing?",
+    "options": [
+      {
+        "text": "No data is lost, because every write is in the append-only file",
+        "explanation": "Incorrect. Writes reach the AOF via the OS page cache. With `everysec`, they are only forced to disk about once a second, so the unflushed tail is lost on power failure."
+      },
+      {
+        "text": "Everything since the last RDB snapshot is lost",
+        "explanation": "Incorrect. That's the risk with RDB-only persistence. With AOF on, recovery replays the log up to its last flushed point."
+      },
+      {
+        "text": "Roughly the last second of writes is lost",
+        "explanation": "Correct. `everysec` fsyncs about once a second, which is the usual compromise: near-`no` speed with roughly a second of exposure in normal operation. Delayed flushes, disk stalls and persistence settings mean this is not a strict worst-case bound."
+      },
+      {
+        "text": "The AOF is corrupted and the whole dataset is lost",
+        "explanation": "Incorrect. A truncated final command can occur, but Redis can load a truncated AOF (dropping the incomplete tail) or repair it with `redis-check-aof`. You lose the tail, not the dataset."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Map the knob to the lesson's durability table:\n\n| `appendfsync` | Flushed | Exposure |\n|---|---|---|\n| `always` | Every write | ~None |\n| `everysec` | ~1/s | ~1 s |\n| `no` | When OS decides | OS- and workload-dependent; no Redis one-second bound |\n\nFor a job store, ask whether the producer durably tracks and can re-enqueue lost jobs. Idempotent processing helps with duplicate retries; it cannot recover a job that was lost. If this loss window is unacceptable, use `always` (and accept the latency) or a store designed for durable queues.",
+    "link": {
+      "title": "Redis persistence (Redis docs)",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A database's log disk takes **2 ms** per fsync. Each commit must be durable before it's acknowledged. Roughly how many commits per second can one log handle **without** group commit, and with batches of 50 commits per fsync?",
+    "options": [
+      {
+        "text": "500/s without; 25,000/s with",
+        "explanation": "Correct. One fsync per commit: 1 / 0.002 s = 500/s. Fifty commits per fsync: 500 × 50 = 25,000/s, at the cost of each commit waiting for the next batch flush."
+      },
+      {
+        "text": "2,000/s without; 4,000/s with",
+        "explanation": "Incorrect. 2 ms means 500 fsyncs per second, not 2,000. And batching multiplies by the batch size, not by 2."
+      },
+      {
+        "text": "500/s in both cases, because the disk speed is unchanged",
+        "explanation": "Incorrect. The disk does the same number of fsyncs, but each now makes 50 commits durable at once. That's the whole point of group commit."
+      },
+      {
+        "text": "Unlimited with group commit, because fsync is skipped",
+        "explanation": "Incorrect. Group commit still fsyncs; it just shares each one between many commits. Disabling synchronous commit acknowledges before the required WAL flush; it does not eliminate background flushing."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nX = b / t_f\nb = 1: X = 1 / 0.002 s = 500 /s\nb = 50: X = 50 / 0.002 s = 25,000 /s\nwhere\nX: the maximum commits per second the log can make durable\nb: commits made durable by each fsync (the batch size)\nt_f: the time one fsync takes, 2 ms = 0.002 s\ns: second\nIn words: the log manages 500 fsyncs a second; each one can carry one commit or fifty.\n```\n\nThe extra wait per commit depends on the batch trigger, queueing and flush completion; 2 ms is the assumed fsync duration, not a bound on the batch wait.\n\nThis is the latency-versus-throughput trade-off in miniature, and why durable systems like Kafka and Postgres can still sustain high write rates.",
+    "link": {
+      "title": "WAL configuration (PostgreSQL docs)",
+      "url": "https://www.postgresql.org/docs/current/wal-configuration.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Kafka producer sending many small messages raises `linger.ms` from 5 to 50. What is the main trade-off?",
+    "options": [
+      {
+        "text": "Messages become less durable",
+        "explanation": "Incorrect. Durability is governed by `acks` and replication, not by how long the producer waits to fill a batch."
+      },
+      {
+        "text": "Consumers must poll less often",
+        "explanation": "Incorrect. `linger.ms` is a producer setting; it doesn't change how consumers poll."
+      },
+      {
+        "text": "Throughput falls because the producer waits",
+        "explanation": "Incorrect. Waiting can improve throughput by filling batches, but the benefit depends on traffic, batch size and the existing bottleneck."
+      },
+      {
+        "text": "Larger batches mean higher throughput and less overhead, but the batching timer can wait up to 50 ms in total (45 ms more than the old setting), unless the batch fills sooner",
+        "explanation": "Correct. Batching amortises per-request overhead (and compresses better), raising throughput at the cost of per-message latency."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Assume one partition receives 1,000 messages/s, batches never fill before the timer, and no backpressure:\n\n```formula\nn = 1 / t_l\nm = r × t_l\nt_l = 5 ms: n = 200 /s, m = 5\nt_l = 50 ms: n = 20 /s, m = 50\nwhere\nn: batches sent per second, one per linger period\nm: messages in each batch\nr: the message rate, 1,000 messages per second\nt_l: the linger time (linger.ms), how long the producer waits to fill a batch: 5 ms = 0.005 s or 50 ms = 0.05 s\nms: millisecond, one thousandth of a second\ns: second\nIn words: waiting ten times longer sends ten times fewer, ten times bigger batches.\n```\n\nTen times fewer requests, better compression, and up to ~45 ms more latency per message. Good for log shipping; bad for a latency-sensitive request path.",
+    "link": {
+      "title": "Apache Kafka documentation",
+      "url": "https://kafka.apache.org/documentation/"
+    }
+  }
+]

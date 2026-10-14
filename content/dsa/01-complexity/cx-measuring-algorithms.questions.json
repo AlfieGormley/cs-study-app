@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cx-in-practice-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You time a function at input sizes n = 1,000, 2,000 and 4,000 and get 0.1 s, 0.8 s and 6.4 s. What complexity does this suggest?",
+    "options": [
+      {
+        "text": "O(n)",
+        "explanation": "Linear would double the time when n doubles. Here it goes up 8-fold."
+      },
+      {
+        "text": "O(n^3)",
+        "explanation": "Correct. Each doubling of n multiplies the time by 8 = 2^3 (2 × 2 × 2), so the exponent is 3."
+      },
+      {
+        "text": "O(n^2)",
+        "explanation": "Quadratic would give a ratio of 4 per doubling (0.1, 0.4, 1.6). The measured ratio is 8."
+      },
+      {
+        "text": "O(2^n)",
+        "explanation": "Exponential growth would explode far faster: going from n = 1,000 to 2,000 would multiply the time by 2 to the power 1,000, not 8."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Take the ratios, then turn the ratio into an exponent:\n\n```formula\n0.8 s / 0.1 s = 8\n6.4 s / 0.8 s = 8\nT(n) ≈ c × n^k\nT(2 × n) / T(n) ≈ 2^k = 8\nk = log_2(8) = 3\nwhere\nT(n): the measured running time at input size n, in seconds (s)\nc: an unknown constant (machine and implementation), which cancels in the ratio\nn: the input size\nk: the exponent of n in the running time\n2^k: k copies of 2 multiplied together\nlog_2(8): the base-2 logarithm of 8, which is 3 because 2 × 2 × 2 = 8\ns: seconds\n≈: approximately equal to\nIn words: doubling n multiplies the time by 8, which is 2 cubed, so the time grows like n cubed.\n```\n\nQuick reference: ratio 2 = linear, a bit over 2 = n log n, 4 = quadratic, 8 = cubic. This \"doubling experiment\" works for any polynomial-ish algorithm and is a good check against your analysis.",
+    "link": {
+      "title": "timeit — Python docs",
+      "url": "https://docs.python.org/3/library/timeit.html"
+    }
+  },
+  {
+    "id": "cx-in-practice-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "This function is documented as 'linear'. You time it at n = 50,000, 100,000 and 200,000 items and get 0.3 s, 1.2 s and 4.8 s. What is the most likely cause?\n\n```python\ndef drain(items):\n    out = []\n    while items:\n        # Front removal shifts items.\n        out.append(items.pop(0))\n    # Empty items; out keeps its order.\n    return out\n```",
+    "options": [
+      {
+        "text": "Python's `append` is O(n), so building `out` is quadratic",
+        "explanation": "`append` is O(1) amortised. Building the output list is linear."
+      },
+      {
+        "text": "The timings are noise; a ratio of 4 is close enough to 2",
+        "explanation": "A ratio of 4 measured consistently across two doublings is a clear signal of quadratic growth, not noise."
+      },
+      {
+        "text": "The garbage collector runs more often for larger lists, which is linear overhead",
+        "explanation": "GC overhead doesn't explain a consistent 4x ratio. The algorithmic cost of pop(0) does."
+      },
+      {
+        "text": "`items.pop(0)` shifts all remaining elements each time, so the loop is Θ(n^2); use `collections.deque.popleft()` or iterate directly",
+        "explanation": "Correct. Each pop(0) is O(len(items)), summing to about n × n / 2 shifts. The 4x ratio per doubling confirms quadratic behaviour. A deque's popleft is O(1)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Ratios: 1.2 / 0.3 = 4 and 4.8 / 1.2 = 4. If time grows like n^k, doubling n multiplies it by 2^k, and 2^k = 4 gives k = 2: quadratic.\n2. Find the hidden cost: `list.pop(0)` removes the first element and shifts the other `len - 1` pointers left.\n3. Add up the shifts:\n\n```formula\nS = (n − 1) + (n − 2) + … + 0\nS = n × (n − 1) / 2 ≈ n^2 / 2\nS(200000) ≈ 2 × 10^10\nwhere\nS: the total number of pointer shifts done by all the pop(0) calls\nn: the starting number of items\nn^2: n squared, n × n\n…: \"and so on\"\n≈: approximately equal to\nIn words: each pop shifts everything still in the list, and those shifts add up to about half of n squared: twenty billion for 200,000 items.\n```\n\n4. Fixes:\n   - `from collections import deque`, then `popleft()`: O(1) each.\n   - Or don't destroy the input: `out = list(items)`, then `items.clear()` if needed.\n\nThe doubling experiment caught a bug that a quick read of the code (\"one loop, so linear\") missed.",
+    "link": {
+      "title": "TimeComplexity — Python wiki",
+      "url": "https://wiki.python.org/moin/TimeComplexity"
+    }
+  },
+  {
+    "id": "cx-in-practice-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need the **100 highest scores** from a stream of n = 10^9 records, on a machine that can't hold the whole dataset in memory. Which approach is best?",
+    "options": [
+      {
+        "text": "Load everything into a list and sort it: O(n log n)",
+        "explanation": "The data doesn't fit in memory, and even if it did, sorting does far more work than needed: it orders all 10^9 records when you only need 100."
+      },
+      {
+        "text": "Quickselect for the 100th largest, then filter: O(n) average",
+        "explanation": "Quickselect is linear on average, but it needs all the data in memory (it partitions in place) and has a Θ(n^2) worst case. It isn't a streaming algorithm."
+      },
+      {
+        "text": "Keep a min-heap of size 100 while streaming: O(n log 100) time, O(100) memory",
+        "explanation": "Correct. Compare each new score with the minimum; only replacements need O(log 100) heap work. log2(100), the base-2 logarithm of 100, is about 7 tree levels, not an exact comparison count."
+      },
+      {
+        "text": "Compare each record against every record already seen",
+        "explanation": "That is Θ(n^2), around 10^9 × 10^9 / 2 = 5 × 10^17 comparisons, and also needs all the data in memory."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Constraints: n = 10^9, can't fit in memory, need only k = 100.\n2. Heap approach:\n   - Keep the best 100 seen so far in a min-heap.\n   - New record bigger than the heap's minimum? Pop the minimum and push the new record: O(log k).\n   - Otherwise skip it: O(1).\n3. Compare the costs:\n\n```formula\nW_heap = O(n × log_2(k))\nlog_2(100) ≈ 6.6\nW_sort ≈ n × log_2(n)\nW_sort ≈ 10^9 × 29.9 ≈ 3 × 10^10\nwhere\nW_heap: the worst-case work of the heap scan, with memory O(k)\nW_sort: the comparisons needed to sort everything\nn: the number of records, 10^9\nk: how many top scores to keep, 100\nlog_2: the base-2 logarithm: log_2(x) is the power you raise 2 to in order to get x\nO: Big-O, at most a constant times\n≈: approximately equal to\nIn words: the heap does at most about 7 levels of work per record and needs room for only 100 scores; sorting does about 30 per record and needs the whole dataset.\n```\n\nMost records are smaller than the current 100th best and are skipped after one comparison, so the heap scan is effectively a few passes' worth of work.\n\nIn Python, `heapq.nlargest(100, stream)` does exactly this. Thinking about which resources are scarce (here memory and a single pass) is as important as the Big-O of time.",
+    "link": {
+      "title": "Time complexity — USACO Guide",
+      "url": "https://usaco.guide/bronze/time-comp"
+    }
+  }
+]

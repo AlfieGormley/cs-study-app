@@ -1,0 +1,130 @@
+[
+  {
+    "id": "cx-analysing-code-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your ETL job de-duplicates 200,000 records with this function and takes minutes. Most records are distinct. What is the complexity, in terms of the number of records n, and what is the best fix?\n\n```python\ndef unique(items):\n    # Keep prior values in a list.\n    seen = []\n    out = []\n    for x in items:\n        if x not in seen:\n            seen.append(x)\n            out.append(x)\n    # Preserve first-occurrence order.\n    return out\n```\n\nAssume hashable records with constant-cost hashing and equality.",
+    "options": [
+      {
+        "text": "Θ(n); the slowness is Python overhead, so rewrite it in C",
+        "explanation": "The function is not linear. `x not in seen` scans the whole list each time, so a C rewrite would still be quadratic, just with a smaller constant."
+      },
+      {
+        "text": "Θ(n log n); sort the items first",
+        "explanation": "Nothing here sorts or halves anything. Sorting would make it Θ(n log n), but that is a fix, not the current cost, and it would lose the original order."
+      },
+      {
+        "text": "Θ(n^2); make `seen` a set so the membership test is O(1) on average",
+        "explanation": "Correct. With mostly distinct items, `seen` grows to about n, and each `in` scans it: about n × n / 2 comparisons. A set makes the test O(1) average, so the whole function is Θ(n) on average."
+      },
+      {
+        "text": "Θ(n^2); replace the list `out` with a deque",
+        "explanation": "`out.append` is already O(1) amortised. The quadratic cost comes from the membership scan on `seen`, not from building `out`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The loop runs n times.\n2. `x not in seen` on a list scans up to `len(seen)` items.\n3. With most items distinct, `seen` has about i items on iteration i, so add those scans up:\n\n```formula\nC ≈ 0 + 1 + … + (n − 1)\nC = n × (n − 1) / 2 ≈ n^2 / 2\nC ≈ (2 × 10^5)^2 / 2 = 2 × 10^10\nwhere\nC: the total number of equality comparisons in the membership tests\nn: the number of records, here 200,000 = 2 × 10^5\ni: the loop iteration number, from 0 to n − 1\nn^2: n squared, n × n\n…: \"and so on\"\n≈: approximately equal to\nIn words: each new record is compared with every distinct record seen so far, which adds up to about twenty billion comparisons for 200,000 records.\n```\n\n4. The elapsed time depends on the machine and equality operation.\n5. Fix: `seen = set()` and `seen.add(x)`. Each test is O(1) on average, so the expected total is Θ(n), proportional to the number of records; measure elapsed time for the actual records.\n\nThe algorithm is identical; only the data structure behind `in` changed.",
+    "link": {
+      "title": "TimeComplexity — Python wiki",
+      "url": "https://wiki.python.org/moin/TimeComplexity"
+    }
+  },
+  {
+    "id": "cx-analysing-code-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the naive recursive Fibonacci from the lesson, how many calls (including the first) does `fib(6)` make?\n\n```python\ndef fib(n):\n    if n < 2:\n        return n\n    # Both calls finish before addition.\n    return fib(n - 1) + fib(n - 2)\n```",
+    "options": [
+      {
+        "text": "6",
+        "explanation": "That would be linear recursion, one call per level. This function makes two recursive calls per level, so the count grows exponentially."
+      },
+      {
+        "text": "13",
+        "explanation": "13 is F(7), the 7th Fibonacci number, but the call count is 2 × F(7) − 1 = 25, which also counts the internal calls."
+      },
+      {
+        "text": "25",
+        "explanation": "Correct. Each call is itself plus the calls it makes, with fib(0) and fib(1) making 1 call each. That gives 1, 1, 3, 5, 9, 15, 25 for n = 0 to 6."
+      },
+      {
+        "text": "64",
+        "explanation": "This is 2^6 = 64, a full binary tree of depth 6. The fib tree is lopsided (the right branch is one level shorter each time), so it grows by a factor of about 1.618 per level, not 2."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count the calls with a recurrence: each call is 1, plus the calls it makes.\n\n```formula\nC(0) = 1\nC(1) = 1\nC(n) = 1 + C(n − 1) + C(n − 2)\nC(n) = 2 × F(n + 1) − 1\nC(6) = 2 × F(7) − 1 = 2 × 13 − 1 = 25\nwhere\nC(n): the number of calls fib(n) makes, including the first one\nn: the argument passed to fib\nF(n): the n-th Fibonacci number: 0, 1, 1, 2, 3, 5, 8, 13, … with F(0) = 0, F(1) = 1 and F(7) = 13\nIn words: a call for n costs itself plus all the calls for n − 1 and n − 2, which works out to just under twice a Fibonacci number.\n```\n\nBuild up:\n\n| n | C(n) |\n|---|---|\n| 0 | 1 |\n| 1 | 1 |\n| 2 | 1 + 1 + 1 = 3 |\n| 3 | 1 + 3 + 1 = 5 |\n| 4 | 1 + 5 + 3 = 9 |\n| 5 | 1 + 9 + 5 = 15 |\n| 6 | 1 + 15 + 9 = 25 |\n\nThe ratio between successive counts approaches the golden ratio, about 1.618: exponential growth.",
+    "link": {
+      "title": "Fibonacci sequence — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Fibonacci_sequence"
+    }
+  },
+  {
+    "id": "cx-analysing-code-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For a CPython list `lst` of length n, which operations take **Θ(n)** time, that is time growing in proportion to n (worst case, or amortised where that's the usual statement)? Select all that apply.",
+    "options": [
+      {
+        "text": "`x in lst`",
+        "explanation": "Correct. Membership on a list is a linear scan; the worst case (absent or last) checks all n items."
+      },
+      {
+        "text": "`lst.pop()`",
+        "explanation": "Removing the last element needs no shifting and is amortised O(1); an occasional shrinking reallocation can cost O(n)."
+      },
+      {
+        "text": "`lst.pop(0)`",
+        "explanation": "Correct. Removing the first element shifts the other n − 1 elements left by one slot."
+      },
+      {
+        "text": "`lst[n // 2]`",
+        "explanation": "Not Θ(n). A list is an array of pointers, so indexing anywhere is O(1)."
+      },
+      {
+        "text": "`lst[:]`",
+        "explanation": "Correct. A slice creates a new list and copies every pointer in the range, so a full slice is Θ(n)."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "A Python list is a contiguous array of pointers. Ask whether each operation must touch many elements:\n\n| Operation | Touches | Cost |\n|---|---|---|\n| `x in lst` | up to all n | Θ(n) |\n| `lst.pop()` | last slot, occasional resize | amortised O(1) |\n| `lst.pop(0)` | shifts n-1 | Θ(n) |\n| `lst[n // 2]` | one slot | O(1) |\n| `lst[:]` | copies n | Θ(n) |\n\nIf you need fast removal at both ends, `collections.deque` gives O(1) `popleft()`.",
+    "link": {
+      "title": "TimeComplexity — Python wiki",
+      "url": "https://wiki.python.org/moin/TimeComplexity"
+    }
+  },
+  {
+    "id": "cx-analysing-code-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What is the worst-case time complexity of this binary search on a sorted list of length n?\n\n```python\ndef has(arr, t):\n    if not arr:\n        return False\n    mid = len(arr) // 2\n    if arr[mid] == t:\n        return True\n    # Each slice creates a new list.\n    if arr[mid] < t:\n        return has(arr[mid+1:], t)\n    return has(arr[:mid], t)\n```",
+    "options": [
+      {
+        "text": "Θ(log n), because it halves the list each call",
+        "explanation": "The number of calls is about log n, but each call copies the half it recurses on. Slicing is not free."
+      },
+      {
+        "text": "Θ(n log n), because each of log n calls does O(n) work",
+        "explanation": "Each call does work proportional to its own (shrinking) input, not to the original n. The copies are n/2, n/4, n/8 and so on, which add up to about n."
+      },
+      {
+        "text": "Θ(n), because the slices copy n/2 + n/4 + ... elements, about n in total",
+        "explanation": "Correct. The roughly log2 n comparisons are swamped by the copying. A geometric series of halves sums to less than n."
+      },
+      {
+        "text": "Θ(1), because it may find the target at the first midpoint",
+        "explanation": "That is the best case. In the worst case (target absent), it recurses all the way to an empty list."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Calls: the length halves each time, so about log_2(n) calls (the base-2 logarithm of n).\n2. Work per call: one comparison, plus a slice that copies about half the current list.\n3. Add up the copying and the comparisons:\n\n```formula\ncopies ≈ n/2 + n/4 + n/8 + … + 1 < n\ncompares ≈ log_2(n)\nT(n) = Θ(log n) + Θ(n) = Θ(n)\nwhere\ncopies: the total number of list elements copied by all the slices\ncompares: the total number of comparisons\nT(n): the worst-case running time on a list of n items\nn: the length of the sorted list\nlog_2(n): the base-2 logarithm of n, about how many times n can be halved before reaching 1\nlog: logarithm (base 2 here; the base only changes a constant)\nΘ: Big-Theta: grows at exactly this rate, up to a constant factor\n…: \"and so on\"\n≈: approximately equal to\nIn words: the halves add up to just under n copies, which swamps the handful of comparisons, so the search is linear.\n```\n\nFor n = 10^6 (a million items), about 20 comparisons but roughly a million element copies, plus a new list allocation per call. The fix is to pass `lo` and `hi` indices rather than slicing, which restores Θ(log n).",
+    "link": {
+      "title": "Binary search — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Binary_search"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fund-cap-pacelc-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An e-commerce shopping cart uses an AP store: during a partition, both sides keep accepting cart updates. When the partition heals, the two versions of a user's cart conflict. Which resolution strategy is most appropriate?",
+    "options": [
+      {
+        "text": "Keep both versions and merge them, e.g. union of items (as Amazon's Dynamo did) or a CRDT",
+        "explanation": "Correct. Detecting concurrent versions (with version vectors) and merging preserves every add. The known side-effect: a deleted item can reappear, which Amazon judged acceptable since it's better than losing an add. An observed-remove set (OR-Set) preserves removal of observed add-tags, but a concurrent new add survives (add-wins semantics)."
+      },
+      {
+        "text": "Last-write-wins by timestamp",
+        "explanation": "Incorrect for a cart. LWW silently discards one side's updates (items the user added would vanish), and clock skew can make the 'wrong' write win. It's acceptable only when losing concurrent updates is harmless."
+      },
+      {
+        "text": "Reject both versions and empty the cart",
+        "explanation": "Incorrect. This destroys the user's data and defeats the purpose of choosing availability."
+      },
+      {
+        "text": "Switch the store to CP so conflicts can't happen",
+        "explanation": "Incorrect as a resolution strategy. A CP store would avoid conflicts but make carts unavailable to users on the minority side during partitions, which is the very trade-off the business rejected by choosing AP."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "During a partition:\n\n```\nA: {book} + pen -> {book, pen}\nB: {book} + mug -> {book, mug}\n```\n\nAfter healing, version vectors show the versions are **concurrent** (neither descends from the other).\n\n- **LWW:** keep {book, mug}, so the pen is lost. Bad.\n- **Union merge:** {book, pen, mug}. Every add preserved.\n\nEdge case: if side A removed `book` while B didn't, a naive union brings `book` back. An OR-Set CRDT tags each add with a unique id so removes of observed adds win, avoiding resurrection.\n\nThe principle: if you choose A, you must also choose a merge strategy that matches the business semantics.",
+    "link": {
+      "title": "Eventually Consistent (Werner Vogels)",
+      "url": "https://www.allthingsdistributed.com/2008/12/eventually_consistent.html"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "During a network partition, a bank's ATMs can't reach the central ledger. Each ATM independently keeps dispensing up to an illustrative £200 per card per day, log the withdrawals, and settle them when connectivity returns, charging overdraft fees where needed. How is this best described?",
+    "options": [
+      {
+        "text": "CP: the ATM preserves linearisability of the balance",
+        "explanation": "Incorrect. The ATM approves withdrawals without seeing the latest balance, so two ATMs could both approve against the same funds. That's not linearisable."
+      },
+      {
+        "text": "A violation of CAP, because the bank keeps both consistency and availability",
+        "explanation": "Incorrect. The bank doesn't keep linearisable consistency. It accepts temporary inconsistency, which is allowed."
+      },
+      {
+        "text": "CA, because the ATMs and the ledger are a single system",
+        "explanation": "Incorrect. They communicate over a network that has just partitioned. 'CA' isn't available to a distributed system."
+      },
+      {
+        "text": "Availability-oriented offline operation with local withdrawal limits and later reconciliation; a global per-card exposure cap needs additional coordination or preallocated rights",
+        "explanation": "Correct. Brewer discusses accepting bounded local risk and reconciling later. But independently disconnected ATMs cannot enforce one shared £200/card/day cap without preallocated spending rights or another coordination mechanism."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "An ATM can continue serving within a local limit and later reconcile its withdrawal log. If a card is used at several disconnected ATMs, each allowing £200 independently:\n\n```formula\nM = k × £200\nk = 3: M = 3 × £200 = £600\nwhere\nM: the most that can be withdrawn on one card in a day during the partition, in pounds (£)\nk: the number of disconnected ATMs the card is used at\nIn words: every disconnected ATM applies the limit on its own, so the limits add up.\n```\n\nThat is not a global £200 exposure guarantee. A stricter global bound requires spending rights allocated in advance or a reachable coordinating authority.\n\nThe £200 amount is a hypothetical exercise limit, not a sourced banking policy.",
+    "link": {
+      "title": "CAP Twelve Years Later (Eric Brewer, InfoQ)",
+      "url": "https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/"
+    }
+  }
+]

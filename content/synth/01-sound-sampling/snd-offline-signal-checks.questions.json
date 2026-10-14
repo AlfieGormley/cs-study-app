@@ -1,0 +1,70 @@
+[
+  {
+    "id": "snd-measuring-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your offline render has `np.mean(x) == 0.1` for a capture containing whole cycles of a steady waveform that should be symmetrical about zero. What does this indicate?",
+    "options": [
+      {
+        "text": "The signal is 0.1 Hz out of tune",
+        "explanation": "The mean of the samples has nothing to do with frequency."
+      },
+      {
+        "text": "The RMS level is 0.1",
+        "explanation": "RMS is the square root of the mean of the *squares*. The plain mean measures offset."
+      },
+      {
+        "text": "The signal has clipped 10% of the time",
+        "explanation": "Samples at or beyond nominal full scale can flag possible clipping for investigation; the mean cannot tell you the clipping count."
+      },
+      {
+        "text": "A DC offset: the waveform is shifted upwards by 0.1",
+        "explanation": "Correct. A symmetric audio waveform should average to about zero. A constant shift wastes headroom and can thump when audio starts or stops."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The mean (average) of a signal is its DC component, the 0 Hz bin of its spectrum.\n2. Sines, saws and squares centred on zero average to (almost) zero over whole cycles.\n3. A mean of 0.1 means everything is shifted up by 0.1: the positive peaks hit full scale 0.1 sooner (about 0.9 dB less headroom for a signal peaking at ±1), and a sudden start or stop makes a step of 0.1, a thump.\n\nCommon causes: a waveform formula off by a constant, an asymmetric clipper, or a bug in integer conversion.",
+    "link": {
+      "title": "DC bias — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/DC_bias"
+    }
+  },
+  {
+    "id": "snd-measuring-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which checks would catch these bugs in an offline render? Select all that apply.",
+    "options": [
+      {
+        "text": "`np.isfinite(x).all()` returning False catches a filter that blew up to NaN or infinity",
+        "explanation": "Correct. An unstable filter or a divide by zero leaves NaN/inf values, which this finds instantly."
+      },
+      {
+        "text": "Counting samples where `abs(x) >= 1.0` flags samples at or beyond nominal full scale for investigation",
+        "explanation": "Correct as a warning, not proof of clipping. −1 can be a valid endpoint; values above the output range must be clamped. Previously clipped samples may already be below this threshold after gain changes."
+      },
+      {
+        "text": "Checking the peak level catches an oscillator that's 10 cents flat",
+        "explanation": "Peak level is unaffected by small pitch errors. Use a frequency measurement (windowed FFT peak with fine bins, or zero crossings for a sine)."
+      },
+      {
+        "text": "Checking `len(x)` catches a block-processing loop that drops the last partial block",
+        "explanation": "Correct. A 1 s render at 48 kHz must have 48,000 samples; a dropped partial block makes it short."
+      },
+      {
+        "text": "Checking the RMS catches aliasing",
+        "explanation": "Aliases are low-level components at unexpected frequencies. They barely change the RMS; you need the spectrum, compared against a prediction."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Map each bug to the measurement that sees it:\n\n| Bug | Check |\n|---|---|\n| NaN/inf | `np.isfinite` |\n| Full-scale warnings | count `abs(x) >= 1` |\n| Pitch error | frequency measurement |\n| Missing samples | length |\n| Aliasing | spectrum vs prediction |\n\nPeak and RMS are blind to small pitch errors and low-level aliasing.",
+    "link": {
+      "title": "numpy.isfinite — NumPy documentation",
+      "url": "https://numpy.org/doc/stable/reference/generated/numpy.isfinite.html"
+    }
+  }
+]

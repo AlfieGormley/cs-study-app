@@ -1,0 +1,152 @@
+[
+  {
+    "id": "fund-scalability-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A batch job takes 100 minutes on one worker. Profiling shows 10 minutes is a serial step (merging results on one node) and the rest parallelises perfectly. Using Amdahl's law, how long does it take with 10 workers, and what's the best achievable with unlimited workers?",
+    "options": [
+      {
+        "text": "10 minutes with 10 workers; approaching 0 with unlimited",
+        "explanation": "Incorrect. This assumes the whole job parallelises. The 10-minute serial step runs at the same speed regardless of worker count."
+      },
+      {
+        "text": "28 minutes with 10 workers; 19 minutes with unlimited",
+        "explanation": "Incorrect. The arithmetic doesn't follow Amdahl's law. The unlimited-worker limit is simply the serial portion, 10 minutes."
+      },
+      {
+        "text": "55 minutes with 10 workers; 50 minutes with unlimited",
+        "explanation": "Incorrect. This halves the job rather than dividing the parallel part by the worker count."
+      },
+      {
+        "text": "19 minutes with 10 workers; 10 minutes with unlimited",
+        "explanation": "Correct. Serial 10 min + parallel 90/10 = 9 min → 19 min (5.3× speed-up). With infinite workers the parallel part → 0, leaving the 10-minute serial step: at most 10× speed-up."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Amdahl's law splits the job into a serial part and a parallel part. Here 90 of the 100 minutes parallelise (a parallel fraction of 0.9) and the 10-minute merge is serial (a serial fraction of 0.1).\n\n**10 workers:**\n```formula\nt_N = t_ser + t_par / N\nt_N = 10 min + 90 min / 10 = 19 min\nS = 100 min / 19 min ≈ 5.3\nwhere\nt_N: the job's running time with N workers, in minutes (min)\nt_ser: the serial part's time, 10 min, which no extra worker can shorten\nt_par: the parallelisable part's time on one worker, 90 min\nN: the number of workers, here 10\nS: the speed-up, one-worker time divided by the new time\nmin: minute\n≈: approximately equal to (rounded)\nIn words: the parallel part is shared out between the workers, the serial part isn't, and the speed-up compares the old time with the new.\n```\n\nCheck with Amdahl's formula:\n```formula\nS(N) = 1 / ((1 − p) + p / N)\nS(10) = 1 / (0.1 + 0.9 / 10)\nS(10) = 1 / 0.19 ≈ 5.26\nwhere\nS(N): the speed-up with N workers\np: the parallel fraction, 0.9\nN: the number of workers, 10\n≈: approximately equal to (rounded)\nIn words: the same answer from the general formula: the job runs in 0.19 of its original time.\n```\n\n**Unlimited workers:**\n```formula\nt_N → 10 min + 0 = 10 min\nS_max = 1 / (1 − p) = 1 / 0.1 = 10\nwhere\nt_N: the running time, which approaches the serial part as N grows\n→: \"tends to\": gets as close as you like as N grows without limit\nmin: minute\nS_max: the maximum possible speed-up, 10×\np: the parallel fraction, 0.9\nIn words: with endless workers the parallel part takes no time, leaving the 10-minute merge, so the job can never be more than 10 times faster.\n```\n\nLesson: to go faster, shrink the serial merge (e.g. tree-shaped merging), not add workers.",
+    "link": {
+      "title": "Amdahl's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+    }
+  },
+  {
+    "id": "fund-scalability-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You add app servers to a service that writes every request to a single Postgres primary. Throughput rises from 1 to 4 servers, then flattens from 4 to 16; monitoring shows the primary saturating while the other tiers have headroom. What's the most likely explanation?",
+    "options": [
+      {
+        "text": "The single write primary is now the serial bottleneck, so more app servers can't help",
+        "explanation": "Correct. This is Amdahl's law in practice: once the shared primary is saturated, it's the serial component. Options include batching writes, scaling the primary up, removing unnecessary writes, or partitioning the data."
+      },
+      {
+        "text": "The load balancer has a maximum of 4 backends",
+        "explanation": "Incorrect. Production load balancers handle hundreds or thousands of backends. If this were the cause, the extra servers simply wouldn't receive traffic, which you'd see immediately."
+      },
+      {
+        "text": "The app servers need more RAM",
+        "explanation": "Incorrect. If each app server were the bottleneck, adding more would keep increasing throughput. The flat curve shows the limit is something they all share."
+      },
+      {
+        "text": "Horizontal scaling never works for web apps",
+        "explanation": "Incorrect. It worked well from 1 to 4 servers. The plateau is caused by a specific shared bottleneck, not by horizontal scaling in general."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Read the curve:\n\n```\nservers: 1    2    4    8    16\nreq/s:   1k   2k   4k   4.2k 4.3k\n```\n\nLinear growth then a plateau means a **shared** resource saturated at ~4k req/s. Each request needs one write on the primary, so the primary caps throughput at ~4k writes/s however many app servers sit in front.\n\nDiagnose: primary CPU, I/O or lock waits near 100% at the plateau.\nFix: reduce writes per request, batch, scale the primary vertically, or shard writes across several primaries.",
+    "link": {
+      "title": "Amdahl's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+    }
+  },
+  {
+    "id": "fund-scalability-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A cluster's throughput is 10k req/s with 4 nodes, 18k with 8, and **15k with 16**. Every node broadcasts cache invalidations to every other node on each write; for the scaling thought experiment, per-node write generation remains fixed as nodes are added. What best explains the curve?",
+    "options": [
+      {
+        "text": "Amdahl's law: a serial component caps throughput",
+        "explanation": "Incorrect. Pure contention makes throughput flatten towards a ceiling. It never makes throughput *fall* when you add nodes."
+      },
+      {
+        "text": "Coherence overhead, as the Universal Scalability Law predicts: all-to-all invalidation traffic grows roughly with N², so adding nodes eventually reduces throughput",
+        "explanation": "Correct. With 16 nodes there are 120 node pairs, against 28 with 8 nodes. Coordination work grows faster than capacity, so the curve goes retrograde."
+      },
+      {
+        "text": "The load balancer is the bottleneck at 18k req/s",
+        "explanation": "Incorrect. A simple fixed-capacity load-balancer model predicts a plateau, but real load balancers can also incur backend-dependent overhead; the specified all-to-all work is the strongest clue here."
+      },
+      {
+        "text": "The new nodes are faulty",
+        "explanation": "Incorrect. Possible, but the scenario names a mechanism (all-to-all broadcasts) whose cost grows with the square of the node count. That's the systematic explanation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count the coordination paths:\n\n```formula\nP = N × (N − 1) / 2\nN = 4: P = 4 × 3 / 2 = 6\nN = 8: P = 8 × 7 / 2 = 28\nN = 16: P = 16 × 15 / 2 = 120\nwhere\nP: the number of node pairs that may exchange invalidation messages\nN: the number of nodes\nIn words: each node pairs with every other node, and dividing by 2 avoids counting each pair twice; the count grows roughly with the square of N.\n```\n\nDoubling from 8 to 16 nodes doubles capacity but more than quadruples pairwise chatter. Once that overhead outgrows the extra capacity, throughput falls.\n\nFixes: partition the cache so each key has one owner, use short TTLs instead of broadcasts, or send invalidations through a shared log that nodes consume.",
+    "link": {
+      "title": "Neil J. Gunther and the Universal Scalability Law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Neil_J._Gunther"
+    }
+  },
+  {
+    "id": "fund-scalability-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A data pipeline is 95% parallelisable and 5% serial. The business wants it **8x** faster. Using Amdahl's law, what is the minimum number of workers, and could it ever reach 25x?",
+    "options": [
+      {
+        "text": "8 workers; yes, with about 25 workers",
+        "explanation": "Incorrect. 8 workers give a speed-up of only 1 / (0.05 + 0.95 / 8) ≈ 5.9x, because the serial 5% doesn't speed up. And 25x is above the 20x ceiling."
+      },
+      {
+        "text": "13 workers; no, the ceiling is 20x",
+        "explanation": "Correct. With 13 workers the speed-up is 1 / (0.05 + 0.95 / 13) ≈ 8.1x, while 12 workers give ≈ 7.7x. With unlimited workers it approaches 1 / 0.05 = 20x, so 25x is impossible without shrinking the serial part."
+      },
+      {
+        "text": "160 workers; yes, with about 500 workers",
+        "explanation": "Incorrect. 160 workers would give about 17.9x, far more than needed for 8x, and no number of workers can exceed 20x."
+      },
+      {
+        "text": "It can't reach 8x at all",
+        "explanation": "Incorrect. The ceiling is 20x, so 8x is reachable with a modest number of workers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Set Amdahl's formula equal to the target and solve for the number of workers:\n\n```formula\nS(N) = 1 / ((1 − p) + p / N)\n8 = 1 / (0.05 + 0.95 / N)\n0.05 + 0.95 / N = 1 / 8 = 0.125\n0.95 / N = 0.075\nN = 0.95 / 0.075 ≈ 12.67\nwhere\nS(N): the speed-up with N workers, here the target 8\np: the parallel fraction, 0.95; the serial fraction 1 − p is 0.05\nN: the number of workers; round 12.67 up to 13, since you can't run part of a worker\n≈: approximately equal to (rounded)\nIn words: work out what share of the original time the job must shrink to (an eighth), subtract the serial part, and see how many workers shrink the parallel part enough.\n```\n\nCheck: 1 / (0.05 + 0.95 / 13) ≈ 8.12.\n\nThe ceiling with unlimited workers:\n```formula\nS_max = 1 / (1 − p) = 1 / 0.05 = 20\n1 − p < 1 / 25 = 0.04\nwhere\nS_max: the largest possible speed-up, 20×\np: the parallel fraction\n<: is less than\nIn words: the speed-up can never beat one over the serial fraction, so 25× needs a serial share below 4%.\n```\n\nTo reach 25x you must cut the serial share below 4%, for example by parallelising the merge step.",
+    "link": {
+      "title": "Amdahl's law (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
+    }
+  },
+  {
+    "id": "fund-scalability-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A product catalogue gets about 100 reads for every write, and its single database is struggling under the **read** load. What is the usual first step?",
+    "options": [
+      {
+        "text": "Add a cache in front of the database and read replicas behind it",
+        "explanation": "Correct. The tier table matches read-heavy data with caching and read replicas. If the measured working set is cacheable, hits reduce database reads and replicas can serve eligible misses, while writes stay on one simple primary."
+      },
+      {
+        "text": "Shard the database by product ID",
+        "explanation": "Incorrect. Sharding spreads writes and data, but it's complex and the problem here is reads, which have cheaper fixes."
+      },
+      {
+        "text": "Put the database behind a CDN",
+        "explanation": "Incorrect. CDNs serve static or cacheable HTTP content at the edge. They don't sit in front of a database's query interface."
+      },
+      {
+        "text": "Add more stateless app servers",
+        "explanation": "Incorrect. The app servers aren't the bottleneck; more of them would just send more queries to the struggling database."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Match the technique to the bottleneck:\n\n| Bottleneck | Technique |\n|---|---|\n| Static content | CDN |\n| Stateless app CPU | More app servers |\n| Read-heavy data | Cache + replicas |\n| Write-heavy data | Sharding |\n\nAt 100:1, a cache with a 90% hit rate removes 90% of database reads in one step. Replicas then absorb the misses. Sharding is reserved for when writes or data size outgrow one primary.",
+    "link": {
+      "title": "Read replicas (Amazon RDS)",
+      "url": "https://aws.amazon.com/rds/features/read-replicas/"
+    }
+  }
+]

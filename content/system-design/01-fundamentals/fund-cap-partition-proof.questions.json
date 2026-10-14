@@ -1,0 +1,122 @@
+[
+  {
+    "id": "fund-cap-pacelc-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does the CAP theorem actually say?",
+    "options": [
+      {
+        "text": "A distributed system can only ever have two of consistency, availability and partition tolerance",
+        "explanation": "Incorrect. This 'pick two' framing is the common misreading. Partitions aren't something you choose to tolerate; they happen. The trade-off only bites during a partition."
+      },
+      {
+        "text": "Strongly consistent databases are always slower than eventually consistent ones",
+        "explanation": "Incorrect. That's closer to the 'else' half of PACELC (latency vs consistency), and even then it's a tendency, not a theorem. CAP says nothing about latency."
+      },
+      {
+        "text": "During a network partition, a system must choose between linearisable consistency and availability",
+        "explanation": "Correct. Gilbert and Lynch proved that if the network is partitioned, a node can't both answer every request and guarantee it reflects the latest write. Without a partition, both are possible."
+      },
+      {
+        "text": "Relational databases are CA and NoSQL databases are AP",
+        "explanation": "Incorrect. CAP doesn't classify database families. A replicated Postgres cluster faces the same partition trade-off as any NoSQL store, and many NoSQL stores (etcd, HBase) prefer consistency."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Walk through the two-node proof:\n\n1. Nodes N1 and N2 replicate key `v` (initially 0).\n2. The link between them is cut (partition).\n3. A client writes `v = 1` to N1 and receives success before the following read starts.\n4. Another client reads `v` from N2.\n\nN2 must either answer `0` (available, not consistent) or refuse/wait (consistent, not available). It can't do both. With no partition, N1 would have replicated to N2 first and both properties hold.",
+    "link": {
+      "title": "Brewer's Conjecture and the Feasibility of CAP (Gilbert and Lynch, PDF)",
+      "url": "https://users.ece.cmu.edu/~adrian/731-sp04/readings/GL-cap.pdf"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the CAP theorem, what does **C** (consistency) mean?",
+    "options": [
+      {
+        "text": "Linearisability: every read returns the most recent completed write, as if there were one copy",
+        "explanation": "Correct. Gilbert and Lynch define consistency as atomic (linearisable) consistency. Weaker models such as causal consistency can remain available during partitions."
+      },
+      {
+        "text": "All replicas eventually converge to the same value",
+        "explanation": "Incorrect. That's eventual consistency, a much weaker guarantee. CAP's C is the strongest single-object model."
+      },
+      {
+        "text": "Transactions preserve database constraints such as foreign keys",
+        "explanation": "Incorrect. That's the C in ACID, a completely different property about invariants within transactions."
+      },
+      {
+        "text": "The data format is the same on every node",
+        "explanation": "Incorrect. Schema or format uniformity has nothing to do with CAP, which is about the values reads observe."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the meanings:\n\n| Phrase | Meaning |\n|---|---|\n| ACID consistency | Invariants hold after each transaction |\n| Eventual consistency | Replicas converge if writes stop |\n| CAP consistency | Linearisability |\n\nLinearisability means once a write completes, every subsequent read (from any client, any node) sees it or something newer. That requires coordination between replicas, which is exactly what a partition prevents.",
+    "link": {
+      "title": "CAP theorem (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/CAP_theorem"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 5-node etcd cluster (Raft) is split by a partition into a group of 3 and a group of 2. A client connected to the 2-node side tries to write. What happens, and how does CAP classify this?",
+    "options": [
+      {
+        "text": "The write succeeds on the 2-node side and is merged later: AP behaviour",
+        "explanation": "Incorrect. Raft requires a majority (3 of 5) to commit. The 2-node side can't form a majority, so it can't accept writes."
+      },
+      {
+        "text": "Both sides accept writes and the higher term wins after healing",
+        "explanation": "Incorrect. That would be split-brain. Raft prevents it precisely by requiring a majority for leadership and commits; terms don't resolve conflicting committed writes."
+      },
+      {
+        "text": "The whole cluster stops accepting writes until the partition heals",
+        "explanation": "Incorrect. The 3-node side has a majority, so it can elect a leader and continue committing writes. Only the minority is unavailable."
+      },
+      {
+        "text": "The write fails (or blocks) on the minority side; the majority side keeps working: CP behaviour",
+        "explanation": "Correct. Raft sacrifices CAP-availability on the minority side to keep linearisability. The 3-node side elects a leader and continues, so clients that can reach it still succeed."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "First, the size of a majority:\n\n```formula\nQ = ⌊N / 2⌋ + 1\nQ = ⌊5 / 2⌋ + 1 = 2 + 1 = 3\nwhere\nQ: the majority (quorum) size, the fewest nodes that make up more than half the cluster\nN: the number of nodes in the cluster, 5\n⌊ ⌋: floor: round down to a whole number (2.5 becomes 2)\nIn words: a majority is just over half, so two groups can never both have one.\n```\n\n1. A majority of 5 nodes is **3**.\n2. Partition: side A has 3 nodes, side B has 2.\n3. Side A can elect a leader (3 votes) and commit writes (3 acks).\n4. Side B can't get 3 votes or 3 acks, so writes there fail or time out. Any old leader on side B steps down when it can't reach a majority.\n\nIn CAP terms: non-failing nodes on side B can't serve writes, so it's not CAP-available; but it stays linearisable, so it's CP. In practice, availability is still high, because clients can reconnect to side A.",
+    "link": {
+      "title": "Please stop calling databases CP or AP (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2015/05/11/please-stop-calling-databases-cp-or-ap.html"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q12",
+    "level": "basic",
+    "type": "single",
+    "prompt": "From the point of view of the other nodes in a cluster, which of these is **indistinguishable from a network partition**?",
+    "options": [
+      {
+        "text": "A node is in a 20-second garbage-collection pause",
+        "explanation": "Correct. Peers just see messages go unanswered. They can't tell a paused, slow or crashed node from one cut off by the network, so they must treat it the same way."
+      },
+      {
+        "text": "A node returns a value written a second ago",
+        "explanation": "Incorrect. That's a staleness symptom, not a communication failure. The node is responding."
+      },
+      {
+        "text": "A node's CPU is at 40% utilisation",
+        "explanation": "Incorrect. A moderately loaded node still answers promptly; nothing looks like lost messages."
+      },
+      {
+        "text": "A client sends a malformed request",
+        "explanation": "Incorrect. That's an application error, answered with an error response. Nodes are still communicating."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A partition is defined by what nodes observe: messages between them don't arrive (in time). Ask of each option: *do peers stop hearing from the node?*\n\n| Situation | Peers hear nothing? |\n|---|---|\n| 20 s GC pause | Yes |\n| Stale value | No |\n| 40% CPU | No |\n| Malformed request | No |\n\nThis is why partition handling isn't optional: even inside one datacentre, pauses and overloaded switches produce the same symptoms as a cut cable.",
+    "link": {
+      "title": "Network partition (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Network_partition"
+    }
+  }
+]

@@ -1,0 +1,130 @@
+[
+  {
+    "id": "fund-tradeoffs-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A 6-person start-up needs full-text product search. Which considerations favour using a **managed** search service rather than running a self-managed Elasticsearch cluster? Select all that apply.",
+    "options": [
+      {
+        "text": "No one on the team has operated a search cluster before",
+        "explanation": "Correct. Running Elasticsearch well (shard sizing, JVM heap, upgrades, snapshots, recovering a red cluster) is specialist work. A managed service shifts much of that operational burden to the provider."
+      },
+      {
+        "text": "Search is a supporting feature, not the product's core differentiator",
+        "explanation": "Correct. Undifferentiated heavy lifting is the classic case for buying. Engineering time is better spent on what makes the product unique."
+      },
+      {
+        "text": "They need to launch in two months",
+        "explanation": "Correct. Managed services shorten time to market: provisioning takes minutes rather than weeks of cluster setup, hardening and runbooks."
+      },
+      {
+        "text": "They'll index 50 PB and query it at 1 M QPS from day one",
+        "explanation": "Incorrect. Extreme scale is the condition where vendor pricing can become untenable and building your own starts to make sense. It's also wildly implausible for a 6-person start-up."
+      },
+      {
+        "text": "Managed services never have outages",
+        "explanation": "Incorrect. Managed services fail too; they have SLAs (e.g. 99.9%) not guarantees. The benefit is shifting operational work, not eliminating failure."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Run the build-vs-buy checklist:\n\n| Factor | This team | Favours |\n|---|---|---|\n| Expertise | None in search | Buy |\n| Differentiator? | No | Buy |\n| Time pressure | 2 months | Buy |\n| Scale | Moderate (realistically) | Buy |\n\nOptions D and E are wrong: D describes the case for *building*, and E is a false belief. Even after buying, you still own the integration, index design and a fallback plan for when the service is degraded.",
+    "link": {
+      "title": "AWS Well-Architected Framework",
+      "url": "https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team wants to split their monolith into 12 microservices \"to improve performance\". The monolith serves 800 req/s with p99 of 120 ms, and one team of 7 owns all of it. What's the most accurate assessment?",
+    "options": [
+      {
+        "text": "Poor fit: microservices mainly buy independent deployment for many teams; here they'd add network hops, distributed failures and operational load without addressing performance",
+        "explanation": "Correct. With one team, the organisational benefit is minimal. A request crossing 5 services sequentially adds several ms plus tail-latency amplification, and every service adds deploy, monitoring and on-call surface. Profile the monolith to find the actual bottleneck first."
+      },
+      {
+        "text": "Good idea: microservices are faster because each is smaller",
+        "explanation": "Incorrect. Smaller code doesn't make requests faster. Replacing in-process calls (nanoseconds) with network calls (~0.5 ms+ each, plus serialisation) usually makes latency worse."
+      },
+      {
+        "text": "Good idea, as long as all services share one database",
+        "explanation": "Incorrect. A shared database couples the services' schemas and deployments, giving you the costs of distribution without the independence benefit (a 'distributed monolith')."
+      },
+      {
+        "text": "Poor fit: microservices can't handle more than 800 req/s",
+        "explanation": "Incorrect. Microservices can handle huge throughput. The objection is about cost and complexity versus benefit, not capacity."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Quantify the latency effect. Suppose a request currently makes 5 in-process calls and would instead make 5 sequential network calls:\n\n```formula\nt_hop ≈ 0.5 ms + 0.5 ms = 1 ms\nΔ ≈ 5 × t_hop ≈ 5 ms\nwhere\nt_hop: the added cost of one network call: about 0.5 ms round trip (RTT) plus about 0.5 ms to serialise and deserialise (serde) the data\nΔ: delta, the time added to a typical (p50) request by 5 sequential hops\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: five network hops at about a millisecond each add about 5 ms to the median request.\n```\n\nAt the tail, it's worse. If each service has a 1% chance of a 50 ms hiccup:\n\n```formula\nP = 1 − 0.99^5 ≈ 0.049\nwhere\nP: the probability that at least one of the 5 services hiccups on a request\n0.99: the chance one service doesn't hiccup\n^: \"to the power of\": 0.99^5 means 5 copies of 0.99 multiplied together\n≈: approximately equal to\nIn words: about 1 request in 20 meets at least one hiccup.\n```\n\nSo these hiccups now land well inside the slowest 5% of requests and push up p99.\n\nWhat microservices *do* buy: independent deploys and scaling per team. With one team of 7, that's little benefit. Better first steps: profile, fix slow queries, add caching, and modularise the monolith internally.",
+    "link": {
+      "title": "Microservice Trade-Offs (Martin Fowler)",
+      "url": "https://martinfowler.com/articles/microservice-trade-offs.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You must pick a primary key scheme and the public REST API shape for a new platform, and also choose the cache TTL for product pages. Using the 'one-way vs two-way door' idea, how should effort be distributed?",
+    "options": [
+      {
+        "text": "Spend equal effort on all three; every decision matters",
+        "explanation": "Incorrect. Equal effort wastes time on cheap, reversible decisions and under-invests in expensive ones. Effort should scale with the cost of reversal."
+      },
+      {
+        "text": "Spend most effort on the cache TTL because it directly affects user-facing latency",
+        "explanation": "Incorrect. A TTL is a config value you can change in minutes and observe the effect immediately. It's the textbook two-way door."
+      },
+      {
+        "text": "Defer all three until after launch so real data can guide them",
+        "explanation": "Incorrect. You can't launch without a key scheme or an API. Deferring is only sensible for decisions that don't block launch and are cheap to make later."
+      },
+      {
+        "text": "Spend most effort on the key scheme and API, which are hard to reverse; choose a sensible TTL quickly and tune it from metrics",
+        "explanation": "Correct. Changing primary keys means migrating every row and every reference; changing a public API breaks clients you don't control and requires versioning and long deprecation. Both are one-way doors. The TTL is a two-way door: pick a reasonable default (e.g. 60 s), measure hit rate and staleness complaints, adjust."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Estimate the cost of reversing each decision later:\n\n| Decision | To reverse | Door |\n|---|---|---|\n| Primary keys | Migrate all data + foreign keys + external refs | One-way |\n| Public API | Version, migrate clients, deprecate over months | One-way |\n| Cache TTL | Edit config, redeploy | Two-way |\n\nSo invest design time where reversal is expensive. For keys: e.g. choose non-sequential IDs that don't leak volume and that work when sharded. For the API: resource naming, pagination and versioning. For TTL: ship a default and iterate.",
+    "link": {
+      "title": "MonolithFirst (Martin Fowler)",
+      "url": "https://martinfowler.com/bliki/MonolithFirst.html"
+    }
+  },
+  {
+    "id": "fund-tradeoffs-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You ingest 200 TB of logs a month into a managed service charging £0.50/GB, about £1.2 M a year. Self-hosting is estimated at £300k/year of infrastructure plus 4 engineers at £120k each. What is the soundest conclusion?",
+    "options": [
+      {
+        "text": "Self-hosting saves £1.2 M a year, so do it immediately",
+        "explanation": "Incorrect. That ignores the self-hosting costs entirely. The saving is the difference between the two totals."
+      },
+      {
+        "text": "Self-hosting looks about £420k a year cheaper; it's worth considering if the team can run it reliably and you've included migration, on-call and the opportunity cost of those engineers",
+        "explanation": "Correct. £300k + 4 × £120k = £780k versus £1.2 M. At this scale vendor pricing is becoming the problem, which is when building makes sense, but the estimate must include hidden costs and the risk of running it badly."
+      },
+      {
+        "text": "Always buy; building infrastructure is never justified",
+        "explanation": "Incorrect. The lesson's build-vs-buy table says scale can tip the balance; Dropbox's Magic Pocket is a real example."
+      },
+      {
+        "text": "The managed service is cheaper once engineer salaries are counted",
+        "explanation": "Incorrect. Even with salaries, self-hosting (£780k) comes out below the managed bill (£1.2 M) on these numbers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nC_m = 200,000 GB × £0.50/GB × 12\nC_m = £100k × 12 = £1.2M\nC_s = £300k + 4 × £120k = £780k\nS = C_m − C_s ≈ £420k\nwhere\nC_m: the managed service's yearly cost: 200 TB = 200,000 GB a month at £0.50 per GB, for 12 months\nGB: gigabyte, 10^9 bytes\nk: thousand\nM: million\nC_s: the self-hosted yearly cost: £300k of infrastructure plus 4 engineers at £120k\nS: the yearly saving from self-hosting\n≈: approximately equal to\nIn words: self-hosting costs about £780k against £1.2M, a saving of about £420k a year before hidden costs.\n```\n\nThen apply the template: gain (£420k), give up (engineering focus, vendor features, someone else's on-call), why acceptable (logging is high volume, well understood), what would change our mind (a big vendor discount, or losing the engineers who run it). Negotiating with the vendor using these numbers is often the first move.",
+    "link": {
+      "title": "Scaling to exabytes and beyond: Magic Pocket (Dropbox)",
+      "url": "https://dropbox.tech/infrastructure/magic-pocket-infrastructure"
+    }
+  }
+]

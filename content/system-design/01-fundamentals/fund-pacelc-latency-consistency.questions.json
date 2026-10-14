@@ -1,0 +1,130 @@
+[
+  {
+    "id": "fund-cap-pacelc-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your database runs in a single region with no network problems at all. Why might you still choose eventually consistent reads?",
+    "options": [
+      {
+        "text": "CAP forces you to give up consistency even without partitions",
+        "explanation": "Incorrect. CAP only constrains behaviour during a partition. Without one, you can have both consistency and availability."
+      },
+      {
+        "text": "Eventually consistent reads are more durable",
+        "explanation": "Incorrect. Read consistency doesn't affect durability; durability depends on how writes are persisted and replicated."
+      },
+      {
+        "text": "Eventually consistent reads can offer lower latency or cost, illustrating the else trade-off in PACELC",
+        "explanation": "Correct. Strong reads must enforce the API's latest-write ordering, sometimes by contacting a leader or quorum. Eventually consistent reads may use nearby replicas with less coordination. DynamoDB, for example, charges strongly consistent reads at twice the capacity of eventually consistent ones."
+      },
+      {
+        "text": "Strongly consistent reads aren't possible in a single region",
+        "explanation": "Incorrect. Strong reads are perfectly possible in a single region; DynamoDB, Postgres primary reads and etcd all provide them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "PACELC: **E**lse (no partition) → choose **L**atency or **C**onsistency.\n\nIn DynamoDB:\n\n| Read type | Capacity (≤4 KB item) | Freshness contract |\n|---|---|---|\n| Eventually consistent | 0.5 RCU | May miss recent writes |\n| Strongly consistent | 1 RCU | Reflects prior successful writes |\n\nAt 100k reads/s, that's 50k vs 100k RCUs: double the cost, plus potentially more latency. If the data is a product description that changes once a week, eventually consistent reads may be suitable if stale descriptions are acceptable.\n\nThese are provisioned read-capacity costs for ordinary item reads; transactional reads have a different cost. Strong reads are supported on tables and local secondary indexes, not global secondary indexes or streams.",
+    "link": {
+      "title": "DynamoDB read consistency (AWS docs)",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about CAP and PACELC are **correct**? Select all that apply.",
+    "options": [
+      {
+        "text": "A correctly implemented single-node database can provide both linearisable operations and responses to every request while the node remains healthy",
+        "explanation": "Correct. There is no inter-replica partition, but the API and concurrency control must still implement linearizability. The node is also a single point of failure."
+      },
+      {
+        "text": "A system choosing consistency during partitions can still achieve 99.99% availability in practice",
+        "explanation": "Correct. CAP availability requires *every* non-failing node to respond. Quorum systems refuse only on the minority side, and partitions are rare, so measured availability can be very high (Spanner targets 99.999%)."
+      },
+      {
+        "text": "PACELC's 'else' branch says that, without partitions, stronger consistency typically costs latency",
+        "explanation": "Correct. Coordinating replicas (quorum writes, leader reads) requires extra round trips, which is the everyday cost of consistency."
+      },
+      {
+        "text": "If a system isn't linearisable, it must be CAP-available",
+        "explanation": "Incorrect. Many systems are neither. For example, a leader-follower database with async replication isn't linearisable (stale follower reads) and also refuses writes when followers can't reach the leader."
+      },
+      {
+        "text": "CAP lets you trade a little consistency for a little availability continuously",
+        "explanation": "Incorrect. CAP is a binary impossibility result about linearisability and total availability. Continuous trade-offs (bounded staleness, quorum sizes) exist, but they're outside what CAP itself describes."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Test each claim against the precise definitions:\n\n- C means linearisable; A means every non-failing node responds; P means the network may lose arbitrary messages.\n\n1. Single node: C and A can coexist with an appropriate implementation; neither follows solely from having one node. True as qualified.\n2. CP + high availability: CAP-A is all-or-nothing per node; operational availability is measured over requests. True.\n3. PACELC else-branch: true by definition.\n4. Non-linearisable ⇒ available? No; async leader-follower is a counterexample.\n5. CAP is binary, not a dial. False.",
+    "link": {
+      "title": "CAP Twelve Years Later (Eric Brewer, InfoQ)",
+      "url": "https://www.infoq.com/articles/cap-twelve-years-later-how-the-rules-have-changed/"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You deploy a database with replicas in London and Virginia (round trip ~80 ms). Writes must be linearisable, and no acknowledged write may be lost if either region is destroyed. What's the **minimum** write latency you should expect, and which PACELC classification applies?",
+    "options": [
+      {
+        "text": "~1 ms; PA/EL",
+        "explanation": "Incorrect. 1 ms is a local commit. Surviving loss of a whole region means another region must hold the write before it's acknowledged, which needs at least one cross-region round trip."
+      },
+      {
+        "text": "At least ~80 ms (one cross-region round trip); PC/EC",
+        "explanation": "Correct. To survive losing the region that took the write, the write must be durably replicated to another region before the ack: ≥ 1 RTT ≈ 80 ms. Choosing consistency over latency in normal operation is EC; refusing writes without a quorum during partitions is PC."
+      },
+      {
+        "text": "~40 ms (half a round trip); PC/EL",
+        "explanation": "Incorrect. The write must reach the other region *and* the confirmation must come back before acknowledging the client, so you pay a full round trip, not one way. And waiting for it is choosing C over L, i.e. EC."
+      },
+      {
+        "text": "~160 ms (two round trips); PA/EC",
+        "explanation": "Incorrect. A well-designed protocol (e.g. a Paxos/Raft leader in one region, with a quorum including another) needs one round trip in the common case. And a linearisable system can't be PA."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Requirement:** survive losing either region → a write must be stored in ≥2 regions before acknowledging.\n2. **Physics:** the leader in London sends the write to Virginia and waits for the ack:\n   ```\n   London -> Virginia : ~40 ms\n   Virginia -> London : ~40 ms\n   minimum commit    : ~80 ms\n   ```\n   (Practical setups often use 3 regions so a majority survives one region loss.)\n3. **Classification:**\n   - Normal operation: you accept ~80 ms to stay consistent → **EC**.\n   - During a partition: the side without a quorum refuses writes → **PC**.\n\nThis is the Spanner / CockroachDB multi-region trade-off. If 80 ms writes are unacceptable, relax a requirement: async replication (risk losing recent writes on region failure) or partition data by home region.",
+    "link": {
+      "title": "Consistency Tradeoffs in Modern Distributed Database System Design (Abadi, PDF)",
+      "url": "https://www.cs.umd.edu/~abadi/papers/abadi-pacelc.pdf"
+    }
+  },
+  {
+    "id": "fund-cap-pacelc-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A global profile service has its primary database in Virginia and an asynchronous read replica in Sydney. Sydney users read locally (~5 ms) instead of from Virginia (~200 ms round trip). Which PACELC choice is this, and what anomaly must you handle?",
+    "options": [
+      {
+        "text": "PC: during partitions the replica refuses reads",
+        "explanation": "Incorrect. The scenario is about normal operation, with no partition, and an async replica would usually keep serving (stale) reads during a partition anyway."
+      },
+      {
+        "text": "EC: users always see their latest update",
+        "explanation": "Incorrect. Reading from an asynchronous replica is the opposite of choosing consistency. Recent writes may not have arrived yet."
+      },
+      {
+        "text": "EL: a user may not see their own edit immediately after saving it, so you need read-your-writes handling",
+        "explanation": "Correct. Choosing local reads trades consistency for latency. The classic fix is to route a user's reads to the primary for a short time after they write, or to read from the replica only once it has caught up to the user's last write position."
+      },
+      {
+        "text": "It's CA, because there's only one primary",
+        "explanation": "Incorrect. There are two nodes connected over a long network link. The system is distributed, so 'CA' doesn't apply."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "No partition is involved, so this is the **E** branch: latency versus consistency.\n\n```\nlocal read:   ~5 ms, maybe stale\nprimary read: ~200 ms, fresh\n```\n\nThe painful anomaly is a user editing their profile, being redirected to the profile page and seeing the old version. Read-your-writes options:\n\n- After a write, pin reads to the primary until the replica has caught up; a fixed 10-second pin is only a heuristic and cannot guarantee read-your-writes.\n- Record the write's log position; read from the replica only once it has replayed past it.\n\nEveryone else's reads can stay local and fast.",
+    "link": {
+      "title": "PACELC theorem (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/PACELC_theorem"
+    }
+  }
+]

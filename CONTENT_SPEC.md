@@ -47,7 +47,11 @@ Intro paragraph...
 ```
 
 - `level` is one of `basic`, `intermediate`, `advanced`.
-- `minutes` is an honest reading time.
+- `minutes` is an honest reading time. Keep each lesson to one manageable learning objective, usually
+  3–5 minutes. Split longer topics into neighbouring short lessons instead of removing their depth.
+- When splitting an existing lesson, use new ids, put `sourceLesson: <old-id>` in each new lesson's
+  frontmatter and add `"migrations": { "<old-id>": ["<new-id>", "<new-id>"] }` to `module.json`.
+  Preserve original files as archival source and keep existing question ids stable when moving them.
 - Every lesson **must** end with `## Key takeaways` and `## Further reading` sections.
 
 ### Supported Markdown (the app has its own small renderer, so stick to this)
@@ -123,7 +127,9 @@ A JSON array. Each question:
 
 - `type` is `single` (`answer` is the 0-based index of the one correct option) or `multi`
   ("select all that apply"; `answer` is an array of indices).
-- **Aim for 10–12 questions per lesson**: roughly 3 basic, 4–5 intermediate and 3–4 advanced, with at least two `multi`.
+- **Aim for 2–4 focused questions per short lesson**, testing the concepts that unit teaches. Use `multi`
+  where appropriate. Preserve existing questions when splitting a long lesson; 1–5 per unit is acceptable
+  when this keeps related questions together. Add a verified question if a new unit otherwise has none.
 - 3–5 options. **Every** option needs an `explanation` saying why it's correct or incorrect.
   Don't just say "Incorrect"; name the misconception.
 - `workedExample` is required. Work through the reasoning step by step, the way a tutor would, with
@@ -167,6 +173,8 @@ Other authors work at the same time. Put any temporary files in your own folder
 - Accuracy matters more than anything. If you aren't sure of a specific figure or default, check the source, or
   phrase it as approximate ("around", "typically"). Don't invent statistics.
 - Code examples use Python unless the topic calls for another language (C for OS internals, SQL for databases, etc.).
+  Add concise comments explaining meaningful operations and the meaning of demonstrated outputs.
+  Keep executable behaviour intact and verify any claimed output. Avoid comments that repeat obvious syntax.
 
 ## Technical terms
 

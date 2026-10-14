@@ -1,0 +1,160 @@
+[
+  {
+    "id": "cx-in-practice-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a target machine with 64-byte cache lines, an array traversal benchmarks faster than traversing a linked list whose nodes are scattered across the heap. Both sum the same n integers in Θ(n) time (time proportional to n). What explains a possible gap?",
+    "options": [
+      {
+        "text": "The array has contiguous access and spatial locality; the list follows dependent pointers that may miss in cache",
+        "explanation": "Correct. The next node address depends on loading the current node. This serial dependency and poor spatial locality can make scattered traversal slower; exact latency requires target-specific measurement."
+      },
+      {
+        "text": "Linked lists are Θ(n log n) to traverse because of pointer overhead",
+        "explanation": "Traversal is still Θ(n), proportional to the number of nodes n: one step per node. The difference is in the constant factor per step, not the growth rate."
+      },
+      {
+        "text": "The compiler can't optimise linked list code at all",
+        "explanation": "Compilers optimise both fine. The bottleneck is memory latency, which no compiler can remove from a pointer-chasing loop."
+      },
+      {
+        "text": "Linked lists store more data, so there's more to add up",
+        "explanation": "The values added are the same. The extra pointer per node increases memory traffic a bit, but the main cost is latency from scattered, dependent accesses."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. With 4-byte integers and 64-byte lines, a line can contain 64 / 4 = 16 adjacent array values.\n2. A scattered list may need a new line for each node, and its next address depends on the current load.\n3. These access patterns can have different costs despite the same Θ(n) count.\n\nContent gap: no reproducible hardware measurements support a universal cache-miss latency or speed ratio, so those numeric claims are omitted.",
+    "link": {
+      "title": "Latency numbers every programmer should know",
+      "url": "https://gist.github.com/jboner/2841832"
+    }
+  },
+  {
+    "id": "cx-in-practice-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`a` is an N x N array of `double` in C (row-major), with N = 10,000. Assume 8-byte doubles, 64-byte cache lines, a matrix larger than cache, and no compiler loop interchange. Which loop has better sequential locality?\n\n```c\n/* A: adjacent columns in one row. */\nfor (i = 0; i < N; i++)\n  for (j = 0; j < N; j++)\n    s += a[i][j];\n\n/* B: same column in successive rows. */\nfor (j = 0; j < N; j++)\n  for (i = 0; i < N; i++)\n    s += a[i][j];\n```",
+    "options": [
+      {
+        "text": "B, because it accesses columns, which are stored contiguously in C",
+        "explanation": "C stores arrays row by row, not column by column. Fortran, MATLAB and Julia are column-major, but C is row-major."
+      },
+      {
+        "text": "Neither: both are Θ(N^2) and do the same additions",
+        "explanation": "They have the same complexity, Θ(N^2) (N × N additions), and the same arithmetic, but very different memory access patterns. Big-O doesn't capture that."
+      },
+      {
+        "text": "A walks sequentially; B advances by 80,000 bytes in its inner loop",
+        "explanation": "Correct. In A, consecutive accesses are 8 bytes apart, so each cache line serves 8 doubles and the prefetcher helps. In B, consecutive accesses are a full row (10,000 × 8 bytes) apart."
+      },
+      {
+        "text": "A, because it has fewer loop iterations",
+        "explanation": "Both do exactly 10,000 × 10,000 = 10^8 iterations. The difference is entirely in the cost per memory access."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Work out where each element lives in memory:\n\n```formula\naddr(i, j) = (i × N + j) × 8 B\nstep_A = 8 B\nstep_B = N × 8 B = 80000 B\nsize = N × N × 8 B = 8 × 10^8 B = 800 MB\nwhere\naddr(i, j): the byte offset of a[i][j] from the start of the array\ni: the row index\nj: the column index\nN: the number of rows and of columns, 10,000\nstep_A: the distance between consecutive accesses in loop A (j changes fastest)\nstep_B: the distance between consecutive accesses in loop B (i changes fastest)\nsize: the total size of the array\nB: bytes; each double is 8 bytes\nMB: megabytes; 1 MB = 10^6 bytes\nIn words: in row-major order neighbours in a row are 8 bytes apart, but neighbours in a column are a whole row, 80,000 bytes, apart.\n```\n\n1. Loop A: one 64-byte cache line serves 64 / 8 = 8 accesses.\n2. Loop B: a different cache line every time.\n3. Whether B retains lines for the next column depends on cache capacity, associativity and the column working set; exceeding total cache capacity alone does not prove eviction.\n\nResult: A has better spatial locality; measure the actual speed difference. Same Θ(N^2), very different constants.",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  },
+  {
+    "id": "cx-in-practice-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Consider a natural merge sort on n items that uses binary insertion sort to extend short runs to a bounded target of at most 64 elements. Why can this quadratic subroutine fit an O(n log n) overall sort?",
+    "options": [
+      {
+        "text": "Because insertion sort is Θ(n) on every input",
+        "explanation": "Insertion sort is Θ(n) only on already-sorted (or nearly sorted) input, and Θ(n^2), growing like n × n, in the worst case."
+      },
+      {
+        "text": "Because insertion sort uses less memory than merge sort for large n",
+        "explanation": "It's true insertion sort is in place, but that's not why it's used here. It's chosen for speed on small pieces."
+      },
+      {
+        "text": "To guarantee stability, which merge sort can't provide",
+        "explanation": "Merge sort is stable, and so is Timsort's merge step. Stability isn't the reason."
+      },
+      {
+        "text": "For small n, insertion sort's low constant factors and cache-friendly access make it faster than merging, and the run length is bounded so the quadratic cost is capped",
+        "explanation": "Correct. With runs capped at 64 elements, each insertion sort costs at most about 64 × 64 / 2 steps, a constant. Across n / 64 runs that is O(n) in total, and it beats recursive merging on tiny arrays."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Asymptotic class matters for large n. For n around 32 to 64, constants dominate.\n2. Insertion sort's inner loop is a few instructions, works on data already in cache, and is very fast on nearly-sorted data (which Timsort exploits).\n3. The quadratic part is bounded:\n\n```formula\nW_ins ≤ (n / m) × m^2 = n × m\nW_ins ≤ n × 64 = O(n)\nwhere\nW_ins: the total work of all the insertion sorts\nn: the number of items being sorted\nm: the maximum run length, here 64\nm^2: m × m, the worst-case cost of insertion-sorting one run\nO(n): at most a constant times n\n≤: less than or equal to\nIn words: about n / m runs, each costing at most m squared, add up to m times n, which is linear because m is a fixed 64.\n```\n\n4. The merges then cost O(n log n) overall, which dominates.\n\nIntrosort does the same with a threshold of 16 elements in libstdc++. The crossover is found by benchmarking.",
+    "link": {
+      "title": "Timsort — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Timsort"
+    }
+  },
+  {
+    "id": "cx-in-practice-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague proposes replacing your BLAS matrix multiply (blocked Θ(n^3), proportional to n × n × n for n by n matrices) with an implementation of a recent algorithm with exponent about 2.37, for multiplying 10,000 x 10,000 matrices. What is the best response?",
+    "options": [
+      {
+        "text": "Keep the existing baseline until representative benchmarks show that the proposed implementation is faster and meets memory and accuracy needs",
+        "explanation": "Correct. A smaller asymptotic exponent alone does not establish performance at n = 10,000. Constants, implementation, memory and numerical behaviour matter."
+      },
+      {
+        "text": "Adopt it: n^2.37 is about 300 times less work than n^3 at n = 10,000",
+        "explanation": "The exponent comparison (10,000 to the power 3 − 2.37 = 0.63 is about 330) ignores the constants, which for these algorithms are so enormous that they only win for matrices far larger than any computer can store."
+      },
+      {
+        "text": "Adopt it only for square matrices, since the exponent only applies to them",
+        "explanation": "Squareness isn't the issue. The issue is enormous hidden constants and complexity."
+      },
+      {
+        "text": "Use Strassen's algorithm instead, since it is always faster than Θ(n^3)",
+        "explanation": "Strassen has a lower exponent but higher constants, extra memory and worse numerical stability. Whether it helps depends on size and hardware, and it is often not used at all in tuned libraries."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. An exponent-only ratio ignores leading constants and lower-order work.\n2. Require a concrete implementation and benchmark representative shapes, sizes and numeric types.\n3. Check accuracy and peak memory as well as time.\n4. Keep the measured baseline until the alternative demonstrates an improvement.",
+    "link": {
+      "title": "Galactic algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Galactic_algorithm"
+    }
+  },
+  {
+    "id": "cx-in-practice-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which factors can explain why a Θ(n²) algorithm beats a Θ(n log n) algorithm over a particular finite input range? Here n is the input size, n² is n × n and log n is its base-2 logarithm. Select all that apply. Let A be Θ(n log n) and B be Θ(n²).",
+    "options": [
+      {
+        "text": "Inputs are always tiny, say n <= 30",
+        "explanation": "Yes. Below the crossover point the asymptotic class doesn't decide anything; a simple quadratic loop with tiny constants often wins. This is why sorting libraries use insertion sort for small pieces."
+      },
+      {
+        "text": "A chases pointers through scattered heap nodes, while B scans a contiguous array",
+        "explanation": "Yes. Dependent cache misses can inflate A’s measured cost per operation. Exact latency depends on hardware and workload."
+      },
+      {
+        "text": "A's constant factor is hundreds of times larger than B's",
+        "explanation": "Yes. If A takes 500 × n × log2 n steps and B takes n × n, B is faster for all n up to several thousand. Whether that matters depends on your real n."
+      },
+      {
+        "text": "Larger n alone guarantees that the quadratic algorithm wins",
+        "explanation": "False. Growth favours n log n eventually, but no specific finite crossover follows without constants."
+      },
+      {
+        "text": "Both are written in the same programming language",
+        "explanation": "No. Using the same language puts them on equal footing; it doesn't favour B. (A slower language for A would only add a constant factor.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "B can win only while its lower constant outweighs its worse growth:\n\n1. **Small n.** Below the crossover, B wins.\n2. **Memory behaviour.** Cache misses inflate A's effective constant.\n3. **Big constant.** Find where the two costs are equal:\n\n```formula\nc_A × n × log_2(n) = c_B × n^2\nn / log_2(n) = c_A / c_B\n500 × n × log_2(n) = n^2\nn = 500 × log_2(n),  n ≈ 6310\nwhere\nc_A: A's constant factor, here 500\nc_B: B's constant factor, here 1\nn: the input size\nlog_2(n): the base-2 logarithm of n (log_2(6310) ≈ 12.6)\nn^2: n squared, n × n\n≈: approximately equal to\nIn words: dividing both sides by n shows the crossover is where n over its own log equals the ratio of the constants; with a 500-to-1 ratio that happens at about n = 6,310.\n```\n\n| n | 500 n log2 n | n^2 |\n|---|---|---|\n| 1,000 | 5.0 × 10^6 | 1.0 × 10^6 |\n| 5,000 | 3.1 × 10^7 | 2.5 × 10^7 |\n| 6,000 | 3.8 × 10^7 | 3.6 × 10^7 |\n| 8,000 | 5.2 × 10^7 | 6.4 × 10^7 |\n\n4. **Larger n alone:** does not favour B; eventual asymptotic superiority does not specify a finite crossover.\n5. **Same language:** neutral.\n\nThe practical rule: know your real n, then measure.",
+    "link": {
+      "title": "Time complexity — USACO Guide",
+      "url": "https://usaco.guide/bronze/time-comp"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 18/76. Updated 2026-10-14.
+Verified modules: 19/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -25,6 +25,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Trees & Heaps | 7 | 35 | 80 | 75 | 170 | 417 | 90 |
 | dsa/Sorting & Searching | 8 | 46 | 96 | 95 | 194 | 431 | 82 |
 | dsa/Graphs | 7 | 37 | 82 | 115 | 177 | 818 | 131 |
+| dsa/Recursion, Backtracking & Greedy | 6 | 40 | 71 | 106 | 142 | 575 | 104 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -2248,6 +2249,136 @@ Low-confidence areas:
 - **medium** — graph-traversal-memory: Tree-frontier and iterative-deepening leading memory models. The calculations explicitly assume full tree search without a global visited set; they do not represent measured Python memory.
 - **medium** — graph-state-search-bidirectional: Tree-like effective branching estimates for two-ended searches. Degree variation, overlap, direction and stopping rules determine real work; exact hypothetical model arithmetic verified, no social-network measurement.
 - **medium** — graph-mst-clustering-tours: 1926 Moravian power-network history. Original archive bibliographic entry and translated original paper/history by Nešetřil and Nešetřilová were read. The Czech original itself was not translated independently.
+
+## dsa: Recursion, Backtracking & Greedy
+
+[Independent verification record](../content/dsa/07-design-techniques/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Split Karatsuba algebra from its implementation, and the master theorem from binary search, so no body exceeds 893 words. New completion owners are unique IDs; original lessons remain archival.
+- Added comments describing pending work, reversible mutation, path snapshots, mask selection, stable merging, half-result reuse, y-order preservation, tie counters, recurrence table updates and output meanings; all 32 lesson and 13 question Python ASTs remain unchanged.
+- Converted inherited symbolic prose and recurrence-table entries into self-contained formula cards; mathematical products use conventional implicit multiplication with explicit grouping.
+- Removed rounded exponents from asymptotic equalities/bounds: use exact log₂(3) or log₂(7), with decimal exponents only explanatory approximations.
+- Changed the Karatsuba n-to-exponent illustration from an asserted digit-product count into an explicit growth-model expression; the 1000-digit expression rounds to 56,871.
+- Separated the quicksort subproblem-size sum from its running-time function instead of asserting an exact triangular-number runtime.
+- Corrected the binary-capacity bit-count formula to floor(log₂(W)) plus one, and carried update-rate units through the hypothetical time substitution.
+- Qualified closest-pair strip sorting as a worst-case upper bound; equal tight local sorting costs support a tight recurrence, but an upper bound alone does not prove every actual input attains it.
+- Distinguished exact cover from generalised exact cover, and libsolv from libmamba; Algorithm X need not choose the smallest column although that is a useful heuristic.
+- Removed universal 8 MB C-stack sizing, instantaneous cache-hit claims, unsourced solver-size practicality and approximately-forty-item performance guarantees. Correct capacity/heap meanings from earlier verified modules are retained.
+- Added precise search-state/CSP-domain/CSP-constraint terminology and actual dictionary probes; removed tail position as an alias for tail recursion because non-recursive calls can also be in tail position.
+- Replaced process-oriented “content gap” notices with useful explanations of benchmark limits, instance-dependent MRV improvements and why canonicity does not establish monetary-design intent.
+- Corrected the question suggesting a failed exchange attempt is usually a counterexample: a failed proof attempt alone does not disprove the greedy rule.
+- tech-recursion-contracts: Slicing lists or strings per call adds hidden O(n) work. → For a copied slice of length n, slicing lists or strings per call adds hidden O(n) work.
+- tech-recursion-iteration: The following table counts control-stack entries, assuming constant-sized entries; → Here depth is the maximum nesting of pending work. The following table counts control-stack entries, assuming constant-sized entries;
+- tech-divide-conquer-structure formula: n × L → nL
+- tech-divide-conquer-structure formula: a × T( → aT(
+- tech-divide-conquer-master: ``` More general recurrences → ```
+
+More general recurrences
+- tech-divide-conquer-binary: ``` A three-way comparator → ```
+
+A three-way comparator
+- tech-divide-conquer-binary formula: n^0 × log n → n^0 log(n)
+- tech-divide-conquer-merge: For a million items that is roughly 1,000,000 × 20 = 20 million element moves, a scale estimate rather than an exact count. → For a million items, the linear-times-logarithm scale is roughly twenty million. This is neither an exact element-move count nor a timing; copied slices and concatenations also contribute work.
+- tech-divide-conquer-merge: T(n) = Θ(n log(n)) = Θ(n log(n)) → T(n) = Θ(n log(n))
+- tech-divide-conquer-power formula: (x^{⌊n/2⌋})^2 × x → (x^{⌊n/2⌋})^2 x
+- tech-divide-conquer-closest-proof: The key fact is that no two points inside one small square can be δ apart or more: → The key fact is that no two points inside one small square can be δ apart or more (δ is the current same-half distance bound):
+- tech-divide-conquer-closest-proof: So at most one point per square, eight in total including the point itself, → So at most one point from the relevant half per small square, eight in total including the point itself,
+- tech-backtracking-subsets: The include/skip version maps directly onto the tree above: → The include/skip version maps directly onto the previous unit’s decision tree:
+- tech-backtracking-subsets formula: n × 2^n → n 2^n
+- tech-backtracking-permutations formula: n × n → n^2
+- tech-backtracking-combinations: That matches the 6 pairs that `combine(4, 2)` prints above. → That matches the six pairs returned by `combine(4, 2)`; the comment shows the result without printing it.
+- tech-backtracking-problems-word-search formula: R × C × 4 × 3^{L − 2} → 4RC 3^{L − 2}
+- tech-backtracking-problems-word-search formula: R × C × 3^L → RC 3^L
+- tech-greedy-huffman formula: Σ f_i × ℓ_i → Σ f_i ℓ_i
+- tech-greedy-fails-coin-dp formula: A × (k + 1) → A(k + 1)
+- tech-greedy-fails-coin-dp formula: A × k → Ak
+- tech-greedy-fails-whole-items formula: n × W → nW
+- tech-recursion-q2: # Multiplication remains after the
+    # return.
+    # Keep this multiplication pending
+    # on return. → # Multiply only after the recursive
+    # call returns.
+- tech-recursion-q10: in C it could exhaust an 8 MB stack. → in C it can exhaust the native stack, whose allowance depends on the process, thread and operating system.
+- tech-recursion-q10: h ≈ log_2(n) = log_2(1,000,000) ≈ 19.9 → h = floor(log_2(n)) + 1
+h = floor(log_2(1,000,000)) + 1 = 20
+- tech-recursion-q10: h: the height of a minimum-height binary tree, in levels → h: the minimum possible number of non-null node levels in a binary tree with n keys
+- tech-recursion-q10: log_2(n): the base-2 logarithm of n, the number of times n can be halved before reaching 1 → log_2(n): the base-two logarithm of n
+floor: round down to the nearest integer
+- tech-recursion-q10: about 20 frames are on the stack at once. → about twenty non-null frames are pending; a conventional null-base-case traversal adds one terminal null frame.
+- tech-recursion-q6: Only the call to `max` is in tail position. → Only the call to `max` is in tail position; the two calls to `f` are not.
+- tech-divide-conquer-master formula: 4^k × (n / 2^k) → 4^k(n / 2^k)
+- tech-divide-conquer-master formula: 2^k × n → 2^k n
+- tech-divide-conquer-master formula: 2^{log_2(n)} × n → 2^{log_2(n)} n
+- tech-divide-conquer-master formula: n × n → n^2
+- tech-divide-conquer-q2: A useful fact: 2¹⁰ = 1024 ≈ 10³, so 10⁹ ≈ 2³⁰. → A useful estimate: ten halvings reduce the range by about a thousandfold, so thirty reduce it by about a billionfold.
+- tech-divide-conquer-q9: The gap widens with size: at 64,000 digits (six doublings) it's 3⁶ = 729 ms versus 4⁶ = 4,096 ms. → The gap widens with size: at 64,000 digits (six doublings) the same model predicts 729 milliseconds versus 4,096 milliseconds.
+- tech-divide-conquer-karatsuba-implementation formula: 2 × n → 2n
+- tech-divide-conquer-karatsuba-implementation formula: 3 × T_k(n) → 3T_k(n)
+- tech-divide-conquer-karatsuba-implementation formula: × T_k(n) →  T_k(n)
+- tech-divide-conquer-q10: W_k = 2^k × (n / 2^k) × log(n / 2^k)
+W_k ≤ n log(n)
+T(n) ≤ log n × n log(n)
+T(n) = O(n (log(n))^2) → W_k = 2^k(n / 2^k) log(n / 2^k)
+W_k ≤ n log(n)
+W_scale = n(log(n))^2
+T(n) = O(W_scale)
+- tech-divide-conquer-q10: W_k: the total sorting work on level k of the tree → W_k: a level-work scale expression; actual sorting work is bounded by a constant multiple
+W_scale: the summed upper growth scale, not an exact step count
+- tech-backtracking-q2: a **object reference** → an **object reference**
+- tech-backtracking-pruning formula: S ≥ k × m → S ≥ km
+- tech-backtracking-duplicates formula: (m_1 + 1) × (m_2 + 1) → (m_1 + 1)(m_2 + 1)
+- tech-backtracking-problems-word-search formula: R × C × 4 × 3^{L − 2} → 4RC 3^{L − 2}
+- tech-greedy-huffman formula: Σ f_i × ℓ_i → Σ f_i ℓ_i
+- tech-greedy-huffman formula: Σ f_i × ℓ_i → Σ f_i ℓ_i
+- tech-greedy-fails-whole-items formula: n × W → nW
+- tech-recursion-costs: > `return xs[0] + total(xs[1:])` looks linear, → > Here n is the original list length. `return xs[0] + total(xs[1:])` looks linear,
+- tech-recursion-costs: n: the argument passed to fib → n: a non-negative integer argument passed to fib; the recursive recurrence applies from two upwards
+- tech-divide-conquer-structure: L: the number of halving levels needed to get from n items down to 1 → L: the real-valued logarithmic scale for halving from n items to one; actual recursion levels are whole numbers
+- tech-divide-conquer-power: M ≈ log_2(1,000,000) ≈ 20 → M = floor(log_2(1,000,000)) + 1 = 20
+- tech-divide-conquer-power: M: the number of squaring steps for an exponent of one million → M: the exact number of squarings in the displayed recursive routine for exponent one million
+floor: round down to the nearest integer
+- tech-divide-conquer-power: so the intermediate numbers never grow beyond m². → so products of already-reduced non-negative residues are smaller than the square of the modulus. Reduce an initially large base before relying on that product-size bound.
+- tech-backtracking-q9: It just runs for a very long time. → Its exponential backtracking may consume substantial CPU; an exact duration requires a benchmark.
+- tech-backtracking-problems-queens: | One queen per row | 8⁸ = 16,777,216 |
+| One per row and column | 8! = 40,320 | → | One queen per row | 16,777,216 |
+| One per row and column | 40,320 |
+- tech-backtracking-problems-q1: equal r − c means a down-right diagonal, equal r + c an anti-diagonal (r is the row, c the column): → equal row-minus-column differences mean a down-right diagonal; equal row-plus-column sums mean an anti-diagonal:
+- tech-backtracking-problems-q1: | Pair | r−c | r+c | → | Pair | Differences | Sums |
+- glossary exponentiation-by-squaring: Computing x^n by squaring the result for n/2 (and multiplying by x once more when n is odd), → Computing x^n by squaring the result for floor(n/2), where n is a non-negative integer exponent (and multiplying by x once more when n is odd),
+- glossary materialise: Materialising all 2^40 subsets is infeasible; yielding them one by one needs only O(n) working memory. → Forty distinct elements have over a trillion subsets. Yielding snapshots one at a time uses O(n) working memory, with n the element count; stored consumer outputs are additional.
+- glossary canonical-coin-system: UK coins and {1, 5, 10, 25} are canonical; → The denomination sets {1, 2, 5, 10, 20, 50, 100, 200} and {1, 5, 10, 25} are canonical under unlimited supply;
+- glossary denomination: UK coins come in 8 denominations from 1p to £2. → The example set {1, 2, 5, 10, 20, 50, 100, 200} has eight denominations.
+- tech-recursion-q10: Correct. With n the number of keys, stack usage equals the maximum recursion depth, which is the tree height: about log₂(10⁶) ≈ 20 when balanced, and n when sorted inserts produce a chain. → Correct. With n the number of keys, stack usage equals the maximum recursion depth, which is the tree height: twenty non-null node levels at minimum height, and n when sorted inserts produce a chain.
+- tech-divide-conquer-q2: Correct. Each comparison halves the range, so it takes about log₂(10⁹) ≈ 29.9 halvings to reach one element. → Correct. Each comparison halves the range, so about thirty probes suffice for a billion candidates.
+- tech-divide-conquer-q2: That would be log₁₀(10⁹). Binary search halves rather than dividing by ten, so the base is 2. → Nine is the decimal logarithm of a billion. Binary search halves rather than dividing by ten, so the base is 2.
+- tech-divide-conquer-q4: Correct. 13 = 8 + 4 + 1, so 3¹³ = 3⁸ × 3⁴ × 3¹. The remainders after dividing by 7 are 2, 4 and 3, and 2 × 4 × 3 = 24, which leaves remainder 3. → Correct. The set exponent bits select the eighth, fourth and first powers of three. The remainders after dividing by 7 are 2, 4 and 3, and 2 × 4 × 3 = 24, which leaves remainder 3.
+- tech-divide-conquer-q4: 1 is 3⁶ mod 7 (and 3¹² mod 7). This misses the final multiply for the lowest bit set in 13 = 1101₂. → One is the remainder of the sixth and twelfth powers of three after division by seven. This misses the final multiply for the lowest bit set in 13 = 1101₂.
+- tech-divide-conquer-master: work like n log n → local work growing linearly times a logarithm
+
+Remaining gaps:
+
+- As before, AC-3, Algorithm X/DLX, CDCL SAT, multi-word trie search and direct N-Queens constructions are explained but not each given a full implementation; this module focuses on reusable search and greedy design principles.
+- The next dynamic-programming module develops the table/state formulations further. These units preserve the contrast examples without duplicating that module.
+- No hardware benchmark establishes a regex duration, MRV call-count improvement, bitmask runtime, large-integer crossover time, or practical item-count limit. Operation and output counts are not timings.
+- Closest-pair code uses floating-point hypot and expected hash lookup, not exact geometric predicates or a worst-case dictionary implementation. Finite meaningful coordinates are an input assumption.
+- The fast-power routines are instructional arithmetic examples, not constant-time cryptographic implementations.
+
+Low-confidence areas:
+
+- **medium** — tech-backtracking-problems-sudoku: MRV/propagation improvement on an arbitrary puzzle. Heuristic improvement depends on the instance and implementation. Only correctness on an explicit puzzle and invalid grid, not a universal speedup, is tested.
+- **medium** — tech-backtracking-problems-masks: Performance of mask search versus set search on arbitrary board sizes. Both actual algorithms are checked against solution counts, but no relative-timing or constant-word-cost guarantee for growing Python integers is asserted.
+- **medium** — tech-divide-conquer-closest-code: Exact geometric correctness for extreme floating-point inputs. The geometric proof assumes exact distances; implementation uses floating point and explicitly states its numeric limitation. Bounded integer-coordinate differential tests are not a proof for all floating-point magnitudes.
+- **medium** — tech-divide-conquer-practice: Hybrid cutoffs or parallel decomposition improve every workload. Primary implementations/framework docs support the mechanisms, not a universal measured advantage. Scheduling and representation overhead remain explicit.
+- **medium** — tech-backtracking-applications: Rejected regex elapsed time at thirty input letters. Combinatorial growth and bounded native rejection cases are checked. The thirty-letter attack example is deliberately not benchmarked to completion, and no runtime is claimed.
+- **medium** — tech-backtracking-problems-propagation: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- **medium** — tech-divide-conquer-karatsuba-implementation: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- **medium** — tech-divide-conquer-power: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- **medium** — tech-greedy-optimality: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- **medium** — tech-recursion-frames: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- **medium** — tech-recursion-iteration: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+- **medium** — tech-recursion-tail-calls: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
 
 ## synth: Sound & Digital Audio
 

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "tech-recursion-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your recursive DFS works in tests but crashes in production with `RecursionError` on a graph that is one long chain of 50,000 nodes. What is the most robust fix?",
+    "options": [
+      {
+        "text": "Call `sys.setrecursionlimit(100_000)` at start-up",
+        "explanation": "This raises the Python-level allowance but is not a portable resource guarantee. Since CPython 3.11 most pure Python calls avoid C stack growth; C-involving call paths and memory limits still matter."
+      },
+      {
+        "text": "Rewrite the DFS with an explicit stack (a Python list) in a loop",
+        "explanation": "Correct. The explicit work list avoids Python recursion depth. On a simple chain it needs very few pending entries; the visited set still grows with the graph. Available memory must be sufficient."
+      },
+      {
+        "text": "Rewrite it in tail-recursive form with an accumulator",
+        "explanation": "CPython never eliminates tail calls, so a tail-recursive version uses exactly as many frames and fails the same way."
+      },
+      {
+        "text": "Add `@functools.lru_cache` to the DFS function",
+        "explanation": "Caching avoids repeated work, but this crash is about depth, not repetition. The first call down the chain still nests 50,000 frames."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Diagnose: the crash is caused by **recursion depth**. A 50,000-node chain makes the DFS nest 50,000 calls, far beyond the default limit of 1000.\n2. Raising the limit changes one guard. It does not remove memory limits or C-stack risks on call paths that consume C stack; most pure Python calls since 3.11 avoid that growth.\n3. Tail recursion doesn't help in CPython, which keeps every frame.\n4. Replace the call stack with a list:\n\n```python\nstack, seen = [start], {start}\nwhile stack:\n    u = stack.pop()\n    for v in graph[u]:\n        if v not in seen:\n            seen.add(v)\n            stack.append(v)\n```\n\nFor this mark-on-push graph traversal, pending entries and the visited set use O(V) additional storage. On general graphs its visitation tree need not equal recursive DFS; it solves the chain-depth problem here.",
+    "link": {
+      "title": "sys.setrecursionlimit — Python docs",
+      "url": "https://docs.python.org/3/library/sys.html"
+    }
+  },
+  {
+    "id": "tech-recursion-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this print for the tree below?\n\n```\n      A\n     / \\\n    B   C\n   / \\   \\\n  D   E   F\n```\n\n```python\nout, stack = [], [root]\nwhile stack:\n    n = stack.pop()\n    out.append(n.val)\n    if n.right:\n        # Right waits below the left\n        # child.\n        stack.append(n.right)\n    if n.left:\n        stack.append(n.left)\nprint(\"\".join(out))\n```",
+    "options": [
+      {
+        "text": "ABCDEF",
+        "explanation": "This is level order (BFS), which needs a queue. A stack processes the most recently pushed node first, so it goes deep before wide."
+      },
+      {
+        "text": "ACFBED",
+        "explanation": "This would happen if left were pushed before right: right would be on top and visited first. The code pushes right first so that left is popped first."
+      },
+      {
+        "text": "ABDECF",
+        "explanation": "Correct. Pushing right then left leaves the left child on top, so the loop visits node, left subtree, right subtree: pre-order."
+      },
+      {
+        "text": "DBEACF",
+        "explanation": "That's an in-order traversal (left, node, right). This loop records each node as soon as it's popped, before its children."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace the stack (top on the right):\n\n```\npop A  out=A      push C, B  [C, B]\npop B  out=AB     push E, D  [C, E, D]\npop D  out=ABD               [C, E]\npop E  out=ABDE              [C]\npop C  out=ABDEC  push F     [F]\npop F  out=ABDECF            []\n```\n\nPushing right before left is the standard trick that makes an explicit stack reproduce recursive pre-order exactly.",
+    "link": {
+      "title": "Call stack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Call_stack"
+    }
+  },
+  {
+    "id": "tech-recursion-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about converting recursion to iteration are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A tail-recursive function can be turned into a `while` loop by reassigning its parameters, with O(1) control-stack space (excluding retained argument data)",
+        "explanation": "Correct. Nothing in the frame is needed after a tail call, so the call becomes 'update the variables and go round again'."
+      },
+      {
+        "text": "Any recursive function can be made iterative by managing an explicit stack of pending work",
+        "explanation": "Correct. The call stack is just a stack; you can always simulate it, at worst by storing each frame's locals and a 'resume point'."
+      },
+      {
+        "text": "Converting to an explicit stack reduces the algorithm's space complexity",
+        "explanation": "Usually false. You still store O(depth) entries; you've only moved them from the limited call stack to the heap."
+      },
+      {
+        "text": "In the lesson’s traversal, which pushes both children onto a LIFO stack, pushing right before left reproduces recursive pre-order",
+        "explanation": "Correct. The stack is LIFO, so the child pushed last is visited first; pushing left last makes it come out first."
+      },
+      {
+        "text": "Iterative versions are always faster in CPython than recursive ones",
+        "explanation": "Often somewhat faster because Python calls are expensive, but not 'always' and not asymptotically. The main reason to convert is the recursion limit."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Go through each claim:\n\n1. **Tail recursion → loop**: true. `f(n-1, acc*n)` becomes `n, acc = n-1, acc*n`.\n2. **Explicit stack is universal**: true. This is a control-flow simulation; compilers can additionally optimise it; you can store `(node, state)` pairs to remember whether a frame has visited its left child yet.\n3. **Space complexity drops**: false. Simulating every frame can retain linear space on a chain, but a specialised pre-order traversal can hold only constant pending work there. Converting does not universally improve the asymptotic bound.\n4. **Push order**: true, because of LIFO.\n5. **Always faster**: false as a universal claim. Relative timings depend on implementation and workload; conversion alone does not imply an asymptotic improvement.",
+    "link": {
+      "title": "Recursion (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Recursion_(computer_science)"
+    }
+  }
+]

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "dist-why-hard-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must tolerate up to **2** simultaneously faulty nodes. Using majority crash quorums versus the standard unsigned Byzantine quorum model, how many nodes do you need?",
+    "options": [
+      {
+        "text": "Crash: 3, Byzantine: 5",
+        "explanation": "Wrong. 3 nodes with 2 crashed leaves 1, which isn't a majority. Crash tolerance needs twice the number of faults plus one: 2 × 2 + 1 = 5."
+      },
+      {
+        "text": "Crash: 5, Byzantine: 7",
+        "explanation": "Correct. Crash faults need 2 × 2 + 1 = 5 nodes so a majority (3) survives. Byzantine faults need 3 × 2 + 1 = 7 so honest nodes outvote liars even when some honest nodes are slow."
+      },
+      {
+        "text": "Crash: 4, Byzantine: 6",
+        "explanation": "Wrong. Even sizes don't improve fault tolerance for majorities, and these fall short of the 5 and 7 nodes that the crash and Byzantine bounds require for 2 faults."
+      },
+      {
+        "text": "Crash: 5, Byzantine: 5",
+        "explanation": "Wrong. Byzantine nodes can send conflicting messages to different peers, so you need extra honest nodes: 3 × 2 + 1 = 7."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Use the node-count rules for each fault model:\n\n```formula\nn_crash = 2 × f + 1 = 2 × 2 + 1 = 5\nn_byz = 3 × f + 1 = 3 × 2 + 1 = 7\nq_byz = 2 × f + 1 = 2 × 2 + 1 = 5\nwhere\nf: the number of nodes that may be faulty at once; here 2\nn_crash: nodes needed for a surviving majority when faulty nodes can only crash\nn_byz: nodes needed in the standard unsigned Byzantine quorum model\nq_byz: the quorum size (how many nodes must agree) in the Byzantine case\nIn words: crash tolerance needs a surviving majority; Byzantine tolerance needs quorums big enough that any two share at least one honest node.\n```\n\n- **Crash**: with 5 nodes, if 2 crash, 3 remain, and 3 is a majority of 5, so quorums can still form and any two quorums overlap.\n- **Byzantine**: with 7 nodes and quorums of 5, two quorums overlap in at least 5 + 5 − 7 = 3 nodes. At most 2 are traitors, so at least one honest node is in both.\n\nThis is why Raft clusters are 3 or 5 nodes and BFT systems are 4, 7, 10...",
+    "link": {
+      "title": "Byzantine fault",
+      "url": "https://en.wikipedia.org/wiki/Byzantine_fault"
+    }
+  },
+  {
+    "id": "dist-why-hard-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Raft assumes a **crash-recovery** fault model with durable storage. Which of these failures fall **outside** that model, so Raft gives no safety guarantee if they happen? Select all that apply.",
+    "options": [
+      {
+        "text": "A node reboots after a power cut with its fsynced log intact.",
+        "explanation": "Inside the model. Crash-recovery means exactly this: the node halts, restarts and still has everything it made durable. Raft handles it."
+      },
+      {
+        "text": "A node comes back on a fresh VM with an empty disk but the same identity.",
+        "explanation": "Outside the model. This is amnesia: the node has forgotten its vote and its log, so it can vote twice in one term or help elect a leader missing committed entries."
+      },
+      {
+        "text": "A disk silently flips bits in a stored log entry.",
+        "explanation": "Outside the model. Silent corruption makes a node report data it never received, which is closer to a Byzantine fault. Systems add checksums to turn it back into a detectable crash."
+      },
+      {
+        "text": "A node is paused for 30 seconds by the hypervisor.",
+        "explanation": "Inside the model. A pause looks like a slow or temporarily crashed node. Raft stays safe; the node simply rejoins and learns about any newer term."
+      },
+      {
+        "text": "A disk controller acknowledges fsync but loses the write on power failure.",
+        "explanation": "Outside the model. The node believes its vote or log entry is durable when it is not, so after a restart it can contradict what it promised. This is a known cause of real data loss."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Ask of each failure: \"does the node behave as a crashed node that restarts with all its durable state?\"\n\n| Failure | Behaves like |\n|---|---|\n| Reboot, disk intact | crash-recovery |\n| Fresh disk, same id | amnesia |\n| Bit flip | arbitrary (Byzantine-ish) |\n| 30 s pause | slow node |\n| Lying fsync | amnesia |\n\nOnly the first and fourth fit the model. The lesson: the fault model is a contract with your hardware and operations. If you replace a node, give it a **new identity** and add it through a membership change, rather than reusing the old one with an empty disk.",
+    "link": {
+      "title": "In Search of an Understandable Consensus Algorithm (Raft paper)",
+      "url": "https://raft.github.io/raft.pdf"
+    }
+  }
+]

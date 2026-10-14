@@ -1,0 +1,32 @@
+[
+  {
+    "id": "dist-consensus-raft-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a 5-node Raft cluster, S1 becomes leader in **term 4**. Its log has an entry at index 2 from **term 2** that it wrote as leader long ago. S1 copies it to S3, so it is now on S1, S2 and S3, a majority. S1 has not yet replicated any term-4 entry. May S1 mark index 2 committed?",
+    "options": [
+      {
+        "text": "Yes: it is on a majority, and that is the definition of committed.",
+        "explanation": "Wrong. That rule applies only to entries from the leader's current term. Counting replicas of an old-term entry is exactly the mistake Figure 8 in the Raft paper shows."
+      },
+      {
+        "text": "Yes, but only after the client that sent it retries.",
+        "explanation": "Wrong. Client retries have nothing to do with commitment, and could even create a duplicate entry."
+      },
+      {
+        "text": "No: a node whose last entry has term 3 could still win an election and overwrite it. S1 must first get a term-4 entry (e.g. a no-op) onto a majority.",
+        "explanation": "Correct. If S1 crashed now, S5 (last entry term 3) could gather votes from S2, S3 and S4, whose last entries are older, and overwrite index 2. Once a term-4 entry is on a majority, no such candidate can win, and index 2 commits along with it."
+      },
+      {
+        "text": "No: entries from old terms can never be committed and must be discarded.",
+        "explanation": "Wrong. Old-term entries are not discarded; they become committed indirectly as soon as a later current-term entry commits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ask \"could any future leader lack this entry?\"\n\n1. Suppose S5 holds a different index-2 entry from **term 3**.\n2. S2, S3 and S4 have last-entry terms of 2 or less.\n3. Election restriction: a voter grants if the candidate's last term is higher. 3 > 2, so S5 can collect 4 votes.\n4. S5 then overwrites index 2 everywhere. Had S1 reported it committed, a committed entry would be lost.\n\nFix: S1 appends a no-op in term 4 and replicates it to a majority. Now a majority has a term-4 last entry, which beats S5's term 3, so S5 can't win. Committing the no-op commits index 2 as well.",
+    "link": {
+      "title": "In Search of an Understandable Consensus Algorithm (Raft paper)",
+      "url": "https://raft.github.io/raft.pdf"
+    }
+  }
+]

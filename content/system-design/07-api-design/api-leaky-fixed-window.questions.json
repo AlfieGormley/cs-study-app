@@ -1,0 +1,62 @@
+[
+  {
+    "id": "api-rate-limiting-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A fixed-window limiter allows 100 requests per calendar minute. What's the maximum number of requests a client can get accepted in any 2-second span?",
+    "options": [
+      {
+        "text": "200",
+        "explanation": "Correct. The client sends 100 at 12:00:59 (the end of window 1) and 100 at 12:01:00 (the start of window 2). Each window's counter is within limit, so all 200 succeed within about 1–2 seconds."
+      },
+      {
+        "text": "100",
+        "explanation": "That's what you'd *want*, and what a sliding window would enforce. A fixed window resets its counter at the boundary, so it can't see the burst straddling two windows."
+      },
+      {
+        "text": "About 3",
+        "explanation": "This assumes the limit is spread evenly (100/60 ≈ 1.7 per second). Fixed windows don't smooth traffic at all; a client can use its whole quota in one instant."
+      },
+      {
+        "text": "150",
+        "explanation": "There's no partial carry-over in a fixed window. Each window independently allows the full 100."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nwindow 12:00  count=0 ... 100 @ :59\nwindow 12:01  count reset to 0\n              100 @ :00\n```\n\n1. 12:00:59.x: 100 requests → counter for 12:00 = 100 ≤ 100. All allowed.\n2. 12:01:00.x: new key, counter starts at 0. 100 requests → 100 ≤ 100. All allowed.\n3. Span covered ≈ 1–2 s. Accepted = **200**, i.e. 2× the intended rate.\n\nA sliding window counter would already block most of the second burst. At 12:01:00.6, just 0.6 s into the new window:\n\n```formula\nestimate = prev × (1 − t / W) + curr\nestimate = 100 × (1 − 0.6 s / 60 s) + 0\nestimate = 100 × 0.99 = 99\nwhere\nestimate: the approximate number of requests in the last W seconds\nprev: the request count for the whole previous fixed window\ncurr: the request count so far in the current window\nt: the time elapsed since the current window started\nW: the window length, 60 s for a per-minute limit\ns: seconds\nIn words: nearly all of the previous minute's 100 requests still count, so only about 1 more request fits under the limit.\n```",
+    "link": {
+      "title": "Cloudflare blog: Counting things, a lot of different things",
+      "url": "https://blog.cloudflare.com/counting-things-a-lot-of-different-things/"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A legacy mainframe behind your API can handle at most 50 requests/s and falls over with bursts. Clients send bursty traffic averaging 40 req/s. Which algorithm best protects the mainframe?",
+    "options": [
+      {
+        "text": "Token bucket with capacity 500",
+        "explanation": "A large-capacity token bucket deliberately *allows* bursts of up to 500 requests at once, which is exactly what the mainframe can't handle."
+      },
+      {
+        "text": "Leaky bucket (queue) draining at 50 req/s",
+        "explanation": "Correct. A leaky bucket queues incoming bursts and releases them at a constant rate, so the mainframe never sees more than 50 req/s. The trade-off is added latency while requests wait in the queue."
+      },
+      {
+        "text": "Fixed window of 3,000 per minute",
+        "explanation": "3,000/min averages 50/s, but a fixed window lets all 3,000 through in the first second of the minute, which would flatten the mainframe."
+      },
+      {
+        "text": "No limiter, because the average is below 50 req/s",
+        "explanation": "The average is fine; the *bursts* are the problem. Without shaping, a spike of 200 in one second will exceed capacity."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Constraint is on **instantaneous** rate (≤ 50/s), not just average.\n2. Token bucket and fixed window both allow bursts by design.\n3. Leaky bucket converts a bursty input into a smooth output:\n\n```\nin:  0 200 0 0 0  (per second)\nout: 50 50 50 50  (constant)\n```\n\n4. Queue sizing: with a 200-request burst and 50/s drain, the last request waits 4 s:\n\n```formula\nW_max = B / r\nW_max = 200 / 50 = 4 s\nwhere\nW_max: the wait of the last request in the burst, in seconds (s)\nB: the number of requests queued, 200\nr: the drain rate, 50 requests per second\ns: seconds\nIn words: the last of 200 queued requests waits for all the others to drain at 50 a second, which takes 4 s.\n```\n\nSize the queue (e.g. 250) so requests beyond that are rejected with 429 rather than waiting indefinitely.",
+    "link": {
+      "title": "Wikipedia: Leaky bucket",
+      "url": "https://en.wikipedia.org/wiki/Leaky_bucket"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dist-quorums-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A key has **3 replicas, needs 2 write acknowledgements, and needs 1 read response** (these are N, W and R respectively). A client writes v2 (replacing v1); replicas A and B ack, C hasn't received it yet. Another client immediately reads. What can it see?",
+    "options": [
+      {
+        "text": "Always v2, because the write met its quorum.",
+        "explanation": "Wrong. R + W = 3, not > 3, so the read's single replica may be C, which still has v1."
+      },
+      {
+        "text": "v1 or v2, depending on which replica answers.",
+        "explanation": "Correct. With R = 1 the read asks one replica. If it's A or B it gets v2; if it's C it gets v1. No overlap is guaranteed."
+      },
+      {
+        "text": "Always v1, because C is the authoritative replica.",
+        "explanation": "Wrong. Leaderless replication has no authoritative replica; any of the three can answer."
+      },
+      {
+        "text": "An error, because replicas disagree.",
+        "explanation": "Wrong. With R = 1 the coordinator only hears one answer, so it can't even notice the disagreement."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. State: A = v2, B = v2, C = v1.\n2. Overlap test:\n\n```formula\nR + W > N\n1 + 2 > 3   ✗\nwhere\n✗: the condition is false: 1 + 2 = 3, which is not more than 3\nR: replicas a read asks; here 1\nW: replicas that acknowledged the write; here 2 (A and B)\nN: replicas per key; here 3\nIn words: the read and write sets add up to exactly the replica count, not more, so they can miss each other completely.\n```\n\nSo a read set {C} and the write set {A, B} can be disjoint.\n\n3. The read picks one replica (often the fastest or a random one). If it picks C, it gets v1. The chance is one in three only if selection is uniform; fastest-replica routing need not be uniform.\n\nTo guarantee v2 under these assumptions, use 2 read responses: the read and write counts then sum to 4, more than the 3 replicas. Thus any two replicas include A or B. C would then be fixed by read repair or anti-entropy.",
+    "link": {
+      "title": "Cassandra Dynamo architecture",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  },
+  {
+    "id": "dist-quorums-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A store uses **5 replicas per key, 2 write acknowledgements and 4 read responses** (N, W and R respectively). Two clients write different values to the same key at the same moment, and both writes succeed. What does R + W > N guarantee here, and what does it not?",
+    "options": [
+      {
+        "text": "It guarantees the two writes were applied in the same order on every replica.",
+        "explanation": "Wrong. Nothing orders concurrent writes. They may even land on disjoint replicas and never meet."
+      },
+      {
+        "text": "It guarantees one write was rejected, because only one can reach a quorum.",
+        "explanation": "Incorrect. Neither read-write nor write-write overlap automatically rejects a write. Even intersecting write sets may accept both; exclusion needs a conditional-write or consensus protocol."
+      },
+      {
+        "text": "It guarantees nothing, because R + W > N only matters for single-replica stores.",
+        "explanation": "Wrong. It does give a real guarantee: every read set intersects every write set."
+      },
+      {
+        "text": "Every later read sees at least one of the two writes, but the writes may sit on disjoint replicas, so which one wins depends only on the version rule (e.g. timestamps).",
+        "explanation": "Correct. Reads overlap writes (4 + 2 = 6, more than 5), but writes don't overlap each other (2 + 2 = 4, which is not greater than 5). Without write-write overlap, no replica is forced to see both and order them."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Two separate conditions:\n\n```formula\nR + W > N\n4 + 2 > 5   ✓\nW > N / 2\n2 > 2.5   ✗\nwhere\n✓: the condition is true\n✗: the condition is false\nR: replicas a read asks; here 4\nW: replicas a write needs; here 2\nN: replicas per key; here 5\nIn words: reads are big enough to meet every write, but writes are too small to be sure of meeting each other.\n```\n\n| Condition | Here | Gives |\n|---|---|---|\n| R + W > N | 6 > 5 ✓ | read meets write |\n| W > N/2 | 2 > 2.5 ✗ | write meets write |\n\nPossible state:\n\n```\nA:x1 B:x1 C:x2 D:x2 E:old\nread {A,B,C,D} -> sees x1 and x2\n```\n\nThe reader sees both and picks by version. With last-write-wins and skewed clocks, an earlier write in physical time can win. Write-write overlap (W ≥ 3) at least ensures some replica sees both writes, but concurrent writes still need a real ordering mechanism (versions read first, or consensus) to be linearizable.",
+    "link": {
+      "title": "Quorum (distributed computing) (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Quorum_%28distributed_computing%29"
+    }
+  }
+]

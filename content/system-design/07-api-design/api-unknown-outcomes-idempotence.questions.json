@@ -1,0 +1,70 @@
+[
+  {
+    "id": "api-idempotency-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A client calls `POST /payments` and gets a timeout after 30 seconds. What does the client actually know about whether the payment happened?",
+    "options": [
+      {
+        "text": "It didn't happen, because the client never received a success response",
+        "explanation": "The request may have succeeded on the server, with only the response being lost. Absence of a response isn't evidence of failure."
+      },
+      {
+        "text": "It happened, because the server must have received the request",
+        "explanation": "The request might have been lost on the way, or the server may have crashed before processing. Receipt isn't guaranteed either."
+      },
+      {
+        "text": "Nothing: the outcome is unknown. It may have been processed, partly processed, or never received",
+        "explanation": "Correct. A timeout is the third outcome of every remote call alongside success and failure. That ambiguity is why retries plus idempotency are needed."
+      },
+      {
+        "text": "It happened only if the server returned a 5xx",
+        "explanation": "The client received no status code at all; that's what a timeout means."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "List where the timeout could have occurred:\n\n1. Request lost before reaching the server → not charged.\n2. Server crashed mid-processing → maybe charged, maybe not.\n3. Server finished; response lost → charged.\n\nThe client sees the same symptom (timeout) in all three cases, so it can't distinguish them. The safe recovery is to **retry with the same idempotency key**: in case 1 the payment happens now; in case 3 the server replays the original result.",
+    "link": {
+      "title": "AWS Builders' Library: Making retries safe with idempotent APIs",
+      "url": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+    }
+  },
+  {
+    "id": "api-idempotency-q3",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these operations are **naturally idempotent** without needing an idempotency key? Select all that apply.",
+    "options": [
+      {
+        "text": "`UPDATE accounts SET status = 'closed' WHERE id = 7`",
+        "explanation": "Correct. Setting an absolute value produces the same final state however many times it runs."
+      },
+      {
+        "text": "`UPDATE accounts SET balance = balance - 20 WHERE id = 7`",
+        "explanation": "Wrong. A relative change compounds: run it three times and £60 is deducted."
+      },
+      {
+        "text": "`PUT /orders/0c7e-... {full order}` where the client chose the id",
+        "explanation": "Correct. The client-chosen id makes creation idempotent: the second PUT replaces the order with an identical one instead of creating a duplicate."
+      },
+      {
+        "text": "Sending a 'your order shipped' email",
+        "explanation": "Wrong. Each execution sends another email. You need deduplication (e.g. a sent-log keyed by order id) to make it idempotent."
+      },
+      {
+        "text": "`INSERT INTO events (id, ...) VALUES ('evt_1', ...) ON CONFLICT (id) DO NOTHING`",
+        "explanation": "Correct. The unique constraint means only the first insert takes effect; later duplicates are no-ops."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Test each one by running it twice in your head and comparing the final state with running it once:\n\n| Operation | Once | Twice | Same? |\n|---|---|---|---|\n| set closed | closed | closed | Yes |\n| balance −20 | −20 | −40 | No |\n| PUT client id | 1 order | 1 order | Yes |\n| send email | 1 email | 2 emails | No |\n| insert on conflict | 1 row | 1 row | Yes |",
+    "link": {
+      "title": "MDN: Idempotent",
+      "url": "https://developer.mozilla.org/en-US/docs/Glossary/Idempotent"
+    }
+  }
+]

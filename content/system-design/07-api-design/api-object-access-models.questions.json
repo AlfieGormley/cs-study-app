@@ -1,0 +1,62 @@
+[
+  {
+    "id": "api-auth-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user is logged in with a valid token and calls `GET /invoices/1009`. The API checks the token is valid and returns the invoice, without checking who owns invoice 1009. What class of vulnerability is this?",
+    "options": [
+      {
+        "text": "Broken object-level authorisation (an IDOR): authentication passed, but authorisation for *this object* was never checked",
+        "explanation": "Correct. Any logged-in user can enumerate ids and read others' invoices. It's the top item in the OWASP API Security Top 10 because it's so common."
+      },
+      {
+        "text": "Cross-site request forgery",
+        "explanation": "CSRF tricks a victim's browser into making a request with the victim's credentials. Here the attacker uses their *own* valid credentials to access someone else's data."
+      },
+      {
+        "text": "Broken authentication",
+        "explanation": "Authentication worked correctly: the server knows exactly who the caller is. The failure is in the authorisation step that follows."
+      },
+      {
+        "text": "SQL injection",
+        "explanation": "Nothing is being injected into a query. The query is legitimate; it's just missing an ownership filter."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Separate the two checks:\n\n1. **Authn**: is the token valid? Yes → caller = user 42.\n2. **Authz**: may user 42 read invoice 1009? **Never asked.**\n\nFix: scope every lookup to the caller.\n\n```sql\n-- Match the caller as well as the\n-- object.\nSELECT * FROM invoices\nWHERE id = $1\n  AND account_id = $caller_account\n```\n\nReturn 404 if no row, so attackers can't even learn which ids exist. Using unguessable ids (UUIDs) helps but isn't a substitute for the check.",
+    "link": {
+      "title": "OWASP API Security Top 10: Broken object level authorization",
+      "url": "https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/"
+    }
+  },
+  {
+    "id": "api-auth-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A document-sharing product has rules like \"you can view a doc if you're in a group that has access to any folder containing it\", with nested folders and groups. Which authorisation model fits best?",
+    "options": [
+      {
+        "text": "RBAC with a role per folder",
+        "explanation": "With thousands of folders and nested groups, you'd need a role per folder per permission, a classic role explosion, while hierarchical RBAC can express inheritance, it may be a cumbersome fit for this resource-sharing graph."
+      },
+      {
+        "text": "Relationship-based access control (ReBAC), as in Google Zanzibar, OpenFGA or SpiceDB",
+        "explanation": "Correct. Permissions are naturally a graph: user → member of → group → viewer of → folder → parent of → doc. ReBAC evaluates such paths directly and can also answer 'who can see this?'."
+      },
+      {
+        "text": "API keys with scopes",
+        "explanation": "API keys may be associated with accounts or users, but coarse scopes can't express per-document sharing."
+      },
+      {
+        "text": "ABAC with only user attributes",
+        "explanation": "ABAC can express rules over attributes, but this rule depends on *relationships* between many entities, which attribute policies represent awkwardly and evaluate expensively."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Write the check as a path:\n\n```\nalice --member--> eng-team\neng-team --viewer--> /design\n/design --parent--> /design/2026\n/design/2026 --parent--> spec.doc\n```\n\nCan alice view spec.doc? Walk the graph: yes, via eng-team → /design → /design/2026.\n\nZanzibar models access using relation tuples. ReBAC directly matches this sharing graph; RBAC with hierarchy or ABAC with suitable relationship data can also model inheritance, so this is a modeling-fit comparison, not a claim of impossibility.",
+    "link": {
+      "title": "Google Research: Zanzibar, Google's consistent, global authorization system",
+      "url": "https://research.google/pubs/zanzibar-googles-consistent-global-authorization-system/"
+    }
+  }
+]

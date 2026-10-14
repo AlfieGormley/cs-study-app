@@ -1,0 +1,130 @@
+[
+  {
+    "id": "dist-transactions-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In 2PC with participants P1, P2 and P3: all three vote yes, the coordinator writes COMMIT to its log, sends commit to P1 only, then crashes. P2 and P3 time out waiting. What should P2 do?",
+    "options": [
+      {
+        "text": "Abort, since it never got a decision.",
+        "explanation": "Wrong. The coordinator decided COMMIT and P1 already committed. Aborting P2 would break atomicity."
+      },
+      {
+        "text": "Stay in doubt holding locks; it may ask P1, and if P1 reports it committed, P2 can commit.",
+        "explanation": "Correct. P2 must not decide alone. If it can reach a participant that knows the outcome (P1 committed), it can follow; otherwise it waits for the coordinator to recover."
+      },
+      {
+        "text": "Commit, since it voted yes.",
+        "explanation": "Wrong as a general rule. Voting yes doesn't mean the decision was commit; another participant might have voted no. P2 only *happens* to be safe here if it can learn the outcome."
+      },
+      {
+        "text": "Ask P3 and follow the majority.",
+        "explanation": "Wrong. P3 is also in doubt, so it knows nothing more. Majority vote among in-doubt participants doesn't reveal the coordinator's decision."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The commit point is the coordinator's COMMIT log record. Decision is **commit**.\n2. P1 knows (it received commit).\n3. P2 and P3 know only that *they* voted yes.\n4. Options for P2:\n  - Ask P1: 'I committed tx42' → P2 commits (cooperative termination).\n  - If P1 is unreachable too: wait for the coordinator to restart, read its log, and resend COMMIT.\n5. Meanwhile P2 holds locks; transactions touching those rows block. That's the **blocking problem**.",
+    "link": {
+      "title": "Two-phase commit protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+    }
+  },
+  {
+    "id": "dist-transactions-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why isn't three-phase commit widely used to solve 2PC's blocking problem?",
+    "options": [
+      {
+        "text": "Its non-blocking guarantee assumes bounded delays and perfect failure detection; under a network partition, groups can reach different decisions.",
+        "explanation": "Correct. Recovery relies on communication and failure-detection assumptions that a partition violates. Extra phases do not make arbitrary partitions safe and non-blocking."
+      },
+      {
+        "text": "It needs three coordinators.",
+        "explanation": "Wrong. 3PC has one coordinator; the 'three' refers to message phases, not coordinators."
+      },
+      {
+        "text": "It's slower than sagas.",
+        "explanation": "Wrong. Speed isn't the core problem; 3PC's flaw is safety under partitions, and sagas offer different (weaker) guarantees altogether."
+      },
+      {
+        "text": "It can't handle participants voting no.",
+        "explanation": "Wrong. 3PC handles no votes just like 2PC: the coordinator aborts."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. 3PC adds a pre-commit state before the final commit decision.\n2. After a coordinator failure, survivors exchange protocol states through a termination protocol; local phase alone is not permission to decide independently.\n3. Under the assumed timing and failure model, this can complete without the failed coordinator.\n4. A network partition prevents a reliable view of all surviving participants and invalidates the non-blocking safety argument. Replicating transaction state with consensus is the common practical alternative, but progress still needs reachable quorums.",
+    "link": {
+      "title": "Nonblocking Commit Protocols (Skeen)",
+      "url": "https://www.cs.utexas.edu/~lorenzo/corsi/cs380d/papers/Ske81.pdf"
+    }
+  },
+  {
+    "id": "dist-transactions-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "How can consensus replication reduce 2PC blocking after an individual coordinator node crashes, provided the required groups retain reachable quorums?",
+    "options": [
+      {
+        "text": "They use 3PC instead.",
+        "explanation": "Wrong. Neither uses 3PC; its partition behaviour is unsafe."
+      },
+      {
+        "text": "They skip the prepare phase for single-row writes only.",
+        "explanation": "Wrong. Single-range optimisations exist, but that doesn't explain how multi-shard transactions avoid blocking."
+      },
+      {
+        "text": "They use sagas internally.",
+        "explanation": "Wrong. Sagas give up atomicity and isolation; these databases provide serializable ACID transactions."
+      },
+      {
+        "text": "The coordinator and each participant are consensus-replicated groups, so a node failure triggers a leader election rather than losing the decision.",
+        "explanation": "Correct. Replicated transaction state permits a surviving leader to recover the decision. Progress still requires the relevant quorums and participants to be reachable."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The blocking problem arises because the decision lives on **one** coordinator machine.\n\n1. Make the coordinator a Raft group of 3 or 5 replicas.\n2. The COMMIT record is a Raft log entry, committed on a majority.\n3. If the coordinator's leader crashes, a new leader is elected in seconds and already has the log.\n4. It resumes sending COMMIT.\n\nParticipants are Raft groups too, so their prepared state is replicated. Progress can still block if a required quorum becomes unreachable, including a partition that leaves all machines running.",
+    "link": {
+      "title": "Spanner (OSDI 2012)",
+      "url": "https://www.usenix.org/system/files/conference/osdi12/osdi12-final-16.pdf"
+    }
+  },
+  {
+    "id": "dist-transactions-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about two-phase commit are true? Select all that apply.",
+    "options": [
+      {
+        "text": "If a participant crashes before voting, the coordinator can safely abort the transaction.",
+        "explanation": "True. No yes vote means no promise to commit, so the coordinator treats the missing vote as no and aborts."
+      },
+      {
+        "text": "A participant that crashes after voting yes must, on restart, stay in doubt and ask the coordinator for the outcome.",
+        "explanation": "True. Its prepare record shows it promised to commit if told to. It can't abort on its own, and it doesn't know the decision, so it must find out."
+      },
+      {
+        "text": "If the coordinator crashes after logging COMMIT, in-doubt participants may safely abort after a timeout.",
+        "explanation": "False. The decision was commit, and some participants may already have committed. Aborting would break atomicity."
+      },
+      {
+        "text": "While participants are in doubt, other transactions that need the same rows are blocked.",
+        "explanation": "True. In-doubt participants keep their locks, so contention spreads the outage to unrelated transactions."
+      },
+      {
+        "text": "2PC keeps working through a coordinator crash as long as a majority of participants are up.",
+        "explanation": "False. Plain 2PC has no majority rule; the decision lives on the coordinator alone. Tolerating its failure needs a replicated (consensus-backed) coordinator."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Walk through the failure cases:\n\n1. **Participant fails before voting** → coordinator times out, aborts. ✓ safe.\n2. **Participant fails after yes** → restarts in doubt from its prepare record. ✓\n3. **Coordinator fails after COMMIT logged** → outcome is commit; participants must wait or learn it from a peer. Aborting is wrong. ✗\n4. **In doubt** → locks held, others block. ✓\n5. **Majority survival** → not a 2PC concept. ✗\n\nThe fix for 3 and 5 is the same: make the coordinator a Raft or Paxos group, as Spanner and CockroachDB do.",
+    "link": {
+      "title": "Two-phase commit protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+    }
+  }
+]

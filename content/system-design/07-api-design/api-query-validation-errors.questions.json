@@ -1,0 +1,62 @@
+[
+  {
+    "id": "api-designing-good-apis-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A client sends `GET /orders?stauts=shipped` (note the typo). Your API ignores unknown query parameters. What is the most likely consequence, and the best design response?",
+    "options": [
+      {
+        "text": "The request returns all orders regardless of status; the client may act on the wrong data. Reject unknown parameters with a 400 naming the bad one",
+        "explanation": "Correct. Silently ignoring an unrecognised filter turns a typo into 'no filter', which can mean emailing every customer instead of just shipped ones. A strict 400 with a Problem Details body naming `stauts` fails fast and visibly."
+      },
+      {
+        "text": "The request returns no orders, which is safe",
+        "explanation": "An ignored filter means no filter is applied, so it returns everything, not nothing. That's the opposite of safe."
+      },
+      {
+        "text": "The server crashes with a 500",
+        "explanation": "Ignoring parameters means the server just doesn't look at them. It won't crash; the danger is that it silently succeeds."
+      },
+      {
+        "text": "Nothing; ignoring unknown parameters is required for backwards compatibility",
+        "explanation": "Tolerating unknown *response* fields on the client side aids compatibility. On the server, rejecting unknown *request* filters is safer; you can still add new parameters later without breaking anyone."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Server sees `stauts`, doesn't recognise it, and drops it.\n2. Query becomes `SELECT * FROM orders` (paged).\n3. Client believes it has shipped orders and, say, sends 'your order has shipped' emails to everyone.\n\nStrict validation instead:\n\n```\nHTTP/1.1 400 Bad Request\nContent-Type: application/problem+json\n\n{\"type\": \".../unknown-parameter\",\n \"title\": \"Unknown query parameter\",\n \"detail\": \"'stauts' is not supported\"}\n```\n\nNote the asymmetry: servers should be strict about requests; clients should be tolerant of extra response fields.",
+    "link": {
+      "title": "RFC 9457: Problem Details for HTTP APIs",
+      "url": "https://www.rfc-editor.org/rfc/rfc9457"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q10",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your API returns RFC 9457 Problem Details. Which field should a client's code branch on to decide how to handle an error?",
+    "options": [
+      {
+        "text": "`detail`",
+        "explanation": "`detail` is a human-readable message about *this* occurrence (\"Balance is 30, cost is 50\"). Its wording varies per request and may change, so string-matching it is fragile."
+      },
+      {
+        "text": "`title`",
+        "explanation": "`title` is a human-readable summary. It's meant for people and could be reworded or translated, which would silently break code that matches on it."
+      },
+      {
+        "text": "`type`",
+        "explanation": "Correct. `type` is a stable URI that identifies the error *class*, such as insufficient funds. It's the machine-readable contract; the other text fields are for humans."
+      },
+      {
+        "text": "`instance`",
+        "explanation": "`instance` identifies the specific occurrence (e.g. the payment it relates to). It's different every time, so it can't tell you what kind of error happened."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Separate what's for machines from what's for people:\n\n| Field | For | Stable? |\n|---|---|---|\n| `type` | Code | Yes |\n| `status` | Code | Yes |\n| `title` | People | Mostly |\n| `detail` | People | No |\n| `instance` | Support | No |\n\nSo the client does `if problem.type == \".../probs/funds\"`, then reads extension fields such as `balance` for context. The `status` alone is too coarse, since many different errors share 422.",
+    "link": {
+      "title": "RFC 9457: Problem Details for HTTP APIs",
+      "url": "https://www.rfc-editor.org/rfc/rfc9457"
+    }
+  }
+]

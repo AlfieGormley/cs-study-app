@@ -1,0 +1,126 @@
+[
+  {
+    "id": "dist-consistency-models-q5",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does **eventual consistency** guarantee?",
+    "options": [
+      {
+        "text": "Reads return the latest write within a bounded time, e.g. 1 second.",
+        "explanation": "Wrong. Eventual consistency gives no time bound at all; bounded staleness is a separate, stronger model."
+      },
+      {
+        "text": "Clients see their own writes immediately.",
+        "explanation": "Wrong. That's read-your-writes, an extra session guarantee that plain eventual consistency doesn't include."
+      },
+      {
+        "text": "All clients see writes in the same order.",
+        "explanation": "Wrong. Agreement on order is part of sequential consistency and stronger; eventual consistency allows replicas to apply writes in different orders as long as they converge."
+      },
+      {
+        "text": "If writes stop, all replicas will eventually converge to the same value.",
+        "explanation": "Correct. That's the whole promise: convergence in the absence of new writes. Interim reads can be stale or out of order."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Strip it to the definition: **liveness only**. Eventually, with no new updates, replicas agree.\n\nIt says nothing about:\n\n- how long (could be ms or hours),\n- what you read meanwhile,\n- the order writes appear in.\n\nAnd to converge, replicas need a deterministic conflict rule (LWW, CRDT merge). That's why people add session guarantees on top.",
+    "link": {
+      "title": "Eventual consistency (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Eventual_consistency"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your global social app must keep working in every region during a trans-Atlantic partition, and must never show a reply before the post it answers. Clients remain with their region during the partition and dependencies are tracked. Which listed model best fits?",
+    "options": [
+      {
+        "text": "Linearizability",
+        "explanation": "Wrong. Linearizability can't stay available on both sides of a partition (the CAP theorem); one side would have to reject requests."
+      },
+      {
+        "text": "Sequential consistency",
+        "explanation": "Wrong. Sequential consistency also needs a single global order agreed by all nodes, which a partitioned system can't maintain while both sides accept writes."
+      },
+      {
+        "text": "Causal consistency",
+        "explanation": "Correct under the stated sticky-client assumption. Causal dependencies keep replies behind their posts, while each region can continue local work. Moving a client to a replica missing its dependencies can require waiting."
+      },
+      {
+        "text": "Eventual consistency only",
+        "explanation": "Wrong. Eventual consistency stays available, but it doesn't guarantee reply-after-post ordering. You can do better."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Two requirements:\n\n1. **Available during partitions** rules out linearizable and sequential (both need global agreement on order).\n2. **Reply after post** is a causal dependency: the reply was written after reading the post.\n\nCausal consistency tracks dependencies (e.g. reply carries 'depends on post #123 @ version vector V'). A replica only exposes the reply once it has the post. Each side of the partition keeps working; histories merge after healing.\n\nThe availability claim assumes clients remain with a replica that has their causal history. Arbitrary migration during a partition is not covered.",
+    "link": {
+      "title": "Causal consistency (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/causal"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q8",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Client A writes the value 1 to key x and gets an acknowledgement. One second after that acknowledgement, client B, which has never communicated with A, reads x and gets **0**, the initial value. Which consistency models permit this history? Select all that apply.",
+    "options": [
+      {
+        "text": "Linearizability",
+        "explanation": "Not permitted. B's read started after A's write completed in real-time order, so it must return 1 or something newer."
+      },
+      {
+        "text": "Sequential consistency",
+        "explanation": "Permitted. The total order \"B reads 0, then A writes 1\" respects each client's own program order. Sequential consistency doesn't require the order to match real-time order across clients."
+      },
+      {
+        "text": "Causal consistency",
+        "explanation": "Permitted. A's write and B's read are not causally related (B never saw anything from A), so B may observe the older state."
+      },
+      {
+        "text": "Eventual consistency",
+        "explanation": "Permitted. Eventual consistency allows stale reads in the meantime; it only promises convergence once writes stop."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Check each model's rule against the history:\n\n```\nA: |--w x=1--|\nB:              |--r x--| -> 0\n```\n\n1. **Linearizable**: real-time order is binding. The write finished before the read began, so the read must see it. ✗\n2. **Sequential**: find *any* single order that respects each client's program order. [B: read 0, A: write 1] works. ✓\n3. **Causal**: only causally related operations must be ordered. There's no path from A's write to B's read. ✓\n4. **Eventual**: anything goes in the interim. ✓\n\nThe moment B learns about A's write through some other channel (A phones B), that external dependency matters. Without passing causal metadata to the database, a weaker causal service may still return stale data; linearizability covers the completed write using real-time order.",
+    "link": {
+      "title": "Sequential consistency (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/sequential"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Treat the feed as one add-only set, initially empty, and each read as a full snapshot with no filtering. Bob posts \"A\" and Carol posts \"B\" at about the same time; neither has seen the other's post. Dave's first read of the feed shows only A. Erin's first read shows only B. What is the **strongest** model this history is consistent with?",
+    "options": [
+      {
+        "text": "Linearizability",
+        "explanation": "Wrong. One copy of the feed would contain A and B in a single order, so it couldn't show A without B to one reader and B without A to another."
+      },
+      {
+        "text": "Sequential consistency",
+        "explanation": "Wrong. Sequential consistency needs one total order of the two writes that every reader agrees on. If A comes first, nobody can see B without A, yet Erin did."
+      },
+      {
+        "text": "Causal consistency",
+        "explanation": "Correct. The two posts are concurrent (neither caused the other), and causal consistency lets different readers see concurrent writes in different orders."
+      },
+      {
+        "text": "Only eventual consistency",
+        "explanation": "Wrong. The history is causally consistent too, and causal is stronger than eventual."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Is there a causal link between the posts? Neither author saw the other's, so no: they are **concurrent**.\n2. Sequential: pick an order. [A, B] means Erin's read of \"B only\" is impossible; [B, A] means Dave's \"A only\" is impossible. ✗\n3. Causal: only causally related writes must be ordered. Concurrent ones may appear in any order to different readers. ✓\n\nIf Carol had replied to Bob's post, the reply would be causally after A, and causal consistency would forbid anyone seeing the reply without A.",
+    "link": {
+      "title": "Causal consistency (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/causal"
+    }
+  }
+]

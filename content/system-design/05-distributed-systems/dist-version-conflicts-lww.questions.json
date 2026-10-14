@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dist-crdts-gossip-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two users edit the same shopping cart on different replicas at the same moment: one adds a book, the other adds a pen. The store uses **last-write-wins**. What happens?",
+    "options": [
+      {
+        "text": "One of the additions is silently lost.",
+        "explanation": "Correct. Each write replaces the whole cart; the one with the lower timestamp is discarded, even though both clients were told their write succeeded."
+      },
+      {
+        "text": "The cart contains both items.",
+        "explanation": "Wrong. LWW keeps one whole value (the one with the higher timestamp) and discards the other; it doesn't merge."
+      },
+      {
+        "text": "Both writes fail with a conflict error.",
+        "explanation": "Wrong. LWW never reports conflicts; it resolves them automatically by timestamp. That's its appeal and its danger."
+      },
+      {
+        "text": "The store keeps both carts as siblings.",
+        "explanation": "Wrong. Keeping siblings is what version-vector stores like Riak do; LWW throws one away."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Replica A: cart = [book], ts = 10.050.\n2. Replica B: cart = [pen], ts = 10.020.\n3. Replication: both see both versions; LWW keeps max ts → [book].\n4. The pen is gone, and neither user was told.\n\nBetter: model the cart as an OR-Set CRDT so the merge is [book, pen].",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Riak read returns two siblings with version vectors **{A:2, B:1}** and **{A:1, B:2}**. The client merges them and writes the result back through coordinator B. What version vector should the new value carry?",
+    "options": [
+      {
+        "text": "{A:2, B:2}",
+        "explanation": "Wrong. That's the element-wise max, which dominates both siblings, but the write itself is a new update on B, so B's entry must also be incremented."
+      },
+      {
+        "text": "{A:3, B:3}",
+        "explanation": "Wrong. Only the coordinating replica's entry is incremented. Bumping A as well would claim an update on A that never happened."
+      },
+      {
+        "text": "{A:1, B:1}",
+        "explanation": "Wrong. That's the element-wise minimum, which is dominated by both siblings, so the store would treat the merged value as older than both and discard it."
+      },
+      {
+        "text": "{A:2, B:3}",
+        "explanation": "Correct. Take the element-wise max, {A:2, B:2}, so the new version dominates both siblings, then increment B for this write."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Max of the siblings:\n\n| | A | B |\n|---|---|---|\n| sibling 1 | 2 | 1 |\n| sibling 2 | 1 | 2 |\n| max | 2 | 2 |\n\n2. Increment the coordinator's entry (B): **{A:2, B:3}**.\n3. Check: {A:2, B:1} ≤ {A:2, B:3} ✓ and {A:1, B:2} ≤ {A:2, B:3} ✓, so both siblings are now obsolete and can be discarded.\n\nIf the client had written without the context from its read, the store would see a new vector concurrent with both, and you'd have three siblings instead of one.",
+    "link": {
+      "title": "Version vector (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Version_vector"
+    }
+  }
+]

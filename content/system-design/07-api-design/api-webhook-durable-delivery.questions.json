@@ -1,0 +1,138 @@
+[
+  {
+    "id": "api-webhooks-gateways-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're consuming Stripe-style payment webhooks with bounded retries and possible duplicates. Which practices should you adopt? Select all that apply.",
+    "options": [
+      {
+        "text": "Verify the signature, persist the event to a queue, return 200 immediately, then process asynchronously",
+        "explanation": "Correct. Fast acknowledgement avoids provider timeouts (and the duplicate retries they cause), and your downstream outages don't turn into webhook failures."
+      },
+      {
+        "text": "Deduplicate on the authenticated event id, in the same transaction as the local database side effect",
+        "explanation": "Correct. Retries can produce duplicates even though bounded retries cannot guarantee delivery. Doing the dedupe insert and the business update atomically prevents a crash between them leaving things inconsistent."
+      },
+      {
+        "text": "Assume events arrive in the order they were created",
+        "explanation": "Wrong. Providers such as Stripe explicitly don't guarantee order. Retries and parallel delivery mean `updated` can arrive before `created`."
+      },
+      {
+        "text": "Periodically reconcile against the provider's events or objects API",
+        "explanation": "Correct. If your endpoint was down beyond the retry window (Stripe retries for up to 3 days), reconciliation catches missed events. Webhooks are a notification, not your only source of truth."
+      },
+      {
+        "text": "Return 500 for event types you don't handle so the provider stops sending them",
+        "explanation": "Wrong. A 5xx tells the provider delivery *failed*, so it retries for days and may eventually disable your endpoint. Return 2xx for events you ignore, and unsubscribe from them in the provider's settings."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Check each against the delivery model (duplicate-capable, unordered, bounded retries on non-2xx; eventual delivery is not guaranteed):\n\n1. Ack fast + async: avoids timeouts. ✔\n2. Dedupe atomically: handles duplicate delivery. ✔\n3. Assume order: contradicts 'unordered'. ✘\n4. Reconcile: covers deliveries lost beyond the retry window. ✔\n5. 500 for unhandled: causes days of retries. ✘",
+    "link": {
+      "title": "Stripe docs: Receive Stripe events in your webhook endpoint",
+      "url": "https://docs.stripe.com/webhooks"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run a webhook delivery platform. One large customer's endpoint starts responding in 25 s (timeouts at 30 s). Soon, webhooks for **all** customers are delayed by minutes. What's the most likely design flaw?",
+    "options": [
+      {
+        "text": "The HMAC signatures are too slow to compute",
+        "explanation": "The scenario points to workers held by slow network responses. Measure cryptographic costs on the actual hardware; no HMAC benchmark is supplied here."
+      },
+      {
+        "text": "All customers share one pool of delivery workers, so slow deliveries to one endpoint tie up workers and starve everyone else",
+        "explanation": "Correct. If the large customer generates many events and each takes 25 s, workers sit blocked on that endpoint. Fix with per-endpoint concurrency limits, separate queues per customer (or per shard), shorter timeouts, and circuit breakers that back off failing endpoints."
+      },
+      {
+        "text": "Exponential backoff is too aggressive",
+        "explanation": "Backoff slows retries to the failing endpoint. It reduces pressure rather than causing delays for other customers."
+      },
+      {
+        "text": "Events are signed with the wrong secret",
+        "explanation": "A wrong secret would cause the customer's verification to fail (and return 4xx), not make deliveries to other customers slow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Quantify the starvation:\n\n- 200 delivery workers shared by all customers.\n- Big customer emits 10 events/s, each now holding a worker for 25 s.\n- Workers needed for that customer alone:\n\n```formula\nW = λ × T\nW = 10 per s × 25 s = 250\nwhere\nW: the number of workers busy with this customer at any moment\nλ: lambda, the rate of events for this customer, 10 per second\nT: how long each delivery holds a worker, 25 s\ns: seconds\nIn words: 10 new deliveries a second, each taking 25 s, keep **250** workers busy, more than the 200 in the pool.\n```\n\nEvery worker is soon stuck waiting on one slow endpoint, and everyone else's events queue up behind it.\n\nFixes:\n1. Cap concurrency per endpoint (e.g. 10 in flight).\n2. Shard queues by customer so one backlog can't block others.\n3. Lower timeouts (5–10 s) and open a circuit breaker after repeated failures.",
+    "link": {
+      "title": "Standard Webhooks specification",
+      "url": "https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're building webhook delivery for your own SaaS platform. Which design choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Write the event to an outbox table in the same transaction as the state change that caused it, and deliver from there",
+        "explanation": "Correct. If the transaction commits, the event is guaranteed to exist; if it rolls back, no phantom event is sent."
+      },
+      {
+        "text": "Send the webhook synchronously inside the API request that caused the event",
+        "explanation": "Unsound. A slow or down customer endpoint then slows or fails *your* API request, and a crash between commit and send loses the event."
+      },
+      {
+        "text": "Give each customer endpoint its own queue or concurrency limit, so one slow endpoint can't starve the rest",
+        "explanation": "Correct. Isolation stops one customer's 25-second timeouts from tying up the shared worker pool."
+      },
+      {
+        "text": "Retry failed deliveries every second, indefinitely",
+        "explanation": "Unsound. That hammers an endpoint that's already struggling and never gives up. Use exponential backoff over hours to days, then disable and notify."
+      },
+      {
+        "text": "Sign `id.timestamp.body` with a per-endpoint secret, and offer a `GET /events` API for reconciliation",
+        "explanation": "Correct. Signing the id and timestamp lets consumers reject forgeries and stale replays; the events API lets them recover anything they missed."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Check each choice against the provider's three jobs: **durably record** events, **isolate customer workloads**, and **let consumers verify and recover**.\n\n| Choice | Lose? | Isolate? | Verify? |\n|---|---|---|---|\n| Outbox | Safe | - | - |\n| Sync send | Loses | Couples | - |\n| Per-endpoint queues | - | Yes | - |\n| Retry every 1 s | - | Hurts | - |\n| Sign + events API | - | - | Yes |\n\nThe outbox is the same transactional pattern as in the idempotency lesson, applied to outgoing events.",
+    "link": {
+      "title": "Standard Webhooks specification",
+      "url": "https://github.com/standard-webhooks/standard-webhooks/blob/main/spec/standard-webhooks.md"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A provider retries failed webhooks after 1 min, 5 min, 30 min, 2 h and 8 h (each delay measured from the previous attempt). Your endpoint goes down just before an event is first sent, and stays down for 6 hours. When is the event finally delivered, measured from the first attempt?",
+    "options": [
+      {
+        "text": "About 6 hours, as soon as the endpoint recovers",
+        "explanation": "Providers don't know when you recover; they only try at scheduled times. The next attempt after the outage ends is what matters."
+      },
+      {
+        "text": "About 2 h 36 min",
+        "explanation": "That's when the fourth retry happens, but your endpoint is still down then (the outage lasts 6 h)."
+      },
+      {
+        "text": "About 10 h 36 min, 4 hours 36 minutes after your endpoint came back",
+        "explanation": "Correct. Cumulative attempt times are 0, 1 min, 6 min, 36 min, 2 h 36 min and 10 h 36 min. The first one after the 6-hour outage is the last."
+      },
+      {
+        "text": "Never: after five failed retries the event is dropped",
+        "explanation": "Five retries means six attempts in total, and the sixth (at 10 h 36 min) comes after the outage ends."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Add up the delays to get the time of each attempt:\n\n```\nattempt  delay   at\n1        -       0:00   down\n2        1 min   0:01   down\n3        5 min   0:06   down\n4        30 min  0:36   down\n5        2 h     2:36   down\n6        8 h     10:36  up\n```\n\nThe endpoint recovers at 6:00 but waits until **10:36** for the event: 4 hours 36 minutes of avoidable staleness.\n\nThis is why consumers shouldn't rely on retries alone. After an outage, **reconcile** through the provider's events API (or trigger redelivery) instead of waiting for the backoff schedule.",
+    "link": {
+      "title": "Stripe docs: Receive Stripe events in your webhook endpoint",
+      "url": "https://docs.stripe.com/webhooks"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "dist-consistency-models-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user updates their display name, the page reloads, and the old name appears. A second later it shows the new one. Which guarantee was violated?",
+    "options": [
+      {
+        "text": "Monotonic writes",
+        "explanation": "Wrong. Monotonic writes is about a client's own writes being applied in order. Only one write happened here."
+      },
+      {
+        "text": "Read-your-writes",
+        "explanation": "Correct. The user failed to see their own completed write, because the reload was served by a replica that hadn't yet received it."
+      },
+      {
+        "text": "Eventual consistency",
+        "explanation": "Wrong. Eventual consistency was honoured: the replicas converged a second later. It just doesn't promise anything about the interim."
+      },
+      {
+        "text": "Writes-follow-reads",
+        "explanation": "Wrong. That guarantee orders writes made after a read relative to what was read; this scenario is about reading after writing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The write went to the leader and succeeded.\n2. The reload read from an async replica with replication lag.\n3. The user saw a state older than their own write.\n\nThat is precisely a **read-your-writes** violation. Fixes: read the user's own data from the leader, or have the client send its last write position so the replica waits (or redirects) until it has caught up.",
+    "link": {
+      "title": "Read your writes (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/read-your-writes"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user refreshes a comment thread and sees 12 comments, refreshes again and sees 9, then 12 again. Reads go round-robin to async replicas. What's the cheapest fix? Assume comments are only added, with no intervening deletions.",
+    "options": [
+      {
+        "text": "Make all replication synchronous.",
+        "explanation": "Wrong for 'cheapest'. It would fix it, but makes every write wait for every replica and fails writes when one replica is down."
+      },
+      {
+        "text": "Run Raft consensus for every read.",
+        "explanation": "Wrong. Consensus reads give linearizability, far stronger (and slower) than needed for this anomaly."
+      },
+      {
+        "text": "Pin each user's reads to the same replica (e.g. hash of user id).",
+        "explanation": "Correct while the chosen replica keeps an advancing history. To preserve the guarantee through failover, carry the last-seen replication position and require the replacement to catch up."
+      },
+      {
+        "text": "Add a cache in front of the replicas with a 1-hour TTL.",
+        "explanation": "Wrong. A cache hides changes for an hour and, if it misses, still reads from a random replica. It trades one anomaly for heavy staleness."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The anomaly is reads going **backwards in time**: a monotonic reads violation caused by hopping between replicas with different lag.\n\n- Replica R1 is at log position 1,000 (12 comments), R2 at 940 (9 comments).\n- Round-robin alternates R1, R2, R1.\n\nPinning the user to one replica means each read sees a log position at or past the last one. If that replica fails, rehash to another, and carry the last-seen position so the new replica waits until it's caught up.",
+    "link": {
+      "title": "Monotonic reads (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/monotonic-reads"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your app gives read-your-writes by having the client keep the log position (LSN) of its last write and sending it with each read. A user edits their profile on their **phone**, then opens the **laptop** app and sees the old profile. What is the best fix?",
+    "options": [
+      {
+        "text": "Make all replicas synchronous.",
+        "explanation": "Wrong. It would work, but it makes every write wait for every replica and fail when any replica is down. That's a heavy price for a per-user guarantee."
+      },
+      {
+        "text": "Clear the laptop's cache on start-up.",
+        "explanation": "Wrong. The stale data comes from a lagging replica, not the laptop's cache. A fresh read can still hit the same lagging replica."
+      },
+      {
+        "text": "Record the user's last-write LSN on the server side (per user), so any device's read is served only by a replica that has caught up to it.",
+        "explanation": "Correct. The token lived only on the phone. Storing it per user, where every device can use it, extends read-your-writes across devices without global coordination."
+      },
+      {
+        "text": "Switch to eventual consistency.",
+        "explanation": "Wrong. That is already the underlying behaviour; it's what causes the anomaly."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Why it failed:\n\n1. Phone writes at LSN 5,000 and remembers 5,000 locally.\n2. Laptop has no token, so its read goes to any replica.\n3. A replica at LSN 4,950 answers with the old profile.\n\nFix: keep `last_write_lsn` per **user** (for example in the session store or a small table keyed by user id). Each read looks it up and goes to a replica at or past that LSN, or to the leader. A simpler, coarser alternative: route a user's reads to the leader for a minute after any write by that user. Timed routing is only a heuristic unless lag is bounded below the interval and failover preserves the confirmed history.",
+    "link": {
+      "title": "Read your writes (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/read-your-writes"
+    }
+  }
+]

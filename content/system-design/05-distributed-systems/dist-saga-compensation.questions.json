@@ -1,0 +1,92 @@
+[
+  {
+    "id": "dist-transactions-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An order saga runs: (1) create order PENDING, (2) reserve stock, (3) charge card, (4) send confirmation email. Step 3 fails (card declined). What does the saga do?",
+    "options": [
+      {
+        "text": "Roll back the database transactions of steps 1 and 2.",
+        "explanation": "Wrong. Steps 1 and 2 already committed in their own services; there's no open transaction to roll back. A saga undoes them with new compensating transactions."
+      },
+      {
+        "text": "Retry step 3 until it succeeds.",
+        "explanation": "Wrong. A declined card is a business failure, not a transient error. Retrying forever won't help; only steps after the pivot should be retried to completion."
+      },
+      {
+        "text": "Run compensations in reverse: release the stock, then cancel the order.",
+        "explanation": "Correct. Each completed step gets a semantic undo, executed in reverse order, while step 4 never runs."
+      },
+      {
+        "text": "Send the confirmation email, then refund.",
+        "explanation": "Wrong. The email (step 4) shouldn't run because the saga failed before it; it's not compensatable, which is why it comes last."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Steps and their compensations:\n\n| Step | Compensation |\n|---|---|\n| T1 create order | C1 cancel order |\n| T2 reserve stock | C2 release stock |\n| T3 charge card (pivot) | – |\n| T4 email (retriable) | – |\n\nT3 fails, so: run **C2** (release), then **C1** (cancel). Each compensation is idempotent and retried until it succeeds. The customer sees 'payment declined, order cancelled'.",
+    "link": {
+      "title": "Saga pattern (microservices.io)",
+      "url": "https://microservices.io/patterns/data/saga.html"
+    }
+  },
+  {
+    "id": "dist-transactions-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An orchestrated saga calls Payments to charge £40 for order 77 with idempotency key `o77-charge`. The call times out, so the orchestrator compensates: it calls refund, Payments finds no charge, and returns OK. Ten seconds later, the original charge request, delayed in a queue, reaches Payments. How should the system be designed so the customer isn't charged for a cancelled order?",
+    "options": [
+      {
+        "text": "Retry the refund on a timer for an hour, in case a charge turns up.",
+        "explanation": "Wrong. It narrows the window but doesn't close it, and the customer may still see a charge and a refund on their statement."
+      },
+      {
+        "text": "Make the forward step the pivot so it never needs compensating.",
+        "explanation": "Wrong. Calling it the pivot doesn't change the fact that its outcome is unknown after a timeout; the saga still has to decide what to do."
+      },
+      {
+        "text": "It can't be prevented; this is an inherent weakness of sagas.",
+        "explanation": "Wrong. It is preventable with careful design at the participant."
+      },
+      {
+        "text": "Payments records \"o77-charge cancelled\" when it handles the refund, and rejects any later charge with that key.",
+        "explanation": "Correct. The participant records cancellation against the forward operation's identifier and rejects a late charge. The refund/cancellation API request has its own idempotency key; correlation and request deduplication are different roles."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The race:\n\n```\nt=0   charge(o77) sent, delayed\nt=5   timeout -> refund(o77)\n      no charge found -> OK\nt=15  charge(o77) arrives\n```\n\nWithout a record of the refund, Payments would charge at t=15 and nothing would undo it.\n\nDesign rules:\n\n1. The compensation must be safe if the forward step never ran (a refund of nothing is a no-op).\n2. It must leave a durable record against the **same forward-operation identifier**, while using a distinct idempotency key for the compensation request, so the forward step arriving later is rejected.\n3. Better still, before compensating, query the step's status by key.",
+    "link": {
+      "title": "Compensating Transaction pattern (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/compensating-transaction"
+    }
+  },
+  {
+    "id": "dist-transactions-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A travel-booking saga has four steps: hold a seat (can be released), charge the card, issue the e-ticket (can't be undone once sent to the airline), and email the itinerary. Assume the hold guarantees ticket issuance can complete with retries once payment succeeds. Which ordering follows the compensatable → pivot → retriable pattern?",
+    "options": [
+      {
+        "text": "Hold seat, charge card, issue ticket, email",
+        "explanation": "Correct. The hold is compensatable, the charge is the pivot, and once it succeeds the ticket and email are retriable steps that must eventually succeed."
+      },
+      {
+        "text": "Issue ticket, hold seat, charge card, email",
+        "explanation": "Wrong. Issuing the ticket first puts an irreversible step before anything that might fail, such as a declined card, with no way to undo it."
+      },
+      {
+        "text": "Email, hold seat, charge card, issue ticket",
+        "explanation": "Wrong. Emailing an itinerary before you know the booking will succeed tells the customer something that may turn out to be false."
+      },
+      {
+        "text": "Charge card, hold seat, issue ticket, email",
+        "explanation": "Wrong. Charging before holding the seat means a \"no seats left\" failure requires a refund, which is exactly the kind of messy compensation good ordering avoids."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Classify each step:\n\n| Step | Type |\n|---|---|\n| Hold seat | compensatable (release) |\n| Charge card | pivot (go/no-go) |\n| Issue ticket | retriable (can't undo) |\n| Email | retriable |\n\nPut everything that may fail for business reasons (no seat, card declined) **before** the pivot, so failures are undone cheaply. After the pivot, the saga only moves forward: ticket issuance and email are retried, idempotently, until they succeed.",
+    "link": {
+      "title": "Saga pattern (microservices.io)",
+      "url": "https://microservices.io/patterns/data/saga.html"
+    }
+  }
+]

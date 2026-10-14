@@ -1,0 +1,62 @@
+[
+  {
+    "id": "api-designing-good-apis-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should every list endpoint enforce a maximum page size, even for authenticated, trusted clients?",
+    "options": [
+      {
+        "text": "Because JSON can't represent more than 1,000 array elements",
+        "explanation": "JSON has no array size limit. The concern is cost, not format."
+      },
+      {
+        "text": "Because HTTP/1.1 limits responses to 1 MB",
+        "explanation": "HTTP has no such limit; responses can be gigabytes. Again, the issue is resource cost on your side."
+      },
+      {
+        "text": "To make offset pagination stable under concurrent inserts",
+        "explanation": "A page size cap doesn't fix offset's instability. Items still shift between pages when rows are inserted or deleted; keyset pagination with stable sort keys avoids those shifts; a stable snapshot is another option."
+      },
+      {
+        "text": "Because one request for an unbounded result set (e.g. 2 million orders) can exhaust database, memory and network resources and hurt every other client",
+        "explanation": "Correct. A bounded page keeps each request's cost predictable. Stripe, for example, defaults to 10 and caps at 100. Trusted clients still have bugs, and one runaway loop can take the database down."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Estimate the unbounded case:\n\n```formula\nS = N × s\nS ≈ 2,000,000 × 1 KB\nS ≈ 2,000,000 KB ≈ 2 GB\nwhere\nS: the total size of the response\nN: the number of orders returned, here 2,000,000\ns: the average size of one order as JSON, about 1 KB\nKB: kilobyte, 1,000 bytes\nGB: gigabyte, 1,000,000 KB\n≈: approximately equal to\nIn words: two million orders at about a kilobyte each is about **2 GB** of JSON in one response.\n```\n\n- The server must read all rows, hold or stream them, and serialise them.\n- The client must download and parse 2 GB.\n\nWith `limit` capped at 100: ~100 KB per response, while database time still depends on the query and workload. Page limits bound result size; query budgets and measurements support capacity planning.",
+    "link": {
+      "title": "Stripe API: Pagination",
+      "url": "https://docs.stripe.com/api/pagination"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user is paging through a feed sorted newest-first using `?limit=10&offset=N`. After they load page 1 (items 1–10), 3 new items are inserted at the top. What do they see on page 2 (`offset=10`)?",
+    "options": [
+      {
+        "text": "Items 11–20, as expected",
+        "explanation": "Offset is evaluated against the *current* data, not the data at the time page 1 loaded. The 3 inserts shift every item down by 3 positions."
+      },
+      {
+        "text": "Items 8–17: the last three items from page 1 are shown again",
+        "explanation": "Correct. After 3 inserts, old item 8 is now at position 11. `OFFSET 10` skips positions 1–10 and returns positions 11–20, which are old items 8–17. Items 8, 9 and 10 appear twice."
+      },
+      {
+        "text": "Items 14–23: three items are skipped",
+        "explanation": "Skipping happens when items are *deleted* above the cursor position, shifting items up. Inserts shift items down, causing duplicates instead."
+      },
+      {
+        "text": "An error, because the data changed",
+        "explanation": "Offset pagination has no way to detect changes; it silently returns whatever is at that position now."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Track positions:\n\n```\nBefore: pos 1..10 = items 1..10\nInsert 3 at top:\n  pos 1..3  = new X Y Z\n  pos 4..13 = items 1..10\n  pos 14..  = items 11..\n```\n\nPage 2 = `OFFSET 10 LIMIT 10` = positions 11–20.\n\n- Positions 11, 12, 13 = old items **8, 9, 10** (duplicates)\n- Positions 14–20 = items 11–17\n\nThe first item of page 2 follows from the shift:\n\n```formula\nf = offset + 1 − k\nf = 10 + 1 − 3 = 8\nwhere\nf: the old item number that now sits at the top of page 2\noffset: the number of positions the query skips, here 10\nk: the number of new items inserted at the top, here 3\nIn words: the inserts push every old item down 3 places, so page 2 starts 3 items earlier than it should.\n```\n\nSo the user sees items 8–17. With an immutable compound cursor (`created_at, id`) defining the same total order, page 2 resumes after item 10 without the insertion-induced duplicates.",
+    "link": {
+      "title": "Use The Index, Luke: Paging through results",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  }
+]

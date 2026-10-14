@@ -1,0 +1,100 @@
+[
+  {
+    "id": "dist-consistency-models-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A system offers **serializable** transactions but not linearizability. Alice commits a transaction setting her balance to £50 (from £100). One second after that commit, she runs a read-only transaction and sees £100. Is that allowed?",
+    "options": [
+      {
+        "text": "No: serializability forbids reading stale data.",
+        "explanation": "Wrong. Serializability only requires equivalence to *some* serial order; ordering the read before the write is a valid serial order, even though it contradicts real-time order."
+      },
+      {
+        "text": "Yes: serializability doesn't require the serial order to respect real-time order.",
+        "explanation": "Correct. Placing the read-only transaction before the write gives a valid serial history. Forbidding this needs strict serializability (serializable + linearizable)."
+      },
+      {
+        "text": "Yes, but only if the two transactions touched different rows.",
+        "explanation": "Wrong. They touch the same row; the anomaly is allowed regardless, because serializability ignores real-time ordering."
+      },
+      {
+        "text": "No: any serializable database is automatically linearizable.",
+        "explanation": "Wrong. They're independent properties. Serializability is about multi-object transactions; linearizability is about real-time recency. A system can have one without the other."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Serial orders available: [T_write, T_read] or [T_read, T_write].\n2. [T_read, T_write] produces read = £100, write = £50. Valid serial execution.\n3. Serializability is satisfied.\n4. But T_read started after T_write committed, so linearizability (real-time order) is violated.\n\nThis happens in practice with snapshot reads on lagging replicas. Spanner's TrueTime commit-wait exists precisely to rule this out, giving **strict serializability**.",
+    "link": {
+      "title": "Linearizability versus serializability (Bailis)",
+      "url": "https://www.bailis.org/blog/linearizability-versus-serializability/"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A sharded database guarantees **serializable** transactions. T1 credits £100 to account X (shard 1) and commits. After T1 commits, T2 credits £50 to account Y (shard 2). An auditor's read-only T3 sees Y's credit but **not** X's. Which guarantee would rule this out?",
+    "options": [
+      {
+        "text": "None is needed: serializability already forbids it.",
+        "explanation": "Wrong. The serial order T2, T3, T1 explains exactly what T3 saw, so the history is serializable. It just contradicts real-time order."
+      },
+      {
+        "text": "Strict serializability",
+        "explanation": "Correct. Strict serializability requires the serial order to respect real-time order. T1 committed before T2 started, so T1 must come first, and any transaction that sees T2 must also see T1."
+      },
+      {
+        "text": "Read-your-writes",
+        "explanation": "Wrong. That's a per-session guarantee about a client seeing its own writes. The auditor wrote nothing."
+      },
+      {
+        "text": "Snapshot isolation",
+        "explanation": "Wrong. Snapshot isolation is weaker than serializability and also doesn't require snapshots to respect real-time order across shards."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Look for a serial order that explains T3:\n\n1. T3 sees T2 but not T1.\n2. Order [T2, T3, T1] produces exactly that. So it's **serializable**.\n3. But T1 finished before T2 began. An order respecting real-time precedence must have T1 before T2, and then T3 couldn't see T2 without T1.\n4. So it violates **strict serializability**.\n\nThis \"causal reverse\" anomaly is possible when shards assign commit timestamps from unsynchronised clocks. Spanner rules it out with TrueTime and commit wait.",
+    "link": {
+      "title": "Strict serializability (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/strict-serializable"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q11",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about consistency models are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Every linearizable history is also sequentially consistent.",
+        "explanation": "True. The linearization order is a single total order that respects real-time order, so it also respects each client's program order."
+      },
+      {
+        "text": "If every key is linearizable on its own, operations across all keys together are linearizable.",
+        "explanation": "True. Linearizability is local (composable), which is why you can shard keys across independent linearizable groups."
+      },
+      {
+        "text": "A serializable database is automatically linearizable.",
+        "explanation": "False. Serializability allows a serial order that contradicts real-time order, for example a read-only transaction ordered before a write that finished earlier."
+      },
+      {
+        "text": "Sequential consistency requires operations from different clients to appear in real-time order.",
+        "explanation": "False. It only requires one total order that respects each client's own program order. Respecting real-time order across clients is what linearizability adds."
+      },
+      {
+        "text": "Strict serializability means serializable plus real-time ordering of transactions.",
+        "explanation": "True. It's the transactional analogue of linearizability, sometimes called external consistency."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Sort the models by two features:\n\n| Model | Transactions? | Real-time order? |\n|---|---|---|\n| Linearizable | no | yes |\n| Sequential | no | no |\n| Serializable | yes | no |\n| Strict serializable | yes | yes |\n\n- Does linearizable imply sequential? Yes, real-time order is stricter than per-client order.\n- Composability: a property of linearizability, not of sequential consistency.\n- Does serializable imply linearizable? No, the column for real-time order differs.",
+    "link": {
+      "title": "Linearizability versus serializability (Peter Bailis)",
+      "url": "https://www.bailis.org/blog/linearizability-versus-serializability/"
+    }
+  }
+]

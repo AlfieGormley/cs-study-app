@@ -1,0 +1,73 @@
+[
+  {
+    "id": "dist-quorums-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For a strict leaderless store with 3 replicas per key, 2 write acknowledgements and 2 read responses using timestamp last-write-wins and no blocking read repair, which scenarios demonstrate a linearisability violation? Select all that apply.",
+    "options": [
+      {
+        "text": "A write in progress has reached one replica; one reader sees it, a later reader doesn't.",
+        "explanation": "Correct. The first read overlapped the replica with the new value, the second overlapped two that didn't yet have it. New-then-old violates linearizability unless reads repair synchronously."
+      },
+      {
+        "text": "A write completes, then a second write begins and completes, but clock skew gives it an older timestamp so subsequent reads return the first value.",
+        "explanation": "Correct. These writes do not overlap, so real-time order requires the second to take effect after the first. Skewed timestamp order can violate that."
+      },
+      {
+        "text": "A write that reached 2 replicas, followed by a read of any 2 replicas",
+        "explanation": "Wrong. After a successful quorum write with no concurrent activity, any 2 of 3 replicas include at least one holding it, so the read sees it."
+      },
+      {
+        "text": "A timed-out write later appears in reads, without any new-then-old observation.",
+        "explanation": "Not by itself a violation. A timeout leaves the result unknown: an incomplete operation may have taken effect. Returning a definitive abort while applying the write would be a different contract."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Seeing a partially propagated value and then the old value in a later non-overlapping read violates linearisability. Blocking read repair can prevent this specific anomaly.\n2. Non-overlapping completed writes must follow real-time order; wall-clock timestamps may not.\n3. A completed isolated quorum write is visible to an overlapping read quorum under the stated assumptions.\n4. A timeout is an unknown outcome, so later visibility alone is allowed. Merely ordering overlapping concurrent writes differently is also not a violation.",
+    "link": {
+      "title": "Cassandra Dynamo architecture",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"
+    }
+  },
+  {
+    "id": "dist-quorums-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You want a leaderless quorum store (3 replicas per key, with reads and writes each needing 2 replicas) to provide **linearizable reads and writes** of a single register, ABD-style. Which are required? Select all that apply.",
+    "options": [
+      {
+        "text": "Strict quorums only: no sloppy stand-in nodes",
+        "explanation": "Required. Sloppy quorums let a write land outside the preference list, breaking the overlap every other step relies on."
+      },
+      {
+        "text": "Before returning, a reader writes the newest value it saw back to a write quorum",
+        "explanation": "Required. Write-back ensures that once any reader returns a value, a quorum holds it, so no later reader can return something older."
+      },
+      {
+        "text": "Writers first read the highest version from a quorum, then write with a higher one",
+        "explanation": "Required (with several writers). It makes versions follow real-time order instead of relying on clocks, so a later write always has a higher version."
+      },
+      {
+        "text": "Requiring reads to contact every replica",
+        "explanation": "Not required. Reading 2 replicas with write-back already gives overlap and recency; reading all 3 just loses read availability when one node is down."
+      },
+      {
+        "text": "Wall-clock timestamps from synchronised clocks to order writes",
+        "explanation": "Not required, and not sufficient. Skewed clocks are what break LWW; ABD avoids depending on them by reading versions first."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Map each requirement to the anomaly it removes:\n\n1. **Sloppy quorums** → overlap breaks. Use strict quorums.\n2. **In-flight write seen, then not seen** → readers write back before returning.\n3. **Concurrent writers with skewed clocks** → writers read the max version first, then write with one more than the highest version seen (with the writer id to break ties).\n\nCost: each read and each write takes **two** round trips. Even then you only get a linearizable register; compare-and-set needs consensus (e.g. Cassandra's Paxos-based lightweight transactions).",
+    "link": {
+      "title": "Quorum (distributed computing) (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Quorum_%28distributed_computing%29"
+    }
+  }
+]

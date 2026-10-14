@@ -1,0 +1,62 @@
+[
+  {
+    "id": "api-real-time-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An app short-polls for new notifications every 10 seconds. Notifications arrive at random times. What is the **average** delay between a notification being created and the client seeing it (ignoring network time)?",
+    "options": [
+      {
+        "text": "10 seconds",
+        "explanation": "That's the *worst* case: a notification created just after a poll waits the full interval. On average it lands halfway between polls."
+      },
+      {
+        "text": "5 seconds",
+        "explanation": "Correct. Arrival times are uniformly spread across the 10 s interval, so the expected wait until the next poll is 10 / 2 = 5 s."
+      },
+      {
+        "text": "0 seconds",
+        "explanation": "Only a push mechanism (long polling, SSE, WebSocket) delivers near-instantly. Short polling always waits for the next scheduled request."
+      },
+      {
+        "text": "20 seconds",
+        "explanation": "A notification is always picked up by the very next poll, so the delay can never exceed one interval."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Polls happen at t = 0, 10, 20, ...\n2. A notification arrives at a uniformly random time within an interval.\n3. It's seen at the next poll:\n\n```formula\nD = I − u\nE[D] = I − E[u] = 10 s − 5 s = 5 s\nwhere\nD: the delay before the client sees the notification\nI: the poll interval, 10 s\nu: how far into the interval the notification arrived, anywhere from 0 to 10 s with equal chance\nE[...]: expected value, the long-run average\ns: seconds\nIn words: on average a notification lands halfway through the interval, so it waits half the interval: **5 s**.\n```\n\nTo halve the latency you'd halve the interval, which doubles the request load. Push techniques break that trade-off.",
+    "link": {
+      "title": "Wikipedia: Push technology",
+      "url": "https://en.wikipedia.org/wiki/Push_technology"
+    }
+  },
+  {
+    "id": "api-real-time-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You have 2 million connected clients. Option A: short polling every 4 seconds. Option B: long polling with a 30-second server timeout, where messages arrive independently as a Poisson process averaging one per client every 2 minutes, polls restart immediately, and network time is ignored. Roughly how many requests per second does each option generate?",
+    "options": [
+      {
+        "text": "A: 500,000/s; B: roughly 75,000–83,000/s",
+        "explanation": "Correct. Short polling generates 500,000 requests/s. Each long poll ends at a message or the 30 s timeout. Counting timeout plus message rates gives an upper bound near 83,000 requests/s; accounting for early message completion gives about 75,000. The worked example defines the model and calculates both."
+      },
+      {
+        "text": "A: 8,000,000/s; B: 60,000,000/s",
+        "explanation": "These multiply the client count by the interval instead of dividing by it. Request rate = clients ÷ seconds between requests."
+      },
+      {
+        "text": "A: 500,000/s; B: 500,000/s",
+        "explanation": "Long polling doesn't re-poll on a short fixed timer. A client only sends a new request when a message arrives or the 30 s timeout fires, so it's far fewer requests."
+      },
+      {
+        "text": "A: 500,000/s; B: 0/s, because long polling holds connections open",
+        "explanation": "The request is held, but each message delivery or timeout completes it, and the client immediately sends a new one. That's still real request traffic."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "**Short polling**\n\n```formula\nR_A = N / I\nR_A = 2,000,000 / 4 s = 500,000/s\nwhere\nR_A: the request rate under short polling\nN: the number of clients, 2,000,000\nI: the poll interval, 4 s\ns: seconds; /s means per second\nIn words: each client sends one request every 4 s, so **500,000 requests per second** in total.\n```\n\n**Long polling**, quick estimate per client:\n\n1. Timeouts: messages are rare, so the client is usually waiting. At most one timeout every 30 s.\n2. Messages: one every 120 s, each ends a poll.\n\n```formula\nR_B ≤ N × (1 / T + 1 / M)\nR_B ≤ 2,000,000 × (1/30 s + 1/120 s)\nR_B ≤ 2,000,000 × 0.0417/s ≈ 83,000/s\nwhere\nR_B: the request rate under long polling\nN: the number of clients, 2,000,000\nT: the server's long-poll timeout, 30 s\nM: the average gap between messages for one client, 120 s\n≤: at most\n≈: approximately equal to\ns: seconds; /s means per second\nIn words: each client sends at most one request per timeout plus one per message, about **83,000 requests per second** in total.\n```\n\nThat slightly overcounts: a poll that a message ends early isn't also a timeout. If messages arrive at random (a Poisson process), the average poll length and the exact rate are:\n\n```formula\nD = M × (1 − e^{−T / M})\nD = 120 s × (1 − e^{−0.25}) ≈ 26.5 s\nR_B = N / D\nR_B = 2,000,000 / 26.5 s ≈ 75,000/s\nwhere\nD: the average length of one poll, ending at a message or the timeout, whichever comes first\nM: the average gap between messages, 120 s\nT: the timeout, 30 s\ne: Euler's number, about 2.718; e^{−T / M} is the chance that no message arrives before the timeout\nN: the number of clients\nR_B: the request rate under long polling\n≈: approximately equal to\ns: seconds; /s means per second\nIn words: a poll lasts about 26.5 s on average, so each client sends one request every 26.5 s: about **75,000 requests per second**.\n```\n\nEither way it's 6–7× fewer requests than short polling, and messages arrive almost instantly instead of 2 s late on average. Raising the timeout to 60 s would cut it to roughly 42,000–50,000 req/s, provided proxies and load balancers don't kill idle requests sooner.",
+    "link": {
+      "title": "RFC 6202: Long polling and streaming",
+      "url": "https://www.rfc-editor.org/rfc/rfc6202"
+    }
+  }
+]

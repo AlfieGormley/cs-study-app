@@ -1,0 +1,92 @@
+[
+  {
+    "id": "api-rest-fundamentals-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A client sends `GET /invoices/77` with a valid token. The invoice exists but belongs to a different company, and the user's role isn't allowed to see it. Which status code is most appropriate?",
+    "options": [
+      {
+        "text": "401 Unauthorized",
+        "explanation": "Despite its name, 401 means *unauthenticated*: the server doesn't know who you are, or your credentials are missing or invalid. Here the token is valid, so identity is known."
+      },
+      {
+        "text": "403 Forbidden",
+        "explanation": "Correct. The server knows who the caller is (valid token) but the caller isn't permitted to access this resource. That's exactly what 403 means. (Some APIs return 404 instead to avoid revealing the invoice exists, which is a legitimate privacy choice.)"
+      },
+      {
+        "text": "400 Bad Request",
+        "explanation": "400 is for malformed or invalid requests. The request here is perfectly well-formed; the problem is permissions."
+      },
+      {
+        "text": "500 Internal Server Error",
+        "explanation": "500 describes an unexpected server condition preventing fulfillment; it is not limited to programming bugs. A permission denial is an expected outcome, and a 5xx would wrongly encourage clients to retry and would page your on-call engineer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask two questions in order:\n\n1. **Do we know who this is?** The token is valid, so yes. That rules out 401 (which is really 'unauthenticated').\n2. **Are they allowed to do this?** No, the invoice belongs to another tenant.\n\n'Known but not allowed' = **403**. If you don't want to leak the existence of other tenants' invoice IDs, returning **404** is also defensible, and many multi-tenant APIs (GitHub for private repos, for example) do exactly that.",
+    "link": {
+      "title": "MDN: HTTP response status codes",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your sign-up endpoint `POST /users` receives two bad requests. Request A has a valid body, but the email is already registered. Request B has `{\"birthDate\": \"2031-01-01\"}`, a date in the future. Which pair of status codes fits best?",
+    "options": [
+      {
+        "text": "A: 422, B: 409",
+        "explanation": "This is the pair swapped. The duplicate email clashes with existing server state (409); the future birth date is invalid on its own terms, whatever the database holds (422)."
+      },
+      {
+        "text": "A: 409, B: 422",
+        "explanation": "Correct. A conflicts with the current state of the user collection: the same body would succeed if that email weren't taken. B is well-formed JSON that is semantically invalid regardless of state."
+      },
+      {
+        "text": "A: 500, B: 400",
+        "explanation": "A unique-constraint violation is an expected outcome, not a server bug. Letting the database exception bubble up as a 500 makes clients retry and pages your on-call engineer for nothing."
+      },
+      {
+        "text": "A: 403, B: 422",
+        "explanation": "403 means the server refuses fulfillment, often but not exclusively for authorisation reasons. Nothing here is about permissions; the caller is allowed to sign up, just not with that email."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask one question of each failure: *would this request succeed if the server's state were different?*\n\n- **A (duplicate email):** yes. If no user had that email, the same body would work. That's a clash with current state, so **409 Conflict**.\n- **B (future birth date):** no. No state of the database makes a future birth date valid. That's a semantic validation error, so **422 Unprocessable Content** (or plain 400, if that's your API's convention).\n\nThe useful consequence for clients: a 409 suggests showing 'that email is taken' and perhaps offering a login link, while a 422 points at a field to fix.",
+    "link": {
+      "title": "RFC 9110: 409 Conflict",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110#name-409-conflict"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your API returns `403 Forbidden` when an access token has **expired**. The mobile team reports that users get stuck on an error screen until they log out and back in, even though the app holds a valid refresh token. What's the best fix?",
+    "options": [
+      {
+        "text": "Return `401` with a `WWW-Authenticate` header for expired or invalid tokens, and keep `403` for valid tokens that lack permission",
+        "explanation": "Correct. For this bearer-token API, an expired token maps to 401 with an authentication challenge. Reserve 403 for refusal despite the presented credentials; blindly refreshing the same permissions does not fix that refusal."
+      },
+      {
+        "text": "Return `400`, because an expired token is a malformed request",
+        "explanation": "The request is well-formed. 400 is also treated as 'fix your request' by clients, so it doesn't trigger a token refresh either."
+      },
+      {
+        "text": "Keep `403` and make the client refresh its token on every 403",
+        "explanation": "This would make clients refresh tokens pointlessly on every genuine permission denial, and it hides the difference between 'who are you?' and 'you can't do that' from every other consumer of the API."
+      },
+      {
+        "text": "Return `419 Authentication Timeout`",
+        "explanation": "419 isn't defined by RFC 9110; it's a framework-specific code (Laravel uses it for CSRF failures). Generic clients won't know what to do with it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Map each failure to what the client should *do next*:\n\n| Situation | Next action | Code |\n|---|---|---|\n| No token | Log in | 401 |\n| Expired token | Refresh, retry | 401 |\n| Valid token, wrong role | Show 'no access' | 403 |\n\nRFC 9110 also requires a 401 to include `WWW-Authenticate`, e.g. `Bearer error=\"invalid_token\"` (the format OAuth's RFC 6750 defines). Configure the client to recognise the invalid_token challenge and make a bounded refresh attempt. HTTP does not make every library refresh automatically, and 403 does not prove different credentials could never help.",
+    "link": {
+      "title": "RFC 9110: 401 Unauthorized",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110#name-401-unauthorized"
+    }
+  }
+]

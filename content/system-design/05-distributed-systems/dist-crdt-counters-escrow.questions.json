@@ -1,0 +1,92 @@
+[
+  {
+    "id": "dist-crdts-gossip-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A G-Counter has three replicas. Their states are A = [A:4, B:1, C:0], B = [A:2, B:3, C:0], C = [A:3, B:1, C:2]. After all three merge, what is the counter's value?",
+    "options": [
+      {
+        "text": "16",
+        "explanation": "Wrong. That sums every entry across all three states, which double counts increments seen by more than one replica."
+      },
+      {
+        "text": "7",
+        "explanation": "Wrong for these inputs. Entry-wise maximum gives 4, 3 and 2, totalling 9; choosing 7 would discard known increments."
+      },
+      {
+        "text": "5",
+        "explanation": "Wrong. That's just replica A's value (4 + 1 + 0). It ignores B's and C's newer local increments."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. Element-wise max gives [A:4, B:3, C:2], and 4 + 3 + 2 = 9."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Merge by taking the element-wise max:\n\n| | A | B | C |\n|---|---|---|---|\n| A's state | 4 | 1 | 0 |\n| B's state | 2 | 3 | 0 |\n| C's state | 3 | 1 | 2 |\n| **max** | **4** | **3** | **2** |\n\n```formula\nM[k] = max(A[k], B[k], C[k])\nv = Σ_k M[k] = 4 + 3 + 2 = 9\nwhere\nA: replica A's vector\nB: replica B's vector\nC: replica C's vector\nk: a position in the vector (one per replica)\nM: the merged vector\nmax: the largest of its inputs\nv: the counter's value\nΣ_k: sigma: add up the term for every position k\nIn words: keep the largest count in each position, then add the positions up.\n```\n\nThe value is **9**.\n\nEach entry is only ever incremented by its owner, so the max is the largest owner count among the delivered input states; undelivered increments remain unknown. Summing would count A's increments up to three times.",
+    "link": {
+      "title": "A comprehensive study of CRDTs (Shapiro et al.)",
+      "url": "https://hal.inria.fr/inria-00555588/document"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why can't you implement decrement on a G-Counter by simply lowering your own entry?",
+    "options": [
+      {
+        "text": "Because negative numbers aren't allowed in vectors.",
+        "explanation": "Wrong. Lowering from 5 to 4 isn't negative; the real problem is the merge function."
+      },
+      {
+        "text": "Because the merge takes the element-wise max, so the lower value would be overwritten by any replica holding the old, higher one.",
+        "explanation": "Correct. Max-merge only lets values grow. A decrement would be undone the moment you merged with a replica that saw the pre-decrement value. Hence PN-Counter's separate N vector."
+      },
+      {
+        "text": "Because decrements need consensus.",
+        "explanation": "Wrong. PN-Counters support decrements without consensus. Only invariants like 'never below zero' need coordination."
+      },
+      {
+        "text": "Because the sum would overflow.",
+        "explanation": "Wrong. Overflow isn't related; the issue is that max-merge isn't compatible with decreasing values."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A = [A:5], gossips to B. B = [A:5].\n2. A decrements by lowering: A = [A:4].\n3. Merging A with B keeps the larger of 4 and 5 in A's entry, giving [A:5]. The decrement vanished.\n\nPN-Counter fix: keep an increments vector containing A’s count of 5, and a decrements vector containing A’s count of 1. Both only grow, so max-merge is correct.\n\n```formula\nv = Σ P − Σ N\nv = 5 − 1 = 4\nwhere\nv: the counter's value\nP: the vector of increments, one entry per replica\nN: the vector of decrements, one entry per replica\nΣ: sigma: add up every entry of the vector that follows\nIn words: the value is total increments minus total decrements, and neither vector ever has to shrink.\n```",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An active-active shop runs in EU and US with stock held in a PN-Counter. One unit of an item is left. During a few hundred milliseconds of replication lag, a customer in each region buys it. What happens, and which design keeps stock from going negative **without** coordinating on every sale?",
+    "options": [
+      {
+        "text": "The PN-Counter rejects the second decrement, so nothing goes wrong.",
+        "explanation": "Wrong. Each region decrements its own N entry without knowing about the other. After merging, stock is 1 − 2 = −1. An unconstrained PN-Counter does not enforce a non-negative bound; preallocated escrow rights can."
+      },
+      {
+        "text": "Stock ends at −1. Use an escrow counter: give each region its own share of stock to sell locally, and coordinate only to transfer shares.",
+        "explanation": "Correct. With escrow, the region holding the last unit can sell it; the other has a share of zero and must ask for more before selling, so the invariant holds and coordination only happens near the limit."
+      },
+      {
+        "text": "Stock ends at 0, because the merge takes the max of the two decrements.",
+        "explanation": "Wrong. N entries are per replica; the merge keeps both decrements, one from EU's entry and one from US's."
+      },
+      {
+        "text": "Stock ends at −1. Switch to an OR-Set of stock units.",
+        "explanation": "Wrong fix. Concurrent removals of the same unit in an OR-Set would both \"succeed\" locally too; it doesn't stop two buyers taking one item."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "PN-Counter state before: P = [EU:1, US:0], N = [0, 0] → value 1.\n\n1. EU sells: N[EU] = 1.\n2. US sells concurrently: N[US] = 1.\n3. Merge, then compute the value:\n\n```formula\nv = Σ P − Σ N\nv = (1 + 0) − (1 + 1) = −1\nwhere\nv: the stock value\nP: increments per region: EU 1, US 0\nN: decrements per region: EU 1, US 1\nΣ: sigma: add up every entry\nIn words: both sales are kept after the merge, so two units were subtracted from one.\n```\n\nThe merged stock is **−1**.\n\nEscrow version:\n\n- EU holds 1 unit of allowance, US holds 0.\n- EU sells locally: allowance 0.\n- US must request a transfer before selling; EU has none to give → \"sold out\".\n\nCoordination happens only when a region runs out of allowance, not on every sale.",
+    "link": {
+      "title": "Conflict-free replicated data type (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type"
+    }
+  }
+]

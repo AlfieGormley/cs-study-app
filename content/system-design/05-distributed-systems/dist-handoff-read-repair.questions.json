@@ -1,0 +1,92 @@
+[
+  {
+    "id": "dist-quorums-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Riak uses 3 replicas per key, needs 2 write acknowledgements, and permits sloppy quorums. Two of the three preference-list replicas for a key are unreachable. A write arrives. What happens?",
+    "options": [
+      {
+        "text": "The write fails, because only one preference-list replica is up.",
+        "explanation": "Wrong for sloppy quorums. That's what a strict quorum would do. Sloppy quorums let healthy nodes outside the preference list stand in."
+      },
+      {
+        "text": "The write is queued on the client until the replicas return.",
+        "explanation": "Wrong. Dynamo-style systems don't buffer on the client; the coordinator places the write on other nodes immediately."
+      },
+      {
+        "text": "The write succeeds on the live replica plus a stand-in node, which keeps a hint and hands it off later.",
+        "explanation": "Correct. The stand-in counts towards W, stores the write tagged with the intended owner, and forwards it when that replica recovers."
+      },
+      {
+        "text": "The write succeeds with W reduced to 1 automatically.",
+        "explanation": "Wrong. W isn't lowered; two acknowledgements are still collected, one from a stand-in."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Preference list: B, C, D. B and C are down.\n\n1. Coordinator sends to D (up) and walks the ring to the next healthy node, E.\n2. D and E ack: the 2 acknowledgements needed (W = 2) are met → success.\n3. E stores the value with a hint: 'belongs to B'.\n4. When B recovers, E pushes the value to B (**hinted handoff**) and deletes its copy.\n\nCatch: until then, a read from B, C, D asking 2 replicas (R = 2) might hit B and C (once they're back) and miss the write. Sloppy quorums trade overlap for availability.",
+    "link": {
+      "title": "Dynamo paper (SOSP 2007)",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "dist-quorums-q7",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A read that asks three replicas returns versions v7, v7 and v5 from three replicas. What does **read repair** do?",
+    "options": [
+      {
+        "text": "Returns v5 because it's the majority-agreed old value.",
+        "explanation": "Wrong. Two replicas agree on v7, and v7 is newer; read repair always favours the newest version."
+      },
+      {
+        "text": "Returns v7 and writes v7 back to the stale replica.",
+        "explanation": "Correct. The coordinator returns the newest version and sends it to the replica that had v5, fixing it on the read path."
+      },
+      {
+        "text": "Triggers a full Merkle-tree comparison of the key range.",
+        "explanation": "Wrong. That's background anti-entropy. Read repair only fixes the key that was read."
+      },
+      {
+        "text": "Deletes the key on all replicas because they disagree.",
+        "explanation": "Wrong. Disagreement is expected in eventually consistent systems; it's resolved, not punished."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Coordinator gathers 3 responses.\n2. Determines newest: v7 (by version vector or timestamp).\n3. Returns v7 to the client.\n4. Sends v7 to the replica with v5 (synchronously or in the background, depending on config).\n\nLimitation: keys that are never read stay stale, which is why you also need anti-entropy repair.",
+    "link": {
+      "title": "Dynamo paper (SOSP 2007)",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "dist-quorums-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Cassandra replica is down for **5 hours**. `max_hint_window` is the default 3 hours. When it comes back, what state is it in?",
+    "options": [
+      {
+        "text": "Fully up to date: hinted handoff replays everything it missed.",
+        "explanation": "Wrong. Coordinators stop storing hints for a replica once it has been down longer than the hint window, so the last 2 hours of writes have no hints."
+      },
+      {
+        "text": "It receives hinted writes from roughly the first 3 hours, misses the rest, and needs repair to catch up fully.",
+        "explanation": "Correct. Hints cover the window; after that, writes for it are simply not recorded. Until a repair runs, low-consistency reads served by this replica can be stale."
+      },
+      {
+        "text": "It refuses to start until an operator runs repair.",
+        "explanation": "Wrong. Cassandra lets it rejoin; it is the operator's job to run repair afterwards."
+      },
+      {
+        "text": "It has lost all its data and must be rebuilt.",
+        "explanation": "Wrong. Its on-disk data is intact; it's only missing writes made while it was away."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Timeline:\n\n```\nh0  replica down; hints start\nh3  hint window ends; no more hints\nh5  replica returns\n    hints for h0-h3 replayed\n    h3-h5 missing\n```\n\nReads at `QUORUM` still overlap a replica that has the data, and read repair fixes keys as they are read. Reads at `ONE` that hit this replica can return stale values until anti-entropy repair (Merkle trees) runs. Rule: after any outage longer than the hint window, run repair on the node.",
+    "link": {
+      "title": "Cassandra hints",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/hints.html"
+    }
+  }
+]

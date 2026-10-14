@@ -1,0 +1,100 @@
+[
+  {
+    "id": "api-auth-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A colleague says: \"Our JWTs are safe to put the user's National Insurance number in, because they're signed.\" What's wrong with this?",
+    "options": [
+      {
+        "text": "Nothing; a signed JWT is encrypted",
+        "explanation": "Signing and encryption are different. A signature (JWS) proves the token wasn't tampered with; it doesn't hide the contents."
+      },
+      {
+        "text": "JWTs can't contain numbers",
+        "explanation": "JWT claims are JSON, so numbers and strings are fine. The issue is confidentiality, not data type."
+      },
+      {
+        "text": "The payload is only base64url-encoded, so anyone who holds the token (browser extensions, logs, proxies) can decode and read it",
+        "explanation": "Correct. Paste any JWT into a base64 decoder and the claims appear in plain text. Signing guarantees integrity, not secrecy. Keep sensitive data out of tokens, or use encrypted JWTs (JWE) if you truly must."
+      },
+      {
+        "text": "Signed JWTs expire too quickly to carry personal data",
+        "explanation": "Expiry is unrelated to confidentiality. Even a token valid for 5 minutes exposes its contents to anyone who sees it, and copies in logs persist far longer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Decode a JWT payload yourself:\n\n```\neyJzdWIiOiJ1c2VyXzQyIn0\n  base64url decode ->\n{\"sub\":\"user_42\"}\n```\n\nNo key needed. A signature only lets the *verifier* detect modification. So:\n\n- Integrity: ✔ (signed)\n- Confidentiality: ✘ (not encrypted)\n\nTokens end up in access logs, browser storage and error reports. Treat the payload as public.",
+    "link": {
+      "title": "RFC 7519: JSON Web Token",
+      "url": "https://www.rfc-editor.org/rfc/rfc7519"
+    }
+  },
+  {
+    "id": "api-auth-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For signed JWT access tokens whose API profile requires issuer, audience and expiry, which verification practices are appropriate? Select all that apply.",
+    "options": [
+      {
+        "text": "Pin the accepted algorithm(s) on the server rather than trusting the token header's `alg`",
+        "explanation": "Correct. Trusting `alg` enables both `alg: none` (no signature at all) and RS256→HS256 confusion, where the public key is misused as an HMAC secret."
+      },
+      {
+        "text": "Check that `aud` matches this API",
+        "explanation": "Correct. Without an audience check, a token minted for one service (perhaps a less-trusted one) can be replayed against another."
+      },
+      {
+        "text": "Check required `exp` and any present `nbf` against the current time",
+        "explanation": "Correct. Otherwise a token stolen months ago still works forever."
+      },
+      {
+        "text": "Decrypt the payload with the private key before reading claims",
+        "explanation": "Wrong. A standard signed JWT (JWS) isn't encrypted; verification checks the signature, usually with the *public* key. Decryption only applies to JWE."
+      },
+      {
+        "text": "Reject any token larger than 256 bytes",
+        "explanation": "Wrong. An RSA-2048 signature alone encodes to 342 base64url characters, before the header and claims. A size cap is reasonable for DoS protection, but 256 bytes would reject legitimate tokens and isn't a defence against these attacks."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Map each check to the attack it stops:\n\n| Check | Stops |\n|---|---|\n| Pin `alg` | `none`, alg confusion |\n| Validate `aud` | Cross-service replay |\n| Validate `exp` | Use of old stolen tokens |\n| Validate `iss` | Tokens from a rogue issuer |\n\n'Decrypt with private key' confuses signing with encryption, and a universal 256-byte cap rejects valid tokens. RFC 8725 lists the full set of recommendations.",
+    "link": {
+      "title": "RFC 8725: JWT Best Current Practices",
+      "url": "https://www.rfc-editor.org/rfc/rfc8725"
+    }
+  },
+  {
+    "id": "api-auth-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume a vulnerable JWT verifier trusts the header algorithm and incorrectly permits RSA public-key PEM bytes as an HMAC secret. An attacker sends an HS256 token MACed with those public bytes. What happens, and how should the verifier be fixed?",
+    "options": [
+      {
+        "text": "It's rejected, because HMAC can't be verified with an RSA key",
+        "explanation": "Vulnerable libraries don't check that the key *type* matches. They treat the PEM bytes as an HMAC secret, and the HMAC verifies."
+      },
+      {
+        "text": "It's accepted, because the library computes HMAC-SHA256 with the public key bytes as the secret, which matches. Fix: pass an explicit allow-list, e.g. `algorithms=[\"RS256\"]`, and use a key object bound to one algorithm",
+        "explanation": "Correct. This is algorithm confusion. The public key is public, so the attacker can compute the same HMAC. Pinning the algorithm on the verifier closes it."
+      },
+      {
+        "text": "It's accepted, but only until the key is rotated, so the fix is rotating keys daily",
+        "explanation": "The attacker simply re-reads the new public key from your JWKS endpoint and forges again. Rotation doesn't address the flaw."
+      },
+      {
+        "text": "It's rejected, because `aud` validation catches forged tokens",
+        "explanation": "The attacker writes the payload, so they set `aud` to whatever you expect. Claim checks only help once the signature is genuinely trustworthy."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Your verifier holds `PUBLIC_KEY_PEM`, which is published at your JWKS endpoint.\n2. The attacker builds header `{\"alg\":\"HS256\"}` and any payload, e.g. `{\"sub\":\"admin\",\"aud\":\"orders-api\"}`.\n3. They compute the HMAC themselves, since they know the PEM:\n\n```formula\ns = HMAC(K, m)\nK = PEM\nwhere\ns: the signature placed in the forged token\nHMAC: HMAC-SHA256, a keyed hash meant to need a secret key\nK: the key the HMAC uses\nPEM: the server's RSA public key written as PEM text, which is published at the JWKS endpoint and so is not secret\nm: the signing input: the base64url header, a dot, then the base64url payload\nIn words: the attacker uses public bytes as the HMAC key, so their signature is exactly what the confused verifier computes.\n```\n\n4. A library that honours the header runs HMAC with the same 'secret' and gets a match. **Forged token accepted.**\n\nFix, per RFC 8725: the verifier decides the algorithm, never the token.\n\nThis library call demonstrates algorithm and audience checks. `token` and the trusted `key` come from the API’s validation context; the complete validator must also require and validate the issuer and expiry claims for the stated token profile.\n\n```python\n# The server chooses the allowed\n# algorithm.\njwt.decode(token, key,\n  algorithms=[\"RS256\"],\n  audience=\"orders-api\")\n```",
+    "link": {
+      "title": "RFC 8725: JWT Best Current Practices",
+      "url": "https://www.rfc-editor.org/rfc/rfc8725"
+    }
+  }
+]

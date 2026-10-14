@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dist-quorums-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two replicas each hold 1 billion keys in a Merkle tree with ~1 million leaves (1,000 keys each). Exactly one key differs. Roughly how much do they exchange to find it?",
+    "options": [
+      {
+        "text": "About 40 hashes, then one 1,000-key range",
+        "explanation": "Correct. The tree is about 20 levels deep (1,000,000 is about 2 raised to the power 20); at each level you compare 2 child hashes and descend into the one that differs, then sync that leaf's keys."
+      },
+      {
+        "text": "1 billion hashes, one per key",
+        "explanation": "Wrong. That's naive comparison, which the Merkle tree exists to avoid."
+      },
+      {
+        "text": "About 1 million leaf hashes",
+        "explanation": "Wrong. Comparing every leaf is better than every key, but the tree lets you skip identical subtrees from the root down."
+      },
+      {
+        "text": "Just the root hash",
+        "explanation": "Wrong. The root tells you *that* something differs, not *where*. You must descend to locate it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Work out the tree's size and depth, then count comparisons:\n\n```formula\nB = K / k = 10^9 / 10^3 = 10^6\nd = log_2(B) = log_2(10^6) ≈ 20\nH ≈ 2 × d = 2 × 20 = 40\nwhere\nK: total keys; here 10^9 (1 billion)\nk: keys per leaf; here 10^3 (1,000)\nB: number of leaves; here 10^6 (1 million)\nd: depth of the binary tree, levels from root to leaf\nlog_2: base-2 logarithm: how many times you can halve a number before reaching 1\nH: hashes exchanged\n≈: approximately equal to\nIn words: each level halves the search, so about 20 levels of 2 hash comparisons find the one differing leaf.\n```\n\n1. Compare roots: they differ.\n2. At each of the 20 levels, compare the 2 children; exactly one differs; descend. That's about **40 hashes**.\n3. At the leaf, exchange its 1,000 keys (or their hashes) to find the one that differs.\n\nTotal ≈ 40 hashes + 1,000 keys versus 10⁹. This is why Dynamo and Cassandra use Merkle trees for anti-entropy.",
+    "link": {
+      "title": "Merkle tree (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Merkle_tree"
+    }
+  },
+  {
+    "id": "dist-quorums-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Cassandra cluster has `gc_grace_seconds` = 10 days. A replica is offline for 14 days and misses a delete. Repair hasn't run. When it rejoins, what's the risk?",
+    "options": [
+      {
+        "text": "None: hinted handoff will deliver the delete.",
+        "explanation": "Wrong. Hints are only stored for a limited window (3 hours by default), so a 14-day outage outlives them."
+      },
+      {
+        "text": "The returning replica will be rejected by the cluster.",
+        "explanation": "Wrong. Cassandra doesn't automatically refuse nodes after long downtime; that's why operators must handle it."
+      },
+      {
+        "text": "Reads will fail until repair runs.",
+        "explanation": "Wrong. Reads continue to work; the danger is returning data that should be gone, not errors."
+      },
+      {
+        "text": "The deleted row may reappear (resurrection).",
+        "explanation": "Correct. The other replicas purged the tombstone after 10 days. The returning replica still has the old row, and with no tombstone to contradict it, read repair and anti-entropy spread it back."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Timeline:\n\n1. Day 0: replica C goes offline. Row X exists on A, B, C.\n2. Day 1: X deleted. A and B write a **tombstone**.\n3. Day 11: gc_grace passes; compaction on A, B purges the tombstone. X now absent on A, B.\n4. Day 14: C returns with X (no tombstone).\n5. A read or repair compares replicas: C has X, A and B have nothing. 'Something' beats 'nothing' → X is copied back. **Resurrected.**\n\nRule: run full repair more often than gc_grace_seconds, and don't let a node rejoin after being down longer than that without rebuilding it.",
+    "link": {
+      "title": "Cassandra repair",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/managing/operating/repair.html"
+    }
+  }
+]

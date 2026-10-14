@@ -1,0 +1,122 @@
+[
+  {
+    "id": "api-designing-good-apis-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You implement keyset pagination with `WHERE created_at < $last ORDER BY created_at DESC LIMIT 20`. Bulk imports often create hundreds of rows with the identical `created_at`. What goes wrong, and what's the fix?",
+    "options": [
+      {
+        "text": "Rows that share the boundary timestamp are skipped, because `<` excludes all of them. Fix: sort and compare on `(created_at, id)` so the order is total",
+        "explanation": "Correct. If page 1 ends partway through 300 rows sharing one timestamp, `created_at < $last` jumps past all the remaining ones. A unique tiebreaker such as `id` lets the cursor resume precisely: `WHERE (created_at, id) < ($t, $id)`."
+      },
+      {
+        "text": "Nothing; timestamps are always unique",
+        "explanation": "Timestamps are not unique, especially for bulk inserts or at millisecond resolution under high write rates."
+      },
+      {
+        "text": "It becomes O(offset). Fix: switch to offset pagination",
+        "explanation": "Keyset remains an index seek; the issue is correctness, not performance. Offset pagination would reintroduce slow deep pages and duplicates."
+      },
+      {
+        "text": "Rows are duplicated. Fix: use `<=` instead of `<`",
+        "explanation": "Switching to `<=` would return the boundary rows again on every page, causing duplicates or even an infinite loop if more than 20 rows share a timestamp."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Suppose 300 rows have `created_at = 12:00:00`.\n\n1. Page 1 returns 20 of them; the last has `created_at = 12:00:00`.\n2. Page 2: `WHERE created_at < 12:00:00` → skips the other **280** rows entirely.\n3. Switching to `<=` can keep returning rows at the boundary timestamp instead of making progress.\n\nFix with a compound key:\n\n```sql\n-- Continue after the compound cursor.\nWHERE (created_at, id) < ($t, $id)\nORDER BY created_at DESC, id DESC\n-- One extra row determines has_more.\nLIMIT 21\n```\n\nand an index on `(created_at, id)`. Now each row has a unique position and pages resume exactly.",
+    "link": {
+      "title": "Google AIP-158: Pagination",
+      "url": "https://google.aip.dev/158"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An `orders` table has 10 million rows and a B-tree index on `(created_at, id)`. A client pages through all of them, 100 at a time. Roughly how many index entries does the database touch for the **last page** with offset pagination vs keyset pagination?",
+    "options": [
+      {
+        "text": "About 100 for both",
+        "explanation": "This is true for keyset but not offset. With `OFFSET`, the database can't jump to row 9,999,900; it must walk past every earlier entry."
+      },
+      {
+        "text": "About 10 million for both",
+        "explanation": "Keyset uses the `WHERE (created_at, id) < (...)` predicate to *seek* directly to the starting point in the B-tree, so it doesn't scan earlier entries."
+      },
+      {
+        "text": "About 10 million for offset; about 100 for keyset",
+        "explanation": "Correct. `OFFSET 9999900 LIMIT 100` walks ~10,000,000 entries and throws away all but the last 100. Keyset seeks to the cursor position (a few page reads down the tree) and reads the final 100 entries (there is no 101st row on this final page)."
+      },
+      {
+        "text": "About 100 for offset; about 10 million for keyset",
+        "explanation": "This reverses the two. Offset is the one whose cost grows with page depth."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "**Offset**:\n\n```formula\noffset = n − limit\noffset = 10,000,000 − 100 = 9,999,900\nE_off ≈ offset + limit = 10,000,000\nwhere\noffset: the rows skipped to reach the last page\nn: the number of rows in the table and index, here 10,000,000\nlimit: the page size, here 100\nE_off: index entries walked for that page\n≈: approximately equal to\nIn words: to reach the last page, offset pagination walks past every earlier row, so it touches all **10,000,000** entries.\n```\n\n**Keyset**:\n\n```formula\nh ≈ log_{300}(10^7) ≈ 2.8\nE_key ≈ 3 + 100 ≈ 103\nwhere\nh: the height of the B-tree: how many index pages the seek reads to find the cursor\nlog_{300}: the logarithm to base 300, the fan-out (child pointers per index page): how many times you divide by 300 to get down to 1\nE_key: index pages and entries touched for the last page\n≈: approximately equal to\nIn words: the seek reads about 3 pages down the tree and then the 100 entries of the page, so about **100**.\n```\n\nOver the whole walk of 100,000 pages, page k of the offset walk touches about k × limit entries, and adding those up gives:\n\n```formula\nΣ_off ≈ n^2 / (2 × limit)\nΣ_off ≈ 10^14 / 200 = 5 × 10^11\nΣ_key ≈ n = 10^7\nwhere\nΣ_off: total entries touched paging through everything with offsets (Σ, sigma, means \"sum of\")\nΣ_key: total entries touched with keyset pages, about one per row\nn: the number of rows, 10^7 (ten million)\nlimit: the page size, 100\n≈: approximately equal to\nIn words: offset paging re-walks every earlier row on every page, so its total grows with the square of the table size; keyset reads each row about once.\n```\n\n5 × 10¹¹ ÷ 10⁷ is about 50,000 times as many scanned entries in this simplified model; seek overhead and actual execution costs are separate.",
+    "link": {
+      "title": "Use The Index, Luke: Paging through results",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your cursors are base64-encoded JSON such as `{\"t\":\"2026-03-01T10:00Z\",\"id\":981}`. A partner discovers this and starts building cursors themselves to 'jump' to a date. You now need to shard the table and add a shard id to every cursor. What's the best takeaway?",
+    "options": [
+      {
+        "text": "Nothing went wrong: partners are entitled to use anything they can decode",
+        "explanation": "They can use it, which is the problem: by Hyrum's Law, an observable format becomes a de facto contract. You'd now break the partner by changing it."
+      },
+      {
+        "text": "Switch to offset pagination, which has no cursor to tamper with",
+        "explanation": "That reintroduces O(offset) cost and unstable pages. The underlying need (start from a date) is better served by a proper filter."
+      },
+      {
+        "text": "Never change the cursor format again",
+        "explanation": "Freezing the format blocks the sharding work. Opaque cursors exist precisely so you *can* change what's inside them."
+      },
+      {
+        "text": "Base64 isn't opacity. Document cursors as opaque, authenticate them with an HMAC or authenticated encryption so hand-built ones are rejected, and give the partner a supported filter such as `created_before=` for the real use case",
+        "explanation": "Correct. An HMAC or authenticated encryption detects hand-built or altered cursors. Continue to support issued cursors until their documented expiry. Adding a real filter meets the partner's legitimate need through the public contract."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Hyrum's Law: anything observable will be depended on. A base64 cursor is observable to anyone with `base64 -d`.\n2. The partner's need (start at a date) is legitimate, but they met it through an implementation detail.\n3. Fix both sides:\n   - **Enforce opacity**: e.g. append an HMAC of the payload, or use authenticated encryption; reject cursors that fail the check with 400.\n   - **Offer the feature properly**: a `created_before=` filter.\n4. Now you can add the shard id (or change the sort key) with a migration that still accepts existing valid cursors until expiry.",
+    "link": {
+      "title": "Hyrum's Law",
+      "url": "https://www.hyrumslaw.com/"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Product wants the orders list to show \"Page 3 of 107,000\". The table has 40 million rows, you already use keyset pagination, and `COUNT(*)` with the user's filters takes several seconds. What's the most pragmatic API design?",
+    "options": [
+      {
+        "text": "Run the exact `COUNT(*)` on every page request",
+        "explanation": "That makes every page as slow as a full scan of the matching rows, which throws away the main benefit of keyset pagination."
+      },
+      {
+        "text": "Return `has_more` for navigation and, if a total is really needed, a capped or approximate count (e.g. \"10,000+\", or an estimate), computed separately or cached",
+        "explanation": "Correct. Most UIs only need 'is there a next page?'. When a total matters, a cap or an estimate (Postgres can estimate from planner statistics) gives users the gist without the full scan."
+      },
+      {
+        "text": "Switch to offset pagination so the count becomes free",
+        "explanation": "Offset pagination doesn't make counting cheaper. It needs the same `COUNT(*)` to show page totals, and adds O(offset) cost to deep pages."
+      },
+      {
+        "text": "Return the count of rows on the current page as the total",
+        "explanation": "That's simply wrong information. It would say \"20\" for a 40-million-row result."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In the stated scenario, the filtered exact-count query takes seconds; its cost depends on matching rows and the query plan, not merely total table size.\n2. Keyset pagination makes each indexed page roughly O(log n + limit), where n is the number of rows in the index and limit the page size. Big O describes how cost grows: here a few tree levels plus one page of rows, so an exact count over millions of rows would dominate the cost.\n3. Options, from cheapest:\n   - `has_more` only (fetch limit + 1).\n   - Capped count: count up to 10,001 and show \"10,000+\".\n   - Estimated count from database statistics.\n   - Exact count computed asynchronously and cached for a while.\n4. Push back on \"Page 3 of 107,000\": evaluate whether search and filters better meet the actual navigation need.",
+    "link": {
+      "title": "Use The Index, Luke: Paging through results (no offset)",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  }
+]

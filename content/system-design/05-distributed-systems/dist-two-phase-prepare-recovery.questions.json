@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dist-transactions-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In two-phase commit, what does a participant promise when it votes **yes** to prepare?",
+    "options": [
+      {
+        "text": "That it has already committed the transaction.",
+        "explanation": "Wrong. It hasn't committed yet; it's waiting for the coordinator's decision. Committing early would break atomicity if another participant votes no."
+      },
+      {
+        "text": "That it will commit if a majority of participants also vote yes.",
+        "explanation": "Wrong. 2PC requires *all* participants to vote yes; majority voting is consensus, not atomic commit."
+      },
+      {
+        "text": "Nothing binding; it can still abort if it times out.",
+        "explanation": "Wrong. Before voting it can abort freely; after a yes vote it can't, which is exactly what causes the blocking problem."
+      },
+      {
+        "text": "That it will commit if told to, even after a crash, so it has durably written the changes and keeps its locks.",
+        "explanation": "Correct. A yes vote surrenders the right to abort unilaterally. The participant persists everything needed to commit and holds locks until it hears the decision."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Lifecycle of a participant:\n\n1. Executes the transaction's writes (uncommitted).\n2. Receives PREPARE.\n3. If able to commit: `fsync` changes + prepare record, then vote YES. Now **in doubt** until the decision.\n4. Receives COMMIT or ABORT and applies it, releasing locks.\n\nIn Postgres, step 3 is `PREPARE TRANSACTION 'tx42'`; step 4 is `COMMIT PREPARED 'tx42'`.",
+    "link": {
+      "title": "Two-phase commit protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+    }
+  },
+  {
+    "id": "dist-transactions-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 2PC coordinator receives yes votes from both participants, then crashes **before** writing any decision record. It restarts and finds the transaction in its log with no COMMIT or ABORT. What should it do?",
+    "options": [
+      {
+        "text": "Commit, because both participants voted yes.",
+        "explanation": "Wrong. It may not know that both votes arrived, and in any case the decision is only made when it's logged. With no record, the safe and conventional choice is abort."
+      },
+      {
+        "text": "Wait for an operator to decide.",
+        "explanation": "Wrong. There is no ambiguity here. Without a decision record, no participant can have been told to commit, so aborting can't conflict with anything."
+      },
+      {
+        "text": "Abort (presumed abort): no participant can have been told to commit, so aborting is safe.",
+        "explanation": "Correct. The commit point is the COMMIT log record. Since it was never written, nobody committed. The coordinator aborts and tells the in-doubt participants, which then release their locks."
+      },
+      {
+        "text": "Ask the participants to vote again.",
+        "explanation": "Wrong. Participants that voted yes are already bound to their vote. Re-voting adds nothing, because the problem is the missing decision, not missing votes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The commit point is the coordinator's durable COMMIT record.\n2. No record → the coordinator never reached the commit point.\n3. It only sends COMMIT after logging it, so no participant has received COMMIT.\n4. Therefore aborting can't contradict any participant. **Abort**, and send ABORT to everyone in doubt.\n\nThis is **presumed abort**: \"no record means abort\". It also saves work, because the coordinator doesn't need to force ABORT records to disk.",
+    "link": {
+      "title": "Two-phase commit protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+    }
+  }
+]

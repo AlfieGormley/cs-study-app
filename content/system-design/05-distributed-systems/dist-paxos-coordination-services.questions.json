@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dist-consensus-raft-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In Paxos, a proposer sends Prepare(n = 10), where n is the proposal number. Two acceptors of a majority reply: one says it accepted (n = 7, value \"A\"), the other says (n = 9, value \"B\"). The proposer wants to propose \"C\". What must it send?",
+    "options": [
+      {
+        "text": "Accept(10, \"B\")",
+        "explanation": "Correct. Paxos requires adopting the value from the highest-numbered accepted proposal reported in the promises: n = 9, \"B\". That preserves any value that may already be chosen."
+      },
+      {
+        "text": "Accept(10, \"C\")",
+        "explanation": "Wrong. Proposing its own value would ignore previously accepted values, which might already be chosen. That breaks agreement."
+      },
+      {
+        "text": "Accept(10, \"A\")",
+        "explanation": "Wrong. It must pick the value with the **highest** accepted proposal number, which is 9, not 7."
+      },
+      {
+        "text": "Restart with Prepare(11), because acceptors disagree.",
+        "explanation": "Wrong. Disagreement among acceptors is expected; the rule resolves it without restarting."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Paxos phase 2 rule:\n\n1. Collect promises from a majority.\n2. If any report an accepted (n, v), choose v with the largest n.\n3. Only if none report a value may the proposer use its own.\n\nHere: the higher of 7 and 9 is 9 → value \"B\". Send **Accept(10, \"B\")**.\n\nWhy: if \"B\" was chosen in round 9 by some majority, that majority overlaps this one, so at least one promise reports a proposal numbered 9 or higher. Picking the highest ensures the chosen value is re-proposed.",
+    "link": {
+      "title": "Paxos Made Simple (Lamport)",
+      "url": "https://lamport.azurewebsites.net/pubs/paxos-simple.pdf"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need leader election for a fleet of workers. You already run ZooKeeper. Which recipe is standard?",
+    "options": [
+      {
+        "text": "Each worker writes its hostname to /leader; last writer wins.",
+        "explanation": "Wrong. Last-writer-wins races and gives no notification when the leader dies; two workers may each think they won."
+      },
+      {
+        "text": "Each worker creates a persistent znode and the oldest one leads.",
+        "explanation": "Wrong. Persistent znodes survive their creator's death, so a dead leader would hold leadership forever."
+      },
+      {
+        "text": "Workers poll /election every second and pick a random leader.",
+        "explanation": "Wrong. Random selection on each worker gives different answers; there's no agreement."
+      },
+      {
+        "text": "Each worker creates an ephemeral sequential znode under /election; the lowest sequence number is leader; others watch the next-lower node.",
+        "explanation": "Correct. Ephemeral nodes vanish when a session dies, sequence numbers give a total order, and watching only the predecessor avoids a herd of notifications."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Worker creates `/election/n_` with EPHEMERAL | SEQUENTIAL → `/election/n_0000000042`.\n2. Lists children; if its node is the lowest, it's leader.\n3. Otherwise it watches the node just below it (e.g. `n_0000000041`).\n4. If that node is deleted (session expired), it re-checks; if now lowest, it leads.\n\nWatching only the predecessor avoids the **herd effect** where every worker wakes on each change. Still pair it with fencing (the lock znode's creation zxid; a sequence number needs the same persistent parent and wraparound handling) because a paused ex-leader may not know its session expired.",
+    "link": {
+      "title": "ZooKeeper recipes",
+      "url": "https://zookeeper.apache.org/doc/current/recipes.html"
+    }
+  }
+]

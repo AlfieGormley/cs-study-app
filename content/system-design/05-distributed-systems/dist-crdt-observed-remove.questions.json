@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dist-crdts-gossip-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In an **OR-Set**, replica A adds \"milk\" (tag a1) and syncs to B. Then, concurrently, B removes \"milk\" and A adds \"milk\" again (tag a2). After they merge, is milk in the set?",
+    "options": [
+      {
+        "text": "Yes: tag a2 was never observed by the remove, so it survives (add wins).",
+        "explanation": "Correct. The merged add-set is {a1, a2}, the remove-set is {a1}, leaving a2. Concurrent add and remove resolve to add-wins."
+      },
+      {
+        "text": "No: the remove happened, so milk is gone.",
+        "explanation": "Wrong. B's remove only removes tags B had observed, i.e. a1. It can't remove a2, which it never saw."
+      },
+      {
+        "text": "It depends on which operation had the higher timestamp.",
+        "explanation": "Wrong. OR-Sets don't use timestamps at all; that's an LWW-Element-Set. Resolution comes from observed tags."
+      },
+      {
+        "text": "The merge fails and needs manual resolution.",
+        "explanation": "Wrong. CRDTs by definition always merge automatically and deterministically."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Track tags:\n\n1. A: add(milk, a1). Sync → B sees {a1}.\n2. B: remove(milk) → tombstones the tags it sees: {a1}.\n3. A (concurrently): add(milk, a2).\n4. Merge:\n  - added tags: a1, a2\n  - removed tags: a1\n  - live tags: a2 only → milk **present**.\n\nA 2P-Set would have said 'removed forever'. The OR-Set's unique tags let re-adds survive.",
+    "link": {
+      "title": "A comprehensive study of CRDTs (Shapiro et al.)",
+      "url": "https://hal.inria.fr/inria-00555588/document"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To save space, an OR-Set implementation deletes tombstones (removed tags) **24 hours** after a remove. A mobile client that holds a full replica goes offline for 3 days. While it's away, \"milk\" (tag a1) is removed and the tombstone is purged. What happens when it syncs?",
+    "options": [
+      {
+        "text": "Milk stays removed, because the remove happened first.",
+        "explanation": "Wrong. OR-Sets don't order by time. Once the tombstone for a1 is gone, nothing records that a1 was removed."
+      },
+      {
+        "text": "Milk reappears: the client still has a1 in its add-set, and with no tombstone left, the merge treats a1 as live.",
+        "explanation": "Correct. The merge sees a1 added and not removed. The removal is lost, the same resurrection problem Cassandra avoids with gc_grace_seconds and repair."
+      },
+      {
+        "text": "The sync fails with a conflict that a user must resolve.",
+        "explanation": "Wrong. CRDT merges never report conflicts; that's their defining property. The danger is a silent wrong answer."
+      },
+      {
+        "text": "Milk appears twice, because the client and server each have a copy.",
+        "explanation": "Wrong. A set contains milk at most once. The question is only whether it's present."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Day 0: all replicas: adds {a1}, removes {}.\n2. Day 0.5: server removes milk → removes {a1}.\n3. Day 1.5: server purges the tombstone → adds {}, removes {} (a1 forgotten entirely).\n4. Day 3: client syncs with adds {a1}, removes {}.\n5. Merge: adds {a1}, removes {} → milk **present**.\n\nA tombstone can be dropped safely only once **every** replica has seen it, which requires tracking replica progress (coordination), or bounding how long a replica may stay offline and forcing a full resync after that.",
+    "link": {
+      "title": "CRDTs: the hard parts (Martin Kleppmann)",
+      "url": "https://martin.kleppmann.com/2020/07/06/crdt-hard-parts-hydra.html"
+    }
+  }
+]

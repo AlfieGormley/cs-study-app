@@ -1,0 +1,122 @@
+[
+  {
+    "id": "api-rest-graphql-grpc-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You migrate internal service calls from REST/JSON to gRPC. Behind an L4 (TCP) load balancer with 10 backends, you notice one backend at 90% CPU and the others nearly idle. What's the most likely cause?",
+    "options": [
+      {
+        "text": "Protobuf is slower to parse than JSON",
+        "explanation": "Parsing performance depends on workload and implementation. It would not by itself explain why an L4 balancer pins a high-volume connection to one backend."
+      },
+      {
+        "text": "gRPC multiplexes many calls over one long-lived HTTP/2 connection, and an L4 balancer only balances connections, so all of a client's requests stick to one backend",
+        "explanation": "Correct under the stated connection-level balancer. Each TCP connection is assigned to a backend; a long-lived gRPC connection can carry many calls to that backend. HTTP/1.1 also supports persistent pooled connections, so it does not guarantee an even distribution. L7 or client-side balancing can distribute calls."
+      },
+      {
+        "text": "gRPC deadlines are concentrating retries on one server",
+        "explanation": "Deadlines cause calls to fail fast when time runs out. They don't steer traffic to a particular backend."
+      },
+      {
+        "text": "The backend is running a different protobuf version",
+        "explanation": "A version mismatch could cause decoding issues, but it wouldn't attract a disproportionate share of traffic to one host."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. L4 balancing decides at **TCP connect** time.\n2. With HTTP/1.1, clients typically open a pool of connections and recycle them, so load spreads.\n3. gRPC/HTTP/2 multiplexes: one connection carries hundreds of concurrent streams and lives for hours.\n4. If a few large callers each hold one connection, those connections land on one or two backends, and stay there.\n\nFixes:\n- L7 proxy (Envoy, Linkerd, gRPC-aware cloud LBs) that balances per **request**.\n- Client-side load balancing: the client resolves all backend addresses and round-robins calls.\n- Set a max connection age so connections are periodically re-established.",
+    "link": {
+      "title": "gRPC: Performance best practices",
+      "url": "https://grpc.io/docs/guides/performance/"
+    }
+  },
+  {
+    "id": "api-rest-graphql-grpc-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A checkout service calls Pricing (which calls Tax, which calls a Currency service). The user-facing SLA is 500 ms. Pricing sometimes hangs for 5 s, and Tax keeps working on requests long after the user has given up. Which gRPC feature most directly addresses this wasted work?",
+    "options": [
+      {
+        "text": "Bidirectional streaming",
+        "explanation": "Streaming changes the shape of the conversation (many messages each way), not whether downstream services know the caller has stopped waiting."
+      },
+      {
+        "text": "Server reflection",
+        "explanation": "Reflection lets tools like `grpcurl` discover services at runtime. It has nothing to do with timeouts."
+      },
+      {
+        "text": "Deadline propagation: Checkout sets a 500 ms deadline that flows to Pricing, Tax and Currency, each of which can cancel when the remaining time hits zero",
+        "explanation": "Correct when deadline propagation is configured. Downstream handlers can observe cancellation, but must cooperate by stopping their own work and canceling supported database/child operations; gRPC does not forcibly interrupt arbitrary application code."
+      },
+      {
+        "text": "Protobuf field tags",
+        "explanation": "Field tags are about wire encoding and protobuf schema evolution, not about time budgets."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Work the time budget:\n\n```\nCheckout: 500 ms budget from now\n  -> Pricing   (spent 20ms, 480 left)\n     -> Tax    (spent 50ms, 430 left)\n        -> FX  (430ms left)\n```\n\nEach hop passes on whatever time is left:\n\n```formula\nT_left = D − T_used\nT_left = 500 ms − 20 ms = 480 ms\nT_left = 480 ms − 50 ms = 430 ms\nwhere\nT_left: the time remaining before the deadline when the next call starts\nD: the time that was left when this hop received the call (500 ms at Checkout)\nT_used: the time this hop has already spent\nms: milliseconds, thousandths of a second\nIn words: the deadline is fixed, so every hop gets only what its callers have not used up.\n```\n\nIf Pricing stalls and 500 ms elapses, the deadline expires everywhere: Checkout returns `DEADLINE_EXCEEDED`, and Tax and FX can observe cancellation and must stop their work cooperatively. Without propagation, each hop would have its own independent (often longer) timeout and keep working for nobody.",
+    "link": {
+      "title": "gRPC: Core concepts",
+      "url": "https://grpc.io/docs/what-is-grpc/core-concepts/"
+    }
+  },
+  {
+    "id": "api-rest-graphql-grpc-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A ride-hailing team explicitly wants (a) resource-oriented HTTP endpoints callable with ordinary tools for partners, (b) UI-specific response composition, and (c) generated protobuf RPC stubs and streaming internally. Which combination most directly fits these chosen constraints?",
+    "options": [
+      {
+        "text": "gRPC for all three, for consistency",
+        "explanation": "gRPC is poor for (a): partners would need protobuf tooling and couldn't use plain HTTP clients. It's also awkward for the mobile web parts of (b) without gRPC-Web proxies."
+      },
+      {
+        "text": "(a) REST, (b) GraphQL or a BFF, (c) gRPC",
+        "explanation": "Correct. Partners want something any language can call with documented, cacheable endpoints (REST + OpenAPI). The app benefits from fetching exactly the shape each screen needs (GraphQL or a BFF). High-volume internal calls benefit from protobuf's small payloads, generated stubs, deadlines and HTTP/2 multiplexing (gRPC)."
+      },
+      {
+        "text": "(a) GraphQL, (b) REST, (c) REST",
+        "explanation": "Public GraphQL and internal REST are valid designs, but this option does not provide the explicitly requested internal protobuf RPC stubs and gRPC streaming contract. No universal CPU or latency comparison follows from a request rate alone."
+      },
+      {
+        "text": "REST for all three, because it's the most widely understood",
+        "explanation": "REST can use compound responses, streaming HTTP and application deadlines. This option still does not meet the chosen requirement for generated protobuf RPC stubs and gRPC streaming internally."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Match each consumer to the style's strengths:\n\n| Consumer | Needs | Fit |\n|---|---|---|\n| Partners | Easy, stable, any language | REST |\n| Rider app | Few round trips, varied shapes | GraphQL/BFF |\n| Internal | Low latency, typed, high QPS | gRPC |\n\nThe combination follows the stated interface requirements. Actual payload savings, CPU cost and latency need workload-specific measurement; the earlier 60% byte saving is not universal.",
+    "link": {
+      "title": "gRPC: Core concepts",
+      "url": "https://grpc.io/docs/what-is-grpc/core-concepts/"
+    }
+  },
+  {
+    "id": "api-rest-graphql-grpc-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your internal `Inventory` service speaks gRPC. The web team now wants to call it directly from a React app in the browser. What do they need?",
+    "options": [
+      {
+        "text": "Nothing: modern browsers use HTTP/2, so they can call gRPC endpoints directly",
+        "explanation": "Browsers do use HTTP/2, but JavaScript can't control HTTP/2 framing or read the trailers gRPC uses for its status, so raw gRPC isn't callable from page code."
+      },
+      {
+        "text": "Convert the service to GraphQL first",
+        "explanation": "That's a much bigger change than needed. GraphQL might suit a UI-facing gateway, but it isn't required just to reach a gRPC service from a browser."
+      },
+      {
+        "text": "Open a WebSocket to each gRPC backend",
+        "explanation": "WebSockets are a different protocol. gRPC servers don't accept WebSocket connections, and you'd lose generated stubs and gRPC semantics."
+      },
+      {
+        "text": "gRPC-Web (or a browser-compatible protocol such as Connect), typically with a proxy such as Envoy translating to native gRPC",
+        "explanation": "Correct. gRPC-Web carries gRPC semantics in a form browsers can send and read, and a proxy translates it to normal gRPC for the backend. You keep generated, typed clients."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. gRPC depends on HTTP/2 details: framing, and **trailers** carrying `grpc-status`.\n2. Browser `fetch` gives page code no control over framing and no reliable access to trailers.\n3. gRPC-Web moves the status into the response body and works over HTTP/1.1 or 2.\n4. A proxy (commonly Envoy) translates gRPC-Web to native gRPC:\n\n```\nBrowser --gRPC-Web--> Envoy\nEnvoy --gRPC (HTTP/2)--> Inventory\n```\n\nNote that gRPC-Web supports unary and server streaming, but not client or bidirectional streaming.",
+    "link": {
+      "title": "gRPC: Core concepts",
+      "url": "https://grpc.io/docs/what-is-grpc/core-concepts/"
+    }
+  }
+]

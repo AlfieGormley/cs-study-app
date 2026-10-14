@@ -1,0 +1,62 @@
+[
+  {
+    "id": "api-real-time-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A chat service has 20 WebSocket gateway servers behind a load balancer. Alice (on gateway 3) sends a message to a group whose members are spread across 12 gateways. What's the standard way to deliver it?",
+    "options": [
+      {
+        "text": "Use sticky sessions so all group members end up on the same gateway",
+        "explanation": "Group members connect independently from all over the world. You can't force thousands of users into one server, and a user in many groups can only be on one gateway."
+      },
+      {
+        "text": "Gateway 3 opens a direct connection to every other gateway and broadcasts",
+        "explanation": "A full mesh of N² connections that sends every message to every gateway, even those with no members, doesn't scale and couples gateways tightly."
+      },
+      {
+        "text": "Members poll a REST endpoint for new group messages",
+        "explanation": "That throws away the point of having WebSockets and reintroduces polling load and latency."
+      },
+      {
+        "text": "The message is published to a pub/sub channel for the group (for example, Redis Pub/Sub; Kafka needs explicit consumer-group and routing design); each gateway holding a member's connection is subscribed and pushes it down to its local sockets",
+        "explanation": "Correct. Gateways stay stateless apart from connections, targeted subscriptions can route to interested gateways. Slack uses channel/gateway routing; Socket.IO's standard Redis adapter broadcasts between nodes and does not guarantee this exact selective-delivery topology."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nAlice -> GW3 -> chat service\n  1. persist message\n  2. PUBLISH group:42 msg\n\nGW1, GW5, ... (12 of 20)\n  SUBSCRIBEd to group:42\n  -> push to local members\n```\n\nKey properties:\n- Only the 12 gateways with members get the message (not all 20).\n- Gateways subscribe when a member connects and unsubscribe when the last one leaves.\n- Persisting first means offline members can fetch it later. Use an outbox or equivalent recovery mechanism so a crash between persistence and publish does not permanently suppress live delivery.\n\nMessaging systems themselves are covered in the messaging module.",
+    "link": {
+      "title": "Slack engineering: Real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  },
+  {
+    "id": "api-real-time-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Each idle WebSocket connection on your gateway uses about 40 KB of memory (socket buffers, TLS state, app state). Servers have 32 GB of RAM, of which you reserve 25% for the OS and runtime. You want each server to run at most 70% full so the fleet can absorb failures. How many servers do you need for 10 million concurrent connections? (Use 1 GB = 1,000,000 KB.)",
+    "options": [
+      {
+        "text": "About 13",
+        "explanation": "This uses all 32 GB for connections (800,000 per server) and no headroom. The OS and runtime need memory too, and a fully loaded fleet can't absorb a server failure."
+      },
+      {
+        "text": "About 17",
+        "explanation": "This correctly reserves 25% (600,000 connections per server) but runs every server at 100%. Losing one server would push its 600,000 clients onto already-full machines."
+      },
+      {
+        "text": "About 24",
+        "explanation": "Correct. 24 GB usable ÷ 40 KB = 600,000 connections per server. At 70% utilisation that's 420,000. 10,000,000 ÷ 420,000 ≈ 23.8, so 24 servers."
+      },
+      {
+        "text": "About 2,400",
+        "explanation": "This would use roughly 4 MB per connection, 100 times the given assumption. Actual memory depends on the runtime, buffering, TLS and workload; the question supplies 40 KB only as a sizing input."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nM_use = M × 0.75 = 32 GB × 0.75 = 24 GB\nC_max = M_use / m\nC_max = 24,000,000 KB / 40 KB = 600,000\nC_tgt = C_max × u = 600,000 × 0.7\nC_tgt = 420,000\nS = ⌈N / C_tgt⌉\nS = ⌈10,000,000 / 420,000⌉ = ⌈23.8⌉ = 24\nwhere\nM_use: the RAM per server left for connections after the 25% reserve\nM: the RAM per server, 32 GB\nC_max: the most connections one server can hold\nm: the memory per idle connection, 40 KB\nC_tgt: the connections per server at the target utilisation\nu: the target utilisation, 0.7 (70%)\nS: the number of servers needed\nN: the number of concurrent connections to support, 10,000,000\n⌈ ⌉: ceiling: round up to the next whole number, since you can't run part of a server\nGB: gigabyte, here 1,000,000 KB\nKB: kilobyte, 1,000 bytes\nIn words: 24 GB of usable memory at 40 KB each fits 600,000 connections; running at 70% means 420,000 per server; 10 million connections then need **24** servers.\n```\n\nSanity check: if one of 24 servers dies, its ~417,000 clients spread over 23 servers, adding ~18,000 each, well within the 180,000 of spare capacity per server.\n\nIn practice, file descriptor limits, CPU for heartbeats and TLS handshakes during reconnect storms may bind before memory does, so load-test.",
+    "link": {
+      "title": "Discord: How Discord scaled Elixir to 5,000,000 concurrent users",
+      "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "dist-leases-locks-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A nightly job regenerates a cached report. If two instances run at once, the only harm is wasted CPU. Redis is already available, and the wasted computation is expensive enough to justify a simple lock. Which lock is appropriate?",
+    "options": [
+      {
+        "text": "Redlock across 5 Redis masters",
+        "explanation": "Wrong. More complex and expensive than needed; for an efficiency lock its extra fault tolerance buys little."
+      },
+      {
+        "text": "ZooKeeper lock with fencing tokens enforced at the cache",
+        "explanation": "Wrong. Correct but over-engineered; fencing matters when a double holder causes damage, which isn't the case here."
+      },
+      {
+        "text": "No lock at all, ever",
+        "explanation": "Wrong. Some coordination is cheap and avoids burning CPU every night on duplicate work; 'no lock' isn't the best answer here."
+      },
+      {
+        "text": "A single Redis `SET key value NX PX 60000`",
+        "explanation": "Correct. This is an efficiency lock: an occasional double run after a Redis failover is harmless, so a single node is simple and good enough."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Classify the lock:\n\n1. What happens with two holders? Duplicate computation, same result.\n2. That's an **efficiency** lock.\n3. Pick the cheapest mechanism that usually prevents duplicates: single-node Redis with NX (only set if absent) and PX (expiry).\n4. Release with a compare-and-delete (Lua script checking the random value) so you don't delete someone else's lock.",
+    "link": {
+      "title": "Distributed locks with Redis",
+      "url": "https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Workers use a single-node Redis lock: `SET lock:report <random> NX PX 30000`. When done, each worker runs `DEL lock:report`. Worker A pauses for 40 s mid-job, B acquires the lock, then A finishes and runs `DEL`. What goes wrong?",
+    "options": [
+      {
+        "text": "Nothing: DEL fails because A no longer owns the key.",
+        "explanation": "Wrong. Redis has no idea who \"owns\" a key. DEL deletes it unconditionally."
+      },
+      {
+        "text": "Redis rejects the DEL because the key has a TTL.",
+        "explanation": "Wrong. Keys with a TTL can be deleted normally."
+      },
+      {
+        "text": "A deletes B's lock, so a third worker C can acquire it while B is still running.",
+        "explanation": "Correct. A's lease expired at 30 s and B took the lock. A's blind DEL removes B's key, and now B and C can both run. Release should delete only if the value still equals A's random token, atomically (a Lua script)."
+      },
+      {
+        "text": "A's DEL extends B's lock by another 30 s.",
+        "explanation": "Wrong. DEL removes the key; it never extends anything."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. At 0 s: A sets lock = \"a7f\". TTL 30 s.\n2. At 30 s: the key expires. B sets lock = \"c19\".\n3. At 40 s: A resumes and runs `DEL lock:report`, deleting **B's** lock.\n4. C acquires: B and C now both run.\n\nSafe release, atomically in Lua:\n\nRun the check and delete atomically as one Redis Lua script, with the key in `KEYS[1]` and this worker’s random token in `ARGV[1]`:\n\n```lua\n-- Preserve a successor’s lock.\nif redis.call(\"get\", KEYS[1])\n   == ARGV[1] then\n  return redis.call(\"del\", KEYS[1])\nend\n-- No matching owner: delete nothing.\nreturn 0\n```\n\nWrapping it in a Lua script makes the compare and delete a single step. A still overran its lease (that's inherent), but it no longer breaks the next holder's lock.",
+    "link": {
+      "title": "Distributed locks with Redis (Redis docs)",
+      "url": "https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A ledger service must apply each account's transactions one at a time, in order. Volume is high and spread across millions of accounts. Which design avoids a per-account distributed lock while staying safe?",
+    "options": [
+      {
+        "text": "Partition by account id, process sequentially, and atomically enforce both transaction-id deduplication and a per-account sequence or fencing condition in the ledger.",
+        "explanation": "Correct. Kafka partitions provide input order, but an old consumer can overlap a new owner. The ledger must reject duplicate and out-of-order or stale-owner writes atomically; idempotency alone only rejects repeats of the same transaction."
+      },
+      {
+        "text": "Take a Redlock lock on the account id for every transaction.",
+        "explanation": "Wrong. It adds a multi-node round trip per transaction and still lacks fencing, so it isn't safe for correctness anyway."
+      },
+      {
+        "text": "Let any worker process any transaction and rely on database autocommit.",
+        "explanation": "Wrong. Concurrent workers could apply an account's transactions out of order or interleave read-modify-write cycles and lose updates."
+      },
+      {
+        "text": "Use a single worker for all accounts.",
+        "explanation": "Wrong. It's safe but can't keep up with high volume, and it is a single point of failure."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Route each account to one partition and process its records sequentially.\n2. During rebalancing, an old consumer may still issue writes.\n3. In one ledger transaction, check the expected account sequence (or a validated owner epoch), check the unique transaction id, update the balance and advance the sequence.\n4. Reject or retry out-of-order work. Deduplication by transaction id alone would still allow two distinct transactions to apply in the wrong order.",
+    "link": {
+      "title": "Leader election in distributed systems (AWS)",
+      "url": "https://aws.amazon.com/builders-library/leader-election-in-distributed-systems/"
+    }
+  }
+]

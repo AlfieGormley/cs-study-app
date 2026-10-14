@@ -1,0 +1,138 @@
+[
+  {
+    "id": "api-designing-good-apis-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your public API has thousands of integrations. Which of these changes can you ship **without** a new API version, assuming you've documented that clients must ignore unknown fields? Select all that apply.",
+    "options": [
+      {
+        "text": "Adding a new optional `metadata` field to the order response",
+        "explanation": "Correct. Additive response fields are safe when clients follow the robustness principle and ignore what they don't recognise."
+      },
+      {
+        "text": "Renaming `amount` to `amount_cents`",
+        "explanation": "Wrong. Every client reading `amount` now gets nothing. A rename is a removal plus an addition, so it's breaking."
+      },
+      {
+        "text": "Adding a new optional `?currency=` query parameter that defaults to the current behaviour",
+        "explanation": "Correct. Existing clients don't send it, so they get exactly the old behaviour."
+      },
+      {
+        "text": "Making the previously optional `phone` request field required",
+        "explanation": "Wrong. Existing clients that omit `phone` will start receiving 400s. Tightening validation is breaking."
+      },
+      {
+        "text": "Adding a brand new endpoint `POST /orders/{id}/notes`",
+        "explanation": "Correct. No existing client calls it, so nothing can break."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Apply one test to each change: *Would a client written yesterday, and never updated, still work?*\n\n| Change | Old client | Safe |\n|---|---|---|\n| New response field | Ignores it | Yes |\n| Rename field | Reads missing field | No |\n| New optional param | Doesn't send it | Yes |\n| Optional → required | Gets 400 | No |\n| New endpoint | Never calls it | Yes |\n\nSafe changes: 1, 3 and 5.",
+    "link": {
+      "title": "Stripe blog: API versioning",
+      "url": "https://stripe.com/blog/api-versioning"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In Stripe's published versioning design, which pattern helps support old response shapes without a separate deployment for every version?",
+    "options": [
+      {
+        "text": "It runs one deployment per API version",
+        "explanation": "That would mean running and patching dozens of deployments, which is exactly the maintenance burden Stripe's approach avoids."
+      },
+      {
+        "text": "Business logic always produces the latest response, then a chain of small version-change modules transforms it backwards, step by step, to the caller's pinned version",
+        "explanation": "Correct. Each breaking change is encapsulated in a module that knows how to downgrade one version step. Response compatibility can be handled by composed transformations; some behavior changes still require explicit version-aware logic."
+      },
+      {
+        "text": "It never makes breaking changes",
+        "explanation": "Stripe does make breaking changes. That's why it needs versioning at all. The point is that they're isolated into transformation modules."
+      },
+      {
+        "text": "Clients are forced to upgrade every 6 months",
+        "explanation": "The design goal is the opposite: clients upgrade when they choose, so old integrations keep working without forced migrations."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Illustrative dates and field transformations, not actual Stripe release claims: picture a request from an account pinned to `2023-10-16` when the latest is `2026-03-01`:\n\n1. Request is handled by current code → latest-shaped response.\n2. Gateway walks the list of version changes newer than `2023-10-16`, newest first.\n3. Each module applies its downgrade, e.g. 'rename `amount_details` back to `amount`', 'collapse `payment_method_options`'.\n4. Response now matches what that integration expects.\n\nAdding a new breaking change = writing one more small module plus its downgrade, not forking the codebase.",
+    "link": {
+      "title": "Stripe blog: API versioning",
+      "url": "https://stripe.com/blog/api-versioning"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You add a new order status, `\"partially_refunded\"`. No field was renamed or removed, yet a partner's Android app starts crashing on the orders screen. What's the most likely cause, and the lesson?",
+    "options": [
+      {
+        "text": "The response got too large; enum values must be short",
+        "explanation": "One extra string value doesn't meaningfully change response size. The crash is about how the client *interprets* the value."
+      },
+      {
+        "text": "The client maps `status` onto a closed enum or exhaustive `switch` with no fallback, so an unknown value throws. Document that enums can grow and that clients must handle unknown values",
+        "explanation": "Correct. Adding an enum value is additive on the server but breaking for any client that assumed the set was closed. That's why the lesson rates it 'risky', not 'safe'."
+      },
+      {
+        "text": "Adding enum values always requires a new major API version",
+        "explanation": "Many APIs add enum values without a new version, provided they've told clients to expect it. The fix is a documented contract plus tolerant clients, not freezing the enum forever."
+      },
+      {
+        "text": "The client must have been relying on response field ordering",
+        "explanation": "Field ordering is a real Hyrum's Law risk, but nothing about ordering changed here. The new value itself is what the client couldn't handle."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. From the server's side, the change is additive: old values still mean what they meant.\n2. From a strict client's side, the set of possible values just changed:\n\nKotlin fragment: `received` is the status string from the API response.\n\n```kotlin\nenum class Status { PAID, REFUNDED }\n// Unknown name throws:\nval name = received.uppercase()\nval status = Status.valueOf(name)\n```\n\n3. Many JSON libraries also throw when they deserialise an unknown value into a closed enum type.\n4. Prevention: say in the docs that enums may gain values, map unknown values to a safe `UNKNOWN` case in your SDKs, and announce new values ahead of time.",
+    "link": {
+      "title": "Google AIP-126: Enumerations",
+      "url": "https://google.aip.dev/126"
+    }
+  },
+  {
+    "id": "api-designing-good-apis-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You plan to retire `GET /v1/orders` in six months. Which steps belong in a safe deprecation plan? Select all that apply.",
+    "options": [
+      {
+        "text": "Send `Deprecation` and `Sunset` headers on every v1 response",
+        "explanation": "Correct. Machine-readable headers let clients' tooling and logs flag the dependency automatically, not just humans who read changelogs."
+      },
+      {
+        "text": "Measure v1 traffic per client and contact the heaviest users directly",
+        "explanation": "Correct. Announcements miss people. Per-client usage data tells you exactly who will break on removal day."
+      },
+      {
+        "text": "Quietly change v1 to return v2's response shape, so clients migrate automatically",
+        "explanation": "That's an unannounced breaking change to the old version, the very thing versioning exists to prevent."
+      },
+      {
+        "text": "Where operationally acceptable, run communicated and risk-assessed brownouts for short windows",
+        "explanation": "Correct. Brief planned failures make forgotten integrations surface while there's still time to fix them, instead of all at once on the cut-off date."
+      },
+      {
+        "text": "Remove v1 on the announced date regardless of remaining traffic",
+        "explanation": "A hard date is useful, but removing an endpoint that still carries significant traffic turns a migration into an outage for your customers. Remove when traffic is near zero, or after deliberate sign-off."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A good deprecation turns a surprise into a schedule:\n\n1. **Announce** with a date (docs, changelog, email).\n2. **Signal in-band**: `Deprecation` (RFC 9745) and `Sunset` (RFC 8594) headers.\n3. **Measure**: who still calls v1, and how often?\n4. **Consider brownouts** only after assessing whether deliberate failures are acceptable for these clients.\n5. **Remove** once traffic is near zero.\n\nChanging the old version's behaviour in place skips every one of those steps.",
+    "link": {
+      "title": "RFC 8594: The Sunset HTTP Header Field",
+      "url": "https://www.rfc-editor.org/rfc/rfc8594"
+    }
+  }
+]

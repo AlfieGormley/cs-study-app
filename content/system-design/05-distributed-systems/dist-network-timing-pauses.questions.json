@@ -1,0 +1,131 @@
+[
+  {
+    "id": "dist-why-hard-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these can cause a healthy node to *appear* dead to its peers? Select all that apply.",
+    "options": [
+      {
+        "text": "A 20-second stop-the-world GC pause",
+        "explanation": "Correct. The process can't send heartbeats during the pause, so peers time out, even though it will resume normally."
+      },
+      {
+        "text": "A network partition between it and the peers",
+        "explanation": "Correct. The node is running and serving whichever side it can reach, but the other side hears nothing."
+      },
+      {
+        "text": "A saturated switch queue delaying heartbeats",
+        "explanation": "Correct. Delay beyond the timeout is indistinguishable from death; the heartbeat arrives too late."
+      },
+      {
+        "text": "The node using TCP instead of UDP",
+        "explanation": "Wrong. The transport protocol doesn't make a node look dead. TCP still suffers delays, but choosing it over UDP isn't a cause of false suspicion."
+      },
+      {
+        "text": "Its VM's hypervisor stealing CPU for a live migration",
+        "explanation": "Correct. The guest is frozen during migration, much like a GC pause, and misses heartbeats."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "A peer decides \"dead\" when it hasn't heard from a node within a timeout. Anything that stops or slows messages for longer than that timeout causes a false positive:\n\n- **Pauses** (GC, VM migration, swapping) stop the sender.\n- **Partitions** stop the path.\n- **Queueing** delays the path.\n\nTransport choice isn't the issue. The lesson: failure detection is always a guess, which is why protocols must stay safe when the guess is wrong.",
+    "link": {
+      "title": "Fallacies of distributed computing",
+      "url": "https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing"
+    }
+  },
+  {
+    "id": "dist-why-hard-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A leader holds a 10-second lease. It checks the lease (8 s left), then hits a 15-second GC pause, then writes to storage. What is the problem, and what does it illustrate?",
+    "options": [
+      {
+        "text": "A stale leader may write after a new leader was elected: a process can't rely on its own sense of elapsed time.",
+        "explanation": "Correct. The process resumes after its already-passed deadline check and acts on an expired lease. Storage must reject stale writers, e.g. with fencing tokens."
+      },
+      {
+        "text": "No problem: it checked the lease before writing.",
+        "explanation": "Wrong. The check and the write are separated by the pause. By the time it writes, the lease expired 7 seconds earlier and another node may be leader."
+      },
+      {
+        "text": "The write is rejected automatically because GC pauses abort I/O.",
+        "explanation": "Wrong. GC pauses don't abort anything; the thread resumes exactly where it left off and performs the write."
+      },
+      {
+        "text": "The problem is clock skew between the leader and storage.",
+        "explanation": "Wrong. Clocks could be perfectly synchronised and this still happens; the issue is the pause between check and use."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\nt=0   lease granted (to t=10)\nt=2   check: 8 s left, OK\nt=2   GC pause starts\nt=10  lease expires; n2 elected\nt=17  pause ends; old leader writes\n```\n\nAt 17 s two nodes believe they are leader. This is a check-then-act race made worse by unbounded pauses. The defence (covered later in the resource-fencing unit) is a **fencing token**: storage remembers the highest token it has seen and rejects the old leader's lower one.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-why-hard-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Raft is described as never violating safety under any network timing, but needing a \"well-behaved\" network for liveness. Which timing model is this?",
+    "options": [
+      {
+        "text": "Synchronous",
+        "explanation": "Wrong. A synchronous model assumes known bounds always hold; Raft explicitly stays safe when they don't."
+      },
+      {
+        "text": "Fully asynchronous with guaranteed termination",
+        "explanation": "Wrong. FLP shows deterministic consensus can't guarantee termination in a fully asynchronous model with even one crash."
+      },
+      {
+        "text": "Partially synchronous",
+        "explanation": "Correct. The system is usually timely but sometimes isn't. Safety holds always; progress happens once delays settle back within bounds, which matches real networks."
+      },
+      {
+        "text": "Byzantine",
+        "explanation": "Wrong. Byzantine is a fault model (nodes lie), not a timing model, and Raft doesn't tolerate Byzantine nodes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Separate two properties:\n\n- **Safety**: nothing bad happens (no two leaders commit conflicting entries). Raft guarantees this with terms and majority votes, regardless of timing.\n- **Liveness**: something good eventually happens (a leader is elected). This needs timeouts to work, i.e. messages arriving within bounds *most* of the time.\n\nThat split is exactly the partially synchronous model, and it sidesteps FLP: termination is only promised in periods of good behaviour.",
+    "link": {
+      "title": "In Search of an Understandable Consensus Algorithm (Raft paper)",
+      "url": "https://raft.github.io/raft.pdf"
+    }
+  },
+  {
+    "id": "dist-why-hard-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Node n1's network card starts dropping **inbound** packets but still sends outbound ones. n1 sends heartbeats to n2 and n3 as normal. What does each side conclude?",
+    "options": [
+      {
+        "text": "Everyone agrees n1 is down, because its network card is faulty.",
+        "explanation": "Wrong. n2 and n3 keep receiving n1's heartbeats, so from their side n1 looks perfectly healthy."
+      },
+      {
+        "text": "n1 suspects n2 and n3 are dead, while n2 and n3 believe n1 is alive.",
+        "explanation": "Correct. This is an asymmetric partition. n1 hears nothing, so it suspects everyone else. The others hear n1 fine, so they see no problem, even though n1 cannot receive their requests or replies."
+      },
+      {
+        "text": "n2 and n3 suspect n1, while n1 believes everything is fine.",
+        "explanation": "Wrong, it's the other way round. Outbound traffic from n1 still works, so n2 and n3 hear it; n1 is the one hearing nothing."
+      },
+      {
+        "text": "Nobody notices anything, because TCP retransmits the lost packets.",
+        "explanation": "Wrong. TCP retransmits, but every retransmission is dropped too. Connections into n1 stall and eventually time out."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Draw the two directions separately:\n\n```\nn1 --> n2, n3   works\nn1 <-- n2, n3   dropped\n```\n\n- n1: no heartbeats or replies arrive, so it times out on everyone.\n- n2, n3: n1's heartbeats arrive on time, so it looks alive, yet requests they send to it never get answered.\n\nWhy it matters: if n1 is a leader, it may keep sending heartbeats that suppress elections while being unable to receive acknowledgements, so nothing commits. Partial and asymmetric failures (sometimes called **gray failures**) are why systems use end-to-end health checks (can you actually do work?) and indirect probes, rather than \"did I hear a heartbeat?\".",
+    "link": {
+      "title": "Jepsen analyses of real databases under partition",
+      "url": "https://jepsen.io/analyses"
+    }
+  }
+]

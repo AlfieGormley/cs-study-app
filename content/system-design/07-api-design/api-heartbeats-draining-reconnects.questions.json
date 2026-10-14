@@ -1,0 +1,130 @@
+[
+  {
+    "id": "api-real-time-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You deploy a new version to a WebSocket gateway holding 200,000 connections by killing the process. Within seconds, your auth service falls over. Why, and what are the best mitigations?",
+    "options": [
+      {
+        "text": "All 200,000 clients reconnect at once, each re-authenticating: a thundering herd. Drain gradually, reconnect with exponential backoff and jitter, and resume from the last-seen sequence number",
+        "explanation": "Correct. Killing the process drops every connection simultaneously, and naïve clients reconnect immediately. Gradual draining spreads the load over minutes, jitter de-synchronises clients, and resume avoids a full state reload."
+      },
+      {
+        "text": "The new version uses a different WebSocket protocol version",
+        "explanation": "WebSocket version 13 has been stable since 2011. A protocol mismatch would cause handshake failures, not an auth-service overload."
+      },
+      {
+        "text": "Long-lived connections leak memory in the auth service",
+        "explanation": "Auth isn't holding the WebSocket connections; the gateway is. The auth load comes from the burst of new handshakes."
+      },
+      {
+        "text": "The load balancer can't route WebSockets after a deploy",
+        "explanation": "The LB keeps routing fine; it's the sudden volume of reconnects, not routing, that causes the failure."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Estimate the burst:\n\n```formula\nR = N / T\nR = 200,000 / 2 s = 100,000/s\nR = 200,000 / 300 s ≈ 667/s\nwhere\nR: the rate of reconnects, each needing an auth check\nN: the number of clients on the gateway, 200,000\nT: the time over which they reconnect: about 2 s after a kill, 300 s (5 minutes) with a graceful drain\n≈: approximately equal to\ns: seconds; /s means per second\nIn words: the same 200,000 reconnects spread over 5 minutes instead of 2 seconds cut the peak rate 150-fold.\n```\n\n- A kill gives **100,000 auth checks/s**. If auth normally handles ~5,000/s, that's 20× overload.\n- A 5-minute graceful drain (closing connections in batches) gives **667 reconnects/s**, comfortably handled.\n\nAdd client-side backoff with full jitter (e.g. random 0–30 s on first retry) so even an unplanned crash spreads reconnects out. Resuming from a sequence number keeps each reconnect cheap.",
+    "link": {
+      "title": "AWS Builders' Library: Timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "api-real-time-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your WebSocket fleet has 10 gateways, each with about 100,000 connections. During a traffic spike you add 10 more. An hour later the new gateways have only a few thousand connections each and the old ones are still overloaded. Which actions help? Select all that apply.",
+    "options": [
+      {
+        "text": "Use least-connections balancing, so new connections prefer the emptier gateways",
+        "explanation": "Correct. Round-robin would send only half of new connections to the new gateways; least-connections sends nearly all of them there until the fleet evens out."
+      },
+      {
+        "text": "Have overloaded gateways gradually close a slice of connections, asking clients to reconnect with jittered backoff",
+        "explanation": "Correct. Connections only move when clients reconnect. Closing a controlled slice, slowly, lets them land on the new gateways without a reconnect storm."
+      },
+      {
+        "text": "Enable sticky sessions on the load balancer",
+        "explanation": "Stickiness tries to send a client back to the *same* gateway, which is the opposite of what you need here."
+      },
+      {
+        "text": "Set a maximum connection age with jitter, so connections naturally recycle over time",
+        "explanation": "Correct. A max age (e.g. a few hours ± random) means the fleet keeps rebalancing on its own, including after future scale-outs."
+      },
+      {
+        "text": "Restart the old gateways all at once so every client reconnects",
+        "explanation": "That moves the connections, but 1 million simultaneous reconnects hammer auth and the gateways: a self-inflicted thundering herd."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. The root cause: balancing happens only at **connect** time. Existing connections stay where they were.\n2. To fix it, you need *new* connections to go to the right place, and *some* old connections to become new ones:\n   - least-connections → new connects go to new gateways ✔\n   - gradual, jittered shedding → old connects move, slowly ✔\n   - max connection age → continuous rebalancing ✔\n3. Moving all of them at once is the reconnect-storm failure mode. ✘\n4. Stickiness is for keeping clients where they are. ✘\n\nTarget: 1,000,000 connections across 20 gateways = 50,000 each.",
+    "link": {
+      "title": "Slack engineering: Real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  },
+  {
+    "id": "api-real-time-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your chat app's WebSocket connections run through an AWS Application Load Balancer with its default settings. Users in quiet rooms keep getting disconnected roughly every minute, but busy rooms are fine. What's the fix?",
+    "options": [
+      {
+        "text": "Switch from WebSockets to short polling",
+        "explanation": "That throws away the real-time design to work around a timeout setting. It would also add far more load than the occasional ping."
+      },
+      {
+        "text": "Send WebSocket ping/pong heartbeats every ~30 s (and/or raise the ALB idle timeout), so idle connections never look idle",
+        "explanation": "Correct. The ALB closes connections with no traffic for its idle timeout, 60 s by default. Quiet rooms send nothing for a minute; busy rooms always have traffic. Heartbeats keep the connection active and also detect dead clients."
+      },
+      {
+        "text": "Enable sticky sessions",
+        "explanation": "A WebSocket is already one long-lived connection to one target. Stickiness affects where *new* requests go, not idle timeouts."
+      },
+      {
+        "text": "Use binary frames instead of text frames",
+        "explanation": "The frame type doesn't matter. The connection is being closed because no frames of any kind are flowing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Read the clue: **quiet** rooms disconnect, **busy** rooms don't, at about **60 s** intervals.\n\n1. Something closes connections after ~60 s of silence.\n2. AWS ALB's default idle timeout is 60 s.\n3. Busy rooms reset the idle timer with every message; quiet rooms don't.\n\nFix: have the server send a protocol ping roughly every 30 s (browsers automatically pong; browser JavaScript cannot send protocol ping frames directly), comfortably inside the timeout, and optionally raise the ALB idle timeout. The same pings let the server notice clients that vanished without closing the socket (a phone losing signal), so it can free their resources.",
+    "link": {
+      "title": "AWS: Application Load Balancer idle timeout",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-load-balancer-attributes.html"
+    }
+  },
+  {
+    "id": "api-real-time-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A gateway holds 200,000 WebSocket connections, and every reconnect costs one call to the auth service. Auth can absorb about 2,000 extra calls/s on top of normal load. For a deploy, you drain the gateway by closing connections at a steady rate, and clients reconnect promptly. Ignoring variability and all other bottlenecks, what lower bound does auth capacity place on drain time?",
+    "options": [
+      {
+        "text": "About 10 seconds",
+        "explanation": "That's 20,000 reconnects per second, ten times what auth can absorb."
+      },
+      {
+        "text": "It doesn't matter, as long as clients use exponential backoff",
+        "explanation": "Backoff helps after *failures*. If you close everything at once and auth falls over, backoff spreads out the wreckage, but you've still caused an outage. Draining controls the rate at the source."
+      },
+      {
+        "text": "About 100 seconds",
+        "explanation": "Correct. 200,000 ÷ 2,000 per second = 100 s. In practice you'd add headroom, say 3–5 minutes, and jitter on the client side."
+      },
+      {
+        "text": "About 2,000 seconds",
+        "explanation": "That divides by 100 instead of 2,000. It's safe, but over half an hour per gateway makes deploys needlessly slow."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Reconnects to absorb: **200,000**.\n2. Auth headroom: **2,000/s**.\n3. Minimum drain time:\n\n```formula\nT_min = N / R\nT_min = 200,000 / 2,000 per s = 100 s\nwhere\nT_min: the shortest drain that keeps auth within its headroom\nN: the reconnects to absorb, 200,000\nR: the spare auth capacity, 2,000 calls per second\ns: seconds\nIn words: 200,000 reconnects at 2,000 a second take **100 s**.\n```\n\n4. Add headroom for other gateways, retries and failures: drain over a few minutes.\n\nCompare with killing the process: 200,000 reconnects in maybe 1–2 seconds, around 100,000/s, which is 50× auth's headroom.\n\nIf you deploy 10 gateways one after another at this pace, the whole rollout takes about 17 minutes, which is why large fleets drain several gateways in parallel only when auth has the capacity.",
+    "link": {
+      "title": "Discord: How Discord scaled Elixir to 5,000,000 concurrent users",
+      "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"
+    }
+  }
+]

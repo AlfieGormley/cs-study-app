@@ -1,0 +1,92 @@
+[
+  {
+    "id": "api-rate-limiting-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A token bucket has capacity 20 and refills at 5 tokens/second. It starts full. A client sends 30 requests at once at time t = 0 s (t is seconds since the start), then 10 more at t = 3 s. How many of the 40 requests are allowed?",
+    "options": [
+      {
+        "text": "20",
+        "explanation": "This counts only the initial burst. By t = 3 s the bucket has refilled 15 tokens, enough for all 10 later requests."
+      },
+      {
+        "text": "25",
+        "explanation": "This assumes the bucket refills only 5 tokens after 3 seconds. Refill is 5 *per second*, so 3 seconds gives 15 tokens."
+      },
+      {
+        "text": "35",
+        "explanation": "This adds the full 15 refilled tokens to the 20, but only 10 requests arrive at t = 3, so only 10 of those tokens are used. Rejected requests from t = 0 aren't replayed later."
+      },
+      {
+        "text": "30",
+        "explanation": "Correct. The initial burst admits 20 and rejects 10, emptying the bucket. After 3 seconds at 5 tokens per second, it holds 15 tokens, below its cap. The next 10 requests all succeed and leave 5 tokens."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Step through it:\n\n| Time | Tokens before | Requests | Allowed | Tokens after |\n|---|---|---|---|---|\n| 0 s | 20 | 30 | 20 | 0 |\n| 3 s | 15 (refilled) | 10 | 10 | 5 |\n\nThe refill by t = 3 s:\n\n```formula\nb = min(C, b_0 + r × Δt)\nb = min(20, 0 + 5 tokens/s × 3 s)\nb = min(20, 15) = 15\nwhere\nb: the tokens in the bucket when the second batch arrives\nC: the capacity, 20 tokens\nb_0: the tokens left after the first burst, 0\nr: the refill rate, 5 tokens per second\nΔt: delta t, the time since the bucket was emptied, 3 s\nmin: the smaller of the two values\ntokens: the bucket's units; each request spends one\ns: seconds\nIn words: 3 seconds at 5 tokens per second puts 15 tokens back, which is under the capacity, so all 10 late requests fit.\n```\n\nThe initial 20 plus the later 10 gives **30 allowed** requests and **10 rejected**.\n\nNote how capacity (20) sets the burst size and the refill rate (5/s) sets the long-run average.",
+    "link": {
+      "title": "Wikipedia: Token bucket",
+      "url": "https://en.wikipedia.org/wiki/Token_bucket"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A token bucket with capacity at least 1 refills at 0.5 tokens/s and currently has 0.2 tokens. Assuming no competing consumption or policy changes, what minimum whole-second Retry-After delay lets it refill to at least one token?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "This would send the client back too early. After 1 s the bucket holds 0.2 + 0.5 = 0.7 tokens, still short of 1, so the retry would be rejected again."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. The client needs 1 − 0.2 = 0.8 more tokens. At 0.5 tokens/s that takes 0.8 / 0.5 = 1.6 s. Round **up** to 2 so the retry is guaranteed to find a whole token."
+      },
+      {
+        "text": "60",
+        "explanation": "That's a full minute, far more than needed. Over-long Retry-After values waste client capacity and make your API feel broken."
+      },
+      {
+        "text": "0",
+        "explanation": "Retrying immediately would just be rejected again and adds load. The whole point of Retry-After is to tell the client how long to wait."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nW = (1 − b) / r\nW = (1 − 0.2) / 0.5 = 1.6 s\nR = ⌈W⌉ = ⌈1.6 s⌉ = 2 s\nwhere\nW: the exact time until the bucket holds one whole token, in seconds (s)\nb: the tokens in the bucket now, 0.2\nr: the refill rate, 0.5 tokens per second\nR: the Retry-After value, which must be a whole number of seconds\n⌈ ⌉: ceiling: round up to the next whole number\ns: seconds\nIn words: 0.8 of a token is missing and tokens arrive at 0.5 per second, so it takes **1.6 s**; Retry-After must be whole seconds, so round **up** to **2**.\n```\n\nCheck: after 2 s the bucket holds 0.2 + 2 × 0.5 = 1.2 tokens, at least one whole token. ✔\n\nRounding down (1 s) gives 0.7 tokens: rejected again.",
+    "link": {
+      "title": "MDN: Retry-After",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Retry-After"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A token bucket should sustain 60 requests/minute and permit an instantaneous burst of 20. Which parameters fit, and how many unit requests can be accepted from t=0 through t=60 seconds inclusive, starting full with demand always available?",
+    "options": [
+      {
+        "text": "Refill 60 tokens/s, capacity 20; up to 3,620",
+        "explanation": "60 per *second* is 3,600 per minute, sixty times the spec. The refill rate has to be the long-run average expressed per second: 60 / 60 = 1."
+      },
+      {
+        "text": "Refill 1 token/s, capacity 60; up to 120",
+        "explanation": "This swaps the roles. Capacity sets the burst size, so it should be 20, not 60. With capacity 60 a client could fire 60 at once."
+      },
+      {
+        "text": "Refill 1 token/s, capacity 20; up to 80",
+        "explanation": "Correct. Sixty tokens per minute is one token per second; the capacity of 20 supplies the burst. From full, 20 can be spent immediately and 60 refill over the inclusive minute, so up to 80 are accepted, settling to 60 per minute afterwards."
+      },
+      {
+        "text": "Refill 1 token/s, capacity 20; exactly 60",
+        "explanation": "The parameters are right, but this forgets the initial full bucket. The 20 stored tokens are spent on top of the 60 that refill during the minute."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Refill rate** follows the long-run average: 60 tokens over 60 seconds gives **1 token/s**.\n2. **Capacity** sets the biggest burst: **20**.\n3. First minute from a full bucket:\n\n```formula\nA = C + r × T\nA = 20 + 1 token/s × 60 s\nA = 20 + 60 = 80\nwhere\nA: the most requests accepted from t = 0 to t = 60 s\nC: the capacity, 20 tokens, all available at the start\nr: the refill rate, 1 token per second\nT: the length of the period, 60 s\nt: time since the start, in seconds\ntoken: one request's worth of allowance\ns: seconds\nIn words: the client spends the 20 stored tokens at once, then one new token each second for 60 seconds, so 80 in total.\n```\n\n4. Every minute after that the bucket is empty on average, so the client gets **60/min**.\n\nThat first-minute overshoot (80 vs 60) is the burst allowance doing its job. If that's unacceptable, use a smaller capacity.",
+    "link": {
+      "title": "Wikipedia: Token bucket",
+      "url": "https://en.wikipedia.org/wiki/Token_bucket"
+    }
+  }
+]

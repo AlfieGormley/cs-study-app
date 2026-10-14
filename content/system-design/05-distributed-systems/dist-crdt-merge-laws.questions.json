@@ -1,0 +1,78 @@
+[
+  {
+    "id": "dist-crdts-gossip-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which properties must a state-based CRDT's merge function have so that replicas converge over gossip? Select all that apply.",
+    "options": [
+      {
+        "text": "Commutative",
+        "explanation": "Correct. Replicas may merge states in either order (A into B, or B into A); results must be equal."
+      },
+      {
+        "text": "Associative",
+        "explanation": "Correct. States arrive via different paths and groupings; merging a with b and then the result with c must give the same as merging b with c first and then with a."
+      },
+      {
+        "text": "Idempotent",
+        "explanation": "Correct. Gossip delivers the same state repeatedly; merging something twice must not change the result."
+      },
+      {
+        "text": "Invertible (every merge can be undone)",
+        "explanation": "Wrong. Merges are joins in a semilattice; they only move 'upwards' and are not undone. Invertibility isn't required and generally isn't possible."
+      },
+      {
+        "text": "Dependent on wall-clock timestamps",
+        "explanation": "Wrong. CRDT convergence doesn't need clocks; LWW registers use them as one design choice, but G-Counters and OR-Sets don't."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Gossip gives you no control over:\n\n- **order** of merges → need commutativity,\n- **grouping/path** → need associativity,\n- **duplicates** → need idempotence.\n\n```formula\nmerge(a, b) = merge(b, a)\nmerge(merge(a,b),c)\n  = merge(a,merge(b,c))\nmerge(a, a) = a\nwhere\nmerge: the function combining two replica states\na: one replica's state\nb: another replica's state\nc: a third replica's state\nIn words: order, grouping and repetition must not change the result: commutativity, associativity and idempotence.\n```\n\nThese three make the state a *join-semilattice*: merge = least upper bound. Every replica that has seen the same set of updates computes the same join. That's strong eventual consistency.",
+    "link": {
+      "title": "crdt.tech",
+      "url": "https://crdt.tech/"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these replicated designs are valid **state-based CRDTs**, guaranteed to converge however states are gossiped? Assume a fixed replica set, eventual delivery and inflationary local updates; each LWW assignment uses a unique pair greater than the current pair. Select all that apply.",
+    "options": [
+      {
+        "text": "A register holding a number, where updates only raise it and merge takes the max",
+        "explanation": "Valid. Max is commutative, associative and idempotent, and updates only move the value upwards, so it's a join-semilattice."
+      },
+      {
+        "text": "A counter where merge adds the two replicas' totals",
+        "explanation": "Not valid. Addition isn't idempotent: merging the same state twice doubles it, and gossip delivers duplicates all the time."
+      },
+      {
+        "text": "A last-write-wins register: keep the value with the highest (timestamp, replica id) pair",
+        "explanation": "Valid. Max over a total order of pairs is a proper join, so replicas converge. It's still a CRDT even though it can discard concurrent writes; \"converges\" doesn't mean \"keeps everything\"."
+      },
+      {
+        "text": "A register where merge keeps whichever value arrived most recently at this replica",
+        "explanation": "Not valid. Arrival order differs per replica, so merge isn't commutative: A may end with B's value while B ends with A's."
+      },
+      {
+        "text": "A grow-only set merged by union",
+        "explanation": "Valid. Union is commutative, associative and idempotent, and adds only grow the set."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Test each merge for the three laws plus \"updates only go up\":\n\n| Design | Comm. | Assoc. | Idem. |\n|---|---|---|---|\n| max-register | ✓ | ✓ | ✓ |\n| sum-counter | ✓ | ✓ | ✗ |\n| LWW (ts, id) | ✓ | ✓ | ✓ |\n| arrival order | ✗ | ✗ | ✓ |\n| G-Set union | ✓ | ✓ | ✓ |\n\nThe LWW register is the trap: it **is** a CRDT, because it converges deterministically. Whether it loses data you care about is a separate design question.",
+    "link": {
+      "title": "A comprehensive study of CRDTs (Shapiro et al.)",
+      "url": "https://hal.inria.fr/inria-00555588/document"
+    }
+  }
+]

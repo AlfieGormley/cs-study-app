@@ -1,0 +1,100 @@
+[
+  {
+    "id": "api-idempotency-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your idempotency layer does: (1) `SELECT` the key; (2) if absent, charge the card; (3) `INSERT` the key with the result. Two identical retries hit two API servers within 5 ms of each other. What happens, and what's the fix?",
+    "options": [
+      {
+        "text": "The database serialises the two SELECTs, so only one charges",
+        "explanation": "Under the default Read Committed isolation, both SELECTs can run before either INSERT and both see 'absent'. Nothing serialises them."
+      },
+      {
+        "text": "Both see the key absent and both charge the card. Fix: atomically claim the key first with an INSERT against a unique constraint (status 'started'), and only the winner does the work",
+        "explanation": "Correct. Check-then-act is a race. Making the claim itself the atomic step means the second request gets a unique-constraint conflict and responds with 409 (in progress) or replays the result once it's done."
+      },
+      {
+        "text": "Both charge, but that's fine because the card network deduplicates",
+        "explanation": "Card networks don't deduplicate on your behalf unless you pass an idempotency key downstream. Relying on that without doing so means double charges."
+      },
+      {
+        "text": "Only the first charges because HTTP/2 orders requests",
+        "explanation": "The two requests are on different servers and possibly different connections. HTTP/2 stream ordering doesn't coordinate separate servers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Interleave the two requests:\n\n```\nt0  A: SELECT K -> none\nt1  B: SELECT K -> none\nt2  A: charge card  (£50)\nt3  B: charge card  (£50)\nt4  A: INSERT K\nt5  B: INSERT K -> dup error\n     (too late, already charged)\n```\n\nFix: claim first.\n\n```\nt0  A: INSERT K 'started' -> ok\nt1  B: INSERT K -> conflict\n       -> 409, retry later\nt2  A: charge, UPDATE K 'done'\n```\n\nThe unique index on `(account_id, key)` does the coordination.",
+    "link": {
+      "title": "Brandur Leach: Implementing Stripe-like idempotency keys in Postgres",
+      "url": "https://brandur.org/idempotency-keys"
+    }
+  },
+  {
+    "id": "api-idempotency-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your server claims key K (`status='started'`), charges the card, then crashes **before** recording the result. The row sits in `started` for ever and retries get 409. Which recovery strategies are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "After a timeout, reconcile K through an authoritative downstream status contract that rules out a pending charge later succeeding before a retry is allowed",
+        "explanation": "Sound only when the downstream offers authoritative status for the operation key and its contract rules out a still-pending operation later succeeding. A transient not-found response from an eventually consistent lookup is not permission to charge again."
+      },
+      {
+        "text": "Forward K (or a scoped derived key) to a payment downstream that enforces an applicable idempotency contract, so resuming the charge step does not repeat the effect",
+        "explanation": "Correct. If the downstream call deduplicates on the same key, the retry can simply resume and redo the step without a second charge. This is the atomic-phases approach."
+      },
+      {
+        "text": "Delete stuck `started` rows after 30 seconds so the next retry starts fresh",
+        "explanation": "Unsafe. The card may already have been charged; starting fresh without any downstream deduplication charges it again."
+      },
+      {
+        "text": "Mark stuck rows `done` with a `201` after a timeout",
+        "explanation": "Unsafe. You'd be telling the client 'paid' without knowing whether the charge happened. If it didn't, you've shipped goods for free."
+      },
+      {
+        "text": "Use durable local recovery points together with downstream idempotency or authoritative reconciliation for the external charge step",
+        "explanation": "Correct with the added external-step protection. Local recovery points cannot by themselves close the crash window between a remote charge and recording its result; downstream deduplication or reconciliation is still necessary."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. A crash after the remote charge but before a local result write creates an unknown outcome.\n2. Retry the remote step with the same key only within a downstream idempotency contract, or reconcile using authoritative operation status that accounts for pending work.\n3. Local recovery points let the workflow resume, but do not atomically commit a remote charge and local database record. Combine them with step 2.\n4. Deleting the claim or inventing success after a timeout guesses the result and is unsafe.",
+    "link": {
+      "title": "Brandur Leach: Implementing Stripe-like idempotency keys in Postgres",
+      "url": "https://brandur.org/idempotency-keys"
+    }
+  },
+  {
+    "id": "api-idempotency-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A worker reads an SQS message 'credit account 7 with £20', applies the credit, then crashes before deleting the message. SQS redelivers it after the visibility timeout. How do you get an effectively-once credit?",
+    "options": [
+      {
+        "text": "Increase the visibility timeout so redelivery never happens",
+        "explanation": "A longer timeout delays redelivery but doesn't prevent it. After a crash, the message is redelivered whenever the timeout expires, however long it is."
+      },
+      {
+        "text": "Delete the message *before* applying the credit",
+        "explanation": "That swaps duplicates for losses: if the worker crashes after deleting but before crediting, the £20 is never applied. That's at-most-once."
+      },
+      {
+        "text": "Record the message id in a `processed` table in the **same database transaction** as the credit, and skip messages whose id is already there",
+        "explanation": "Correct. The credit and the 'seen it' marker commit together or not at all, so a redelivered message is recognised and skipped. At-least-once delivery plus an idempotent receiver."
+      },
+      {
+        "text": "Nothing: SQS standard queues guarantee exactly-once delivery",
+        "explanation": "Standard queues are at-least-once and can deliver duplicates. FIFO queues deduplicate within a 5-minute window, but that doesn't help if your *consumer* crashes after applying the effect."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Delivery can be at most once (delete first) or at least once (delete after). Neither alone is exactly once.\n2. Choose at-least-once, then make the receiver idempotent:\n\n```sql\n-- Marker and credit commit together.\nBEGIN;\nINSERT INTO processed(msg_id)\n  -- Duplicate message ids abort the\n  -- credit.\n  VALUES ('m-81');  -- unique\nUPDATE accounts\n  SET balance = balance + 20\n  WHERE id = 7;\nCOMMIT;\n```\n\n3. On redelivery, the insert hits the unique constraint, the worker handles the unique-constraint error, rolls back the transaction, and deletes the already-processed message.\n4. The non-idempotent `balance + 20` is now safe, because it's guarded by the dedup record in the same transaction.",
+    "link": {
+      "title": "AWS Builders' Library: Making retries safe with idempotent APIs",
+      "url": "https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/"
+    }
+  }
+]

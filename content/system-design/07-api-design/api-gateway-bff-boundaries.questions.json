@@ -1,0 +1,62 @@
+[
+  {
+    "id": "api-webhooks-gateways-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your mobile home screen needs data from 5 services, and on 4G each round trip costs ~150 ms. The web app needs a very different shape from the same services. The mobile team waits weeks for core teams to change endpoints. Which pattern best addresses this?",
+    "options": [
+      {
+        "text": "Put the aggregation logic for every client in the shared API gateway",
+        "explanation": "This turns the gateway into a monolith owned by a platform team. Every client change now queues behind that team, which is the same bottleneck in a new place."
+      },
+      {
+        "text": "Have the mobile app call all 5 services directly in parallel",
+        "explanation": "Parallel calls help latency, but the app still downloads 5 over-fetched payloads, and still depends on core teams for any shape change."
+      },
+      {
+        "text": "A backend-for-frontend per client type (mobile BFF, web BFF), owned by each frontend team, that aggregates and shapes responses",
+        "explanation": "Correct. The mobile BFF makes the 5 calls over the fast data-centre network and returns one trimmed payload; the mobile team owns it, so they can change it without waiting for core teams."
+      },
+      {
+        "text": "Add a version number to each core service's API",
+        "explanation": "Versioning manages breaking changes, but doesn't reduce round trips or let the mobile team shape responses themselves."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Illustrative latency model (assumed payload sizes and internal latency; excludes processing and transfer time):\n\n- **Direct, sequential**: 5 × 150 ms = 750 ms.\n- **Direct, parallel**: ~150 ms, but 5 payloads (say 5 × 40 KB = 200 KB) over 4G.\n- **BFF**: 1 × 150 ms on 4G + 5 parallel calls in the data centre at ~5 ms each, returning one 15 KB payload.\n\nOwnership matters as much as latency: the BFF lives with the mobile team, so a new screen means changing their own service, not filing tickets with five other teams.",
+    "link": {
+      "title": "Sam Newman: Backends for frontends",
+      "url": "https://samnewman.io/patterns/architectural/bff/"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The platform team proposes adding a rule to the API gateway: \"if a customer has more than 5 past orders, add a 10% loyalty discount to `POST /checkout` requests\". It would ship faster than changing the checkout service. What's the strongest objection?",
+    "options": [
+      {
+        "text": "It's business logic. Putting domain rules in the gateway couples every team to it, makes it the bottleneck for changes, and hides pricing rules from the service that owns checkout",
+        "explanation": "Correct. Gateways should handle cross-cutting policy (auth, rate limits, routing, TLS). Once they apply domain rules, they become the shared monolith you split up to escape."
+      },
+      {
+        "text": "Gateways can't modify request bodies",
+        "explanation": "Many gateways can transform requests. The issue isn't capability; it's that this logic doesn't belong there."
+      },
+      {
+        "text": "It would break TLS termination",
+        "explanation": "TLS is terminated before the gateway sees the request either way. The discount rule has nothing to do with TLS."
+      },
+      {
+        "text": "Gateways can only route by URL path",
+        "explanation": "Modern gateways route on headers, methods, weights and more. Again, capability isn't the problem."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask of any proposed gateway feature: *is this true for every API, or is it a rule about this domain?*\n\n| Feature | Cross-cutting? | Where |\n|---|---|---|\n| Validate JWT | Yes | Gateway |\n| 1,000 req/min per key | Yes | Gateway |\n| Route `/orders/*` | Yes | Gateway |\n| Loyalty discount | No | Checkout service |\n\nThe discount also needs order history, which means the gateway calling a database or service on the hot path of a single endpoint. That adds latency to the one component every request already passes through.",
+    "link": {
+      "title": "Microsoft Azure Architecture Center: API gateways",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/microservices/design/gateway"
+    }
+  }
+]

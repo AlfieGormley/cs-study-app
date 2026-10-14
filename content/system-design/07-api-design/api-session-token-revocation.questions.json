@@ -1,0 +1,32 @@
+[
+  {
+    "id": "api-auth-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An account is disabled at 09:00. Its stateless JWT access token was issued at 08:30 and expires eight hours later. The API validates signature and claims, including exp, but does no credential revocation/account lookup. What exposure remains, and what reduces it without a per-request database lookup?",
+    "options": [
+      {
+        "text": "No exposure; disabling the account invalidates the JWT",
+        "explanation": "A stateless JWT is verified purely by its signature and claims. The API never consults the account table, so disabling the account changes nothing until expiry."
+      },
+      {
+        "text": "Until 16:30. Shorten access tokens to ~10 minutes and use refresh tokens that are checked against the account on each refresh",
+        "explanation": "Correct under the stated validation policy. Short access-token lifetimes reduce exposure to at most about ten minutes if refreshes check the current account state. A jti deny-list can enforce earlier token credential revocation, subject to propagation and cache delays."
+      },
+      {
+        "text": "Until 16:30. Switch from RS256 to HS256",
+        "explanation": "Changing the signing algorithm doesn't affect lifetime or credential revocation. It would also make every verifier capable of forging tokens."
+      },
+      {
+        "text": "Until 16:30. Rotate the signing key",
+        "explanation": "Issuing a new signing key alone does not invalidate tokens signed by a still-trusted old key. Removing the old verification key from every verifier can invalidate all tokens using it, with propagation/cache delays and broad disruption."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nT_exp = T_iss + L\nT_exp = 08:30 + 8 h = 16:30\nE = T_exp − T_dis\nE = 16:30 − 09:00 = 7.5 h\nwhere\nT_exp: the token's expiry time, its exp claim\nT_iss: the time the token was issued, 08:30\nL: the token's lifetime, 8 hours\nE: the exposure window: how long the token still works after the account is disabled\nT_dis: the time the account was disabled, 09:00\nh: hours\nIn words: the token outlives the account by **7.5 hours**, because nothing checks the account until **16:30**.\n```\n\nWith 10-minute access tokens, the worst case is a token issued just before 09:00, so the exposure is at most the lifetime: ≤ **10 minutes**. At 09:10 the client tries to refresh; the auth server sees the account is disabled and refuses.\n\nCost: one auth-server check every 10 minutes per client, instead of one DB lookup per API request. If you need sub-minute credential revocation (a compromised admin), push the `jti` to a deny-list cached on every gateway.",
+    "link": {
+      "title": "RFC 8725: JWT Best Current Practices",
+      "url": "https://www.rfc-editor.org/rfc/rfc8725"
+    }
+  }
+]

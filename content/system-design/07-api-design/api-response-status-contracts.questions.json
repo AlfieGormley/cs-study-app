@@ -1,0 +1,100 @@
+[
+  {
+    "id": "api-rest-fundamentals-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "During a database outage, your API catches the exception and returns `400 Bad Request` with `{\"error\": \"could not save\"}`. What is the main operational problem with this choice?",
+    "options": [
+      {
+        "text": "400 responses can't have a JSON body",
+        "explanation": "A 400 response can carry JSON error details. Some statuses, including 204 and 304, cannot carry response content, so this is not true of every status."
+      },
+      {
+        "text": "Load balancers will mark the server unhealthy on any 400",
+        "explanation": "Load balancer health checks typically hit a dedicated endpoint, and passive checks look for 5xx or connection failures. Whether 400 affects health depends on configured active/passive checks; it is not a universal load-balancer rule."
+      },
+      {
+        "text": "400 is reserved for CORS errors",
+        "explanation": "400 is a general 'bad request' code for malformed or invalid input. It has nothing specifically to do with CORS."
+      },
+      {
+        "text": "Clients may interpret 400 as a request error, and monitors counting only 5xx can miss the server outage",
+        "explanation": "Correct. The 4xx/5xx split is a contract. A 400 tells clients the request itself is at fault, so they won't retry, and it hides a server-side outage from error-rate monitors that track 5xx. The right code is 503 (perhaps with Retry-After) or 500."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think about who reads status codes and what they do:\n\n| Reader | Sees 400 | Sees 503 |\n|---|---|---|\n| Client retry logic | Give up | Back off, retry |\n| SLO dashboard | Client error | Server error |\n| Pager alerting | Silent | Fires |\n\nThese are risks for the illustrated monitoring/retry policies, not automatic behavior of all clients or monitors. Retries also require safe operation semantics. Use 503 (with `Retry-After` if you know roughly when you'll recover) or 500.",
+    "link": {
+      "title": "MDN: HTTP response status codes",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your generic HTTP client wrapper retries automatically with exponential backoff. For which of these responses is an **automatic** retry of the same request reasonable? Select all that apply.",
+    "options": [
+      {
+        "text": "`GET /orders/42` returned `503` with `Retry-After: 5`",
+        "explanation": "Correct. 503 is a temporary server-side condition, GET is idempotent, and the server even told you how long to wait."
+      },
+      {
+        "text": "`POST /orders` (no idempotency key) returned `500`",
+        "explanation": "Not safe to retry automatically. A 500 doesn't say whether the order was created before the crash, and POST isn't idempotent, so a retry could create a duplicate."
+      },
+      {
+        "text": "`PUT /users/7` returned `422`",
+        "explanation": "No. 422 says the body itself is semantically invalid. Sending the identical body again will get the identical answer."
+      },
+      {
+        "text": "`GET /search?q=van` returned `429` with `Retry-After: 30`",
+        "explanation": "Correct, as long as you honour the wait. 429 means 'you are over your limit for now'; retrying after the indicated delay is exactly what the server is asking for."
+      },
+      {
+        "text": "`DELETE /sessions/9` timed out with no response",
+        "explanation": "Correct. DELETE is idempotent, so even if the first attempt succeeded, repeating it leaves the server in the same state."
+      }
+    ],
+    "answer": [
+      0,
+      3,
+      4
+    ],
+    "workedExample": "An automatic retry needs **both** of these to be true:\n\n1. The failure is plausibly *transient* (5xx, 429, timeout, connection reset), not a 4xx that will repeat.\n2. Repeating the request is *harmless*: the method is idempotent, or the endpoint enforces an applicable idempotency-key contract.\n\n| Case | Transient? | Harmless? | Retry |\n|---|---|---|---|\n| GET 503 | Yes | Yes | Yes |\n| POST 500 | Yes | No | No |\n| PUT 422 | No | Yes | No |\n| GET 429 | Yes | Yes | Yes |\n| DELETE timeout | Yes | Yes | Yes |\n\nThe POST case is the classic trap: the status code says 'maybe later', but the method says 'not safe to repeat'.",
+    "link": {
+      "title": "RFC 9110: Idempotent methods",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110#name-idempotent-methods"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`POST /reports` kicks off a PDF export that takes about two minutes. What's the most RESTful response?",
+    "options": [
+      {
+        "text": "Hold the connection open for two minutes, then return `200` with the PDF",
+        "explanation": "Long-held requests tie up connections and usually hit load-balancer or gateway timeouts (often 30–60 seconds) before the work finishes, which leaves the client with an ambiguous failure."
+      },
+      {
+        "text": "`201 Created` with the finished PDF in the body",
+        "explanation": "The specified option incorrectly promises a finished PDF before it exists. An API could legitimately return 201 for a newly created job resource, but 202 is a natural choice when the requested processing remains incomplete."
+      },
+      {
+        "text": "`204 No Content`, and the client polls `/reports` until a new one appears",
+        "explanation": "The specified response gives no job identifier; although 204 may include headers, polling the whole collection is a poor way to identify this job. Polling a whole collection to find 'the new one' is fragile."
+      },
+      {
+        "text": "`202 Accepted` with a `Location` header pointing at a status resource such as `/reports/jobs/81`, which the client polls (or is notified about by webhook)",
+        "explanation": "Correct. 202 means 'accepted for processing, not finished'. Giving the job its own URL turns the long operation into an ordinary resource the client can GET."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The work outlives a sensible request timeout, so don't do it inline.\n2. Respond immediately with **202 Accepted** and a link to a job resource:\n\n```\nHTTP/1.1 202 Accepted\nLocation: /reports/jobs/81\n```\n\n3. The client polls `GET /reports/jobs/81`, which reports `queued`, then `running`, then `done` with a link to `/reports/81.pdf`.\n4. For many clients or long jobs, add a webhook so they don't have to poll.\n\nThe pattern makes a slow process look like a resource, which is the REST way to model it.",
+    "link": {
+      "title": "MDN: 202 Accepted",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/202"
+    }
+  }
+]

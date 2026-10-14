@@ -1,0 +1,65 @@
+[
+  {
+    "id": "dist-time-ordering-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about hybrid logical clocks (HLC) are true? Select all that apply.",
+    "options": [
+      {
+        "text": "HLC timestamps preserve happens-before order.",
+        "explanation": "Correct. HLC preserves happens-before, just like a Lamport clock, by taking the max of incoming and local values and bumping the counter."
+      },
+      {
+        "text": "HLC can tell you whether two events are concurrent.",
+        "explanation": "Wrong. HLC is a scalar timestamp like Lamport's; it gives a total order but can't distinguish concurrency from causality. You need vector clocks for that."
+      },
+      {
+        "text": "Under the paper’s bounded clock-synchronisation assumptions, including limited backwards movement, HLC’s physical part stays close to physical-clock time.",
+        "explanation": "Correct under the physical-clock assumptions. The physical part keeps the largest physical time observed, and the HLC paper bounds its distance from the local physical clock using the bound on earlier causal physical readings relative to later ones. A large common backwards step can violate that assumption even when instantaneous pairwise skew is small. HLC does not independently establish accurate true time."
+      },
+      {
+        "text": "HLC removes the need to bound clock skew in CockroachDB.",
+        "explanation": "Wrong. CockroachDB still relies on a maximum offset (default 500 ms) for its uncertainty interval, and nodes that exceed it shut down."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Walk through each:\n\n1. **Causality**: on receive, the physical part becomes the largest of three values, and the counter increments past the matching local/message counters; it resets only when physical time exceeds both. The pair is strictly greater than the send. ✓\n\n```formula\nl′ = max(l, l_msg, pt)\nwhere\nl: the receiver's current physical part (largest physical time it has seen)\nl_msg: the physical part carried on the message\npt: the receiver's own wall-clock time now\nl′: l-prime, the new physical part\nmax: the largest of its inputs\nIn words: the receiver's timestamp is at least as big as both its own and the message's, so it can never come before the send.\n```\n\n2. **Concurrency detection**: a single (l, c) pair can't encode \"neither before the other\". ✗\n3. **Close to physical-clock time**: the physical part is the largest physical time seen and stays close to the local physical clock under the paper’s clock-synchronisation assumptions, including bounded backwards movement. ✓\n4. **Skew bound**: CockroachDB needs it for read uncertainty restarts. ✗",
+    "link": {
+      "title": "Logical Physical Clocks (HLC paper)",
+      "url": "https://cse.buffalo.edu/tech-reports/2014-04.pdf"
+    }
+  },
+  {
+    "id": "dist-time-ordering-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In CockroachDB (max offset 500 ms), a read at timestamp 10.000 s finds a value written at 10.200 s by another node. Assume the full 500 ms uncertainty window applies and earlier reads cannot be refreshed after a timestamp advance. What happens?",
+    "options": [
+      {
+        "text": "The read restarts at a higher timestamp, because 10.200 is inside the uncertainty interval.",
+        "explanation": "Correct. The interval is [10.000, 10.500]. A value inside it might have happened before the read, so CockroachDB bumps the read timestamp past it and retries."
+      },
+      {
+        "text": "The value is ignored because it's in the future.",
+        "explanation": "Wrong. Ignoring it would be unsafe: due to skew, the write may really have happened before the read in physical time."
+      },
+      {
+        "text": "The value is returned because it's the newest.",
+        "explanation": "Wrong. Returning a value with a timestamp above the read's would break snapshot semantics for MVCC reads."
+      },
+      {
+        "text": "The writing node is shut down for excessive clock skew.",
+        "explanation": "Wrong. 200 ms is within the 500 ms bound. Nodes are only shut down when they detect offset beyond the configured maximum."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Test whether the value is in the uncertainty interval:\n\n```formula\nr < w ≤ r + Δ_max\n10.000 s < 10.200 s ≤ 10.500 s\nwhere\nr: the read timestamp; 10.000 s\nw: the timestamp of the value found; 10.200 s\nΔ_max: delta-max, CockroachDB's maximum clock offset; 500 ms = 0.500 s\ns: seconds\nms: milliseconds\nIn words: the value is stamped after the read, but by less than the maximum clock offset, so it might really have been written before the read.\n```\n\n1. Read timestamp 10.000 s; uncertainty window runs from just above 10.000 s up to 10.500 s.\n2. Found a write at 10.200 s, inside the window.\n3. Because clocks may differ by up to 500 ms, the writer's 10.200 could correspond to physical time before the reader's 10.000.\n4. Ambiguous → **uncertainty restart**: advance past 10.200 and retry, which then includes the value.\n\nThis is CockroachDB's price for not having TrueTime: uncertainty handling: advance the timestamp and refresh reads where possible, otherwise retry.",
+    "link": {
+      "title": "Living without atomic clocks (Cockroach Labs)",
+      "url": "https://www.cockroachlabs.com/blog/living-without-atomic-clocks/"
+    }
+  }
+]

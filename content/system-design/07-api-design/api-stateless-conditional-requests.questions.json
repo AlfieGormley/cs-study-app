@@ -1,0 +1,70 @@
+[
+  {
+    "id": "api-rest-fundamentals-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Assume interchangeable servers with access to the same required resource state and valid credentials. Which of these are consequences of a REST API being **stateless**? Select all that apply.",
+    "options": [
+      {
+        "text": "Any server behind the load balancer can handle any request, so sticky sessions aren't needed",
+        "explanation": "Correct. Because no client context lives in one server's memory, requests can be routed anywhere, which makes scaling out and failover simple."
+      },
+      {
+        "text": "The API can't store any data in a database",
+        "explanation": "Wrong. Statelessness is about *session* state between requests, not application data. Orders, users and so on live in the database as usual."
+      },
+      {
+        "text": "Authenticated requests carry the required authentication information rather than depending on a prior login remembered by one app instance",
+        "explanation": "For authenticated operations, the request carries the authentication information needed to interpret it. A shared server-side session store makes instances replaceable but does not itself satisfy strict REST stateless-session constraints; public requests need no credentials."
+      },
+      {
+        "text": "If a server crashes mid-session, the client's next request can succeed on another server without re-login",
+        "explanation": "Correct. Nothing the client depends on was held only in the crashed server's memory, so another instance can serve it."
+      },
+      {
+        "text": "Responses can never be cached",
+        "explanation": "Wrong. Statelessness actually *helps* caching, because a response depends only on the request, not on hidden per-connection state. REST lists cacheability as a separate constraint that works alongside statelessness."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Define the term precisely first: *stateless* means each request contains all the information needed to process it; the server keeps no client session context between requests.\n\nThen test each option:\n\n- Routing anywhere: follows directly. ✔\n- No database: confuses session state with application state. ✘\n- Auth per request: follows directly, since the server can't 'remember' you. ✔\n- Survive a crash: follows directly. ✔\n- No caching: the opposite is true. ✘",
+    "link": {
+      "title": "Fielding's dissertation, chapter 5: REST",
+      "url": "https://ics.uci.edu/~fielding/pubs/dissertation/rest_arch_style.htm"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two support agents open product 5 (ETag `\"v7\"`). Agent A changes the price and sends `PUT /products/5` with `If-Match: \"v7\"`. One second later Agent B changes the description and sends `PUT /products/5` with `If-Match: \"v7\"`. What should happen to B's request in a correctly designed API?",
+    "options": [
+      {
+        "text": "200 OK, and B's PUT overwrites the product, including A's new price",
+        "explanation": "That's the 'lost update' problem that `If-Match` exists to prevent. Without the precondition check, B's full replacement would silently revert A's price change."
+      },
+      {
+        "text": "409 Conflict, because two people edited at once",
+        "explanation": "409 is sometimes used for state conflicts, but HTTP defines a more specific code for a failed precondition header: 412. Using 412 tells the client exactly which mechanism rejected it."
+      },
+      {
+        "text": "412 Precondition Failed, because the current ETag is now `\"v8\"`, not `\"v7\"`",
+        "explanation": "Correct. A's successful write bumped the version to `\"v8\"`. B's `If-Match: \"v7\"` no longer matches, so the server refuses the write. B's client should re-fetch, merge and retry."
+      },
+      {
+        "text": "304 Not Modified, because the ETag is unchanged",
+        "explanation": "304 is the response to a *conditional GET* with `If-None-Match` when the selected representation matches the validator; the cached response may have been stale before validation. It doesn't apply to a PUT, and the ETag *has* changed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "This is optimistic concurrency control over HTTP.\n\n```\nt=0  A, B GET  -> ETag \"v7\"\nt=1  A PUT If-Match \"v7\" -> match\n     server writes, ETag -> \"v8\"\nt=2  B PUT If-Match \"v7\"\n     current is \"v8\" -> no match\n     -> 412 Precondition Failed\n```\n\nB's client then:\n1. `GET /products/5` (gets `\"v8\"` with A's price).\n2. Re-applies B's description edit.\n3. `PUT` with `If-Match: \"v8\"`. Succeeds.\n\nNo lock was held during user editing; the server must check the validator atomically with mutation, which may use a database lock. Neither edit was silently overwritten.",
+    "link": {
+      "title": "MDN: If-Match",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Match"
+    }
+  }
+]

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "api-rest-fundamentals-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which HTTP method is idempotent but **not** safe?",
+    "options": [
+      {
+        "text": "GET",
+        "explanation": "GET is both safe and idempotent. It's read-only in intent, so it isn't an example of 'idempotent but not safe'."
+      },
+      {
+        "text": "POST",
+        "explanation": "POST is neither safe nor idempotent. Sending the same POST twice can create two resources or run a process twice."
+      },
+      {
+        "text": "DELETE",
+        "explanation": "Correct. DELETE changes server state (so it isn't safe), but deleting the same resource twice leaves the server in the same state as deleting it once (so it is idempotent). The second response may be 404, but idempotency is about server state, not identical responses."
+      },
+      {
+        "text": "HEAD",
+        "explanation": "HEAD is a GET without the body, so it is safe and idempotent, just like GET."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Safe** = the client isn't asking for any state change. Among the core methods defined in RFC9110, GET, HEAD, OPTIONS and TRACE are safe; extensions can define other safe methods.\n2. **Idempotent** = any number of identical requests leave the server in the same state as one. All safe methods, plus PUT and DELETE.\n3. So 'idempotent but not safe' = {PUT, DELETE} minus the safe ones = PUT and DELETE.\n4. Of the options, only DELETE is in that set.\n\nCommon trap: thinking DELETE isn't idempotent because the second call returns 404. Idempotency is defined by the effect on the server, not the response code.",
+    "link": {
+      "title": "MDN: Idempotent",
+      "url": "https://developer.mozilla.org/en-US/docs/Glossary/Idempotent"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A payment POST charges the card but its response is lost. The client permits automatic timeout retries only for methods known to be idempotent, and this endpoint has no idempotency contract. What follows?",
+    "options": [
+      {
+        "text": "The library retries and the customer is charged twice",
+        "explanation": "A blind retry could charge twice if the handler executes again. This client explicitly excludes automatic retries for such operations; HTTP itself does not implement payment deduplication."
+      },
+      {
+        "text": "The server detects the duplicate automatically because HTTP is stateless",
+        "explanation": "REST statelessness does not prohibit stored resource state or deduplication records. HTTP simply does not infer payment deduplication from statelessness. Deduplication needs explicit state, such as a stored idempotency key."
+      },
+      {
+        "text": "TCP guarantees exactly-once delivery, so the retry can't happen",
+        "explanation": "TCP guarantees ordered, reliable delivery within one connection. It says nothing about application-level retries over a *new* connection after a timeout, which is exactly this scenario."
+      },
+      {
+        "text": "The stated retry policy does not replay this POST automatically; the client has an ambiguous result and needs reconciliation or an idempotency contract",
+        "explanation": "Correct. Automatic retries are normally limited to idempotent methods (GET, PUT, DELETE...). For POST the client is left with an ambiguous timeout. The real fix is an idempotency key so that a retry is safe."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The server charged the card, but the client did not receive confirmation.\n2. From the client’s perspective, completion is unknown; in this scenario the charge actually happened.\n3. The stated policy does not automatically retry an operation without known idempotent semantics.\n4. RFC 9110 permits retrying a non-idempotent method when the client knows the operation is idempotent or knows the original was not applied; method name alone is not the entire rule.\n5. A payment API needs a supported idempotency/reconciliation contract. Merely adding an arbitrary header does not create one.",
+    "link": {
+      "title": "RFC 9110: HTTP Semantics",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API exposes `PATCH /accounts/5` with body `{\"op\": \"increment\", \"field\": \"balance\", \"by\": 10}`. The balance starts at 100. A flaky proxy delivers the request **three** times. What is the final balance, and what does it show?",
+    "options": [
+      {
+        "text": "130: this PATCH isn't idempotent, so each delivery adds 10",
+        "explanation": "Correct. 100 + 10 + 10 + 10 = 130. A relative operation applied three times has three times the effect. A 'set balance to 110' patch would have been idempotent; 'add 10' isn't."
+      },
+      {
+        "text": "110: PATCH is always idempotent",
+        "explanation": "HTTP does not guarantee PATCH is idempotent. Whether it is depends on the patch semantics. An 'increment' operation is inherently non-idempotent."
+      },
+      {
+        "text": "100: the server rejects duplicates automatically",
+        "explanation": "There's no automatic duplicate detection in HTTP. Unless you build it (e.g. with an idempotency key or ETag precondition), each delivery is processed."
+      },
+      {
+        "text": "It's undefined because PATCH isn't allowed to change numbers",
+        "explanation": "PATCH can change any field. The issue is whether the change is absolute or relative, not the data type."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Each delivery adds another 10 to whatever the balance is now:\n\n```formula\nB_end = B_start + n × Δ\nB_end = 100 + 3 × 10\nB_end = 130\nwhere\nB_end: the balance after every delivery has been applied\nB_start: the starting balance, here 100\nn: how many times the proxy delivered the request, here 3\nΔ: delta, the amount each increment adds, here 10\nIn words: a relative change is applied once per delivery, so three deliveries add 10 three times: 110, then 120, then **130**.\n```\n\nCompare with an absolute patch `{\"balance\": 110}`: after 1, 2 or 3 deliveries the balance is 110 every time. That one is idempotent.\n\nTwo ways to make the relative version safe:\n- Add `If-Match: \"<etag>\"` so only the first delivery matches the current version; the others get `412`.\n- Require an idempotency key so duplicates return the stored first result.",
+    "link": {
+      "title": "MDN: HTTP request methods",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods"
+    }
+  },
+  {
+    "id": "api-rest-fundamentals-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "PUT replaces writable user fields, adds an audit row and changes an informational updatedAt timestamp that does not trigger billing, notifications or application decisions. Does this incidental bookkeeping alone invalidate idempotency?",
+    "options": [
+      {
+        "text": "The reviewer: any change between two calls, including a timestamp, breaks idempotency",
+        "explanation": "Idempotency in RFC 9110 is about the *intended effect* the client asked for, not every byte the server writes. Incidental side effects such as logs and bookkeeping timestamps don't count."
+      },
+      {
+        "text": "The reviewer: PUT is only idempotent when it returns 204",
+        "explanation": "Idempotency doesn't depend on the response code or body. Two identical PUTs may return different responses and still be idempotent."
+      },
+      {
+        "text": "Neither: PUT is idempotent by definition, so the implementation can do anything",
+        "explanation": "The method's semantics are a promise your implementation must keep. A PUT handler that appended a line item on every call would break that promise, and retries would then cause real harm."
+      },
+      {
+        "text": "The endpoint is still idempotent: the client's intended effect (user 7 has this representation) is the same after one call or five; audit rows and timestamps are incidental side effects",
+        "explanation": "Correct. RFC 9110 explicitly allows idempotent and even safe methods to have side effects such as logging. What matters is that repeating the request doesn't change the outcome the client asked for."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "RFC 9110 defines a method as idempotent if the *intended effect on the server* of several identical requests is the same as one.\n\n1. Intended effect of `PUT /users/7`: 'user 7 now looks like this body'.\n2. After 1 call: user 7 matches the body. After 5 calls: still matches. ✔\n3. Audit log has 5 rows instead of 1, and `updatedAt` moved. The client didn't ask for those, and repeating them causes no harm.\n\nContrast with a handler that, say, sends a 'profile updated' SMS on every PUT. That's a side effect users *notice*, so retries would be visible and you'd want to deduplicate.",
+    "link": {
+      "title": "RFC 9110: Idempotent methods",
+      "url": "https://www.rfc-editor.org/rfc/rfc9110#name-idempotent-methods"
+    }
+  }
+]

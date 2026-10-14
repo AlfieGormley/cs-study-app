@@ -1,0 +1,152 @@
+[
+  {
+    "id": "api-webhooks-gateways-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your `/webhooks/payments` endpoint marks orders as paid when it receives a `payment.succeeded` event. It doesn't verify signatures. What's the main risk?",
+    "options": [
+      {
+        "text": "Events might arrive slowly",
+        "explanation": "Latency is a reliability concern, not the main risk here. The bigger problem is that the endpoint trusts anything it receives."
+      },
+      {
+        "text": "The provider will stop sending events",
+        "explanation": "Providers don't know or care whether you verify signatures; deliveries continue either way."
+      },
+      {
+        "text": "Duplicate events will double-mark orders",
+        "explanation": "Duplicates are a real concern, but they're solved by deduplicating on event id, not by signatures. And marking an order paid twice is usually harmless."
+      },
+      {
+        "text": "Anyone who discovers the URL can POST a forged event and get orders marked as paid without paying",
+        "explanation": "Correct. Without the provider's required authentication mechanism, this public endpoint cannot distinguish the forged request. HMAC is one common mechanism; other authenticated delivery schemes exist."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think like an attacker:\n\n1. Place an order, don't pay.\n2. Guess or find the webhook URL (it's often `/webhooks/stripe` or appears in client-side code or docs).\n3. `curl -X POST` a JSON body shaped like a real `payment.succeeded` event with your order id.\n4. Unverified endpoint marks your order paid → free goods.\n\nWith verification, step 3 fails, because the signature the provider sends is:\n\n```formula\ns = HMAC(k, t + \".\" + b)\nwhere\ns: the signature in the webhook header\nHMAC: HMAC-SHA256, a keyed hash that only someone holding k can compute\nk: the shared webhook secret\nt: the delivery timestamp\nb: the raw request body\n+: joined end to end (concatenation), not addition\nIn words: the signature is a keyed fingerprint of the timestamp and body, and without the secret the attacker cannot produce one that matches.\n```",
+    "link": {
+      "title": "Stripe docs: Verify webhook signatures",
+      "url": "https://docs.stripe.com/webhooks/signature"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your Stripe-style `timestamp.body` signature check fails on genuine deliveries even though the secret is correct. This Python function receives the decoded secret bytes, ASCII timestamp bytes and raw body bytes:\n\n```python\nimport hmac, json\n\ndef wrong_signature(secret, ts, raw):\n    # Parsing loses the original layout.\n    body = json.loads(raw)\n    # Re-encoding cannot restore it.\n    payload = json.dumps(body).encode()\n    msg = ts + b\".\" + payload\n    return hmac.digest(secret, msg,\n                       \"sha256\")\n```\n\nWhat is the most likely bug?",
+    "options": [
+      {
+        "text": "HMAC-SHA256 can't sign JSON",
+        "explanation": "HMAC signs arbitrary bytes. JSON is fine, as long as you sign exactly the bytes that were sent."
+      },
+      {
+        "text": "The body is parsed and re-serialised, so whitespace, key order or escaping differ from the raw bytes the provider signed",
+        "explanation": "Correct. Even one changed space produces a completely different HMAC. Always verify against the raw request body before any parsing."
+      },
+      {
+        "text": "The timestamp should come after the body",
+        "explanation": "The order is set by the provider's spec. Stripe uses `timestamp.body`, which this code follows. The problem is the body bytes themselves."
+      },
+      {
+        "text": "The secret must be base64-decoded first",
+        "explanation": "Some providers (Standard Webhooks) do use base64 secrets, but the question says the secret is correct. The re-serialisation bug would break verification regardless."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare the body bytes:\n\n```\nsent:   {\"id\": \"evt_1\",  \"amt\":5}\nre-ser: {\"id\": \"evt_1\", \"amt\": 5}\n```\n\nRe-serialisation changes the signed byte sequence, so the digest no longer matches, apart from cryptographically negligible collisions. Preserve the original bytes and compare the computed digest with the supplied, decoded 32-byte signature:\n\n```python\nimport hmac, json\n\ndef parse_if_signed(secret, ts, raw,\n                    sig):\n    # Preserve the provider's bytes.\n    msg = ts + b\".\" + raw\n    expected = hmac.digest(secret, msg,\n                           \"sha256\")\n    # sig is a decoded 32-byte digest.\n    if not hmac.compare_digest(\n            expected, sig):\n        raise ValueError(\"bad HMAC\")\n    return json.loads(raw)\n```\n\nWith a matching digest, this fixture returns the parsed event. Changing the raw body while keeping that digest raises `ValueError`. This is **signature-only pedagogy**: it does not validate freshness, header encodings, secret selection, delivery identity or duplicate effects. Use the provider SDK and its current signing/freshness contract in a real handler. Stripe signs the timestamp and body; GitHub’s different protocol signs the body alone.",
+    "link": {
+      "title": "Stripe docs: Verify webhook signatures",
+      "url": "https://docs.stripe.com/webhooks/signature"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker captures a genuine, correctly signed `refund.created` webhook from a misconfigured log and resends it to your endpoint 2 hours later. Your code verifies the HMAC over `timestamp.body` and allows a 5-minute tolerance. What happens?",
+    "options": [
+      {
+        "text": "It's rejected, because the signed timestamp is 2 hours old, beyond the 5-minute tolerance, and the attacker can't change the timestamp without invalidating the signature",
+        "explanation": "Correct. Because the timestamp is part of the signed string, the attacker must either send the old timestamp (rejected as stale) or a new one (signature mismatch)."
+      },
+      {
+        "text": "It's accepted, because the signature is valid",
+        "explanation": "The signature is valid only for that exact timestamp. The tolerance check is what makes a valid-but-old signature useless."
+      },
+      {
+        "text": "It's accepted, but only if the attacker updates the timestamp header",
+        "explanation": "Updating the timestamp changes the signed string, so the recomputed HMAC no longer matches the captured signature."
+      },
+      {
+        "text": "It depends on whether the event id was already processed; timestamps don't help",
+        "explanation": "Deduplication by event id is a second, complementary defence, but the timestamp check alone already rejects this replay."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Attacker's two options:\n\n| Send | HMAC check | Age check |\n|---|---|---|\n| Old `t` | ✔ match | ✘ 2 h > 5 min |\n| New `t` | ✘ mismatch | (n/a) |\n\nEither way, rejected.\n\nWithin the 5-minute window a replay could still pass the timestamp check, which is why you also dedupe on the event id: belt and braces.",
+    "link": {
+      "title": "Stripe docs: Verify webhook signatures",
+      "url": "https://docs.stripe.com/webhooks/signature"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You consume GitHub webhooks and verify `X-Hub-Signature-256` correctly. GitHub's HMAC covers only the body; there's no signed timestamp. An attacker captures one genuine `push` delivery and replays it a day later. What's your main defence?",
+    "options": [
+      {
+        "text": "Reject deliveries older than 5 minutes using the `Date` header",
+        "explanation": "The `Date` header isn't part of the signature, so the attacker can set it to anything. An unsigned timestamp proves nothing."
+      },
+      {
+        "text": "None is needed: a valid signature proves the delivery is fresh",
+        "explanation": "A signature proves the body came from GitHub at *some* point. A replayed copy has the same valid signature, which is exactly why replays are dangerous."
+      },
+      {
+        "text": "Rotate the webhook secret every day",
+        "explanation": "Rotation limits how long one captured delivery stays valid, but it's operationally painful and still leaves a window. It isn't the primary defence."
+      },
+      {
+        "text": "Use authenticated payload identity or a retained digest of verified raw bytes for replay detection, and make business effects idempotent; the unsigned delivery header alone is insufficient",
+        "explanation": "Correct. A captured body remains authentically signed. Retained authenticated identity can detect repeats; reconcile current provider state for stale events. The attacker can replace X-GitHub-Delivery without invalidating the body HMAC."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Replay protection needs something the attacker can't change: either a **signed** timestamp or a record of what you've already seen.\n2. GitHub signs only the body, so any timestamp in a header is unprotected.\n3. That leaves **deduplication**: retain authenticated event identity or the verified body digest where suitable; the unsigned delivery id only helps ordinary redelivery deduplication.\n4. An attacker could change the unsigned delivery id, so also make processing idempotent on the *content*, e.g. define a business key including the repository, ref and commit for the intended effect, so an unrelated repository or legitimate new operation is not accidentally suppressed.\n\nCompare with Stripe and Standard Webhooks, which put the timestamp inside the signed string, so stale replays are rejected outright.",
+    "link": {
+      "title": "GitHub docs: Validating webhook deliveries",
+      "url": "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
+    }
+  },
+  {
+    "id": "api-webhooks-gateways-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to rotate a webhook signing secret. The provider and your 30 consumer servers can't switch at the same instant. How do you avoid rejecting genuine webhooks during the changeover?",
+    "options": [
+      {
+        "text": "Turn off signature verification for the rotation window",
+        "explanation": "That opens exactly the window an attacker would want, and there's no need for it."
+      },
+      {
+        "text": "Have the provider sign each delivery with both old and new secrets during an overlap period, and have consumers accept a delivery if any signature matches a secret they hold",
+        "explanation": "Correct. Stripe and Standard Webhooks both allow several signatures in one header for this reason. Consumers can roll forward one at a time, then the old secret is retired."
+      },
+      {
+        "text": "Return 500 for failed signatures, so the provider retries until the new secret is everywhere",
+        "explanation": "That relies on retry timing to paper over the gap, delays every event, and may exhaust the retry schedule. Overlapping secrets avoid the failures in the first place."
+      },
+      {
+        "text": "Encrypt the old secret with the new one",
+        "explanation": "That has no effect on verification. The consumer still needs to check a signature made with a secret it holds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A safe rotation has an overlap where both secrets are valid:\n\n```\nT0  provider: sign with old\nT1  provider: sign with old+new\n    header: v1=<old>,v1=<new>\nT2  consumers roll out new\n    (accept either)\nT3  provider: sign with new\nT4  consumers drop old\n```\n\nAt every moment, each delivery carries at least one signature that every consumer can verify. No window without verification, and no rejected events.",
+    "link": {
+      "title": "Stripe docs: Verify webhook signatures",
+      "url": "https://docs.stripe.com/webhooks/signature"
+    }
+  }
+]

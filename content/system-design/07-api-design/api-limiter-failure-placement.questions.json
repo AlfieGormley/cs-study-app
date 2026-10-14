@@ -1,0 +1,100 @@
+[
+  {
+    "id": "api-rate-limiting-q7",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A public API handles 200,000 requests/s. Its documented policy favors availability with a bounded local fallback on limiter-store failure, and approximate quotas are acceptable. Which listed choices reduce avoidable storage/coordination cost while preserving useful client guidance? Select all that apply.",
+    "options": [
+      {
+        "text": "Fail open (with a local fallback limiter) if Redis becomes unreachable, for normal API traffic",
+        "explanation": "Correct. A rate limiter is a protection layer; letting a Redis blip turn into a total API outage is usually worse than briefly under-enforcing. A coarse per-server fallback still caps runaway clients."
+      },
+      {
+        "text": "Key anonymous traffic only by IP address, with a low limit, without considering NAT",
+        "explanation": "Wrong. Thousands of users behind a corporate NAT or mobile carrier gateway can share one IP. A low per-IP limit would block them all. Combine IP with other signals or use higher limits for anonymous traffic."
+      },
+      {
+        "text": "Include remaining-quota headers (`RateLimit`, or `X-RateLimit-Remaining`) on successful responses",
+        "explanation": "Correct. Clients can throttle themselves before hitting 429, which reduces wasted requests on both sides."
+      },
+      {
+        "text": "Enforce the limit at the gateway, before requests reach application servers",
+        "explanation": "Correct. Rejecting at the edge means over-limit requests cost almost nothing and don't consume app or database capacity."
+      },
+      {
+        "text": "Use a sliding window log for every client, storing every request timestamp",
+        "explanation": "A sliding log may be feasible with sufficient resources, but it retains up to 12 million accepted timestamps for a 60-second window at this rate. Since approximate quotas are acceptable here, constant-state algorithms avoid that storage and churn."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Under the stated availability policy, a local fallback can bound some load while accepting reduced quota precision.\n2. NAT makes low IP-only limits unfair.\n3. Remaining-quota headers help clients adapt; early enforcement avoids app/database work.\n4. A 60-second log at 200,000 accepted requests/s retains up to 12,000,000 timestamps. Actual memory depends on representation and key/member sizes; no universal bytes-per-entry estimate is given. Constant-state approximations fit the stated requirement.",
+    "link": {
+      "title": "Stripe blog: Scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To avoid a Redis hop, each of your 20 gateways enforces an equal local quota share (the client's limit divided by the number of gateways): a 1,000/min client limit becomes 50/min per gateway. A partner's SDK holds two long-lived HTTP/2 connections, so all its traffic lands on just 2 gateways. What happens?",
+    "options": [
+      {
+        "text": "It's capped at about 100/min, a tenth of its paid limit, because only 2 of the 20 local limiters ever see its traffic",
+        "explanation": "Correct. Local `limit / N` only matches the global limit when traffic is spread evenly across all N servers. Concentrated traffic gets a fraction of its quota."
+      },
+      {
+        "text": "It gets its full 1,000/min, because the limits add up across gateways",
+        "explanation": "The limits add up only if traffic reaches all 20 gateways. Two gateways at 50 each is 100."
+      },
+      {
+        "text": "It gets 2,000/min, because each gateway lets through up to the full limit",
+        "explanation": "Each gateway enforces 50, not 1,000. Over-allowing is the risk of *per-server full limits*, not of `limit / N`."
+      },
+      {
+        "text": "It's blocked entirely, because the gateways disagree",
+        "explanation": "Local limiters don't coordinate, so they can't disagree. Each simply allows up to 50/min on its own."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nL_local = L / N\nL_local = 1,000 / 20 = 50\nA = g × L_local = 2 × 50 = 100\nwhere\nL_local: the limit each gateway enforces, per minute\nL: the client's global limit, 1,000 per minute\nN: the number of gateways, 20\nA: the most requests per minute the partner can get through\ng: the number of gateways its traffic actually reaches, 2\nIn words: each gateway allows only a twentieth of the limit, and the partner's two connections reach only two gateways, so it gets **100/min**.\n```\n\nThe partner hits 429 at 10% of what it pays for.\n\nThis is the trade-off of approximate local limiting: no network hop, but accuracy depends on even load distribution. Mitigations:\n\n- Periodically sync counts between gateways, or rebalance shares based on observed traffic.\n- Use the shared Redis limiter for high-value clients.\n- Use L7 load balancing that spreads individual requests, not connections.",
+    "link": {
+      "title": "Stripe blog: Scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  },
+  {
+    "id": "api-rate-limiting-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your Redis cluster that backs rate limiting becomes unreachable for five minutes. Two limiters use it: a general 1,000/min per-API-key limit on `/v1/*`, and a 5-attempts-per-15-minutes limit on `POST /login`. What's the most defensible behaviour?",
+    "options": [
+      {
+        "text": "Fail closed for both, so nothing is ever let through without being counted",
+        "explanation": "Rejecting all API traffic because the limiter's store is down turns a protection layer into a total outage, which is usually worse than briefly under-enforcing."
+      },
+      {
+        "text": "Fail open for both, because availability always wins",
+        "explanation": "For `/login`, the limit is a security control against credential stuffing. Five minutes of unlimited password guessing is a real risk."
+      },
+      {
+        "text": "Fail closed for the general API and open for login",
+        "explanation": "That's backwards: it takes down normal traffic and removes the one limit that defends against attackers."
+      },
+      {
+        "text": "Fail open for the general API (ideally with a coarse local fallback limiter), and fail closed, or fall back to a strict local limit, for login",
+        "explanation": "Correct. Match the failure mode to the purpose: the general limit protects capacity, so availability matters most; the login limit protects accounts, so safety matters most."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask what each limiter is *for*:\n\n| Limiter | Purpose | If store is down |\n|---|---|---|\n| `/v1/*` | Capacity, fairness | Open + local cap |\n| `/login` | Security | Closed or strict local |\n\n1. A coarse local fallback for the general API (e.g. a per-gateway token bucket) still stops a runaway client from flattening the fleet.\n2. For login, a strict per-gateway limit (say 5 attempts per IP per gateway) still slows attackers. Failing closed outright means nobody can log in for five minutes, which may also be acceptable for a short incident.",
+    "link": {
+      "title": "Stripe blog: Scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  }
+]

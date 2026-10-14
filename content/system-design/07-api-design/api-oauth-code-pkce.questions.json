@@ -1,0 +1,62 @@
+[
+  {
+    "id": "api-auth-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the OAuth 2.0 authorisation code flow with PKCE, a malicious app on the same phone intercepts the redirect containing `?code=xyz`. Why can't it obtain an access token?",
+    "options": [
+      {
+        "text": "Authorisation codes are encrypted with the user's password",
+        "explanation": "Codes are opaque random strings; they aren't encrypted with anything the attacker lacks. The protection comes from what the token exchange requires."
+      },
+      {
+        "text": "The code expires after one second",
+        "explanation": "Codes are short-lived (often around a minute) and single-use, but an attacker can act within that window. Expiry alone isn't the defence PKCE provides."
+      },
+      {
+        "text": "Exchanging the intercepted code requires the original code_verifier; with S256 the server hashes the verifier and compares it with the saved challenge",
+        "explanation": "Correct. The challenge went out through the browser, but the verifier never did. Without it, the stolen code is useless."
+      },
+      {
+        "text": "The authorisation server checks the attacker's IP address",
+        "explanation": "OAuth doesn't bind codes to IP addresses, and both apps are on the same phone, with the same IP anyway."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Legit app generates a random verifier and computes the challenge from it:\n\n```formula\nc = BASE64URL(SHA256(v))\nwhere\nc: the code challenge, sent through the browser\nv: the code verifier, a random string of 43 to 128 characters that stays inside the app\nSHA256: the SHA-256 hash function: a 32-byte fingerprint that cannot feasibly be reversed\nBASE64URL: base64url encoding without padding, which writes the bytes as URL-safe text\nIn words: the challenge is a one-way fingerprint of the verifier.\n```\n\n2. Redirect to `/authorize?code_challenge=c&code_challenge_method=S256`.\n3. User logs in; auth server stores `c` with the code.\n4. Attacker intercepts `code=xyz`.\n5. Attacker calls `/token` with `code=xyz` but doesn't know `v`. Without the high-entropy verifier, finding any other string whose hash matches `c` is computationally infeasible → **rejected**.\n6. Legit app sends `code=xyz&code_verifier=v` → matches → tokens issued.\n\nSHA-256 is one-way, so seeing `c` doesn't reveal `v`.",
+    "link": {
+      "title": "oauth.net: PKCE",
+      "url": "https://oauth.net/2/pkce/"
+    }
+  },
+  {
+    "id": "api-auth-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're building a new single-page React app in 2026 that calls your API on behalf of logged-in users through your own OAuth server. Which flow should it use?",
+    "options": [
+      {
+        "text": "Implicit grant, because SPAs can't keep a client secret",
+        "explanation": "That was the original reasoning for implicit, but returning tokens in the URL fragment exposes them to browser history and page scripts (ordinary HTTP Referer headers do not include fragments). RFC 9700 says not to use it, and OAuth 2.1 removes it."
+      },
+      {
+        "text": "Authorisation code with a client secret embedded in the JavaScript bundle",
+        "explanation": "Anything in a browser bundle is public. An embedded secret is readable by anyone who opens dev tools, so it authenticates nothing."
+      },
+      {
+        "text": "Authorisation code + PKCE with `S256`, as a public client",
+        "explanation": "Correct. PKCE binds the authorization code to this transaction; it is not client authentication and does not replace a confidential client's secret: only the app instance that created the verifier can redeem the code. Tokens come back over a direct request, not through the URL."
+      },
+      {
+        "text": "Resource owner password grant, collecting the password in your own login form",
+        "explanation": "The password grant teaches users to type passwords into apps, and it can't support MFA or federated login. RFC 9700 says it must not be used."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Work through the constraints:\n\n1. A user is present with a browser → a user-facing redirect flow.\n2. The SPA is a **public client**: it can't keep a secret.\n3. Implicit (tokens in the URL) and password grants are deprecated by RFC 9700 and gone from OAuth 2.1.\n4. That leaves **authorisation code + PKCE**, with `code_challenge_method=S256`.\n\nMany teams go one step further with a *backend-for-frontend*: a small server does the OAuth flow as a confidential client and gives the browser only an `HttpOnly` session cookie, so tokens never touch JavaScript.",
+    "link": {
+      "title": "RFC 9700: OAuth 2.0 Security Best Current Practice",
+      "url": "https://www.rfc-editor.org/rfc/rfc9700"
+    }
+  }
+]

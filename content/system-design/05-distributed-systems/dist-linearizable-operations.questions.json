@@ -1,0 +1,70 @@
+[
+  {
+    "id": "dist-consistency-models-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Client A writes the value 1 to key x (initially 0) from 10:00:00.000 to 10:00:00.300. Client B reads x from 10:00:00.100 to 10:00:00.150 and gets **1**. Client C reads x from 10:00:00.200 to 10:00:00.250. Under **linearizability**, what can C's read return?",
+    "options": [
+      {
+        "text": "Only 1",
+        "explanation": "Correct. B's read returned 1, so the write's linearization point is before 10:00:00.150. C starts at .200, after that point, so it must see 1 (or newer)."
+      },
+      {
+        "text": "Either 0 or 1, because C's read overlaps A's write.",
+        "explanation": "Wrong. Overlap alone would allow either, but B already observed 1 and finished before C started. Linearizability then forbids C going back to 0."
+      },
+      {
+        "text": "Only 0, because A's write hasn't finished yet.",
+        "explanation": "Wrong. A write can take effect at any instant between its start and end. B already saw it take effect."
+      },
+      {
+        "text": "Anything, linearizability doesn't constrain concurrent reads.",
+        "explanation": "Wrong. Linearizability constrains every operation relative to real-time order; reads that follow a read seeing the new value must also see it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Draw it:\n\n```\nA: |------write x=1------|\nB:    |-r=1-|\nC:            |-r=?-|\n```\n\n1. Each operation takes effect at a single instant within its interval.\n2. B returned 1, so A's write took effect before B ended (.150).\n3. C started at .200 > .150, so the write is already in effect for C.\n4. C must return 1.\n\nIf C returned 0, the history would show the value going *backwards*, which no single copy could do.",
+    "link": {
+      "title": "Linearizability (Jepsen)",
+      "url": "https://jepsen.io/consistency/models/linearizable"
+    }
+  },
+  {
+    "id": "dist-consistency-models-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which tasks would you place in a linearizable coordination core using atomic conditional operations, rather than accepting arbitrary stale replica state? Assume no preallocated ownership or escrow rights. Select all that apply.",
+    "options": [
+      {
+        "text": "Ensuring two people can't register the same username",
+        "explanation": "Correct. Both registration attempts must see one agreed state; with weaker models, two replicas could each accept 'alice'."
+      },
+      {
+        "text": "Choosing which node is the current leader",
+        "explanation": "Correct. All nodes must agree on a single leader; disagreement leads to split brain."
+      },
+      {
+        "text": "Counting likes on a post",
+        "explanation": "Wrong. Showing 1,203 instead of 1,205 briefly is harmless; a CRDT counter with eventual consistency is ideal."
+      },
+      {
+        "text": "Displaying replies after the posts they reply to",
+        "explanation": "Wrong. That needs causal consistency, which is weaker and remains available during partitions."
+      },
+      {
+        "text": "Preventing an account balance going below zero across concurrent withdrawals",
+        "explanation": "Correct. Each withdrawal must see the effect of all previous ones; otherwise two concurrent withdrawals can both pass the balance check."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Ask: \"does correctness need everyone to agree on the *latest* value right now?\"\n\n- Username uniqueness: yes, it's a compare-and-set on one value.\n- Leader: yes, it's a lock.\n- Balance check: yes, it's a constraint over the latest value.\n- Likes: no, approximate is fine.\n- Reply order: only causal order matters.\n\nKeeping the linearizable core small is how systems stay fast.",
+    "link": {
+      "title": "Consistency models (Jepsen)",
+      "url": "https://jepsen.io/consistency"
+    }
+  }
+]

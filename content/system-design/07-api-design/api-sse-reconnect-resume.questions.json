@@ -1,0 +1,62 @@
+[
+  {
+    "id": "api-real-time-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're building a live football scores page. Updates flow only from server to browser, a few per minute, to millions of viewers. You want automatic reconnection and replay of missed events after mobile network drops with minimal custom code. Which is the best fit?",
+    "options": [
+      {
+        "text": "WebSockets",
+        "explanation": "WebSockets would work, but they're full-duplex (you don't need client→server streaming), the browser API has no automatic reconnect, and you'd have to build resume logic yourself."
+      },
+      {
+        "text": "Short polling every second",
+        "explanation": "Millions of viewers polling every second means millions of requests per second, nearly all returning no change. Wasteful and still up to 1 s late."
+      },
+      {
+        "text": "Server-Sent Events",
+        "explanation": "Correct. SSE is one-way server push over plain HTTP. `EventSource` reconnects automatically and sends `Last-Event-ID`, so the server can replay missed goals. Configure HTTP intermediaries for streaming; native EventSource supports cookies, but not custom Authorization headers."
+      },
+      {
+        "text": "gRPC bidirectional streaming",
+        "explanation": "Browsers can't use raw gRPC without gRPC-Web and a proxy, and bidirectional streaming is unnecessary for one-way updates."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Requirements checklist:\n\n| Need | SSE | WebSocket |\n|---|---|---|\n| Server→client | ✔ | ✔ |\n| Client→server stream | not needed | ✔ |\n| Auto-reconnect | built in | DIY |\n| Resume missed events | `Last-Event-ID` | DIY |\n| Plain HTTP infra | ✔ | upgrade needed |\n\nSSE meets every requirement with the least custom code.",
+    "link": {
+      "title": "MDN: Using server-sent events",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events"
+    }
+  },
+  {
+    "id": "api-real-time-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your SSE notifications stream sends `id:` on every event. A phone drops off the network for 20 seconds during which events 340–352 are sent, then `EventSource` reconnects with `Last-Event-ID: 339`. Users report missing notifications after reconnecting. What's the most likely server-side gap?",
+    "options": [
+      {
+        "text": "The server ignores `Last-Event-ID` or has nowhere to read past events from, so it only sends new events from the moment of reconnection",
+        "explanation": "Correct. The browser does its half automatically: reconnect and report the last id. The server has to keep a replay buffer (or query a log) and send everything after 339 before resuming live events."
+      },
+      {
+        "text": "`EventSource` doesn't reconnect automatically, so the client must do it",
+        "explanation": "It does reconnect automatically; that's one of SSE's selling points. The client did reconnect here and sent the header."
+      },
+      {
+        "text": "SSE can't carry ids larger than 255",
+        "explanation": "The `id` field is an arbitrary string. There's no numeric limit."
+      },
+      {
+        "text": "The events were binary, which SSE drops",
+        "explanation": "SSE is text-only, but that would fail on every event, not just during the outage. Binary data is sent base64-encoded."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Split the resume work into its two halves:\n\n| Step | Who does it |\n|---|---|\n| Detect drop, reconnect | Browser |\n| Send `Last-Event-ID: 339` | Browser |\n| Find events 340+ | **Server** |\n| Send them, then go live | **Server** |\n\nImplementation sketch: keep each user's recent events in a capped Redis list or stream (say, the last 5 minutes). Avoid a replay-to-live race: consume a durable stream continuously after the last ID, or establish and buffer a live subscription before replaying to a captured high-water mark, then deduplicate the overlap. If the requested id is older than the buffer, tell the client to do a full refresh.",
+    "link": {
+      "title": "MDN: Using server-sent events",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events"
+    }
+  }
+]

@@ -26,8 +26,17 @@ author/independent-verifier process. Existing skipped-content decisions below re
   51 originals became 238 short lessons with 608 focused questions. Version `d25fe18527e2` passes 61 tests,
   all lesson/question mobile renders, actual lesson/quiz routes in every converted module, original answer-key
   preservation, completion-age controls, offline practice and installed-app update checks.
-- Distributed systems, API design and architecture are undergoing independent verification. Remaining modules
-  and the scoped Complexity formula follow-up are queued.
+- Published third-batch commit `1a0ad7d`: messaging and the precise server-duration glossary phrase.
+  GitHub Pages succeeded; live app, asset manifest, progress helper and index match `d25fe18527e2`.
+- Current release candidate: nine converted modules, 67 originals → 316 short units with 800 questions.
+  Full verified-snapshot version `d63a1a489233`, 61 tests, all mobile lesson/question renders and actual
+  lesson/quiz routes in all nine modules pass. All 5,565 original course question IDs/keys/types/option counts
+  are preserved. Previously published Complexity units remain active while its format follow-up is authored.
+- Distributed systems is independently verified and stamped (40 short units, 96 preserved questions).
+  Its broad real-time aliases have also been independently narrowed to consistency-ordering phrases.
+  API design's code-format follow-up is complete: four checked native examples, zero unresolved active
+  pseudocode/format debt. Architecture is undergoing independent verification, reliability is being authored,
+  and Complexity's required formula-format follow-up is being authored. Remaining modules are queued.
 - Current reports: [short-lessons-report.md](short-lessons-report.md). Working queue and baseline snapshots:
   `/tmp/cs-study-short-lessons/queue.json`, `original-index.json`, `original-questions.json`; baseline commit
   `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`. The full original course has 482 lessons and 5,565 questions.
@@ -39,6 +48,8 @@ author/independent-verifier process. Existing skipped-content decisions below re
   `scripts/audit-short-lessons.mjs` with the original index and question snapshots as arguments. Add
   `--partial` for interim releases: every original course question must survive, and converted modules also
   preserve original answer keys, question types and option counts. The final audit must omit `--partial`.
+  `/tmp/cs-study-short-lessons/audit-archives.mjs` compares all 964 original MD/question files against the fixed
+  baseline using Git blobs; all currently remain byte-identical. Repeat after final content work.
 - Integration follow-ups are recorded in the working queue. The request-duration glossary phrase is now
   independently verified. Complexity Analysis still needs a scoped author and different verifier to resolve
   actual inherited prose/table formula-format violations; the prior review explicitly did not classify all

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "api-webhooks-gateways-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You receive `subscription.updated` (plan = Pro, version 7) and then, due to a retry, an older `subscription.updated` (plan = Basic, version 5). Your handler simply writes the event's plan to the database. What ends up stored, and what's the most robust fix?",
+    "options": [
+      {
+        "text": "Pro; webhooks are always delivered in order",
+        "explanation": "They aren't. Retries of earlier failed deliveries commonly arrive after newer events."
+      },
+      {
+        "text": "Pro; databases reject older writes automatically",
+        "explanation": "A plain `UPDATE` has no notion of event age. It overwrites whatever is there unless you add a condition."
+      },
+      {
+        "text": "Basic. Fix: on any subscription event, re-fetch the subscription's current state from the provider's API (or only apply events with a higher version than stored)",
+        "explanation": "Correct. The stale event overwrote newer data. Treating events as hints helps, but concurrent refresh responses can still finish out of order; serialize refreshes per object or guard the stored version. An atomic version check (`WHERE version < 5` fails, so skip) is the cheaper alternative."
+      },
+      {
+        "text": "Basic. Fix: process webhooks with a single thread",
+        "explanation": "A single thread processes events in *arrival* order, but arrival order is already wrong here. Serialising doesn't fix out-of-order delivery."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Timeline:\n\n```\narrive 1: v7 plan=Pro   -> store Pro\narrive 2: v5 plan=Basic -> store Basic\n```\n\nCustomer paid for Pro but now has Basic. Fixes:\n\n**Version guard**\n\n```sql\n-- Ignore equal or older object\n-- versions.\nUPDATE subs SET plan=$p, ver=$v\nWHERE id=$id AND ver < $v\n```\n\nstored version 7 < incoming version 5 is false → 0 rows → ignored.\n\n**Re-fetch** (thin-event style)\n\nOn any event for `sub_123`, call `GET /subscriptions/sub_123` and store the result. Serialize these refreshes per object or use a trustworthy version check when storing fetched state; otherwise an older fetch can overwrite a newer one.",
+    "link": {
+      "title": "Stripe docs: Receive Stripe events in your webhook endpoint",
+      "url": "https://docs.stripe.com/webhooks"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "dist-transactions-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about sagas are true? Select all that apply.",
+    "options": [
+      {
+        "text": "They provide isolation: other transactions never see intermediate states.",
+        "explanation": "Wrong. Each local transaction commits immediately, so intermediate states (reserved stock, a charge that will be refunded) are visible. Sagas lack the I in ACID."
+      },
+      {
+        "text": "Compensating transactions must be idempotent.",
+        "explanation": "Correct. Compensations are retried after timeouts or crashes; running a refund twice must not refund twice."
+      },
+      {
+        "text": "Non-compensatable actions should come after the pivot step.",
+        "explanation": "Correct. Things like sending emails or shipping can't be undone, so they belong after the point of no return, as retriable steps."
+      },
+      {
+        "text": "Choreography makes the end-to-end flow easier to see and change than orchestration.",
+        "explanation": "Wrong. Choreography spreads the flow across event subscriptions; orchestration keeps it in one state machine, which is easier to understand and change."
+      },
+      {
+        "text": "A transactional outbox prevents a service from committing its change without durably recording the associated event to publish.",
+        "explanation": "Correct. The event intent and state change commit in one local transaction. A functioning relay publishes later and may repeat delivery; publication to the external broker is not part of that atomic commit."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Check each claim against how sagas work:\n\n1. Isolation: local commits are visible immediately. ✗\n2. Idempotent compensations: needed because of retries. ✓\n3. Step ordering: compensatable → pivot → retriable. ✓\n4. Choreography visibility: the opposite is true. ✗\n5. Outbox: atomic 'write + event' within one database. ✓",
+    "link": {
+      "title": "Saga distributed transactions (Azure)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/saga"
+    }
+  },
+  {
+    "id": "dist-transactions-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a choreographed saga, the Payments service updates its database to CHARGED and then publishes `PaymentSucceeded` to Kafka. It crashes between the two. What happens and what's the fix?",
+    "options": [
+      {
+        "text": "Kafka replays the message automatically; no fix needed.",
+        "explanation": "Wrong. The message was never sent, so Kafka has nothing to replay."
+      },
+      {
+        "text": "The saga stalls: the customer is charged but no downstream service learns of it. Fix with a transactional outbox.",
+        "explanation": "Correct. The database change committed but the event was lost. Writing the event to an outbox table in the same transaction, and relaying it, makes the two atomic."
+      },
+      {
+        "text": "The charge rolls back automatically.",
+        "explanation": "Wrong. The local transaction committed before the crash; nothing undoes it."
+      },
+      {
+        "text": "Fix it by publishing first, then updating the database.",
+        "explanation": "Wrong. That just reverses the failure: an event saying 'charged' with no record of the charge if the crash happens after publishing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "This is the **dual-write problem**.\n\n1. `UPDATE payments SET status='CHARGED'` commits.\n2. Crash.\n3. `PaymentSucceeded` never published → Inventory and Orders wait forever.\n\nOutbox fix:\n\nIllustrative SQL scaffold: the ellipses stand for the application’s actual row updates and event values.\n\n```sql\nBEGIN;\n-- Commit payment and event as one.\nUPDATE payments ...;\nINSERT INTO outbox(event) ...;\nCOMMIT;\n```\n\nA relay (polling or CDC like Debezium) reads the outbox and publishes. It may publish twice after a crash, so consumers deduplicate by event id.",
+    "link": {
+      "title": "Saga pattern (microservices.io)",
+      "url": "https://microservices.io/patterns/data/saga.html"
+    }
+  },
+  {
+    "id": "dist-transactions-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A loan-approval process has nine steps across six services, with branches (manual review if a credit score is borderline), timeouts measured in days, and frequent rule changes. Which saga style fits best?",
+    "options": [
+      {
+        "text": "Choreography, because it avoids a central point of failure.",
+        "explanation": "Wrong for this flow. With nine steps, branches and long timeouts, the logic would be spread across event subscriptions in six services, making it hard to see, test or change."
+      },
+      {
+        "text": "Orchestration, with durable state in a workflow engine such as Temporal or Step Functions.",
+        "explanation": "Correct. One state machine holds the whole flow, including branches and long timers, so it's visible, testable and changeable in one place, and survives crashes by persisting its state."
+      },
+      {
+        "text": "2PC across all six services.",
+        "explanation": "Wrong. 2PC would hold locks across services for days while waiting for manual review; that's exactly what sagas exist to avoid."
+      },
+      {
+        "text": "No coordination: each service retries until the loan is approved.",
+        "explanation": "Wrong. Without a saga there's no defined way to undo completed steps when a later one rejects the loan."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Score the flow against the table in the lesson:\n\n| Factor | Favours |\n|---|---|\n| 9 steps, 6 services | orchestration |\n| Branches | orchestration |\n| Day-long timers | durable orchestrator |\n| Frequent changes | orchestration |\n\nChoreography shines for short, stable flows of two or three steps. Here, a durable orchestrator keeps the saga's state in one place, can sleep for days on a timer, and resumes correctly after a crash.",
+    "link": {
+      "title": "Saga distributed transactions (Azure Architecture Center)",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/saga"
+    }
+  }
+]

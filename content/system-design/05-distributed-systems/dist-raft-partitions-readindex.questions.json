@@ -1,0 +1,100 @@
+[
+  {
+    "id": "dist-consensus-raft-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 5-node cluster partitions: the leader n1 (term 3) and n2 on one side; n3, n4, n5 on the other. A client sends a write to n1. What happens to it, and what happens when the partition heals?",
+    "options": [
+      {
+        "text": "n1 commits it with n2; on healing, the logs are merged.",
+        "explanation": "Wrong. 2 of 5 is not a majority, so n1 can't commit. Raft never merges divergent logs; the leader's log overwrites conflicts."
+      },
+      {
+        "text": "n1 immediately steps down because it can't see a majority.",
+        "explanation": "Wrong. Basic Raft doesn't force a leader to step down just because followers are unreachable (some implementations add 'check quorum'). It stays leader but can't commit."
+      },
+      {
+        "text": "n1 appends it but can't commit; n3–n5 elect a leader in term 4; on healing n1 steps down and the entry is discarded if it conflicts.",
+        "explanation": "Correct. The minority can't reach a majority. The majority elects a new leader with a higher term. When n1 sees term 4 it becomes a follower and its uncommitted entry is overwritten by the new leader's log."
+      },
+      {
+        "text": "Both sides elect leaders and both commit writes.",
+        "explanation": "Wrong. Only the majority side can win an election. The minority can't commit, so there's no split brain at the commit level."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Majority = 3.\n\n1. **Minority side** {n1, n2}: n1 appends entry at index 10, term 3, replicates to n2. 2 acks < 3 → **not committed**. Client times out.\n2. **Majority side** {n3, n4, n5}: no heartbeats → n4 times out, term 4, gets 3 votes, leader. Commits new entries at index 10 onwards in term 4.\n3. **Heal**: n4's AppendEntries carries term 4. n1 sees 4 > 3 → follower. Consistency check fails at index 10 (term 3 vs 4) → n1's entry overwritten.\n\nThe client must retry, ideally with an idempotency key, because it never got a success.",
+    "link": {
+      "title": "The Secret Lives of Data: Raft",
+      "url": "https://thesecretlivesofdata.com/raft/"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Raft leader in term 5 wants to serve a **linearizable read** from its local state. Assume it has committed an entry in term 5 and will wait until its state machine has applied the required commit index. Which approaches are safe? Select all that apply.",
+    "options": [
+      {
+        "text": "Read immediately from local state, since it's the leader.",
+        "explanation": "Wrong. A partitioned leader may have been replaced in term 6 without knowing; its local state could be stale."
+      },
+      {
+        "text": "ReadIndex: record the commit index, confirm leadership with a majority heartbeat, wait to apply up to that index, then read.",
+        "explanation": "Correct. The heartbeat round proves no newer leader existed at that moment, and applying up to the commit index guarantees the read reflects every committed write."
+      },
+      {
+        "text": "Append the read as a log entry and answer once it commits.",
+        "explanation": "Correct. Slow (a full replication round and disk write), but committing proves leadership and orders the read with writes."
+      },
+      {
+        "text": "A majority-confirmed leader lease whose voting protocol prevents another leader before expiry, with a conservative deadline and bounded clock drift.",
+        "explanation": "Correct under these protocol and timing assumptions. A lease merely chosen shorter than an election timeout is insufficient: quorum lease/voting rules must prevent overlapping leader authority, and the deadline must account for clock-rate error and pauses."
+      },
+      {
+        "text": "Read from any follower's local state.",
+        "explanation": "Wrong. Followers may lag behind the commit index; without a ReadIndex-style check against the leader, reads can be stale."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "The danger: a deposed leader answering from old state.\n\n1. **Local read**: no proof of leadership. ✗\n2. **ReadIndex** (etcd default): one heartbeat round trip to a majority, no disk write. ✓\n3. **Log read**: proves everything but costs a log write. ✓\n4. **Lease read**: no round trip; trusts that no one can be elected before the lease expires, which relies on clocks. ✓ (with timing assumptions)\n5. **Follower read**: only safe if the follower first asks the leader for the commit index and waits to catch up (follower ReadIndex). ✗ as stated.",
+    "link": {
+      "title": "etcd API guarantees",
+      "url": "https://etcd.io/docs/v3.6/learning/api_guarantees/"
+    }
+  },
+  {
+    "id": "dist-consensus-raft-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With Pre-Vote disabled, a follower was cut off from a healthy 5-node etcd cluster for ten minutes. During that time it timed out repeatedly and its term climbed from 8 to **40**. When the link comes back, the stable leader (term 8) steps down and the cluster holds an election. Which Raft extension prevents this?",
+    "options": [
+      {
+        "text": "Joint consensus",
+        "explanation": "Wrong. Joint consensus is for changing cluster membership safely. It doesn't stop a member inflating its term."
+      },
+      {
+        "text": "Pre-Vote",
+        "explanation": "Correct. With Pre-Vote, a node first asks whether peers would vote for it, without incrementing its term. While isolated it can't get a majority of pre-votes, so its term stays at 8 and it rejoins quietly as a follower."
+      },
+      {
+        "text": "ReadIndex",
+        "explanation": "Wrong. ReadIndex is for linearizable reads; it doesn't affect elections or terms."
+      },
+      {
+        "text": "Log compaction with snapshots",
+        "explanation": "Wrong. Snapshots bound log size and speed up catch-up; they don't stop term inflation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Without Pre-Vote:\n\n1. Isolated node times out, increments term, asks for votes, gets none. Repeat: term reaches 40.\n2. On reconnect, its messages carry term 40.\n3. The leader sees 40 > 8 and steps down. An election follows, which the rejoiner can't even win because its log is behind.\n\nWith Pre-Vote:\n\n1. Isolated node sends PreVote(term 9). No majority replies, so it **does not** increment.\n2. On reconnect it hears the leader's heartbeats at term 8 and becomes a follower. No disruption.",
+    "link": {
+      "title": "etcd's Raft library",
+      "url": "https://github.com/etcd-io/raft"
+    }
+  }
+]

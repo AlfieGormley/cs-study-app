@@ -1,0 +1,92 @@
+[
+  {
+    "id": "api-idempotency-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer writes this Python retry function for a payment call. The supplied `post` callback returns an object whose `ok` attribute reports known success; this teaching fixture reports unsuccessful or unknown attempts as `ok=False`.\n\n```python\nfrom uuid import uuid4\n\ndef buggy_retry(post, body):\n    for attempt in range(1, 4):\n        # Fresh attempt key: the bug.\n        key = str(uuid4())\n        headers = {\n            \"Idempotency-Key\": key\n        }\n        resp = post(\"/payments\", body,\n                    headers=headers)\n        if resp.ok:\n            return resp\n    return resp\n```\n\nWhat is the idempotency bug? This example isolates key placement; real clients also need timeout handling, retryability checks, backoff and a supported server contract.",
+    "options": [
+      {
+        "text": "Nothing; each attempt has an idempotency key",
+        "explanation": "Having *a* key isn't enough. The server deduplicates by key, so different keys on each attempt look like three separate payments."
+      },
+      {
+        "text": "UUIDv4 isn't random enough for idempotency keys",
+        "explanation": "UUIDv4 has 122 random bits, which is plenty to avoid collisions. Randomness isn't the problem."
+      },
+      {
+        "text": "Idempotency keys can only be sent on GET requests",
+        "explanation": "It's the reverse: idempotency keys exist for non-idempotent methods like POST. GET is already idempotent."
+      },
+      {
+        "text": "A new key is generated on every attempt, so if attempt 1 succeeded but its response was lost, attempt 2 creates a second payment",
+        "explanation": "Correct. The key must represent the logical operation and be generated *once*, before the loop, then reused for every attempt."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace the failure case under a server contract that deduplicates by key:\n\n1. Attempt 1, key K1 → server charges £50, response lost.\n2. Attempt 2, key **K2** → server has never seen K2 → charges £50 again.\n3. Customer charged £100.\n\nMove key creation outside the loop:\n\n```python\nfrom uuid import uuid4\n\ndef retry_one_intent(post, body):\n    # One key for the logical operation.\n    key = str(uuid4())\n    headers = {\"Idempotency-Key\": key}\n    for attempt in range(1, 4):\n        resp = post(\"/payments\", body,\n                    headers=headers)\n        if resp.ok:\n            return resp\n    return resp\n```\n\nIn a fixture where the first two results are unknown and the third reports success, the buggy function makes three calls with three distinct UUID strings; the corrected function makes three calls with one shared UUID string. UUID values are random, so no specific value is claimed. The same-key retry prevents a second effect only under the endpoint’s documented scope and retention contract. Persist the key alongside the pending order if the app can restart; real HTTP timeouts and error policies still need handling.",
+    "link": {
+      "title": "Stripe API: Idempotent requests",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  },
+  {
+    "id": "api-idempotency-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A client retries `POST /payments` with `Idempotency-Key: K` but, due to a bug, changes `amount` from 5000 to 7000 on the retry. The first request with K succeeded. Under Stripe API v1's documented contract, how does its idempotency layer respond?",
+    "options": [
+      {
+        "text": "It returns an idempotency error, because the parameters don't match the original request made with that key",
+        "explanation": "Correct. Stripe compares the incoming parameters with the original. Silently returning the old 5000 result would hide the client bug; charging 7000 would break the key's promise. Erroring makes the bug visible."
+      },
+      {
+        "text": "It charges 7000, because the parameters are new",
+        "explanation": "That would defeat the purpose of the key: the client would get a second charge for what it claims is the same operation."
+      },
+      {
+        "text": "It silently returns the original 5000 result",
+        "explanation": "That would hide a real bug: the client believes it charged 7000. Stripe deliberately errors instead."
+      },
+      {
+        "text": "It refunds the first charge and charges 7000",
+        "explanation": "Idempotency layers never take compensating actions on their own. They either replay or reject."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The server stores, per key: `(request hash, status, response)`.\n\n1. Retry arrives with K.\n2. Lookup finds K → stored hash = `hash(amount=5000, ...)`.\n3. Incoming hash = `hash(amount=7000, ...)` → **mismatch**.\n4. Return an error (Stripe uses an `idempotency_error`; the IETF draft suggests `422`).\n\nThis is why implementations store a hash of the request body, not just the key.",
+    "link": {
+      "title": "Stripe API: Idempotent requests",
+      "url": "https://docs.stripe.com/api/idempotent_requests"
+    }
+  },
+  {
+    "id": "api-idempotency-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API deliberately adopts the expired IETF Idempotency-Key draft’s proposed 409/422 convention. Two identical payment requests share a key; the second arrives while the first is in progress. Which response follows this convention?",
+    "options": [
+      {
+        "text": "`201 Created` immediately, copied from the first request",
+        "explanation": "There's nothing to copy yet: the first request hasn't finished, so no result has been stored."
+      },
+      {
+        "text": "`422`, because the key has been used already",
+        "explanation": "In the draft, 422 is for reusing a key with a *different* request body. Here the body is identical; the problem is timing, not a mismatch."
+      },
+      {
+        "text": "`409 Conflict`, meaning 'a request with this key is in progress'; the client backs off and retries with the same key, and then gets the stored result replayed",
+        "explanation": "Correct. The 409 isn't stored as the key's result, so a later retry with the same key sees the finished first request and gets its response."
+      },
+      {
+        "text": "Run the second request too; the card network will deduplicate",
+        "explanation": "You can't assume every downstream deduplicates, and it would defeat the point of claiming the key atomically. The unique-key insert should already have made the second request lose the race."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Follow the claim-first algorithm:\n\n1. Request 1 inserts `(account, K, status='started')`. Succeeds.\n2. Request 2 tries the same insert 50 ms later. Unique constraint conflict.\n3. Request 2 reads the existing row: same body hash, status `started`. Return **409**.\n4. Request 1 finishes: status `done`, code 201, body stored.\n5. The client retries request 2 after a short backoff. The row is now `done`, so it gets the **replayed 201**.\n\nResult: one charge, and both taps end with the same success response.",
+    "link": {
+      "title": "IETF draft: The Idempotency-Key HTTP header field",
+      "url": "https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/"
+    }
+  }
+]

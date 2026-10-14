@@ -1,0 +1,160 @@
+[
+  {
+    "id": "dist-leases-locks-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Worker A holds a lock with fencing token 41 and pauses. The lease expires. Worker B acquires token 42 and writes. Then B releases and C acquires 43 but hasn't written yet. A wakes and writes with token 41. What does a storage service that enforces fencing do?",
+    "options": [
+      {
+        "text": "Rejects it, because 41 < 42, the highest token it has seen.",
+        "explanation": "Correct. Storage tracks the max token from any accepted request. B's write recorded 42, so A's 41 is stale and rejected."
+      },
+      {
+        "text": "Accepts it, because C hasn't written yet so the highest seen is still 41.",
+        "explanation": "Wrong. Storage has already seen 42 from B's write, so the highest seen is 42."
+      },
+      {
+        "text": "Accepts it, because 41 was a valid token when issued.",
+        "explanation": "Wrong. Validity at issue time is irrelevant; the whole point is rejecting tokens that have since been superseded."
+      },
+      {
+        "text": "Asks the lock service whether A still holds the lock.",
+        "explanation": "Wrong. That's another check-then-act race and adds a dependency; fencing works by comparing numbers locally at the resource."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Storage state over time:\n\n| Event | max token |\n|---|---|\n| start | 40 |\n| B writes (42) | 42 |\n| C acquires 43 (no write) | 42 |\n| A writes (41) | 41 < 42 → **reject** |\n\nNote that storage only learns about tokens from requests it receives. That's fine: any token lower than one already used is definitely stale.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Kubernetes-style controller uses a 15-second lease in etcd and renews every 5 seconds. Its process suffers a 20-second GC pause right after a successful renewal. Another replica takes over at t = 15 s. The protected records are in that same etcd cluster. What is the safest design for its writes?",
+    "options": [
+      {
+        "text": "Check `time.now() < lease_expiry` before each write.",
+        "explanation": "Wrong. The pause can happen between the check and the write; the check passes, the write lands after expiry."
+      },
+      {
+        "text": "Include the lease's etcd revision in each write as a transaction condition, so writes from an old lease holder fail.",
+        "explanation": "Correct for writes in the same etcd transaction. Compare the leadership key revision and update the protected keys atomically. A separate check followed by an external write would still race."
+      },
+      {
+        "text": "Make the lease 30 seconds so 20-second pauses are covered.",
+        "explanation": "Wrong. Pauses are unbounded; a 35-second pause breaks it, and failover becomes slower for every real crash."
+      },
+      {
+        "text": "Disable garbage collection on the controller.",
+        "explanation": "Wrong. Pauses also come from VM migration, swapping and network delay; removing GC doesn't remove the problem."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Timeline:\n\n```\nt=0   renew; lease to t=15\nt=0   GC pause begins\nt=15  lease expires\nt=15  replica 2 becomes leader\nt=20  replica 1 resumes, writes\n```\n\nFixes ranked:\n\n1. Client-side time checks: race, unsafe.\n2. Longer lease: makes the window rarer, not impossible.\n3. **Fencing**: `Txn(If(mod_revision(leader_key) == my_rev)).Then(put ...)` fails for replica 1 because replica 2's election changed the revision. Safe whatever the timing.",
+    "link": {
+      "title": "etcd API guarantees",
+      "url": "https://etcd.io/docs/v3.6/learning/api_guarantees/"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your lock protects calls to a third-party payment API that has no notion of fencing tokens. Two holders could double-charge. What's the best mitigation?",
+    "options": [
+      {
+        "text": "Use Redlock with 7 nodes instead of 5.",
+        "explanation": "Wrong. More nodes don't fix pauses or missing fencing; a stale holder can still call the API."
+      },
+      {
+        "text": "Rely on etcd's linearizability.",
+        "explanation": "Wrong. etcd guarantees agreement on who holds the lock, but can't stop a paused ex-holder's in-flight call reaching the external API."
+      },
+      {
+        "text": "Send an idempotency key derived from the operation (e.g. order id) so repeated calls have no extra effect.",
+        "explanation": "Correct. When the resource can't check tokens, making the operation idempotent means a stale holder's duplicate call is harmless."
+      },
+      {
+        "text": "Shorten the lease to 1 second.",
+        "explanation": "Wrong. Shorter leases increase false expiry and do nothing about stale holders; they make it worse."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Fencing needs the resource to compare tokens; the payment API won't.\n2. So the lock alone can't give safety.\n3. Move safety to the operation: an idempotency key like `charge:order-9182` means the processor returns the original result on a duplicate instead of charging again.\n4. Stripe and Adyen support idempotency, subject to their documented key scope and retention windows.\n\nRule: lock for efficiency, idempotency (or fencing) for correctness.",
+    "link": {
+      "title": "Timeouts, retries and backoff with jitter (AWS)",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these can serve as a **fencing token**, one that the protected resource can compare to reject a stale lock holder? Assume a stable ZooKeeper parent with no counter wraparound; the Raft option fences leader-issued writes by election epoch, not multiple lock grants in one term. Select all that apply.",
+    "options": [
+      {
+        "text": "The etcd revision at which the lock key was created",
+        "explanation": "Correct. etcd revisions are cluster-wide and strictly increasing, so every new acquisition gets a larger number."
+      },
+      {
+        "text": "The sequence number of a ZooKeeper ephemeral sequential lock node",
+        "explanation": "Correct. ZooKeeper assigns increasing sequence numbers under a parent, so a later lock holder's node has a higher number."
+      },
+      {
+        "text": "The random value Redlock stores in the key",
+        "explanation": "Wrong. Random values can show \"this isn't my lock\", but can't be ordered, so the resource can't tell whether a request comes from an older or newer holder."
+      },
+      {
+        "text": "The lock holder's wall-clock time when it acquired the lock",
+        "explanation": "Wrong. Wall clocks on different machines are skewed and can jump backwards, so a later holder may present a smaller timestamp."
+      },
+      {
+        "text": "The Raft term of the leader that issues the writes",
+        "explanation": "Correct. Terms strictly increase with each election, and Raft followers already use them to reject a deposed leader."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "A fencing token needs one property: **every new ownership epoch gets a strictly larger number than every earlier epoch**, decided by a single authority.\n\n| Candidate | Strictly increasing? |\n|---|---|\n| etcd revision | yes |\n| ZooKeeper sequence | within stable parent |\n| Redlock random value | no (unordered) |\n| Holder's wall clock | no (skew, jumps) |\n| Raft term | for leader epochs |\n\nThe consensus-backed ones work because a single replicated log decides the order of grants.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  },
+  {
+    "id": "dist-leases-locks-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You add fencing to a storage service that has three replicas with **asynchronous** replication. Writes go to whichever replica is nearest, and each replica independently rejects tokens lower than the highest it has seen. Holder A (token 33) is paused; B gets token 34 and writes to replica R1. A wakes and writes to R2. What happens?",
+    "options": [
+      {
+        "text": "R2 rejects A, because 34 is the highest token in the system.",
+        "explanation": "Wrong. R2 only knows tokens it has seen itself. If B's write hasn't replicated to R2 yet, R2's highest is still 33 or lower."
+      },
+      {
+        "text": "R2 may accept A's stale write, because it hasn't yet seen token 34. Fencing must be checked in one consistent place.",
+        "explanation": "Correct. Independent checks on asynchronously replicated copies re-create the race fencing was meant to remove. The token check and the write must be one atomic step in a linearizable place, such as a single leader or a conditional write."
+      },
+      {
+        "text": "The write is rejected because replicas share tokens instantly over gossip.",
+        "explanation": "Wrong. Gossip is eventually consistent; there's always a window in which R2 hasn't heard about 34."
+      },
+      {
+        "text": "Both writes are kept, and the token is used to merge them later.",
+        "explanation": "Wrong. The design rejects or accepts writes; it doesn't merge. And even if replication later orders by token, A's write may already have been read and acted on."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nR1: max=34 (B wrote)\nR2: max=33 (not replicated)\nA writes 33 to R2 -> 33 >= 33 OK!\n```\n\nThe stale holder got through because the \"highest token seen\" isn't a single agreed value. Fixes:\n\n- Route all writes for the resource through a single leader that checks the token.\n- Use a linearizable conditional write (`UPDATE ... WHERE token <= 34`, an etcd transaction, a DynamoDB condition expression).\n\nFencing moves the problem to the resource; the resource must then be strongly consistent about the token.",
+    "link": {
+      "title": "How to do distributed locking (Kleppmann)",
+      "url": "https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html"
+    }
+  }
+]

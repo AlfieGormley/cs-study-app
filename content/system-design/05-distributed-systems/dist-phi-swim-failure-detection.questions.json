@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dist-crdts-gossip-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In SWIM, node A pings B and gets no ack. What does A do next, and why?",
+    "options": [
+      {
+        "text": "Immediately declares B dead and gossips it.",
+        "explanation": "Wrong. The problem might be A's own link or a dropped packet. SWIM avoids premature conviction with indirect probes and a suspicion phase."
+      },
+      {
+        "text": "Pings B in a tight loop until it answers.",
+        "explanation": "Wrong. That would add load to a struggling node and network, and doesn't scale. SWIM uses one probe per period plus indirect probes."
+      },
+      {
+        "text": "Asks a central coordinator whether B is alive.",
+        "explanation": "Wrong. SWIM is fully decentralised; there is no coordinator."
+      },
+      {
+        "text": "Asks k other nodes to ping B on its behalf (ping-req); if none get an ack, B becomes suspected, and can refute with a higher incarnation number.",
+        "explanation": "Correct. Indirect probing separates 'B is down' from 'the A–B path is bad'. The suspicion phase plus incarnation numbers let a live B clear its name before being declared dead."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "SWIM probe cycle:\n\n1. A → ping → B. Wait (e.g. 500 ms).\n2. No ack → A → ping-req(B) → C, D, E (k = 3).\n3. Each helper pings B and relays any ack to A.\n4. Ack via C → B is alive; A's direct path was the problem.\n5. No acks → mark B **suspect**, gossip it.\n6. B hears it, increments its incarnation number, gossips 'alive, inc = 7', which overrides the suspicion.\n7. If no refutation within the timeout → **dead**.",
+    "link": {
+      "title": "SWIM paper",
+      "url": "https://www.cs.cornell.edu/projects/Quicksilver/public_pdfs/SWIM.pdf"
+    }
+  },
+  {
+    "id": "dist-crdts-gossip-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Cassandra's standard phi failure detector uses an exponential model based on the observed mean heartbeat interval. Two peers have the same mean but different jitter. Does higher jitter alone guarantee later conviction?",
+    "options": [
+      {
+        "text": "Yes: the detector directly uses a larger standard deviation.",
+        "explanation": "Incorrect. That describes a variance-sensitive model, not Cassandra's standard exponential model."
+      },
+      {
+        "text": "No: with the same observed mean and elapsed silence, this model gives the same phi.",
+        "explanation": "Correct. In this model phi is the elapsed silence divided by the mean interval, multiplied by a fixed constant (about 0.434). Variance is not a separate input."
+      },
+      {
+        "text": "Yes: phi 8 always means eight seconds.",
+        "explanation": "Incorrect. Phi is dimensionless; time to reach a threshold depends on the mean interval."
+      },
+      {
+        "text": "Noisy peers can never be convicted.",
+        "explanation": "Incorrect. Phi increases as silence grows."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "In the exponential model:\n\n```formula\nφ = (t / μ) × log_10(e)\nφ = (1.1 s / 1 s) × 0.434 ≈ 0.478\nwhere\nφ: phi, the suspicion level (no unit)\nt: the silence since the last heartbeat, in seconds (s); here 1.1 s\nμ: mu, the observed mean heartbeat interval; here 1 s\ne: Euler's number, about 2.718\nlog_10(e): the base-10 logarithm of e, about 0.434\ns: second\n≈: approximately equal to\nIn words: phi depends only on how long the silence is compared with the average interval; jitter in the intervals is not an input.\n```\n\nSo phi is about 0.478 for either peer, regardless of variance. Longer observed mean intervals slow phi growth. This tail probability is not the posterior probability that the node is alive, nor a guaranteed false-positive rate.",
+    "link": {
+      "title": "Cassandra failure detector implementation",
+      "url": "https://github.com/apache/cassandra/blob/cassandra-5.0/src/java/org/apache/cassandra/gms/FailureDetector.java"
+    }
+  }
+]

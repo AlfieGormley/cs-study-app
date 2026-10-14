@@ -1,0 +1,70 @@
+[
+  {
+    "id": "api-real-time-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about classic WebSocket over HTTP/1.1 are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The connection starts as an HTTP request with `Upgrade: websocket` and the server replies `101 Switching Protocols`",
+        "explanation": "Correct. The opening handshake is HTTP, which lets WebSockets share ports 80/443 and pass through HTTP infrastructure."
+      },
+      {
+        "text": "After the handshake, both client and server can send messages at any time",
+        "explanation": "Correct. WebSockets are full-duplex: neither side has to wait for the other."
+      },
+      {
+        "text": "The browser's WebSocket API reconnects automatically after a dropped connection",
+        "explanation": "Wrong. That's a feature of SSE's `EventSource`. With WebSockets you must implement reconnection (ideally with backoff and jitter) yourself or use a library."
+      },
+      {
+        "text": "Each message carries full HTTP headers",
+        "explanation": "Wrong. After the upgrade, each base frame header occupies 2–14 bytes, excluding extensions and transport overhead; a message can span several frames. That's a key efficiency advantage over polling."
+      },
+      {
+        "text": "WebSockets support both text and binary messages",
+        "explanation": "Correct. Frames have an opcode for text (UTF-8) or binary. SSE, by contrast, is text-only."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Walk through the life of a WebSocket:\n\n1. **Handshake**: HTTP `GET` + `Upgrade` → `101`. (Option 1 ✔)\n2. **Data**: frames both ways, any time (option 2 ✔), text or binary (option 5 ✔), tiny frame headers (option 4 ✘).\n3. **Drop**: `onclose` fires; nothing reconnects for you (option 3 ✘).",
+    "link": {
+      "title": "RFC 6455: The WebSocket Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc6455"
+    }
+  },
+  {
+    "id": "api-real-time-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're building a collaborative whiteboard. Each user's cursor position is broadcast to everyone else in the room about 20 times a second, and users also send strokes as they draw. Which transport fits best?",
+    "options": [
+      {
+        "text": "Server-Sent Events, with cursor updates sent as `POST` requests",
+        "explanation": "SSE handles the downstream well, but 20 POSTs per second per user means full HTTP headers on every tiny update. The upstream is as busy as the downstream here."
+      },
+      {
+        "text": "Long polling",
+        "explanation": "Without batching, each delivered update completes a poll and requires a new request. Batching reduces requests but adds waiting. It's built for occasional pushes."
+      },
+      {
+        "text": "Short polling every second",
+        "explanation": "One-second polling makes cursors jump rather than glide and still sends a request per second per user. It can batch multiple updates, but delivers them in delayed bursts rather than smoothly."
+      },
+      {
+        "text": "WebSockets",
+        "explanation": "Correct. Both directions carry frequent, small messages. A base WebSocket frame header adds 2–14 bytes, excluding extensions and transport overhead; HTTP request overhead depends on headers and HTTP version, and either side can send at any time."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Use the lesson's rule: SSE for server push, WebSockets when the client also streams, polling when updates are rare.\n\n1. Client → server: about 20 updates/s per user, plus strokes. **The client streams.**\n2. Server → client: about 20 updates/s × (users − 1).\n3. Overhead per cursor update:\n\n| Transport | Overhead |\n|---|---|\n| HTTP/1.1 POST | assume 300–800 B headers |\n| WS base frame header | 2–14 B |\n\nFor an illustrative 20-byte cursor payload and the assumed HTTP header sizes, header overhead is 15–40× the data; these are arithmetic inputs, not measured universal values. (HTTP/2 header compression shrinks this, but each update is still a full request with its own response.) WebSockets win clearly. Figma and similar tools use persistent connections for exactly this reason.",
+    "link": {
+      "title": "MDN: The WebSocket API",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API"
+    }
+  }
+]

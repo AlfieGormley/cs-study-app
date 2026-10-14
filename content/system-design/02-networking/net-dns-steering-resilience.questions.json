@@ -1,0 +1,92 @@
+[
+  {
+    "id": "net-dns-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You use plain round-robin DNS with three `A` records for `api.example.com`. One server dies. What happens?",
+    "options": [
+      {
+        "text": "DNS automatically stops returning the dead IP",
+        "explanation": "Plain DNS has no idea whether a server is alive. Health-checked DNS (e.g. Route 53 failover) can do this, but plain round robin keeps returning all three records."
+      },
+      {
+        "text": "All traffic fails because DNS needs every server healthy",
+        "explanation": "DNS doesn't check servers at all. Clients given one of the two live IPs succeed normally."
+      },
+      {
+        "text": "Traffic is automatically spread over the two remaining servers with no errors",
+        "explanation": "That's what a load balancer with health checks does. DNS round robin has no feedback loop, so errors continue until the record is removed and caches expire."
+      },
+      {
+        "text": "Roughly a third of new connection attempts hit the dead IP, and clients that don't retry another address fail until the record is changed and caches expire",
+        "explanation": "Correct. Each resolver keeps handing out the dead IP. Some clients (browsers) try the next address after a timeout; many API clients don't, so they fail."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Resolvers return all three IPs in rotating order; clients usually take the first.\n2. With one server dead, about a third of fresh lookups put the dead IP first:\n\n```formula\nP_dead = 1 / N = 1 / 3 ≈ 33%\nwhere\nP_dead: the fraction of fresh lookups that put the dead server's IP first, and so the fraction of new connections that try it first\nN: the number of A records being rotated; here 3\n≈: approximately equal to\n%: per cent\nIn words: rotation spreads first places evenly, so the dead IP comes first in one lookup out of three.\n```\n\nBrowsers implement fallback (try the next IP after a timeout, often seconds); typical HTTP libraries may just fail. Recovery: remove the record (manually or via health checks) **and** wait for TTL expiry. That's why DNS is used for coarse routing, with a health-checking load balancer behind each IP.",
+    "link": {
+      "title": "Configuring DNS failover (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html"
+    }
+  },
+  {
+    "id": "net-dns-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You use geo-based DNS to send European users to `eu-west` and US users to `us-east`. Analytics show many users in Germany are being routed to `us-east`. They all use a large public resolver. What's the most likely cause and fix?",
+    "options": [
+      {
+        "text": "German ISPs block European IP ranges",
+        "explanation": "There's no such blocking. The users aren't failing to reach Europe; DNS is choosing the wrong region for them."
+      },
+      {
+        "text": "The `A` record TTL is too long",
+        "explanation": "A long TTL slows changes, but it doesn't cause the wrong region to be chosen in the first place. The selection uses the resolver's location."
+      },
+      {
+        "text": "The public resolver's query reaches your authoritative server from a US-located IP, so geo-DNS sees the resolver's location. Support EDNS Client Subnet (ECS) so you see the client's subnet.",
+        "explanation": "Correct. Authoritative servers only see the resolver's address. ECS lets the resolver include a truncated client subnet, so the geo decision uses the user's real network."
+      },
+      {
+        "text": "Geo-DNS only works with IPv6",
+        "explanation": "Geo-DNS works on IPv4 and IPv6 equally. The problem is whose IP the geolocation is based on."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Geo-DNS decides based on **the IP that sent the query**, which is the recursive resolver, not the user.\n2. If the resolver's egress appears to be in the US (or its anycast routing lands the query at a US site), users get the US answer.\n3. **ECS** adds e.g. the client's /24 to the query, so the authoritative server can geolocate the user.\n4. Trade-offs: ECS leaks some client information and fragments resolver caches (one entry per subnet), so not every resolver sends it.\n5. Alternative fix: anycast at the network layer, which routes by where the user's packets actually enter.",
+    "link": {
+      "title": "GeoDNS (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/GeoDNS"
+    }
+  },
+  {
+    "id": "net-dns-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're designing DNS for a service that must stay reachable even if your DNS provider suffers a large DDoS like the 2016 Dyn attack. Which approach most directly addresses that risk?",
+    "options": [
+      {
+        "text": "Lower all TTLs to 5 seconds so you can react faster",
+        "explanation": "This makes things worse: when the provider is down, caches expire within seconds and every client immediately fails to resolve. Longer TTLs actually ride out short DNS outages."
+      },
+      {
+        "text": "Host the zone on two independent authoritative providers and list both sets of name servers in your `NS` records",
+        "explanation": "Correct. Resolvers try the other `NS` set if one doesn't answer, so an attack on one provider doesn't take you offline. You must keep the zones in sync (via zone transfers or automation)."
+      },
+      {
+        "text": "Put the website behind a CDN",
+        "explanation": "A CDN protects your origin servers, but users still need DNS to find the CDN. If the DNS provider is down, they can't resolve the name at all."
+      },
+      {
+        "text": "Use DNS over HTTPS",
+        "explanation": "DoH protects the privacy of the client–resolver hop. It does nothing if the authoritative servers can't answer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The failure is: **authoritative servers unreachable**.\n2. Once cached records expire, clients without usable serve-stale data cannot resolve the name, however healthy your servers are.\n3. Redundancy at that layer means **multiple providers**: e.g. `NS` records for both `ns1.provider-a.net` and `ns1.provider-b.net`.\n4. Supporting moves: moderate TTLs (minutes to hours for stable records) so caches bridge short outages.\n5. Cost: keeping two providers' zones in sync, and advanced features (geo, health checks) may differ between them.",
+    "link": {
+      "title": "Domain Name System (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Domain_Name_System"
+    }
+  }
+]

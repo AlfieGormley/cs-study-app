@@ -1,0 +1,92 @@
+[
+  {
+    "id": "net-proxies-gateways-mesh-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A request path is: API gateway → service A → service B. The gateway retries up to 3 attempts, A's mesh sidecar retries up to 3 attempts, and A's HTTP client retries up to 3 attempts. B starts timing out under load. In the worst case, how many requests can one user call generate against B, and what's the fix?",
+    "options": [
+      {
+        "text": "3, because retries don't multiply",
+        "explanation": "Retries at each layer are independent: every attempt from an outer layer triggers a full set of attempts at the inner layers, so they multiply."
+      },
+      {
+        "text": "9",
+        "explanation": "That counts only two layers (3 × 3). There are three retrying layers in this path."
+      },
+      {
+        "text": "27; retry at one layer only, with a retry budget and backoff with jitter",
+        "explanation": "Correct. 3 × 3 × 3 = 27 attempts against an already overloaded B: a retry storm. Retrying at one layer with a budget (e.g. ≤ 10% extra load) keeps amplification bounded."
+      },
+      {
+        "text": "Infinite, because retries loop",
+        "explanation": "Each layer is capped at 3 attempts, so the total is finite. It's just much larger than intended."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Gateway makes up to **3** attempts to A.\n2. For each of those, A's HTTP client makes up to **3** attempts to B.\n3. Each of those passes through A's outbound sidecar, which makes up to **3** attempts.\n4. The attempts multiply:\n\n```formula\nA_total = a^L = 3^3 = 3 × 3 × 3 = 27\nwhere\nA_total: the worst-case attempts against B for one user call\na: the attempts each layer may make, 3\nL: the number of independently retrying layers, 3 (gateway, A's HTTP client and A's sidecar)\nIn words: every outer attempt triggers a full set of inner attempts, so three layers of three make 27.\n```\n\nIf B is failing because it's overloaded, up to 27× the attempts can prolong the overload. Fix: retry only at the innermost caller (or one chosen layer); use budgets, exponential backoff with jitter, and deadlines that propagate so outer layers don't retry work that's already doomed.",
+    "link": {
+      "title": "What is a service mesh? (Linkerd)",
+      "url": "https://linkerd.io/what-is-a-service-mesh/"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The gateway permits two attempts, each with a 2 s timeout, within a 4 s overall budget. A calls B with a 5 s timeout, B runs a 4 s database query, and cancellation is not propagated. What failure amplification can occur?",
+    "options": [
+      {
+        "text": "Nothing; B eventually answers, so the user gets a response",
+        "explanation": "The gateway has already given up at 2 s. B's answer arrives after nobody is waiting for it."
+      },
+      {
+        "text": "The gateway gives up at 2 s and retries, but A and B keep working on the abandoned request, so each user request creates duplicate work on an already slow database",
+        "explanation": "Correct. Inner timeouts longer than outer ones waste capacity on requests nobody is waiting for, and the retry doubles the load at the worst moment. Inner timeouts should be shorter, or a deadline should propagate."
+      },
+      {
+        "text": "B's 5 s timeout causes the gateway to wait 5 s",
+        "explanation": "The gateway enforces its own 2 s timeout regardless of what downstream services are configured with."
+      },
+      {
+        "text": "A will retry B forever",
+        "explanation": "A's 5 s timeout bounds the call. The problem is wasted and duplicated work, not an infinite loop."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. At 0 s the gateway starts attempt 1: A → B → database.\n2. At 2 s the first attempt times out; the gateway starts attempt 2 while the abandoned database query continues. It has not yet returned a final response to the user.\n3. Around 4 s the first query finishes too late for its attempt; the overall gateway budget expires while the second query is still running.\n4. Two database queries were started for one user call.\n5. Propagate deadlines and implement cancellation in application/database work, or use shorter inner budgets. A deadline alone does not automatically interrupt every computation or database query.",
+    "link": {
+      "title": "What is a service mesh? (Linkerd)",
+      "url": "https://linkerd.io/what-is-a-service-mesh/"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A service receives 1,000 requests per second, and a downstream dependency starts failing 50% of calls. Compare retrying every failure once with a retry budget capping retries at 20% of normal traffic. How many retry requests per second reach the dependency in each case?",
+    "options": [
+      {
+        "text": "500 per second with blind retries, 200 per second with the budget",
+        "explanation": "Correct. 50% of 1,000 = 500 failures, each retried once. The budget caps retries at 20% of 1,000 = 200 per second, so the struggling dependency sees 1,200 rps instead of 1,500."
+      },
+      {
+        "text": "500 per second in both cases",
+        "explanation": "The budget's whole purpose is to cap retries below what blind retrying would send."
+      },
+      {
+        "text": "200 per second with blind retries, 500 per second with the budget",
+        "explanation": "This reverses the two: blind retries follow the failure rate, while the budget is a fixed fraction of normal traffic."
+      },
+      {
+        "text": "0 per second with the budget, because budgets disable retries during failures",
+        "explanation": "A budget still allows retries up to its limit; it just stops them growing with the failure rate."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nR_blind = p × λ\nR_blind = 0.5 × 1,000 rps = 500 rps\nL_blind = λ + R_blind = 1,500 rps\nR_max = b × λ\nR_max = 0.2 × 1,000 rps = 200 rps\nL_budget = λ + R_max = 1,200 rps\nwhere\nR_blind: retries per second when every failure is retried once, in requests per second (rps)\np: the fraction of calls that fail, 0.5 (50%)\nλ: lambda, the normal request rate, 1,000 rps\nL_blind: the total load on the dependency with blind retries\nR_max: the most retries per second the budget allows\nb: the retry budget as a fraction of normal traffic, 0.2 (20%)\nL_budget: the total load on the dependency with the budget\nrps: requests per second\nIn words: blind retries add load in proportion to failures; a budget caps the extra at a fixed slice of normal traffic.\n```\n\nSo the dependency sees **1,500 rps** (+50%) with blind retries, just as it's struggling, but **1,200 rps** with the budget. If failures rise to 100%, blind retries double the load (2,000 rps), while the budget still caps it at 1,200.\n\nBudgets keep retries useful for occasional blips but stop them amplifying a real overload.",
+    "link": {
+      "title": "Handling overload (Google SRE book)",
+      "url": "https://sre.google/sre-book/handling-overload/"
+    }
+  }
+]

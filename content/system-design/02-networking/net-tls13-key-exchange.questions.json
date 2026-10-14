@@ -1,0 +1,70 @@
+[
+  {
+    "id": "net-tls-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does a TLS 1.3 full handshake need only one round trip, when TLS 1.2 needed two?",
+    "options": [
+      {
+        "text": "The client sends its key share in the very first message, guessing the key-exchange group, so both sides can derive keys after one exchange",
+        "explanation": "Correct. In TLS 1.2, the client only sends its key share in the second round trip, after seeing the server's choice. TLS 1.3 collapses this by having the client send a key share up front."
+      },
+      {
+        "text": "TLS 1.3 skips certificate verification",
+        "explanation": "TLS 1.3 still sends and verifies the server certificate on every full handshake; it just encrypts it. Authentication wasn't removed."
+      },
+      {
+        "text": "TLS 1.3 runs over UDP",
+        "explanation": "TLS 1.3 normally runs over TCP. QUIC uses TLS 1.3 over UDP, but the 1-RTT handshake is a property of TLS 1.3 itself."
+      },
+      {
+        "text": "TLS 1.3 uses smaller certificates",
+        "explanation": "Certificate size does not change the protocol’s logical handshake sequence. An oversized certificate flight can nevertheless add transport delay when it exceeds the initial congestion window; TLS 1.3’s main saving here comes from restructuring key exchange."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. TLS 1.2: RTT 1 = client offers options, server picks a cipher and sends its certificate and key parameters; RTT 2 = client sends its key share, then both exchange Finished.\n2. TLS 1.3: the ClientHello already contains an (EC)DHE public key for a likely group (e.g. X25519).\n3. The server replies with its own share and can immediately encrypt the certificate and Finished.\n4. Client verifies and sends Finished **plus its HTTP request**.\n5. Saving at 100 ms RTT: 100 ms per new connection. (If the guess is wrong, a HelloRetryRequest costs an extra RTT.)",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "net-tls-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about a certificate-authenticated TLS 1.3 full handshake using (EC)DHE, without ECH, are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The server's certificate travels encrypted",
+        "explanation": "Correct. Keys are derived right after ServerHello, so the certificate, CertificateVerify and Finished are all encrypted, unlike in TLS 1.2."
+      },
+      {
+        "text": "The SNI hostname is encrypted by default",
+        "explanation": "SNI sits in the ClientHello, before any keys exist, so it's in the clear unless Encrypted Client Hello is used."
+      },
+      {
+        "text": "This handshake uses ephemeral (EC)DHE, so later theft of the certificate private key does not decrypt recorded sessions",
+        "explanation": "Correct. TLS 1.3 removed static RSA key exchange; the long-term key only signs the handshake, giving forward secrecy."
+      },
+      {
+        "text": "Static RSA key exchange is still allowed for compatibility",
+        "explanation": "It was removed precisely because it gives no forward secrecy. RSA keys can still be used for *signatures*, just not for key transport."
+      },
+      {
+        "text": "If the server doesn't support the key-exchange group the client guessed, a HelloRetryRequest costs an extra round trip",
+        "explanation": "Correct. The client then resends its ClientHello with a share for a group the server accepts."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Go message by message:\n\n1. **ClientHello** (clear): versions, ciphers, key share, SNI, ALPN.\n2. **ServerHello** (clear): chosen parameters and the server's key share. Both sides now derive handshake keys.\n3. **Certificate, CertificateVerify, Finished**: encrypted.\n4. Key shares are fresh for each connection → **forward secrecy**.\n5. Wrong group guess → HelloRetryRequest → +1 RTT; clients guess common groups (X25519, or a hybrid post-quantum group) to avoid it.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  }
+]

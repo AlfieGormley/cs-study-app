@@ -58,7 +58,7 @@ export function compileDrawing(source, language = '') {
   const structural = /[┌┐└┘├┤│─┬┴╭╮╰╯]|\+[-─]{2,}|(?:^|\n)\s*\|/.test(source);
   // Mixed drawings may contain code labels; only reject programs when there
   // is no actual box/connector structure. Assembly uses brackets as operands.
-  if (!structural && language !== 'diagram' && /^(?:\s*)(?:def |class |if |for |while |return |SELECT |FROM |UPDATE |INSERT |const |let |#include|\$ |EXPLAIN |(?:Hash|Merge|Nested Loop) Join|Seq Scan|Index .*Scan|(?:mov|ldr|str|lea|xor|cmp|jmp|stp|ldp)\s+\w)/m.test(source)) return null;
+  if (!structural && language !== 'diagram' && /^(?:\s*)(?:def |class |if |for |while |return |SELECT |FROM |UPDATE |INSERT |(?:OPTIONAL\s+)?MATCH[\s(]|const |let |#include|\$ |EXPLAIN |(?:Hash|Merge|Nested Loop) Join|Seq Scan|Index .*Scan|(?:mov|ldr|str|lea|xor|cmp|jmp|stp|ldp)\s+\w)/m.test(source)) return null;
   if (/^<<<<<<< |^>>>>>>> |^>>> /m.test(source)) return null;
   const tree = compileTree(source);
   if (tree) return tree;

@@ -1371,7 +1371,7 @@
       "leading column",
       "leading columns"
     ],
-    "definition": "A composite index can be searched efficiently only on a leading part of its column list. An index on (a, b, c) serves conditions on a, or a and b, but not on b alone.",
+    "definition": "The conventional composite B-tree access rule: constraints on leading columns identify a contiguous index range. A predicate on a later column alone may require a broad scan, although skip scan can help when there are few distinct leading values.",
     "source": "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys"
   },
   {
@@ -1392,7 +1392,7 @@
       "covered by the index",
       "covered query"
     ],
-    "definition": "An index that contains every column a query needs, so the database can answer from the index alone without visiting the table.",
+    "definition": "An index containing every column needed by a query’s predicates, ordering and result, making an index-only access path possible. Engine visibility rules can still require table visits, such as PostgreSQL heap checks or InnoDB clustered-record checks.",
     "example": "An index on (customer_id, created_at) INCLUDE (status, total_p) covers a query selecting created_at, status and total_p for one customer.",
     "source": "https://www.postgresql.org/docs/current/indexes-index-only-scans.html"
   },
@@ -1500,7 +1500,7 @@
       "heap-only tuple update",
       "heap-only tuple updates"
     ],
-    "definition": "Heap-only tuple update: a Postgres optimisation where an UPDATE that changes no indexed column, and whose new version fits on the same page, needs no new index entries. Indexing the changed column prevents it.",
+    "definition": "PostgreSQL’s heap-only tuple optimisation: a new tuple version on the same heap page can avoid ordinary index entries when no column referenced by a non-summarising index changes. BRIN and other summarising indexes are an exception to that column-change restriction and may still need maintenance.",
     "source": "https://www.postgresql.org/docs/current/storage-hot.html"
   },
   {
@@ -1558,7 +1558,7 @@
     "aliases": [
       "type casts"
     ],
-    "definition": "Converting a value from one data type to another, such as text to integer. If a query forces a cast on an indexed column, the index on the raw column can no longer be used.",
+    "definition": "Converting a value from one data type to another, such as text to integer. Applying a cast to an indexed column can prevent an ordinary index seek; converting the query parameter to the column’s type can preserve it.",
     "source": "https://www.postgresql.org/docs/current/sql-expressions.html#SQL-SYNTAX-TYPE-CASTS"
   },
   {
@@ -1766,7 +1766,7 @@
     "aliases": [
       "predicate locks"
     ],
-    "definition": "A lock on every row that matches a condition, including rows that do not exist yet, which prevents phantoms. Real databases approximate it with index-range or next-key locks.",
+    "definition": "Tracking or protecting the set of rows matching a condition, including possible future rows. Lock-based serializable engines can use blocking key-range locks to prevent phantoms; PostgreSQL SSI instead uses non-blocking predicate markers to detect dependencies and abort unsafe executions.",
     "source": "https://en.wikipedia.org/wiki/Two-phase_locking"
   },
   {
@@ -1973,7 +1973,7 @@
       "Postgres streaming replication",
       "streaming replica"
     ],
-    "definition": "Postgres's built-in physical replication: the leader streams WAL records to standbys as they are written, and the standbys replay them byte for byte.",
+    "definition": "Postgres’s built-in physical replication: the primary streams WAL records as they are generated, and standbys replay the physical changes. Compatible server formats and major versions are required.",
     "source": "https://www.postgresql.org/docs/current/warm-standby.html"
   },
   {
@@ -1983,7 +1983,7 @@
       "physical replication",
       "physical log replication"
     ],
-    "definition": "Replicating by sending the raw storage-level log (such as Postgres WAL), so replicas are byte-identical. Leader and follower must run the same major version, and you cannot pick individual tables.",
+    "definition": "Replication by sending the raw storage-level log, such as PostgreSQL WAL, and replaying its physical changes on a compatible standby. PostgreSQL generally requires the same major version and compatible hardware architecture; physical replication covers the cluster rather than selected tables.",
     "source": "https://www.postgresql.org/docs/current/warm-standby.html"
   },
   {
@@ -2066,7 +2066,7 @@
       "recovery conflict",
       "recovery conflicts"
     ],
-    "definition": "A Postgres standby setting (30 s by default) for how long WAL replay may wait for a conflicting read query before cancelling it with \"conflict with recovery\".",
+    "definition": "A PostgreSQL standby setting, 30 seconds by default, that limits the total delay in applying WAL already received from the primary. Conflicting queries can be cancelled when that budget is exhausted; each query does not receive its own fresh 30-second allowance.",
     "source": "https://www.postgresql.org/docs/current/hot-standby.html#HOT-STANDBY-CONFLICT"
   },
   {
@@ -3012,5 +3012,28 @@
     "definition": "The fixed-size block a database reads and writes as one unit: 8 KB in Postgres and 16 KB by default in InnoDB. Each B-tree node is one page, and the cost of a query is largely the number of pages it touches.",
     "example": "A 100-million-row table at about 100 rows per 8 KB page fills a million pages.",
     "source": "https://www.postgresql.org/docs/current/storage-page-layout.html"
+  },
+  {
+    "id": "db-btree-fan-out",
+    "term": "B-tree fan-out",
+    "aliases": [
+      "B-tree fanout",
+      "B-tree branching factor"
+    ],
+    "definition": "The number of child pointers in an internal B-tree page. A page holding many children makes the tree wide and shallow, so a lookup visits few levels. Leaf key capacity and page occupancy also affect a height estimate.",
+    "example": "In a simplified full-page model with 400 children per internal page and 400 keys per leaf, three levels can address about 64 million keys.",
+    "source": "https://www.db-book.com/slides-dir/PDF-dir/ch14.pdf"
+  },
+  {
+    "id": "db-storage-atomic-write",
+    "term": "Storage-atomic write",
+    "aliases": [
+      "storage-atomic writes",
+      "storage atomic write",
+      "storage atomic writes"
+    ],
+    "definition": "A storage write guaranteed to appear entirely old or entirely new after a covered failure, rather than a mixture of both. Its guaranteed size and failure conditions depend on the complete storage stack; a larger database page may tear when it needs several separately atomic writes.",
+    "example": "Under the lesson’s assumed 4 KiB failure-atomic unit, writing an 8 KiB database page may leave one half old and one half new after a crash.",
+    "source": "https://www.postgresql.org/docs/current/wal-configuration.html"
   }
 ]

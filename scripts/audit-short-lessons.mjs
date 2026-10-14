@@ -3,13 +3,14 @@
 // Usage: node scripts/audit-short-lessons.mjs <original-index> <original-questions> [report]
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import { migrationProblems } from '../lesson-progress.js';
+import { migrationProblems, subjectMigrationProblems } from '../lesson-progress.js';
 
 const original = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const originalQuestions = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 const current = JSON.parse(fs.readFileSync('data/index.json', 'utf8'));
 const questions = JSON.parse(fs.readFileSync('data/questions.json', 'utf8'));
 const rows = [];
+for (const subject of current.subjects) assert.deepEqual(subjectMigrationProblems(subject.modules.map((module) => ({ ...module, lessons: module.lessons.map((lesson) => lesson.id) }))), []);
 for (const subject of original.subjects) for (const previous of subject.modules) {
   const module = current.subjects.find((s) => s.id === subject.id)?.modules.find((m) => m.id === previous.id);
   assert.ok(module, `missing module ${subject.id}/${previous.id}`);

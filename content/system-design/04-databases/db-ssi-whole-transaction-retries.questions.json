@@ -1,0 +1,70 @@
+[
+  {
+    "id": "db-transactions-isolation-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You switch a high-traffic Postgres service to `SERIALIZABLE` (SSI). What new behaviour must the application handle?",
+    "options": [
+      {
+        "text": "Reads now block writes, so latency rises under load",
+        "explanation": "Wrong. SSI keeps MVCC's non-blocking reads; its SIREAD markers record what was read without blocking anyone. That's what distinguishes it from 2PL."
+      },
+      {
+        "text": "Transactions can fail with serialization errors (SQLSTATE 40001) at any statement or at commit, and must be retried",
+        "explanation": "Correct. SSI is optimistic: it lets transactions run and aborts one when it detects a dangerous pattern of read/write dependencies. The app needs a retry loop, and transactions should be short and free of external side effects."
+      },
+      {
+        "text": "Nothing: Serializable is just slower",
+        "explanation": "Wrong. Serialization failures are a behavioral change and their frequency and performance cost depend on the workload. Applications need bounded full-transaction retries or an explicit failure response."
+      },
+      {
+        "text": "Deadlocks become impossible",
+        "explanation": "Wrong. Rows written still take locks, so deadlocks between writers are still possible. Serialization failures are an *additional* failure mode."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. SSI tracks dependencies between reads and writes in addition to using snapshots.\n2. A dangerous dependency pattern can trigger SQLSTATE 40001 during a statement or at commit.\n3. Roll back the entire failed transaction, then retry its complete logic in a new transaction and snapshot with bounded backoff.\nPython control-flow fragment: place this inside a request handler. The transaction, rollback and backoff helpers are supplied by the application.\n```python\n# Retry all logic in a fresh\n# transaction.\nfor attempt in range(1, 6):\n  try:\n    run_complete_transaction()\n    return success\n  except SerializationFailure:\n    rollback_if_needed()\n    # Exhaustion must remain a failure.\n    if attempt == 5: raise\n    sleep(backoff(attempt))\n```\n4. Keep nontransactional side effects out of retried transaction bodies. A transactional outbox plus an idempotent downstream protocol closes crash and duplicate windows better than a bare post-commit call.",
+    "link": {
+      "title": "Ports and Grittner: Serializable Snapshot Isolation in PostgreSQL",
+      "url": "https://arxiv.org/abs/1208.4179"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A team migrating from Oracle to Postgres says: \"We ran everything at `SERIALIZABLE` on Oracle, so our booking code was race-free.\" Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Oracle's Serializable is snapshot isolation, so write skew (such as the on-call doctors bug) could still have happened",
+        "explanation": "Correct. Oracle detects write-write conflicts on the same row (`ORA-08177`) but doesn't track read dependencies, so two transactions writing different rows on the basis of the same read can both commit."
+      },
+      {
+        "text": "Oracle offers only Read Committed and Serializable (plus Read Only); it has no Repeatable Read level",
+        "explanation": "Correct. Oracle's default is Read Committed, and its only stronger level is Serializable. Asking it for Repeatable Read isn't an option."
+      },
+      {
+        "text": "Postgres Serializable is also snapshot isolation, so nothing changes after the migration",
+        "explanation": "Wrong. Postgres Serializable is SSI: it adds read-dependency tracking on top of snapshots and aborts transactions that could produce write skew. It is genuinely serializable."
+      },
+      {
+        "text": "Oracle's Serializable takes shared read locks, which is why it was slow",
+        "explanation": "Wrong. Oracle uses multiversion reads at every level; readers don't take shared locks. That's why its Serializable is snapshot isolation rather than 2PL."
+      },
+      {
+        "text": "After moving to Postgres Serializable, the code needs to retry on SQLSTATE 40001",
+        "explanation": "Correct. SSI is optimistic and aborts one transaction of a dangerous pair. Without a retry loop, those aborts become user-facing errors."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Ask what each engine's \"Serializable\" actually is.\n\n| Engine | Serializable is | Write skew? |\n|---|---|---|\n| Oracle | Snapshot isolation | Possible |\n| Postgres | SSI | Prevented |\n\n1. Oracle: snapshot reads plus first-committer-wins on rows both transactions *wrote*. The doctors case writes different rows, so both commit. (1) true.\n2. Oracle's isolation levels are Read Committed (default) and Serializable; READ ONLY is a separate transaction mode. (2) true.\n3. Postgres Serializable is SSI, which is stronger, not the same. (3) false.\n4. Ordinary Oracle consistent reads do not take shared row locks; explicit locking queries are different. (4) false.\n5. SSI aborts with 40001, so retries are required. (5) true.\n\nSo the team's code may have had latent write-skew bugs on Oracle that Postgres will now surface as serialization failures.",
+    "link": {
+      "title": "Oracle: Data concurrency and consistency",
+      "url": "https://docs.oracle.com/en/database/oracle/oracle-database/19/cncpt/data-concurrency-and-consistency.html"
+    }
+  }
+]

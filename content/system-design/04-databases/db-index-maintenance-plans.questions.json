@@ -1,0 +1,130 @@
+[
+  {
+    "id": "db-indexing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Postgres table has an index on `created_at`. The query `SELECT * FROM events WHERE date(created_at) = '2026-09-30'` does a sequential scan. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "The planner never uses indexes for `SELECT *`",
+        "explanation": "Wrong. `SELECT *` only means a heap fetch is needed after the index lookup; it doesn't prevent index use."
+      },
+      {
+        "text": "Wrapping the column in `date()` means the index on raw `created_at` can't be used; rewrite as a range `created_at >= '2026-09-30' AND created_at < '2026-10-01'`",
+        "explanation": "Correct. The index is sorted by `created_at` values, not by `date(created_at)`. A half-open range on the raw column is sargable (index-usable) and returns the same rows."
+      },
+      {
+        "text": "The table needs `VACUUM FULL`",
+        "explanation": "Wrong. Bloat might slow scans, but it doesn't stop the planner from using an index for a sargable predicate."
+      },
+      {
+        "text": "Dates can't be indexed in Postgres",
+        "explanation": "Wrong. Date and timestamp columns are indexed with ordinary B-trees all the time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The index maps raw `created_at` values to rows, in order.\n2. The predicate is on `date(created_at)`, a computed value. The planner can't use the index on `created_at` for it.\n3. Option A: rewrite the predicate to use the column directly:\nUse this predicate inside the original SELECT; it is not a complete statement by itself.\n```sql\n-- Seek a half-open date interval.\nWHERE created_at >= '2026-09-30'\n  AND created_at <  '2026-10-01'\n```\n4. Option B: create an expression index `ON events (date(created_at))` (for `timestamptz`, you'd need to pin the time zone so the expression is immutable).\n5. Option A is usually better: no extra index to maintain.",
+    "link": {
+      "title": "Use The Index, Luke: concatenated indexes",
+      "url": "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys"
+    }
+  },
+  {
+    "id": "db-indexing-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An `events` table takes 20,000 inserts per second and has 9 indexes. Insert latency is climbing. Which are reasonable responses? Select all that apply.",
+    "options": [
+      {
+        "text": "Investigate zero-scan indexes over a representative period and remove only those confirmed unnecessary for queries or constraints.",
+        "explanation": "Correct. Counters may reset, rare jobs or replicas may use an index, and a unique index may enforce a constraint without ordinary scans. Check those roles before dropping it."
+      },
+      {
+        "text": "Replace an index on `status`, used only to find `status = 'failed'` rows, with a partial index `WHERE status = 'failed'`",
+        "explanation": "Correct. If failures are, say, 0.1% of rows, the partial index is about 1000× smaller and most inserts don't touch it at all."
+      },
+      {
+        "text": "Add a covering index for every common query",
+        "explanation": "Wrong. That adds more indexes, so more write amplification. The problem is too many indexes, not too few."
+      },
+      {
+        "text": "Consider an LSM-based store for this append-heavy workload if it truly outgrows B-tree insertion costs",
+        "explanation": "Correct. LSM trees turn random index writes into sequential, batched ones, which suits very high insert rates. It's a bigger change but a legitimate one."
+      },
+      {
+        "text": "Run `ANALYZE` more often",
+        "explanation": "Wrong. Fresh statistics improve query plans; they don't reduce the cost of maintaining 9 indexes on each insert."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Quantify:\n```formula\nM = R × (1 + I)\nM = 20,000/s × (1 + 9) = 200,000/s\nM' = 20,000/s × (1 + 6) = 140,000/s\nwhere\nM: structure modifications per second (heap plus index writes), many to random pages\nR: inserts per second, here 20,000\nI: the number of indexes on the table, here 9\nM': the same total after dropping 3 indexes\ns: seconds\nIn words: every insert writes the table once and each index once, so the write work grows in step with the number of indexes.\n```\n2. Reduce the number of indexes: remove indexes confirmed unnecessary for reads and constraints. Removing 3 cuts that to 140,000 per second.\n3. Shrink indexes: partial indexes cover only interesting rows, so most inserts skip them entirely.\n4. If that's still not enough, the workload (append-heavy, few updates) fits an LSM engine or a time-partitioned table where old partitions have indexes and the hot one has few.\n5. More indexes or `ANALYZE` don't reduce write work.",
+    "link": {
+      "title": "PostgreSQL: Multicolumn indexes",
+      "url": "https://www.postgresql.org/docs/current/indexes-multicolumn.html"
+    }
+  },
+  {
+    "id": "db-indexing-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In Postgres, a hot `users` table gets frequent `UPDATE users SET last_seen_at = now() WHERE id = $1`. There are 6 ordinary B-tree indexes, one of which includes `last_seen_at`. Updates cause heavy index bloat. What's going on?",
+    "options": [
+      {
+        "text": "Because `last_seen_at` is indexed, the update can't be a HOT update (heap-only tuple update), so Postgres inserts new entries into all 6 indexes for every update",
+        "explanation": "Correct. Postgres MVCC writes a new row version. If no indexed column changed and the page has room, it's a HOT update with no index changes. Changing an indexed column forces new entries in every index, not just the one containing the column."
+      },
+      {
+        "text": "Only the index on `last_seen_at` is updated; bloat is from autovacuum being disabled",
+        "explanation": "Wrong. In Postgres an update that is not a HOT update needs new entries in *every* index, because each index points to the physical tuple, and the new version lives at a new location."
+      },
+      {
+        "text": "Primary-key indexes are rebuilt on every update",
+        "explanation": "Wrong. Nothing is rebuilt; Postgres adds new index entries pointing at the new row version, and old ones are cleaned up by vacuum."
+      },
+      {
+        "text": "B-trees can't store timestamps efficiently",
+        "explanation": "Wrong. Timestamps are 8-byte fixed-width values, among the cheapest things to index."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Postgres never updates a row in place: `UPDATE` writes a new tuple version and marks the old one dead.\n2. Indexes point to tuple locations (ctid). A new version at a new location would normally need new entries in every index.\n3. The HOT update optimisation avoids this when (a) no indexed column changed and (b) the new version fits on the same page: the old tuple chains to the new one, and indexes stay untouched.\n4. Here `last_seen_at` is indexed, so a HOT update is impossible: each update adds 6 index entries. At 1,000 updates/s that's 6,000 index insertions per second, plus the dead entries vacuum must clean.\n5. Fixes: drop the index on `last_seen_at` if you can, move it to a separate narrow table, and set `fillfactor` below 100 to leave room for HOT updates.\nThis example assumes ordinary B-tree indexes. PostgreSQL permits a HOT update when only summarizing BRIN-indexed columns change, provided the new tuple fits on the same heap page; those summary indexes may still need updating.",
+    "link": {
+      "title": "PostgreSQL: Heap-only tuples (HOT)",
+      "url": "https://www.postgresql.org/docs/current/storage-hot.html"
+    }
+  },
+  {
+    "id": "db-indexing-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 100-million-row Postgres table occupies 1 million 8 KB pages. A query matches 30% of rows on an indexed `region` column, and rows for each region are scattered throughout the table. The planner chooses a sequential scan. A developer forces an index scan, and the query gets several times slower. Why?",
+    "options": [
+      {
+        "text": "With 30% of rows scattered across almost every page, an index scan does about 30 million row fetches in heap order that jumps around, and touches every page anyway, while a sequential scan reads the 1 million pages once in order",
+        "explanation": "Correct. Low selectivity plus poor correlation makes the index the expensive path. The planner's choice was right."
+      },
+      {
+        "text": "The index is corrupt and should be rebuilt with `REINDEX`",
+        "explanation": "Wrong. A corrupt index gives wrong results or errors, not a predictable slowdown. The behaviour is exactly what the cost model predicts."
+      },
+      {
+        "text": "Index scans can't be used for `=` conditions on text columns",
+        "explanation": "Wrong. Equality on text is the most basic B-tree use. The index was used; it just wasn't the cheaper plan."
+      },
+      {
+        "text": "Sequential scans are always faster on SSDs",
+        "explanation": "Wrong. For selective queries (a few rows), an index lookup is thousands of times faster. It's selectivity that matters here, not the disk type."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Rows matching: 30% × 100M = 30 million.\n2. Rows per page: 100, so a page has ~30 matching rows. Nearly every page contains a match.\n3. Sequential scan: read 1M pages in order, about 8 GB of sequential I/O.\n4. Index scan: walk 30M index entries, then visit the heap for each, in an order unrelated to the table's layout. Even with caching, that's many more page visits and random I/O than one sequential pass.\n5. Postgres's middle ground, a **bitmap heap scan**, sorts row pointers by page first. At 30% it still touches nearly every page, so a sequential scan wins.\n6. Indexes pay off when they cut the pages read substantially, typically for at most a few percent of rows.",
+    "link": {
+      "title": "PostgreSQL: Using EXPLAIN",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  }
+]

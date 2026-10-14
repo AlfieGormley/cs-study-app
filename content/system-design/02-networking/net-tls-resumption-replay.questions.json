@@ -1,0 +1,131 @@
+[
+  {
+    "id": "net-tls-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A mobile app's users are 150 ms from your only region. Which measures reduce the latency added by TLS for them? Select all that apply.",
+    "options": [
+      {
+        "text": "Upgrade from TLS 1.2 to TLS 1.3",
+        "explanation": "Correct. That removes one round trip from every full handshake: 150 ms saved per new connection."
+      },
+      {
+        "text": "Terminate TLS at CDN edges close to users",
+        "explanation": "Correct. The handshake round trips now cost the short RTT to the edge (e.g. 10 ms) instead of 150 ms; the edge keeps warm connections to the origin."
+      },
+      {
+        "text": "Keep connections alive and reuse them across requests",
+        "explanation": "Correct. A reused connection pays no handshake at all for subsequent requests."
+      },
+      {
+        "text": "Switch from ECDSA to RSA-4096 certificates",
+        "explanation": "Changing the certificate algorithm does not remove a handshake round trip. RSA-4096 certificates and signatures can increase the first-flight bytes compared with ECDSA; signing cost depends on the hardware, library and implementation, so benchmark it rather than assuming a latency reduction."
+      },
+      {
+        "text": "Enable session resumption with 0-RTT for requests the application can safely tolerate being replayed",
+        "explanation": "Correct. Returning clients can send `GET` requests in the first flight, removing the TLS round trip on resumption."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Setup time is round trips times RTT:\n\n```formula\nT = (n_TCP + n_TLS) × RTT\nT_12 = (1 + 2) × 150 ms = 450 ms\nT_13 = (1 + 1) × 150 ms = 300 ms\nT_0rtt = (1 + 0) × 150 ms = 150 ms\nwhere\nT: the setup time before the request can be sent, in milliseconds (ms)\nn_TCP: the round trips for the TCP handshake, 1\nn_TLS: the round trips for TLS: 2 for a full TLS 1.2 handshake, 1 for TLS 1.3, 0 for TLS 1.3 resumption with 0-RTT early data\nRTT: the round-trip time to your region, 150 ms\nT_12: the baseline with TLS 1.2\nT_13: after upgrading to TLS 1.3\nT_0rtt: a resumed connection using 0-RTT\nms: millisecond, one thousandth of a second\nIn words: each round trip removed saves a full 150 ms.\n```\n\n- Baseline, new connection, TLS 1.2: **three round trips (450 ms)** before the request.\n- TLS 1.3 → two round trips (300 ms).\n- 0-RTT on resume → one TCP round trip (150 ms).\n- Edge at 10 ms RTT → about 20 ms of setup, plus one origin round trip over a warm connection.\n- Connection reuse → 0 ms setup for later requests.\n\nChanging to RSA-4096 does not remove a protocol round trip; its byte size and signing cost depend on the certificate chain and implementation.",
+    "link": {
+      "title": "Introducing 0-RTT (Cloudflare blog)",
+      "url": "https://blog.cloudflare.com/introducing-0-rtt/"
+    }
+  },
+  {
+    "id": "net-tls-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your team proposes enabling TLS 1.3 0-RTT for all API endpoints, including `POST /payments`. What's the main risk?",
+    "options": [
+      {
+        "text": "0-RTT data is sent unencrypted",
+        "explanation": "Early data is encrypted, but it can be replayed and lacks forward secrecy against later compromise of its PSK."
+      },
+      {
+        "text": "0-RTT breaks forward secrecy for all later traffic",
+        "explanation": "With PSK plus fresh (EC)DHE, later application traffic retains forward secrecy even though early data does not. PSK-only mode has different forward-secrecy properties."
+      },
+      {
+        "text": "An attacker can capture and replay the early-data request, so the payment could be processed twice",
+        "explanation": "Correct. Captured early data can be replayed across connections. Reject payment requests in early data unless the application has explicitly designed and validated replay-safe handling; an idempotency key alone is not a complete transport replay policy."
+      },
+      {
+        "text": "0-RTT doubles the handshake latency",
+        "explanation": "0-RTT removes handshake latency on resumption; that's the whole point. Its cost is security, not speed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Early data uses keys derived from a PSK established by a previous handshake.\n2. An attacker can record and replay the first flight, potentially to a different server.\n3. A correctly implemented safe product read can tolerate repetition; a payment may charge twice.\n4. Clients should use safe methods unless they have additional safety information. A proxy marks forwarded early requests with `Early-Data: 1`; an origin that cannot process them safely replies `425 Too Early`. Use payment idempotency controls independently.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "net-tls-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A returning client reconnects over TCP using TLS 1.3 session resumption with a valid ticket, but the server has early data (0-RTT) **disabled**. RTT is 50 ms. How long after starting does the client's HTTP request leave?",
+    "options": [
+      {
+        "text": "Immediately, because resumption is 0-RTT",
+        "explanation": "Resumption and 0-RTT are separate. Without early data, the client must still finish a 1-RTT handshake before sending application data."
+      },
+      {
+        "text": "After about 50 ms",
+        "explanation": "That counts only the TCP handshake, as if TLS resumption needed no round trip. Without early data it still needs one."
+      },
+      {
+        "text": "After about 150 ms",
+        "explanation": "That's a full TLS 1.2 handshake over TCP (3 RTT). TLS 1.3, resumed or not, needs one TLS round trip."
+      },
+      {
+        "text": "After about 100 ms: one RTT for TCP and one for the resumed TLS handshake",
+        "explanation": "Correct. Resumption skips the certificate and its verification (saving CPU and bytes), but the round-trip count is the same as a full TLS 1.3 handshake: 2 RTT over TCP."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Count the round trips:\n\n| Step | RTT |\n|---|---|\n| TCP SYN / SYN-ACK | 1 |\n| ClientHello + PSK / ServerHello + Finished | 1 |\n| Then the request goes out | |\n\n```formula\nT = (n_TCP + n_TLS) × RTT\nT = (1 + 1) × 50 ms = 100 ms\nwhere\nT: the time before the HTTP request can leave the client, in milliseconds (ms)\nn_TCP: the round trips for the TCP handshake, 1\nn_TLS: the round trips for the resumed TLS 1.3 handshake without early data, 1\nRTT: the round-trip time, 50 ms\nms: millisecond, one thousandth of a second\nIn words: resumption without early data still needs a full TLS round trip after the TCP one.\n```\n\nSo **100 ms**.\n\nWith 0-RTT enabled, the request would ride with the ClientHello: 50 ms. With QUIC and 0-RTT: 0 ms of setup before the request leaves.",
+    "link": {
+      "title": "RFC 8446: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc8446"
+    }
+  },
+  {
+    "id": "net-tls-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run 20 TLS-terminating nodes using encrypted stateless session tickets. Reconnecting clients are distributed uniformly and independently across nodes, and every node generates a different ticket-encryption key. Clients support tickets, but resumption succeeds only about 5% of the time. Why?",
+    "options": [
+      {
+        "text": "Clients don't support session tickets",
+        "explanation": "Almost every modern TLS client supports resumption; a 5% rate points at the servers, not the clients."
+      },
+      {
+        "text": "A returning client usually lands on a different node, which can't decrypt a ticket issued with another node's key, so it falls back to a full handshake",
+        "explanation": "Correct. With 20 independent keys, a client has roughly a 1 in 20 chance of reaching the node that issued its ticket, which matches the 5% resumption rate. Share ticket keys across the fleet (rotated frequently and distributed securely)."
+      },
+      {
+        "text": "TLS 1.3 doesn't support resumption",
+        "explanation": "TLS 1.3 supports resumption via pre-shared keys from session tickets; it's also what 0-RTT is built on."
+      },
+      {
+        "text": "Anycast encrypts tickets differently per region",
+        "explanation": "Anycast is a routing technique and has nothing to do with ticket encryption."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. This implementation encrypts resumable state into a stateless ticket; other implementations can use opaque identifiers and server-side state.\n2. A returning client presents its ticket to a uniformly chosen node.\n3. Only the original node has the right key:\n\n```formula\nP = 1 / N = 1 / 20 = 0.05 = 5%\nwhere\nP: the probability that a returning client lands on the node that issued its ticket\nN: the number of TLS-terminating nodes, 20, each equally likely\n%: per cent\nIn words: with 20 nodes and 20 different keys, a returning client finds the right key only one time in twenty.\n```\n\nFix: share a securely distributed, rotated ticket-key set or use another compatible resumption design.\nNote that ticket-key compromise can enable impersonation and expose early data or PSK-only traffic; it does not automatically decrypt past post-handshake traffic protected by fresh (EC)DHE.",
+    "link": {
+      "title": "High Performance Browser Networking: TLS",
+      "url": "https://hpbn.co/transport-layer-security-tls/"
+    }
+  }
+]

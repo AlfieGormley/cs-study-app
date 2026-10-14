@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { migrateLessonProgress, migratedLessonId, updateOriginalCompletion, migrationProblems } from '../lesson-progress.js';
+import { migrateLessonProgress, migratedLessonId, updateOriginalCompletion, migrationProblems, subjectMigrationProblems } from '../lesson-progress.js';
 
 const module = { id: 'module', migrations: { long: ['short-a', 'short-b'] }, lessons: ['short-a', 'short-b'] };
 const index = { subjects: [{ id: 's', modules: [module] }, { id: 'other', modules: [{ id: 'module', lessons: ['long'] }] }] };
@@ -43,6 +43,22 @@ test('existing dates on individual short lessons are not overwritten during migr
   assert.equal(progress.done['s/short-b'], 1234);
 });
 
+test('a later release migrates newly split modules without restoring unmarked parts from an earlier release', () => {
+  const progress = state();
+  progress.done['s/later-long'] = 4321;
+  migrateLessonProgress(progress, index);
+  delete progress.done['s/short-b'];
+  updateOriginalCompletion('s', module, { sourceLesson: 'long' }, progress.done);
+  const updated = structuredClone(index);
+  updated.subjects[0].modules.push({ id: 'later', lessons: ['later-a', 'later-b'], migrations: { 'later-long': ['later-a', 'later-b'] } });
+  assert.equal(migrateLessonProgress(progress, updated), true);
+  assert.equal(progress.done['s/later-a'], 4321);
+  assert.equal(progress.done['s/later-b'], 4321);
+  assert.equal(progress.done['s/short-a'], 1234);
+  assert.equal(progress.done['s/short-b'], undefined);
+  assert.equal(migrateLessonProgress(progress, updated), false);
+});
+
 test('original completion mirrors all short lessons, without changing individual dates', () => {
   const done = { 's/short-a': 1000, 's/short-b': 2000 };
   updateOriginalCompletion('s', module, { id: 'short-b', sourceLesson: 'long' }, done);
@@ -63,4 +79,10 @@ test('invalid or overlapping migrations are rejected before reaching devices', (
   assert.ok(migrationProblems({ lessons: ['a'], migrations: { x: ['missing'] } }).length);
   assert.ok(migrationProblems({ lessons: ['a'], migrations: { x: 'a' } }).length);
   assert.ok(migrationProblems({ lessons: ['a', 'b'], migrations: { x: ['b', 'a'] } }).length);
+});
+
+test('a retired completion key cannot be reused or claimed by another module', () => {
+  assert.deepEqual(subjectMigrationProblems([module, { lessons: ['unrelated'] }]), []);
+  assert.ok(subjectMigrationProblems([module, { lessons: ['long'] }]).length);
+  assert.ok(subjectMigrationProblems([module, { lessons: ['other'], migrations: { long: ['other'] } }]).length);
 });

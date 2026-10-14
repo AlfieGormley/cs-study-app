@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cache-http-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A 50 KB product JSON has `Cache-Control: max-age=60` and `ETag: \"p9-v3\"`. 90 seconds later the browser requests it again and the product hasn't changed. Assume the browser retains the response, is online, sends a conditional request, and the server preserves this freshness policy in its validation response. What happens?",
+    "options": [
+      {
+        "text": "The browser serves the cached copy without contacting the server",
+        "explanation": "At 90 s the copy is older than `max-age=60`, so it is stale and can't be used without validation (no stale-while-revalidate is set)."
+      },
+      {
+        "text": "The browser downloads the full 50 KB again with a 200",
+        "explanation": "It would only do so if the ETag no longer matched. Because the product is unchanged, the server can answer 304."
+      },
+      {
+        "text": "The browser sends `If-None-Match: \"p9-v3\"`; the server replies `304 Not Modified` with no body, and the browser reuses its copy for another 60 s",
+        "explanation": "Correct. Validation costs a round trip but transfers only headers instead of 50 KB, and the 304 refreshes the stored copy's freshness."
+      },
+      {
+        "text": "The browser sends `If-Modified-Since` using the ETag value",
+        "explanation": "`If-Modified-Since` takes a date from `Last-Modified`. The ETag is sent in `If-None-Match`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Check freshness:\n\n```formula\na < L\n90 s ≥ 60 s\nwhere\na: the copy's age, 90 seconds (s)\nL: the freshness lifetime, max-age = 60 s\n<: is less than; the first line is the test for being fresh\n≥: is greater than or equal to; the second line shows the test fails\ns: seconds\nIn words: a copy is fresh only while its age is below its lifetime; at 90 s it is 30 s past its 60 s lifetime, so it is stale.\n```\n2. The stored response has a validator (ETag), so the browser makes a conditional request:\n```\nGET /products/9\nIf-None-Match: \"p9-v3\"\n```\n3. The server computes the current ETag, gets `\"p9-v3\"`, and replies `304 Not Modified`.\n4. Bytes saved ≈ 50 KB; latency paid = one round trip.\n5. The cached copy is fresh again for 60 s.",
+    "link": {
+      "title": "ETag — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag"
+    }
+  },
+  {
+    "id": "cache-http-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Behind a load balancer, your 6 web servers generate ETags from file inode and modification time. Monitoring shows that conditional requests return `200` (full body) about 5 times in 6, even for unchanged files. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "Browsers don't send `If-None-Match` to load-balanced sites",
+        "explanation": "Browsers send the conditional header regardless; it's the server's comparison that fails."
+      },
+      {
+        "text": "The ETags should be weak",
+        "explanation": "Weak vs strong changes the comparison rules, but the values themselves still differ across servers, so they still wouldn't match."
+      },
+      {
+        "text": "Each server computes a different ETag for the same file, so a request validated against another server's ETag doesn't match; derive ETags from a content hash or version instead",
+        "explanation": "Correct. Inodes differ across machines. With 6 servers, a request reaches the original server only 1 time in 6, so 5 in 6 revalidations fail. Content-based ETags are identical everywhere."
+      },
+      {
+        "text": "The `max-age` is too short",
+        "explanation": "A longer max-age reduces how often revalidation happens, but each revalidation would still fail 5 times in 6."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Server 1's ETag for `logo.png`: `\"8f2-12a-...\"` (inode 8f2). Server 4's: `\"3c1-12a-...\"` (inode 3c1).\n2. The browser stores server 1's ETag.\n3. Next request goes to a random server:\n\n```formula\nP_match = 1 / S\nP_match = 1 / 6 ≈ 0.17\nP_fail = 1 − 1 / 6 = 5 / 6 ≈ 0.83\nwhere\nP_match: chance the request reaches the server whose ETag the browser holds\nP_fail: chance it reaches another server\nS: the number of servers, 6\n≈: approximately equal to\nIn words: with 6 equally likely servers, only 1 request in 6 returns to the original one.\n```\n\n4. On the other 5 in 6, the ETag doesn't match → `200` with full body.\n5. Fix: ETag = hash of content (or DB row version). Every server computes the same value, and the 304 rate for unchanged files goes to ~100%.",
+    "link": {
+      "title": "ETag — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/ETag"
+    }
+  }
+]

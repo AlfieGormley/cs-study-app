@@ -39,6 +39,8 @@ test('pure trees retain topology and node identity, including duplicate labels',
 });
 test('code, equations, assembly and conflict markers are never diagrammed',()=>{
  for(const [source,language] of [['x = a -> b','python'],['θ ← θ − η·g',''],['n <= 2',''],['    ldr x0, [sp, #16]\n    mov x1, [sp, #32]',''],['<<<<<<< HEAD\nx = 2\n=======\nx = 3\n>>>>>>> branch','']]) assert.equal(compileDrawing(source,language),null,source);
+ assert.equal(compileDrawing('// Friends of friends\nMATCH (me:Person)-[:FRIEND]->()\n      -[:FRIEND]->(fof)\nRETURN fof.name;'),null);
+ assert.equal(compileDrawing('OPTIONAL MATCH(n)-[:NEXT]->(m)\nRETURN m;'),null);
 });
 test('code annotations inside a real box diagram do not hide the drawing',()=>{
  assert.ok(compileDrawing('let v = vec![1,2];\n+------+\n| ptr  |--> heap\n+------+'));

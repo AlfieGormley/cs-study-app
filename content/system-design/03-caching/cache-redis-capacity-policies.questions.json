@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cache-eviction-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You deploy a fresh Redis instance as a cache with default settings and `maxmemory 4gb`. Your app never sets TTLs. What happens when accounted memory exceeds this configured 4 GiB (4,294,967,296-byte) limit?",
+    "options": [
+      {
+        "text": "Writes start failing with an OOM error, while reads still work",
+        "explanation": "Correct. The default `noeviction` policy refuses commands that would add memory. For a cache, set `maxmemory-policy allkeys-lru` (or `allkeys-lfu`)."
+      },
+      {
+        "text": "Redis evicts the least recently used keys",
+        "explanation": "Only if `maxmemory-policy` is `allkeys-lru`. The default policy is `noeviction`."
+      },
+      {
+        "text": "Redis evicts keys with the shortest TTL",
+        "explanation": "That is `volatile-ttl`, which is not the default and would evict nothing here because no keys have a TTL."
+      },
+      {
+        "text": "Redis grows beyond 4 GB until the OS kills it",
+        "explanation": "Not the intended dataset-growth behavior: noeviction rejects memory-growing commands. However maxmemory is not a hard process-RSS limit; command overshoot, allocator fragmentation, buffers and copy-on-write still need headroom."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `maxmemory` sets the limit; `maxmemory-policy` decides what happens at the limit.\n2. Default policy: `noeviction`.\n3. Above the configured limit, a memory-growing `SET` can return `OOM command not allowed when used memory > 'maxmemory'`. `GET` keeps working.\n4. Your cache-aside code fails to populate, so missed keys cannot be populated and keep reaching the DB; already cached keys can still hit.\n5. Even switching to `volatile-lru` wouldn't help, because no key has a TTL, so none are candidates.\n6. Correct config for a cache: `maxmemory-policy allkeys-lru`.",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  },
+  {
+    "id": "cache-eviction-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "One Redis instance holds both cache entries (always written with a TTL) and feature-flag keys that must never be evicted (no TTL). Which `maxmemory-policy` fits best, and what does the Redis documentation recommend instead?",
+    "options": [
+      {
+        "text": "`allkeys-lru`; there is no better option",
+        "explanation": "`allkeys-lru` treats every key as a candidate, so a rarely-read feature flag could be evicted."
+      },
+      {
+        "text": "`noeviction`, so nothing is ever lost",
+        "explanation": "This protects the flags, but cache writes start failing with OOM errors as soon as memory is full, which breaks the cache."
+      },
+      {
+        "text": "`volatile-ttl`, which evicts the keys without a TTL first",
+        "explanation": "It is the other way round: `volatile-*` policies only ever evict keys that *have* a TTL."
+      },
+      {
+        "text": "`volatile-lru` (or `volatile-lfu`), since only keys with a TTL are candidates; but ideally run two separate instances",
+        "explanation": "Correct. `volatile-*` restricts eviction to keys with an expiry, which protects the flags. The docs note that two instances, one for caching and one for persistent data, are cleaner."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. You need eviction to apply to cache entries **only**.\n2. `volatile-*` policies consider only keys with an expiry set, so the TTL acts as an \"evictable\" flag.\n3. `volatile-lru` evicts the least recently used of those.\n4. Caveat: if a cache write ever forgets its TTL, that key becomes unevictable. And if no key has a TTL, `volatile-*` behaves like `noeviction`.\n5. Hence the Redis docs' advice: separate instances, with `allkeys-lru` on the cache and `noeviction` on the store.",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  }
+]

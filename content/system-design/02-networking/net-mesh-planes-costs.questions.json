@@ -1,0 +1,109 @@
+[
+  {
+    "id": "net-proxies-gateways-mesh-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For traffic enrolled in a configured L7-capable mesh with supported HTTP protocols and no app-level TLS hiding requests from it, which features can the mesh provide without changing application code? Select all that apply.",
+    "options": [
+      {
+        "text": "Mutual TLS between services, with automatic certificate rotation",
+        "explanation": "Correct. Sidecars handle the TLS handshakes using certificates issued and rotated by the control plane."
+      },
+      {
+        "text": "Per-request load balancing and retries with timeouts",
+        "explanation": "Correct. The client-side sidecar balances each request across endpoints and applies retry and timeout policies from config."
+      },
+      {
+        "text": "Sending 5% of traffic to a new version",
+        "explanation": "Correct. Weighted routing rules in the proxies split traffic between versions for canaries."
+      },
+      {
+        "text": "Fixing N+1 query problems in the database layer",
+        "explanation": "A mesh sees network calls between services, not how an app queries its database. Query patterns are application logic."
+      },
+      {
+        "text": "Request-level metrics (rate, errors, latency) for each service pair",
+        "explanation": "Correct. Since every call goes through proxies, they emit uniform golden-signal metrics. (Full distributed traces still need apps to propagate trace headers.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Ask, for each feature: **can a proxy beside the app do it just by seeing network traffic?**\n\n- mTLS → yes, the proxy owns the connection.\n- LB, retries, timeouts → yes, per request.\n- Traffic splitting → yes, routing rules.\n- Metrics → yes, it sees every request and response.\n- Database query design → no, that's inside the app.\n\nNote the trace caveat: the proxy can create spans, but the app must forward headers like `traceparent` to link them.",
+    "link": {
+      "title": "What is Istio?",
+      "url": "https://istio.io/latest/docs/concepts/what-is-istio/"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A startup has 6 services, all in Go, on one Kubernetes cluster. The CTO wants Istio 'for observability'. What's the most balanced recommendation?",
+    "options": [
+      {
+        "text": "Start with a shared Go client/server library or OpenTelemetry instrumentation for metrics and tracing; revisit a mesh when service count, language mix or mTLS and traffic-policy needs grow",
+        "explanation": "Correct. One language means a library gives the same observability at lower operational cost. A mesh becomes worthwhile as heterogeneity and policy requirements increase."
+      },
+      {
+        "text": "Adopt Istio immediately; every Kubernetes cluster needs a mesh",
+        "explanation": "Many clusters run fine without a mesh. With 6 services in one language, the mesh's control plane, sidecar resources and debugging complexity may outweigh its benefits."
+      },
+      {
+        "text": "Never use a mesh; they only add latency",
+        "explanation": "Meshes add some latency and cost, but at scale (many services, many languages, strict mTLS needs) they're often the most practical option. A blanket 'never' ignores that."
+      },
+      {
+        "text": "Replace Kubernetes with an API gateway",
+        "explanation": "A gateway handles external traffic into the system; it doesn't replace container orchestration or give visibility into service-to-service calls."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Weigh benefits against costs for **this** team:\n\n1. Need: observability → OpenTelemetry in a shared Go library covers metrics and tracing.\n2. Languages: one → a library is maintained once, no polyglot problem.\n3. mTLS mandate? Not stated.\n4. Mesh cost: control plane to run and upgrade, a sidecar per pod (CPU and memory), deployment-dependent proxy latency, new failure modes.\n5. Conclusion: library now; reassess as measured needs, language mix or identity/policy requirements change. Ambient-mode meshes lower the cost if they adopt later.",
+    "link": {
+      "title": "Service mesh (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Service_mesh"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about Istio's ambient mode compared with classic sidecar mode are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "A per-node proxy (ztunnel) provides L4 features such as mTLS without a sidecar in each pod",
+        "explanation": "Correct. ztunnel runs once per node and handles secure L4 transport for traffic from workloads enrolled in ambient mode."
+      },
+      {
+        "text": "L7 features like HTTP retries or header-based routing need an optional waypoint proxy",
+        "explanation": "Correct. ambient splits L4 (ztunnel) from L7 (waypoint proxies, deployed only where needed)."
+      },
+      {
+        "text": "Ambient mode removes the need for a control plane",
+        "explanation": "Ambient still needs `istiod` to issue certificates and distribute configuration. What it removes is the per-pod sidecar."
+      },
+      {
+        "text": "Classic sidecar mode adds two proxy hops per service-to-service call",
+        "explanation": "Correct. The caller's outbound sidecar and the callee's inbound sidecar each process the request."
+      },
+      {
+        "text": "Ambient mode requires changing application code to call the mesh",
+        "explanation": "Like sidecars, ambient intercepts traffic transparently; apps don't change."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Separate the two planes:\n\n- **Control plane** (istiod): config and certificates → needed in both modes.\n- **Data plane:**\n  - Sidecar mode: a proxy in every pod → 2 hops per call, CPU and memory per pod.\n  - Ambient mode: ztunnel per node for L4 (mTLS, identity), plus waypoints for L7 only where you need it.\n\nThe saving is resources and operational friction (no sidecar injection or restarts for upgrades), not the control plane.",
+    "link": {
+      "title": "What is Istio?",
+      "url": "https://istio.io/latest/docs/concepts/what-is-istio/"
+    }
+  }
+]

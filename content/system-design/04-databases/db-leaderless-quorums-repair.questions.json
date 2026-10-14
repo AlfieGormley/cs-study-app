@@ -1,0 +1,100 @@
+[
+  {
+    "id": "db-replication-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a leaderless Cassandra-style cluster each key is stored on three replicas, and a write succeeds once two replicas acknowledge it. One replica, C, was down and missed the write. It comes back. Which mechanisms bring C up to date? ",
+    "options": [
+      {
+        "text": "C replays the leader's write-ahead log",
+        "explanation": "Wrong. Leaderless systems have no leader and no single log to replay."
+      },
+      {
+        "text": "Only a full manual rebuild of C from a backup",
+        "explanation": "Wrong. That's a last resort for a lost disk; ordinary short outages are repaired online."
+      },
+      {
+        "text": "Hinted handoff from a node that stored C's writes while it was down, read repair when a read notices C's stale value, and periodic anti-entropy repair using Merkle trees",
+        "explanation": "Correct. These three mechanisms together make leaderless replicas converge: hints for short outages, read repair for hot data, anti-entropy (`nodetool repair`) for everything else."
+      },
+      {
+        "text": "Nothing; C stays stale permanently, but quorum reads hide it",
+        "explanation": "Wrong. Without repair, a later failure of the up-to-date replicas could make stale data the majority. That's why Cassandra requires regular repair, at least within `gc_grace_seconds` (10 days by default), or deleted data can reappear."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Write goes to A, B and C. A and B ack, satisfying w = 2. C is down.\n```formula\nw + r > n\n2 + 2 > 3\nwhere\nn: the number of replicas per key, here 3\nw: the write quorum, acknowledgements a write needs, here 2\nr: the read quorum, replicas a read asks, here 2\nIn words: reading 2 of 3 always includes at least one replica that took the write, so reads stay correct while C is stale, but C still has to be repaired.\n```\n2. **Hinted handoff**: the coordinator stores a hint for C and replays it when C returns (Cassandra keeps hints for 3 hours by default).\n3. **Read repair**: a later read at r = 2 that contacts C sees an older timestamp than A's, returns A's value and writes it back to C.\n4. **Anti-entropy**: `nodetool repair` compares Merkle trees of token ranges between replicas and streams only the differing ranges.\n5. Why repair matters: tombstones (deletion markers) are purged after `gc_grace_seconds`. If C missed a delete and isn't repaired before then, the old value can come back to life.",
+    "link": {
+      "title": "DeCandia et al.: Dynamo, Amazon's highly available key-value store",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "db-replication-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A leaderless store has five replicas per key. A write succeeds when the write quorum of replicas acknowledge it, and a read asks its read quorum of replicas and returns the newest value. You want every read to overlap the latest successful write, **and** you want both reads and writes to keep succeeding with any two replicas down. Which write/read quorum pair should you choose?",
+    "options": [
+      {
+        "text": "Write quorum 5, read quorum 1",
+        "explanation": "Overlaps (5 + 1 > 5) and gives very fast reads, but a single replica down makes every write fail, since all 5 must ack."
+      },
+      {
+        "text": "Write quorum 3, read quorum 3",
+        "explanation": "Correct. 3 + 3 = 6 > 5, so read and write sets always share a replica. With two down, three remain: enough for both a write quorum and a read quorum."
+      },
+      {
+        "text": "Write quorum 2, read quorum 3",
+        "explanation": "Wrong. 2 + 3 = 5 is not greater than 5, so a read can miss both replicas that took the write."
+      },
+      {
+        "text": "Write quorum 4, read quorum 2",
+        "explanation": "Overlaps (6 > 5), but with two replicas down only three remain, fewer than the 4 a write needs. Writes tolerate just one failure."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Overlap and availability conditions:\n```formula\nw + r > n\nw ≤ n − f\nr ≤ n − f\nwhere\nn: the number of replicas per key, here 5\nw: the write quorum, acknowledgements a write needs\nr: the read quorum, replicas a read asks\nf: the number of replicas that may be down, here 2\n≤: less than or equal to\nIn words: reads and writes must overlap, and each quorum must still be reachable with f replicas down.\n```\n2. Substitute five replicas and two permitted failures:\n```formula\nw + r ≥ 6\nw ≤ 5 − 2 = 3\nr ≤ 5 − 2 = 3\nwhere\nw: the write quorum\nr: the read quorum\n≥: greater than or equal to (with whole numbers, > 5 means ≥ 6)\n≤: less than or equal to\nIn words: the two quorums must add up to at least 6, but neither may exceed 3.\n```\n3. Each quorum is at most three, but together they must reach six. Therefore both must be three:\n```formula\nw = 3, r = 3\nwhere\nw: the write quorum, acknowledgements required\nr: the read quorum, replicas contacted\nIn words: only three plus three reaches the required six while neither quorum exceeds three.\n```\n\n| w, r | Overlap? | Survives 2 down? |\n|---|---|---|\n| 5, 1 | Yes | Writes no |\n| 3, 3 | Yes | Yes |\n| 2, 3 | No | Yes |\n| 4, 2 | Yes | Writes no |\n\n4. General rule: a majority for both reads and writes tolerates the most failures:\n```formula\nw = r = ⌊n / 2⌋ + 1\nf_max = ⌊(n − 1) / 2⌋\nw = r = ⌊5 / 2⌋ + 1 = 3\nf_max = ⌊4 / 2⌋ = 2\nwhere\nw: the write quorum\nr: the read quorum\nn: the number of replicas per key\n⌊ ⌋: floor: round down to a whole number\nf_max: the most replicas that can be down while both reads and writes still succeed\nIn words: with 5 replicas, majority quorums of 3 survive any 2 failures.\n```\n5. Caveat from the consensus module: even with overlap, sloppy quorums and concurrent writes mean quorums aren't linearizable by themselves.",
+    "link": {
+      "title": "Wikipedia: Quorum (distributed computing)",
+      "url": "https://en.wikipedia.org/wiki/Quorum_%28distributed_computing%29"
+    }
+  },
+  {
+    "id": "db-replication-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In the simplified Aurora storage durability/recovery quorum model, six copies are spread two per availability zone, with write quorum four and recovery read quorum three. Which statements follow? Select all that apply. This is not a claim that every ordinary SQL read contacts three storage copies.",
+    "options": [
+      {
+        "text": "Losing a whole availability zone (2 copies) still leaves enough copies to keep writing",
+        "explanation": "Correct. 6 − 2 = 4 copies remain, exactly the write quorum."
+      },
+      {
+        "text": "Losing an availability zone plus one more copy elsewhere still leaves enough copies to read (and so to repair)",
+        "explanation": "Correct. 6 − 3 = 3 copies remain, which meets the read quorum of 3. Writes would stall until copies are rebuilt, but no committed data is lost."
+      },
+      {
+        "text": "Every read quorum overlaps every write quorum",
+        "explanation": "Correct. 4 + 3 = 7 > 6, so any 3 copies include at least one of any 4 that took a write."
+      },
+      {
+        "text": "Each commit waits for all 6 copies to acknowledge",
+        "explanation": "Wrong. It waits for 4. Waiting for all 6 would let one slow or failed storage node stall every write."
+      },
+      {
+        "text": "Losing two whole availability zones still allows writes",
+        "explanation": "Wrong. Only 2 copies would remain, below both the write quorum (4) and the read quorum (3)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Quorum arithmetic for six copies, four-copy writes and three-copy recovery reads:\n\n| Failure | Copies left | Write? | Read? |\n|---|---|---|---|\n| None | 6 | Yes | Yes |\n| 1 AZ | 4 | Yes | Yes |\n| 1 AZ + 1 | 3 | No | Yes |\n| 2 AZs | 2 | No | No |\n\n1. Overlap:\n```formula\nw + r > n\n4 + 3 = 7 > 6\nwhere\nn: the number of storage copies, 6\nw: the write quorum, 4 copies\nr: the read (recovery) quorum, 3 copies\nIn words: any 3 copies must include at least one of the 4 that took a write, because 3 + 4 is more than the 6 that exist.\n```\nTrue.\n2. Waiting for 4 of 6 can avoid waiting for the two slowest storage acknowledgements per write, a big tail-latency win.\n3. The design goal: survive \"AZ + 1\" without losing data, because failures in different AZs can overlap during a repair.\nThis arithmetic addresses storage copies only; database compute availability and recovery paths also matter.",
+    "link": {
+      "title": "Amazon Aurora: Storage and reliability",
+      "url": "https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.StorageReliability.html"
+    }
+  }
+]

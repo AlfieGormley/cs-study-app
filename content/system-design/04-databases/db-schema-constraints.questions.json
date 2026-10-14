@@ -1,0 +1,70 @@
+[
+  {
+    "id": "db-relational-acid-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PostgreSQL, using ordinary UNIQUE, CHECK, NOT NULL and FOREIGN KEY constraints on the existing users, orders, subscriptions and invoices tables (without schema redesign, triggers or application code), which rules can be enforced? Select all that apply.",
+    "options": [
+      {
+        "text": "No two users share an email address",
+        "explanation": "Correct. `UNIQUE (email)` (or a unique index, possibly on `lower(email)`) is enforced on every insert and update, even under concurrency."
+      },
+      {
+        "text": "An order's total is never negative",
+        "explanation": "Correct. `CHECK (total_p >= 0)` is evaluated for every row written."
+      },
+      {
+        "text": "Every order belongs to a user that exists",
+        "explanation": "Correct. A NOT NULL user_id plus a foreign key rejects missing or nonexistent users. A nullable foreign key alone permits an order with no user."
+      },
+      {
+        "text": "A user may have at most three active subscriptions",
+        "explanation": "Wrong. That rule depends on counting *other* rows. `CHECK` constraints only see the current row, so this needs a trigger, application logic under suitable locking, or a redesign such as three numbered slots with a unique constraint."
+      },
+      {
+        "text": "A customer's credit limit must exceed the sum of their unpaid invoices",
+        "explanation": "Wrong for these PostgreSQL constraints on the stated schema. An aggregate across invoices requires a suitable redesign or transactional enforcement. Do not generalize this to every SQL-standard constraint facility or every DBMS."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask of each rule: *can it be checked by looking at one row, or by a key lookup the database already knows how to do?*\n\n| Rule | Mechanism |\n|---|---|\n| Unique email | `UNIQUE` |\n| Non-negative total | `CHECK` |\n| Order has a user | `NOT NULL` plus `FOREIGN KEY` |\n| Max 3 active subs | Trigger / app |\n| Credit vs invoices | Trigger / app |\n\n1. `UNIQUE`, `CHECK` and `FOREIGN KEY` are declarative and race-free.\n2. Rules that count or sum other rows aren't single-row checks. Implemented in the application, they are vulnerable to races between concurrent transactions (see the isolation lesson).\n\nSo the first three.",
+    "link": {
+      "title": "PostgreSQL: Constraints",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An invoicing system stores line prices in a `double precision` column in pounds. Finance finds an invoice whose lines are £0.10, £0.20 and £0.30, but a check `WHERE total = 0.60` doesn't match it. What's the cause and the fix?",
+    "options": [
+      {
+        "text": "The database rounds doubles to two decimal places on insert",
+        "explanation": "Wrong. `double precision` stores binary floating point with no decimal rounding at all; that's the problem, not the cause of a rounding step."
+      },
+      {
+        "text": "The total needs a `CHECK` constraint",
+        "explanation": "Wrong. A constraint can reject bad values but can't make floating-point arithmetic exact."
+      },
+      {
+        "text": "Use `real` instead, which is more precise",
+        "explanation": "Wrong. `real` is single precision (about 6 significant decimal digits), which is *less* precise than `double precision`."
+      },
+      {
+        "text": "Binary floating point can't represent 0.1, 0.2 or 0.3 exactly, so the sum is very slightly off 0.60; store integer pence or `numeric`",
+        "explanation": "Correct. In IEEE 754 doubles, 0.1 + 0.2 + 0.3 = 0.6000000000000001. Integer minor units (or exact `numeric`) make sums exact."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Decimal 0.1 in binary is a repeating fraction, like 1/3 in decimal. A double stores the nearest representable value.\n2. The tiny errors add up:\nPython arithmetic result (a calculator transcript, not two executable statements):\n```text\n0.1 + 0.2 + 0.3\n= 0.6000000000000001\n```\n3. So an exact equality test against 0.60 fails, and summing millions of lines can drift by pennies.\n4. Fix: `total_p integer` storing 10, 20, 30; the sum is exactly 60.\n5. Or `numeric(12,2)`, which is exact decimal arithmetic (slower, but fine for money).\n6. Convert to pounds only for display.",
+    "link": {
+      "title": "PostgreSQL: Numeric types",
+      "url": "https://www.postgresql.org/docs/current/datatype-numeric.html"
+    }
+  }
+]

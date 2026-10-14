@@ -1,0 +1,92 @@
+[
+  {
+    "id": "db-replication-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement best describes the trade-off between synchronous and asynchronous replication?",
+    "options": [
+      {
+        "text": "Synchronous replication is faster because writes go to two places in parallel",
+        "explanation": "Wrong. Waiting for the required replica acknowledgement can add latency, though local and remote work may overlap; there is no universal additive timing formula."
+      },
+      {
+        "text": "Asynchronous replication never loses data, because the WAL is kept on the leader",
+        "explanation": "Wrong. If the leader's disk is lost or a follower is promoted, writes that never shipped are gone, even though clients were told they committed."
+      },
+      {
+        "text": "Synchronous replication guarantees a confirmed write exists on at least two nodes, at the cost of higher latency and stalls if the sync follower is slow or down",
+        "explanation": "Correct for synchronous durable acknowledgements with no asynchronous fallback, and failover to a replica known to contain the acknowledged history. Quorum synchronous replication can wait for any required subset; this is not a universal definition of semi-sync."
+      },
+      {
+        "text": "They're equivalent except for configuration",
+        "explanation": "Wrong. They give fundamentally different guarantees about data loss on failover."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A durable synchronous commit waits for the configured local and replica persistence conditions; their work may overlap.\n2. Async commit can acknowledge before a replica has received the change.\n3. Lossless synchronous failover requires selecting a replica with the acknowledged history and preventing stale leaders from writing; arbitrary promotion can still lose data.\n4. A strict required-replica policy may stall writes when sufficient replicas are unavailable. PostgreSQL ANY 1 (s1, s2) needs one eligible acknowledgement.\n5. Distinguish remote receipt, durable flush and replay; they provide different guarantees.",
+    "link": {
+      "title": "PostgreSQL: High availability, load balancing and replication",
+      "url": "https://www.postgresql.org/docs/current/high-availability.html"
+    }
+  },
+  {
+    "id": "db-replication-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Postgres primary has one synchronous standby, `synchronous_commit = on`. To get read-your-writes, the app sends each user's reads to that sync standby after they write. Occasionally a user still doesn't see a change they just made. Why?",
+    "options": [
+      {
+        "text": "With `on`, the primary waits until the standby has *flushed* the WAL to disk, not until it has *applied* it, so a read can arrive before replay; use `remote_apply` for this read path",
+        "explanation": "Correct. `on` guarantees durability on the standby, not visibility. `remote_apply` makes the primary wait until the change is replayed and visible to queries there."
+      },
+      {
+        "text": "Synchronous replication is broken; the standby must have been running asynchronously",
+        "explanation": "Not necessarily. Everything can be working as configured. The issue is what `on` waits for."
+      },
+      {
+        "text": "The standby takes a snapshot only once a minute",
+        "explanation": "Wrong. Queries on a hot standby see whatever WAL has been replayed so far; there's no once-a-minute snapshot."
+      },
+      {
+        "text": "The client's connection pool cached the old result",
+        "explanation": "Unlikely. Connection pools don't cache query results. The gap between flush and replay explains the symptom exactly."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Commit path with `synchronous_commit = on`:\n   - Primary flushes WAL locally.\n   - Standby receives it and flushes it to disk.\n   - Standby acks; client sees \"committed\".\n2. Replay on the standby happens *after* the flush, in a separate process. Usually a few ms behind, sometimes more (heavy load, a replay conflict with a long query).\n3. A read arriving in that window sees the old row.\n4. Options:\n\n| Setting | Waits for |\n|---|---|\n| `remote_write` | Standby OS received |\n| `on` | Standby disk flush |\n| `remote_apply` | Standby replayed |\n\n5. Set it per transaction for just the writes that need it: `SET LOCAL synchronous_commit = remote_apply;`.",
+    "link": {
+      "title": "PostgreSQL: Replication settings",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-replication.html"
+    }
+  },
+  {
+    "id": "db-replication-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to upgrade a 2 TB Postgres database from version 15 to 17 with only a few seconds of write downtime. Which replication approach can support this goal after compatibility checks and a rehearsed cutover?",
+    "options": [
+      {
+        "text": "Physical streaming replication to a version 17 standby, then promote it",
+        "explanation": "Wrong. Physical replication ships raw WAL bytes, which require the same major version on both sides."
+      },
+      {
+        "text": "Statement-based replication",
+        "explanation": "Wrong. Postgres doesn't offer it, and it's fragile anyway: non-deterministic functions such as `now()` and `random()` give different results on each side."
+      },
+      {
+        "text": "Logical replication from the version 15 primary to a new version 17 server, then switch writes over once it has caught up",
+        "explanation": "Correct. Logical replication sends row changes, independent of the on-disk format, so it works across major versions. Copy the data, let it catch up, pause writes briefly, check the lag is zero, then repoint the application."
+      },
+      {
+        "text": "Take a nightly `pg_dump` and restore it on version 17",
+        "explanation": "Works, but not with seconds of downtime. Dumping and restoring 2 TB takes hours, and every write since the dump would be lost unless you stop writes for that whole time."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Constraint: different major versions, near-zero downtime.\n2. Physical replication: same major version only. Out.\n3. Logical replication:\n   - Create a publication on v15, a subscription on v17.\n   - Initial table copy, then streaming of row changes.\n4. Cut-over:\n   - Stop writes for the rehearsed cutover; seconds are a target, not a guaranteed bound.\n   - Wait for the subscriber to catch up.\n   - Bump sequences on v17 (logical replication doesn't copy sequence values).\n   - Repoint the application.\n5. Caveats: schema changes (DDL) aren't replicated, and tables need a primary key or replica identity for updates and deletes.\nAlso inventory unsupported object types (such as large objects), sequences, DDL, extensions and replica identity. Copy or migrate these explicitly and validate the target; row replication alone is not a complete database migration.",
+    "link": {
+      "title": "PostgreSQL: Logical replication",
+      "url": "https://www.postgresql.org/docs/current/logical-replication.html"
+    }
+  }
+]

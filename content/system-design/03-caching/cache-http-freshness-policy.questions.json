@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cache-http-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A response carries `Cache-Control: no-cache`. What may a browser do with it?",
+    "options": [
+      {
+        "text": "Store it, but revalidate with the origin (for example using its ETag) before every reuse",
+        "explanation": "Correct. `no-cache` means \"cache, but don't trust it without asking\". A 304 reply lets the browser reuse the stored body."
+      },
+      {
+        "text": "Nothing: it must not store the response at all",
+        "explanation": "That is `no-store`. `no-cache` allows storage; it just forbids using the copy without checking first."
+      },
+      {
+        "text": "Serve it from cache for up to 60 seconds by default",
+        "explanation": "There is no default lifetime implied by `no-cache`; it requires revalidation on every use."
+      },
+      {
+        "text": "Store it only in shared caches such as CDNs",
+        "explanation": "Wrong. Unqualified no-cache requires validation by both private and shared caches. private restricts shared storage; s-maxage changes shared-cache freshness, not private-cache storage permission."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Separate the two ideas: **storing** a response and **reusing** it without asking.\n2. `no-store`: don't store. `no-cache`: store, but always ask before reuse.\n3. With an ETag, reuse looks like: `If-None-Match: \"v5\"` → `304 Not Modified` (no body).\n4. This is ideal for HTML: users always get the latest page, but unchanged pages cost only a tiny 304.",
+    "link": {
+      "title": "Cache-Control — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control"
+    }
+  },
+  {
+    "id": "cache-http-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A CDN holds a copy of `/prices` sent with `Cache-Control: max-age=60, must-revalidate`. The copy is now 90 s old and the origin is unreachable. What should the CDN return?",
+    "options": [
+      {
+        "text": "The stale copy, because serving something is better than nothing",
+        "explanation": "Without `must-revalidate`, a disconnected cache may sometimes serve stale content. `must-revalidate` exists precisely to forbid that."
+      },
+      {
+        "text": "An error, typically `504 Gateway Timeout`, because a stale response marked `must-revalidate` may not be reused without successful validation",
+        "explanation": "Correct. RFC 9111 says a disconnected cache must generate an error rather than reuse the stale response. The origin has chosen \"error\" over \"wrong price\"."
+      },
+      {
+        "text": "The stale copy with a `Warning` header",
+        "explanation": "Adding a warning does not make reuse allowed. `must-revalidate` forbids reusing it at all once stale and unvalidated."
+      },
+      {
+        "text": "A `304 Not Modified`",
+        "explanation": "Caches can generate 304 responses in appropriate validated/fresh cases, but this cache has only a stale must-revalidate response and cannot successfully validate it while disconnected."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Age 90 s > `max-age` 60 s, so the copy is **stale**.\n2. Stale copies normally need validation, but HTTP lets caches serve stale in a few cases, such as being disconnected.\n3. `must-revalidate` removes that leeway:\n\n```\nstale + must-revalidate\n  -> validate with origin\n  -> origin down -> 504\n```\n\n4. An alternative policy with `stale-if-error=600` and without `must-revalidate` can explicitly permit the stale copy during an eligible outage in a supporting cache. Choose between them by asking whether stale data or an error is worse for this resource. Prices: error. A news article: stale.",
+    "link": {
+      "title": "RFC 9111: HTTP Caching",
+      "url": "https://www.rfc-editor.org/rfc/rfc9111"
+    }
+  },
+  {
+    "id": "cache-http-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A browser receives a response from a CDN with `Cache-Control: max-age=300` and `Age: 250`. For how much longer may the browser treat its copy as fresh?",
+    "options": [
+      {
+        "text": "300 seconds, because the browser's clock starts when it receives the response",
+        "explanation": "The `Age` header tells the browser the response has already spent 250 s in upstream caches. Ignoring it would make the total lifetime 550 s."
+      },
+      {
+        "text": "About 50 seconds",
+        "explanation": "Correct. Freshness is measured from when the origin generated the response. It is already 250 s old, so 300 − 250 = 50 s of freshness remain."
+      },
+      {
+        "text": "0 seconds: an `Age` header means the copy is already stale",
+        "explanation": "A non-zero `Age` only says the response came from a cache. It is stale only once its age reaches the freshness lifetime."
+      },
+      {
+        "text": "550 seconds",
+        "explanation": "This adds the age to the lifetime instead of subtracting it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Freshness lifetime = `max-age` = 300 s.\n2. Current age on arrival = `Age` header = 250 s (plus any transit time).\n3. Remaining freshness:\n\n```formula\nr = L − a\nr = 300 s − 250 s = 50 s\nwhere\nr: the freshness remaining, in seconds (s)\nL: the freshness lifetime, max-age = 300 s\na: the current age, from the Age header, 250 s\ns: seconds\nIn words: the response has already used 250 of its 300 seconds of freshness upstream, so the browser gets only 50.\n```\n\n4. After ~50 s the browser must revalidate.\n5. This is why a CDN copy fetched late in its life gives browsers only a short window, and why `s-maxage` and `max-age` are often set separately.",
+    "link": {
+      "title": "HTTP caching — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
+    }
+  }
+]

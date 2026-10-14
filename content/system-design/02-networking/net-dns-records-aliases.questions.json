@@ -1,0 +1,62 @@
+[
+  {
+    "id": "net-dns-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You want `example.com` (the bare apex) to point at your CDN's hostname `d123.cdn.net`. Why can't you just add `example.com CNAME d123.cdn.net`?",
+    "options": [
+      {
+        "text": "CNAMEs can only point to IP addresses",
+        "explanation": "It's the other way around: a CNAME always points to another *name*. `A` and `AAAA` records hold IP addresses."
+      },
+      {
+        "text": "The apex must hold `SOA` and `NS` records, and a CNAME cannot coexist with the required SOA and NS data at the same name",
+        "explanation": "Correct. The DNS specification says a CNAME cannot coexist with ordinary data such as SOA and NS (DNSSEC-related exceptions do not permit an apex CNAME). Since the apex must have `SOA`/`NS`, an apex CNAME is invalid; providers offer ALIAS/ANAME records as a workaround."
+      },
+      {
+        "text": "CNAMEs are not cached, so it would be too slow",
+        "explanation": "CNAME records have TTLs and are cached like any other record. The restriction is about the specification, not performance."
+      },
+      {
+        "text": "Browsers refuse to follow CNAMEs on the apex",
+        "explanation": "Browsers don't see record types; the resolver follows CNAMEs for them. The problem is in the DNS zone, not the browser."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Every zone apex must have an `SOA` record and `NS` records.\n2. RFC rules: if a name has a CNAME, it must have **no other ordinary data**, apart from specified DNSSEC-related records.\n3. Both can't be true at `example.com`, so the CNAME is invalid.\n4. Fix: choose an ALIAS/flattening integration that supports this CDN target and returns address records. Route 53 aliases support CloudFront and other selected AWS resources, not arbitrary external CDN hostnames. Alternatively, serve an apex HTTP redirect to `www.example.com` and CNAME `www` to the CDN.",
+    "link": {
+      "title": "List of DNS record types (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/List_of_DNS_record_types"
+    }
+  },
+  {
+    "id": "net-dns-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your apex `example.com` uses your DNS provider's ALIAS record pointing at a CDN hostname, while `www.example.com` is a normal CNAME to the same CDN. The CDN steers users with DNS. Users in Asia report that `example.com` is much slower than `www.example.com`. What's the likely cause? Assume the provider resolves the target from US servers without forwarding a client subnet or using a CDN-specific steering integration.",
+    "options": [
+      {
+        "text": "ALIAS records are cached for longer than CNAMEs",
+        "explanation": "TTL length affects how quickly changes spread, not which PoP a user gets on a given lookup."
+      },
+      {
+        "text": "The apex can't use HTTPS",
+        "explanation": "The apex can use HTTPS like any other name; certificates can cover `example.com` as a SAN."
+      },
+      {
+        "text": "Browsers deprioritise apex domains",
+        "explanation": "Browsers don't treat apex names differently when connecting."
+      },
+      {
+        "text": "Your DNS provider resolves the CDN's name itself, so the CDN's geo-steering sees the provider's location (perhaps in the US) rather than the user's resolver, and hands back a far-away PoP",
+        "explanation": "Correct under the stated provider behaviour. With a CNAME, the user’s recursive resolver queries the CDN. Here the ALIAS target query comes from the provider’s US servers, so a CDN using that source address can choose a distant edge. Other ALIAS integrations can preserve a useful location signal."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `www` → CNAME → the user's resolver (in Asia) asks the CDN's DNS → the CDN sees an Asian resolver → returns an Asian PoP.\n2. `example.com` → ALIAS → your DNS provider looks up the CDN name *itself*, from its own servers.\n3. The CDN sees the DNS provider's address → may return a US or EU PoP → your provider passes those `A` records to the Asian user.\n4. Fixes: redirect the apex to `www`, use a provider whose ALIAS integration supports the CDN properly (e.g. Route 53 alias records to CloudFront, or EDNS Client Subnet), or use a CDN with anycast addresses at the apex.\n5. This is a conditional diagnosis, not a defect of every apex alias. Compare results from representative networks and check the provider/CDN integration.",
+    "link": {
+      "title": "Choosing a routing policy (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy.html"
+    }
+  }
+]

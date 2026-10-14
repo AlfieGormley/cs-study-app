@@ -1,0 +1,100 @@
+[
+  {
+    "id": "db-partitioning-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A multi-tenant SaaS on MySQL needs to move from 4 to 8 shards while preserving read availability and allowing a brief queued write pause at cutover. Shard key is `tenant_id`. Which sequence is safest?",
+    "options": [
+      {
+        "text": "Take the site offline, dump and reload each moving tenant, update the routing map, bring the site back",
+        "explanation": "Wrong for the requirement. It's simple and safe but needs downtime proportional to data size, which the brief rules out."
+      },
+      {
+        "text": "Update the routing map first, then copy data to the new shards in the background",
+        "explanation": "Wrong. Reads and writes would go to shards that don't have the data yet, causing errors or missing data until the copy finishes."
+      },
+      {
+        "text": "Change the shard function to `tenant_id mod 8` and let each shard work out what it should hold",
+        "explanation": "Wrong. Without an orchestrated copy, rows would simply be unreachable on the old shards. Doubling the modulus moves about half of uniformly distributed keys, but it still requires a safe data migration."
+      },
+      {
+        "text": "Backfill moving tenants to new shards from a snapshot, stream ongoing changes via CDC with reliable capture and replay, verify with checksums, then cut over each tenant's routing with a brief write pause, keeping rollback possible",
+        "explanation": "Correct. This is the standard online-migration pattern (as Vitess's MoveTables/Reshard workflows do): the new location is kept in sync until it's verified, and cutover is a small, reversible step."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. **Plan**: decide which tenants move (half of each old shard's tenants) using a lookup table, not `mod`, so you can move tenants individually.\n2. **Backfill**: copy a consistent snapshot of those tenants' rows to the new shards.\n3. **Catch up**: stream the binlog (CDC) from the snapshot position so new writes also reach the new shard.\n4. **Verify**: compare row counts and checksums per table per tenant.\n5. **Cut over**: briefly pause writes for that tenant (duration measured and bounded for the deployment), let CDC drain, flip the routing entry, resume.\n6. **Rollback path**: keep reverse replication running for a while so you can flip back.\n7. **Clean up** old copies once confident.",
+    "link": {
+      "title": "Vitess documentation",
+      "url": "https://vitess.io/docs/"
+    }
+  },
+  {
+    "id": "db-partitioning-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A B2B SaaS shards Postgres by `hash(tenant_id) mod 16`. One enterprise tenant now holds 35% of all data and generates 40% of queries, and its shard is saturated while others are idle. What's the best long-term design change?",
+    "options": [
+      {
+        "text": "Change to `hash(tenant_id) mod 32`",
+        "explanation": "Wrong. One tenant still hashes to one shard, so its load stays on one machine, and doubling the modulus moves about half of uniformly hashed tenant keys; the large tenant still occupies one shard."
+      },
+      {
+        "text": "Switch the shard key to `user_id` so the big tenant spreads out",
+        "explanation": "Wrong. That spreads the big tenant, but nearly every query is per-tenant, so most queries would now need scatter-gather across all shards, and tenant-level transactions would become cross-shard."
+      },
+      {
+        "text": "Replicate the hot shard to more read replicas",
+        "explanation": "Partially useful for reads, but it doesn't help writes or the data volume, and the root cause, a fixed formula placing a giant tenant with others, remains."
+      },
+      {
+        "text": "Route tenants through a directory (lookup table), give the giant tenant its own dedicated shard, and if it outgrows one machine, shard it internally by a second key",
+        "explanation": "Correct. A directory lets you place tenants individually and move them one at a time. Isolating the outlier fixes the hot spot without touching other tenants, and a second-level key (say `account_id`) only for that tenant handles further growth."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Diagnose: skew from one *key* (a tenant), not bad hashing.\n2. Any fixed placement formula puts all of that tenant on one shard:\n```formula\nshard = f(tenant_id)\nwhere\nshard: the shard that stores a tenant's data\nf: any placement function, e.g. hash modulo the shard count\ntenant_id: the tenant's id\nIn words: one tenant id always gives one shard, so a giant tenant can never be spread out by changing the formula alone.\n```\n3. Directory-based sharding:\n```\ntenant_id -> shard\n  1..n    -> shards 1-16\n  BIG     -> shard 17 (dedicated)\n```\n4. Moving BIG: backfill, CDC, verify, cut over (as in the resharding steps).\n5. If BIG later needs several machines, shard its data by a second key such as `account_id`, keeping its queries mostly single-shard.\n6. Systems like Citus and Vitess support this pattern of isolating large tenants.",
+    "link": {
+      "title": "Citus: Choosing a distribution column",
+      "url": "https://docs.citusdata.com/en/stable/sharding/data_modeling.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You create an Elasticsearch index with 5 primary shards on a 5-node cluster and expect to grow to 50 nodes. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The primary shard count is fixed at index creation; changing it means reindexing or using the split API, which first requires making the index read-only",
+        "explanation": "Correct. Elasticsearch uses a fixed number of partitions per index. The split API can multiply the count, but only on a read-only index."
+      },
+      {
+        "text": "With 5 primaries, indexing work can't spread over more than 5 nodes, though replicas can spread search load further",
+        "explanation": "Correct. Each document belongs to one primary shard, so at most 5 nodes do primary indexing work. Replica shards can be placed on other nodes to serve searches."
+      },
+      {
+        "text": "Creating 500 primary shards now would be free insurance",
+        "explanation": "Wrong. Every shard has memory, file and cluster-state overhead, and searches fan out to every shard. Oversharding is a common cause of slow, unstable clusters."
+      },
+      {
+        "text": "When you add nodes, Elasticsearch automatically splits shards to use them",
+        "explanation": "Wrong. Adding nodes moves existing shards around; it never changes the number of primaries."
+      },
+      {
+        "text": "Using time-based indexes (one per day or month) lets each new index pick a shard count suited to the current cluster",
+        "explanation": "Correct. A common pattern for logs and events: new indexes, often via rollover, can use more shards as the cluster grows, without touching old ones."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. Elasticsearch routes each document to a primary shard, in simplified form:\n```formula\nshard = hash(routing) mod P\nwhere\nshard: the primary shard that stores the document\nhash: Elasticsearch's hash function (Murmur3)\nrouting: the routing value, the document id by default\nmod: modulo, the remainder after whole-number division\nP: the number of primary shards\nIn words: the document's shard is fixed by its hash and the primary count, so changing the count would move most documents.\n```\nThat's why the count can't change freely. (The real formula also uses a routing-shards setting so the split API can multiply the count cleanly.)\n2. 5 primaries → at most 5 nodes doing primary indexing.\n3. Replicas add search capacity and redundancy, not indexing capacity.\n4. Too many shards: overhead per shard plus search fan-out. Aim for shards in the tens of GB.\n5. Growth options:\n   - Split API (×2, ×5, ...) on a read-only index.\n   - Reindex into a new index.\n   - Time-based indexes with rollover, each sized for its time.",
+    "link": {
+      "title": "Elasticsearch: Split index API",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-split-index.html"
+    }
+  }
+]

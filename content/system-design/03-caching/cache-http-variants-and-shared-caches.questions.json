@@ -1,0 +1,159 @@
+[
+  {
+    "id": "cache-http-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After adding `Vary: User-Agent` to your homepage responses, the CDN's hit ratio falls from 95% to 20%. Why?",
+    "options": [
+      {
+        "text": "CDNs refuse to cache responses that vary on any header",
+        "explanation": "CDNs handle `Vary: Accept-Encoding` all the time. The problem is the specific header chosen."
+      },
+      {
+        "text": "`Vary` makes every response private",
+        "explanation": "`Vary` changes the cache key, not who may store the response. That's what `private` does."
+      },
+      {
+        "text": "The CDN now revalidates every request",
+        "explanation": "`Vary` doesn't force revalidation. Requests miss because no stored copy matches their exact User-Agent."
+      },
+      {
+        "text": "Each distinct User-Agent string gets its own cached copy; there are thousands of them, so most requests miss",
+        "explanation": "Correct. User-Agent strings vary by browser, version, OS and device, so the cache fragments into many low-traffic entries. Normalise to a small device class, or vary the page another way."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Cache key becomes `URL + User-Agent`.\n2. Suppose 1,000 homepage requests per second across 3,000 distinct User-Agent strings at an edge.\n3. Each variant is requested rarely, so by the time it is requested again it may have expired or been evicted.\n4. Hit ratio collapses.\n5. Fix: have the CDN derive a normalised header like `X-Device: mobile|desktop` and vary on that (2 variants), or use responsive HTML with no Vary at all.",
+    "link": {
+      "title": "Vary — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary"
+    }
+  },
+  {
+    "id": "cache-http-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After an incident, users report seeing **other people's** account pages. The API sets `Cache-Control: public, max-age=60` on `/account` to \"improve performance\". The CDN keys on URL only. What happened, and what is the correct header?",
+    "options": [
+      {
+        "text": "The browser cache leaked data between tabs; use `max-age=0`",
+        "explanation": "max-age=0 does not prohibit shared storage. A browser profile can also be shared by people or switch application accounts, so private browser caching is not itself an account-isolation guarantee; the stated CDN configuration is the immediate cause here."
+      },
+      {
+        "text": "The CDN stored the first user's personalised response under `/account` and served it to everyone for 60 s; use `private` (or `no-store`) so shared caches never store it",
+        "explanation": "Correct. `public` explicitly permits shared caches to store the response, even for authenticated requests. Personalised responses must be `private`."
+      },
+      {
+        "text": "The ETag was weak, so the CDN mixed up versions",
+        "explanation": "ETag strength affects validation comparisons, not whose data a cache serves."
+      },
+      {
+        "text": "The CDN should add `Vary: Accept-Encoding`",
+        "explanation": "Varying on encoding still gives every user the same key, so it would not stop the leak."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. User A requests `/account` with a session cookie. Origin responds with A's details and `public, max-age=60`.\n2. `public` tells the CDN it may store this, even though the request was authenticated.\n3. The CDN keys on `GET /account` only. User B's request matches and gets A's page.\n4. Fix: `Cache-Control: private, max-age=0` (browser only, revalidate) or `no-store` for sensitive data.\n5. Then purge the CDN to remove already-cached copies.",
+    "link": {
+      "title": "HTTP caching — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"
+    }
+  },
+  {
+    "id": "cache-http-q7",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You want browsers to always check for new HTML, but you want your CDN to keep each page for 5 minutes (and you'll purge it on publish). Which header achieves this?",
+    "options": [
+      {
+        "text": "`Cache-Control: public, max-age=0, s-maxage=300, must-revalidate`",
+        "explanation": "Correct. `s-maxage` overrides `max-age` for shared caches only, so the CDN keeps it 5 minutes while browsers treat it as immediately stale and revalidate."
+      },
+      {
+        "text": "`Cache-Control: max-age=300`",
+        "explanation": "This applies to browsers too, so they would keep the HTML for 5 minutes without checking."
+      },
+      {
+        "text": "`Cache-Control: private, s-maxage=300`",
+        "explanation": "`private` forbids shared caches from storing it, so the CDN wouldn't cache it at all."
+      },
+      {
+        "text": "`Cache-Control: no-store, s-maxage=300`",
+        "explanation": "`no-store` forbids every cache from storing it, which overrides `s-maxage`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Two audiences: browsers (private caches) and the CDN (shared).\n2. `max-age` applies to both; `s-maxage` applies to shared caches and overrides `max-age` there.\n3. Browsers: `max-age=0` → stale immediately → revalidate each time (cheap with an ETag).\n4. CDN: `s-maxage=300` → serve for 5 minutes, purged early on publish.\n5. `public` makes the shared-cache permission explicit.\nmust-revalidate removes disconnected stale reuse once the browser copy is stale. Browser validation can be answered by a fresh CDN copy; it need not reach the origin on every request.",
+    "link": {
+      "title": "RFC 9111: HTTP Caching",
+      "url": "https://www.rfc-editor.org/rfc/rfc9111"
+    }
+  },
+  {
+    "id": "cache-http-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Assume otherwise cacheable successful GET responses, no conflicting directives and no Vary dimensions distinguishing users. Which of these responses may a **shared** CDN cache store and reuse for other users? Select all that apply.",
+    "options": [
+      {
+        "text": "Request had an `Authorization` header; response has `Cache-Control: max-age=60`",
+        "explanation": "Incorrect. A response to an authorised request may only be reused by a shared cache if it carries `public`, `s-maxage` or `must-revalidate`. `max-age` alone is not enough."
+      },
+      {
+        "text": "Request had an `Authorization` header; response has `Cache-Control: s-maxage=60`",
+        "explanation": "Correct. `s-maxage` is one of the directives that explicitly allows shared caching of authorised responses, so make sure the content really is the same for everyone."
+      },
+      {
+        "text": "Request carried a session cookie; response has `Cache-Control: max-age=300` and no `private`",
+        "explanation": "Correct, and dangerous. HTTP gives cookies no special protection, so if the CDN keys on URL alone, one user's personalised page can be served to others."
+      },
+      {
+        "text": "Response has `Cache-Control: private, max-age=300`",
+        "explanation": "Incorrect. `private` restricts storage to private caches such as the browser. A shared cache must not store it."
+      },
+      {
+        "text": "Response has `Cache-Control: no-store`",
+        "explanation": "Incorrect. `no-store` forbids every cache, private or shared, from storing the response."
+      }
+    ],
+    "answer": [
+      1,
+      2
+    ],
+    "workedExample": "Work through the rules in order:\n\n1. `no-store` → nobody stores (E out).\n2. `private` → only private caches (D out).\n3. Request had `Authorization` → shared caches need `public`, `s-maxage` or `must-revalidate` (A out, B in).\n4. Anything else that is cacheable may be stored by a shared cache, **including cookie-authenticated pages** (C in).\n\nThe trap is C: teams assume \"logged-in\" responses are protected, but only the `Authorization` header gets that safeguard. Personalised responses should say `private` explicitly.",
+    "link": {
+      "title": "Cache-Control — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control"
+    }
+  },
+  {
+    "id": "cache-http-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your marketing homepage is identical for every anonymous visitor, but every browser carries a few analytics cookies. The origin sends `Vary: Cookie` \"to be safe\", and the CDN hit ratio is close to zero. What is the best fix?",
+    "options": [
+      {
+        "text": "Add `Vary: User-Agent` as well, so the cache key is more precise",
+        "explanation": "More `Vary` headers fragment the cache further. The problem is already that the key is too specific."
+      },
+      {
+        "text": "Set `Cache-Control: no-store` so the CDN stops trying",
+        "explanation": "That gives up on caching entirely for a page that is ideal to cache."
+      },
+      {
+        "text": "Increase `s-maxage` to a day",
+        "explanation": "A longer lifetime cannot help when nearly every request has a different cache key and never matches a stored copy."
+      },
+      {
+        "text": "Have the CDN strip or ignore cookies for this page and drop `Vary: Cookie`, so all anonymous visitors share one cached copy",
+        "explanation": "Correct. Analytics cookies don't change the page, so they shouldn't be in the key. Keep personalised pages separate and mark them `private`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `Vary: Cookie` makes the full `Cookie` header part of the cache key.\n2. Analytics cookies contain per-visitor IDs, so nearly every visitor has a unique value.\n3. Each request misses: the hit ratio collapses, even though the page bytes are identical.\n4. Fix the key, not the lifetime:\n   - Strip cookies at the CDN for anonymous, non-personalised paths.\n   - Remove `Vary: Cookie` from those responses.\n   - For personalised paths, use `private` so the CDN never stores them.\n5. Result: one cached homepage served to everyone.",
+    "link": {
+      "title": "Vary — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Vary"
+    }
+  }
+]

@@ -1,0 +1,130 @@
+[
+  {
+    "id": "net-cdn-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You have 300 edge PoPs and a fragile origin. Which techniques reduce origin load for a viral cacheable article, either during initial fill or later TTL refreshes? Select all that apply.",
+    "options": [
+      {
+        "text": "An origin shield that all PoPs fetch through on a miss",
+        "explanation": "Correct. A shared shield can turn many edge misses into fewer origin fetches, potentially one when all requests use the same cacheable key and the shield coalesces them successfully. Bypasses and configuration can cause additional fetches."
+      },
+      {
+        "text": "Request collapsing (coalescing) at the edge and shield",
+        "explanation": "Correct. Concurrent requests for the same uncached object wait for one in-flight fetch rather than each going upstream."
+      },
+      {
+        "text": "Adding `Vary: User-Agent` to the article",
+        "explanation": "This creates a separate cached copy per user-agent string, multiplying misses and origin requests."
+      },
+      {
+        "text": "Serving stale content while revalidating (`stale-while-revalidate`) after the TTL expires",
+        "explanation": "Correct within the allowed stale window. Readers can receive a cached stale response while refresh runs in the background; collapsing at a shared shield can consolidate duplicate refreshes. Stale-while-revalidate alone does not guarantee one refresh globally."
+      },
+      {
+        "text": "Purging the whole CDN cache to make sure the article is fresh",
+        "explanation": "A full purge makes every object miss at once, creating exactly the origin stampede you're trying to avoid."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "In an ideal initial-fill model, assume one cacheable article key, 300 PoPs, 10,000 simultaneous users, no bypasses and successful collapsing at the stated tiers:\n\n| Setup | Origin requests |\n|---|---|\n| No shield, no collapsing | up to 10,000 |\n| Collapsing per PoP | ≤ 300 |\n| + Origin shield | 1 |\n\nAt TTL expiry, permitted stale responses avoid blocking readers. A shared shield with collapsing can consolidate refreshes; stale-while-revalidate by itself does not establish one global refresh. `Vary: User-Agent` and global purges push the numbers back up.",
+    "link": {
+      "title": "Using Amazon CloudFront Origin Shield (AWS)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-shield.html"
+    }
+  },
+  {
+    "id": "net-cdn-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You deploy a new front-end build. With `app.js` cached for 1 year, users still get the old JavaScript; with a 60 s TTL, your hit ratio is poor and deploys still show a minute of mixed versions. What's the standard solution?",
+    "options": [
+      {
+        "text": "Content-hashed file names (`app.3f9a1c.js`) cached for a year as `immutable`, with the HTML that references them on a short TTL",
+        "explanation": "Correct. Each build produces new URLs, so old and new assets never collide; only the small HTML document needs to refresh, and unchanged assets can be reused for a long time, while first requests, eviction and traffic distribution still affect hit ratio."
+      },
+      {
+        "text": "Purge the entire CDN on every deploy",
+        "explanation": "This works but causes a miss storm against the origin on every deploy, and browsers still hold their own cached `app.js` that a CDN purge can't reach."
+      },
+      {
+        "text": "Add `?v=random` to every request at runtime",
+        "explanation": "If the query parameter is in the cache key, a new random value makes each request a new key and defeats reuse. If it is excluded from the key, it does not version the object at all. Neither is a reliable content-versioning policy."
+      },
+      {
+        "text": "Set `Vary: Date` on the JavaScript",
+        "explanation": "Vary selects variants using request header values. Browsers normally omit the request Date header, so Vary: Date often does not create new variants at all; it is not an asset-versioning mechanism."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Problem: one URL, changing content → you must trade freshness against hit ratio.\n2. Break the link: **new content → new URL**. The build emits `app.<hash>.js`.\n3. Assets: `Cache-Control: public, max-age=31536000, immutable` → cached at the edge and in browsers for a year.\n4. HTML: `max-age=60` or revalidated → after a deploy, it points at the new hashes within a minute.\n5. Keep every asset referenced by retained old HTML available. This prevents missing-file failures; application/API compatibility still needs its own rollout policy.",
+    "link": {
+      "title": "Configuring caching (Amazon CloudFront)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/ConfiguringCaching.html"
+    }
+  },
+  {
+    "id": "net-cdn-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your origin is in Frankfurt and most of your users are in Asia, so a colleague proposes enabling the origin shield in Singapore. Why is a region near Frankfurt usually the better choice?",
+    "options": [
+      {
+        "text": "Shields only work in the same region as the origin",
+        "explanation": "Shields can be placed in many regions. The question is which placement minimises extra latency, not what is allowed."
+      },
+      {
+        "text": "Singapore PoPs have smaller caches",
+        "explanation": "Cache size isn't the reason. The concern is the routing detour that a far-from-origin shield adds."
+      },
+      {
+        "text": "A shield in Singapore would cache less",
+        "explanation": "Hit ratio at the shield depends on the demand it aggregates, which is the same wherever it is."
+      },
+      {
+        "text": "A shield near Frankfurt usually keeps the extra shield-to-origin leg short and reduces detours for origin misses from multiple continents; measure the complete hit/miss paths before choosing",
+        "explanation": "Correct as a default for origin-miss paths, which is also CloudFront guidance. A high-hit shield near an audience can have different trade-offs; topology and measured latency decide."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "A shield near the origin usually keeps the shield-to-origin leg short for misses from every edge. A distant shield can add detours for some users. However, shield hits avoid the origin leg entirely, so shield hit ratio, audience location, measured routes and provider topology matter. Select a supported shield region using measured latency and provider guidance; proximity is a heuristic, not proof that it is optimal for every workload.",
+    "link": {
+      "title": "Using Amazon CloudFront Origin Shield (AWS)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-shield.html"
+    }
+  },
+  {
+    "id": "net-cdn-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your CDN serves 50,000 requests per second at a 98% hit ratio. During a price update, someone runs a **purge everything** at peak. Roughly what happens to origin traffic in the first moments, and what should you do instead?",
+    "options": [
+      {
+        "text": "Origin traffic stays about 1,000 rps, because the CDN refills gradually",
+        "explanation": "Right after a full purge, nothing is cached, so almost every request misses. Refilling happens through those misses."
+      },
+      {
+        "text": "Origin traffic briefly jumps from about 1,000 rps towards 50,000 rps (up to 50×, softened by request collapsing); purge only the affected objects by surrogate key or tag, and use versioned URLs for static assets",
+        "explanation": "Correct. Normal origin load is 2% of 50,000 = 1,000 rps. With an empty cache, misses approach 100%. Targeted purges keep everything else warm."
+      },
+      {
+        "text": "Origin traffic drops to zero while the purge runs",
+        "explanation": "Purges don't pause traffic; requests keep flowing and now miss."
+      },
+      {
+        "text": "Origin traffic doubles to about 2,000 rps",
+        "explanation": "That would be a hit ratio of 96%. An empty cache gives a hit ratio near zero at first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nR_miss = (1 − CHR) × R_total\nR_before = (1 − 0.98) × 50,000 rps\nR_before = 1,000 rps\nR_after ≈ (1 − 0) × 50,000 rps\nR_after ≈ 50,000 rps\nwhere\nR_miss: the rate of cache misses, which all go towards the origin, in requests per second (rps)\nCHR: the cache hit ratio, as a fraction: 0.98 normally, close to 0 just after a full purge\nR_total: the total request rate, 50,000 rps\nR_before: origin traffic before the purge\nR_after: origin traffic just after the purge, before request collapsing\nrps: requests per second\n≈: approximately equal to\nIn words: emptying the cache turns 2% misses into nearly 100% misses, up to 50 times the origin's normal load.\n```\n\n1. Request collapsing and a shield limit this to one fetch per distinct object per shield, but a large catalogue still means a huge spike.\n2. Better:\n  - Tag responses (`Surrogate-Key: product-42 prices`) and purge just `prices`.\n  - Version static assets so deploys need no purge.\n  - Use `stale-while-revalidate` so expiry refreshes in the background.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  }
+]

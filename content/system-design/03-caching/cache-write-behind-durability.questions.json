@@ -1,0 +1,104 @@
+[
+  {
+    "id": "cache-strategies-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service uses **write-back** caching for shopping-basket updates. A cache node crashes 3 seconds after acknowledging a customer's \"add to basket\". The next flush is due 5 seconds after that acknowledgement; the cache has neither persistence nor replication. What happens?",
+    "options": [
+      {
+        "text": "The item is lost: it was acknowledged but never flushed to the database",
+        "explanation": "Correct. The write lived only in the crashed node's memory. This is the core risk of write-back without a durable, replicated cache."
+      },
+      {
+        "text": "The item is safe, because write-back writes to the database first",
+        "explanation": "That is the opposite of write-back. Write-back acknowledges after writing to the cache only and writes the database later."
+      },
+      {
+        "text": "The item is delayed until the node restarts, then flushed",
+        "explanation": "An in-memory cache without persistence loses its contents on a crash. There is nothing left to flush after a restart."
+      },
+      {
+        "text": "The database rejects later writes until it is reconciled with the cache",
+        "explanation": "The database knows nothing about the pending writes, so there is nothing for it to reconcile against."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\n0 s  write to cache, ACK to user\n3 s  cache node crashes\n5 s  flush would have happened\n```\n\n1. At 0 s the only copy of the change is in cache RAM.\n2. The crash at 3 s destroys it.\n3. The database never received it, so the basket is missing the item.\n\nTo use write-back safely you need a failure-tested durability protocol in the cache; asynchronous replication alone can lose acknowledged writes, or a workload where losing up to one flush interval of writes is acceptable.",
+    "link": {
+      "title": "Cache (computing): writing policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
+    }
+  },
+  {
+    "id": "cache-strategies-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are choosing a strategy for a **page-view counter** incremented 30,000 times per second on a popular article. Losing a few seconds of counts in a crash is acceptable. Assume each scheduled flush succeeds on time. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Write-back lets you coalesce thousands of increments into one database write per flush",
+        "explanation": "Correct. `INCR` in Redis, then flushing the total every second turns 30,000 DB writes into 1, removing the row-level lock contention."
+      },
+      {
+        "text": "Write-through would still send 30,000 writes per second to the database",
+        "explanation": "Correct. Write-through writes the database synchronously on every update, so it does nothing to reduce database write volume."
+      },
+      {
+        "text": "Cache-aside with delete-on-write is the best fit here",
+        "explanation": "Incorrect. Each increment would update the DB and delete the key, so the database still takes every write and the cache is constantly emptied."
+      },
+      {
+        "text": "The accepted loss window is roughly equal to the flush interval",
+        "explanation": "Correct. Anything incremented since the last flush lives only in the cache, so a crash loses up to one interval's worth (unless the cache is replicated or persisted)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Write volume: 30,000/s to a single row. In Postgres, each `UPDATE` takes a row lock, so they serialise and contend.\n2. Write-back: `INCR article:9:views` in Redis (an O(1) in-memory operation), and a job every 1 s reads the total and runs one `UPDATE`.\n3. DB writes: 30,000/s → 1/s.\n4. Risk: a crash loses up to one flush interval of increments:\n\n```formula\nL_max = r × t_flush\nL_max = 30,000 /s × 1 s = 30,000\nwhere\nL_max: the most increments a crash can lose\nr: the increment rate, 30,000 per second (/s)\nt_flush: the time between flushes, 1 second (s)\ns: seconds\nIn words: a crash loses at most one flush interval's worth of views, here about 30,000, which the scenario says is fine.\n```\n5. Write-through or cache-aside both leave the database doing all 30,000 writes, so neither solves the problem.\nInitialize counters from the durable total after cache loss and preserve flush ordering/idempotency. Blindly writing a reset counter or replaying an old total can corrupt even previously persisted counts. Delayed or failed flushes enlarge the loss window.",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  },
+  {
+    "id": "cache-strategies-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An orders service is considering **write-back** caching to cut write latency. Which of these are genuine consequences it must plan for? Select all that apply.",
+    "options": [
+      {
+        "text": "Acknowledged writes can be lost if a cache node fails before flushing",
+        "explanation": "Correct. Until the flush, the only copy is in cache memory. Replication and an append-only log narrow this risk; without them, it is the defining risk of write-back."
+      },
+      {
+        "text": "Reports and other services that query the database directly will see data that lags behind the cache",
+        "explanation": "Correct. With successful on-time flushes the delay is around one interval; failures or backlog can make it longer, so anything bypassing the cache reads old data."
+      },
+      {
+        "text": "Reads of recently written keys through the cache will miss",
+        "explanation": "Incorrect. With write-back the cache has the newest value, so reads through it hit. It is readers of the *database* that see stale data."
+      },
+      {
+        "text": "Flush failures and ordering need explicit handling, for example retrying a batch that the database partly rejected",
+        "explanation": "Correct. If a flushed write violates a constraint, the user was already told it succeeded. You need retry, dead-letter and conflict rules."
+      },
+      {
+        "text": "Write volume to the database rises, because every write is sent twice",
+        "explanation": "Incorrect. Write-back usually *reduces* database writes by coalescing repeated updates into one flush."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Walk through who holds the newest data:\n\n1. Write arrives → cache updated → **ack**. Newest data: cache only.\n2. Flush (later) → database updated. Newest data: both.\n\nBetween 1 and 2:\n- A cache crash loses it (A true).\n- Database readers see the old value (B true).\n- Cache readers see the new value (C false).\n\nAt step 2 the database might reject the write, after the user was told it succeeded (D true). And coalescing means fewer database writes, not more (E false).\n\nFor orders, these risks are usually unacceptable, which is why write-back suits counters and analytics instead.",
+    "link": {
+      "title": "Cache (computing): writing policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
+    }
+  }
+]

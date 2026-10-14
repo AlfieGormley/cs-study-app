@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cache-failure-modes-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "To stop a bug flooding the database with lookups for missing users, you add negative caching with a **1-hour** TTL. Soon, users who sign up are told \"account not found\" when they log in a few seconds later. What is happening, and what is the fix?",
+    "options": [
+      {
+        "text": "The sign-up writes to a replica, so the account isn't visible yet",
+        "explanation": "The cached negative entry explains this scenario. Replica lag can also last a long time during faults; a duration alone cannot exclude it."
+      },
+      {
+        "text": "The Bloom filter is giving false negatives",
+        "explanation": "No Bloom filter is in this design. A correctly populated Bloom filter has no false negatives for inserted keys, but an out-of-date application filter can omit newly created keys."
+      },
+      {
+        "text": "Negative caching should never be used for user lookups",
+        "explanation": "It is fine for user lookups, and it is fixing the original bug. It just needs a short TTL and invalidation on create."
+      },
+      {
+        "text": "A lookup before or during sign-up cached \"not found\" for that id, and it persists for an hour; use a short TTL and delete the negative entry when the user is created",
+        "explanation": "Correct. A negative entry is a cached answer like any other, so it needs invalidating when the truth changes. Delete it on create and keep its TTL short (seconds to a minute)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. During sign-up, the flow checks whether the username or email exists: miss → database says no → cache `NULL_MARKER` for 1 hour.\n2. The account is created in the database, but the marker remains.\n3. At login, the cache returns the marker: \"not found\".\n4. Fixes:\n   - On create: `DEL user:<id>` (or the email key) after the commit, exactly like delete-on-write.\n   - Short negative TTLs (e.g. 30–60 s) as a safety net.\n5. Rule: negative entries are just cached values. Invalidate them when the thing they say doesn't exist starts to exist.\nConcurrent delayed negative fills can race with create-time deletion; use the same leases/version safeguards as for positive cached values when strict immediate visibility is required.",
+    "link": {
+      "title": "Cache stampede — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_stampede"
+    }
+  }
+]

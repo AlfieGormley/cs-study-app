@@ -1,0 +1,122 @@
+[
+  {
+    "id": "net-request-lifecycle-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user in London fetches a page from a single server in Virginia. RTT is 80 ms. DNS is already cached, and the server takes 20 ms to generate the response. Using TLS 1.3 on a brand-new connection, roughly how long until the first byte of the response arrives?",
+    "options": [
+      {
+        "text": "About 100 ms",
+        "explanation": "This counts only one round trip plus server time, as if the connection were already open. A new connection must first pay for the TCP and TLS handshakes."
+      },
+      {
+        "text": "About 260 ms",
+        "explanation": "Correct. Count one 80 ms round trip each for TCP, TLS 1.3 and the request/response, then add 20 ms of server work. The total is 260 ms."
+      },
+      {
+        "text": "About 340 ms",
+        "explanation": "This includes an uncached DNS lookup (~80–100 ms) or a TLS 1.2 two-RTT handshake. The question says DNS is cached and TLS 1.3 needs only one round trip."
+      },
+      {
+        "text": "About 180 ms",
+        "explanation": "This counts two round trips plus server time, so it has dropped one of TCP, TLS or the request itself. All three are needed on a new connection."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count the round trips on a cold connection:\n\n| Step | RTTs | Time |\n|---|---|---|\n| DNS | 0 (cached) | 0 ms |\n| TCP SYN/SYN-ACK | 1 | 80 ms |\n| TLS 1.3 | 1 | 80 ms |\n| GET + response | 1 | 80 ms |\n| Server work | - | 20 ms |\n\nAdd the round trips and the server's work:\n\n```formula\nT = n × RTT + T_server\nT = 3 × 80 ms + 20 ms = 260 ms\nwhere\nT: the time until the first byte of the response arrives, in milliseconds (ms)\nn: the round trips needed on a new connection with cached DNS: TCP, TLS 1.3 and the request itself, so 3\nRTT: the round-trip time from London to Virginia, 80 ms\nT_server: the time the server takes to build the response, 20 ms\nms: millisecond, one thousandth of a second\nIn words: three round trips plus the server's own work.\n```\n\nTotal: **260 ms**. Notice that 160 ms of that is setup. On a reused connection only the request's round trip remains, so the same request would take 80 ms + 20 ms = 100 ms.",
+    "link": {
+      "title": "High Performance Browser Networking: Building blocks of TCP",
+      "url": "https://hpbn.co/building-blocks-of-tcp/"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users report ~900 ms page loads from Sydney and ~150 ms from New York. Your only servers are in us-east-1 and HTML is uncacheable. Traces show that the Sydney delay is dominated by connection-setup round trips; servers are not saturated and transfer time is negligible. Which listed change directly reduces that delay?",
+    "options": [
+      {
+        "text": "Putting a CDN in front so TCP and TLS terminate at a Sydney edge, with the edge keeping warm connections to the origin",
+        "explanation": "Correct. The handshakes now cost a ~10 ms RTT instead of ~200 ms, and the edge reuses a long-lived connection to Virginia, so only the request itself crosses the Pacific. Even uncacheable HTML benefits."
+      },
+      {
+        "text": "Doubling the number of app servers in us-east-1",
+        "explanation": "More servers help if they're overloaded, but New York is fast, so server capacity isn't the bottleneck. Sydney's problem is the ~200 ms RTT, which extra servers in Virginia don't change."
+      },
+      {
+        "text": "Upgrading the database to a larger instance",
+        "explanation": "Database time is the same for both cities, and New York is already fast. The extra ~750 ms in Sydney comes from distance, not query time."
+      },
+      {
+        "text": "Switching from gzip to Brotli compression",
+        "explanation": "Brotli shaves a few kilobytes, which helps bandwidth, but the delay here is dominated by round trips, not bytes. A smaller body still pays the same 3–4 trans-Pacific RTTs."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The supplied traces establish that connection-setup trips dominate. Moving TCP and TLS termination to a nearby edge removes two long setup trips.\n2. For a separate illustrative budget, assume the origin RTT is 200 ms, the direct DNS lookup takes 200 ms, and server work takes 100 ms. DNS is a separate input, not automatically a trip to the origin.\n3. Through a Sydney edge, assume DNS takes 10 ms, the client-to-edge RTT is 10 ms and the warm edge-to-origin RTT remains 200 ms. Keep the same 100 ms of server work.\n\n```formula\nT_cold = D_cold + 3 × RTT_f + T_s\nT_cold = 200 ms + 600 ms + 100 ms\nT_cold = 900 ms\nT_edge = D_edge + 3 × RTT_e\n         + RTT_f + T_s\nT_edge = 10 ms + 30 ms + 200 ms\n         + 100 ms = 340 ms\nwhere\nT_cold: the illustrative direct time to first byte, in milliseconds (ms)\nT_edge: the illustrative time through the Sydney edge, in ms\nD_cold: the assumed direct DNS lookup time, 200 ms; independent of the origin RTT\nD_edge: the assumed edge DNS lookup time, 10 ms\nRTT_f: the assumed RTT from Sydney to Virginia, 200 ms, also used for the warm edge-to-origin path\nRTT_e: the assumed user-to-edge RTT, 10 ms\nT_s: the same server processing time in both designs, 100 ms\n3: TCP setup, TLS 1.3 setup and the HTTP request/response trip\nms: millisecond, one thousandth of a second\nIn words: the edge makes two setup trips local; the origin request and the same server work remain, while DNS has its own assumed cost.\n```\n\nThis example gives 900 ms direct and 340 ms through the edge. It illustrates the mechanism; a production prediction needs measured DNS, routing and server times. Adding app servers, a bigger database or compression does not directly remove the long setup trips identified by these traces.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your product team wants a 100 ms time-to-first-byte target for users in Mumbai. Your origin is in Frankfurt (RTT ≈ 120 ms), and responses are personalised and uncacheable. What is the honest assessment?",
+    "options": [
+      {
+        "text": "Achievable by tuning the app server to respond in under 10 ms",
+        "explanation": "Even a 0 ms server can't beat physics: at least one 120 ms round trip to Frankfurt is needed to get personalised data, which already exceeds 100 ms."
+      },
+      {
+        "text": "Not achievable from Frankfurt; you need compute and data closer to Mumbai (e.g. an Indian region), and an edge only partly helps",
+        "explanation": "Correct. An edge removes the handshake RTTs, but the uncacheable request still needs one 120 ms trip to the origin. Meeting 100 ms means moving the origin, or the data it needs, nearer to the users."
+      },
+      {
+        "text": "Achievable with TLS 1.3 0-RTT alone",
+        "explanation": "0-RTT removes the TLS round trip on resumption, but the request still has to travel to Frankfurt and back (120 ms), so it can't reach 100 ms on its own."
+      },
+      {
+        "text": "Achievable by switching to UDP",
+        "explanation": "Changing transport can remove handshake round trips, but the request/response still has to cross the 120 ms path. UDP doesn't make light travel faster."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Assume each response requires a round trip to Frankfurt, with a fixed 120 ms RTT. That alone exceeds the 100 ms target.\n2. A Mumbai edge with a 5 ms client RTT, a warm 120 ms origin path and a new TCP/TLS connection takes 135 ms plus server time (worked out below).\n3. Meeting the target requires changing the dependency or placing the necessary compute/data closer. Actual routing improvements could also change the assumed RTT; 120 ms is a scenario input, not a universal physical constant.\n\nThe edge calculation in step 2:\n\n```formula\nT = 3 × RTT_edge + RTT_origin + T_server\nT = 3 × 5 ms + 120 ms + T_server\nT = 135 ms + T_server\nwhere\nT: the time to first byte through a Mumbai edge, in milliseconds (ms)\n3: the round trips to the edge: TCP, TLS and the request itself\nRTT_edge: the round-trip time from the user to the Mumbai edge, 5 ms\nRTT_origin: the round-trip time from the edge to Frankfurt over a warm connection, 120 ms\nT_server: the time the origin spends building the response\nms: millisecond, one thousandth of a second\nIn words: even with every handshake at a nearby edge, the one unavoidable trip to Frankfurt already costs more than the 100 ms target.\n```",
+    "link": {
+      "title": "Global Accelerator overview (AWS)",
+      "url": "https://docs.aws.amazon.com/global-accelerator/latest/dg/what-is-global-accelerator.html"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A London user requests an uncacheable page through a CDN edge in London (RTT 10 ms). The origin is in Virginia (edge-to-origin RTT 80 ms) and the edge already holds a warm connection to it. DNS is cached, TLS 1.3 is used, and the origin takes 20 ms. Roughly what is the time to first byte on a new user connection?",
+    "options": [
+      {
+        "text": "About 35 ms",
+        "explanation": "That's the cache-hit case from the lesson. On a miss, the edge still has to fetch the page from Virginia, which costs at least one 80 ms round trip."
+      },
+      {
+        "text": "About 340 ms",
+        "explanation": "That's going direct to Virginia with an uncached DNS lookup. The handshakes here happen with the nearby edge, not with Virginia."
+      },
+      {
+        "text": "About 130 ms",
+        "explanation": "Correct. TCP 10 + TLS 10 + request to the edge 10 + edge-to-origin round trip 80 + server 20 = 130 ms."
+      },
+      {
+        "text": "About 290 ms",
+        "explanation": "This charges full handshakes to Virginia as well. Because the edge reuses a warm connection, only the request itself crosses the Atlantic."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Split the path into the short hop and the long hop:\n\n| Step | Time |\n|---|---|\n| TCP to edge | 10 ms |\n| TLS 1.3 at edge | 10 ms |\n| Request to edge | 10 ms |\n| Edge to origin (warm) | 80 ms |\n| Origin work | 20 ms |\n| **Total** | **130 ms** |\n\nThe same sums as a formula, compared with going direct:\n\n```formula\nT_cdn = 3 × RTT_e + RTT_o + T_s\nT_cdn = 3 × 10 ms + 80 ms + 20 ms\nT_cdn = 130 ms\nT_dir = 3 × RTT_o + T_s\nT_dir = 3 × 80 ms + 20 ms = 260 ms\nwhere\nT_cdn: the time to first byte through the London edge, in milliseconds (ms)\nT_dir: the time to first byte connecting straight to Virginia\nRTT_e: the round-trip time to the London edge, 10 ms\nRTT_o: the round-trip time to the origin in Virginia, 80 ms\nT_s: the origin's server time, 20 ms\n3: the round trips on a new connection: TCP, TLS 1.3 and the request\nms: millisecond, one thousandth of a second\nIn words: through the edge only one round trip crosses the Atlantic; direct, all three do.\n```\n\nThe edge halves it by moving the handshakes, but it can't remove the one trip to wherever the data lives.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  }
+]

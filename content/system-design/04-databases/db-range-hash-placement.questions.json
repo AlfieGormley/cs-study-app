@@ -1,0 +1,62 @@
+[
+  {
+    "id": "db-partitioning-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An event log is range-partitioned by `created_at`. Writes are 50,000 per second, and the cluster has 10 nodes. Monitoring shows one node at 100% CPU and the others nearly idle. Why?",
+    "options": [
+      {
+        "text": "The hash function is poorly distributed",
+        "explanation": "Wrong. Range partitioning doesn't hash the key at all; it assigns contiguous key ranges to partitions."
+      },
+      {
+        "text": "All new writes have the current timestamp, so they all fall into the single partition covering 'now', making it a hot spot",
+        "explanation": "Correct. Time-ordered keys under range partitioning send every new write to the latest range. Nine nodes hold old data; one takes all 50,000 writes per second."
+      },
+      {
+        "text": "The cluster needs more replicas",
+        "explanation": "Wrong. Replicas of the hot partition would receive the same write stream; replication doesn't spread writes in a single-leader setup."
+      },
+      {
+        "text": "The idle nodes have failed",
+        "explanation": "Wrong. They're idle because no current writes map to their ranges, not because they're down."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Range partitioning: partition 10 covers `created_at ≥ yesterday`, say.\n2. Every new event has `created_at = now()`, which falls into partition 10.\n3. So partition 10 takes 50,000 writes per second; partitions 1–9 take none.\n4. Effective capacity = one node's capacity, regardless of cluster size.\n5. Fixes: prefix the key with something high-cardinality (`(source_id, created_at)`), or hash-partition on an id and keep time ordering within each partition.",
+    "link": {
+      "title": "DynamoDB: Designing partition keys to distribute your workload",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume uniformly distributed hash values. A cache cluster assigns keys with `hash(key) mod N`. It grows from N = 4 to N = 5 nodes. Roughly what fraction of keys now map to a different node?",
+    "options": [
+      {
+        "text": "About 20%, the new node's share",
+        "explanation": "Wrong. That's the *ideal* (what consistent hashing achieves). With mod N, almost every key's remainder changes."
+      },
+      {
+        "text": "About 25%",
+        "explanation": "Wrong. There's no reason the moved fraction would equal one old node's share; the remainders change for most keys, not just one node's worth."
+      },
+      {
+        "text": "None; existing keys stay where they are",
+        "explanation": "Wrong. Lookups recompute `hash mod 5`, so keys go wherever the new formula says, and most of them now land on a different node."
+      },
+      {
+        "text": "About 80%",
+        "explanation": "Correct. A key stays put only if its hash leaves the same remainder when divided by 4 and by 5, which happens for 4 out of every 20 consecutive hash values: 20%. So about 80% of keys move, and a cold replacement placement can cause many misses; the request fraction depends on key popularity."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A key with hash value h moves unless its old and new node numbers match:\n```formula\nold = h mod 4\nnew = h mod 5\nwhere\nold: the node the key used to live on (0–3)\nnew: the node it maps to after growth (0–4)\nh: the key's hash value, a whole number\nmod: modulo, the remainder after whole-number division (7 mod 4 = 3)\nIn words: each key's node is the remainder of its hash; adding a node changes the divisor, so most remainders change.\n```\n2. The pair of remainders repeats every 20 values (the lowest common multiple of 4 and 5). Count h in 0–19 where they're equal: h = 0, 1, 2, 3 (both give h). That's 4 values.\n3. The fraction that stays:\n```formula\nF_stay = 4 / 20 = 1 / (N + 1)\nF_stay = 1 / (4 + 1) = 0.2\nF_move = 1 − 0.2 = 0.8\nwhere\nF_stay: the fraction of keys that stay on the same node\nF_move: the fraction that move\nN: the number of nodes before growth, here 4\nIn words: going from 4 to 5 nodes with modulo placement keeps only 1 key in 5 in place; 80% move.\n```\n4. For a cold cache with uniformly popular keys, about 80% of requests initially miss; skew and migration/warming change this: a classic cause of outages during scaling.\n5. Consistent hashing moves only about one key in five, 20% (just the new node's share), and virtual nodes can distribute those transfers across several old nodes, without guaranteeing equal transfers from every node.",
+    "link": {
+      "title": "Wikipedia: Consistent hashing",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  }
+]

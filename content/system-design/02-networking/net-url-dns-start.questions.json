@@ -1,0 +1,101 @@
+[
+  {
+    "id": "net-request-lifecycle-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume HTTPS over TCP, no cached DNS answer or open connection, and no TCP Fast Open or TLS early data. What is the normal order?",
+    "options": [
+      {
+        "text": "TCP handshake → DNS lookup → TLS handshake → HTTP request",
+        "explanation": "TCP needs a destination IP address to send the SYN to, so it can't happen before DNS has turned the name into an IP."
+      },
+      {
+        "text": "DNS lookup → TLS handshake → TCP handshake → HTTP request",
+        "explanation": "TLS (over TCP) runs inside an established TCP connection; there's nowhere to send the ClientHello until TCP is open."
+      },
+      {
+        "text": "DNS lookup → HTTP request → TLS handshake → TCP handshake",
+        "explanation": "For HTTPS the HTTP request is encrypted, so it can only be sent after TLS has established keys; it can't come before the transport and security layers exist."
+      },
+      {
+        "text": "DNS lookup → TCP handshake → TLS handshake → HTTP request",
+        "explanation": "Correct. The name must be resolved first, then a TCP connection opened to that IP, then TLS negotiated over it, and only then can the encrypted HTTP request be sent."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Work from dependencies:\n\n1. TCP needs an **IP address** → DNS must come first.\n2. TLS messages travel **over** the TCP connection → TCP comes before TLS.\n3. The HTTP request is **encrypted with TLS keys** → TLS comes before HTTP.\n\nSo: DNS → TCP → TLS → HTTP. (With HTTP/3, QUIC merges the transport and TLS handshakes into one, but DNS still comes first.)",
+    "link": {
+      "title": "What happens when... (GitHub)",
+      "url": "https://github.com/alex/what-happens-when"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these let a browser skip one or more network round trips on a later visit to the same site? Select all that apply.",
+    "options": [
+      {
+        "text": "A fresh copy of the resource in the browser's HTTP cache",
+        "explanation": "Correct. If the cached response is still fresh, the browser uses it without any network request at all: no DNS, TCP, TLS or HTTP round trips."
+      },
+      {
+        "text": "An HSTS entry for the domain",
+        "explanation": "Correct. HSTS makes the browser go straight to HTTPS, skipping the round trip(s) of an `http://` request that would only return a 301 redirect to `https://`."
+      },
+      {
+        "text": "Reusing a kept-alive connection to the origin",
+        "explanation": "Correct. A reused connection has already done DNS, TCP and TLS, so the next request costs just one round trip."
+      },
+      {
+        "text": "Setting a longer `Content-Length` header",
+        "explanation": "`Content-Length` just tells the receiver how big the body is. It has no effect on handshakes or caching, so it saves no round trips."
+      },
+      {
+        "text": "A cached DNS answer still within its TTL",
+        "explanation": "Correct. A cached answer lets the client skip the resolver queries entirely, saving anything from a few ms to over 100 ms."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Go through each round trip and ask what removes it:\n\n- **DNS** → cached answer within TTL.\n- **http→https redirect** → HSTS.\n- **TCP + TLS** → reuse an existing connection.\n- **The whole request** → a fresh HTTP cache entry.\n\n`Content-Length` describes a body; it doesn't remove any step. So the answer is the cache, HSTS, connection reuse and DNS caching.",
+    "link": {
+      "title": "Strict-Transport-Security (MDN)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security"
+    }
+  },
+  {
+    "id": "net-request-lifecycle-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a client starts with an explicit `http://bank.example.com/` URL and has no HTTPS-first upgrading, HTTPS DNS upgrade, cached/inherited HSTS policy or preload entry. The server redirects HTTP to HTTPS and sends HSTS over HTTPS. What happens on the first visit?",
+    "options": [
+      {
+        "text": "The browser goes straight to HTTPS because the site supports HSTS",
+        "explanation": "HSTS itself cannot upgrade this request because this client has no applicable policy. Other browser features can prefer HTTPS, but the question explicitly excludes them."
+      },
+      {
+        "text": "The browser sends a plain `http://` request, gets a redirect to `https://`, and only then learns the HSTS policy for future visits",
+        "explanation": "Correct. The first request goes out unencrypted and the redirect costs an extra round trip (or more). That first hop is also the window an on-path attacker can exploit, which is exactly what the preload list closes."
+      },
+      {
+        "text": "The connection fails because HSTS forbids plain HTTP entirely",
+        "explanation": "HSTS tells a browser that has already seen the policy to refuse plain HTTP. It can't affect a browser that has never received it."
+      },
+      {
+        "text": "The DNS resolver upgrades the request to HTTPS",
+        "explanation": "DNS only maps names to addresses; it doesn't rewrite URL schemes. (An `HTTPS` DNS record can hint that a site supports HTTPS, but that's a browser decision, not the resolver's.)"
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. HSTS is learnt from a response header, so the browser must receive one HTTPS response first.\n2. First visit: the specified client starts with the explicit `http://` URL, connects to port 80 and sends the request in the clear.\n3. The server replies `301` to `https://bank.example.com/`: one wasted round trip, plus a new TCP connection to port 443.\n4. Over HTTPS, the response carries `Strict-Transport-Security: max-age=...`. From now on the browser upgrades by itself.\n5. To protect even the first visit, submit the domain to the **HSTS preload list**, which ships inside browsers.",
+    "link": {
+      "title": "Strict-Transport-Security (MDN)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Strict-Transport-Security"
+    }
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "db-nosql-families-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A fraud team wants to find accounts within 4 hops of a known fraudster via shared phone numbers, devices or cards. In Postgres this is a recursive CTE that takes minutes. Why would a graph database like Neo4j typically do better?",
+    "options": [
+      {
+        "text": "Graph databases store everything in memory, unlike Postgres",
+        "explanation": "Wrong. Neo4j persists to disk like Postgres. Memory helps both; it isn't the structural difference."
+      },
+      {
+        "text": "Graph databases use SQL more efficiently",
+        "explanation": "Wrong. Neo4j uses Cypher, not SQL. The advantage comes from storage layout, not the query language."
+      },
+      {
+        "text": "Graph databases shard more easily across many machines",
+        "explanation": "Wrong; it's the opposite. Graphs are notoriously hard to shard because traversals cross partition boundaries."
+      },
+      {
+        "text": "Each node stores direct pointers to its edges, so each hop costs roughly proportional to the neighbours visited, rather than an index lookup over a huge join table",
+        "explanation": "Correct. Index-free adjacency makes a hop cost O(neighbours): proportional to the number of neighbours actually visited, independent of total graph size. In SQL each hop is a join with B-tree probes over the whole edge table, and the intermediate result sets grow at each level."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. In SQL, edges live in a table like `links(a, b)`. For an indexed nested-loop plan, each hop joins the frontier set against `links`, probing a B-tree index with O(log E) cost per row, where E is the number of rows (edges) in `links`: the probe gets slightly slower as the whole edge table grows.\n2. With an average fan-out of 20, the frontier grows 20 → 400 → 8,000 → 160,000 rows by hop 4, and every step is a join plus de-duplication:\n```formula\nF_h = d^h\nF_4 = 20^4 = 160,000\nwhere\nF_h: the frontier size, the number of accounts reached at hop h (before removing duplicates)\nF_4: the frontier size at hop 4\nd: the average number of links per account (the fan-out), here 20\nh: the hop number, counting the fraudster's direct links as hop 1\nIn words: each hop multiplies the frontier by the fan-out, so four hops at 20 links each reach about 160,000 accounts.\n```\n3. In a graph database, each node record links directly to its relationship records, so following edges is pointer-chasing with no global index.\n4. The visited set is just as large, but each step is cheaper and the engine's traversal is optimised for it (and can prune early).\n5. That's why multi-hop pattern queries are the strongest case for a graph database.",
+    "link": {
+      "title": "Wikipedia: NoSQL",
+      "url": "https://en.wikipedia.org/wiki/NoSQL"
+    }
+  }
+]

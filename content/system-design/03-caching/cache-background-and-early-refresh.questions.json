@@ -1,0 +1,71 @@
+[
+  {
+    "id": "cache-failure-modes-q2",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With probabilistic early expiration (XFetch), a request refreshes early if:\n\n```formula\nt + δ × β × (−ln(U)) ≥ t_exp\nwhere\nt: the current time, in seconds (s)\nδ: delta, how long a rebuild takes, in s\nβ: beta, a tuning knob (default 1)\nln: the natural logarithm (base e ≈ 2.718)\nU: a fresh random number above 0 and at most 1\nt_exp: when the value expires, in s\n≥: is greater than or equal to\ns: seconds\nIn words: each request adds a random head start to the clock and refreshes if that pushes it past expiry.\n```\n Why does this reduce stampede risk on hot keys **without** routinely wasting work on cold ones?",
+    "options": [
+      {
+        "text": "Each request has a small, rising chance of refreshing as expiry nears; a hot key gets so many requests that one refreshes just before expiry, while a cold key is rarely requested in that window so rarely refreshes early",
+        "explanation": "Correct as a probabilistic mitigation, not a guarantee. Hot keys provide many refresh opportunities; refreshes can overlap or fail and rare cold requests can still refresh early."
+      },
+      {
+        "text": "It locks the key so only one request can refresh",
+        "explanation": "XFetch needs no lock or coordination; each request decides independently."
+      },
+      {
+        "text": "It refreshes all keys at exactly δ (delta) seconds before expiry",
+        "explanation": "A fixed early time would make all requests in that instant refresh together, just shifting the stampede earlier. The randomness spreads it out."
+      },
+      {
+        "text": "It extends the TTL of hot keys so they never expire",
+        "explanation": "The TTL is unchanged. Hot keys stay fresh because they're recomputed early, not because their TTL is extended."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. −ln(U) is exponentially distributed with mean 1, so the \"early\" offset averages δ × β (delta times beta).\n2. Let δ = 0.5 s and β = 1. A request 2 s before expiry refreshes only if its offset is at least 2 s:\n\n```formula\nP = e^(−Δ / (δ × β))\nP = e^(−2 s / (0.5 s × 1))\nP = e^(−4)\nP ≈ 0.018\nwhere\nP: chance this one request refreshes early\ne: Euler's number, about 2.718\nΔ: time left before expiry, 2 seconds (s)\nδ: delta, the rebuild time, 0.5 s\nβ: beta, the tuning knob, 1\n≈: approximately equal to\ns: seconds\nIn words: 2 s before expiry each request has about a 1.8% chance of refreshing; closer to expiry the chance rises.\n```\n3. Hot key at 1,000 req/s: in the last 2 s there are 2,000 rolls, so one almost surely succeeds; a refresh is likely to start before expiry, but it must also finish successfully; overlapping decisions may launch multiple refreshes.\n4. Cold key at 1 request/minute: probably zero requests in that 2 s window, so no wasted early refresh.\n5. Tune β (beta) above 1 to refresh earlier if rebuild times vary.",
+    "link": {
+      "title": "Optimal Probabilistic Cache Stampede Prevention (VLDB 2015)",
+      "url": "https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You implement **serve stale while refreshing** in Redis: each value stores a soft expiry of 60 s, and the key has a hard TTL of 10 minutes. Assume a fresh authoritative value at insertion, no stale refill, no early eviction, and a read path that blocks on a miss. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Between 60 s and 10 minutes, readers get the stored value immediately, and one of them triggers a refresh",
+        "explanation": "Correct. Past the soft expiry the value is stale but still usable, so nobody waits on the rebuild."
+      },
+      {
+        "text": "You still need something to stop many readers triggering the refresh at once, such as a short lock or a single-flight",
+        "explanation": "Correct. Without it, every reader that sees the soft expiry pass could start its own refresh: a background stampede."
+      },
+      {
+        "text": "If the database is down, readers can keep getting the stale value until the hard TTL, which improves availability",
+        "explanation": "Correct. This is the application-cache version of `stale-if-error`: the hard TTL bounds how stale you are willing to go."
+      },
+      {
+        "text": "After 10 minutes the key is gone, so the next reader must wait for a full rebuild",
+        "explanation": "Correct. Once the hard TTL passes there is nothing to serve, so the next reader waits (this is fine for keys read so rarely that no one refreshed them in 9 minutes)."
+      },
+      {
+        "text": "Readers can never see data older than 60 s",
+        "explanation": "Incorrect. They can see data up to 10 minutes old if refreshes fail or the key is rarely read. Choose the hard TTL to match the staleness you can accept."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Lay the two clocks on one timeline:\n\n```\n0s ---- 60s ----------- 600s\n fresh   stale but served  gone\n         (refresh async)\n```\n\n1. 0–60 s: fresh, plain hit.\n2. 60–600 s: serve stale, one reader refreshes (A), guarded by a lock so only one does (B). A failing database just means the stale copy keeps being served (C).\n3. After 600 s: a normal miss (D).\n4. So the worst-case staleness is the **hard** TTL, not the soft one (E false).",
+    "link": {
+      "title": "Thundering herd problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Thundering_herd_problem"
+    }
+  }
+]

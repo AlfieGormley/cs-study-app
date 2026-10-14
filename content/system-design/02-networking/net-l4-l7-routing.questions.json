@@ -1,0 +1,100 @@
+[
+  {
+    "id": "net-load-balancers-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need to send `/api/*` requests to one server pool and `/images/*` to another, from the same hostname. Which kind of load balancer do you need?",
+    "options": [
+      {
+        "text": "An L4 load balancer, because it's faster",
+        "explanation": "L4 balancers only see IP addresses and ports. The URL path is inside the HTTP request (and usually inside TLS), so an L4 balancer can't route on it."
+      },
+      {
+        "text": "Round-robin DNS",
+        "explanation": "DNS works on hostnames only; it never sees URL paths. Both paths share a hostname, so DNS can't separate them."
+      },
+      {
+        "text": "Either; all load balancers can route by path",
+        "explanation": "Only balancers that understand HTTP can route by path. That's the defining difference between L4 and L7."
+      },
+      {
+        "text": "An L7 load balancer",
+        "explanation": "Correct. An L7 balancer terminates the connection and parses HTTP, so it can read the path and pick a pool per request."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. What information is needed? The **path** (`/api` vs `/images`).\n2. Where does it live? In the HTTP request line, inside the TLS-encrypted stream.\n3. Who can see it? Only something that terminates TLS and parses HTTP, i.e. **L7**.\n4. Examples: AWS ALB path rules, NGINX `location` blocks, Envoy route config.",
+    "link": {
+      "title": "What is an Application Load Balancer? (AWS)",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html"
+    }
+  },
+  {
+    "id": "net-load-balancers-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You serve 40 Gbps of video responses but only 1 Gbps of requests. Your software L4 balancers are saturating their network links. Which technique most directly cuts balancer bandwidth?",
+    "options": [
+      {
+        "text": "Switch to an L7 balancer",
+        "explanation": "An L7 balancer proxies both directions and does more work per byte, so it would carry the full 41 Gbps and need even more capacity."
+      },
+      {
+        "text": "Direct server return (DSR), so backends send responses straight to clients and the balancer only handles the inbound 1 Gbps",
+        "explanation": "Correct. With DSR, backends reply using the service IP as the source address, bypassing the balancer. It's a classic L4 technique for asymmetric traffic."
+      },
+      {
+        "text": "Enable sticky sessions",
+        "explanation": "Stickiness changes which backend gets a connection, not how much data flows through the balancer."
+      },
+      {
+        "text": "Use weighted round robin",
+        "explanation": "Weights change how traffic is split among backends; every byte still passes through the balancer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In the stated simplified accounting, traffic is 1 Gbps inbound plus 40 Gbps outbound = 41 Gbps passing through the balancer.\n2. DSR returns responses directly from backends, leaving about 1 Gbps of request traffic at the balancer.\n3. That is about a 41-fold reduction in traffic carried, excluding ACKs, encapsulation, NIC ingress/egress double counting and other overhead.\n4. The return path bypasses passive response inspection; active health probes can still receive their own responses.\n5. Backends and routing must support the service address and return path.\n\nThe bandwidth sums in steps 1 to 3:\n\n```formula\nB_before = B_in + B_out\nB_before = 1 Gbps + 40 Gbps = 41 Gbps\nB_after = B_in = 1 Gbps\nB_before / B_after = 41\nwhere\nB_before: the traffic passing through the balancers without DSR, in gigabits per second (Gbps)\nB_after: the traffic through the balancers with DSR\nB_in: the inbound request traffic, 1 Gbps\nB_out: the outbound response traffic, 40 Gbps\nGbps: gigabits per second, 10^9 bits per second\nIn words: with DSR, the big response stream skips the balancers, leaving them about a forty-first of the traffic.\n```",
+    "link": {
+      "title": "Maglev: a fast and reliable software network load balancer (Google Research)",
+      "url": "https://research.google/pubs/maglev-a-fast-and-reliable-software-network-load-balancer/"
+    }
+  },
+  {
+    "id": "net-load-balancers-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For which of these requirements do you need an **L7** load balancer rather than an L4 one? Select all that apply.",
+    "options": [
+      {
+        "text": "Spreading individual gRPC calls from a few long-lived clients across many backends",
+        "explanation": "Correct. gRPC multiplexes many calls over one HTTP/2 connection; only something that parses HTTP/2 can balance per call rather than per connection."
+      },
+      {
+        "text": "Sending requests with header `x-canary: true` to a canary pool",
+        "explanation": "Correct. Headers are inside the (usually TLS-encrypted) HTTP request, so only an L7 balancer can read them."
+      },
+      {
+        "text": "Balancing PostgreSQL client connections across read replicas",
+        "explanation": "The Postgres wire protocol isn't HTTP; an L4 balancer spreading TCP connections works fine (or a Postgres-aware proxy, which isn't an HTTP L7 balancer)."
+      },
+      {
+        "text": "Using direct server return so responses bypass the balancer",
+        "explanation": "DSR is an L4 technique: the balancer only forwards inbound packets. An L7 proxy must see responses, so it can't use DSR."
+      },
+      {
+        "text": "Routing `/checkout` and `/search` to different services on the same hostname",
+        "explanation": "Correct. The path is part of the HTTP request, which only an L7 balancer parses."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Ask, for each requirement: **does the decision need anything above IP and port?**\n\n| Need | Data needed | Layer |\n|---|---|---|\n| Per-call gRPC | HTTP/2 streams | L7 |\n| Header canary | HTTP header | L7 |\n| Postgres conns | TCP connection | L4 |\n| DSR | IP packets | L4 |\n| Path routing | URL path | L7 |\n\nL4 decisions are made once per connection from the 5-tuple. Anything about individual requests needs L7.",
+    "link": {
+      "title": "Load balancing (computing) (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Load_balancing_%28computing%29"
+    }
+  }
+]

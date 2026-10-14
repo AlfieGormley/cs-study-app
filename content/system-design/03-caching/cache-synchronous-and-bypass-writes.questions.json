@@ -1,0 +1,152 @@
+[
+  {
+    "id": "cache-strategies-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which strategy writes data **only to the database**, leaving the cache to be filled later by reads?",
+    "options": [
+      {
+        "text": "Write-through",
+        "explanation": "Write-through writes to both cache and database synchronously."
+      },
+      {
+        "text": "Write-back",
+        "explanation": "Write-back writes to the cache first and the database later; it is the opposite of bypassing the cache."
+      },
+      {
+        "text": "Read-through",
+        "explanation": "Read-through is a read strategy describing who loads data on a miss, not a write strategy."
+      },
+      {
+        "text": "Write-around",
+        "explanation": "Correct. Writes go around the cache straight to the database. It suits data that is written often but read rarely, at the cost of a miss on the first read after a write."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Ask: on a write, where does data go?\n2. Write-through: cache + DB. Write-back: cache, then DB later. Write-around: DB only.\n3. Read-through does not describe writes at all.\n4. So the answer is write-around. A typical use is log or audit data, which is written constantly and rarely read straight away.",
+    "link": {
+      "title": "Caching strategies — Amazon ElastiCache docs",
+      "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html"
+    }
+  },
+  {
+    "id": "cache-strategies-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Users complain that after editing their profile, the profile page still shows the old data for a few seconds. The app uses cache-aside, updating the DB then letting the 60 s TTL expire. Which change most directly fixes this?",
+    "options": [
+      {
+        "text": "Increase the TTL to 10 minutes",
+        "explanation": "A longer TTL makes the stale window longer, not shorter."
+      },
+      {
+        "text": "Delete (or overwrite) the cache key immediately after the database update commits",
+        "explanation": "Correct for the simple sequential path: invalidate after commit rather than waiting for expiry. Concurrent stale fills, reordered cache writes and failures still require leases/versioning or an authoritative read path when strict freshness matters."
+      },
+      {
+        "text": "Switch to write-around without invalidation",
+        "explanation": "Write-around without invalidation is what the app is effectively doing now: the DB is updated, but the stale cached copy remains until TTL."
+      },
+      {
+        "text": "Move the cache into each app server's process",
+        "explanation": "In-process caching adds more copies and makes staleness worse, since each server must be invalidated separately."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Current flow: `UPDATE users ...` and nothing else. The cache still holds the old profile until its TTL (up to 60 s) runs out.\n2. Fix: after the commit, `DEL user:42`.\n3. The next read misses, loads the new row and caches it.\n4. In the sequential successful path the stale window ends at deletion; there is no unconditional millisecond bound under races or failures.\n5. Keep the TTL anyway: if a delete is ever lost (network blip), expiry still repairs the cache eventually.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-strategies-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With write-through, the app writes to Redis, then to Postgres. Redis succeeds but the Postgres transaction fails on a constraint violation. What state are you in, and what is the usual fix?",
+    "options": [
+      {
+        "text": "The cache now holds a value that never existed in the database; write to the DB first and only then update or delete the cache",
+        "explanation": "Correct. Readers would see data that was rejected. Ordering the DB write first means a failed write leaves the cache untouched, and a cache failure after commit leaves only a stale entry, which deletion or a TTL repairs."
+      },
+      {
+        "text": "Consistent: Postgres rolled back, so Redis automatically rolls back too",
+        "explanation": "Redis and Postgres do not share a transaction. A Postgres rollback does nothing to a value already set in Redis."
+      },
+      {
+        "text": "Postgres will retry until it succeeds, so the states will converge",
+        "explanation": "A constraint violation is a permanent rejection, not a transient error. Retrying fails the same way."
+      },
+      {
+        "text": "This cannot happen with write-through, because write-through uses two-phase commit",
+        "explanation": "Write-through is a pattern, not a protocol. Common implementations do not use two-phase commit between the cache and database."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Sequence: `SET user:42 {...new...}` succeeds, then `UPDATE users ...` fails (for example a unique email clash).\n2. Postgres still holds the old row; Redis holds a version that was never committed.\n3. Readers hitting Redis see phantom data until a TTL or the next write.\n4. Fix the order: commit to the DB first (it is the source of truth and can reject writes), then update or delete the cache.\n5. If the cache step fails after a successful commit, you have a *stale* entry, not a *phantom* one, and a delete-retry or TTL repairs it.",
+    "link": {
+      "title": "Caching strategies — Amazon ElastiCache docs",
+      "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html"
+    }
+  },
+  {
+    "id": "cache-strategies-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two requests update the same product price at almost the same moment. Each one writes the database and then **overwrites** the cache with its own new value using `SET`. Writer A commits £10, then writer B commits £12, but A's `SET` reaches Redis after B's. What is the result?",
+    "options": [
+      {
+        "text": "Redis holds £12, matching the database, because the last database commit always wins in the cache",
+        "explanation": "The cache has no idea about commit order. Whichever `SET` arrives last wins in Redis, and here that is A's."
+      },
+      {
+        "text": "Redis holds £10 while the database holds £12, and it stays wrong until the TTL expires or the next write",
+        "explanation": "Correct. Overwriting on write lets slow network paths reorder updates. Deleting the key instead means both writers do the same idempotent thing, and the next read loads £12."
+      },
+      {
+        "text": "Redis rejects A's `SET` because it is older",
+        "explanation": "Plain `SET` has no versioning. It accepts whatever arrives last."
+      },
+      {
+        "text": "Both writes fail with a conflict error",
+        "explanation": "Neither the database nor Redis detects a conflict here. Both writes succeed, which is exactly why the cache ends up wrong."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Database order: A (£10) then B (£12). Database = **£12**.\n2. Cache order: B's `SET £12`, then A's delayed `SET £10`. Cache = **£10**.\n3. Readers now get £10 until the TTL expires.\n4. With delete-on-write:\n\n```\nA: commit £10, DEL price:9\nB: commit £12, DEL price:9\n```\n\nThe order of deletes no longer matters; the next read misses and loads £12.\n\nDelete-on-write closes this particular race. The later stale-refill unit covers the read/write race it does not close.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-strategies-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your product catalogue uses write-through caching with a 24-hour TTL. A nightly job re-imports 10 million product rows, of which only about 50,000 are viewed on a typical day. The morning after each import, the cache hit ratio collapses. What is the best change?",
+    "options": [
+      {
+        "text": "Make the import use write-around: write to the database and delete any cached copy, so only products that are actually read get cached",
+        "explanation": "Correct. Write-through on a bulk import caches 10 million mostly-unread rows, which evicts the hot 50,000. Bypassing population avoids filling the cache with cold imported rows. Invalidating changed hot rows still causes their next reads to miss."
+      },
+      {
+        "text": "Increase the TTL to 7 days so imported entries last longer",
+        "explanation": "The problem is that unread entries are flooding the cache and evicting hot ones. Keeping them longer makes it worse."
+      },
+      {
+        "text": "Switch the import to write-back so it finishes faster",
+        "explanation": "Write-back still puts all 10 million rows in the cache, and adds a risk of data loss to a bulk import."
+      },
+      {
+        "text": "Double the cache size so all 10 million rows fit",
+        "explanation": "This might work, but it buys a lot of memory to store data that is almost never read. Changing the write path is far cheaper."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Write-through puts every written row into the cache: 10 million entries.\n2. Only ~50,000 (0.5%) are read on a typical day.\n3. The cache has a fixed size, so the imported rows evict the hot entries (cache pollution).\n4. In the morning, readers miss on the hot products until they reload: the hit ratio collapses.\n5. Write-around for the import (write DB, `DEL` the key) keeps the cache holding only what readers asked for.\n\nRule of thumb: write-through suits writes that are likely to be read soon; bulk or write-heavy paths should go around the cache.",
+    "link": {
+      "title": "Caching strategies — Amazon ElastiCache docs",
+      "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html"
+    }
+  }
+]

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "net-dns-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A recursive resolver with an empty cache receives a query for `www.example.com`. Which server does it ask first?",
+    "options": [
+      {
+        "text": "The authoritative server for `example.com`",
+        "explanation": "The resolver doesn't yet know which servers are authoritative for `example.com`; it discovers that from referrals, starting at the root."
+      },
+      {
+        "text": "The `.com` TLD server",
+        "explanation": "It needs the root's referral to learn where the `.com` servers are, unless that referral is already cached, which the question rules out."
+      },
+      {
+        "text": "The domain's registrar",
+        "explanation": "Registrars publish `NS` records into the TLD zone, but they aren't queried during resolution. The path is root → TLD → authoritative."
+      },
+      {
+        "text": "A root server",
+        "explanation": "Correct. With nothing cached, the only thing a resolver knows is the root server addresses (built in as 'root hints'). The root refers it to the `.com` TLD servers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Cold cache: the resolver knows only the root hints.\n2. Root replies: \"I don't know `www.example.com`, but here are the `.com` servers.\"\n3. `.com` replies: \"Here are `example.com`'s name servers (`NS`).\"\n4. The authoritative server returns the `A` record.\n5. The resolver caches **each** answer for its TTL. The next lookup for anything under `.com` can skip the root and go straight to the `.com` servers; the next lookup for anything under `example.com` can go straight to its name servers.",
+    "link": {
+      "title": "Domain Name System (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Domain_Name_System"
+    }
+  },
+  {
+    "id": "net-dns-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You add many `TXT` records and enable DNSSEC, so some responses for your domain grow to about 3 KB. Users on a few corporate networks now fail to resolve the name, while everyone else is fine. Which are plausible causes? Select all that apply.",
+    "options": [
+      {
+        "text": "The answer no longer fits in the UDP size the client advertised, so the server sets the truncated flag, and the corporate firewall blocks the TCP port 53 retry",
+        "explanation": "Correct. Large answers fall back to TCP. Some firewalls still wrongly allow only UDP 53, so the TCP retry fails."
+      },
+      {
+        "text": "Large UDP responses are fragmented at the IP layer, and some middleboxes drop the fragments",
+        "explanation": "Correct. This is why the DNS community settled on advertising around 1,232 bytes (DNS Flag Day 2020): stay under typical path limits and use TCP for anything bigger."
+      },
+      {
+        "text": "DNSSEC makes resolvers ignore TTLs",
+        "explanation": "DNSSEC does not tell resolvers to ignore TTLs; validation can further limit use of data by signature validity."
+      },
+      {
+        "text": "A CNAME now sits at the zone apex",
+        "explanation": "Nothing in the scenario adds a CNAME. Apex CNAMEs are a zone-configuration error that would break resolution for everyone, not only a few networks."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Classic DNS assumed 512-byte UDP answers; EDNS(0) lets clients advertise more.\n2. If the response is bigger than advertised, the server returns a truncated (TC) reply → the client must retry over **TCP**.\n3. Failure path A: TCP/53 blocked → retry fails.\n4. Failure path B: a big UDP answer fragments; fragments get dropped → timeout.\n5. Fixes: trim records, prefer compact DNSSEC algorithms (ECDSA), and ask affected networks to allow TCP/53 (which RFC 7766 makes mandatory).",
+    "link": {
+      "title": "Domain Name System (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Domain_Name_System"
+    }
+  }
+]

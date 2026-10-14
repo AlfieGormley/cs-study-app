@@ -1,0 +1,70 @@
+[
+  {
+    "id": "db-relational-acid-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bank transfer runs two `UPDATE`s inside one transaction: debit account A, credit account B. The database server loses power after the debit but before `COMMIT`. After restart, what does the database guarantee?",
+    "options": [
+      {
+        "text": "Account A is debited and B is not, because the debit had already executed",
+        "explanation": "Wrong. Executing a statement is not committing it. Atomicity prevents this uncommitted debit from becoming a visible committed result after recovery."
+      },
+      {
+        "text": "Neither change is visible: the debit is rolled back",
+        "explanation": "Correct. Neither change becomes a committed result. Physical recovery and transaction visibility are separate: PostgreSQL may replay changes from an uncommitted transaction, but its row versions remain invisible."
+      },
+      {
+        "text": "Both changes are applied, because the database replays the whole transaction from the log",
+        "explanation": "Wrong. WAL may redo physical changes from transactions that never committed; it does not invent the unexecuted credit or make the aborted debit visible. PostgreSQL uses transaction status and MVCC; InnoDB also undoes incomplete transactions."
+      },
+      {
+        "text": "It depends on the isolation level",
+        "explanation": "Wrong. Isolation levels govern what *concurrent* transactions can see of each other. Crash recovery of uncommitted work is atomicity and durability, and it doesn't vary with the isolation level."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Atomicity requires all transaction effects to commit together or none to become committed.\n2. The transfer never committed, so its debit must not become a visible committed balance.\n3. Recovery may replay physical log records regardless of whether their transaction committed. PostgreSQL treats uncommitted tuple versions as invisible; InnoDB uses undo to roll back incomplete transactions.\n4. The recovered committed balances therefore exclude this transfer.",
+    "link": {
+      "title": "PostgreSQL: Write-ahead logging",
+      "url": "https://www.postgresql.org/docs/current/wal-intro.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Assume ordinary enforced constraints and durable commit configuration. Which of these are guarantees the database itself provides, rather than things that depend on the application? Select all that apply.",
+    "options": [
+      {
+        "text": "A committed transaction survives a crash of the database process",
+        "explanation": "Correct. This is durability: the commit record is flushed to the write-ahead log before the commit is acknowledged."
+      },
+      {
+        "text": "A user's account balance never goes negative, even though no `CHECK` constraint exists",
+        "explanation": "Wrong. Without a declared constraint the database has no idea this rule exists. ACID's 'consistency' is only as strong as the invariants you encode or your application maintains."
+      },
+      {
+        "text": "An aborted transaction leaves no committed visible effects from its database row writes.",
+        "explanation": "Correct. Physical tuple/log records can remain until cleanup, and sequences or external side effects are not generally rolled back; atomicity covers transactional database changes."
+      },
+      {
+        "text": "A committed, non-NULL orders.user_id governed by a validated and enabled foreign key references an existing user.",
+        "explanation": "Correct. The constraint enforces this relationship at the required check point. Nullable references and deferred checks must be considered explicitly."
+      },
+      {
+        "text": "Two transactions running concurrently behave exactly as if they ran one after the other",
+        "explanation": "Wrong in general. That's serializability, and most databases default to weaker levels (Postgres and Oracle default to Read Committed; MySQL InnoDB to Repeatable Read). You only get this if you choose `SERIALIZABLE`."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Go through each option and ask: *does the database know about this rule?*\n\n1. Durability: the database's own WAL mechanism. Database-guaranteed.\n2. Non-negative balance with no constraint: the database doesn't know the rule. Application's job (or add `CHECK (balance >= 0)`).\n3. Atomicity on abort: built-in. Database-guaranteed.\n4. Declared foreign key: the rule *is* known to the database, so it enforces it.\n5. Serial-equivalent behaviour: only at `SERIALIZABLE`, which isn't the default in Postgres, MySQL, Oracle or SQL Server.\n\nSo the answers are 1, 3 and 4.",
+    "link": {
+      "title": "PostgreSQL: Constraints",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  }
+]

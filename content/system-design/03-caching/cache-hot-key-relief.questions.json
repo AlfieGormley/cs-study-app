@@ -1,0 +1,40 @@
+[
+  {
+    "id": "cache-failure-modes-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "During a live final, the key `match:final:score` receives 400,000 reads/s. The Redis shard holding it maxes out at ~120,000 ops/s; the cluster's other 19 shards are mostly idle. Assume bounded score staleness is acceptable. Which measures would actually relieve it? Select all that apply.",
+    "options": [
+      {
+        "text": "Add 20 more shards to the cluster",
+        "explanation": "Incorrect. A single key lives in one slot on one shard. More shards don't split one key's traffic."
+      },
+      {
+        "text": "Add an in-process cache on each of the 200 app servers with a 1 s TTL",
+        "explanation": "Correct with per-server miss coalescing and stable cache residency: roughly one fill per server per TTL can cut origin reads. The total age also includes source lag and any stale-fill delay."
+      },
+      {
+        "text": "Store 8 copies as `match:final:score#0..7`, write all of them, and have readers pick one at random",
+        "explanation": "Correct if those copies are deliberately distributed over enough physical shards and updates handle partial failures. Different slots may still share one shard; eight suffixes do not guarantee eight independent capacities."
+      },
+      {
+        "text": "Add read replicas to the hot shard and route reads for that key to them",
+        "explanation": "Correct if reads tolerate replica lag and routing balances them. Capacity may approach the sum of measured node capacities, but replication work, network and load distribution prevent assuming perfect linear scaling."
+      },
+      {
+        "text": "Switch to `allkeys-lfu`",
+        "explanation": "Incorrect. LFU would keep the hot key cached, but it's already cached. The problem is throughput on one node, not eviction."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "1. Diagnose: one key → one hash slot → one shard. Cluster size is irrelevant for a single key.\n2. Need: cut per-shard load from 400k to under 120k.\n3. With per-server coalescing and no early eviction, local cache fills are:\n\n```formula\nR_redis ≈ S / TTL\nR_redis ≈ 200 / 1 s = 200 /s\nwhere\nR_redis: reads reaching Redis each second\nS: application servers, here 200\nTTL: local-cache lifetime, here 1 second (s)\ns: seconds\n≈: approximately equal; assumes one fill per server per lifetime and no early eviction\nIn words: coalesced local caches reduce Redis reads to about 200 a second.\n```\n4. Key splitting and replicas both divide the reads by the number of nodes serving them:\n\n```formula\nR_node = R / k\nR_node = 400,000 / 8 = 50,000\nR_node = 400,000 / 4 = 100,000\nwhere\nR_node: reads per second on each node\nR: reads per second for the key, 400,000\nk: nodes sharing the key: 8 split copies, or 3 replicas + 1 primary = 4\nIn words: 8 copies on 8 shards give 50k reads/s each; 4 nodes give 100k each, just under the 120k limit.\n```\n\n5. Both assume the copies sit on distinct, capable nodes and the load is spread evenly; verify placement and headroom.\n6. Often you combine the local cache with one of the others for headroom.",
+    "link": {
+      "title": "Redis Cluster specification",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
+    }
+  }
+]

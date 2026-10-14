@@ -1,0 +1,62 @@
+[
+  {
+    "id": "net-transport-http-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You're building a multiplayer game that sends each player's position 30 times a second. Why do many such games use UDP rather than TCP for position updates?",
+    "options": [
+      {
+        "text": "UDP encrypts packets automatically",
+        "explanation": "UDP has no encryption at all. Encryption comes from a layer on top (DTLS, QUIC or the game's own scheme)."
+      },
+      {
+        "text": "UDP guarantees delivery faster than TCP",
+        "explanation": "UDP guarantees nothing about delivery. It's attractive precisely because it doesn't try to deliver everything."
+      },
+      {
+        "text": "TCP can't send more than one message per second",
+        "explanation": "TCP can carry very high message rates. The issue isn't throughput but head-of-line blocking and retransmission delay."
+      },
+      {
+        "text": "A lost update is superseded 33 ms later, so retransmitting it (and blocking newer updates behind it, as TCP would) only adds lag",
+        "explanation": "Correct. TCP's in-order delivery would hold back fresh positions until a stale one is retransmitted. UDP lets the game drop the stale packet and use the newest state."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "First, how often a new update arrives:\n\n```formula\nt_gap = 1 / f = 1 s / 30 ≈ 33 ms\nwhere\nt_gap: the time between one position update and the next, in milliseconds (ms)\nf: the update rate, 30 updates per second\ns: second\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: thirty updates a second means a fresh one every 33 ms or so.\n```\n\n1. With TCP, if one packet is lost, loss detection and retransmission can delay delivery; assume a 60 ms recovery delay for this illustration. Meanwhile the next two updates have arrived but TCP **can't deliver them** until the lost one is filled in.\n2. Result: a 60+ ms stutter, all to deliver a position that's already out of date.\n3. With UDP, the game just uses the newest packet it has. Important events (a kill, a purchase) can be sent with the game's own lightweight acknowledgements.",
+    "link": {
+      "title": "User Datagram Protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/User_Datagram_Protocol"
+    }
+  },
+  {
+    "id": "net-transport-http-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In HTTP/1.1, why did browsers open about six TCP connections per origin?",
+    "options": [
+      {
+        "text": "HTTP/1.1 closes the connection after every request",
+        "explanation": "HTTP/1.1 made connections persistent by default (keep-alive). The limit is concurrency on a connection, not reuse."
+      },
+      {
+        "text": "Without HTTP/1.1 pipelining, each connection handles one request/response at a time, so parallel fetching needs more connections",
+        "explanation": "Correct. Without working pipelining, a connection waits for each response to finish before the next can be sent; multiple connections are the only way to fetch resources concurrently."
+      },
+      {
+        "text": "Servers limited each connection to 100 KB",
+        "explanation": "There's no such per-connection size limit in HTTP/1.1. Connections can carry arbitrarily large responses."
+      },
+      {
+        "text": "To provide redundancy in case one TCP connection drops",
+        "explanation": "Redundancy isn't the reason. The six connections are for parallel fetching to work around HTTP-level head-of-line blocking."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A page needs, say, 60 resources.\n2. On one HTTP/1.1 connection, they come back strictly one after another, each costing at least 1 RTT.\n3. At 50 ms RTT, compare one connection with six:\n\n```formula\nT_1 = k × RTT = 60 × 50 ms = 3,000 ms\nT_6 = (k / c) × RTT\nT_6 = (60 / 6) × 50 ms = 500 ms\nwhere\nT_1: the minimum time to fetch every resource over one HTTP/1.1 connection, in milliseconds (ms)\nT_6: the same over c parallel connections\nk: the number of resources on the page, 60\nc: the number of parallel connections, 6\nRTT: the round-trip time, 50 ms\nms: millisecond, one thousandth of a second\nIn words: one request per round trip per connection, so six connections cut 60 rounds to 10.\n```\n\nThat's 3 s on one connection versus about 0.5 s on six (plus 5 extra handshakes). HTTP/2 can issue independent requests concurrently on one connection, subject to stream limits and flow control. Completion time still depends on response size, server work, congestion and loss; multiplexing does not guarantee a 1–2 RTT page load.",
+    "link": {
+      "title": "High Performance Browser Networking: HTTP/1.x",
+      "url": "https://hpbn.co/http1x/"
+    }
+  }
+]

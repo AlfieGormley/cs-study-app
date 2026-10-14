@@ -1,0 +1,62 @@
+[
+  {
+    "id": "net-tls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want your load balancer to route `/api/*` to one service and `/static/*` to another, while traffic between the load balancer and services must also be encrypted. Which TLS pattern fits?",
+    "options": [
+      {
+        "text": "TLS passthrough to the services",
+        "explanation": "With passthrough the load balancer never decrypts, so it can't see the URL path and can't route on `/api` vs `/static`. It could only route by SNI."
+      },
+      {
+        "text": "Terminate at the load balancer and re-encrypt to the services (or use mTLS)",
+        "explanation": "Correct. Decrypting at the load balancer lets it read paths and headers for L7 routing; opening a new TLS connection to each backend keeps the internal hop encrypted."
+      },
+      {
+        "text": "Terminate at the load balancer, then plain HTTP to the services",
+        "explanation": "This allows path routing but leaves the internal hop unencrypted, which breaks the requirement."
+      },
+      {
+        "text": "Use a single TLS session from the client through to every service",
+        "explanation": "A TLS session is between two endpoints. One session can't fan out to multiple services and still let the middle box read the path."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Requirement A: route by path → the LB must **see HTTP** → it must decrypt.\n2. Requirement B: internal hop encrypted → the LB must **open a new TLS connection** to backends.\n3. Passthrough fails A; edge-only termination fails B.\n4. Re-encryption satisfies both. The cost is two TLS sessions per request path, mitigated by keeping the LB→backend connections pooled.",
+    "link": {
+      "title": "What is an Application Load Balancer? (AWS)",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/introduction.html"
+    }
+  },
+  {
+    "id": "net-tls-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A TLS-passthrough L4 load balancer fronts 200 customer domains, each with its own certificate on different backend clusters. How can it send each connection to the right cluster without decrypting?",
+    "options": [
+      {
+        "text": "It reads the SNI hostname from the unencrypted ClientHello",
+        "explanation": "Correct. SNI is sent in clear in the ClientHello (unless Encrypted Client Hello is used), so an L4/TLS-aware proxy can route on it without holding any keys."
+      },
+      {
+        "text": "It reads the `Host` header",
+        "explanation": "The `Host` header is inside the encrypted HTTP request, so a passthrough balancer can't see it."
+      },
+      {
+        "text": "It uses a different destination port for each domain",
+        "explanation": "Clients all connect to port 443 for HTTPS, so ports can't distinguish 200 domains."
+      },
+      {
+        "text": "It can't; passthrough requires one IP address per domain",
+        "explanation": "That was true before SNI was widely supported. Today SNI-based routing makes shared IPs work with passthrough."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Passthrough means the LB sees only TCP plus the cleartext parts of TLS.\n2. The ClientHello includes `server_name` (SNI), e.g. `shop.customer42.com`.\n3. The LB peeks at it (HAProxy `req.ssl_sni`, Envoy's TLS inspector) and picks the backend cluster.\n4. Caveat: **Encrypted Client Hello (ECH)** hides the real SNI behind an outer, public name, which would break this unless the LB itself holds the ECH keys.",
+    "link": {
+      "title": "Server Name Indication (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Server_Name_Indication"
+    }
+  }
+]

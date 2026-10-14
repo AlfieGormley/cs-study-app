@@ -1,3 +1,35 @@
+# Short lessons and code comments: ACTIVE (14 October 2026)
+
+The user chose separate short lessons, each with its own completion status and focused questions. Continue
+converting the existing course and adding useful code comments; the first published batch is a milestone,
+not completion of the whole task. Follow [short-lessons-brief.md](short-lessons-brief.md) and the mandatory
+author/independent-verifier process. Existing skipped-content decisions below remain in force.
+
+- Published commit `82eb4aa`: Fundamentals, Complexity Analysis and Sound & Digital Audio; 20 originals
+  became 94 short lessons with 234 questions. All original question IDs/keys remain, plus three new questions.
+- The first batch preserves original completion dates in its new parts, independently tracks new completions,
+  redirects old links and resumes saved quizzes. Full staged build, 54 tests, all new mobile lesson/question
+  renders, navigation, age controls, offline practice and installed-app update checks passed. GitHub Pages
+  succeeded and live files match version `d4511ae2ebbf`.
+- Networking, caching and system-design databases are independently verified and stamped. The current
+  verified build contains 204 short lessons replacing 43 originals across six modules, with 512 associated
+  questions. All 5,565 original course question IDs remain, plus five new questions.
+- Second-batch integration: full verified-snapshot build version `0e1dfffd8410`, 56 tests and all 204 new
+  lesson/512 question mobile renders pass. An unlabelled Cypher query's accidental diagram classification was
+  fixed; real diagrams remain. Precise database glossary terms prevent incorrect cross-subject definitions.
+- Distributed systems, messaging and API design are being authored; remaining modules are queued.
+- Current reports: [short-lessons-report.md](short-lessons-report.md). Working queue and baseline snapshots:
+  `/tmp/cs-study-short-lessons/queue.json`, `original-index.json`, `original-questions.json`; baseline commit
+  `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`. The full original course has 482 lessons and 5,565 questions.
+- Root owns shared code and generated assets. `/tmp/cs-study-short-lessons/preview-verified.mjs` builds isolated
+  previews from verified modules and the original baseline, allowing pending author files to stay out of releases.
+  Do not publish generated data built from unverified content. The final whole-course migration audit is
+  `scripts/audit-short-lessons.mjs` with the original index and question snapshots as arguments.
+
+Historical notes below are superseded where they conflict with this active task or already published changes.
+
+---
+
 # Formula and glossary retrofit: COMPLETE (8–11 October 2026)
 
 All 76 modules have formula blocks and verified glossaries, and a final cross-subject reconciliation pass

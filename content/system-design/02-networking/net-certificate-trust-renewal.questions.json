@@ -1,0 +1,122 @@
+[
+  {
+    "id": "net-tls-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A wildcard certificate is issued for `*.example.com`. Which hostname will it **not** be valid for?",
+    "options": [
+      {
+        "text": "`shop.example.com`",
+        "explanation": "A wildcard matches exactly one label in the leftmost position, and `shop` is one label, so this is covered."
+      },
+      {
+        "text": "`api.example.com`",
+        "explanation": "`api` is a single leftmost label, so `*.example.com` covers it."
+      },
+      {
+        "text": "`eu.api.example.com`",
+        "explanation": "Correct. The wildcard matches only one label. `eu.api` is two labels, so you'd need `*.api.example.com` or an explicit name."
+      },
+      {
+        "text": "`www.example.com`",
+        "explanation": "`www` is a single label, so it matches the wildcard."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `*` replaces exactly **one** DNS label (the text between dots), in the leftmost position.\n2. `shop.example.com`, `api.example.com`, `www.example.com` → one label before `example.com` → valid.\n3. `eu.api.example.com` → two labels → **invalid**.\n4. Also note `*.example.com` doesn't cover the bare `example.com`; add it as a separate SAN.",
+    "link": {
+      "title": "Public key certificate (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Public_key_certificate"
+    }
+  },
+  {
+    "id": "net-tls-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After a certificate renewal, your site works in Chrome on desktop, but your Android app and `curl` fail with 'unable to verify the first certificate'. What's the most likely cause?",
+    "options": [
+      {
+        "text": "The new certificate uses TLS 1.3",
+        "explanation": "Certificates are not tied to a single TLS version. The reported error concerns chain validation; TLS-version support depends on the particular client and library."
+      },
+      {
+        "text": "The root CA was removed from all trust stores",
+        "explanation": "If the root were untrusted, desktop Chrome would fail too. The fact that only some clients fail points to a missing intermediate."
+      },
+      {
+        "text": "DNS is returning the wrong IP for the app",
+        "explanation": "A wrong IP would usually give a name mismatch or connection error. 'Unable to verify the first certificate' specifically means the client couldn't find the issuer of the leaf."
+      },
+      {
+        "text": "The server is sending only the leaf certificate, not the intermediate; desktop browsers fill the gap themselves but other clients don't",
+        "explanation": "Correct. Browsers can cache intermediates or fetch them via the certificate's AIA URL. Many other clients don't, so the chain to a trusted root is broken."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The client needs a path: leaf → intermediate → root (in its trust store).\n2. The server must send **leaf + intermediate(s)**; the root is already on the client.\n3. After renewal, the config often points at `cert.pem` (leaf only) instead of `fullchain.pem`.\n4. Chrome on desktop hides this by fetching the intermediate itself; `curl` and many mobile stacks don't.\n5. Check with `openssl s_client -connect host:443 -showcerts` and fix the chain file.",
+    "link": {
+      "title": "High Performance Browser Networking: TLS",
+      "url": "https://hpbn.co/transport-layer-security-tls/"
+    }
+  },
+  {
+    "id": "net-tls-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team previously bought one-year publicly trusted TLS certificates and renewed them by hand each January. What do the CA/Browser Forum's lifetime changes mean for that process?",
+    "options": [
+      {
+        "text": "Nothing, because one-year certificates remain valid for public websites",
+        "explanation": "Public TLS certificate lifetimes are being cut in stages, starting at 200 days in March 2026, so one-year certificates can no longer be issued for public sites."
+      },
+      {
+        "text": "They can avoid the change by buying certificates in bulk in advance",
+        "explanation": "Certificates issued now still carry the shorter maximum lifetime, so stockpiling doesn't help."
+      },
+      {
+        "text": "Maximum lifetimes drop to 200 days from March 2026, 100 days from 2027 and 47 days from 2029, so they need automated renewal (for example ACME) rather than a yearly manual task",
+        "explanation": "Correct. Maximum validity periods shorten in stages, so an annual renewal task no longer suffices. Automation and expiry monitoring reduce the operational risk of more frequent replacement."
+      },
+      {
+        "text": "Shorter lifetimes only apply to Let's Encrypt certificates",
+        "explanation": "The CA/Browser Forum baseline requirements apply to every publicly trusted CA, paid or free."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The public-TLS maximum becomes 200 days on 15 March 2026, 100 days on 15 March 2027 and 47 days on 15 March 2029.\n2. With a 47-day certificate, renewal at two-thirds of its lifetime is about 31 days.\n3. Frequent manual renewal increases the chance of an operational mistake; an outage is not inevitable.\n4. Use ACME or managed certificates, test renewal and monitor expiry. Private PKI has its own policy.\n\nThe arithmetic in step 2:\n\n```formula\nt_renew = 2/3 × L\nt_renew = 2/3 × 47 days ≈ 31 days\nwhere\nt_renew: how long after issuance the certificate is renewed\nL: the certificate's lifetime, 47 days\ndays: the unit of time here, 24 hours each\n≈: approximately equal to\nIn words: renewing at two-thirds of a 47-day lifetime means a renewal roughly every month, far too often to do by hand.\n```",
+    "link": {
+      "title": "CA/Browser Forum ballot SC081v3",
+      "url": "https://cabforum.org/2025/04/11/ballot-sc081v3-introduce-schedule-of-reducing-validity-and-data-reuse-periods/"
+    }
+  },
+  {
+    "id": "net-tls-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume TCP's initial congestion window is ten 1,460-byte segments and the server has no earlier opportunity to grow it. After a switch to an RSA-4096 leaf and two intermediates (about 18 KB of certificates), distant clients need an extra handshake round trip. Why?",
+    "options": [
+      {
+        "text": "RSA-4096 is not supported by TLS 1.3",
+        "explanation": "TLS 1.3 accepts RSA certificates for signatures. Support isn't the issue; size is."
+      },
+      {
+        "text": "Clients must download intermediates separately",
+        "explanation": "The server is sending the intermediates, which is why the flight is so large. The problem is the size of that flight."
+      },
+      {
+        "text": "The server's first flight is larger than TCP's initial congestion window (about 14 KB), so the server must wait for the client's ACK before sending the rest",
+        "explanation": "Correct. The certificates overflow the initial window, so the handshake spills into a second round trip. A smaller ECDSA certificate and a trimmed chain fit in one flight."
+      },
+      {
+        "text": "Longer keys always add a round trip to key exchange",
+        "explanation": "Key exchange uses ephemeral (EC)DHE shares regardless of the certificate's key size; a bigger certificate key doesn't add round trips by itself."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nIW = 10 × MSS\nIW = 10 × 1,460 B = 14,600 B ≈ 14 KB\nF ≈ 19 KB > IW\nwhere\nIW: TCP's initial congestion window: how much the server may send before the first ACK comes back\nMSS: the maximum segment size, 1,460 bytes (B) per segment here\nF: the server's first flight: ServerHello, extensions, about 18 KB of certificates, CertificateVerify and Finished, about 19 KB in total\nB: bytes\nKB: kilobytes, thousands of bytes\n≈: approximately equal to\n>: greater than\nIn words: the first flight is bigger than the initial window, so it can't all go in one round trip.\n```\n\nThe server sends about 14 KB, waits one RTT for ACKs, then sends the remainder: an extra round trip.\n\nFixes:\n  - ECDSA P-256 certificates (far smaller than RSA-4096).\n  - Don't send the root or unneeded cross-signs.\n  - Certificate compression (RFC 8879), when both endpoints negotiate support.",
+    "link": {
+      "title": "High Performance Browser Networking: TLS",
+      "url": "https://hpbn.co/transport-layer-security-tls/"
+    }
+  }
+]

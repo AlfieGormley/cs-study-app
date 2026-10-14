@@ -1,0 +1,108 @@
+[
+  {
+    "id": "net-global-traffic-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to fail traffic away from a region within about 30 seconds of it going down, for clients that hold long-lived connections and sometimes cache DNS for hours. Which approach best meets this?",
+    "options": [
+      {
+        "text": "DNS failover with a 10 s TTL",
+        "explanation": "A short TTL doesn't help clients that cache DNS for hours or keep connections open; those never re-resolve, so they stay pinned to the dead region."
+      },
+      {
+        "text": "Anycast IPs (e.g. AWS Global Accelerator or an anycast edge) that route to healthy regions behind a stable address",
+        "explanation": "Correct as an architecture choice: a stable edge address can route reconnecting clients to healthy regions without fresh DNS answers. Meeting a 30-second objective still requires suitable health detection, connection timeouts and tested reconnect behavior; anycast alone does not guarantee it."
+      },
+      {
+        "text": "Weighted DNS with 50/50 weights",
+        "explanation": "Weights split traffic in normal conditions but don't remove the failed region quickly, and still depend on clients re-resolving."
+      },
+      {
+        "text": "Ask users to refresh the page",
+        "explanation": "That doesn't help API clients, and a refresh may still use the cached DNS answer or pooled connection to the dead region."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Constraint: clients **won't re-resolve DNS** quickly → any DNS-based approach has an hours-long tail.\n2. So keep the IP the same and change what's *behind* it.\n3. Anycast edge: client → nearest edge (same IP everywhere) → healthy region chosen per connection.\n4. When health checks fail for a region (e.g. after 3 × 10 s checks), the edge routes new connections elsewhere; dropped long-lived connections reconnect to the same IP and land in a healthy region.\n5. Clients need to reconnect on failure, but never need a new DNS answer.",
+    "link": {
+      "title": "What is AWS Global Accelerator?",
+      "url": "https://docs.aws.amazon.com/global-accelerator/latest/dg/what-is-global-accelerator.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which are real limitations of anycast for global traffic management? Select all that apply.",
+    "options": [
+      {
+        "text": "BGP's choice of 'nearest' may not be the lowest-latency site",
+        "explanation": "Correct. BGP prefers routes by policy and AS-path length, not measured latency, so some users land at a farther site."
+      },
+      {
+        "text": "A routing change mid-connection can send a TCP flow's packets to a different site, breaking it",
+        "explanation": "Correct. The new site has no state for that connection, so it resets. This matters most for long-lived connections."
+      },
+      {
+        "text": "Precise percentage-based traffic splits are hard",
+        "explanation": "Correct. You can only influence BGP indirectly (withdrawals, prepending, communities), so 'send 30% to London' isn't directly expressible."
+      },
+      {
+        "text": "Clients must be updated whenever a site is added",
+        "explanation": "The opposite: clients keep using the same IP, and new sites just start announcing it. That's one of anycast's strengths."
+      },
+      {
+        "text": "It can't work over IPv4",
+        "explanation": "Anycast works for IPv4 and IPv6; 1.1.1.1 and 8.8.8.8 are IPv4 anycast addresses."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Separate what BGP gives you from what it doesn't:\n\n- Gives: one stable IP, automatic nearest-by-routing, fast reroute on withdrawal, spread of DDoS traffic.\n- Doesn't give: latency awareness, per-connection stickiness across route changes, fine-grained weights.\n\nSo the first three options are limitations; the last two are false. Large operators compensate with careful peering, stable announcements and a layer that keeps connection state consistent.",
+    "link": {
+      "title": "Border Gateway Protocol (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Border_Gateway_Protocol"
+    }
+  },
+  {
+    "id": "net-global-traffic-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You withdraw the anycast announcement from your large Frankfurt PoP, which handles about 30% of European traffic, for maintenance. Which statements are true? Select all that apply. Assume packets rerouted to other PoPs cannot use shared TCP connection state or forwarding back to Frankfurt.",
+    "options": [
+      {
+        "text": "Its users move to whichever sites BGP now considers next best, often nearby PoPs such as Amsterdam or Paris, rather than spreading evenly across the network",
+        "explanation": "Correct. Each network falls back to its next-best route, which is usually a neighbouring PoP, so load concentrates nearby."
+      },
+      {
+        "text": "Open TCP connections to Frankfurt break, because their packets now arrive at a site with no state for them",
+        "explanation": "If packets move to a site without connection state or forwarding support, existing TCP sessions fail. Simply prepending or withdrawing BGP routes also moves existing flows; graceful draining requires connection-aware handling or application reconnect support."
+      },
+      {
+        "text": "Clients must receive a new DNS answer before they can reach another PoP",
+        "explanation": "Anycast uses the same IP everywhere; only the routing behind it changes. No DNS change is involved."
+      },
+      {
+        "text": "Neighbouring PoPs need enough headroom to absorb Frankfurt's traffic",
+        "explanation": "Correct. If Amsterdam inherits most of Frankfurt's 30%, Amsterdam needs that capacity spare, not just the network as a whole."
+      },
+      {
+        "text": "All traffic moves the instant the announcement is withdrawn, with no convergence period",
+        "explanation": "BGP withdrawals propagate through routers and trigger route selection. The delay depends on routing policy, detection, timers and topology; no instant or fixed-time guarantee follows."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Withdraw Frankfurt → each network picks its next-best route → mostly nearby PoPs.\n2. Long-lived TCP connections hit a stateless new site → reset → clients reconnect.\n3. No DNS involved: same IP.\n4. Capacity is **local**: plan which PoPs inherit each site's users.\n5. Good practice: test which sites inherit load, use connection-aware draining/forwarding or planned reconnects, and stage routing changes while watching capacity. Prepending itself does not preserve existing flows.",
+    "link": {
+      "title": "Anycast (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Anycast"
+    }
+  }
+]

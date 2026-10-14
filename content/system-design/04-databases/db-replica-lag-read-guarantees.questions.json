@@ -1,0 +1,92 @@
+[
+  {
+    "id": "db-replication-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user changes their display name, then immediately reloads their profile page and sees the old name. The app writes to a Postgres primary and reads from async read replicas. Assume no primary failure or browser caching. What's happening?",
+    "options": [
+      {
+        "text": "The write was lost because async replication doesn't guarantee durability",
+        "explanation": "Wrong. The primary committed the write durably; it just hasn't reached the replica yet. It will appear once the replica catches up."
+      },
+      {
+        "text": "Replication lag: the reload was served by a replica that hasn't yet applied the update, violating read-your-writes",
+        "explanation": "Correct. With async replication, replicas trail the primary. A read right after a write can hit a replica that hasn't caught up."
+      },
+      {
+        "text": "The browser cached the page",
+        "explanation": "Possible in general, but it doesn't explain the architecture-level cause here. The described setup (writes to primary, reads from async replicas) produces exactly this symptom."
+      },
+      {
+        "text": "A write conflict between replicas",
+        "explanation": "Wrong. Single-leader replication has only one writer, so replicas can't produce conflicting writes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The write goes to the primary and commits.\n2. The primary streams the WAL to replicas asynchronously; a replica might be 50 ms to several seconds behind.\n3. The reload is load-balanced to a replica that hasn't applied it yet: old name.\n4. Fixes for read-your-writes:\n   - Read the user's own profile from the primary.\n   - A fixed primary-routing window such as 10 seconds is only a best-effort heuristic; a replica can lag longer.\n   - Store the primary's LSN after the write (`pg_current_wal_lsn()`), and only read from a replica whose `pg_last_wal_replay_lsn()` is at least that.\nLSN comparisons require a compatible replication history/timeline and correct failover handling. A replica behind the required position must wait or the read must fall back to an authoritative source.",
+    "link": {
+      "title": "PostgreSQL: High availability, load balancing and replication",
+      "url": "https://www.postgresql.org/docs/current/high-availability.html"
+    }
+  },
+  {
+    "id": "db-replication-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user refreshes a comments page three times. They see a new comment, then it disappears, then it reappears. Reads are spread round-robin across three async replicas. Which guarantee is being violated, and what's a simple fix?",
+    "options": [
+      {
+        "text": "Monotonic reads; route each user consistently to the same replica, e.g. by hashing the user id",
+        "explanation": "Correct. Different replicas have different lag, so successive reads go backwards in time. Pinning to one continuously advancing replica avoids this routing-induced reversal. Failover or reassignment still needs a compatible minimum observed position for a guarantee."
+      },
+      {
+        "text": "Read-your-writes; read everything from the leader",
+        "explanation": "Wrong diagnosis. The user didn't write the comment, so this isn't about seeing their own writes. Reading everything from the leader would work but throws away read scaling."
+      },
+      {
+        "text": "Atomicity; wrap the reads in a transaction",
+        "explanation": "Wrong. Each read is on a different replica; a transaction on one node can't make separate replicas agree."
+      },
+      {
+        "text": "Durability; switch to synchronous replication to all replicas",
+        "explanation": "Wrong. Durable synchronous acknowledgement alone need not wait for replay visibility, so it does not by itself supply monotonic reads. Requiring every replica also adds latency and availability cost. The violated property is monotonic reads, which routing fixes cheaply."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Replica lags: R1 = 0.5 s, R2 = 8 s, R3 = 1 s. The comment was written 3 s ago.\n2. Refresh 1 → R1 (has it). Refresh 2 → R2 (8 s behind, doesn't). Refresh 3 → R3 (has it).\n3. The user's view moved backwards in time: a monotonic reads violation.\n4. Fix: pick the replica from a hash of the user id, so the same user always gets the same one:\n```formula\ni = hash(user_id) mod 3\nwhere\ni: the index of the replica this user reads from: 0, 1 or 2\nhash: a hash function that turns the id into a large number; the same id always gives the same number\nuser_id: the user's id\nmod: modulo, the remainder after whole-number division\n3: the number of replicas\nIn words: hash the user id and take the remainder by the replica count, so each user is pinned to one replica.\n```\nAs code, using a hash that gives the same result on every app server: `replica = replicas[hash(user_id) % 3]`. Under stable routing the user reads one continuously advancing replica. Python's built-in string hash is process-dependent; use an explicitly stable application hash across servers.\n5. If that replica fails, reassign, accepting a possible one-off jump backwards.",
+    "link": {
+      "title": "Wikipedia: Eventual consistency",
+      "url": "https://en.wikipedia.org/wiki/Eventual_consistency"
+    }
+  },
+  {
+    "id": "db-replication-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Analysts run 10-minute reports on a Postgres streaming replica. Recovery-conflict diagnostics identify vacuum cleanup of old row versions as the cause. Some fail with *canceling statement due to conflict with recovery*. Someone suggests turning on `hot_standby_feedback`. What's the trade-off?",
+    "options": [
+      {
+        "text": "No trade-off; it simply makes the replica more reliable",
+        "explanation": "Wrong. Feedback can prevent cleanup-related conflicts by retaining versions on the primary, increasing bloat; it does not prevent every kind of recovery conflict."
+      },
+      {
+        "text": "It stops cancellations by making the replica apply WAL synchronously",
+        "explanation": "Wrong. It doesn't change sync or async replication at all. It tells the primary which old row versions the replica's queries still need."
+      },
+      {
+        "text": "The replica will start rejecting writes",
+        "explanation": "Wrong. A hot standby is read-only regardless of this setting."
+      },
+      {
+        "text": "Feedback can reduce cleanup-related query cancellations, but retaining versions can cause primary-table bloat.",
+        "explanation": "Correct. It does not solve DDL-lock, buffer-pin or every other recovery conflict; alternatives trade replay delay or reporting architecture against freshness and cost."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Primary: vacuum removes dead row versions no primary transaction needs.\n2. That removal is replayed on the replica. If a replica query still needs those versions, there's a conflict.\n3. The replica can:\n   - Delay replay within `max_standby_streaming_delay` (30 s default total replay-delay budget), then cancel conflicting queries; earlier delays may leave a new query less grace time.\n4. Options for 10-minute reports:\n\n| Option | Cost |\n|---|---|\n| Feedback on | Bloat on primary |\n| Delay 15 min | Replica lags |\n| Separate replica | One more server |\n\n5. A common pattern: a dedicated reporting replica with a long delay, so the replicas serving users stay fresh.",
+    "link": {
+      "title": "PostgreSQL: Hot standby",
+      "url": "https://www.postgresql.org/docs/current/hot-standby.html"
+    }
+  }
+]

@@ -1,0 +1,156 @@
+[
+  {
+    "id": "net-dns-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`api.example.com` has a TTL of 86,400 s (24 h). On Monday at 09:00 you lower it to 60 s, and at 09:30 you change the `A` record to a new data centre. When can you be reasonably confident almost all well-behaved resolvers are using the new IP?",
+    "options": [
+      {
+        "text": "From about 09:00 on Tuesday, 24 hours after the TTL was lowered",
+        "explanation": "Correct. A resolver that cached the old record at 08:59 Monday with TTL 86,400 keeps it until about 08:59 Tuesday. Only then do normally expiring caches stop reusing the old long-TTL entry; they re-query when needed, subject to serve-stale policy."
+      },
+      {
+        "text": "Around 09:31, one minute after the change",
+        "explanation": "That would be true only if every cache already held the 60 s TTL. Resolvers that cached the record before 09:00 hold it with a 24 h TTL and won't look again until it expires."
+      },
+      {
+        "text": "Around 10:30, an hour later",
+        "explanation": "There's nothing special about an hour. Caches populated just before 09:00 keep the old record for up to 24 hours."
+      },
+      {
+        "text": "Never, because DNS changes need the registrar to propagate them",
+        "explanation": "Changing an `A` record happens at your authoritative server; the registrar is only involved for `NS` delegation changes. Caches converge as TTLs expire."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Worst case: a resolver cached the record at 08:59 on Monday, with a TTL of 86,400 s.\n2. Lowering the TTL at 09:00 doesn't reach that cache; it only affects answers given *after* 09:00.\n3. That cache keeps the old IP until the old TTL runs out:\n\n```formula\nt_expire = t_fetch + TTL_old\nt_expire = 08:59 + 86,400 s\nt_expire = 08:59 + 24 h\nwhere\nt_expire: the clock time at which the cached copy expires; here 08:59 on Tuesday\nt_fetch: the clock time at which the resolver cached the record, 08:59 on Monday\nTTL_old: the TTL the record had when it was cached, 86,400 seconds (s), which is 24 hours (h)\ns: second\nh: hour, 3,600 seconds\nIn words: a cached copy lives out the TTL it was given, counted from when it was fetched.\n```\n\nSo the old IP can be served until **08:59 Tuesday**. Correct playbook: lower the TTL, **wait the old TTL** (24 h), then make the change. Then caches converge within ~60 s. Even then, keep the old servers up for a while: some clients ignore TTLs.",
+    "link": {
+      "title": "RFC 1035: Domain names, implementation and specification",
+      "url": "https://www.rfc-editor.org/rfc/rfc1035"
+    }
+  },
+  {
+    "id": "net-dns-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your DNS failover is configured with a 30 s TTL, yet after a region fails, 5% of traffic keeps hitting the dead region for over an hour. Which are plausible causes? Select all that apply.",
+    "options": [
+      {
+        "text": "Some clients cache DNS results far longer than the TTL (e.g. an old JVM caching forever)",
+        "explanation": "Correct. Java historically cached successful lookups indefinitely when a security manager was installed, and many SDKs and apps cache at startup. They never ask again."
+      },
+      {
+        "text": "Long-lived connections (connection pools, HTTP/2, WebSockets) never re-resolve while the connection stays open",
+        "explanation": "Correct. DNS is consulted only when a new connection is opened. A pooled connection to a now-broken region may hang or fail slowly instead of moving."
+      },
+      {
+        "text": "Some resolvers enforce a minimum TTL higher than 30 s",
+        "explanation": "Correct. Some ISP resolvers clamp low TTLs up to several minutes or more to reduce load, so they serve the stale answer longer."
+      },
+      {
+        "text": "UDP packets are slower than TCP, so the new answer takes longer to arrive",
+        "explanation": "UDP is if anything faster (no handshake). Transport speed affects milliseconds per query, not hour-long staleness."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think about where the old answer can still live:\n\n1. **Client caches** that ignore TTL (JVM `networkaddress.cache.ttl`, apps that resolve once).\n2. **Open connections**, which bypass DNS entirely until they close.\n3. **Resolvers clamping TTLs** to a minimum.\n\nUDP vs TCP speed is irrelevant. Mitigations: configure client DNS caching, set a max connection lifetime on pools (e.g. 5 min) so they re-resolve, and fail fast on errors so clients reconnect.",
+    "link": {
+      "title": "Time to live (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Time_to_live"
+    }
+  },
+  {
+    "id": "net-dns-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer runs `dig new.example.com` before the record exists, then creates it. The zone's `SOA` record has a TTL of 900 s and a `MINIMUM` field of 3,600 s. For roughly how long might the resolver they used keep saying the name doesn't exist?",
+    "options": [
+      {
+        "text": "Up to about 15 minutes",
+        "explanation": "Correct. Under RFC 2308 the negative-caching TTL is the smaller of the SOA record’s own TTL and its MINIMUM field. Here 900 s is smaller than 3,600 s, so the cached negative answer lasts 900 s."
+      },
+      {
+        "text": "Up to about an hour",
+        "explanation": "That uses the MINIMUM field alone. RFC 2308 caps the negative TTL at the SOA record's own TTL as well, so the smaller value wins."
+      },
+      {
+        "text": "Not at all, because negative answers are never cached",
+        "explanation": "They are cached, precisely to stop repeated lookups for non-existent names hammering authoritative servers."
+      },
+      {
+        "text": "Until the registrar propagates the change, usually 24 to 48 hours",
+        "explanation": "Adding a record happens on your authoritative servers; the registrar isn't involved. The '48 hours to propagate' folklore is really just TTLs expiring."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The `NXDOMAIN` response includes the zone's `SOA` record.\n2. RFC 2308 sets the negative TTL:\n\n```formula\nTTL_neg = min(TTL_SOA, MINIMUM)\nTTL_neg = min(900 s, 3,600 s) = 900 s\nwhere\nTTL_neg: how long a resolver may cache the \"doesn't exist\" (NXDOMAIN) answer, in seconds (s)\nmin: the minimum function: whichever value in the brackets is smaller\nTTL_SOA: the TTL of the zone's SOA record, 900 s\nMINIMUM: the MINIMUM field inside the SOA record, 3,600 s\ns: second\nIn words: the smaller of the two values wins, so 900 s, which is 15 minutes.\n```\n\nSo that resolver may answer 'doesn't exist' for up to 15 minutes after the record is created. Other resolvers that never cached the miss see the new record immediately. Lesson: create records *before* anything starts querying them, or keep the negative TTL short.",
+    "link": {
+      "title": "RFC 2308: Negative caching of DNS queries",
+      "url": "https://www.rfc-editor.org/rfc/rfc2308"
+    }
+  },
+  {
+    "id": "net-dns-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A recursive resolver fetched `api.example.com` (TTL 300 s) from the authoritative server at 10:00:00. A laptop asks that resolver for the name at 10:04:00. What TTL does the laptop receive, and when does its own cached copy expire?",
+    "options": [
+      {
+        "text": "300 s; the laptop's copy expires at 10:09:00",
+        "explanation": "Resolvers don't reset the TTL when they hand out a cached answer. They pass on the time remaining."
+      },
+      {
+        "text": "0 s; the laptop must ask again immediately",
+        "explanation": "The resolver's entry still has 60 s left, so it hands that remaining time on."
+      },
+      {
+        "text": "60 s; the laptop's copy expires at 10:05:00, the same moment as the resolver's",
+        "explanation": "Correct. The TTL counts down in the resolver's cache. Every downstream cache inherits the remaining time, so they all expire together."
+      },
+      {
+        "text": "It depends on the laptop's clock, so it can't be known",
+        "explanation": "TTLs are relative durations in seconds, not absolute timestamps, so clock skew doesn't change the result."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Work out when the resolver's copy dies and how much life it has left at 10:04:00:\n\n```formula\nt_exp = t_fetch + TTL\nt_exp = 10:00:00 + 300 s = 10:05:00\nTTL_left = TTL − t_age\nTTL_left = 300 s − 240 s = 60 s\nwhere\nt_exp: the clock time at which the resolver's cached copy expires\nt_fetch: the clock time at which the resolver fetched the record, 10:00:00\nTTL: the record's time to live, 300 seconds (s)\nTTL_left: the remaining TTL the resolver hands to the laptop\nt_age: how long the resolver has held the record when the laptop asks: from 10:00:00 to 10:04:00 is 240 s\ns: second\nIn words: the resolver passes on only the 60 s its copy has left, so the laptop's copy expires at the same moment, 10:05:00.\n```\n\nThe resolver answers with TTL 60; the laptop caches it for 60 s, so its copy expires at **10:05:00**.\n\nConsequence: after you change a record, the worst-case wait is about one TTL from the most recent fetch of the old answer before the change, not one TTL per layer of caching.",
+    "link": {
+      "title": "Time to live (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Time_to_live"
+    }
+  },
+  {
+    "id": "net-dns-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your authoritative DNS provider is unreachable for two hours. Your records have a 300 s TTL. You expected everyone to fail after five minutes, but many users kept resolving your name throughout. What most likely explains this?",
+    "options": [
+      {
+        "text": "Root servers keep a backup copy of every domain's records",
+        "explanation": "Root servers only hold delegations to TLD servers. They never store your `A` records."
+      },
+      {
+        "text": "Many recursive resolvers implement serve-stale (RFC 8767), returning expired cached answers when the authoritative servers can't be reached",
+        "explanation": "Correct. Major public resolvers do this deliberately: a slightly stale answer is better than a failure. It cushions DNS outages, though you can't rely on every resolver doing it."
+      },
+      {
+        "text": "The TTL was silently raised by the registrar",
+        "explanation": "Registrars don't edit the TTLs of records in your zone."
+      },
+      {
+        "text": "Browsers ignore DNS entirely after the first visit",
+        "explanation": "Browsers cache DNS briefly and reuse connections, but they still resolve names when opening new connections; they don't skip DNS for hours."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Expected: after 300 s, caches expire → resolvers ask your provider → no answer → failure.\n2. Serve-stale changes step 3: if the refresh fails, the resolver keeps serving the expired entry (RFC 8767 suggests a maximum staleness of 1 to 3 days).\n3. Users behind such resolvers carry on; users behind strict resolvers fail.\n4. Don't design around it: you still want multiple providers. But it explains partial survival and also why some clients see old data longer than the TTL.",
+    "link": {
+      "title": "RFC 8767: Serving stale data to improve DNS resiliency",
+      "url": "https://www.rfc-editor.org/rfc/rfc8767"
+    }
+  }
+]

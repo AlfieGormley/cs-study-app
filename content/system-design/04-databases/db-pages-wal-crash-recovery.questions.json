@@ -1,0 +1,131 @@
+[
+  {
+    "id": "db-storage-internals-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume `fsync = on` and `synchronous_commit = on`. Postgres acknowledges a `COMMIT` before the modified table pages have been written to their place on disk. Why is that safe?",
+    "options": [
+      {
+        "text": "It isn't; Postgres relies on the OS cache never losing data",
+        "explanation": "Wrong. Postgres explicitly `fsync`s the WAL at commit because the OS page cache *can* lose data on power failure."
+      },
+      {
+        "text": "Because the WAL records for the transaction, including its commit record, are flushed to disk first; after a crash, recovery replays them to rebuild the pages",
+        "explanation": "Correct. That's the write-ahead rule: log first, pages later. The WAL is enough to redo every committed change."
+      },
+      {
+        "text": "Because a replica always has a copy",
+        "explanation": "Wrong. Replication may be async or absent; single-node durability comes from the WAL, not replicas."
+      },
+      {
+        "text": "Because the buffer pool is battery-backed",
+        "explanation": "Wrong. Some RAID controllers have battery-backed caches, but the buffer pool is ordinary RAM, which is lost on power failure."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The transaction updates pages in the buffer pool (RAM) and appends WAL records describing the changes.\n2. At `COMMIT`, Postgres writes and `fsync`s the WAL up to the commit record. Only then does the client get success.\n3. The dirty pages are written later by the background writer or at a checkpoint.\n4. Crash: RAM is lost, so the dirty pages are lost.\n5. Recovery starts from the last checkpoint and replays WAL records, reconstructing every committed change.\n6. Cost: one sequential `fsync` per commit (or per group of commits) instead of many random page writes.",
+    "link": {
+      "title": "PostgreSQL: Write-Ahead Logging",
+      "url": "https://www.postgresql.org/docs/current/wal-intro.html"
+    }
+  },
+  {
+    "id": "db-storage-internals-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To speed up writes, a team sets Postgres `synchronous_commit = off`. The server loses power. What's the consequence?",
+    "options": [
+      {
+        "text": "The database may be corrupted and need restoring from backup",
+        "explanation": "Wrong. `synchronous_commit = off` doesn't risk corruption: WAL ordering is preserved, and recovery produces a consistent state. (Turning off `fsync` entirely is what risks corruption.)"
+      },
+      {
+        "text": "Nothing; all acknowledged commits are durable",
+        "explanation": "Wrong. Commits are acknowledged before their WAL is flushed, so the most recent ones can be lost."
+      },
+      {
+        "text": "Transactions committed in roughly the last few hundred milliseconds (up to about 3 × `wal_writer_delay`) may be lost, but the database recovers to a consistent state",
+        "explanation": "Correct. The WAL writer flushes asynchronously; on a crash, the most recent acknowledged commits that weren't yet flushed are lost, but there's no corruption and no partial transaction."
+      },
+      {
+        "text": "Uncommitted transactions are committed during recovery",
+        "explanation": "Wrong. Recovery never commits a transaction that didn't commit; it only replays flushed WAL."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Normal: commit waits for the WAL `fsync` → acknowledged commits are durable.\n2. With `synchronous_commit = off`: commit returns once the record is in the WAL buffer; the WAL writer flushes every `wal_writer_delay` (200 ms default). Postgres documents the maximum loss window as three times that:\n```formula\nt_loss ≤ 3 × d_w\nt_loss ≤ 3 × 200 ms = 600 ms\nwhere\nt_loss: the longest window of acknowledged commits a crash can lose\nd_w: the wal_writer_delay setting, 200 ms by default\n≤: less than or equal to\nms: millisecond, one thousandth of a second\nIn words: at the default setting, a crash loses at most about the last 0.6 seconds of commits.\n```\n3. Power loss: unflushed WAL is gone, so those transactions are lost even though clients were told they succeeded.\n4. WAL is still written in order and data pages are never written ahead of their WAL, so recovery yields a consistent database as of a slightly earlier point.\n5. Good for: high-volume, low-value writes (analytics events). Bad for: payments. It can be set per transaction: `SET LOCAL synchronous_commit = off`.",
+    "link": {
+      "title": "PostgreSQL: Asynchronous commit",
+      "url": "https://www.postgresql.org/docs/current/wal-async-commit.html"
+    }
+  },
+  {
+    "id": "db-storage-internals-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After every checkpoint, a Postgres server's WAL volume spikes. An engineer proposes `full_page_writes = off` to cut it. The data sits on ext4 on an ordinary SSD with 4 KB storage-atomic writes. What's the risk?",
+    "options": [
+      {
+        "text": "None: the WAL already contains every change, so full-page images are redundant",
+        "explanation": "Wrong. Normal WAL records describe *changes* to a page and assume the page on disk is intact. If the page itself is half old and half new, replaying a delta onto it can't repair it."
+      },
+      {
+        "text": "A crash midway through writing an 8 KB page can leave a torn page that recovery can't fix, silently corrupting data",
+        "explanation": "Correct. The first change to a page after a checkpoint logs the whole page, so recovery can overwrite a torn page with a known-good copy. Without that, a 4 KB-atomic device can leave half an 8 KB page updated, which deltas can't repair."
+      },
+      {
+        "text": "Commits are no longer durable until the next checkpoint",
+        "explanation": "Wrong. Commit durability still comes from flushing the WAL at commit. Full-page images protect against torn pages, not lost commits."
+      },
+      {
+        "text": "Replicas stop receiving changes, because they replay only full-page images",
+        "explanation": "Wrong. Replicas replay the same WAL records as crash recovery, deltas included. They'd keep working, but share the torn-page risk."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Postgres pages are 8 KB; this device guarantees only 4 KB storage-atomic writes.\n2. Power fails mid-write: the first 4 KB is new, the second 4 KB is old. That's a **torn page**.\n3. Recovery replays WAL deltas such as \"insert tuple at offset 312\". Applying that to a torn page gives garbage.\n4. With `full_page_writes = on`, the first WAL record for each page after a checkpoint contains the whole page image. Recovery writes that image first, then replays later deltas.\n5. That's why WAL spikes right after each checkpoint: the first qualifying modification of a page can log a full-page image (compression and unused page space can reduce its size).\n6. Safer ways to cut the spike: space checkpoints further apart (larger `max_wal_size`, longer `checkpoint_timeout`) or enable `wal_compression`. Keep full_page_writes enabled unless the complete operating-system and storage configuration has a documented, verified guarantee against torn PostgreSQL-page writes and its recovery behavior has been tested. A filesystem name alone is not sufficient evidence.",
+    "link": {
+      "title": "PostgreSQL: WAL configuration",
+      "url": "https://www.postgresql.org/docs/current/wal-configuration.html"
+    }
+  },
+  {
+    "id": "db-storage-internals-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A Postgres server checkpoints every 5 minutes. You raise `max_wal_size` and `checkpoint_timeout` so checkpoints happen every 30 minutes instead. Assume durably flushed commits and sufficient buffer capacity. Which effects are possible or expected for a workload repeatedly updating hot pages? Select all that apply.",
+    "options": [
+      {
+        "text": "Less WAL written overall, because fewer full-page images are logged",
+        "explanation": "Correct. A full-page image is logged on the first change to each page after a checkpoint. Fewer checkpoints means fewer \"first changes\", so busy pages are imaged less often."
+      },
+      {
+        "text": "Potentially fewer checkpoint-driven data-page writes, as multiple changes can be coalesced.",
+        "explanation": "Correct as a potential benefit, not a promise of one flush per interval. Background writer activity, backend writes and eviction may flush a page earlier or repeatedly."
+      },
+      {
+        "text": "Crash recovery can take longer, because more WAL must be replayed from the last checkpoint",
+        "explanation": "Correct. Recovery starts at the last checkpoint. A longer interval can increase replay work; the ratio depends on the workload, checkpoint duration and WAL generation."
+      },
+      {
+        "text": "Committed transactions are at greater risk of being lost in a crash",
+        "explanation": "Wrong. Commit durability depends on the WAL flush at commit, not on checkpoints. Everything committed is in the WAL and will be replayed."
+      },
+      {
+        "text": "The WAL directory needs more disk space",
+        "explanation": "Correct. WAL can only be recycled once a checkpoint has passed it, so more WAL accumulates between checkpoints."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Think about what a checkpoint is for: it bounds how far back recovery must start, and allows older WAL to be recycled.\n\n1. Full-page images: one per page per checkpoint cycle. Longer cycles → fewer images → less WAL. True.\n2. Page writes: the checkpointer must flush every dirty page once per cycle. Checkpoint-driven flush opportunities decrease, but background/backend activity can still flush a hot page multiple times. True.\n3. Recovery replays from the last checkpoint, so up to 30 minutes of WAL rather than 5. True.\n4. Durability comes from the commit-time WAL flush. Unchanged. False.\n5. More WAL held between checkpoints → more disk. True.\n\nSo: lower steady-state I/O, at the cost of disk space and slower recovery.",
+    "link": {
+      "title": "PostgreSQL: WAL configuration",
+      "url": "https://www.postgresql.org/docs/current/wal-configuration.html"
+    }
+  }
+]

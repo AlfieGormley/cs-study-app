@@ -1,0 +1,70 @@
+[
+  {
+    "id": "db-storage-internals-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An analyst runs `SELECT region, sum(revenue_p) FROM sales GROUP BY region` over 2 billion rows of a 60-column table. Why can this run substantially faster in a column store like ClickHouse or Redshift than in Postgres?",
+    "options": [
+      {
+        "text": "Column stores keep all data in RAM",
+        "explanation": "Wrong. Column stores routinely handle data far larger than memory; their advantage comes from reading less data and processing it efficiently."
+      },
+      {
+        "text": "Column stores skip `GROUP BY` processing",
+        "explanation": "Wrong. They still aggregate; they just do it on compact, vectorised column batches."
+      },
+      {
+        "text": "Column stores use B-tree indexes on every column",
+        "explanation": "Wrong. Column-oriented engines can reduce scanned bytes and process batches without requiring a B-tree on every column; some plans may also use specialized indexes or projections."
+      },
+      {
+        "text": "It reads only the 2 needed columns instead of all 60, the columns compress heavily (e.g. a low-cardinality region dictionary-encodes to a byte or less), and it processes values in vectorised batches",
+        "explanation": "Correct. Column pruning, compression and batched execution can reduce work. The ratio depends on column widths, encoding, execution plans and hardware, not simply 60 divided by 2."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Suppose a row scan reads 600 GB while a columnar layout needs only 10 GB for the two selected encoded columns. These are hypothetical sizes.\n2. That is 60 times fewer scanned bytes in this example, not a promised runtime speedup.\n3. Compression and vectorized processing can also help aggregation.\n4. A covering index, cached data, preaggregation or different query plan changes the comparison.\n5. A universal 10–100× speedup is absent because no matching reproducible benchmark is available.",
+    "link": {
+      "title": "Wikipedia: Column-oriented DBMS",
+      "url": "https://en.wikipedia.org/wiki/Column-oriented_DBMS"
+    }
+  },
+  {
+    "id": "db-storage-internals-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A team is weighing a column store for a 100-column `sales` table. Which statements about column stores are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Fetching a complete row may require gathering values from many column chunks rather than one row-oriented record.",
+        "explanation": "Correct. A pure column layout separates attributes, but chunks may share files, be cached or use hybrid layouts; this does not imply 100 physical reads."
+      },
+      {
+        "text": "Single-row inserts and updates are usually buffered and written in batches",
+        "explanation": "Correct. Writing one row into 100 compressed column files is expensive, so column stores collect writes (often in a row-oriented buffer) and merge them in bulk, much like an LSM tree."
+      },
+      {
+        "text": "Sorting the data by `sale_date` makes zone maps on `sale_date` much more effective",
+        "explanation": "Correct. If the data is sorted, each block covers a narrow date range, so the min/max per block lets the engine skip almost every block outside a date filter. On unsorted data, most blocks span every date and nothing can be skipped."
+      },
+      {
+        "text": "They usually compress worse than row stores, because each file mixes many data types",
+        "explanation": "Wrong. It's the other way round. Each column file holds one type with similar values, which is ideal for run-length, dictionary and bit-packing encodings. Row pages mix types and compress worse."
+      },
+      {
+        "text": "They are ideal for a checkout service that updates individual orders thousands of times per second",
+        "explanation": "Wrong. That's an OLTP workload of small, random writes by key, which is exactly where column stores are weakest."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask, for each statement, how data is laid out.\n\n1. Column layout: values are organized by column, so assembling a whole row may touch many chunks, not necessarily separate files or physical I/Os. True.\n2. Writes therefore touch every column; batching amortises that. True.\n3. Zone maps store min/max per block. Sorted by date, a block might be `2026-03-01..2026-03-02`, so a query for January skips it. Unsorted blocks often span wider ranges, reducing pruning effectiveness. True.\n4. One type and similar values per column compress *better* (the exact ratio depends on data and codecs). False.\n5. High-rate single-row updates are OLTP. False.\n\nRule of thumb: rows for \"fetch or change one thing by key\", columns for \"scan and aggregate a few attributes of many things\".",
+    "link": {
+      "title": "Wikipedia: Column-oriented DBMS",
+      "url": "https://en.wikipedia.org/wiki/Column-oriented_DBMS"
+    }
+  }
+]

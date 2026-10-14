@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cache-failure-modes-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're launching a new region with an empty Redis cluster. The regional database replica is sized for a 2% miss rate at full traffic. What's the safest way to go live?",
+    "options": [
+      {
+        "text": "Ramp traffic gradually (1% → 5% → 25% → 100%) and/or pre-load the hottest keys, so the database never sees more misses than it can handle",
+        "explanation": "Correct. Each step fills the cache with that slice's working set before the next. Pre-warming from access logs or a peer cluster shortens the ramp."
+      },
+      {
+        "text": "Switch 100% of the region's traffic over at once; the cache will fill within minutes",
+        "explanation": "At first the miss rate is ~100%, i.e. 50× what the database is sized for. It will likely fall over before the cache fills."
+      },
+      {
+        "text": "Set very long TTLs on the new cluster",
+        "explanation": "TTL length doesn't affect the initial empty state; every key still misses on first access."
+      },
+      {
+        "text": "Disable the cache until the database is warm",
+        "explanation": "Without the cache the database gets 100% of traffic, which is exactly the overload you're trying to avoid."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The database sees the new cache's share of traffic times its miss ratio:\n\n```formula\nR_db = s × (1 − h) × R\nR_db = 1 × (1 − 0) × R = R\nR_db = 0.05 × (1 − 0.6) × R\nR_db = 0.02 × R\nwhere\nR_db: reads per second reaching the DB\ns: share of traffic sent to the new cache\nh: the new cache's current hit ratio\nR: full traffic, in reads per second\nIn words: a cold cache at full traffic passes everything to the database; 5% of traffic at a 60% hit ratio passes only 2%.\n```\n\n2. DB capacity ≈ 2% of full traffic, so a cold cache at 100% traffic is a 50× overload.\n3. Ramp: at 1% traffic, misses ≈ 1% of full traffic (within capacity). As the hit ratio climbs, step up.\n4. Step to 5% when the hit ratio passes 60%: misses ≈ 2% of full traffic, right at capacity.\n5. Continue until 100%, by which time the hit ratio is ~98%.\n6. Include other database work and any old-region misses sharing this capacity; the equation counts only the new cluster. Each step needs measured headroom rather than a fixed schedule.\n7. Pre-warming the top keys (or reading misses from a warm peer cluster, as Facebook did) makes each step safer and faster.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A deploy changes the cache key prefix from `user:v2:` to `user:v3:` across all 300 app servers at once. Ten minutes later the database is overloaded. What went wrong, and how should it have been rolled out?",
+    "options": [
+      {
+        "text": "Redis evicted the v2 keys too slowly",
+        "explanation": "Old copies consume memory and can cause eviction pressure, but the key observation is that the new prefix cannot hit existing v2 entries."
+      },
+      {
+        "text": "The new prefix hashed every key to the same shard",
+        "explanation": "There are no hash tags here; different full key names spread across slots as before."
+      },
+      {
+        "text": "Every v3 lookup missed, which is equivalent to flushing the whole cache; roll out gradually (a few servers at a time), or read v3 and fall back to v2/write both during the transition",
+        "explanation": "Correct with compatible serialization and a protocol that updates or invalidates both key versions. Dual reads reduce misses but do not eliminate them or automatically preserve freshness."
+      },
+      {
+        "text": "The v3 serialisation was larger, so the cache ran out of memory",
+        "explanation": "Possible in principle, but the immediate cause of DB overload is the 100% miss rate on the new keys, not memory."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Before: hit ratio 98% on `user:v2:*`.\n2. After an all-at-once deploy: every request looks up `user:v3:*`, which doesn't exist yet → hit ratio ≈ 0%.\n3. DB load jumps ~50×: a self-inflicted avalanche.\n4. Safer options:\n   - Canary 5% of servers → the new 5% may all miss, plus the usual 2% misses on the other 95%:\n\n```formula\nm = s + (1 − s) × m_old\nm = 0.05 + 0.95 × 0.02 = 0.069\nwhere\nm: overall miss ratio during the canary\ns: share of servers on v3, 0.05\nm_old: the old miss ratio, 0.02\nIn words: about 6.9% of reads miss, roughly 3.5 times the usual database load, before the v3 keys warm up.\n```\n\n   - Dual-read: try v3; on miss, read v2, convert, write v3.\n   - Pre-populate v3 keys from v2 with a background job before switching reads.\n5. Treat a key-format change like a schema migration.\nChoose rollout percentages from available origin headroom, not a fixed 5% rule, and keep both key versions coherent until old readers have drained.",
+    "link": {
+      "title": "Thundering herd problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Thundering_herd_problem"
+    }
+  }
+]

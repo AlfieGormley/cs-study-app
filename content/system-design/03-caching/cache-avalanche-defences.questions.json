@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cache-failure-modes-q4",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A nightly job warms 2 million keys at 06:00, all with `EX 3600`. Every day at 07:00 the database CPU spikes. What's the simplest fix?",
+    "options": [
+      {
+        "text": "Set all TTLs to 7200 seconds",
+        "explanation": "This just moves the synchronised expiry to 08:00."
+      },
+      {
+        "text": "Add random TTL jitter to each key (for example 3600 + random(0–360) seconds)",
+        "explanation": "Correct. Jitter spreads expiry/reload opportunities rather than guaranteeing the resulting rate is small enough. Compare the remaining peak miss rate with origin capacity."
+      },
+      {
+        "text": "Switch the eviction policy to LFU",
+        "explanation": "These keys are expiring, not being evicted for memory, so the eviction policy is irrelevant."
+      },
+      {
+        "text": "Remove TTLs entirely",
+        "explanation": "That avoids the spike but leaves data stale forever and removes the safety net for missed invalidations."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. All 2M keys were set within minutes of 06:00 with the same TTL → all expire at ~07:00. That's an avalanche.\n2. With TTL jitter of up to 10%: expiries spread uniformly over 07:00–07:06 (360 s).\n3. Rate of expiries:\n\n```formula\nE = K / W\nE = 2,000,000 / 360 s ≈ 5,600 /s\nwhere\nE: expiries per second (/s)\nK: keys warmed together, 2 million\nW: the jitter window, 10% of 3,600 s = 360 s\ns: seconds\n≈: approximately equal to\nIn words: spreading 2 million expiries over 6 minutes gives about 5,600 a second instead of all at once.\n```\n\n   Only keys actually requested get reloaded, so the database sees roughly this rate at most (plus any duplicate rebuilds of the same key).\n4. One line of code: `ttl = 3600 + random.randint(0, 360)`.",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  },
+  {
+    "id": "cache-failure-modes-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Normal load is 100,000 reads/s with a 97% overall hit ratio across its healthy cache tiers; the database can handle 6,000 reads/s. Each app server also has an in-process cache that would serve about 60% of reads on its own. The whole Redis cluster becomes unreachable. What load reaches the database, and what must happen next?",
+    "options": [
+      {
+        "text": "About 3,000 reads/s; nothing needs to change",
+        "explanation": "This is the normal miss load with Redis healthy. With Redis gone, only the in-process caches stand between the traffic and the database."
+      },
+      {
+        "text": "About 40,000 reads/s, roughly 6.7× capacity; you must shed or degrade load (circuit breakers, serving fallbacks, rate-limiting misses) until Redis returns",
+        "explanation": "Correct. In-process caches absorb 60%, but the remaining 40% of 100,000 is still far beyond 6,000/s. Without shedding, the database saturates and everything slows."
+      },
+      {
+        "text": "About 100,000 reads/s; in-process caches never help during an outage",
+        "explanation": "In-process caches are independent of Redis, so they keep serving their share. That is part of the point of multi-level caching."
+      },
+      {
+        "text": "About 6,000 reads/s, because the database applies back-pressure automatically",
+        "explanation": "Not guaranteed. A database may have admission controls, but its sustainable capacity does not automatically reduce offered application demand to that number; explicit bounded queues and shedding are needed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The database sees the miss ratio times the total load:\n\n```formula\nR_db = (1 − h) × R\nR_db = (1 − 0.97) × 100,000 = 3,000\nR_db = (1 − 0.60) × 100,000 = 40,000\nwhere\nR_db: database reads per second\nh: hit ratio: 0.97 normally, 0.60 with only the local caches\nR: total reads per second, 100,000\nIn words: losing Redis takes the miss ratio from 3% to 40%, so database load jumps from 3,000 to 40,000 reads a second.\n```\n\n2. Normally 3,000/s is within the 6,000/s capacity. With Redis down, only the local caches remain.\n3. Overload: 40,000 / 6,000 ≈ 6.7×.\n4. So the local cache helps a lot (it turns 100k into 40k), but not enough.\n5. Next steps: a circuit breaker on the database path, serving degraded or default responses for non-critical reads, rate-limiting rebuilds per key, and restoring Redis (replicas across zones make this outage less likely in the first place).",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  }
+]

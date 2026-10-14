@@ -1,0 +1,168 @@
+[
+  {
+    "id": "net-transport-http-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine advantages of HTTP/3 (QUIC) over HTTP/2 (TCP + TLS)? Select all that apply.",
+    "options": [
+      {
+        "text": "Loss of application-stream data need not block delivery on unrelated streams",
+        "explanation": "Correct. QUIC tracks ordering per stream, so loss on stream A doesn't hold back streams B and C."
+      },
+      {
+        "text": "Connections can survive a client's IP address changing, for example Wi-Fi to 4G",
+        "explanation": "Correct. QUIC identifies connections by connection ID rather than the IP/port 4-tuple, so it can migrate when the network changes."
+      },
+      {
+        "text": "Transport and TLS handshakes are combined, so a new connection needs 1 RTT instead of 2",
+        "explanation": "Correct. QUIC integrates TLS 1.3 into its handshake, and resumption can use 0-RTT."
+      },
+      {
+        "text": "It needs less CPU than TCP on servers",
+        "explanation": "Generally the opposite: QUIC runs in user space with per-packet encryption, and has historically cost more CPU than kernel TCP, though offloads are narrowing the gap."
+      },
+      {
+        "text": "It works on every network, because UDP is never blocked",
+        "explanation": "Some enterprise firewalls block or throttle UDP 443. That's why browsers keep an HTTP/2 fallback."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each claim against how QUIC works:\n\n1. **Per-stream ordering** → no transport HOL across streams. (yes)\n2. **Connection IDs** → migration across networks. (yes)\n3. **Integrated TLS 1.3** → 1 RTT new, 0-RTT resume. (yes)\n4. CPU: user-space UDP plus encryption per packet → typically *more* CPU. (no)\n5. UDP blocking exists → fallback is needed. (no)",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "net-transport-http-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You enable HTTP/3 on your CDN. Real-user monitoring shows that on a user's *first* visit, almost all requests still use HTTP/2, yet repeat visits use HTTP/3. Why?",
+    "options": [
+      {
+        "text": "HTTP/3 only works after a TLS session ticket has been cached",
+        "explanation": "Session tickets enable 0-RTT resumption, but a full 1-RTT HTTP/3 handshake works without them. Tickets aren't required for HTTP/3 at all."
+      },
+      {
+        "text": "Browsers learn that an origin supports HTTP/3 from an `Alt-Svc` header (or DNS `HTTPS` record) and so typically start with TCP on the first contact",
+        "explanation": "Correct. Without prior knowledge, the browser connects over TCP; the response's `Alt-Svc: h3=\":443\"` advertises HTTP/3, which is then used for later connections. Publishing an `HTTPS` DNS record can enable HTTP/3 from the start."
+      },
+      {
+        "text": "QUIC needs the server to pre-warm a congestion window per client",
+        "explanation": "QUIC uses normal congestion control starting from an initial window, like TCP. There's no per-client pre-warming requirement."
+      },
+      {
+        "text": "The CDN deliberately disables HTTP/3 on first visits for security",
+        "explanation": "There's no such security policy. The behaviour comes from how clients discover HTTP/3 support."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A URL says `https://`, not which HTTP version to use. TCP+TLS with ALPN is the safe default.\n2. The server replies (over HTTP/2) with `Alt-Svc: h3=\":443\"; ma=86400`.\n3. The browser caches that hint for `ma` seconds and tries QUIC next time, racing it against TCP in case UDP is blocked.\n4. To get HTTP/3 on the very first connection, publish a DNS `HTTPS` record (RFC 9460) with `alpn=h3`, which the browser can fetch alongside the `A` record.",
+    "link": {
+      "title": "RFC 9460: SVCB and HTTPS resource records",
+      "url": "https://www.rfc-editor.org/rfc/rfc9460"
+    }
+  },
+  {
+    "id": "net-transport-http-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A QUIC connection has independent streams A, B and C. One packet carrying only B application data is lost; later A/C bytes arrive in order with no missing header/control dependencies. Assume the loss triggers congestion-window reduction. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The A and C data that arrived can be delivered to the application straight away",
+        "explanation": "Correct. QUIC orders data per stream, so a gap in stream B doesn't hold back other streams."
+      },
+      {
+        "text": "Stream B's data after the gap waits until the lost data is retransmitted",
+        "explanation": "Correct. Ordering still applies *within* a stream, so B stalls until the gap is filled."
+      },
+      {
+        "text": "The connection's congestion controller treats the loss as a congestion signal, slowing sending for all streams",
+        "explanation": "Correct. Congestion control is per connection in QUIC, so loss still reduces the rate for everything, even though it no longer blocks delivery."
+      },
+      {
+        "text": "All three streams stall, just as they would over TCP",
+        "explanation": "That's HTTP/2's problem. Avoiding cross-stream blocking is the main reason QUIC exists."
+      },
+      {
+        "text": "The lost data is never resent, because QUIC runs over UDP",
+        "explanation": "QUIC implements its own acknowledgements and retransmission on top of UDP; it's a reliable transport."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Separate the three things loss can affect:\n\n1. **Delivery of other streams:** QUIC keeps a reorder buffer per stream → A and C unaffected.\n2. **Delivery of the same stream:** in-order within B → B waits for the retransmission.\n3. **Sending rate:** one congestion window per connection → everyone slows a bit.\n\nSo HTTP/3 removes *cross-stream* head-of-line blocking, not every effect of loss. And reliability is still there: QUIC detects the loss from its ACKs and resends the missing frames in a new packet.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "net-transport-http-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You enable HTTP/3 behind an L4 load balancer that hashes each UDP packet's 4-tuple (source and destination IP and port) to pick a backend. Users on phones report that downloads restart whenever they walk out of Wi-Fi range onto mobile data. Why?",
+    "options": [
+      {
+        "text": "QUIC doesn't support connection migration",
+        "explanation": "It does: connections are identified by a connection ID, so they can survive an address change. The migration is failing at the load balancer, not in the protocol."
+      },
+      {
+        "text": "Mobile networks block HTTP/3",
+        "explanation": "If mobile networks blocked UDP, the connection would fall back to HTTP/2, not restart mid-download after a network change."
+      },
+      {
+        "text": "The phone's new IP address changes the 4-tuple, so the balancer hashes its packets to a different backend that has no state or keys for the connection",
+        "explanation": "Correct. The client migrated correctly, but the balancer routed by 4-tuple. Route by QUIC connection ID (for example with a QUIC-aware balancer that decodes server-chosen IDs) so packets keep reaching the same backend."
+      },
+      {
+        "text": "TLS session tickets expire when the IP changes",
+        "explanation": "Tickets aren't tied to the client's IP. And migration doesn't need a new handshake at all; the existing connection continues."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Before: phone on Wi-Fi, 4-tuple `(198.51.100.4:51000 → VIP:443)` → hashes to backend 3.\n2. Phone switches to mobile data: new source IP and port → new 4-tuple.\n3. QUIC on the phone continues the same connection using a valid server-issued connection ID (normally a different ID on a new path for privacy).\n4. The L4 balancer hashes the *new* 4-tuple → backend 7, which has never seen this connection → it can't decrypt and drops or resets.\n5. Fix: have backends encode a routing hint in the connection IDs they issue and have the balancer route on it (the IETF QUIC-LB work describes this), or use a QUIC-aware balancer.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "net-transport-http-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A site advertises HTTP/3 and also serves HTTPS over TCP. A browser supports TCP fallback; the customer's network blocks outbound UDP but permits TCP 443. What happens?",
+    "options": [
+      {
+        "text": "The site is unreachable from that network until HTTP/3 is disabled",
+        "explanation": "Here the server and browser both support the permitted TCP path, so blocking UDP does not make the site unreachable. This is not a guarantee for every possible client or deployment."
+      },
+      {
+        "text": "The site works over HTTP/2 (or HTTP/1.1) on TCP, perhaps after a short delay the first time QUIC is tried and fails",
+        "explanation": "Correct. Browsers race or fall back from QUIC to TCP, and remember that QUIC failed for a while. Users lose HTTP/3's benefits but nothing breaks."
+      },
+      {
+        "text": "The browser tunnels QUIC over TCP port 443",
+        "explanation": "Browsers don't encapsulate QUIC in TCP; they just use HTTP/2 over TCP and TLS instead."
+      },
+      {
+        "text": "Requests succeed over UDP port 53 instead",
+        "explanation": "Browsers don't move web traffic to the DNS port. UDP 53 is for DNS queries to resolvers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Discovery via `Alt-Svc` or an `HTTPS` DNS record tells the browser HTTP/3 is *available*, not mandatory.\n2. The browser attempts QUIC on UDP 443; the packets are dropped.\n3. It has a TCP connection racing alongside (or starts one after a short timeout) and uses HTTP/2 over it.\n4. It marks QUIC as broken for that network for a while, so later loads go straight to TCP.\n\nFor browser access across networks that block UDP, retain a healthy HTTPS-over-TCP fallback, using HTTP/2 or HTTP/1.1 as supported.",
+    "link": {
+      "title": "RFC 9114: HTTP/3",
+      "url": "https://www.rfc-editor.org/rfc/rfc9114"
+    }
+  }
+]

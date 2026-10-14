@@ -1,0 +1,95 @@
+[
+  {
+    "id": "db-partitioning-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do systems using consistent hashing (such as Cassandra) give each physical node many virtual nodes on the ring, rather than one point each?",
+    "options": [
+      {
+        "text": "To store more replicas of each key",
+        "explanation": "Wrong. Replication factor is configured separately; virtual nodes affect how ranges are distributed, not how many copies exist."
+      },
+      {
+        "text": "Because hashing is too slow with only one point per node",
+        "explanation": "Wrong. Lookup cost isn't the issue; finding the next point on a sorted ring is a fast binary search either way."
+      },
+      {
+        "text": "To even out range sizes and load, and so that a joining or leaving node shares its data with many nodes instead of one neighbour",
+        "explanation": "Correct. With one random point each, range sizes vary widely, and a new node only relieves one neighbour. Many small ranges per node average out, and transfers spread across the cluster."
+      },
+      {
+        "text": "To allow range scans across the ring",
+        "explanation": "Wrong. Hash-based placement scatters adjacent keys regardless of the number of virtual nodes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With 4 nodes and one random point each, the gaps between points (each node's share) can easily differ by 3× or more.\n2. Add a fifth node: it lands in one gap and takes keys only from the next node clockwise. That one node does all the streaming, and the others stay unbalanced.\n3. With 16–256 tokens per node, each node owns many small ranges. Shares average out (law of large numbers).\n4. A new node can take small slices from several existing nodes, sharing streaming load. Allocation and actual key popularity determine the resulting balance.\n5. Trade-off: more tokens means more ranges to track and repair; Cassandra 4.0 reduced the default from 256 to 16 with a token allocation algorithm that keeps balance good.",
+    "link": {
+      "title": "Wikipedia: Consistent hashing",
+      "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
+    }
+  },
+  {
+    "id": "db-partitioning-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A service writes 40,000 one-KiB notification items per second to a hot DynamoDB key range. Which mitigations can reduce per-partition write pressure, assuming sufficient total table capacity? Select all that apply.",
+    "options": [
+      {
+        "text": "Distribute writes across salted keys and verify that physical placement spreads the traffic; queries then gather results from the salts.",
+        "explanation": "Correct. Fifty uniformly used logical salts average 800 one-KiB writes/s each, but fifty salts do not guarantee fifty physical partitions. Verify distribution, headroom and access patterns."
+      },
+      {
+        "text": "Switch from hash to range partitioning on `user_id`",
+        "explanation": "Wrong by itself. A partitioning label does not ensure the hot workload is physically distributed; choose a key design that can actually spread the writes."
+      },
+      {
+        "text": "Add more nodes to the cluster",
+        "explanation": "Wrong by itself. More total capacity does not guarantee relief for a hot physical partition; distribution must be addressed."
+      },
+      {
+        "text": "If product semantics permit, aggregate many events into a compact summary before writing.",
+        "explanation": "Correct only when aggregation reduces billed bytes/updates. Putting 100 events into a larger item or BatchWriteItem call does not automatically cut required write units by 100."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "1. A standard one-KiB write consumes one write unit; physical partitions have finite throughput.\n2. Salting creates independently routable logical keys, but validate their physical distribution.\n3. If 50 salts receive uniform traffic, each gets 800 writes/s on average; allow headroom and verify the actual service behavior.\n```formula\nR_salt = R / S\nR_salt = 40,000/s / 50 = 800/s\nwhere\nR_salt: the average write rate per salted key, in writes per second (/s)\nR: the total write rate, 40,000 one-KiB writes per second\nS: the number of salt values, here 50\ns: seconds\nIn words: splitting one hot key into 50 salted keys divides its write rate by 50, if traffic is spread evenly.\n```\n4. Combining 100 events into a single one-KiB summary would reduce 40,000 events/s to 400 one-unit writes/s only if discarding that detail is acceptable.\n5. A 100-KiB item costs about 100 standard write units, and API batching does not reduce the per-item bill. Logical item collections without LSIs may also be split internally; distinguish logical keys from physical partitions.",
+    "link": {
+      "title": "DynamoDB: Designing partition keys to distribute your workload",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/bp-partition-key-design.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Redis Cluster, `MGET user:42:cart user:42:profile` fails with a `CROSSSLOT` error, although it worked on a single Redis server. What's the cleanest fix?",
+    "options": [
+      {
+        "text": "Rename the keys with a hash tag, such as `{user:42}:cart` and `{user:42}:profile`, so both hash to the same slot",
+        "explanation": "Correct. When a key contains `{...}`, Redis hashes only the part inside the braces, so all of a user's keys share a slot and multi-key commands work."
+      },
+      {
+        "text": "Increase the number of hash slots so both keys fit in one",
+        "explanation": "Wrong. Redis Cluster always has exactly 16,384 slots. The issue is that the two keys hash to different slots, not that there are too few."
+      },
+      {
+        "text": "Run the command on every node and merge the results",
+        "explanation": "Wrong. That works around the symptom at the cost of extra round trips, and it can't make transactions or Lua scripts span slots."
+      },
+      {
+        "text": "Disable cluster mode for multi-key commands",
+        "explanation": "Wrong. There's no per-command switch; cluster mode either shards the keyspace or it doesn't."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Redis Cluster places every key in a slot, and each node owns a set of slots:\n```formula\nslot = CRC16(key) mod 16384\nwhere\nslot: the hash slot the key belongs to, 0–16383\nCRC16: a 16-bit checksum function that turns the key's bytes into a number from 0 to 65535\nkey: the key string, or only the part inside {braces} if it has a hash tag\nmod: modulo, the remainder after whole-number division\n16384: the fixed number of slots in a Redis Cluster\nIn words: checksum the key and take the remainder by 16,384; keys with the same hash tag get the same slot.\n```\n2. `user:42:cart` and `user:42:profile` are different strings, so they almost certainly land in different slots, possibly on different nodes.\n3. Multi-key commands, `MULTI`/`EXEC` and Lua scripts need all keys in one slot, hence `CROSSSLOT`.\n4. Hash tags:\n```\n{user:42}:cart     -> CRC16(\"user:42\")\n{user:42}:profile  -> CRC16(\"user:42\")\n```\n   Same slot, so `MGET` works.\n5. Caution: don't put a popular constant in the tag (`{global}:...`), or every key piles into one slot and one node becomes a hot spot.",
+    "link": {
+      "title": "Redis Cluster specification",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
+    }
+  }
+]

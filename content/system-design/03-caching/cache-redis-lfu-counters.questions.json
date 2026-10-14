@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cache-eviction-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about **Redis's** eviction implementation are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It evicts by sampling a few random keys (default 5) and choosing the best candidate, rather than keeping a full LRU list",
+        "explanation": "Correct. `maxmemory-samples` controls the sample size, and an eviction pool keeps good candidates across rounds, approximating true LRU without per-key linked-list pointers."
+      },
+      {
+        "text": "Its LFU mode uses an 8-bit logarithmic counter that is incremented probabilistically",
+        "explanation": "Correct. The counter increments with decreasing probability as it grows (tuned by `lfu-log-factor`), letting 8 bits represent very large hit counts."
+      },
+      {
+        "text": "LFU counters never decrease, so a key popular last month remains protected",
+        "explanation": "Incorrect. Counters decay over time according to `lfu-decay-time` (default 1 minute per decrement), so old popularity fades."
+      },
+      {
+        "text": "Increasing `maxmemory-samples` to 10 brings eviction closer to true LRU at the cost of more CPU",
+        "explanation": "Correct. A bigger sample is more likely to contain the true oldest key, so accuracy improves, at the cost of more work per eviction."
+      },
+      {
+        "text": "Expired keys are only removed when a client reads them",
+        "explanation": "Incorrect. Redis also runs budgeted active-expiry cycles, so unread keys are reclaimed too; timing depends on version and hz/dynamic-hz settings."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Exact LRU costs two pointers per key plus list updates on every read. With 100 million keys:\n\n```formula\nM = n × 2 × p\nM = 100,000,000 × 2 × 8 B = 1.6 GB\nwhere\nM: memory for the list pointers, in bytes (B)\nn: the number of keys, 100 million\n2: two pointers (previous and next) per key\np: one pointer's size, 8 B on a 64-bit machine\nB: bytes\nGB: gigabytes; 1 GB = 1,000,000,000 B\nIn words: 16 bytes of pointers per key comes to about 1.6 GB for 100 million keys, before storing any data.\n```\n2. Redis instead stores a 24-bit clock or LFU counter in each object and **samples**: pick 5 random keys, put the oldest in a 16-entry pool, evict the pool's best.\n3. LFU: an 8-bit Morris-style counter. With `lfu-log-factor 10`, around a million hits saturate the counter at 255.\n4. Decay: elapsed decay periods are applied lazily when the key is accessed or considered; a background decrement of every idle key is not required, so formerly hot keys become evictable.\n5. Expiry is both lazy (on access) and active (periodic sampling).",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  },
+  {
+    "id": "cache-eviction-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Redis runs with `allkeys-lfu` and the default `lfu-decay-time 1`. Key `promo:blackfriday` reached an LFU counter of 200 during a sale, then was not touched for 3 hours. A newer key `promo:xmas` has a counter of 30 and was read a minute ago. Under memory pressure, which is more likely to be evicted, and why?",
+    "options": [
+      {
+        "text": "`promo:xmas`, because 30 is far below 200 and LFU counters only ever grow",
+        "explanation": "Counters do not only grow. Idle keys are decremented by one per decay period, so the stored 200 is not what eviction compares against."
+      },
+      {
+        "text": "`promo:blackfriday`, because 180 idle minutes decay its counter to about 20, below `promo:xmas`'s 30",
+        "explanation": "Correct. One decrement per idle minute takes 200 down to roughly 20. Old popularity has faded, which is exactly what decay is for."
+      },
+      {
+        "text": "Neither: LFU never evicts a key whose counter has passed the initial value of 5",
+        "explanation": "There is no such protection. The initial value of 5 just gives new keys a chance to accumulate hits; any key can be evicted."
+      },
+      {
+        "text": "`promo:blackfriday`, but only because LFU falls back to LRU for idle keys",
+        "explanation": "LFU mode does not switch to LRU. The idle time matters only because it drives the counter's decay."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Decay rule: for every `lfu-decay-time` minutes (1 here) since the last decrement, subtract 1 from the counter.\n2. Idle time: 3 hours = 180 minutes.\n3. Effective counter:\n\n```formula\nC_new = max(C − ⌊t_idle / D⌋, 0)\nC_new = max(200 − ⌊180 / 1⌋, 0)\nC_new = 200 − 180 = 20\nwhere\nC_new: the counter after decay\nC: the stored counter, 200\nmax: the larger of its two inputs (never below 0)\n⌊ ⌋: floor, rounding down to a whole number\nt_idle: minutes since last access, here 180\nD: lfu-decay-time, here 1 minute\nIn words: one point is lost per idle minute, so three idle hours take Black Friday's 200 down to 20.\n```\n\n4. Compare: `promo:blackfriday` ≈ 20 vs `promo:xmas` ≈ 29 after one minute of decay.\n5. Sampled eviction picks the lower counter, so Black Friday is more likely to be selected if both are considered; random sampling does not guarantee a particular victim.\n\nWithout decay, last month's hit would squat in the cache forever. Setting `lfu-decay-time 0` disables decay, which is rarely what a cache wants.",
+    "link": {
+      "title": "Key eviction — Redis docs",
+      "url": "https://redis.io/docs/latest/develop/reference/eviction/"
+    }
+  }
+]

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cache-distributed-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Redis node using 26 GB of a 32 GB machine is OOM-killed every night at the same time, under heavy write load. RDB snapshots are scheduled then. What's the most likely cause?",
+    "options": [
+      {
+        "text": "RDB compresses data in memory before writing it",
+        "explanation": "Compression happens while streaming to disk, not by building a second in-memory copy."
+      },
+      {
+        "text": "Snapshots load the old RDB file into memory first",
+        "explanation": "Saving doesn't load the previous file; RDB loading happens only at start-up."
+      },
+      {
+        "text": "The `fork()` for the snapshot uses copy-on-write; heavy writes during the snapshot duplicate many pages, pushing memory towards 2× and over the limit",
+        "explanation": "Correct. Each page modified by the parent during the snapshot is copied. With heavy writes, a 26 GB dataset can need several more GB, exceeding 32 GB."
+      },
+      {
+        "text": "AOF rewrite and RDB can't run on the same machine",
+        "explanation": "They can coexist (Redis avoids running both rewrites at once); this isn't a cause of OOM."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `BGSAVE` forks a child. Initially parent and child share all 26 GB of pages.\n2. When the parent modifies a page, the kernel copies it (copy-on-write).\n3. If 30% of pages are touched during a long snapshot:\n\n```formula\nM_peak ≈ M × (1 + f)\nM_peak ≈ 26 GB × (1 + 0.3)\nM_peak ≈ 33.8 GB\nwhere\nM_peak: peak memory during the snapshot, in gigabytes (GB)\nM: the dataset's normal memory, 26 GB\nf: fraction of pages written during the snapshot, 0.3\nGB: gigabytes\n≈: approximately equal to\nIn words: 30% of 26 GB gets copied, adding 7.8 GB on top of the 26 GB.\n```\n\n4. 33.8 GB is more than the machine's 32 GB → OOM killer.\n5. Fixes: set `maxmemory` below RAM by enough measured headroom for copy-on-write, buffers and fragmentation, snapshot from a replica instead, evaluate the Redis/kernel guidance for transparent huge pages (which can increase copy-on-write and latency costs; actual page splitting/copy behavior depends on the kernel), or shard to smaller nodes.",
+    "link": {
+      "title": "Redis persistence",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/"
+    }
+  },
+  {
+    "id": "cache-distributed-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about Redis persistence are true? Select all that apply.",
+    "options": [
+      {
+        "text": "With RDB alone, a crash loses every write since the last snapshot",
+        "explanation": "Correct. RDB is a point-in-time snapshot. Writes after it exist only in memory until the next one."
+      },
+      {
+        "text": "AOF with `appendfsync everysec` typically loses about a second of writes on a crash",
+        "explanation": "Correct. The log is fsynced roughly once a second, so the last second or so of writes may not be on disk."
+      },
+      {
+        "text": "`appendfsync always` is the fastest AOF mode",
+        "explanation": "Incorrect. Fsyncing every write is the slowest mode. It gives the strongest durability at a large throughput cost."
+      },
+      {
+        "text": "Persistence on a primary prevents losing acknowledged writes when a replica is promoted after the primary dies",
+        "explanation": "Incorrect. The promoted replica never had the write. The dead primary's disk does not help unless that same node comes back as primary."
+      },
+      {
+        "text": "For a cache, a main benefit of persistence is a warm restart rather than durability",
+        "explanation": "Correct. Persistence may avoid expensive origin reloads, but actual restart and refill times depend on dataset, storage, CPU, traffic and recovery configuration."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Separate two failure cases:\n\n| Failure | What helps |\n|---|---|\n| Same node restarts | RDB / AOF |\n| Node lost, replica promoted | Replication, `WAIT` |\n\n1. RDB: lose since last snapshot (A true).\n2. AOF `everysec`: lose about 1 s (B true). `always`: least loss, slowest (C false).\n3. Failover uses the replica's data, not the dead node's disk (D false).\n4. For a cache, data can be rebuilt from the database; the real cost is the time and load to rebuild it, so persistence buys warm restarts (E true).",
+    "link": {
+      "title": "Redis persistence",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/"
+    }
+  }
+]

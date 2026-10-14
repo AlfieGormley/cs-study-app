@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cache-fundamentals-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run 40 app servers, each with an in-process cache of user profiles (TTL 10 minutes). Assume no stale in-flight refill or replica lag, and no invalidation on writes. A user changes their display name. What will they most likely experience?",
+    "options": [
+      {
+        "text": "The name flips between old and new on refresh, depending on which server the load balancer picks, for up to 10 minutes",
+        "explanation": "Correct. Each server has its own copy. Servers that cached the old name keep serving it until their entry expires, so requests landing on different servers see different values."
+      },
+      {
+        "text": "The new name appears everywhere immediately, because the database was updated",
+        "explanation": "The database is updated, but 40 independent in-process caches still hold the old value until their TTL expires or they are explicitly invalidated."
+      },
+      {
+        "text": "The old name appears for exactly 10 minutes on every server, then changes everywhere at once",
+        "explanation": "Each server cached the profile at a different time, so each entry expires at a different moment. There is no single synchronised switch-over."
+      },
+      {
+        "text": "The update fails, because in-process caches lock the row",
+        "explanation": "In-process caches hold copies; they do not take database locks. The write succeeds."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In-process means **one cache per server**: 40 separate copies.\n2. Server A cached the profile at 10:00, server B at 10:07, server C never cached it.\n3. The user renames at 10:08.\n4. A request to C misses and reads the new name. A request to A shows the old name until 10:10. B shows it until 10:17.\n5. The load balancer spreads requests, so the user sees the name flicker.\n\nFixes: use a shared cache with reliable invalidation (Redis alone does not ensure freshness), shorten the in-process TTL to a few seconds, or broadcast invalidations (for example via Redis pub/sub).",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-fundamentals-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are choosing between an in-process cache and a shared Redis cache for product data on 30 app servers. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "An in-process lookup avoids a network round trip and can reduce latency.",
+        "explanation": "Correct. The actual cost depends on language, data structure, serialization and workload; there is no universal 100 ns application lookup guarantee."
+      },
+      {
+        "text": "With one coalesced cold fill per server, up to 30 independent servers may load the same key.",
+        "explanation": "Correct under that assumption. Without per-process coalescing, concurrent misses can produce more than one load per server."
+      },
+      {
+        "text": "A Redis cache is lost whenever an app server is redeployed",
+        "explanation": "Incorrect. Redis runs as a separate service, so it survives app deploys. It is the in-process cache that is emptied on every restart."
+      },
+      {
+        "text": "An in-process cache keeps all 30 servers consistent with each other automatically",
+        "explanation": "Incorrect. Each server holds an independent copy, so they can disagree until each entry expires or is invalidated."
+      },
+      {
+        "text": "A small in-process cache with a 1–5 s TTL in front of Redis can absorb very hot keys",
+        "explanation": "Correct when short local staleness is acceptable. Local TTL bounds time since insertion, not total age inherited from Redis or a lagging source."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. Local caches avoid the network but each process has its own contents.\n2. Shared Redis centralizes access, but replicas, invalidation races and stale origin data still affect consistency with the database.\n3. A separate Redis service survives app restarts; a process-local cache does not.\n4. Combining tiers can reduce hot-key load; measure latency and include every layer when setting freshness objectives.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  }
+]

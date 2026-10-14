@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cache-strategies-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the **cache-aside** pattern, who is responsible for loading data into the cache on a miss?",
+    "options": [
+      {
+        "text": "The cache, using a loader function configured for the database",
+        "explanation": "That describes read-through. In cache-aside the cache is a passive key-value store that knows nothing about the database."
+      },
+      {
+        "text": "The database, which pushes changes into the cache",
+        "explanation": "Pushing changes from the database (for example via change data capture) is an invalidation technique, not the definition of cache-aside."
+      },
+      {
+        "text": "The application: it checks the cache, reads the database on a miss, then writes the value to the cache",
+        "explanation": "Correct. The application sits \"aside\" both stores and orchestrates them. This is the default pattern with Redis and Memcached."
+      },
+      {
+        "text": "Nobody: cache-aside only caches values that were written",
+        "explanation": "Caching values on write is write-through. Cache-aside is lazy: it caches on read misses."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Request for `user:42` arrives at the app.\n2. App calls `GET user:42` on Redis and gets nothing (miss).\n3. App queries the database itself.\n4. App calls `SET user:42 <value> EX 300`.\n5. App returns the value.\n\nEvery step is in application code, so the app owns the cache logic. In read-through, steps 3–4 would happen inside the cache library instead.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-strategies-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Under a sudden spike, within one process, 500 requests for the same uncached key arrive within 10 ms. Which approach prevents 500 identical database queries with the least application code?",
+    "options": [
+      {
+        "text": "Plain cache-aside with a longer TTL",
+        "explanation": "A longer TTL does not help the first load: all 500 requests miss before anyone has populated the key, so all 500 query the database."
+      },
+      {
+        "text": "Write-around",
+        "explanation": "Write-around affects writes. This scenario is entirely about concurrent reads."
+      },
+      {
+        "text": "A read-through cache library that coalesces concurrent loads for the same key",
+        "explanation": "Correct. Libraries such as Caffeine's `LoadingCache` run the loader once per key and make the other callers wait for the same result, so 500 misses become 1 query."
+      },
+      {
+        "text": "Write-back with a 1 s flush interval",
+        "explanation": "Write-back changes when writes reach the database; it does nothing to stop concurrent read misses."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. With naive cache-aside, each of the 500 requests runs `GET` (miss) → `SELECT` → `SET` independently, giving 500 queries.\n2. A coalescing read-through cache keeps a map of in-flight loads per key.\n3. Request 1 starts the load. Requests 2–500 find a pending load and wait for its result.\n4. Result: 1 query, 500 responses.\n5. You can build the same thing by hand in cache-aside (Go's `singleflight`, or a short Redis lock), as the later stampede and coalescing unit shows, but read-through libraries often give it to you for free.\n6. One caveat: in-process coalescing is per server. With 20 app servers, the 500 requests become at most 20 queries, which is usually fine.",
+    "link": {
+      "title": "singleflight package — Go",
+      "url": "https://pkg.go.dev/golang.org/x/sync/singleflight"
+    }
+  },
+  {
+    "id": "cache-strategies-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An app uses cache-aside: on a read miss it queries the database and sets the key with a TTL. The application developers find the miss path repeated in 40 places and keep forgetting to add the TTL. Which change addresses this most directly?",
+    "options": [
+      {
+        "text": "Switch to write-back so the cache handles writes",
+        "explanation": "Write-back changes the write path. The duplication here is in the read-miss logic."
+      },
+      {
+        "text": "Remove the TTL everywhere for consistency",
+        "explanation": "Removing TTLs removes the safety net that repairs stale or orphaned entries. Consistency of code is not worth that."
+      },
+      {
+        "text": "Move to a read-through layer: one loader function per entity type, so the cache owns loading and applies the TTL in one place",
+        "explanation": "Correct. Read-through moves the miss-handling into the cache layer, so it is written once, the TTL is configured once, and concurrent misses can be coalesced."
+      },
+      {
+        "text": "Cache everything at application start-up so there are no misses",
+        "explanation": "Pre-loading everything wastes memory on unread data and still needs a miss path for new or evicted keys."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Cache-aside puts `GET → miss → SELECT → SET` in **application code**, wherever data is read.\n2. 40 copies means 40 chances to forget the TTL or serialise differently.\n3. Read-through has the same data flow but the code lives in the cache layer:\n\nIllustrative adapter API (not a complete library program):\n\n```python\n# Configure one shared miss path.\ncache = LoadingCache(\n    loader=load_user, ttl=300)\n# A miss invokes the configured loader.\nuser = cache.get(user_id)\n```\n\n4. Now the TTL is set in one place, and a good library also coalesces concurrent misses.\n5. The trade-off is coupling: the cache layer now has to know how to load each entity.",
+    "link": {
+      "title": "Caching strategies — Amazon ElastiCache docs",
+      "url": "https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/Strategies.html"
+    }
+  }
+]

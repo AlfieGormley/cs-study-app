@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cache-invalidation-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your cache-aside service deletes the key after every DB update, with a 24-hour TTL. Occasionally a product shows an old price for hours, even though the DB is correct. Logs show a read that started just before the update and finished just after. What happened?",
+    "options": [
+      {
+        "text": "The delete failed silently",
+        "explanation": "Possible in general, but the logs point to a specific interleaving with a slow reader, not a failed delete."
+      },
+      {
+        "text": "The reader fetched the old row before the update, then wrote it to the cache **after** the writer's delete, re-caching the old price with a fresh 24-hour TTL",
+        "explanation": "Correct. This is the classic cache-aside read/write race: the reader's `SET` is based on a stale read but lands after the invalidation, and nothing deletes it again."
+      },
+      {
+        "text": "Redis replication lag returned an old value",
+        "explanation": "The observed stale refill explains this timeline. Replica lag can also be arbitrarily long during faults; duration alone does not rule it out."
+      },
+      {
+        "text": "The TTL was too short",
+        "explanation": "The opposite: a long TTL is why the stale value survives for hours. A shorter TTL would limit the damage."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Reconstruct the timeline:\n\n```\nms   who  action\n000  R    GET -> miss\n005  R    SELECT -> £10\n010  W    UPDATE -> £12\n012  W    DEL product:9\n300  R    SET product:9 £10\n          (EX 86400)\n```\n\n1. R's read happened before W's commit, so it holds £10.\n2. R was slow (a GC pause) and its `SET` arrived after W's `DEL`.\n3. The cache now says £10 for 24 hours.\n\nFixes: leases (the delete voids R's token, so the set is rejected), versioned set-if-newer with tombstones, or at least a shorter TTL and a delayed second delete.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  },
+  {
+    "id": "cache-invalidation-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your service uses delete-on-write and sees the occasional stale-set race. Database reads on the miss path take 20 ms at the median and 400 ms at p99.9. You add a **delayed double delete**. Which delay is most sensible, and what is its limitation?",
+    "options": [
+      {
+        "text": "About 20 ms, the median read time; it removes the race entirely",
+        "explanation": "A delay at the median still leaves half of slow readers able to set after the second delete, so many races survive."
+      },
+      {
+        "text": "Zero: issue both deletes back to back",
+        "explanation": "Two immediate deletes are equivalent to one. The point is to delete again *after* any in-flight slow reader has finished its set."
+      },
+      {
+        "text": "About 500 ms, just above the slowest typical read; it narrows the window but cannot guarantee correctness, since a reader can still be slower than any fixed delay",
+        "explanation": "Correct. The second delete catches readers whose stale set landed in the first half-second. A reader stalled by a long GC pause can still arrive later, which is why leases or versioning are the real fix."
+      },
+      {
+        "text": "About 24 hours, matching the TTL",
+        "explanation": "A day-long delay is far too late to reduce the near-term stale window. Expiry starts when the stale entry is inserted, so it is not necessarily simultaneous with a delete scheduled from the writer’s commit."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The race: a reader reads the old row, the writer deletes, then the reader's `SET` lands.\n2. The second delete must land **after** that late `SET` to clean it up.\n3. So the delay must exceed the slow-reader time:\n\n```formula\nd > t_read\n500 ms > 400 ms\nwhere\nd: the delay before the second delete, in milliseconds (ms)\nt_read: the miss-path read time to cover; here the p99.9 (99.9th percentile), 400 ms\nms: milliseconds; 1 ms = 0.001 seconds\nIn words: wait a little longer than all but the slowest one-in-a-thousand reads, then delete again.\n```\n4. Timeline:\n\n```\n0 ms    W: commit, DEL\n300 ms  R: stale SET lands\n500 ms  W: DEL again -> fixed\n```\n\n5. If R stalls for 2 s instead, its set lands after both deletes and survives until TTL. Hence \"heuristic, not guarantee\".",
+    "link": {
+      "title": "Scaling Memcache at Facebook (NSDI 2013)",
+      "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+    }
+  }
+]

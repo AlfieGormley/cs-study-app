@@ -1,0 +1,71 @@
+[
+  {
+    "id": "net-load-balancers-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your app stores user sessions in server memory and relies on sticky sessions at the load balancer. Which problems should you expect? Select all that apply.",
+    "options": [
+      {
+        "text": "When a server crashes, its users lose their sessions and get logged out",
+        "explanation": "Correct. The session data only existed in that server's memory; affinity can't move it elsewhere."
+      },
+      {
+        "text": "Newly added servers take a long time to share the load, because existing users stay pinned",
+        "explanation": "Correct. Only new sessions go to new servers. Scale-out during a spike barely helps the already-hot servers."
+      },
+      {
+        "text": "Load can become uneven if some pinned users are much heavier than others",
+        "explanation": "Correct. Affinity overrides the balancing algorithm; a server with a few heavy users can't shed them."
+      },
+      {
+        "text": "TLS stops working with sticky sessions",
+        "explanation": "Stickiness is implemented with cookies or hashing at the L7 balancer, which terminates TLS anyway. It has no effect on TLS."
+      },
+      {
+        "text": "If affinity is by client IP, users behind one carrier NAT all land on the same server",
+        "explanation": "Correct. Thousands of mobile users can share a few public IPs, so IP-hash stickiness concentrates them."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Walk through the life of a sticky session:\n\n1. **Placement** fixed at first request → no rebalancing later (uneven load, slow scale-out).\n2. **State** lives only on that server → lost on crash or deploy.\n3. **Key choice**: cookies are per browser; IP hash is per NAT gateway → hot spots.\n\nFix: move session state to Redis or a signed token, so any server can serve any request; keep stickiness only as a cache-locality optimisation.",
+    "link": {
+      "title": "Sticky sessions for your Application Load Balancer (AWS)",
+      "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/sticky-sessions.html"
+    }
+  },
+  {
+    "id": "net-load-balancers-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your chat service holds WebSocket connections that last for hours behind an ALB with a 300 s deregistration delay. On every deploy, about 50,000 clients disconnect within the same second and then reconnect at once, causing a load spike and failed logins. What's the best improvement?",
+    "options": [
+      {
+        "text": "Raise the deregistration delay to 24 hours",
+        "explanation": "A 24-hour value is outside the ALB deregistration-delay range (0–3,600 seconds). Even a longer supported delay does not itself spread reconnects."
+      },
+      {
+        "text": "Disable health checks during deploys",
+        "explanation": "Health checks don't cause the disconnects; draining does. Turning them off risks sending traffic to broken instances."
+      },
+      {
+        "text": "Switch to round-robin balancing",
+        "explanation": "The algorithm chooses where new connections go; it doesn't change the fact that 50,000 clients reconnect at the same moment."
+      },
+      {
+        "text": "Have draining servers close their WebSockets gradually over the drain window, and make clients reconnect with exponential backoff plus random jitter",
+        "explanation": "Correct. Spreading closes over the window and jittering client reconnects turn a 50,000-in-one-second spike into a steady trickle that the fleet absorbs."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Draining lets in-flight work finish, but a WebSocket is never 'finished'; at the end of the delay, the balancer cuts everything still open.\n2. All of a server's clients drop together → they all reconnect together → **thundering herd**.\n3. Server side: on drain, close connections in batches over, say, 250 s with a 'please reconnect' close code.\n4. Client side: wait a random delay that grows with each failed attempt (exponential backoff with full jitter), then reconnect.\n5. Result: 50,000 reconnects spread over minutes, a few hundred per second, instead of 50,000 in one second.\n\nThe client's delay and the resulting reconnect rate:\n\n```formula\ndelay = random(0, b × 2^k)\nrate ≈ C / t_drain\nrate ≈ 50,000 / 250 s = 200 reconnects/s\nwhere\ndelay: how long the client waits before its next reconnect attempt, in seconds (s)\nrandom: random(x, y) picks a number uniformly at random between x and y\nb: the base delay, for example 1 s\nk: the number of failed attempts so far: 0, 1, 2...\nrate: reconnections per second hitting the fleet when closes are spread evenly\nC: the number of clients to move, 50,000\nt_drain: the window the closes are spread over, 250 s\nreconnects/s: reconnections per second\ns: second\n≈: approximately equal to\nIn words: random, growing delays scatter the reconnects, and spreading 50,000 closes over 250 s gives about 200 reconnects per second.\n```",
+    "link": {
+      "title": "Load balancing, visualised (Sam Rose)",
+      "url": "https://samwho.dev/load-balancing/"
+    }
+  }
+]

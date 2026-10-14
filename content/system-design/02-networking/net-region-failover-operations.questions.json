@@ -1,0 +1,92 @@
+[
+  {
+    "id": "net-global-traffic-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Region A fails at 14:00. Automation shifts 100% of A's traffic to region B in one step. At 14:03, B also falls over. A review shows B's caches were cold and its autoscaling group was at minimum size. Which change best prevents a repeat?",
+    "options": [
+      {
+        "text": "Lower DNS TTLs so traffic moves even faster",
+        "explanation": "Moving traffic faster makes the herd arrive sooner. B didn't fail because traffic was slow to arrive, but because it arrived all at once to an unprepared region."
+      },
+      {
+        "text": "Fail back to region A as soon as possible",
+        "explanation": "Region A is the one that failed; sending traffic back before it's healthy just moves the outage. Failback should wait for sustained health."
+      },
+      {
+        "text": "Shift traffic in weighted steps while B scales up and warms caches, keep pre-provisioned headroom in B, and use load shedding or rate limits to protect it",
+        "explanation": "Correct. Gradual shifts give autoscaling and caches time to catch up; headroom absorbs the first minutes; shedding excess load keeps B serving most users instead of collapsing."
+      },
+      {
+        "text": "Remove health checks so failover never triggers",
+        "explanation": "Then region A's outage would have stayed a full outage for its users. The problem was how failover was executed, not that it happened."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. B at minimum size might handle, say, 30% of A's peak. Receiving 100% at once → overload.\n2. Cold caches multiply the problem: every request hits B's databases, which were sized for B's normal hit ratio.\n3. Better runbook:\n  - Keep B with enough standing headroom to absorb what it would inherit (with only two regions, that means running each at 50% or less).\n  - Shift 10% → 25% → 50% → 100% over minutes, watching error rates and latency.\n  - Scale B ahead of each step.\n  - Shed or degrade non-critical traffic if B nears its limits.\n4. A partial, controlled shift beats a total, cascading one.",
+    "link": {
+      "title": "Weighted routing (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy-weighted.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your failover runbook says: 'During a regional outage, call the cloud provider's API to update the load balancer and DNS configuration.' A reviewer says this is fragile. Why?",
+    "options": [
+      {
+        "text": "Control-plane APIs may be degraded during the same incident (possibly hosted in the failing region), so recovery should rely on data-plane mechanisms like pre-configured health checks that flip routing automatically",
+        "explanation": "Correct. Control planes are more complex and less available than data planes. AWS's guidance is to avoid control-plane dependencies in recovery paths: pre-provision everything and let health checks drive failover."
+      },
+      {
+        "text": "APIs are slower than the console",
+        "explanation": "Speed isn't the main concern, and consoles call the same APIs. The issue is whether those APIs are available during the incident."
+      },
+      {
+        "text": "DNS can't be changed during an outage",
+        "explanation": "DNS can be changed when its control plane is healthy. Pre-configured health-driven failover avoids needing a record edit during the incident, but cached DNS answers and existing connections still delay client movement."
+      },
+      {
+        "text": "Load balancers don't support configuration changes",
+        "explanation": "They do support configuration changes. The risk is depending on making changes at the worst possible moment."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. **Data plane** = the parts that serve traffic (DNS answering queries, health checks, load balancers forwarding packets). Highly available, simple.\n2. **Control plane** = the parts that create or change resources (APIs, consoles). More complex; may be regional; often impaired during large events.\n3. A runbook requiring control-plane calls fails exactly when it's needed most.\n4. Better: pre-create standby resources and failover records; let health checks (data plane) trigger the switch; if a manual lever is needed, make it a data-plane one (e.g. a health check that reads a flag file you can flip).",
+    "link": {
+      "title": "Configuring DNS failover (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html"
+    }
+  },
+  {
+    "id": "net-global-traffic-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your automated failover moves traffic from region A to B whenever A fails 2 health checks in a row, and back as soon as A passes 2 in a row. During a partial network problem, A alternates between passing and failing, and traffic swings between regions every minute, causing errors on every switch. What's the best fix?",
+    "options": [
+      {
+        "text": "Lower the DNS TTL so each switch takes effect faster",
+        "explanation": "Faster switching makes the swinging worse, not better. The problem is switching too often, not too slowly."
+      },
+      {
+        "text": "Remove health checks from region A",
+        "explanation": "Then a genuine outage in A would never trigger failover."
+      },
+      {
+        "text": "Add hysteresis: require more failures over a longer window to fail over, and a sustained period of health (often with human approval) before failing back",
+        "explanation": "Correct. Different thresholds for leaving and returning stop marginal health from causing repeated flips. Failback is the less urgent action, so it can afford to be slow and deliberate."
+      },
+      {
+        "text": "Fail over to a third region instead",
+        "explanation": "That just changes where traffic swings to. The flapping comes from the decision rule, not from the choice of standby."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Symmetric, sensitive thresholds (2 fails out, 2 passes back) plus a marginal region cause **flapping**.\n2. Every flip costs: dropped connections, cold caches, possibly a thundering herd.\n3. Hysteresis:\n  - Fail over after, say, 3 of 5 checks failing from several vantage points.\n  - Fail back only after, say, 15 minutes of continuous health, ideally confirmed by a human.\n4. Also consider sticking with the standby until the next planned window: an unnecessary failback is a second risky event.",
+    "link": {
+      "title": "Configuring DNS failover (Amazon Route 53)",
+      "url": "https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/dns-failover.html"
+    }
+  }
+]

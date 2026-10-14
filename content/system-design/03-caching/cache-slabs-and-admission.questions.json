@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cache-eviction-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Memcached cluster shows heavy evictions and a falling hit ratio, yet `stats` reports gigabytes of free memory. Values recently shrank from ~1 KB JSON to ~100 B after a format change. What is the most likely cause?",
+    "options": [
+      {
+        "text": "Memcached's global LRU is evicting large items first",
+        "explanation": "Memcached does not have one global LRU; it has a separate LRU per slab class, which is the point of the question."
+      },
+      {
+        "text": "The TTL on small values is shorter",
+        "explanation": "TTL causes expiry, which is reported separately from evictions; the format change did not alter TTLs."
+      },
+      {
+        "text": "Memcached compresses small values badly",
+        "explanation": "Memcached itself does not compress values (some clients do). Compression would not cause evictions alongside free memory."
+      },
+      {
+        "text": "Memory was assigned to the ~1 KB slab class; the small-item class has few pages and evicts within itself, while memory sits idle in the large class",
+        "explanation": "Correct. Each slab class evicts independently. Pages assigned to the old size class stay there until the slab rebalancer (`slab_reassign`/`slab_automove`) moves them, so one class can thrash while another is underused."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Memcached splits memory into 1 MiB (1,048,576-byte) pages assigned to slab classes (for example 96 B, 120 B, ..., ~1 KB, ...).\n2. For months, values were ~1 KB, so almost all pages went to the ~1 KB class.\n3. After the change, new items (about 100 B of value plus a ~50 B header) land in a small class of around 150–200 B, which owns only a few pages.\n4. That class fills quickly and evicts its own LRU tail, even though the ~1 KB class has lots of free chunks.\n5. Fix: rely on automatic slab rebalancing (`slab_automove`, on by default in modern versions, but it moves pages gradually), or restart/warm the cluster after major size changes.",
+    "link": {
+      "title": "Memcached wiki",
+      "url": "https://github.com/memcached/memcached/wiki"
+    }
+  },
+  {
+    "id": "cache-eviction-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Caffeine's W-TinyLFU is described as an **admission policy** as well as an eviction policy. What does that mean in practice?",
+    "options": [
+      {
+        "text": "It refuses to cache any key that has not been read at least twice in the last minute",
+        "explanation": "There is no fixed threshold like this. Admission is relative: the candidate is compared with the eviction victim."
+      },
+      {
+        "text": "Its main-cache admission decision compares the newcomer’s estimated frequency with the victim’s and can reject a less popular newcomer",
+        "explanation": "Correct. TinyLFU keeps approximate frequencies in a Count-Min Sketch. A newcomer from the LRU window competes with the main cache's victim; low-frequency newcomers can be dropped, protecting against one-hit wonders. Caffeine 3.2.3 also admits warmer candidates randomly with probability 1/128 as a hash-attack defence."
+      },
+      {
+        "text": "It only admits keys that fit within a size limit",
+        "explanation": "Size limits exist in Caffeine (weighers), but that isn't what the admission policy refers to."
+      },
+      {
+        "text": "It caches items in the order they were admitted and evicts the oldest",
+        "explanation": "That describes FIFO, which ignores frequency entirely."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ordinary policies always admit the new item and only choose what to evict.\n2. W-TinyLFU: new items enter an LRU window whose size is implementation/configuration-dependent (modern Caffeine adapts it).\n3. When an item leaves the window, it is compared to the main segment's victim using sketch frequencies.\n4. Example: candidate X has estimated frequency 1 (seen once); victim Y has 7. X is discarded; Y stays.\n5. A scan's keys all have frequency ~1, so they are less likely to displace a well-established hot set; approximate counts and policy details do not guarantee immunity.\n6. The sketch is periodically halved so frequencies reflect recent behaviour.\n7. The frequency comparison describes the main policy, not an absolute invariant: Caffeine 3.2.3 randomly admits some warmer candidates to resist hash-collision attacks.",
+    "link": {
+      "title": "TinyLFU: A Highly Efficient Cache Admission Policy (arXiv)",
+      "url": "https://arxiv.org/abs/1512.00727"
+    }
+  },
+  {
+    "id": "cache-eviction-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A nightly batch job reads millions of keys once each through your cache. Which of these designs are intended to help keep the daytime hot set largely intact? Select all that apply.",
+    "options": [
+      {
+        "text": "Plain LRU",
+        "explanation": "Incorrect. Each scanned key becomes the most recent entry, so the scan pushes the hot set out of the cache."
+      },
+      {
+        "text": "Redis `allkeys-lfu`",
+        "explanation": "Correct. Scanned keys are seen once, so their counters stay near the starting value and they are evicted before the frequently-used hot keys."
+      },
+      {
+        "text": "Memcached's segmented LRU (HOT/WARM/COLD)",
+        "explanation": "Correct as scan resistance, not immunity. Segment caps, asynchronous promotions and workload changes can still displace useful entries."
+      },
+      {
+        "text": "FIFO",
+        "explanation": "Incorrect. The scan's keys are the newest inserts, so FIFO evicts the older hot keys first, just as LRU does."
+      },
+      {
+        "text": "Caffeine's W-TinyLFU",
+        "explanation": "Correct. A one-hit candidate loses the frequency comparison against the main cache's victim, so scanned keys are dropped rather than admitted."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "LRU and FIFO are vulnerable to a stream of new one-off keys. LFU, segmented LRU and W-TinyLFU can protect repeatedly used entries, but sampling, frequency decay, segment sizes and concurrent traffic mean none guarantees the entire hot set survives. Bypassing the application cache for the batch job avoids this source of pollution directly.",
+    "link": {
+      "title": "Cache replacement policies — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_replacement_policies"
+    }
+  }
+]

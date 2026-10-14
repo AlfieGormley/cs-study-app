@@ -1,0 +1,92 @@
+[
+  {
+    "id": "db-transactions-isolation-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Under PostgreSQL Read Committed with plain SELECT statements and no intervening writes by T1, transaction T1 reads a product's stock as 5. T2 then sets it to 3 and commits. T1 reads the stock again in the same transaction. What does T1 see, and what is this called?",
+    "options": [
+      {
+        "text": "5; Read Committed guarantees repeatable reads",
+        "explanation": "Wrong. Read Committed only guarantees you never see *uncommitted* data. It takes a fresh snapshot per statement, so committed changes become visible mid-transaction."
+      },
+      {
+        "text": "3; a dirty read",
+        "explanation": "Wrong. A dirty read means seeing *uncommitted* data. T2 had committed, so seeing 3 is not dirty."
+      },
+      {
+        "text": "3; a non-repeatable read",
+        "explanation": "Correct. The same row read twice in one transaction gives different values because another transaction committed in between. Read Committed allows this."
+      },
+      {
+        "text": "An error, because T2's write conflicts with T1's read",
+        "explanation": "Wrong. These plain Read Committed reads do not produce a serialization error merely because T2 changes the row between statements. Locking statements and stronger isolation have different conflict behavior."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Read Committed (the Postgres default) takes a new snapshot at the start of each *statement*.\n2. T1's first `SELECT` snapshot: T2 hasn't committed, so T1 sees 5.\n3. T2 commits stock = 3.\n4. T1's second `SELECT` takes a new snapshot, which includes T2's commit, so T1 sees 3.\n5. Same row, same transaction, different result: a non-repeatable read. Under Repeatable Read (snapshot isolation) T1 would see 5 both times.",
+    "link": {
+      "title": "PostgreSQL: Transaction isolation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A likes counter uses read-then-write code, and you run it on two databases, both at **Repeatable Read**. Each request runs `BEGIN`, reads `likes` (100) with a plain `SELECT`, then runs `UPDATE posts SET likes = 101 WHERE id = 9` and commits. Both read before either writes. What happens on PostgreSQL and on MySQL InnoDB?",
+    "options": [
+      {
+        "text": "Postgres aborts the second transaction (40001), so a retry gives 102; MySQL commits both and ends with 101, a lost update",
+        "explanation": "Correct. Postgres sees that the row changed after the second transaction's snapshot and raises *could not serialize access due to concurrent update*. InnoDB's `UPDATE` is a *current read* of the latest committed row, so it simply writes 101 again."
+      },
+      {
+        "text": "Both databases end with 101 and both transactions commit",
+        "explanation": "Half right. That's what MySQL does, but Postgres Repeatable Read is snapshot isolation with a first-committer-wins check, so it won't let the second writer silently overwrite."
+      },
+      {
+        "text": "Both databases abort the second transaction with a serialization error",
+        "explanation": "Wrong for MySQL. InnoDB uses write locks, but this pattern does not raise PostgreSQL-style snapshot-change serialization errors: the second `UPDATE` waits for the row lock, then overwrites the latest committed row."
+      },
+      {
+        "text": "Postgres ends with 101; MySQL's gap locks block the second `SELECT`, so it reads 101 and writes 102",
+        "explanation": "Wrong. A plain `SELECT` in InnoDB is a non-locking snapshot read and takes no gap locks. Only `FOR UPDATE`/`FOR SHARE` reads lock."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Same level name, different engines. Check what each one actually does.\n2. **Postgres RR** = snapshot isolation.\n   - T1 updates row 9 and commits.\n   - T2's `UPDATE` waits on T1's lock, then sees the row was changed after T2's snapshot.\n   - T2 fails with SQLSTATE 40001. On retry it reads 101 and writes 102.\n3. **MySQL RR**: plain reads use a snapshot, but `UPDATE` reads the newest committed version.\n   - T2's `UPDATE` waits for T1, then writes the literal 101 over T1's 101.\n   - Both commit. Final value 101: a lost update.\n4. Portable fixes: `SET likes = likes + 1`, or `SELECT ... FOR UPDATE` before computing, or a version check:\n```sql\n-- Write only if the old value survives.\nUPDATE posts SET likes = 101\n WHERE id = 9 AND likes = 100;\n-- 0 rows updated? re-read, retry\n```",
+    "link": {
+      "title": "MySQL: Transaction isolation levels",
+      "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On MySQL InnoDB at the default Repeatable Read, T1 runs:\n```sql\nBEGIN;\n-- First snapshot sees ten new jobs.\nSELECT count(*) FROM jobs\n WHERE state = 'new';      -- 10\n```\nT2 then inserts one more `'new'` job and commits. T1 continues:\n```sql\n-- Current read includes T2's new row.\nUPDATE jobs SET state = 'taken'\n WHERE state = 'new';\n-- Own writes now include all eleven.\nSELECT count(*) FROM jobs\n WHERE state = 'taken';\n```\nHow many rows does the `UPDATE` change, and what does T1's last `SELECT` return (assuming no jobs were `'taken'` before)?",
+    "options": [
+      {
+        "text": "10 and 10: Repeatable Read freezes T1's view of the table",
+        "explanation": "Wrong. That's what Postgres's snapshot isolation would do. InnoDB's `UPDATE` is a *current read* of the latest committed rows, not a snapshot read."
+      },
+      {
+        "text": "10 and 11: the `UPDATE` uses the snapshot, but the final count sees T2's row",
+        "explanation": "Wrong on both. The `UPDATE` is not limited to the snapshot, and a plain `SELECT` doesn't see other transactions' newer commits; it sees the 11th row only because T1 itself modified it."
+      },
+      {
+        "text": "The `UPDATE` fails with a serialization error because T2 inserted a matching row",
+        "explanation": "Wrong. InnoDB uses write locks, but this pattern does not raise PostgreSQL-style snapshot-change serialization errors. It just locks and updates the current rows."
+      },
+      {
+        "text": "11 and 11: the `UPDATE` sees T2's committed row, and once T1 has modified it, that row becomes visible to T1's snapshot reads",
+        "explanation": "Correct. InnoDB plain reads use the snapshot, but `UPDATE` reads and locks the newest committed rows. T1's own changes are always visible to it, so the newly updated row appears in its later snapshot read."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. InnoDB has two kinds of read inside one Repeatable Read transaction:\n   - **Snapshot (consistent) read**: plain `SELECT`, as of T1's first read.\n   - **Current read**: `UPDATE`, `DELETE`, `FOR UPDATE`/`FOR SHARE`, against current data. Range predicates can take next-key locks; a unique-key equality lookup can use record-only locks.\n2. First `SELECT`: snapshot read, 10 rows.\n3. T2 commits an 11th `'new'` row.\n4. `UPDATE ... WHERE state = 'new'`: current read finds 11 rows and updates all 11.\n5. Final `SELECT`: snapshot read, but a transaction always sees its own writes. All 11 rows now carry T1's change, so it returns 11.\n6. Takeaway: InnoDB Repeatable Read is not pure snapshot isolation. A phantom row \"appears\" because T1 wrote to it. Postgres RR would update only 10 rows.",
+    "link": {
+      "title": "MySQL: Transaction isolation levels",
+      "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-isolation-levels.html"
+    }
+  }
+]

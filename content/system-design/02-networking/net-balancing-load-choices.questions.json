@@ -1,0 +1,62 @@
+[
+  {
+    "id": "net-load-balancers-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A pool has four identical servers behind round robin. Most requests take 5 ms, but 1% are report exports taking 30 s. What problem will round robin cause?",
+    "options": [
+      {
+        "text": "None; round robin gives each server exactly a quarter of the work",
+        "explanation": "Round robin gives each server a quarter of the **requests**, not the work. A server that happens to receive several 30 s exports is far busier than the others but keeps getting its full share."
+      },
+      {
+        "text": "Servers that pick up the slow exports pile up in-flight requests and slow down, while round robin keeps sending them new traffic",
+        "explanation": "Correct. Round robin ignores current load. A least-requests or power-of-two-choices algorithm would steer new requests away from servers busy with exports."
+      },
+      {
+        "text": "Round robin will crash when request times differ",
+        "explanation": "Round robin doesn't know or care about request durations; it won't crash. It just distributes unevenly in terms of actual load."
+      },
+      {
+        "text": "Round robin will send all exports to the same server",
+        "explanation": "Round robin doesn't look at request type at all. Exports land wherever the rotation happens to be."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Round robin balances **count**, assuming equal cost.\n2. Here cost varies 6,000× (5 ms vs 30 s).\n3. Suppose server B gets three exports in a minute: it has three long requests occupying workers, yet still gets 25% of the new 5 ms requests, which queue behind them.\n4. **Least outstanding requests** sees B has more in flight and favours A, C, D.\n5. Better still: move exports to a separate worker pool or async job queue.\n\nThe cost gap in step 2:\n\n```formula\nratio = t_export / t_normal\nratio = 30,000 ms / 5 ms = 6,000\nwhere\nratio: how many times more work one export is than one normal request\nt_export: the duration of a report export, 30 s = 30,000 milliseconds (ms)\nt_normal: the duration of a normal request, 5 ms\nms: millisecond, one thousandth of a second\nIn words: one export occupies a worker as long as 6,000 normal requests, so counting requests says little about load.\n```",
+    "link": {
+      "title": "Supported load balancers (Envoy)",
+      "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/load_balancers"
+    }
+  },
+  {
+    "id": "net-load-balancers-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You run 50 independent L7 proxy instances, each doing global *least-connections* to 200 backends based on its own view. A backend that just restarted has 0 connections. What tends to happen, and what algorithm mitigates it?",
+    "options": [
+      {
+        "text": "Nothing; least-connections handles this perfectly",
+        "explanation": "Each proxy independently sees the restarted backend as the least loaded and sends it new traffic at the same time. Together they overwhelm it."
+      },
+      {
+        "text": "The backend is ignored until it reaches the average connection count",
+        "explanation": "Least-connections does the opposite: a backend with the fewest connections is the most attractive target."
+      },
+      {
+        "text": "All 50 proxies simultaneously pick the empty backend (herding), overloading it; power of two choices limits this because each proxy only compares two random backends",
+        "explanation": "Correct. With P2C, the empty backend wins only when it's one of the two sampled, so its share of new traffic rises gradually rather than all proxies piling on together."
+      },
+      {
+        "text": "Round robin would be worse, because it can't spread load",
+        "explanation": "Round robin would actually not herd onto the restarted node (it'd get 1/200 of traffic), though it ignores load in other ways. The specific fix for herding with load awareness is P2C."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Global least-connections: each proxy picks `argmin(connections)` across 200 backends.\n2. A fresh backend at 0 connections is the argmin for **every** proxy at once.\n3. 50 proxies × their request rates all land on it until their (stale, local) counts catch up → overload, possibly a crash loop.\n4. **P2C**: sample 2 of 200 at random; the fresh backend is in the sample about 1% of the time and then wins, so it gets roughly twice its fair share, not all traffic (worked out below).\n5. Add **slow start** (ramp new backends' weight over 30–60 s) for warm-up, as Envoy and HAProxy support.\n\nThe P2C numbers in step 4:\n\n```formula\nP ≈ d / N = 2 / 200 = 1%\nshare_fair = 1 / N = 1 / 200 = 0.5%\nP / share_fair = 1% / 0.5% = 2\nwhere\nP: the probability that the fresh backend is one of the two sampled for a given request (it then wins, having fewest requests)\nd: how many backends each request samples, 2\nN: the number of backends, 200\nshare_fair: the share each backend would get if load were spread perfectly evenly\n≈: approximately (ignoring the tiny chance of sampling the same backend twice)\n%: per cent\nIn words: the empty backend gets about double its fair share, a modest bump, instead of every proxy's traffic at once.\n```",
+    "link": {
+      "title": "Power of two choices load balancing (HAProxy)",
+      "url": "https://www.haproxy.com/blog/power-of-two-load-balancing"
+    }
+  }
+]

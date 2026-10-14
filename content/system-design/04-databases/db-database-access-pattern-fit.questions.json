@@ -1,0 +1,92 @@
+[
+  {
+    "id": "db-choosing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A new B2B invoicing product expects 5,000 customers, about 200 GB of data after three years, a few hundred writes per second at peak, and needs atomic updates across invoices, payments and ledger entries. What's the most sensible default?",
+    "options": [
+      {
+        "text": "Cassandra, so it can scale later",
+        "explanation": "Wrong as a default. Conventional Cassandra data models do not provide the familiar general multi-table relational transaction model needed here; distributed operations add complexity without a measured need."
+      },
+      {
+        "text": "A managed relational database such as Postgres on RDS or Cloud SQL",
+        "explanation": "Correct. Managed PostgreSQL is a reasonable starting point for multi-table transactions and relational constraints. Actual capacity depends on schema, queries, indexes, hardware and service configuration."
+      },
+      {
+        "text": "MongoDB, because invoices are documents",
+        "explanation": "MongoDB supports multi-document transactions, so it is not incapable. However, document shape alone does not outweigh this workload’s relational invariants and lack of a document-specific requirement."
+      },
+      {
+        "text": "Redis, for speed",
+        "explanation": "Wrong. Redis is primarily in-memory with weaker durability guarantees by default; it's a poor system of record for financial data and isn't needed for this load."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Prioritize atomic changes across invoice, payment and ledger rows.\n2. PostgreSQL supports transactions and relational constraints appropriate for those requirements.\n3. A managed service reduces routine backup, patching and failover work.\n4. Benchmark the actual schema and peak workload before sizing; no universal writes-per-second capacity or percentage is asserted.\n5. Revisit the design when measured resource or latency constraints justify it.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "db-choosing-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A global messaging product requires users in Sydney, Frankfurt and Virginia to acknowledge writes within 20 ms, continue accepting writes in every region during inter-region partitions, and immediately expose one final, strict order for the same conversation with no later reordering. Which assessment is correct?",
+    "options": [
+      {
+        "text": "One Postgres primary in Virginia with read replicas in each region",
+        "explanation": "Wrong. A distant authoritative primary adds a remote write round trip, and an inter-region partition prevents unreachable regions from committing there. That alone violates the stated availability requirement."
+      },
+      {
+        "text": "The requirements conflict: choose provisional local writes with eventual ordering, or authoritative conversation ordering with latency and partition-availability tradeoffs.",
+        "explanation": "Correct. Isolated regions cannot coordinate one immediately final order. Homing a conversation restricts where it can commit during a partition; merging independently accepted writes can require later reordering."
+      },
+      {
+        "text": "A globally serializable database (e.g. Spanner) with a single leader per row",
+        "explanation": "Close but it fails one requirement. Spanner gives strong ordering, but writes require the configured consensus quorum. A region unable to reach that quorum during a partition cannot commit independently. Latency depends on the deployed instance configuration."
+      },
+      {
+        "text": "Redis in each region with no replication",
+        "explanation": "Wrong. Without replication, users in other regions would never see the messages, and Redis alone is a weak system of record."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A 20 ms acknowledgement cannot depend on coordination among these distant regions.\n2. During a partition, both regions may accept concurrent writes to the same conversation.\n3. Assigning local timestamps and a deterministic tie-breaker can eventually converge, but cannot promise that an already displayed order will never change.\n4. A single authoritative sequencer supplies a final order, but other regions must reach it or defer commits.\n5. Clarify which requirement may be relaxed; a database product does not remove this conflict.",
+    "link": {
+      "title": "DeCandia et al.: Dynamo, Amazon's highly available key-value store",
+      "url": "https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf"
+    }
+  },
+  {
+    "id": "db-choosing-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A three-person team is building a device registry for an IoT product. Every access is `get device by id` or `update device by id`; there are no joins or ad-hoc queries. Traffic is near zero most of the day but spikes to 30,000 requests per second when a firmware rollout starts. The backend runs on AWS Lambda. Which store fits best?",
+    "options": [
+      {
+        "text": "A self-managed Cassandra cluster sized for the peak",
+        "explanation": "Wrong. It would handle the load, but a three-person team would operate a cluster that sits mostly idle, paying for peak capacity all day."
+      },
+      {
+        "text": "DynamoDB in on-demand mode, with the device id as partition key",
+        "explanation": "Correct fit for known key-based access and a small team, provided key distribution, request sizes, warm throughput, previous peak, table/account limits and optional maximum throughput support the rollout spike. On-demand is not unlimited capacity."
+      },
+      {
+        "text": "A Postgres primary with read replicas",
+        "explanation": "Workable, but a weaker fit. It's sized for the peak or it struggles during rollouts, and thousands of concurrent Lambda instances each opening connections need a pooler such as RDS Proxy. Nothing here needs SQL's flexibility."
+      },
+      {
+        "text": "Redis as the only store",
+        "explanation": "Wrong. Redis would be fast, but as the sole system of record for device state its durability depends on persistence settings, and you'd still provision a server for the peak."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Access patterns: get by id, update by id. Fully known, single-key.\n2. Load shape: idle, then 30,000 requests/s for a while. Very spiky.\n3. Team: three people, so operational burden matters a lot.\n4. Runtime: Lambda, which favours connectionless HTTP APIs.\n5. DynamoDB on-demand matches every point:\n   - `GetItem` / `UpdateItem` by partition key.\n   - Pay per request; verify warm throughput, previous-peak scaling behavior and quotas before the spike.\n   - Watch for one very hot device id, which still hits the per-partition limits.\n6. This is the other side of \"start with Postgres\": when access patterns are simple and known, a managed key-value store can be the simpler choice.",
+    "link": {
+      "title": "DynamoDB: Capacity modes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/capacity-mode.html"
+    }
+  }
+]

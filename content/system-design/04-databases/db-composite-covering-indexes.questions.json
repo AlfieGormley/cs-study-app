@@ -1,0 +1,130 @@
+[
+  {
+    "id": "db-indexing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Given a PostgreSQL B-tree index on `(customer_id, created_at)` and many distinct customers, which query lacks a constraint on the leading column and may require a broad scan?",
+    "options": [
+      {
+        "text": "`WHERE customer_id = 42`",
+        "explanation": "Can use it. `customer_id` is the leftmost column, so all of customer 42's entries are contiguous in the index."
+      },
+      {
+        "text": "`WHERE customer_id = 42 AND created_at >= '2026-09-01'`",
+        "explanation": "Can use it. Equality on the first column followed by a range on the second is the ideal pattern for this index."
+      },
+      {
+        "text": "`WHERE created_at >= '2026-09-01'`",
+        "explanation": "Correct. Matching dates are spread across customers. PostgreSQL 18 skip scan can help when there are few distinct leading values, but with many customers a broad index or table scan may be cheaper."
+      },
+      {
+        "text": "`WHERE customer_id = 42 ORDER BY created_at DESC LIMIT 10`",
+        "explanation": "Can use it. Within customer 42, entries are already sorted by `created_at`, so the database reads 10 entries backwards with no sort."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Equality on customer_id restricts the index to that customer’s contiguous entries.\n2. A date range within one customer narrows that range further.\n3. Ordering dates within one customer can use the index in either direction.\n4. Date alone does not constrain the leading key. PostgreSQL 18 may use skip scan when leading-key cardinality is low; it is not categorically unable to use this index.\n5. For frequent date-only queries across many customers, evaluate a date-leading index with EXPLAIN.",
+    "link": {
+      "title": "PostgreSQL: Multicolumn indexes",
+      "url": "https://www.postgresql.org/docs/current/indexes-multicolumn.html"
+    }
+  },
+  {
+    "id": "db-indexing-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This query runs thousands of times a second:\n```sql\n-- Read payload for the newest orders.\nSELECT status, total_p FROM orders\nWHERE customer_id = $1\nORDER BY created_at DESC LIMIT 20;\n```\nThere's an index on `(customer_id, created_at)`. `EXPLAIN` shows an Index Scan that then fetches 20 heap rows. What change most directly removes the heap fetches?",
+    "options": [
+      {
+        "text": "Add a separate index on `(status)`",
+        "explanation": "Wrong. `status` isn't filtered on; a separate index on it can't help this query, and it adds write cost."
+      },
+      {
+        "text": "Recreate the index as `(customer_id, created_at) INCLUDE (status, total_p)`",
+        "explanation": "Correct. The index now contains every column the query needs, so Postgres can do an index-only scan and skip the 20 random heap reads (as long as the visibility map is up to date)."
+      },
+      {
+        "text": "Reorder the index to `(created_at, customer_id)`",
+        "explanation": "Wrong. That breaks the equality-first rule: the database would walk entries for all customers in date order. It also still needs heap fetches for `status` and `total_p`."
+      },
+      {
+        "text": "Increase `LIMIT` to 100 so the planner prefers a sequential scan",
+        "explanation": "Wrong. Reading more rows doesn't avoid the per-row fetch, and a sequential scan of a huge table would be vastly slower."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The index finds the right 20 entries, but `status` and `total_p` aren't in it, so Postgres fetches each row from the heap: up to 20 random page reads.\n2. A covering index stores those columns in its leaf entries:\n```sql\n-- Add payload without new sort keys.\nCREATE INDEX CONCURRENTLY\n  idx_orders_cover\n  ON orders (customer_id, created_at)\n  INCLUDE (status, total_p);\n```\n3. The plan becomes `Index Only Scan`. Check `Heap Fetches: 0` in `EXPLAIN ANALYZE`.\n4. Caveat: Postgres still checks the visibility map; pages modified since the last vacuum force a heap visit.\n5. Trade-off: the index is a little larger, and updates to `status` now touch it.",
+    "link": {
+      "title": "PostgreSQL: Index-only scans and covering indexes",
+      "url": "https://www.postgresql.org/docs/current/indexes-index-only-scans.html"
+    }
+  },
+  {
+    "id": "db-indexing-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Postgres `jobs` table holds 200 million rows, of which typically a few thousand are `'pending'`. Workers poll every 100 ms:\n```sql\n-- Poll the earliest pending jobs.\nSELECT id FROM jobs\nWHERE status = 'pending'\nORDER BY created_at\nLIMIT 10;\n```\nWhich index is the best fit?",
+    "options": [
+      {
+        "text": "`ON jobs (status)`",
+        "explanation": "Works, but poorly. It finds the pending rows, then must sort them by `created_at`, and the index holds an entry for all 200 million rows, so every insert and status change maintains it."
+      },
+      {
+        "text": "`ON jobs (created_at)`",
+        "explanation": "Wrong. The planner would walk jobs in date order from the oldest, skipping millions of completed ones before finding 10 pending."
+      },
+      {
+        "text": "`ON jobs (created_at) WHERE status = 'pending'`",
+        "explanation": "Correct. A partial index holds only the few thousand pending rows, already in `created_at` order. The query reads its first 10 entries. After completion the new tuple version no longer qualifies; old index entries may remain until cleanup."
+      },
+      {
+        "text": "`ON jobs (status, created_at)` on all rows",
+        "explanation": "Workable for the query shape, but weaker here. It indexes all 200 million rows, so it's thousands of times bigger than the partial index and costs every insert and update."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The query filters on a rare value and sorts by `created_at`.\n2. Compare sizes:\n   - Full index: 200 million entries, several GB.\n   - Partial `WHERE status = 'pending'`: a few thousand entries, a few hundred KB.\n3. The partial index is in `created_at` order, so the scan can stop after finding 10 visible qualifying rows without a sort, potentially skipping dead or locked entries.\n4. Its small live set makes caching likely, but cache residency and polling cost depend on churn, vacuum and load.\n5. The planner uses a partial index only when the query's `WHERE` implies its predicate, so write `status = 'pending'` literally; a parameterised `status = $1` may not match it.\n6. For many concurrent workers, add `FOR UPDATE SKIP LOCKED` so they don't grab the same jobs.\nWorkers should select and claim jobs in one transaction; merely using SKIP LOCKED without a durable state change does not finish the claim protocol.",
+    "link": {
+      "title": "PostgreSQL: Partial indexes",
+      "url": "https://www.postgresql.org/docs/current/indexes-partial.html"
+    }
+  },
+  {
+    "id": "db-indexing-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A table has a B-tree index on `(a, b, c)`. Which of these can the index serve as a direct range seek (and, where stated, without a sort step)? Select all that apply.",
+    "options": [
+      {
+        "text": "`WHERE a = 1 AND b = 2 AND c > 10`",
+        "explanation": "Correct. Equality on the first two columns, then a range on the third: one contiguous stretch of the index."
+      },
+      {
+        "text": "`WHERE a = 1 ORDER BY b LIMIT 5`, with no sort step",
+        "explanation": "Correct. Within `a = 1`, entries are already sorted by `b`, so the database reads the first 5."
+      },
+      {
+        "text": "`WHERE a = 1 AND b > 5 ORDER BY c`, with no sort step",
+        "explanation": "Wrong. The range on `b` covers many `b` values, and `c` is sorted only *within* each `b`. The results must be sorted by `c` afterwards."
+      },
+      {
+        "text": "`WHERE b = 2`",
+        "explanation": "Wrong. Without `a`, matching entries are scattered under every `a` value. At best an engine with skip scan probes once per distinct `a`, which only helps if there are few."
+      },
+      {
+        "text": "`WHERE a = 1 AND b = 2 ORDER BY c DESC LIMIT 1`, with no sort step",
+        "explanation": "Correct. Equality on `a` and `b` leaves entries ordered by `c`; reading the index backwards gives the largest `c` immediately."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Picture the index as a list sorted by `a`, then `b`, then `c`.\n\n1. `a=1, b=2, c>10`: fix `a`, fix `b`, then a range of `c`. Contiguous. Yes.\n2. `a=1 ORDER BY b`: inside `a=1`, sorted by `b`. Yes, no sort.\n3. `a=1, b>5 ORDER BY c`: the rows span many `b` groups, each with its own `c` ordering:\n```\n(1,6,3) (1,6,9) (1,7,1) (1,7,4)\nc order: 3 9 1 4  -> must sort\n```\n   No.\n4. `b=2`: no leading `a`, so no contiguous range. No.\n5. `a=1, b=2 ORDER BY c DESC`: contiguous and ordered by `c`; scan backwards. Yes.\n\nRule: equality columns first; after the first range column, later columns no longer give order.",
+    "link": {
+      "title": "PostgreSQL: Multicolumn indexes",
+      "url": "https://www.postgresql.org/docs/current/indexes-multicolumn.html"
+    }
+  }
+]

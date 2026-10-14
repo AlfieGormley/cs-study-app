@@ -1,0 +1,92 @@
+[
+  {
+    "id": "db-transactions-isolation-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two web requests each run, under PostgreSQL Read Committed:\n```sql\n-- Both requests read the old value 100.\nSELECT likes FROM posts\n WHERE id = 9;            -- 100\n-- app computes 100 + 1\n-- Write the literal computed earlier.\nUPDATE posts SET likes = 101\n WHERE id = 9;\n```\nThey interleave so both read 100 before either writes. What's the final value, and what's the simplest correct fix?",
+    "options": [
+      {
+        "text": "101; use `UPDATE posts SET likes = likes + 1 WHERE id = 9`",
+        "explanation": "Correct. Both write 101, so one increment is lost (a lost update). An atomic `likes = likes + 1` makes the second update wait on the first's row lock and then re-read the committed value, giving 102."
+      },
+      {
+        "text": "102; the database serialises the two updates automatically",
+        "explanation": "Wrong. The database does serialise the two `UPDATE` statements via a row lock, but each writes the literal 101 computed in the app, so the result is still 101."
+      },
+      {
+        "text": "101; switch to Read Uncommitted so each sees the other's write",
+        "explanation": "Wrong. PostgreSQL treats Read Uncommitted as Read Committed, so it neither fixes this race nor adds dirty reads. Engines that implement dirty reads still do not thereby make the read-modify-write atomic."
+      },
+      {
+        "text": "The second update fails with a deadlock",
+        "explanation": "Wrong. There's only one row lock involved, so there's no cycle and no deadlock; the second update simply waits, then proceeds."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace the interleaving:\n\n| Step | T1 | T2 |\n|---|---|---|\n| 1 | read 100 | |\n| 2 | | read 100 |\n| 3 | write 101, commit | |\n| 4 | | write 101, commit |\n\nFinal value: 101, but two likes were added. That's a **lost update**.\n\nFixes, from simplest:\n1. Atomic update: `SET likes = likes + 1`. At step 4, T2's update waits for T1's lock, then (in Read Committed) re-evaluates against the latest committed row: 101 + 1 = 102.\n2. `SELECT ... FOR UPDATE` before computing.\n3. Repeatable Read: T2 would abort with a serialization error and retry.\n4. Optimistic concurrency: `UPDATE ... WHERE id = 9 AND likes = 100`, and retry if 0 rows updated.",
+    "link": {
+      "title": "PostgreSQL: Transaction isolation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A booking service checks for overlaps and then inserts:\n```sql\nBEGIN;\nSELECT 1 FROM bookings\n WHERE room=4 AND slot='09:00'\n FOR UPDATE;\n-- No returned row means no row lock.\n-- The application then inserts:\nINSERT INTO bookings(room,slot)\n VALUES (4,'09:00');\nCOMMIT;\n```\nUnder Read Committed, two requests run at once and double-book. Why didn't `FOR UPDATE` help?",
+    "options": [
+      {
+        "text": "`FOR UPDATE` is ignored under Read Committed",
+        "explanation": "Wrong. `FOR UPDATE` works at every level in Postgres; it locks the rows the query returns."
+      },
+      {
+        "text": "The `SELECT` found no rows, so there was nothing to lock: this is a phantom. Use a unique constraint on `(room, slot)` instead",
+        "explanation": "Correct. Row locks only lock rows that exist. With no existing booking, both transactions lock nothing, both see no rows and both insert. A unique index makes the second insert fail, which is the robust fix."
+      },
+      {
+        "text": "The two transactions deadlocked and the database chose to commit both",
+        "explanation": "Wrong. Deadlock resolution always aborts a transaction; it never commits both. And there were no conflicting locks here at all."
+      },
+      {
+        "text": "Read Committed allows dirty writes",
+        "explanation": "Wrong. Every Postgres level prevents dirty writes. The inserted rows are distinct rows, not overwrites of each other."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. T1 runs the `SELECT ... FOR UPDATE`: zero rows match, zero rows locked.\n2. T2 does the same: zero rows, zero locks. Nothing makes it wait.\n3. Both insert `(4, '09:00')` and commit. Double booking.\n4. The problem is a **phantom**: the row that would conflict doesn't exist yet, so it can't be locked.\n5. Fixes:\n   - `CREATE UNIQUE INDEX ON bookings(room, slot)`: T2's insert fails with a unique violation (it waits on T1's uncommitted index entry, then errors when T1 commits).\n   - For overlapping *ranges*, a Postgres exclusion constraint (`EXCLUDE USING gist (room WITH =, during WITH &&)`).\n   - Or run at `SERIALIZABLE` so SSI detects the predicate conflict.",
+    "link": {
+      "title": "PostgreSQL: Transaction isolation",
+      "url": "https://www.postgresql.org/docs/current/transaction-iso.html"
+    }
+  },
+  {
+    "id": "db-transactions-isolation-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Under strict two-phase locking, T1 updates account A then tries to update account B. Concurrently, T2 updates B then tries to update A. What happens?",
+    "options": [
+      {
+        "text": "Both succeed because 2PL releases each lock right after the statement",
+        "explanation": "Wrong. In strict 2PL, exclusive write locks are held until commit or abort; releasing early would allow other transactions to see or overwrite uncommitted data."
+      },
+      {
+        "text": "T2 automatically waits for T1 to commit, then proceeds",
+        "explanation": "Wrong. T1 can't commit: it's waiting for B, which T2 holds. Neither can make progress."
+      },
+      {
+        "text": "Deadlock: each waits for a lock the other holds; the database detects the cycle and aborts one, which must retry",
+        "explanation": "Correct. T1 holds A and waits for B; T2 holds B and waits for A. Lock managers detect the wait-for cycle (or time out) and abort a victim."
+      },
+      {
+        "text": "The database merges the two transactions",
+        "explanation": "Wrong. Databases never merge transactions; each transaction is an independent unit that commits or aborts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. T1: lock A (exclusive). T2: lock B (exclusive).\n2. T1 requests B: held by T2, so T1 waits.\n3. T2 requests A: held by T1, so T2 waits.\n4. Wait-for graph: T1 → T2 → T1. A cycle: deadlock.\n5. The detector (Postgres checks after `deadlock_timeout`, 1 s by default) aborts one transaction; its locks are released and the other proceeds.\n6. Prevention: always acquire locks in a consistent order, e.g. update accounts in ascending id order. Then both transactions lock A first, and one simply waits for the other.",
+    "link": {
+      "title": "Wikipedia: Two-phase locking",
+      "url": "https://en.wikipedia.org/wiki/Two-phase_locking"
+    }
+  }
+]

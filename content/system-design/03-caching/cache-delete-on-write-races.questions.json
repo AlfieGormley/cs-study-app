@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cache-invalidation-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do most cache-aside designs **delete** the cache key on write rather than **update** it with the new value?",
+    "options": [
+      {
+        "text": "Deletes are faster than sets in Redis",
+        "explanation": "The speed difference depends on value size and workload; it is not the reason for this default. The reason is correctness under concurrency, not performance."
+      },
+      {
+        "text": "Updating the cache is impossible without write-through",
+        "explanation": "Cache-aside apps can certainly `SET` the cache after a write; the problem is the race it introduces, not that it can't be done."
+      },
+      {
+        "text": "Deleting guarantees the cache is never stale",
+        "explanation": "Deletion still has a stale-read window and the read/write race, where a slow reader re-inserts an old value after the delete."
+      },
+      {
+        "text": "Deletes from concurrent writers commute: in any order they leave an empty key, so the next read loads the true value. Concurrent updates can land out of order and leave an old value",
+        "explanation": "Correct. Two `SET`s racing can leave the loser's older value in the cache. Two `DEL`s racing always converge on \"no entry\", which is safe."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Race with updates:\n\n```\nA: DB name=Ann\nB: DB name=Bea\nB: SET Bea\nA: SET Ann   <- arrives late\n```\n\nDB = Bea, cache = Ann. Wrong until TTL.\n\nSame race with deletes:\n\n```\nA: DB name=Ann\nB: DB name=Bea\nB: DEL\nA: DEL\n```\n\nCache empty; the next read loads Bea. Correct regardless of order.",
+    "link": {
+      "title": "Scaling Memcache at Facebook (NSDI 2013)",
+      "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+    }
+  },
+  {
+    "id": "cache-invalidation-q6",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why should cached entries have a TTL even when the application explicitly invalidates on every write?",
+    "options": [
+      {
+        "text": "Because Redis requires a TTL on every key",
+        "explanation": "Redis keys can live forever; TTLs are optional."
+      },
+      {
+        "text": "Because TTLs make the cache strongly consistent",
+        "explanation": "Wrong. TTL limits one entry’s residence since insertion, not necessarily the age of its underlying data. A stale replica or delayed fill may insert old data with a fresh TTL."
+      },
+      {
+        "text": "To improve hit ratio",
+        "explanation": "TTLs can reduce hit ratio by expiring useful entries; the effect depends on reuse and the chosen lifetime. They are a correctness safeguard, not a performance one."
+      },
+      {
+        "text": "As a safety net, expire an individual cached copy after a bounded residence time; total freshness also depends on where and when it was loaded.",
+        "explanation": "Correct. TTL helps recover from lost invalidations, but does not guarantee eventual freshness when every refill can keep loading stale data."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A missed invalidation can leave a stale copy behind.\n2. TTL makes that individual entry expire.\n3. A delayed request or lagging replica may then insert an already-old value, restarting the TTL.\n4. For a hard freshness target, track source versions/timestamps, bound loading delays and replica lag, or use an authoritative read. TTL alone is insufficient.",
+    "link": {
+      "title": "Caching best practices — AWS",
+      "url": "https://aws.amazon.com/caching/best-practices/"
+    }
+  }
+]

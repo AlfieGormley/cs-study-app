@@ -1,0 +1,62 @@
+[
+  {
+    "id": "db-nosql-families-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Cassandra table has `PRIMARY KEY ((sensor_id, day), ts)`. There is no supporting secondary index. A developer runs `SELECT * FROM readings WHERE ts > '2026-09-01'` (no sensor or day). What happens?",
+    "options": [
+      {
+        "text": "It runs quickly using the clustering order on `ts`",
+        "explanation": "Wrong. Clustering order only sorts rows *within* a partition. Without the partition key, Cassandra doesn't know which partitions (and hence nodes) to read."
+      },
+      {
+        "text": "Cassandra rejects it unless you add `ALLOW FILTERING`, and with that it can scan across the whole table",
+        "explanation": "Correct. Queries must restrict the partition key so they can be routed. `ALLOW FILTERING` permits potentially expensive filtering across table partitions. Replica selection and execution determine which nodes are contacted; this is unsuitable for a large unconstrained table."
+      },
+      {
+        "text": "Cassandra builds a temporary secondary index automatically",
+        "explanation": "Wrong. Cassandra never creates indexes implicitly; you'd have to create a secondary index or, more commonly, a second table keyed for this query."
+      },
+      {
+        "text": "It returns only rows from the coordinator node's local data",
+        "explanation": "Wrong. Cassandra doesn't silently return partial results; it either rejects the query or, with `ALLOW FILTERING`, scans across the cluster."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In Cassandra, the partition key `(sensor_id, day)` is hashed to choose which nodes hold the data.\n2. A query without it can't be routed to a specific node: the data could be anywhere.\n3. Cassandra refuses rather than quietly running a cluster-wide scan, unless you opt in with `ALLOW FILTERING`.\n4. The idiomatic fix is *query-first modelling*: create another table, e.g. `PRIMARY KEY ((day), ts, sensor_id)`, and write each reading to both tables.\n5. Watch partition size there: one partition per day holding every sensor might get too big, so you might use `(day, hour)` buckets.\nKeep denormalized tables consistent through a reliable write/capture/retry protocol; two unrelated application writes can diverge after a failure. Bucket sizing must account for all sensors and actual serialized bytes.",
+    "link": {
+      "title": "Apache Cassandra: Data modeling",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/developing/data-modeling/index.html"
+    }
+  },
+  {
+    "id": "db-nosql-families-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer simplifies the lesson's Cassandra table to `PRIMARY KEY ((sensor_id), ts)`, dropping `day` from the partition key. Sensors report once a second and data is kept for 3 years. What goes wrong?",
+    "options": [
+      {
+        "text": "Nothing; Cassandra partitions have no practical size limit",
+        "explanation": "Wrong. Very large partitions concentrate work on their replicas and can make reads, compaction and repair expensive. Choose a size target from workload tests rather than treating a rule of thumb as a hard limit."
+      },
+      {
+        "text": "Queries for one sensor's latest readings become impossible",
+        "explanation": "Wrong. They still work, because `sensor_id` is the partition key and `ts` the clustering column. The problem is the partition's size over time, not whether it can be queried."
+      },
+      {
+        "text": "Writes are rejected after 86,400 rows per partition",
+        "explanation": "Wrong. There's no per-day row limit. 86,400 is simply how many rows a once-a-second sensor adds each day."
+      },
+      {
+        "text": "A three-year window still puts about 95 million rows in each sensor partition; time buckets keep individual partitions much smaller.",
+        "explanation": "Correct. The stated retention bounds history, but that bound is too large to ignore. Daily buckets contain 86,400 readings before accounting for expired data awaiting cleanup."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Rows per sensor, per day and over the retention period:\n```formula\nR_day = 1/s × 86,400 s = 86,400\nR_total = R_day × 365 × Y\nR_total = 86,400 × 365 × 3\nR_total ≈ 94,600,000\nwhere\nR_day: rows one sensor writes per day\ns: seconds\n86,400 s: the number of seconds in a day\nR_total: rows in one sensor's partition after the whole retention period\nY: the number of years kept, here 3\n≈: approximately equal to\nIn words: once a second for three years is about 95 million rows, all in one partition when the key is the sensor alone.\n```\n2. So about 95 million rows end up in one partition.\n3. At ~40 bytes a row that's several GB in one partition, held by just the replica nodes that own that key.\n4. Effects: slow reads of the partition, heavy compaction and repair, uneven disk use across nodes.\n5. With `((sensor_id, day), ts)`:\n   - 86,400 rows × ~40 B ≈ 3.5 MB per partition.\n   - \"Latest 100 readings today\" is still one partition read.\n   - A multi-day query reads one partition per day.\n6. Choose the bucket size (hour, day, week) from the write rate using measured partition bytes, tombstones, query patterns and operating limits.",
+    "link": {
+      "title": "Apache Cassandra: Data modeling",
+      "url": "https://cassandra.apache.org/doc/latest/cassandra/developing/data-modeling/index.html"
+    }
+  }
+]

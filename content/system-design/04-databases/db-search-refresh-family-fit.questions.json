@@ -1,0 +1,32 @@
+[
+  {
+    "id": "db-nosql-families-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A shop writes each new product to an actively searched Elastic Stack Elasticsearch index with the default one-second refresh interval and then immediately redirects the seller to a search results page that queries for it. About half the time the new product is missing, but it appears if they reload a second later. What's going on?",
+    "options": [
+      {
+        "text": "Elasticsearch lost the write and the client retried it",
+        "explanation": "Wrong. The document appears a moment later without any retry, so it was accepted. Something is delaying its visibility to search, not losing it."
+      },
+      {
+        "text": "The cluster's replicas are out of sync, so searches sometimes hit a stale replica",
+        "explanation": "Unlikely as the explanation. Replica lag can exist, but the systematic \"missing for about a second\" behaviour matches the refresh interval, which affects every copy."
+      },
+      {
+        "text": "Search is near-real-time: new documents become searchable only after the next refresh, about once a second by default",
+        "explanation": "Correct. Indexing writes to an in-memory buffer; a periodic refresh makes it searchable. Use the id returned by the write to fetch the document directly (GET by id is real-time), or set `refresh=wait_for` on that write if you must."
+      },
+      {
+        "text": "The inverted index can only be rebuilt nightly",
+        "explanation": "Wrong. Lucene indexes incrementally by creating new segments at each refresh; there's no nightly rebuild."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Symptom: missing immediately, present a second later. That's a visibility delay, not data loss.\n2. Elasticsearch buffers new documents and makes them searchable at each **refresh**, by default every 1 s (for indexes that are actively searched).\n3. A search issued within that window misses the document.\n4. Fixes, from best:\n   - Show the product from the write response or a GET by id, which is real-time.\n   - `?refresh=wait_for` on that one write: the call returns once it's searchable.\n   - Never force a refresh on every write; it creates tiny segments and hurts throughput.\n5. Broader lesson: search engines are derived views, usually fed from a primary database, and they lag it slightly.\nThis default is deployment-specific; Elastic Cloud Serverless uses a different default. Check index.refresh_interval and refresh behavior for the deployed service.",
+    "link": {
+      "title": "Elasticsearch: Near real-time search",
+      "url": "https://www.elastic.co/guide/en/elasticsearch/reference/current/near-real-time.html"
+    }
+  }
+]

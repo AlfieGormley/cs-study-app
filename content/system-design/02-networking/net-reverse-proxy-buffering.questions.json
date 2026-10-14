@@ -1,0 +1,122 @@
+[
+  {
+    "id": "net-proxies-gateways-mesh-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement correctly distinguishes a forward proxy from a reverse proxy?",
+    "options": [
+      {
+        "text": "A forward proxy acts on behalf of clients (servers see the proxy); a reverse proxy acts on behalf of servers (clients see the proxy)",
+        "explanation": "Correct. A corporate web proxy hides users from websites; NGINX in front of your app hides backends from users."
+      },
+      {
+        "text": "A forward proxy only handles HTTP; a reverse proxy only handles TCP",
+        "explanation": "Both kinds can handle HTTP, and both can work at the TCP level. Protocol isn't what separates them; whose side they're on is."
+      },
+      {
+        "text": "A reverse proxy sends responses backwards to the server",
+        "explanation": "'Reverse' refers to the direction of representation (it stands in for servers), not to the direction data flows."
+      },
+      {
+        "text": "They're the same thing with different names",
+        "explanation": "They're deployed by different parties for different reasons: one by the client's network, one by the service operator."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask: **who deploys it, and who is hidden?**\n\n| | Deployed by | Hides |\n|---|---|---|\n| Forward | Client's org | Clients |\n| Reverse | Service owner | Servers |\n\nExamples: Squid at a company or school (forward); NGINX, HAProxy or a CDN in front of a website (reverse).",
+    "link": {
+      "title": "Reverse proxy (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Reverse_proxy"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A server has 8 synchronous workers. Assume an unbuffered slow response occupies a worker for 5 s, while enabled NGINX buffering with adequate capacity lets the worker finish generation and transfer in 50 ms. Why can buffering raise the worker-limited throughput?",
+    "options": [
+      {
+        "text": "NGINX makes the mobile network faster",
+        "explanation": "NGINX can't change the client's network speed. The slow download still takes 5 s; it just no longer ties up a Python worker."
+      },
+      {
+        "text": "NGINX caches every response so the app never runs",
+        "explanation": "NGINX can cache, but personalised responses usually aren't cached. The throughput gain here comes from buffering, which works for uncacheable responses too."
+      },
+      {
+        "text": "NGINX buffers the response, freeing the Python worker in milliseconds while NGINX's event loop handles the slow client",
+        "explanation": "Correct. NGINX handles thousands of slow connections cheaply in one event loop, so the 8 expensive workers spend their time generating responses rather than waiting on sockets."
+      },
+      {
+        "text": "NGINX converts the app to async Python",
+        "explanation": "A proxy can't change how the app is written. It isolates the app from slow clients instead."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each worker handles one request at a time, so the ceiling is workers divided by time per request:\n\n```formula\nX = W / t\nX_slow = 8 / 5 s = 1.6 requests/s\nX_buf = 8 / 0.05 s = 160 requests/s\nX_buf / X_slow = 160 / 1.6 = 100\nwhere\nX: the worker-limited throughput ceiling, in requests per second (requests/s)\nW: the number of synchronous workers, 8\nt: how long each request occupies a worker, in seconds (s)\nX_slow: the ceiling when a slow client holds the worker for 5 s\nX_buf: the ceiling when buffering frees the worker after 0.05 s (50 ms)\nrequests/s: requests per second\ns: second\nIn words: freeing each worker 100 times sooner raises the ceiling 100-fold.\n```\n\nThis is a 100-fold increase in the ideal worker-limited ceiling, not a benchmark of overall throughput. Client bandwidth, proxy memory/disk buffers, CPU and connection limits can become bottlenecks; no universal 10,000-client capacity follows.",
+    "link": {
+      "title": "ngx_http_proxy_module: proxy buffering (NGINX docs)",
+      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your rate limiter keys on the first IP in `X-Forwarded-For`. Attackers bypass it easily. Why?",
+    "options": [
+      {
+        "text": "`X-Forwarded-For` is encrypted, so the limiter reads garbage",
+        "explanation": "It's a plain HTTP header, readable by any hop that terminates TLS. The problem is trust, not encryption."
+      },
+      {
+        "text": "Clients can send their own `X-Forwarded-For`; proxies append to it, so the left-most value is attacker-controlled. Use the entry added by your own trusted proxy.",
+        "explanation": "Correct. An attacker sends `X-Forwarded-For: 1.2.3.4` with a random IP each time; your proxy appends the real IP at the end. Read from the right, skipping known proxies."
+      },
+      {
+        "text": "IP addresses can't be used for rate limiting",
+        "explanation": "IP-based limits are common and useful (with caveats about NAT). They only fail here because the IP is being read from a spoofable position."
+      },
+      {
+        "text": "The load balancer strips the header",
+        "explanation": "If it were stripped, the limiter would see nothing at all, not attacker-chosen values. The symptom points to trusting client-supplied data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Attacker sends: `X-Forwarded-For: 9.9.9.9` (random each request).\n2. Your CDN appends the real client IP: `9.9.9.9, 203.0.113.5`.\n3. Your LB appends the CDN's IP: `9.9.9.9, 203.0.113.5, 198.51.100.7`.\n4. Taking the **first** entry gives `9.9.9.9`: attacker-chosen.\n5. Correct: walk from the **right**, discard addresses of hops you trust (LB, CDN ranges); the first untrusted one, `203.0.113.5`, is the real client.",
+    "link": {
+      "title": "Reverse proxy (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Reverse_proxy"
+    }
+  },
+  {
+    "id": "net-proxies-gateways-mesh-q12",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You add a Server-Sent Events endpoint that streams small price updates every second. Behind NGINX, clients receive nothing for a while and then a burst of many updates at once. What's the likely cause and fix?",
+    "options": [
+      {
+        "text": "SSE doesn't work over HTTPS",
+        "explanation": "SSE works fine over HTTPS; the symptom is about batching, not failure."
+      },
+      {
+        "text": "The browser is caching the stream",
+        "explanation": "Browsers don't cache an open event stream; they process events as they arrive."
+      },
+      {
+        "text": "NGINX's response buffering collects the stream's output until a buffer fills or the response ends; disable buffering for that route (for example `proxy_buffering off`, or the app sending `X-Accel-Buffering: no`)",
+        "explanation": "Correct as a likely buffering diagnosis. Disable response buffering for this route so NGINX passes bytes through as received; the X-Accel-Buffering header works only if configuration permits it. Also verify that the application flushes events and that compression or another intermediary is not buffering them."
+      },
+      {
+        "text": "The app server needs more worker processes",
+        "explanation": "More workers wouldn't change how NGINX batches the stream's bytes before sending them on."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Normal case: NGINX reads the app's response into buffers so a slow client can't hold up a worker. Great for ordinary pages.\n2. Streaming case: each event is a few hundred bytes; buffering can delay small updates and produce bursts; there is no universal rule that NGINX flushes only a full buffer.\n3. Fix per route: `proxy_buffering off;` in that `location`, or have the app send `X-Accel-Buffering: no` when NGINX has not disabled that header’s effect.\n4. Also check proxy read timeouts, which can cut long-lived streams, and send periodic keep-alive comments.\n\nBuffering is a trade-off: useful for many ordinary responses, but low-latency event streams usually need immediate forwarding and application flushing.",
+    "link": {
+      "title": "ngx_http_proxy_module (NGINX docs)",
+      "url": "https://nginx.org/en/docs/http/ngx_http_proxy_module.html"
+    }
+  }
+]

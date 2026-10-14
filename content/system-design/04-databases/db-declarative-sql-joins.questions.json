@@ -1,0 +1,92 @@
+[
+  {
+    "id": "db-relational-acid-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API endpoint lists 50 orders with each customer's email. Assume 50 distinct customers, no cache or batching, and lazy loading that issues a separate query per customer. The ORM code loads the orders, then accesses `order.user.email` in a loop. Database round-trip latency is 2 ms. Roughly how much time goes on round trips, and what's the fix?",
+    "options": [
+      {
+        "text": "About 2 ms; ORMs batch these automatically",
+        "explanation": "Wrong under the explicit lazy-loading assumptions. Defaults and batching behavior vary by ORM; this example stipulates one query per association."
+      },
+      {
+        "text": "About 100 ms; nothing can be done short of caching",
+        "explanation": "Wrong on the fix. The latency estimate is close, but a join or an `IN` query removes the extra round trips without any cache."
+      },
+      {
+        "text": "About 102 ms (51 queries); fix it with a join or eager loading (`WHERE id IN (...)`)",
+        "explanation": "Correct. One query for the orders plus 50 for users is 51 round trips at 2 ms. A join, or loading all users in one `IN` query, makes it 1–2 round trips (about 2–4 ms)."
+      },
+      {
+        "text": "About 102 ms; fix it by adding an index on `users.email`",
+        "explanation": "Wrong. The lookups are by `users.id` (already the primary key). The cost is the number of round trips, not slow lookups, so an index on email doesn't help."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Count the queries: 1 query for 50 orders + 1 query per order for its user = 51.\n2. Multiply by round-trip time, before any query execution time:\n```formula\nQ = 1 + N = 1 + 50 = 51\nT = Q × t_RTT\nT = 51 × 2 ms = 102 ms\nwhere\nQ: the total number of queries sent\nN: the number of orders loaded, each of which triggers one extra query for its user\nT: the total time spent waiting on round trips, in milliseconds (ms)\nt_RTT: the round-trip time of one query between application and database, here 2 ms\nms: millisecond, one thousandth of a second\nIn words: one query for the list plus one per order, each waiting a full round trip, adds up to about a tenth of a second.\n```\n3. The lookups themselves are cheap primary-key reads; the cost is network latency.\n4. Fix by fetching users in bulk:\n```sql\n-- Fetch orders and their users\n-- together.\nSELECT o.id, u.email\nFROM orders o\nJOIN users u ON u.id = o.user_id\nWHERE o.id = ANY($1);\n```\n5. Now it's one round trip: about 2 ms plus execution. That reduces the round-trip component by 51×; total endpoint speedup also depends on query execution and other work.",
+    "link": {
+      "title": "PostgreSQL: Joins Between Tables",
+      "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The planner must join `orders` (50 million rows) to `users` (2 million rows) on `orders.user_id = users.id` for a report that reads every row of both tables. Assume the projected build-side rows and hash overhead fit within available hash-join memory. Neither input is sorted on the join key. Which join algorithm is it most likely to choose?",
+    "options": [
+      {
+        "text": "Nested loop, probing the `users` primary key index for each order",
+        "explanation": "Wrong for this case. That would be 50 million index probes, each a random B-tree traversal. Nested loops shine when the outer side is small (say, a few hundred rows), not 50 million."
+      },
+      {
+        "text": "Merge join, after sorting both tables",
+        "explanation": "Plausible but usually more expensive here. Sorting 50 million rows costs O(n log n), where n is the number of rows sorted, so the work grows a little faster than the row count, and it probably spills to disk. Merge join wins when inputs are already ordered, for example read via an index."
+      },
+      {
+        "text": "Hash join, building a hash table on `users` and streaming `orders` through it",
+        "explanation": "Correct. Build a hash table on the smaller side (the projected build side fits memory by assumption; row count alone does not establish that), then scan the 50 million orders once, probing in O(1): constant time per order, however big the hash table is. Total work is roughly linear in the input size."
+      },
+      {
+        "text": "Cross join, then filter on the condition",
+        "explanation": "Wrong. A cross join pairs every order with every user: 50 million × 2 million = 100 trillion (10¹⁴) combinations. Planners never choose this for an equality join."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Large unsorted equality-join inputs favor considering a hash join when its build side fits memory.\n2. Build a hash table over projected users columns, then scan orders and probe it.\n3. Nested-loop index probes may be cached, so tree height is not an actual disk-read count. Hash joins may spill when memory estimates are wrong.\n4. Actual row width, statistics, caching and parallelism determine the chosen plan; inspect EXPLAIN rather than treating row count as a guarantee.\n5. Rough work counts show why the cross join is never chosen and the hash join is cheap:\n```formula\nC = N_o × N_u\nC = 50,000,000 × 2,000,000 = 10^14\nW ≈ N_u + N_o\nW ≈ 2,000,000 + 50,000,000\nW ≈ 52,000,000\nwhere\nC: the number of row pairs a cross join produces\nN_o: the number of rows in orders, 50 million\nN_u: the number of rows in users, 2 million\nW: the rough number of row operations for a hash join: insert each user once, then probe once per order\n≈: approximately equal to\nIn words: a cross join creates 100 trillion pairs, while a hash join touches each row about once, roughly 52 million operations.\n```",
+    "link": {
+      "title": "PostgreSQL: Joins Between Tables",
+      "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+    }
+  },
+  {
+    "id": "db-relational-acid-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume users.email is UNIQUE and NOT NULL. A report should list **every** user with their total paid spend, showing 0 for users who have never paid:\n```sql\n-- The later filter discards NULL\n-- orders.\nSELECT u.email,\n  coalesce(sum(o.total_p), 0)\nFROM users u\nLEFT JOIN orders o\n  ON o.user_id = u.id\nWHERE o.status = 'paid'\nGROUP BY u.email;\n```\nUsers with no paid orders are missing from the output. Why?",
+    "options": [
+      {
+        "text": "For users without matching orders, the LEFT JOIN produces NULL order columns, and `WHERE o.status = 'paid'` discards those rows; moving the condition into `ON` fixes it",
+        "explanation": "Correct. `WHERE` runs after the join. `NULL = 'paid'` is not true, so the padded rows are filtered out, turning the LEFT JOIN into an inner join. With `ON o.user_id = u.id AND o.status = 'paid'`, unmatched users keep their row with NULL order columns."
+      },
+      {
+        "text": "`coalesce` doesn't work inside an aggregate",
+        "explanation": "Wrong. `coalesce(sum(...), 0)` is a standard way to turn a NULL sum into 0. The rows never reach the aggregate, so there's nothing to coalesce."
+      },
+      {
+        "text": "`GROUP BY u.email` drops groups with NULL values",
+        "explanation": "Wrong. Grouping is on `u.email`, which is never NULL here. The rows were removed before grouping."
+      },
+      {
+        "text": "LEFT JOIN only keeps unmatched rows from the right-hand table",
+        "explanation": "Wrong. That's a RIGHT JOIN. LEFT JOIN keeps every row from the left table (`users`), padding missing right-hand columns with NULL."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Take a user, Sam, with no orders at all.\n2. After the LEFT JOIN: one row, `(sam@x, NULL, NULL...)`.\n3. `WHERE o.status = 'paid'`: `NULL = 'paid'` evaluates to NULL, which isn't true, so Sam's row is dropped.\n4. Users with only *refunded* orders vanish too: their joined rows have `status = 'refunded'`.\n5. Fix: filter inside the join.\nReplace the original join and WHERE filter with this join fragment inside the SELECT.\n```sql\n-- Filter right rows during the join.\nLEFT JOIN orders o\n  ON o.user_id = u.id\n AND o.status = 'paid'\n```\n6. Now Sam's padded row survives; `sum(NULL)` is NULL and `coalesce` turns it into 0.",
+    "link": {
+      "title": "PostgreSQL: Table expressions (joins)",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  }
+]

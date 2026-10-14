@@ -10,7 +10,7 @@ import { plainText } from '../markdown.js';
 import { compileCatalogue } from './diagram-compiler.mjs';
 import { checkVerification, lessonHash, readGlossary } from './verification.mjs';
 import { checkFormula } from '../formula.js';
-import { migrationProblems } from '../lesson-progress.js';
+import { migrationProblems, subjectMigrationProblems } from '../lesson-progress.js';
 import { glossary as coreGlossary } from '../glossary-data.js';
 import { aliasKey } from '../glossary-rules.js';
 
@@ -198,6 +198,8 @@ for (const subjectName of dirs(contentDir)) {
     subjectEntry.modules.push(entry);
     outputs[`data/${subject.id}/${mod.id}.json`] = full;
   }
+  const migrationModules = subjectEntry.modules.map((module) => ({ ...module, lessons: module.lessons.map((lesson) => lesson.id) }));
+  for (const problem of subjectMigrationProblems(migrationModules)) err(path.join(subjectPath, 'subject.json'), problem);
   subjectEntry.modules.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   if (subjectEntry.modules.length) index.subjects.push(subjectEntry); // hide subjects with no content yet
 }

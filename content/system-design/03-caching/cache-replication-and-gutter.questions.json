@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cache-distributed-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Redis primary with one replica acknowledges a `SET`, then crashes immediately. Sentinel promotes the replica. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The write may be lost, because replication is asynchronous",
+        "explanation": "Correct. The primary acknowledged before the replica received the write, so the promoted replica may never have had it."
+      },
+      {
+        "text": "Redis guarantees the write is present, because Sentinel waits for replicas to catch up",
+        "explanation": "Incorrect. Sentinel promotes the best available replica; it cannot recover data that never left the dead primary."
+      },
+      {
+        "text": "Using `WAIT 1 100` after the write reduces, but doesn't eliminate, the chance of losing it",
+        "explanation": "Correct only if the client checks how many replicas WAIT actually acknowledges before its timeout. Receipt is not necessarily disk persistence; loss can still occur if the acknowledged replica also fails or loses volatile state."
+      },
+      {
+        "text": "For a pure cache, a lost insertion into a previously absent key causes a later miss; lost updates or invalidations may instead expose stale values.",
+        "explanation": "Correct. Cache loss does not automatically mean a harmless miss: a replica can retain an older value when the newer update/delete was lost."
+      },
+      {
+        "text": "Enabling AOF with `appendfsync always` on the primary prevents this loss",
+        "explanation": "Incorrect. AOF protects against the *same* node restarting. Here the replica is promoted and never had the write; the dead primary's disk doesn't help."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Sequence: client `SET` → primary applies, replies OK → primary crashes before streaming to replica.\n2. Sentinel detects failure (after `down-after-milliseconds`) and promotes the replica, which lacks the write. **Lost.**\n3. `WAIT 1 100`: the client waits until one replica confirms or 100 ms passes. If the returned acknowledgement count is at least one, both nodes received it; timeout alone does not establish that, and receipt is not durable storage.\n4. AOF on the primary is local; it helps only if that same primary restarts and stays primary.\n5. An absent key can be reloaded; an older surviving key needs freshness/invalidation safeguards.",
+    "link": {
+      "title": "Redis replication",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/replication/"
+    }
+  },
+  {
+    "id": "cache-distributed-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why did Facebook send a failed Memcached server's traffic to a small dedicated **gutter** pool rather than rehashing it across the remaining servers?",
+    "options": [
+      {
+        "text": "Rehashing could push the failed server's hot keys onto a healthy server, overload it and cascade; gutter servers absorb the load with short TTLs and protect both the cluster and the database",
+        "explanation": "Correct. A single server can hold extremely hot keys. Moving them onto a neighbour may overload it in turn. Gutter isolates the failure and limits staleness via short TTLs."
+      },
+      {
+        "text": "Rehashing is impossible with consistent hashing",
+        "explanation": "Rehashing is exactly what consistent hashing does by default when a node is removed."
+      },
+      {
+        "text": "Gutter servers have persistent storage",
+        "explanation": "Gutter servers are ordinary Memcached boxes; their point is isolation, not persistence."
+      },
+      {
+        "text": "To avoid any database queries during failure",
+        "explanation": "Gutter starts empty, so misses still go to the database; it just prevents a cascade of cache failures and limits repeated misses."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Server S7 dies. With rehashing, all of S7's keys (including a few extremely hot ones) move to S8.\n2. S8's load jumps; if it falls over, its keys move to S9, and so on: a cascade.\n3. With gutter: clients that get no response from S7 retry against the gutter pool (~1% of servers).\n4. Gutter fills from the DB with short TTLs, absorbing S7's traffic without disturbing the rest of the cluster.\n5. Facebook reported that gutter reduced client-visible failures by around 99%.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  }
+]

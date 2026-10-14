@@ -1,0 +1,66 @@
+[
+  {
+    "id": "db-storage-internals-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A RocksDB instance uses leveled compaction with a size ratio of 10 and five levels below L0. What can you infer about its compaction write amplification without a workload measurement?",
+    "options": [
+      {
+        "text": "It is always 1× because every key is written only once.",
+        "explanation": "Wrong. Compaction rewrites retained records and may merge overlapping existing data."
+      },
+      {
+        "text": "It is exactly 5×, one rewrite per level.",
+        "explanation": "Wrong. Overlap, updates, compression and compaction choices affect the bytes rewritten."
+      },
+      {
+        "text": "It is exactly 2× regardless of key distribution.",
+        "explanation": "Wrong. No fixed factor follows from the level count and size ratio alone."
+      },
+      {
+        "text": "Repeated merges can amplify writes substantially, but the actual factor depends on overlap, workload and configuration and must be measured.",
+        "explanation": "Correct. Leveled compaction trades repeated rewriting for bounded overlap and space/read efficiency. A simple size ratio is not a universal measured write-amplification value."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A flush creates sorted files. Later compactions merge them with overlapping files in the next level.\n2. Surviving entries may be rewritten repeatedly, while overwritten/deleted entries may be discarded.\n3. Key distribution, update locality, compression and compaction selection determine actual bytes written.\n4. Measure physical bytes written divided by logical bytes ingested, explicitly stating whether WAL and initial flushes are included:\n```formula\nWA = B_disk / B_app\nwhere\nWA: write amplification, a ratio with no unit\nB_disk: bytes the engine physically writes (flushes plus compaction output, and WAL if you count it)\nB_app: bytes of data the application wrote\nIn words: write amplification is how many bytes reach the disk for every byte the application wrote.\n```\n5. A universal numerical range is absent because no matching workload benchmark is available.",
+    "link": {
+      "title": "RocksDB: Leveled compaction",
+      "url": "https://github.com/facebook/rocksdb/wiki/Leveled-Compaction"
+    }
+  },
+  {
+    "id": "db-storage-internals-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Cassandra cluster uses size-tiered compaction on a write-heavy table. Disks are 85% full, and read latency is creeping up. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Size-tiered compaction can temporarily need free space roughly equal to the SSTables being merged, so a large compaction may fail at 85% full",
+        "explanation": "Correct. Compaction writes output before deleting inputs, so the required headroom depends on the actual compaction size, snapshots and concurrent activity; no universal fullness threshold follows."
+      },
+      {
+        "text": "Read latency rises because a key may be spread across many overlapping SSTables, raising read amplification",
+        "explanation": "Correct. In STCS, many similarly sized files can each contain versions of a key, so reads consult more files (bloom filters help only for absent keys)."
+      },
+      {
+        "text": "Switching to leveled compaction would reduce write amplification",
+        "explanation": "Wrong. Leveled compaction *increases* write amplification (data rewritten at each level) in exchange for lower read and space amplification."
+      },
+      {
+        "text": "Leveled compaction generally reduces space amplification, but does not impose a universal 10% overhead bound.",
+        "explanation": "Correct. Non-overlapping levels reduce retained overlap; L0, snapshots, obsolete versions and temporary compaction outputs still affect peak space."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. STCS: merge several similar-sized SSTables into one. Output is written before inputs are deleted, so peak space is the inputs plus the output.\n2. If the largest tier is 30% of the disk, merging it needs up to another 30% free. At 85% full, there isn't room.\n3. Reads: a frequently updated key may have versions in many SSTables; each must be checked and merged.\n4. Leveled: each level is non-overlapping and 10× the previous, so a point key is in at most one file per non-L0 level; temporary outputs and retained versions still affect total space.\n5. Price: higher write amplification. For a write-heavy table, check that disks can sustain the extra compaction I/O before switching.",
+    "link": {
+      "title": "Mark Callaghan: Read, write and space amplification",
+      "url": "https://smalldatum.blogspot.com/2015/11/read-write-space-amplification-pick-2_23.html"
+    }
+  }
+]

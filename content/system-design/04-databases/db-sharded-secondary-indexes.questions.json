@@ -1,0 +1,130 @@
+[
+  {
+    "id": "db-partitioning-q4",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A product catalogue is sharded across 20 shards by `product_id`, with a *local* secondary index on `category` in each shard. Assume independent shard response times. Each shard answers a category query in 5 ms at p50 and 80 ms at p99. Roughly what p99 should you expect for 'list products in category X'?",
+    "options": [
+      {
+        "text": "About 5 ms, since the query uses an index",
+        "explanation": "Wrong. The index makes each shard fast, but the query must go to all 20 shards and wait for the slowest one."
+      },
+      {
+        "text": "Roughly 80 ms or worse, because the scatter-gather waits on the slowest of 20 shards, and the chance of at least one shard being slow is high",
+        "explanation": "Correct. With 20 shards, the chance that all 20 respond faster than their own p99 is 0.99 raised to the power 20, about 82%, so about 18% of queries hit at least one 80 ms shard. The overall p99 is at or beyond the per-shard p99."
+      },
+      {
+        "text": "About 100 ms, i.e. 20 × 5 ms",
+        "explanation": "Wrong. The shard requests run in parallel, not serially, so latency isn't the sum. It's governed by the maximum of 20 parallel responses."
+      },
+      {
+        "text": "About 4 ms, because the work is split 20 ways",
+        "explanation": "Wrong. Splitting data doesn't make each shard's fixed latency smaller, and you still wait for every shard."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Local index → the category could be on any shard → query all 20 in parallel, merge results.\n2. Latency = max of 20 shard latencies.\n3. Probability that every shard is fast:\n```formula\nP_all = q^N\nP_all = 0.99^20 ≈ 0.818\nP_slow = 1 − P_all ≈ 0.18\nwhere\nP_all: the probability that all N shards answer faster than their p99\nq: the probability one shard answers faster than its p99, 0.99 by definition of p99\nN: the number of shards queried, here 20\nP_slow: the probability that at least one shard is at or beyond its p99\n≈: approximately equal to\nIn words: with 20 independent shards, about 1 query in 5 waits for at least one shard's worst-1% latency.\n```\n4. So ~18% of requests include at least one shard at or beyond 80 ms. The combined p99 is therefore at least the per-shard p99; its exact value cannot be derived from only p50 and p99.\n5. Mitigations: a global index partitioned by `category` (one shard per query, but async index updates), hedged requests to replicas, or a search engine built for this access pattern.",
+    "link": {
+      "title": "MongoDB: Sharding",
+      "url": "https://www.mongodb.com/docs/manual/sharding/"
+    }
+  },
+  {
+    "id": "db-partitioning-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user updates an item in a DynamoDB table and immediately queries a global secondary index (GSI) for it. The query returns the old value. Why?",
+    "options": [
+      {
+        "text": "GSIs are maintained asynchronously, so they're eventually consistent and can briefly lag the base table",
+        "explanation": "Correct. A GSI is partitioned by its own key, so an item update may need to change an index partition on a different node. DynamoDB propagates this asynchronously and GSI queries don't support strongly consistent reads."
+      },
+      {
+        "text": "The update failed silently",
+        "explanation": "Wrong. DynamoDB returns success only after the base-table write is durably stored; a subsequent strongly consistent GetItem on the same regional table would see it (or a newer value)."
+      },
+      {
+        "text": "The GSI only updates nightly",
+        "explanation": "Wrong. GSI propagation is continuous, normally within a fraction of a second, though it can lag more under throttling."
+      },
+      {
+        "text": "The query used the wrong partition key",
+        "explanation": "Wrong. If the key were wrong, the query wouldn't find the item at all, rather than finding its old version."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The base table is partitioned by its partition key, say `itemId`.\n2. The GSI is partitioned by a *different* attribute, say `status`. The index entry for this item lives on whichever partition owns its `status` value.\n3. Updating synchronously would mean a cross-partition transaction on every write. Instead DynamoDB updates the GSI asynchronously.\n4. Result: a short window where the GSI shows the old value.\n5. Design for it: read from the base table (with `ConsistentRead`) when you need the latest value, and treat GSI results as possibly slightly stale. Also give the GSI enough write capacity, or throttling there can back up.\n6. If you need strongly consistent reads on an alternate sort order *within* one partition key, a local secondary index supports them, but only if it was defined when the table was created.",
+    "link": {
+      "title": "DynamoDB: Global secondary indexes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GSI.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An existing DynamoDB table has partition key `customerId` and sort key `orderDate`. A new feature needs \"this customer's orders sorted by `totalAmount`\", and finance insists the results be strongly consistent. What are your options?",
+    "options": [
+      {
+        "text": "Add a local secondary index on `(customerId, totalAmount)` to the existing table",
+        "explanation": "Wrong. That's the right *shape*, but LSIs can only be defined when a table is created. You can't add one to an existing table."
+      },
+      {
+        "text": "Add a GSI on `(customerId, totalAmount)` and query it with `ConsistentRead = true`",
+        "explanation": "Wrong. GSIs don't support strongly consistent reads; a `ConsistentRead` query on a GSI is rejected. A GSI would be fine if eventual consistency were acceptable."
+      },
+      {
+        "text": "Either create a new table with that LSI and migrate the data, or query the base table by `customerId` with a strongly consistent read and sort by amount in the application",
+        "explanation": "Correct. An LSI gives strongly consistent reads in the needed order, but requires a new table. For a modest number of orders per customer, a strongly consistent `Query` on the partition key plus an in-app sort also works."
+      },
+      {
+        "text": "Use a `Scan` with a filter on `customerId`",
+        "explanation": "Wrong. A scan reads the whole table and filters afterwards: very expensive, and it still returns results unsorted by amount."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The pattern stays within one partition key (`customerId`), with a different sort key. That's the definition of an LSI.\n2. LSI facts:\n   - Strongly consistent reads: yes.\n   - When can you add one? Only at table creation.\n   - Max 5 per table; 10 GB per partition-key value.\n3. GSI facts:\n   - Can be added any time (default quota 20).\n   - Eventually consistent reads only.\n4. So with strong consistency required and an existing table:\n   - New table with the LSI, then backfill (for example via a stream or export/import), or\n   - Strongly consistent `Query(customerId)` on the base table, then sort by amount in code (fine for tens or hundreds of orders).\n5. Lesson: decide LSIs up front, because they're fixed for the table's lifetime.\nStrong Query reads do not supply an atomic snapshot of an entire changing collection across pages. If finance needs a point-in-time aggregate, add a suitable versioned snapshot or transactional design.",
+    "link": {
+      "title": "DynamoDB: Local secondary indexes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/LSI.html"
+    }
+  },
+  {
+    "id": "db-partitioning-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about DynamoDB secondary indexes are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A table can have at most 5 local secondary indexes, and they must be defined when the table is created",
+        "explanation": "Correct. The limit of 5 LSIs is fixed, and LSIs can't be added to or removed from an existing table."
+      },
+      {
+        "text": "A table with any LSI limits each partition-key value to 10 GB of data across the table and its LSIs",
+        "explanation": "Correct. This is the *item collection* limit. A customer with a huge number of items can hit it, and further writes for that key are then rejected."
+      },
+      {
+        "text": "If a GSI lacks write capacity to keep up, writes to the base table are throttled",
+        "explanation": "Correct. Every base-table write that affects the index must also be applied to the GSI, so an under-provisioned GSI throttles the table's writes."
+      },
+      {
+        "text": "GSI queries can request strongly consistent reads with `ConsistentRead = true`",
+        "explanation": "Wrong. GSIs are updated asynchronously and support only eventually consistent reads."
+      },
+      {
+        "text": "The 20-GSI limit per table is a hard limit that can't be raised",
+        "explanation": "Wrong. 20 is the *default* quota for GSIs per table, and it's adjustable through a service quota request."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "| | LSI | GSI |\n|---|---|---|\n| Partition key | Same as table | Any attribute |\n| Limit | 5, fixed | 20 default |\n| Add later? | No | Yes |\n| Strong reads? | Yes | No |\n| Capacity | Table's | Its own |\n\n1. LSI limit and creation-time rule: true.\n2. 10 GB item-collection limit applies when the table has LSIs: true.\n3. GSI write back-pressure throttles the base table: true. Give GSIs enough capacity (or use on-demand mode).\n4. GSIs are eventually consistent: the option is false.\n5. 20 is a default quota, not a hard limit: false.",
+    "link": {
+      "title": "DynamoDB: Global secondary indexes",
+      "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GSI.html"
+    }
+  }
+]

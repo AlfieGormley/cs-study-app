@@ -1,0 +1,100 @@
+[
+  {
+    "id": "db-indexing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A B-tree index has an illustrative B-tree fan-out of about 400 children per internal page and about 400 keys per leaf. Roughly how many page reads does a lookup need in a table of 60 million rows?",
+    "options": [
+      {
+        "text": "About 26, since log₂(60 million) ≈ 26",
+        "explanation": "Wrong. log₂ (logarithm to base 2) counts how many times you halve 60 million to reach 1, which is the depth of a binary tree with two children per node. B-trees pack hundreds of keys into each page, so the base of the logarithm is the B-tree fan-out, not 2."
+      },
+      {
+        "text": "About 3–4",
+        "explanation": "Correct. Three levels of 400-way branching reach 400 × 400 × 400 = 64 million keys, which covers 60 million. Add one for the leaf or row fetch, and the top levels are usually cached anyway."
+      },
+      {
+        "text": "About 60,000",
+        "explanation": "Wrong. That's closer to scanning a meaningful fraction of the table. The whole point of a tree index is logarithmic, not linear, cost."
+      },
+      {
+        "text": "Exactly 1, like a hash table",
+        "explanation": "Wrong. B-trees need a root-to-leaf walk. Even hash indexes need at least a bucket read plus the row fetch."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each level multiplies the number of addressable keys by the B-tree fan-out (≈400).\n2. Level 1 (root): 400 keys. Level 2: 400² = 160,000. Level 3: 400³ = 64,000,000.\n3. 64 million ≥ 60 million, so three levels suffice. As a formula:\n```formula\nh = ⌈log_f(n)⌉\nh = ⌈log_400(60,000,000)⌉\nh = ⌈2.99⌉ = 3\nh_bin = ⌈log_2(60,000,000)⌉ = 26\nwhere\nh: the tree height, the number of page reads from root to leaf\nf: the B-tree fan-out, children per page, here 400\nn: the number of keys, here 60 million\nlog_f: logarithm to base f: how many copies of f must be multiplied together to reach n\nlog_400: logarithm to base 400\nlog_2: logarithm to base 2, the number of halvings\n⌈ ⌉: ceiling, round up to a whole number of levels\nh_bin: the height a binary tree (B-tree fan-out 2) would need\n≥: greater than or equal to\nIn words: with 400 children per page, 3 levels reach 60 million keys, whereas a binary tree would need 26 levels.\n```\n4. A lookup reads the root, an internal page and a leaf: 3 page reads, plus one heap fetch in Postgres.\n5. The root and internal levels are tiny (1 + 400 pages ≈ 3 MB at 8 KB), so they stay cached and often only the leaf hits disk.",
+    "link": {
+      "title": "Use The Index, Luke: concatenated indexes",
+      "url": "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys"
+    }
+  },
+  {
+    "id": "db-indexing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A MySQL InnoDB table uses a random UUIDv4 stored as `CHAR(36)` for its primary key and has 5 secondary indexes. As it grows past the buffer pool size, insert throughput collapses and the indexes are much bigger than expected. What's the best explanation and fix?",
+    "options": [
+      {
+        "text": "UUIDs can't be indexed efficiently by B-trees; switch to a hash index",
+        "explanation": "Wrong. B-trees index strings fine, and InnoDB's clustered index has to be a B-tree. The problems are the key's randomness and width, not its type."
+      },
+      {
+        "text": "There are too many secondary indexes; InnoDB supports only 4 efficiently",
+        "explanation": "Wrong. There's no such limit. Each index does add write cost, but the specific blow-up here comes from the primary key choice."
+      },
+      {
+        "text": "The buffer pool is too small; doubling it is the only real fix",
+        "explanation": "A larger buffer pool delays the problem but doesn't remove it. With random keys, the working set is the whole tree, so the cliff returns as the table keeps growing."
+      },
+      {
+        "text": "Random keys insert all over the clustered index, causing page splits and random I/O, and every secondary index entry copies the 36-byte key; use a compact, increasing key such as `BIGINT` auto-increment or a time-ordered UUIDv7 in `BINARY(16)`",
+        "explanation": "Correct. In InnoDB the table is ordered by primary key, so random keys touch random pages once the table exceeds memory. Each secondary entry stores the PK, so a 36-byte key bloats all five indexes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. InnoDB's table is a B-tree clustered on the primary key.\n2. Random UUIDv4 keys land on random leaf pages. Once the tree exceeds the buffer pool, most inserts read a page from disk, and full pages split (leaving them about half empty).\n3. Increasing keys always append at the right-hand edge, so the hot pages stay in memory and pages tend to be more densely packed (InnoDB normally leaves free space).\n4. Width: each of 5 secondary indexes stores the PK in every entry.\n```\nCHAR(36) UUID: 36+ bytes\nBINARY(16):    16 bytes\nBIGINT:         8 bytes\n```\n5. Fix: `BIGINT` auto-increment, or a UUIDv7 (time-ordered, so roughly increasing) stored as `BINARY(16)` when IDs must be generated client-side.",
+    "link": {
+      "title": "MySQL: Clustered and secondary indexes",
+      "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-index-types.html"
+    }
+  },
+  {
+    "id": "db-indexing-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An InnoDB table `users(id BIGINT PRIMARY KEY, email, name, ...)` has a secondary index on `(email)`. Which queries are covered by the columns in the secondary index (setting aside any clustered-index visits needed for MVCC visibility)? Select all that apply.",
+    "options": [
+      {
+        "text": "`SELECT id FROM users WHERE email = ?`",
+        "explanation": "Correct. Each secondary entry is `(email, id)`, since InnoDB stores the primary key as the pointer. Both columns are right there."
+      },
+      {
+        "text": "`SELECT email, id FROM users WHERE email LIKE 'ann%'`",
+        "explanation": "Correct. A prefix `LIKE` is a range on `email`, and both selected columns are in the index entry."
+      },
+      {
+        "text": "`SELECT name FROM users WHERE email = ?`",
+        "explanation": "Wrong. `name` isn't in the secondary index, so InnoDB must use the primary key it found to look up the full row in the clustered index."
+      },
+      {
+        "text": "`SELECT count(*) FROM users WHERE email = ?`",
+        "explanation": "Correct. Counting needs no column values beyond the index key, so the secondary index alone suffices."
+      },
+      {
+        "text": "`SELECT * FROM users WHERE email = ?`",
+        "explanation": "Wrong. `*` needs every column, so this requires a second B-tree walk into the clustered index."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. InnoDB secondary index leaf entry: `(email, id)`.\n2. A query is covered if every column it touches is in that entry.\n\n| Query needs | Covered? |\n|---|---|\n| email, id | Yes |\n| email (range), id | Yes |\n| email, name | No |\n| email (count) | Yes |\n| all columns | No |\n\n3. `EXPLAIN` shows `Using index` when a query is covered.\n4. To cover `name` too, make the index `(email, name)`. InnoDB has no `INCLUDE` clause, but the PK is always implicitly there.\nColumn coverage is not a guarantee of zero clustered-index I/O: InnoDB may need clustered records for MVCC visibility, especially with recently modified or delete-marked secondary records.",
+    "link": {
+      "title": "MySQL: Clustered and secondary indexes",
+      "url": "https://dev.mysql.com/doc/refman/8.4/en/innodb-index-types.html"
+    }
+  }
+]

@@ -1,0 +1,130 @@
+[
+  {
+    "id": "net-cdn-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Product pages are cacheable for 5 minutes, but the CDN hit ratio is only 20%. Logs show URLs like `/p/42?utm_source=mail&utm_campaign=x&fbclid=...`. What's the best fix?",
+    "options": [
+      {
+        "text": "Increase the TTL to 24 hours",
+        "explanation": "A longer TTL helps only if the same key is requested again. With unique tracking parameters, most keys are seen once, so TTL barely matters (and stale prices become a risk)."
+      },
+      {
+        "text": "Add `Vary: Cookie` to the response",
+        "explanation": "That fragments the cache even further, by every distinct cookie header, lowering the hit ratio."
+      },
+      {
+        "text": "Purge the cache more often",
+        "explanation": "Purging removes cached entries and lowers the hit ratio. The problem is too many distinct keys, not stale content."
+      },
+      {
+        "text": "Exclude tracking parameters from the cache key (allow-list only parameters that change the response)",
+        "explanation": "Correct. `/p/42` with any `utm_*` or `fbclid` returns the same page, so they shouldn't fragment the cache. Allow-listing collapses thousands of keys into one per product."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Diagnose: same page, many URLs → **cache-key fragmentation**.\n2. A page shared in a campaign might get 5,000 distinct `fbclid` values → 5,000 cache entries, each hit once.\n3. Fix: build the cache key from the path plus allow-listed params (e.g. `colour`, `size`); drop `utm_*`, `fbclid`, `gclid`; sort what remains.\n4. Now all 5,000 requests share one object: 1 miss + 4,999 hits.\n5. Analytics still work, because the browser keeps the full URL for client-side tracking.",
+    "link": {
+      "title": "Understand the cache key (Amazon CloudFront)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-the-cache-key.html"
+    }
+  },
+  {
+    "id": "net-cdn-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After a release, some users see *other people's* names on the `/dashboard` page. The page recently started being cached by the CDN. What's the most likely cause?",
+    "options": [
+      {
+        "text": "The CDN's TLS certificate is shared between users",
+        "explanation": "All users share a site's certificate; that's normal and doesn't mix up response content."
+      },
+      {
+        "text": "A personalised response was cached under a key that doesn't include the user's identity, so one user's page was served to others",
+        "explanation": "Correct. The first user's response populated the cache entry for `/dashboard`, and later users with the same key got it. Personalised responses must be `private`/`no-store` or keyed on identity."
+      },
+      {
+        "text": "The origin's database returned the wrong rows",
+        "explanation": "Possible in theory, but the timing (started when CDN caching began) and the pattern (whole pages belonging to other users) point to cache-key leakage."
+      },
+      {
+        "text": "Users' browsers are caching too aggressively",
+        "explanation": "A private browser cache can also leak between accounts sharing one browser if caching is misconfigured. Here the change to shared CDN caching makes its key/policy the leading suspect."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Alice requests `/dashboard` → miss → origin returns \"Hi Alice\" → CDN stores it under key `/dashboard`.\n2. Bob requests `/dashboard` → same key → **hit** → Bob sees \"Hi Alice\".\n3. Immediate fix: purge `/dashboard`, stop caching it.\n4. Durable fix: send `Cache-Control: private, no-store` on authenticated responses; configure the CDN to bypass the cache when an auth cookie is present; alert on cacheable responses that also contain `Set-Cookie`.\n5. Confirm that CDN policy honours these origin headers. For CloudFront, a positive minimum TTL can override private/no-store, so use a suitable zero-minimum-TTL or cache-disabled policy on authenticated paths.",
+    "link": {
+      "title": "Configuring caching (Amazon CloudFront)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/ConfiguringCaching.html"
+    }
+  },
+  {
+    "id": "net-cdn-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your CDN is configured to cache anything ending in `.css`, `.js` or `.png` for a day, whatever the origin says. Your app framework ignores unknown path suffixes, so `/account/settings/x.css` returns the logged-in user's settings page. What's the risk and the best fix?",
+    "options": [
+      {
+        "text": "No risk: the CSS rule only matches real stylesheets",
+        "explanation": "The CDN matches on the URL's extension, not on what the response actually contains. Here an HTML account page has a `.css` URL."
+      },
+      {
+        "text": "Only a performance risk, because HTML is larger than CSS",
+        "explanation": "The real danger is data exposure, not size."
+      },
+      {
+        "text": "Web cache deception: an attacker tricks a victim into visiting that URL, the CDN caches the victim's private page, and the attacker then fetches it. Cache based on the origin's `Cache-Control` (with `private`/`no-store` on account pages) and make the origin reject unknown suffixes",
+        "explanation": "Correct. The CDN and the origin disagree about what the URL is. Respecting origin cache headers, and having the origin return 404 for unexpected paths, closes the gap."
+      },
+      {
+        "text": "The browser will refuse to render HTML served as CSS",
+        "explanation": "The attacker doesn't need the victim's browser to render anything; they just need the CDN to store the response so they can request it themselves."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Attacker sends the victim a link: `/account/settings/x.css`.\n2. The victim's browser sends it with their session cookie → the origin returns the victim's settings page.\n3. The CDN sees `.css` → caches it publicly for a day.\n4. Attacker requests the same URL with no cookie → **cache hit** → reads the victim's data.\n5. Defences: cache by the origin's `Cache-Control` rather than by extension; send `private, no-store` on authenticated pages; return 404 for unknown path suffixes; don't cache responses to requests carrying session cookies.",
+    "link": {
+      "title": "Understand the cache key (Amazon CloudFront)",
+      "url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/controlling-the-cache-key.html"
+    }
+  },
+  {
+    "id": "net-cdn-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A public product page differs by language (English, French or German) and has separate mobile and desktop HTML. Which cache-key choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Normalise `Accept-Language` into one of `en`, `fr` or `de` and key on that",
+        "explanation": "Correct. Raw `Accept-Language` values vary enormously (`fr-FR,fr;q=0.9,en;q=0.8`...). Collapsing them to the three languages you serve gives at most three variants."
+      },
+      {
+        "text": "Include the full `User-Agent` string in the key",
+        "explanation": "There are thousands of distinct user-agent strings, so this fragments the cache massively. Bucket them instead."
+      },
+      {
+        "text": "Include the session cookie, to be safe",
+        "explanation": "The page is public and identical for every user in the same bucket. Keying on the session makes every visitor a separate miss."
+      },
+      {
+        "text": "Allow-list only the query parameters that change the page (say `page` and `sort`) and sort them",
+        "explanation": "Correct. This drops tracking parameters and makes `?a=1&b=2` and `?b=2&a=1` share an entry."
+      },
+      {
+        "text": "Map the user agent to a `mobile` or `desktop` device bucket and key on that",
+        "explanation": "Correct. Two buckets capture the real difference in the HTML without fragmenting by every browser version."
+      }
+    ],
+    "answer": [
+      0,
+      3,
+      4
+    ],
+    "workedExample": "Rule: **key on exactly what changes the response, normalised to as few values as possible.**\n\n| Input | Key on |\n|---|---|\n| Language | en / fr / de |\n| Device | mobile / desktop |\n| Query | `page`, `sort` only |\n| Session | nothing (public page) |\n\n```formula\nV = L × D = 3 × 2 = 6\nwhere\nV: the maximum number of cached variants of one product page, for each distinct `page`/`sort` combination\nL: the number of language buckets (en, fr, de), 3\nD: the number of device buckets (mobile, desktop), 2\nIn words: three languages times two devices gives at most six cached copies per page and sort order, instead of thousands.\n```",
+    "link": {
+      "title": "Vary header (MDN)",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Vary"
+    }
+  }
+]

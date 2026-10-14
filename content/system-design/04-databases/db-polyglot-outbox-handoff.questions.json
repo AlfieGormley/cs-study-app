@@ -1,0 +1,125 @@
+[
+  {
+    "id": "db-choosing-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An app writes a product to Postgres and then, in the same request handler, indexes it in Elasticsearch. Occasionally products exist in Postgres but never appear in search. What's the root cause and the robust fix?",
+    "options": [
+      {
+        "text": "Elasticsearch is eventually consistent; wait longer",
+        "explanation": "Wrong as a complete explanation. Refresh introduces a configurable delay, but a failed second write can leave a permanently missing index document."
+      },
+      {
+        "text": "Wrap both writes in a Postgres transaction",
+        "explanation": "Wrong. A Postgres transaction can't include an Elasticsearch write; if the Elasticsearch call succeeds and the commit then fails (or vice versa), they still diverge."
+      },
+      {
+        "text": "Dual writes aren't atomic: if the process crashes or the second call fails after the first succeeds, the stores diverge. Derive the index from Postgres's change stream (CDC, e.g. Debezium → Kafka) or a transactional outbox",
+        "explanation": "Correct. Commit the business change and its durable handoff atomically, then retry downstream delivery. Eventual indexing depends on retention, ordering/idempotency, monitoring and recovery of rejected events."
+      },
+      {
+        "text": "Retry the Elasticsearch write three times",
+        "explanation": "Wrong as a complete fix. Retries reduce the failure rate, but a crash between the two writes still loses the index update, and retries can reorder updates."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Request: `INSERT product` → commit → `PUT /products/_doc/42`.\n2. Failure points: the process crashes after commit, the network times out, Elasticsearch rejects the request. Any of these leaves Postgres with the product and Elasticsearch without it.\n3. There's no transaction spanning both systems, so dual writes can't be made atomic.\n4. **Outbox**: in the same Postgres transaction, insert a row into `outbox(event)`. A relay publishes outbox rows to Kafka; a consumer indexes them. Atomic because it's one database transaction.\n5. **CDC**: Debezium reads the Postgres WAL and publishes row changes; same effect with no app change.\n6. Bonus: rebuild the index from a database snapshot plus retained changes, or replay the full history only if it has actually been retained.",
+    "link": {
+      "title": "Martin Fowler: Polyglot Persistence",
+      "url": "https://martinfowler.com/bliki/PolyglotPersistence.html"
+    }
+  },
+  {
+    "id": "db-choosing-q3",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A ride-hailing service is choosing storage. Which pairings of data to store are well matched? Select all that apply.",
+    "options": [
+      {
+        "text": "Current driver locations (updated every 4 s, only latest matters, queried by radius) → Redis with geospatial commands",
+        "explanation": "Correct. High-frequency overwrites of small values with radius queries suit an in-memory store with `GEOADD`/`GEOSEARCH`. Losing a few seconds of positions on failure is acceptable."
+      },
+      {
+        "text": "Payments and trip billing → an eventually consistent store with last-write-wins",
+        "explanation": "Wrong. LWW can silently drop writes; financial records need ACID transactions and durability, i.e. a relational or distributed SQL database."
+      },
+      {
+        "text": "Trip history per rider (write once, read newest first by rider) → a wide-column or key-value store with rider id as partition key and time as sort key",
+        "explanation": "Correct for a known keyed access pattern, subject to per-key throughput, partition size and retention limits. No design scales one hot rider or unbounded partition without additional measures."
+      },
+      {
+        "text": "Analytics over two years of trips (aggregates by city and hour) → the same OLTP Postgres primary",
+        "explanation": "Poor default when heavy analytical scans compete with production transactions. A separate analytical system can isolate that load; its exact speedup must be benchmarked, not assumed."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Match each workload's pattern to a store:\n\n| Data | Pattern | Fit |\n|---|---|---|\n| Locations | overwrite, geo radius, ephemeral | Redis geo |\n| Payments | atomic, durable, invariants | Postgres |\n| Trip history | append, by rider, by time | Cassandra / DynamoDB |\n| Analytics | scans + aggregates | Columnar warehouse |\n\nOptions 1 and 3 match. Option 2 puts money in a store that can lose writes; option 4 puts OLAP on the OLTP primary.\nA universal warehouse speedup is absent because no matched workload benchmark is supplied; losing recent driver positions must also be an explicitly accepted product tradeoff.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer"
+    }
+  },
+  {
+    "id": "db-choosing-q5",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a polyglot architecture with Postgres (orders), Redis (cache) and Elasticsearch (search), which statement reflects good practice?",
+    "options": [
+      {
+        "text": "Postgres is the system of record for orders; Redis and Elasticsearch hold derived data that can be rebuilt from it",
+        "explanation": "Correct. Naming one source of truth per fact means derived stores can lag or be wiped and rebuilt without data loss."
+      },
+      {
+        "text": "Each store is equally authoritative; reconcile differences nightly",
+        "explanation": "Wrong. If every store is authoritative, a disagreement has no correct answer. Nightly reconciliation then has to guess."
+      },
+      {
+        "text": "Write new orders to Redis first for speed, then persist them to Postgres later",
+        "explanation": "Wrong as a default. Treating the cache as the first write target makes it a source of truth with weaker durability; a crash can lose orders."
+      },
+      {
+        "text": "Elasticsearch should be the source of truth because it can query everything",
+        "explanation": "Wrong. Search engines are optimised for search, not transactional writes; they lack multi-document transactions and have near-real-time visibility."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. For each fact, ask: if two stores disagree, which one is right?\n2. Orders: Postgres. It has transactions, constraints and durable backups.\n3. Redis cache: a copy for speed. Wiping it costs only latency.\n4. Elasticsearch: a copy for search, fed from Postgres via CDC. Wiping it means a reindex, not data loss.\n5. Test: can you rebuild each derived store from scratch? If not, it has become a source of truth by accident.",
+    "link": {
+      "title": "Martin Fowler: Polyglot Persistence",
+      "url": "https://martinfowler.com/bliki/PolyglotPersistence.html"
+    }
+  },
+  {
+    "id": "db-choosing-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An order service uses a transactional outbox: each order transaction also inserts an `order_placed` event into an `outbox` table, and a relay publishes outbox rows to Kafka. After the relay crashes and restarts, some customers get two confirmation emails. What's the right fix?",
+    "options": [
+      {
+        "text": "Make the relay delete each outbox row before publishing it",
+        "explanation": "Wrong. If the relay crashes after deleting but before publishing, the event is lost for good. That trades duplicates for silent loss."
+      },
+      {
+        "text": "Abandon the outbox and send the email inside the order transaction",
+        "explanation": "Wrong. An email can't be rolled back. If the transaction later aborts, the customer is told about an order that doesn't exist; if it's retried, they get duplicates anyway."
+      },
+      {
+        "text": "Switch Kafka to synchronous replication",
+        "explanation": "Wrong. Kafka's replication affects durability of messages in Kafka, not whether the relay sends a message twice."
+      },
+      {
+        "text": "Keep at-least-once delivery and use a durable email workflow with a stable provider-supported idempotency key, bounded retries and reconciliation.",
+        "explanation": "Correct. A local processed-event marker alone cannot atomically cover an external send: recording first can lose an email, while sending first can duplicate it. Provider deduplication must cover the retry window; unresolved outcomes need reconciliation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A relay may publish and crash before marking its outbox row sent, so the event is delivered again.\n2. Persist an email job uniquely keyed by event id; retries use the same payload and provider idempotency key.\n3. If a send succeeds but its response is lost, retry only within the provider’s documented deduplication window. For example, Resend retains keys for 24 hours.\n4. Record successful responses durably. Reconcile ambiguous outcomes before the window expires instead of blindly resending afterwards.\n5. A database INSERT followed by a send is not an exactly-once transaction. Without a suitable provider contract, state the duplicate-versus-loss tradeoff explicitly.",
+    "link": {
+      "title": "Resend: Idempotency keys",
+      "url": "https://resend.com/docs/dashboard/emails/idempotency-keys"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cache-invalidation-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your team adds change data capture (Debezium reading the Postgres WAL) to drive cache invalidation. Assume the relevant logged tables/operations are captured, all dependent keys are mapped, ordering is preserved where required, and retention/retries are reliable. Which benefits does this bring over invalidating in application code? Select all that apply.",
+    "options": [
+      {
+        "text": "Writes made outside the app (migrations, admin SQL, other services) still trigger invalidation",
+        "explanation": "Correct for captured tables and operations, regardless of which client wrote them. Publication/filter configuration, unlogged data, truncation handling and missing derived-key mappings can still create gaps."
+      },
+      {
+        "text": "Only committed captured changes drive invalidation; preserve the relevant per-key ordering through delivery.",
+        "explanation": "Correct. PostgreSQL logical decoding exposes committed changes, but a multi-topic/partition pipeline does not automatically provide one global consumption order."
+      },
+      {
+        "text": "The cache becomes strongly consistent with the database",
+        "explanation": "Incorrect. CDC is asynchronous: there is still a delay (whose size depends on the capture and delivery pipeline) between commit and delete, during which reads are stale."
+      },
+      {
+        "text": "Failed deletes can be retried from the durable log",
+        "explanation": "Correct. Because the events sit in Kafka (or the WAL), the consumer can retry until the delete succeeds instead of losing it on a network blip."
+      },
+      {
+        "text": "It removes the need to know which cache keys depend on which rows",
+        "explanation": "Incorrect. The consumer still has to map a changed row to every key derived from it, which is hard for aggregates and joined views."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. App-level invalidation relies on every write path calling `DEL`. One forgotten script leaves stale data.\n2. With CDC, PostgreSQL WAL also contains physical work from uncommitted transactions; logical decoding emits captured committed changes. Debezium delivery depends on its configured capture scope.\n3. A consumer maps `products id=9` → `DEL product:9`, `DEL category:3:list`, and retries on failure.\n4. Limits: it's still eventual (commit → event → delete takes time), and you must maintain the row-to-key mapping.",
+    "link": {
+      "title": "Scaling Memcache at Facebook (NSDI 2013)",
+      "url": "https://www.usenix.org/conference/nsdi13/technical-sessions/presentation/nishtala"
+    }
+  },
+  {
+    "id": "cache-invalidation-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user updates their bio and immediately reloads. Your system tolerates 5 s of global staleness, but product wants **this user** to see their change at once. The cache is shared Redis with CDC-based invalidation (≈200 ms lag). What is the most targeted fix?",
+    "options": [
+      {
+        "text": "Drop the TTL to 1 second for all profiles",
+        "explanation": "TTL doesn't address the 200 ms CDC lag on the first reload, and it would increase misses for everyone to solve one user's experience."
+      },
+      {
+        "text": "Carry the committed row version for that user; accept cached data only if it is at least that version, otherwise read the primary.",
+        "explanation": "Correct. A durable session/version requirement gives a checkable read-your-writes condition. A fixed bypass window is only a heuristic unless lag and stale refills are bounded."
+      },
+      {
+        "text": "Disable caching for profiles",
+        "explanation": "This removes the cache's benefit for every reader to solve a problem only the writer has."
+      },
+      {
+        "text": "Switch Redis to synchronous replication",
+        "explanation": "Redis replication isn't the source of the staleness; the stale value comes from the gap before the CDC delete arrives."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The user needs to observe at least the version their write committed.\n2. Return/store that ordered version in the session or request context.\n3. Compare a cached value’s version with it. If too old or missing, read an authoritative source (with appropriate failover handling).\n4. Keep the version requirement until future reads satisfy it; do not assume an arbitrary five-second timeout proves freshness.\n5. Versioned write-through can help only if concurrent ordering and failure cases are also handled.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  },
+  {
+    "id": "cache-invalidation-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your primary database is in Europe and a read replica with its own cache cluster runs in the US, with replication lag that can reach several seconds. A US user updates their profile (the write goes to Europe) and reloads at once. What does a Facebook-style **remote marker** do here?",
+    "options": [
+      {
+        "text": "It copies the new value directly into the US cache, so the reload hits",
+        "explanation": "Remote markers carry no data. They only say \"the local replica may be stale for this key\"."
+      },
+      {
+        "text": "It blocks the user's reload until replication catches up",
+        "explanation": "Nothing is blocked. The reload is simply routed to a different database."
+      },
+      {
+        "text": "It deletes the replica's copy of the row",
+        "explanation": "Markers live in memcache; they never modify the replica database."
+      },
+      {
+        "text": "Before writing, the server sets a marker for the key in the US region; on the reload, the cache misses, the server sees the marker and reads from the European primary instead of the lagging replica",
+        "explanation": "Correct. The marker trades extra latency on that miss for a lower chance of reading stale data. It is removed as part of the write's invalidations once replication delivers them."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The paper's three steps for a write from a non-master region to key `k`:\n\n1. Set remote marker `r_k` in the local region.\n2. Write to the master, embedding `k` and `r_k` as keys to invalidate once the change replicates.\n3. Delete `k` in the local cluster.\n\nOn the reload:\n\n```\nGET k        -> miss\nGET r_k      -> present\n=> query master (Europe)\n```\n\nOnce replication catches up, the invalidation removes `r_k`, and reads go back to the local replica. The cost is a cross-region round trip (with deployment-dependent latency) on those misses only. Concurrent modifications can remove a marker needed by another write, and eviction can lose it: the paper describes reduced stale-read probability, not an unconditional consistency guarantee.",
+    "link": {
+      "title": "Scaling Memcache at Facebook — full paper PDF",
+      "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cache-invalidation-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You cache each user's profile with a version number from the DB and write to Redis using an atomic \"set only if the new version is greater\" script. Assume database-ordered versions and retained comparison metadata (no intervening eviction, expiry or reset). Which race does this fix?",
+    "options": [
+      {
+        "text": "A reader re-caching old data after the key was deleted",
+        "explanation": "After a plain delete, there is no stored version to compare against, so the stale set succeeds. You'd need a tombstone holding the new version to fix this."
+      },
+      {
+        "text": "Cache stampede on a popular key",
+        "explanation": "Versioning controls which write wins; it does nothing to stop many concurrent misses from all querying the DB."
+      },
+      {
+        "text": "Two concurrent writers updating the cache out of order",
+        "explanation": "Correct. If writer A (version 7) arrives after writer B (version 8), the script sees 8 ≥ 7 and rejects A's write, so the cache keeps the newer value."
+      },
+      {
+        "text": "Redis losing data on a crash",
+        "explanation": "Versioning is about ordering of writes, not durability. Persistence and replication address crashes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. DB rows carry `version`. A commits v7, B commits v8.\n2. B's cache write arrives first: cache has no entry → write v8.\n3. A's cache write arrives: current v8 ≥ 7 → rejected.\n4. Cache ends at v8, matching the DB.\n\nWhy not the delete race? After `DEL`, the key is gone. A slow reader holding v7 finds no current version and the script accepts it. Storing a tombstone `{v: 8, data: null}` instead of deleting would make v7 lose.\nEvicting or expiring the version metadata loses this protection. Retain an authoritative high-water mark or bound and reject all older in-flight fills before removing it.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-invalidation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team switches to **versioned keys**: each user's current version number is stored in a small `user:42:ver` key, and profiles are cached as `user:42:v<N>`. On update, the writer commits to the DB and increments the version. What happens to the old entry `user:42:v8` after the version becomes 9?",
+    "options": [
+      {
+        "text": "It is overwritten in place by the v9 data",
+        "explanation": "Versioned keys never overwrite: v9 is a different key, written by the next reader that misses on it."
+      },
+      {
+        "text": "Readers stop asking for it, because they now build the key `user:42:v9`; the old entry ages out via its TTL or eviction",
+        "explanation": "Correct. Invalidation becomes renaming. Nobody deletes v8; it simply becomes unreachable and is reclaimed by TTL or eviction."
+      },
+      {
+        "text": "Redis deletes it automatically when the version number changes",
+        "explanation": "Redis knows nothing about the naming scheme. The old key stays until its TTL expires or it is evicted."
+      },
+      {
+        "text": "Readers keep getting v8 until its TTL expires",
+        "explanation": "Readers look up the version first, see 9, and request `user:42:v9`, which is a miss and loads fresh data."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Read path:\n\n```\nv = GET user:42:ver      -> 9\nGET user:42:v9           -> miss\nload from DB, SET v9\n```\n\n2. new readers observing version 9 stop requesting user:42:v8; older in-flight readers may still use it, so it is dead weight until its TTL or eviction removes it.\n3. Trade-offs:\n   - Every read now costs an extra lookup for the version (the value key depends on the version result, so a single ordinary MGET cannot batch both unknown-dependent lookups; an atomic server-side routine or carefully scoped local version cache changes the tradeoff).\n   - Old versions use memory until they expire, so keep a TTL.\n   - The version key itself must be updated reliably; if that bump is lost, readers keep using the old version.\n4. This is the same idea as fingerprinted asset URLs in HTTP caching.\nUse a database-ordered revision and verify the fetched payload matches the versioned key. Independent Redis increments can reorder relative to database commits; in-flight readers and stale version caches may continue requesting v8 temporarily.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  },
+  {
+    "id": "cache-invalidation-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You use an atomic \"set only if newer version\" script. To close the delete race, the writer replaces `DEL user:42` with a **tombstone** `{v: 8, data: null}` (with a TTL). Assume the script explicitly permits equal-version replacement of a tombstone by data, and retains the version floor while older readers may still write. A slow reader then tries to set data it read at version 7. What happens, and what must readers do when they see the tombstone?",
+    "options": [
+      {
+        "text": "The reader's set succeeds, because tombstones are treated as empty keys",
+        "explanation": "If the script treated the tombstone as empty, it would be no better than a delete. The tombstone exists precisely to carry the version 8."
+      },
+      {
+        "text": "The reader's set is rejected because 8 ≥ 7; any reader that finds the tombstone treats it as a miss, loads from the DB and sets version 8 or later",
+        "explanation": "Correct. The tombstone keeps the latest version visible after the data is gone, so the stale v7 write loses, while fresh v8+ data can still replace it."
+      },
+      {
+        "text": "The reader's set is rejected, and the tombstone is served to users as an empty profile",
+        "explanation": "Readers must not show `null` as the profile. A tombstone means \"no data cached, but the version is at least 8\", so it is handled as a miss."
+      },
+      {
+        "text": "Both values are stored and readers pick the newer one",
+        "explanation": "The script stores one value per key. It decides which write wins rather than keeping both."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Without a tombstone:\n\n```\nW: commit v8, DEL key\nR: SET v7 -> key empty -> ACCEPTED\n```\n\n2. With a tombstone:\n\n```\nW: commit v8, SET {v:8,null}\nR: SET v7 -> 8 >= 7 -> REJECTED\n```\n\n3. The next reader sees `data: null`, treats it as a miss, reads v8 from the DB and sets it. One detail: the lesson's script rejects equal versions (`cur >= new`), so for tombstones it must accept a set whose version *equals* the tombstone's, otherwise fresh v8 data could never replace the v8 tombstone.\n4. Do not expire or evict the version floor while an older request can still fill the cache. Use retained authoritative metadata or a proven bound that rejects old fills before reclamation.\n\nThis is how versioning closes the race that a plain delete leaves open.",
+    "link": {
+      "title": "Cache-aside pattern — Azure Architecture Center",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/cache-aside"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "db-nosql-families-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In MongoDB you're modelling blog posts and their comments. The application enforces at most 50 size-limited comments per post and validates that the full BSON document remains below 16 MiB, always displayed with the post. Following the rule 'embed what you read together, reference what you share', what should you do?",
+    "options": [
+      {
+        "text": "Store comments in a separate collection and use `$lookup` on every page view",
+        "explanation": "Wrong for this workload. It reintroduces a join on the hottest read path even though comments are always read with their post and aren't shared."
+      },
+      {
+        "text": "Store each comment as its own top-level document with the post's full content copied into it",
+        "explanation": "Wrong. That copies the post into every comment, so editing the post means updating every comment: the worst of both worlds."
+      },
+      {
+        "text": "Embed the comments array inside the post document",
+        "explanation": "Correct. Comments belong to exactly one post, are read with it, and the count is bounded, so embedding gives one read per page with no join."
+      },
+      {
+        "text": "Use a graph database instead, since comments relate to posts",
+        "explanation": "Wrong. A one-to-few parent/child relationship is not a graph problem. Graph databases are justified by multi-hop traversals."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask how comments are read: always with their post. So they're *read together*.\n2. Ask whether they are shared: no, each comment belongs to one post.\n3. Ask whether the array is bounded: both count and serialized document size are explicitly bounded below MongoDB's 16 MiB limit.\n4. All three point to embedding: one document read renders the page.\n5. When would you switch? If a post could get 100,000 comments (unbounded growth) you'd store comments separately, perhaps bucketed in pages of 100, and reference the post id.",
+    "link": {
+      "title": "MongoDB: Data modeling",
+      "url": "https://www.mongodb.com/docs/manual/data-modeling/"
+    }
+  },
+  {
+    "id": "db-nosql-families-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A start-up keeps its product catalogue in MongoDB. A new requirement arrives: reports joining products, suppliers, warehouses and orders in arbitrary ways, and multi-entity updates that must be atomic. What's the strongest argument here?",
+    "options": [
+      {
+        "text": "Stay on MongoDB: `$lookup` and multi-document transactions make it equivalent to a relational database",
+        "explanation": "Wrong as a blanket equivalence. MongoDB supports these features, but a relational schema and SQL can be a clearer fit for the stated ad-hoc joins and invariants. Performance requires measuring the actual alternatives."
+      },
+      {
+        "text": "Move everything to Cassandra for scale",
+        "explanation": "Wrong. Cassandra is *worse* at ad-hoc joins and multi-entity transactions; it's optimised for known, partition-keyed queries at high write volume."
+      },
+      {
+        "text": "The data has become highly relational with ad-hoc queries and cross-entity invariants, which is the relational model's home ground, so a relational database (possibly using `jsonb` for flexible attributes) is the better fit",
+        "explanation": "Correct. Many-to-many relationships, ad-hoc joins and multi-row transactions are exactly what relational databases make cheap; `jsonb` keeps the flexible-attribute benefit for product specs."
+      },
+      {
+        "text": "Use a graph database, because there are relationships",
+        "explanation": "Wrong. Having relationships isn't the same as needing multi-hop traversals. Reporting with joins and aggregates is a relational workload."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. List the new requirements: ad-hoc joins across 4 entity types, aggregates, atomic multi-entity updates.\n2. Map each to the families:\n   - Ad-hoc joins: relational planners excel; document stores make you pre-shape data.\n   - Atomic cross-entity updates: native in relational databases; also supported by MongoDB; compare semantics, implementation complexity and measured cost.\n3. The original reason for MongoDB (flexible product attributes) survives in Postgres via `jsonb` with GIN indexes.\n4. Conclusion: the workload has moved into relational territory. Evaluate migration cost and benchmarks before deciding whether and when to move.",
+    "link": {
+      "title": "MongoDB: Data modeling",
+      "url": "https://www.mongodb.com/docs/manual/data-modeling/"
+    }
+  },
+  {
+    "id": "db-nosql-families-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An IoT platform stores one MongoDB document per device and `$push`es every reading (one every 5 seconds, about 60 bytes each) into a `readings` array in that document. After a few months, writes slow down and some devices start failing to save. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The array is unbounded, so active devices eventually approach MongoDB's 16 MiB document limit and further pushes fail",
+        "explanation": "Correct. 17,280 readings a day at ~60 bytes is about 1 MB a day, so a device hits 16 MiB in a few weeks, after which updates to that document are rejected."
+      },
+      {
+        "text": "An ever-growing array can increase update, cache and document-processing costs.",
+        "explanation": "Correct. The exact cost depends on storage and update behavior; MongoDB may replicate update deltas rather than the entire document. The hard size limit and growth pattern remain the main problems."
+      },
+      {
+        "text": "Using the bucket pattern, with one document per device per hour holding that hour's readings, keeps documents bounded",
+        "explanation": "Correct. Each bucket holds at most 720 readings (an hour at 5-second intervals), roughly 43 KB, so documents stay small and old buckets can be expired or archived as a unit."
+      },
+      {
+        "text": "Embedding is always correct here, because the readings are read together with the device",
+        "explanation": "Wrong. \"Embed what you read together\" assumes the embedded set is bounded. Nobody reads months of readings with every device lookup, and the array never stops growing."
+      },
+      {
+        "text": "The fix is to switch to a graph database, because devices relate to readings",
+        "explanation": "Wrong. A device and its readings are a one-to-many time series, not a multi-hop graph. A time-series store, or bucketed documents, fits."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Growth, size and time to the limit:\n```formula\nn = 86,400 s / 5 s = 17,280\nG = n × b = 17,280 × 60 B\nG ≈ 1,036,800 B/d ≈ 1 MB/d\nt = L / G\nt = 16,777,216 B / (1,036,800 B/d)\nt ≈ 16 d\nwhere\nn: the number of readings one device sends per day\n86,400 s: the number of seconds in a day\ns: seconds\nG: how much the document grows each day, in bytes per day (B/d)\nb: the size of one reading, about 60 bytes\nB: bytes\nMB: megabytes, about a million bytes\nL: MongoDB's document size limit, 16 MiB = 16,777,216 bytes\nt: the time until the document hits the limit, in days (d)\nd: days\n≈: approximately equal to\nIn words: a reading every 5 seconds adds about 1 MB a day, so the document reaches 16 MiB in a little over two weeks.\n```\n2. After that, pushes to that document fail.\n3. Before that, every push modifies a big, growing document: potentially higher document-processing and cache costs; replication traffic depends on the encoded update.\n4. Bucket pattern:\n```\n{ device: 7,\n  hour: \"2026-09-14T10\",\n  n: 720,\n  readings: [ ... ] }\n```\n   720 readings × 60 B ≈ 43 KB per document.\n5. Queries for \"device 7 between 10:00 and 12:00\" read two or three buckets.\nThe 60-byte arithmetic is approximate payload sizing; BSON array keys and other metadata add overhead. MongoDB’s document limit is 16 MiB, so validate actual encoded size.",
+    "link": {
+      "title": "MongoDB: Bucket pattern",
+      "url": "https://www.mongodb.com/docs/manual/data-modeling/design-patterns/group-data/bucket-pattern/"
+    }
+  }
+]

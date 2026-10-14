@@ -18,6 +18,19 @@ export function migrationProblems(module) {
   return problems;
 }
 
+// Completion keys are shared by all modules in a subject. An archived id must
+// not become an unrelated active lesson or acquire a second migration owner.
+export function subjectMigrationProblems(modules) {
+  const active = new Set(modules.flatMap((module) => module.lessons));
+  const retired = new Set(), problems = [];
+  for (const module of modules) for (const original of Object.keys(module.migrations ?? {})) {
+    if (active.has(original)) problems.push(`archived lesson ${original} must not be active in another module`);
+    if (retired.has(original)) problems.push(`archived lesson ${original} must have one migration owner`);
+    retired.add(original);
+  }
+  return problems;
+}
+
 // Expand a completed original into its short lessons once. Retain the original
 // timestamp so both saved progress and completion-age filters survive the split.
 export function migrateLessonProgress(state, index) {

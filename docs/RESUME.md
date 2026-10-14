@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 15/76 modules; 111 originals → 549 short lessons with 1331 focused questions.
+- Independently verified: 16/76 modules; 118 originals → 584 short lessons with 1411 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `219c259`, version `95bc1aa0dc67`, 517 short lessons/1264 focused questions
-  across 14 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated verified candidate: `2527ff3025f3`, 15 modules/549 units/1331 questions.
+- Latest confirmed live release: `85bc52f`, version `2527ff3025f3`, 549 short lessons/1331 focused questions
+  across 15 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `45a08d278f4b`, 16 modules/584 units/1411 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
   Complexity and Sound & Digital Audio are also published; Complexity’s formula follow-up is complete
@@ -18,9 +18,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- dsa/dsa-trees: verifying; trees_short_verify.
 - dsa/dsa-sorting: authoring; sorting_short_author.
 - dsa/dsa-graphs: authoring; graphs_short_author.
+- dsa/dsa-techniques: authoring; /root/techniques_short_author.
 
 Verification and integration:
 
@@ -29,7 +29,7 @@ Verification and integration:
 - Root owns shared code/generated assets. Preview only verified modules; do not publish data compiled
   from current unverified drafts. Every active formula hit needs conversion or a genuine documented
   exception/false positive; code comments and actual outputs need native checks.
-- The latest candidate passes the full isolated build, 61 Node tests, all short lesson/question phone
+- The current candidate passes the full isolated build, 61 Node tests, all short lesson/question phone
   renders and real lesson/quiz routes in every converted module. Installed-app updates, exact progress
   preservation, offline practice, completion-age sliders/text input and dictionary integration pass.
 - Previously published short units remain active during follow-ups. Migrations copy exact old completion

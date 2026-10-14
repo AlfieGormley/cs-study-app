@@ -1,0 +1,100 @@
+[
+  {
+    "id": "tree-heaps-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must find the 50 largest response times in a stream of 100 million log lines, using little memory. Which approach fits best?\n\nHere n is the number of input items, k counts kept items, and h names the binary min-heap list in the worked example.",
+    "options": [
+      {
+        "text": "Keep a max-heap of all items and pop 50 times",
+        "explanation": "This stores all 10⁸ items in memory and costs O(n) to build; it ignores the 'little memory' requirement."
+      },
+      {
+        "text": "Sort all response times and take the last 50",
+        "explanation": "O(n log n) time (n times its logarithm) and O(n) memory, and it cannot run on a stream without first storing everything."
+      },
+      {
+        "text": "Keep a max-heap of size 50 and push every item",
+        "explanation": "A max-heap's root is the *largest* keeper, which tells you nothing about whether a new item should displace the *smallest* keeper."
+      },
+      {
+        "text": "Keep a min-heap of size 50; replace the root when a new item is larger",
+        "explanation": "Correct. The root is the weakest of the current top 50, so each item needs one comparison and occasionally a replace that sifts through a binary heap only 6 levels deep. With k denoting the 50 kept items, that is O(n log k) time and O(k) memory."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Maintain the best 50 seen so far.\n2. The question for each new item is 'does it beat the worst of my 50?'. A **min-heap** answers that in O(1) at `h[0]`.\n3. If it does, `heapreplace` swaps it in, sifting through a binary heap of 50 items, which has six node levels (at most five downward swaps).\n4. Cost: after filling the min-heap, each later item makes one root comparison. A replacement in the simple downward-swap implementation traverses at most five edges; Python’s heapq may use a different repair procedure. The number of replacements depends on arrival order. Memory: 50 items.\n\n`heapq.nlargest(50, stream)` implements exactly this.",
+    "link": {
+      "title": "heapq — Python docs",
+      "url": "https://docs.python.org/3/library/heapq.html"
+    }
+  },
+  {
+    "id": "tree-heaps-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "This task queue crashes the first time two tasks share a priority. Why, and what is the standard fix?\n\n```python\nimport heapq\nq = []\nheapq.heappush(q, (2, {\"id\": \"a\"}))\nheapq.heappush(q, (2, {\"id\": \"b\"}))\n```",
+    "options": [
+      {
+        "text": "heapq does not allow duplicate priorities; use a dict keyed by priority instead",
+        "explanation": "heapq happily stores duplicates. The problem is what Python compares next when the first tuple elements tie."
+      },
+      {
+        "text": "The tuples tie on 2, so Python compares the dicts, which raises TypeError; insert a counter: `(2, next(counter), task)`",
+        "explanation": "Correct. Tuples compare element by element. A unique, increasing counter in second place means the tasks themselves are never compared, and equal priorities come out first-in-first-out."
+      },
+      {
+        "text": "heapq requires a list of integers; store task IDs only",
+        "explanation": "heapq works with any mutually comparable items, including tuples. Integers only is unnecessary."
+      },
+      {
+        "text": "The binary heap needs to be heapified after every push",
+        "explanation": "heappush maintains the invariant itself; calling heapify afterwards wouldn't avoid the comparison that raises the error."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Pushing the second tuple sifts it up, comparing `(2, {...b})` with `(2, {...a})`.\n2. Tuple comparison: first elements equal (2 == 2), so compare second elements: two dicts.\n3. `dict < dict` is not defined: `TypeError: '<' not supported between instances of 'dict' and 'dict'`.\n4. Fix (as recommended in the heapq docs):\n\n```python\nimport itertools\ncounter = itertools.count()\nq = []  # rebuild after the failed push\nfor task in [{\"id\": \"a\"}, {\"id\": \"b\"}]:\n    heapq.heappush(q,\n        (2, next(counter), task))\n```\n\nThe counter is unique, so comparison never reaches the task, and ties pop in insertion order.",
+    "link": {
+      "title": "heapq — Python docs",
+      "url": "https://docs.python.org/3/library/heapq.html"
+    }
+  },
+  {
+    "id": "tree-heaps-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You need a **max**-priority queue in Python. Which of these work? Select all that apply.\n\nHere h is the Python list storing binary heap entries.",
+    "options": [
+      {
+        "text": "Push negated keys into heapq: `heappush(h, -x)`, and negate again on pop",
+        "explanation": "Correct. Negation reverses the order, so the min-heap's root is the largest original key. This is the classic idiom for numeric keys."
+      },
+      {
+        "text": "On Python 3.14+, use `heapq.heapify_max`, `heappush_max` and `heappop_max`",
+        "explanation": "Correct. Python 3.14 added public max-heap functions to heapq."
+      },
+      {
+        "text": "Call `heapq.heapify(h, reverse=True)`",
+        "explanation": "heapify takes no `reverse` parameter; this raises TypeError."
+      },
+      {
+        "text": "Push `(-priority, counter, item)` tuples",
+        "explanation": "Correct. Negating only the priority gives max-priority order while the counter breaks ties and keeps items from being compared."
+      },
+      {
+        "text": "Use heapq normally and read `h[-1]` for the maximum",
+        "explanation": "The last element of a min-heap is just some leaf, not necessarily the maximum (the maximum is one of the leaves, roughly half of all the items)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Negation: min of (−x) is −(max of x). Works for numbers. True.\n2. Python 3.14's heapq documents `heapify_max`, `heappush_max`, `heappop_max`, `heappushpop_max` and `heapreplace_max`. True.\n3. No such parameter. False.\n4. Negate the priority field only; the payload doesn't need to be numeric. True.\n5. `h[-1]` is the last leaf. In `[1, 9, 2, 10, 11, 3]` the last element is 3, but the max is 11. False.",
+    "link": {
+      "title": "heapq — Python docs",
+      "url": "https://docs.python.org/3/library/heapq.html"
+    }
+  }
+]

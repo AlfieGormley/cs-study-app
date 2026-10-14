@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 15/76. Updated 2026-10-14.
+Verified modules: 16/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -22,6 +22,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Complexity Analysis | 7 | 35 | 81 | 290 | 150 | 830 | 32 |
 | dsa/Arrays, Lists, Stacks & Queues | 6 | 32 | 67 | 54 | 293 | 511 | 82 |
 | dsa/Hash Tables & Hashing | 6 | 37 | 73 | 103 | 158 | 371 | 76 |
+| dsa/Trees & Heaps | 7 | 35 | 80 | 75 | 170 | 417 | 90 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -1884,6 +1885,69 @@ Low-confidence areas:
 - **medium** — hash-prob-count-min: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
 - **medium** — hash-prob-hll-registers: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
 - **medium** — hash-prob-hll-merging: Version/build-dependent runtime behaviour, vendor examples, practical speed or finite-sketch accuracy. Core algorithm and documented implementation facts were checked against fetched primary sources and executable fixtures. Runtime details can change; memory/timing depends on build and workload, and approximate-sketch assumptions are explicitly scoped.
+
+## dsa: Trees & Heaps
+
+[Independent verification record](../content/dsa/04-trees/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Traversal stack described as binary-heap memory → heap-allocated list storage; allocation heaps and priority-queue heaps stay distinct in the compiled dictionary.
+- Three quizzes defined h as tree height despite using h as a Python heap list → correct list meaning, with separate keeper and node counts.
+- AVL insert called a double rotation one rotation → one repair step comprising one or two rotations; original numerical answer keys preserved.
+- Top-k total work presented as actual sift levels → explicitly a worst-case growth scale, since many stream items require only a root comparison.
+- Top-50 Python replacement example implied exactly five-swap repair and 500 million actual Python swaps → distinguish simple downward-swap model from heapq’s implementation and arrival-dependent replacements.
+- d-ary heap cache and push speed declared guaranteed → fewer possible levels with workload-dependent actual performance.
+- Standalone height vocabulary referred to a missing diagram above → explicit earlier A–H prerequisite; exact deepest empty-child frame now also stated locally.
+- Formula closing fence had prose attached → separate closing line and paragraph, preventing stray Markdown.
+- Red-black invariant unit mentioned uncle cases before teaching insertion → local black-height takeaway and standalone invariant title.
+- Trie API examples omitted required root arguments → executable signatures match table calls.
+- Empty radix-tree root violated unqualified twice-key-count bound → require at least one stored key and document empty-root exception.
+- Binary lifting climb example allowed 100,000 edges in a 100,000-node tree → at most 99,999; quiz explicitly defines n and treats 34 as table-level work rather than exact primitive jumps.
+- C++ associative-container costs overgeneralised → iterator erasure amortised constant; multi-key erasure includes matching-element count, while unique-key operations remain logarithmic.
+- Eight-byte child pointers described as universal on 64-bit machines → explicit assumed eight-byte representation; bytes, decimal MB and KiB kept distinct.
+- Bare no cycles alias opened Cycle → remove opposite-meaning alias.
+- Key-length complexity entry captured O(L log n) and O(L + k) with a linear-key-only definition → remove the mismatched aliases.
+- Suffix trie incorrectly aliased compressed Suffix tree → separate precise uncompressed Suffix trie entry; quadratic-space caveat and existing compressed-tree entry preserved.
+- Merkle Patricia definition claimed every node is referenced by its hash → Ethereum hashes longer encoded children and embeds short ones.
+- DOM definition implied only nested element children → also text/comment nodes; directory-tree examples qualify filesystem links.
+- Git DAG example implied all merge commits have two parents and unsourced popularity superlative → two or more merge parents; neutral distributed-version-control definition.
+- Implicit-array and iterator glossary guarantees omitted storage and one-call qualifications → contiguous slots versus referenced payloads, height-plus-one initialisation/advance scope.
+- Heap helper definition described max functions as removing the minimum → max counterparts reverse priority order; practical speed qualification.
+- Go heap.Interface omitted its sort.Interface inheritance → exact Len/Less/Swap plus Push/Pop structure.
+- Historical fgrep attribution could not be newly corroborated → source-backed current GNU grep multiple-fixed-pattern application retained; original Aho–Corasick paper independently fetched/read.
+- Symbolic answer/prose arithmetic outside cards → natural counted-quantity wording or existing standalone cards; actual Python keyword calls remain genuine Rule 6 exceptions.
+- Maximum-path-gain standalone formula did not define empty-child gain → add zero-gain base case matching the executed implementation.
+- Tree C free example lacked explanation of child-before-parent order → concise native comment; actual fragment compiled and tested.
+
+Remaining gaps:
+
+- All 35 active units and all 80 prompts, options, explanations and worked examples reviewed; inherited topics, examples and diagrams preserved across coherent ordered groups. Question keys/types/levels/option counts and all 14 archive files match the fixed baseline.
+- All 32 lesson and 10 quiz Python fragments executed with explicit earlier prerequisites; actual C free-tree fragment compiled with warnings-as-errors. Tests cover 626 binary shapes, all 5040 seven-key AVL insertion permutations, 100 BST successor/deletion fixtures and 250 heap streams. Finite fixtures supplement the general arguments rather than proving all possible inputs.
+- No pinned CPython object-size/cache-miss/corpus-memory, AVL/red-black speed or sortedcontainers benchmark. The visible inherited evidence-gap notes remain.
+- Red-black insertion remains a clearly labelled conventional outline; no full red-black or AVL deletion implementation. No Java/C++/Go/kernel/routing/Redis/Ethereum integration execution.
+- Morris original-paper full text not obtained: publisher metadata confirms the 1979 attribution, and actual traversal/restoration is independently executed. Aho–Corasick original 1975 paper was obtained and read; current GNU grep application is sourced to the GNU manual.
+- Primary source families checked targeted factual claims and changed glossary definitions. Correct unchanged entries retain their existing confidence/hash provenance; this review does not claim fresh sentence-by-sentence primary corroboration of every unchanged background definition.
+- Root performs full-course build and mobile/PWA integration; this worker writes no shared/generated application files. Isolated actual glossary compiler and app lookup were executed to check current subject meanings.
+
+Low-confidence areas:
+
+- **medium** — tree-morris-threads: 1979 Morris attribution and full original-paper discussion. Publisher search metadata retrieved, direct full-page fetch blocked; algorithm and restoration checked by independent native fixtures.
+- **medium** — tree-balanced-workloads: Library/kernel implementation details and historical/current CFS/EEVDF uses. Current primary docs/source checked; facts can change and no live integration benchmark is claimed.
+- **medium** — tree-python-top-k: Python heapq API/version and algorithm-selection details. Current official docs and CPython3.14 implementation checked; growth bounds are models, not latency guarantees.
+- **medium** — tree-heap-merging: Merge work scale and alternative priority-queue speed. Abstract list/heap-level scale intentionally omits implementation constants; concrete speed requires measurements.
+- **medium** — tree-radix-variants: Routing, Redis, Ethereum and Linux production uses. Current official docs/implementations checked; version-sensitive and not run as integrations.
+- **medium** — tree-avl-height-bound: Leading AVL height coefficient versus finite exact heights. Leading approximation qualified; exact 27/28 finite recurrence recomputed. No measured runtime conclusion follows.
+- **medium** — glossary: glossary term vruntime. Weight-adjusted and hierarchical run-queue semantics checked in kernel docs/source; simplified teaching definition and version-sensitive scheduler context.
+- **medium** — glossary: glossary term cpp-std-map. Current C++ draft contracts and common implementation source checked; concrete library representations remain implementation-dependent.
+- **medium** — glossary: glossary term write-heavy. General workload label; inherited confidence remains medium and no benchmark advantage is asserted.
+- **medium** — glossary: glossary term heapreplace. Current Python min/max API contracts checked; implementation and practical speed depend on version and workload.
+- **medium** — glossary: glossary term heapify-max. Exact Python3.14 version note is now confirmed in fresh official docs; original medium confidence retained as requested.
+- **medium** — glossary: glossary term go-container-heap. Current Go API interface checked, but production implementation/API facts are version-sensitive.
+- **medium** — glossary: glossary term ethereum. Current official state-trie documentation fetched; production details can evolve and no integration run is claimed.
+- **medium** — glossary: glossary term merkle-patricia-trie. Official Ethereum encoding exception checked; implementation summary is deliberately simplified and version-sensitive.
+- **medium** — glossary: glossary term xarray. Current kernel official docs support its API and radix-tree relationship, but definition remains a simplified implementation summary.
+- **medium** — glossary: glossary term fgrep. Current GNU fixed-pattern algorithm documented; earlier historical attribution replaced because original implementation history was not independently corroborated.
 
 ## synth: Sound & Digital Audio
 

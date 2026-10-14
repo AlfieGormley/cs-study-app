@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cs1-news-feed-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your fan-out fleet's Kafka consumer lag reaches **10 minutes** during a global sporting final. Which mitigations are reasonable? Select all that apply.",
+    "options": [
+      {
+        "text": "Skip fan-out to followers who haven't been active for 30 days, rebuilding their timelines by pull when they return.",
+        "explanation": "Correct. A large share of followers on any big platform are dormant. Skipping them removes a big chunk of write amplification with no visible effect on active users."
+      },
+      {
+        "text": "Temporarily lower the celebrity threshold so more high-follower accounts are pulled at read time instead of pushed.",
+        "explanation": "Correct. The accounts with the most followers generate the most fan-out work; moving more of them to pull cuts the backlog, at a modest increase in read cost."
+      },
+      {
+        "text": "Prioritise fan-out to followers who are currently online.",
+        "explanation": "Correct. Online users will load their feed in the next few minutes; offline users won't. Ordering work by who'll actually look makes the lag invisible to most people."
+      },
+      {
+        "text": "Make the post API wait until fan-out completes before returning success.",
+        "explanation": "Incorrect. That makes authors wait minutes for a 'posted' confirmation and creates timeouts and retries (which generate *more* work). Fan-out must stay asynchronous."
+      },
+      {
+        "text": "Drop posts that are older than 1 minute from the fan-out queue.",
+        "explanation": "Incorrect. Followers would silently never see those posts in their precomputed timelines. Lag is temporary; data loss is permanent."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Treat it as a work-reduction and prioritisation problem:\n\n1. **Reduce work**: inactive followers and mega-accounts are the largest sources of inserts. Removing them can cut the fan-out volume by a large fraction.\n2. **Prioritise**: online-first ordering means the lag is mostly absorbed by people who aren't looking.\n3. **Don't** couple the write API to fan-out, and **don't** drop work silently.\n\nAlso autoscale the fan-out workers on consumer lag, so the system reacts before humans need to.",
+    "link": {
+      "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
+      "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your timeline cache holds **800 IDs × 16 B** for each of **300M** users (~3.8 TB, ~11.5 TB with three copies total). Analysis shows 95% of reads never go past the first **200** entries, and only **150M** users open the app in a typical week. If you cap timelines at 200 and keep them only for weekly-active users, roughly what is the replicated raw payload footprint, excluding storage overhead?",
+    "options": [
+      {
+        "text": "About 1.4 TB",
+        "explanation": "Correct. 150M × 200 × 16 B = 480 GB; × 3 copies ≈ 1.44 TB, about 8x less than before. Deeper pages and returning users are served by pull."
+      },
+      {
+        "text": "About 5.8 TB",
+        "explanation": "Wrong. That applies only the active-user filter (150M × 800 × 16 B × 3 ≈ 5.8 TB), leaving the 800 cap in place."
+      },
+      {
+        "text": "About 480 GB",
+        "explanation": "Wrong. That's the single-copy size; you still keep three copies total for availability."
+      },
+      {
+        "text": "About 2.9 TB",
+        "explanation": "Wrong. That applies the cap reduction (300M × 200 × 16 B × 3 ≈ 2.9 TB) but not the active-user filter."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nbefore = 300M × 800 × 16 B ≈ 3.84 TB\nbefore × 3 ≈ 11.5 TB\nafter = 150M × 200 × 16 B = 480 GB\nafter × 3 ≈ 1.44 TB\nwhere\nbefore: one copy with 800 entries for each of 300 million users\nafter: one copy with 200 entries for each of 150 million weekly-active users\n× 3: three copies total of every timeline\nM: million\nB: bytes\nGB: gigabyte, 10^9 bytes\nTB: terabyte, 10^12 bytes (1,000 GB)\n≈: approximately equal to (rounded)\nIn words: half the users and a quarter of the entries means an eighth of the memory: about 1.44 TB replicated instead of 11.5 TB.\n```\n\nThe trade-off: the 5% of reads that scroll past 200 entries, and users returning after more than a week, need a pull-based rebuild. That's a small, slower path in exchange for an 8x memory saving. Say which you'd monitor: the rebuild rate and its latency.",
+    "link": {
+      "title": "InfoQ: Timelines at Scale",
+      "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+    }
+  }
+]

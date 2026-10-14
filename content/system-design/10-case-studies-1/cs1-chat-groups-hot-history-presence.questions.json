@@ -1,0 +1,130 @@
+[
+  {
+    "id": "cs1-chat-system-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You support both 200-member family groups and **500,000-member** community channels. How should message fan-out differ between them?",
+    "options": [
+      {
+        "text": "Fan out on write for both: write a copy into every member's inbox.",
+        "explanation": "Wrong. For the big channel, every message becomes 500,000 inbox writes, most for members who aren't looking. A channel posting 10 messages a minute would generate ~83,000 writes/s on its own."
+      },
+      {
+        "text": "Fan out on read for both: store once and let everyone fetch.",
+        "explanation": "Wrong for small groups. Family members expect a push notification and instant delivery even when the app is closed; per-device inboxes are one way to implement reliable pushes, not the only possible design; a durable channel log with per-device cursors can also work."
+      },
+      {
+        "text": "Small groups: fan out on write to each member device's inbox. Huge channels: store once, push only to currently connected subscribers, and let others read history with per-member read cursors.",
+        "explanation": "Correct. Group size changes the economics, just as in the news feed. Small groups get reliable per-device delivery; huge channels avoid write amplification and track unread state with cursors."
+      },
+      {
+        "text": "Reject groups larger than 1,000 members.",
+        "explanation": "Wrong. That's a product limit, not a design. The prompt requires both sizes. Product limits and each provider's current architecture differ; the proposed store-once model addresses the large-channel workload here."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare write load for one message:\n\n```\nFamily group: 200 inbox references\nBig channel:  500,000 writes (huge)\n```\n\nAt 10 messages/minute in the big channel:\n\n```formula\nwrites = (m / (60 s)) × members\nwrites = (10 / (60 s)) × 500,000\nwrites ≈ 83,000/s\nwhere\nwrites: inbox writes per second from this one channel\nm: messages posted per minute, 10\n60 s: one minute in seconds\nmembers: inboxes each message is copied into, 500,000\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: one message every six seconds copied to half a million inboxes is about 83,000 writes a second from a single channel.\n```\n\nStore-once instead: one write, plus a pub/sub publish to the gateways of the (say) 5,000 members online with the channel open. Offline members see an unread count computed from `channel_latest_seq - my_read_seq` only if visible messages use contiguous sequence numbers without deletions or filtering; otherwise count unread visible messages explicitly.",
+    "link": {
+      "title": "Discord: how Discord scaled Elixir to 5,000,000 concurrent users",
+      "url": "https://discord.com/blog/how-discord-scaled-elixir-to-5-000-000-concurrent-users"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Presence updates (online/offline) are generating more traffic than messages. Which changes would reduce presence load? Select all that apply.",
+    "options": [
+      {
+        "text": "Push presence changes only to users who currently have a chat with that person open; others fetch presence lazily when they open the chat.",
+        "explanation": "Correct. Most of a user's contacts aren't looking at that user at any given moment. Subscribing only interested viewers removes the bulk of fan-out."
+      },
+      {
+        "text": "Debounce disconnects: wait several seconds after a socket drops before announcing offline.",
+        "explanation": "Correct. Mobile connections blip constantly (lifts, tunnels, Wi-Fi to 4G handover). Without debouncing, each blip broadcasts offline then online, doubling noise for nothing."
+      },
+      {
+        "text": "Store presence in the message database with a durable write for every heartbeat.",
+        "explanation": "Incorrect. Presence is ephemeral; a durable write per heartbeat (250M clients every 30 s is ~8M writes/s) is enormous cost for data that's worthless a minute later. Use an in-memory store with TTLs."
+      },
+      {
+        "text": "Lengthen the heartbeat interval from 10 s to 30 s and use a TTL of ~60–90 s.",
+        "explanation": "Correct. Heartbeat volume falls by 3x. The cost is slower detection of silent disconnects, which is acceptable for an 'online' indicator."
+      },
+      {
+        "text": "Broadcast every user's presence to all of their contacts on every heartbeat, to keep everyone accurate.",
+        "explanation": "Incorrect. This is the worst-case design: contacts × heartbeat rate, almost all of it unchanged state sent to people who aren't looking."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Estimate naive presence fan-out:\n\n```formula\nevents = users × contacts / t\nevents = 250M × 200 / (600 s) ≈ 83M/s\nopen = 83M/s × 0.01 ≈ 830k/s\nwhere\nevents: presence updates sent per second if every change goes to every contact\nusers: online users, 250 million\ncontacts: contacts per user, 200\nt: average time between status changes per user (flaps included), 10 minutes = 600 s\nopen: updates per second if only the ~1% of contacts with the chat open receive them\nM: million\nk: thousand\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: naive presence fan-out is about 83 million updates a second; sending only to the 1% who are looking cuts it to about 830,000.\n```\n\nThat naive figure dwarfs ~600k messages/s. Apply the fixes:\n\n- Only ~1% of contacts have the chat open → ~830k/s.\n- Debouncing removes most flaps → perhaps a few hundred thousand/s.\n- Heartbeats at 30 s: 250M / 30 ≈ 8M tiny in-memory TTL refreshes/s, handled by gateways and Redis, not fanned out.",
+    "link": {
+      "title": "Meta engineering: building mobile-first infrastructure for Messenger",
+      "url": "https://engineering.fb.com/2014/10/09/production-engineering/building-mobile-first-infrastructure-for-messenger/"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A huge community server posts an announcement with `@everyone`. Within seconds, 200,000 users open the same channel, all reading the same `(channel, bucket)` partition. The replicas holding it saturate and latency spikes spread across the cluster. What is the most targeted fix?",
+    "options": [
+      {
+        "text": "Use smaller time buckets so the partition is smaller.",
+        "explanation": "Wrong. Shorter intervals can reduce partition bytes, but everyone still reads the same newest rows; interval size does not distribute that concurrent demand."
+      },
+      {
+        "text": "Put a data-service layer in front of the database, routed by channel, that coalesces identical concurrent reads into one database query and serves the result to all waiting requests.",
+        "explanation": "Correct. 200,000 reads for the same rows become a handful of queries. This is what Discord built in Rust before migrating to ScyllaDB, precisely for this hot-partition pattern."
+      },
+      {
+        "text": "Add more nodes to the database cluster.",
+        "explanation": "Wrong. Existing partitions are read from their configured replica sets; simply adding nodes does not automatically spread simultaneous reads of these same rows across the whole cluster."
+      },
+      {
+        "text": "Rate limit the channel to 1,000 readers per second.",
+        "explanation": "Wrong. Making 199,000 people wait to read an announcement is a terrible user experience, and it treats demand as abuse."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Separate the two partition problems:\n\n| Problem | Cause | Fix |\n|---|---|---|\n| Too big | unbounded history | time buckets |\n| Too hot | many readers | coalesce, cache |\n\nWith coalescing, routing all requests for one channel to the same data-service instance (consistent hashing on `channel_id`) means concurrent identical reads meet in one place and share a single query.",
+    "link": {
+      "title": "Discord: how Discord stores trillions of messages",
+      "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You partition message history by `(channel_id, bucket)`. Your busiest channel sustains **50 messages/s**, each about **200 B**. You want partitions under about **100 MB**. Roughly what's the largest bucket width that keeps this channel's partitions under the limit?",
+    "options": [
+      {
+        "text": "About 1 year",
+        "explanation": "Wrong. 50/s for a year is about 1.6 billion messages, over 300 GB in one partition."
+      },
+      {
+        "text": "About 1 day",
+        "explanation": "Wrong. 50 × 86,400 × 200 B ≈ 864 MB per day, nearly 9x over the target."
+      },
+      {
+        "text": "About 1 minute",
+        "explanation": "Wrong. That keeps partitions tiny (about 600 KB) but makes 'load the last 50 messages' of a quiet channel scan many empty buckets. Too narrow is also a cost."
+      },
+      {
+        "text": "About 2–3 hours",
+        "explanation": "Correct. 50 × 200 B = 10 KB/s, so 100 MB takes 10,000 s, about 2.8 hours. In practice you'd size buckets for typical channels and handle extreme ones specially, a fixed global width is one option, while adaptive bucketing requires explicit metadata and routing."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The bucket width is the time it takes the channel to write the size limit:\n\n```formula\nrate = 50/s × 200 B = 10 KB/s\nt = limit / rate\nt = 100,000 KB / (10 KB/s) = 10,000 s\nt ≈ 2.8 hours\nwhere\nrate: bytes written to the channel per second\nlimit: the partition size target, 100 MB = 100,000 KB\nt: the bucket width that just fills the limit\nB: bytes\nKB: kilobyte, 1,000 bytes\nMB: megabyte, 1,000,000 bytes\ns: seconds; /s means per second\nhours: 10,000 s / 3,600 s per hour ≈ 2.8\n≈: approximately equal to\nIn words: at 10 KB a second, a 100 MB partition fills in 10,000 seconds, so buckets should be no wider than about 2.8 hours.\n```\n\nThe tension: wide buckets risk huge partitions for busy channels; narrow buckets force quiet channels to query many empty buckets to find recent history. Discord uses a static time window and walks back through buckets as needed.",
+    "link": {
+      "title": "Discord: how Discord stores trillions of messages",
+      "url": "https://discord.com/blog/how-discord-stores-trillions-of-messages"
+    }
+  }
+]

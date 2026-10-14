@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs1-chat-system-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a group chat, Alice's phone clock is 3 seconds fast. She and Bob send messages about one second apart. Some members see the messages in different orders. What should determine display order?",
+    "options": [
+      {
+        "text": "The sender's device timestamp, adjusted by NTP.",
+        "explanation": "Wrong. Phones drift, users change clocks, and NTP corrections aren't guaranteed on mobile. Even perfectly synchronised clocks would tie or cross for near-simultaneous messages from different devices."
+      },
+      {
+        "text": "A per-conversation sequence number assigned by the server that owns the conversation.",
+        "explanation": "Correct. A single owner assigns monotonically increasing sequence numbers, so every participant sorts by the same numbers and sees the same order. A gap indicates missing work only when committed positions are contiguous; the protocol must identify intentional gaps from failed allocations, deletions or filtering."
+      },
+      {
+        "text": "The order in which each recipient's device receives the messages.",
+        "explanation": "Wrong. Network paths differ per recipient, so arrival order differs; that's exactly why members see different orders."
+      },
+      {
+        "text": "Alphabetical order of sender names for messages within the same second.",
+        "explanation": "Wrong. It's deterministic but meaningless: replies could appear before the messages they answer whenever the responder's name sorts first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "What you need: **the same order for everyone in a conversation**. You don't need global order across conversations.\n\n1. Partition the chat service by `conv_id`, so one owner handles each conversation.\n2. The owner keeps a counter, `next_seq`, per conversation. Each accepted message gets the counter's current value as its `seq`, and the counter then goes up by one.\n3. Clients display by `seq`.\n\n```\nAlice \"see you at 6\" -> seq 118\nBob   \"ok!\"          -> seq 119\n```\n\nEveryone sees 118 before 119. For the assumed low per-conversation rate, one owner can suffice; high-volume channels still require capacity checks. On failover, establish a new storage-enforced epoch, recover committed state, and atomically allocate/persist so stale owners or failed allocations cannot corrupt the sequence.",
+    "link": {
+      "title": "Lamport timestamp (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Lamport_timestamp"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The chat-service instance that owns conversation 42 stalls in a 20-second GC pause. Its lease expires, a new owner takes over, reads `last committed sequence: 900` and starts assigning 901, 902... Then the old owner wakes up and also assigns 901 to a message it was holding. How do you prevent the duplicate sequence number?",
+    "options": [
+      {
+        "text": "Use NTP-synchronised timestamps instead of sequence numbers.",
+        "explanation": "Wrong. Clock-based ordering brings back the very skew problems that per-conversation sequence numbers were introduced to avoid."
+      },
+      {
+        "text": "Make GC pauses shorter so leases never expire unexpectedly.",
+        "explanation": "Wrong as the fix. Pauses, network blips and slow disks will always happen sometimes. Correctness can't depend on timing."
+      },
+      {
+        "text": "Tag each ownership lease with an increasing epoch (fencing token) and make message writes conditional on the stored epoch, so writes from the stale owner (old epoch) are rejected.",
+        "explanation": "Correct. The new owner bumps the epoch when it takes over. The old owner's conditional write fails, it learns it has lost ownership, and its message is retried through the new owner."
+      },
+      {
+        "text": "Let both owners write, and resolve conflicts later with last-writer-wins.",
+        "explanation": "Wrong. Last-writer-wins silently drops one of the two messages with seq 901, which is message loss."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nepoch 7: owner A holds conv 42\nA pauses 20 s; lease expires\nepoch 8: owner B, last sequence: 900\nB writes seq 901 (epoch 8) OK\nA wakes, writes seq 901 (epoch 7)\n  -> rejected: epoch 7 < 8\n```\n\nThis is the standard fencing-token pattern: a lease alone isn't safe, because the holder can't tell it has expired while paused. The storage layer must enforce the epoch.",
+    "link": {
+      "title": "Slack engineering: real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 10/76. Updated 2026-10-14.
+Verified modules: 11/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -16,6 +16,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | system-design/Messaging & Streaming | 8 | 34 | 96 | 55 | 291 | 185 | 42 |
 | system-design/API Design | 8 | 38 | 96 | 69 | 383 | 597 | 84 |
 | system-design/Architecture & Scaling Patterns | 9 | 41 | 108 | 84 | 262 | 495 | 26 |
+| system-design/Case Studies I | 7 | 43 | 85 | 103 | 183 | 773 | 66 |
 | dsa/Complexity Analysis | 7 | 35 | 81 | 290 | 150 | 830 | 32 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
@@ -1046,6 +1047,360 @@ Low-confidence areas:
 - **medium** — arch-spark-shuffle-skew-plans: Shuffle skew ratios and mitigations. Arithmetic and SQL tuning docs checked. Physical-plan, partial aggregation, AQE operator support and actual scheduling determine realised cost; no Spark execution benchmark.
 - **medium** — arch-media-rendition-cdn-pipeline: 1.5-minute ideal parallel transcode example and chunk-safe publication. The arithmetic is checked under stated equal-cost/60-worker assumptions; no codec/transcoding, CDN or fault test validates realised speed or every format boundary.
 - **medium** — arch-lambda-kappa-replay-paths: Historical company/architecture examples and replay duration. Kreps primary essay independently fetched and 22.5-day model recomputed; retained-history volume, live rate, source/sink capacity and deployment semantics can differ.
+
+## system-design: Case Studies I
+
+[Independent verification record](../content/system-design/10-case-studies-1/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- For this practice framework, spend less time on steps 1–5 once the design is clear, leaving time to demonstrate depth. Follow the interviewer's actual guidance.
+- Turning a vague prompt into a concrete, agreed problem demonstrates problem navigation in this practice framework.
+- - **Trade-offs** → a dimension of this practice checklist.
+- No Cassandra benchmark is supplied. The prompt establishes that the simpler relational design already meets the targets; extra components need a concrete requirement and measured justification.
+- | 500 GB | Fits the benchmarked storage plan |
+- size = 365 bn × 500 B = 182.5 TB
+replicated = 182.5 TB × 3 = 547.5 TB
+- In words: the raw size is 182.5 TB and three copies total 547.5 TB; round those final estimates to about 180 TB and 550 TB.
+- Gateways cache "this key is over limit until a given deadline"
+- Assume a cross-region round trip of about 100 ms in this scenario. Putting that round trip on each check would exceed the stated 1–2 ms overhead target. Actual network latency depends on deployment.
+- The formula assumes the current time has not moved backwards. The Python fixture clamps negative elapsed time to zero; production timestamp persistence must also avoid granting the same elapsed interval twice after a clock regression.
+- a 5 ms timeout with zero retries targets a bounded network wait; scheduling, queueing and the fallback also contribute to measured tail latency
+- A commit quorum spanning these regions requires cross-region coordination; the supplied 90 ms round trip would exceed this check's budget. Quorum placement and the client's region determine which requests pay that delay.
+- Redis Cluster derives the slot from the key's first non-empty hash tag, when one is present:
+
+```formula
+slot = CRC16(tag) mod 16,384
+where
+slot: the hash slot, an integer from 0 to 16,383
+CRC16: Redis Cluster's specified 16-bit cyclic redundancy check function
+tag: the bytes inside the first non-empty brace pair; if the first opening brace has no closing brace or an empty pair, Redis hashes the entire key
+mod: remainder after division
+In words: keys with the same valid tag select the same slot; one primary owns that slot at a time.
+```
+- **Latency**: assume a character every 100–200 ms for this interaction budget.
+- Easy to shard and update; memory relative to a trie depends on key duplication and representation.
+- **Purge** affected prefixes using the selected CDN's documented purge mechanism,
+- Personalisation prevents sharing the same final cached response across users unless the cache key safely separates their results.
+- At age 16 days, A falls below a fixed 2,000-point benchmark. If both queries receive no new traffic, B also decays: their score ratio stays constant, so B does not overtake A merely as time passes.
+- Σ: sigma, "add up over every day d"
+d: one day in the history being summed
+count_d:
+- Keep an explicit candidate budget and a prefix index; benchmark merging and filter checks against the serving latency target. A small overlay does not by itself prove negligible latency.
+- No rebuild duration is established here, and rebuilding still leaves existing CDN copies stale.
+- Uniform independent sampling reduces bot and human counts in the same proportion in expectation. Random variation can change ranks, but it does not selectively remove the manipulation.
+- | Recent searches, re-rank | user | Not shared across users |
+- Assuming balanced regional traffic, four nodes per region give spare capacity for a node loss in this input model. To sustain all 300,000 requests/s after losing one of three equal regions, five 32-core nodes per region leave 320 cores in the two surviving regions. Validate load redistribution and shared dependencies as well.
+- **Read-heavy**: assume 500 million posts and 3 billion timeline loads a day, about 6 loads per post,
+- edits and deletions change the canonical object rather than every timeline copy; serving caches still need a freshness policy.
+- total = (300M × 800 × 16 B) × 3
+total = 11.52 TB ≈ 11.5 TB
+- (three copies total)
+- with three copies total
+- × 3 copies
+- three copies total
+- × 3: three copies total of every timeline
+- The stated hypothetical workload does not establish sampling. The eligible-recipient count may instead differ from an unweighted follower average.
+- The prompt counts all eligible inserts, not just celebrity posts. It supplies no historical celebrity-only measurement.
+- Two effects could explain a lower eligible-recipient mean in this hypothetical dataset:
+- B's read at 10 s can merge the original from the celebrity's user timeline without waiting for bulk fan-out, provided that read sees the committed post. Stale caches or failed lookups still need parent fetching or deferral.
+- Redis string values normally support up to 512 MB; list values have different element and aggregate limits.
+- merge the author's acknowledged post into their own view while fan-out proceeds asynchronously. A server-side guarantee also needs fresh hydration and a fallback when a cache is lost or stale; optimistic client insertion improves that client's UI only.
+- partitioning by `(channel, time bucket)` bounds the covered time span, but neither byte size nor concurrent demand.
+- **Connection efficiency** can become a major cost driver; compare it with measured media, storage and egress costs:
+- Redelivery plus persistent client deduplication avoids presenting this retained message twice under the declared recovery model; it is not an unconditional exactly-once guarantee.
+- Use best-effort routing and recoverable delivery within the declared durability, retention and retry model:
+- A gap indicates missing work only when committed positions are contiguous; the protocol must identify intentional gaps from failed allocations, deletions or filtering.
+- The prompt requires both sizes. Product limits and each provider's current architecture differ; the proposed store-once model addresses the large-channel workload here.
+- Family group: 200 device-inbox references
+- Those heartbeats are tiny and handled by the gateways locally, but both connection memory and heartbeat/message processing must be included when sizing gateways. A gateway owns sockets, not the only durable message copy. The design retains unacknowledged messages in a server-side device inbox, so a failed gateway causes reconnects with jitter and redelivery rather than deleting the messages.
+- **Multiple usable providers where the channel supports alternatives**, with weighted routing
+- rate = 1,000,000 / (86,400 s) ≈ 12/s
+rate = 1,000,000,000 / (86,400 s) ≈ 12,000/s
+- s_day = 24 × 60 × 60 = 86,400 s ≈ 10^5 s
+rate = N_day / s_day
+rate ≈ 50,000,000 / (100,000 s) = 500/s
+exact = 50,000,000 / (86,400 s) ≈ 579/s
+- writes = 100M × 1 / (10^5 s) = 1,000/s
+reads = 100M × 10 / (10^5 s) = 10,000/s
+peak writes = 1,000/s × 3 = 3,000/s
+peak reads = 10,000/s × 3 = 30,000/s
+- servers = load / capacity
+servers = 33,000/s / (1,000/s) = 33
+total = 35 × Z / (Z − 1)
+total = 35 × 3 / 2 = 52.5 → 54
+- needed = load / capacity
+needed = 40,000/s / (1,000/s) = 40
+total = needed × Z / (Z − 1)
+total = 40 × 3 / 2 = 60
+n_zone = 60 / 3 = 20
+- writes ≈ 100M / (10^5 s) = 1,000/s
+peak writes ≈ 1,000/s × 3 = 3,000/s
+reads ≈ 1B / (10^5 s) = 10,000/s
+peak reads ≈ 10,000/s × 3 = 30,000/s
+- years = codes / (daily × 365)
+years = 57B / (100M × 365) ≈ 1.6
+ratio = 3.5T / (365B) ≈ 9.6
+- ratio = codes / needed
+r_6 = (5.7 × 10^10) / (5 × 10^10) ≈ 1.1
+r_7 = (3.5 × 10^12) / (5 × 10^10) = 70
+- n_50 ≈ 1.18√(N)
+√(N) = √(3.5 × 10^12) ≈ 1.9 × 10^6
+n_50 ≈ 1.18 × 1.9 × 10^6 ≈ 2.2 × 10^6
+- n_50 ≈ 1.18√(N)
+N = 62^7 ≈ 3.5 × 10^12
+√(N) ≈ 1.87 × 10^6
+n_50 ≈ 2.2 × 10^6
+- p = stored / N
+p = (350 × 10^9) / (3.5 × 10^12) = 0.1
+- n = 62d_1 + d_0
+125 = 2 × 62 + 1 → "21"
+62^7 − 1 → "ZZZZZZZ"
+- t = block / writes
+t = 1,000,000 / (3,000/s) ≈ 333 s
+- m = (an) mod 62^7
+- t = block / writes
+t = 1,000,000 / (3,000/s) ≈ 333 s
+t_server = 1,000,000 / (300/s) ≈ 3,333 s
+- f(n) = (an) mod 62^7
+- links = 1 bn × 365 × 10 = 3.65 × 10^12
+space_7 = 62^7 ≈ 3.52 × 10^12
+years = (3.52 × 10^12) / (3.65 × 10^11)
+years ≈ 9.6
+space_8 = 62^8 ≈ 2.18 × 10^14
+- shards = checks / cap
+shards = 1,000,000/s / (50,000/s) = 20
+- target = cap × (1 − headroom)
+target = 80,000/s × 0.5 = 40,000/s
+shards = load / target
+shards = 800,000/s / (40,000/s) = 20
+- d = 30 s + U(0, 30 s)
+rate ≈ 5,000 / (30 s) ≈ 167/s
+- est = prev × (1 − t / w) + curr
+est = 80 × (1 − 15 s / (60 s)) + 30
+est = 80 × 0.75 + 30 = 90
+- est = prev × (1 − t / w) + curr
+est = 100 × (1 − 0 s / (60 s)) + 0 = 100
+- est = prev × (1 − t / w) + curr
+est = 84 × (1 − 30 s / (60 s)) + 55
+est = 84 × 0.5 + 55
+est = 42 + 55 = 97
+- rate = 10,000 / (60 s) ≈ 167/s
+over ≈ rate × t_sync = 167/s × 1 s = 167
+share = over / limit
+share = 167 / 10,000 ≈ 1.7%
+- L = λ × W
+L = (100 / (60 s)) × 20 s ≈ 33
+- L = λ × W
+λ = 100 / (60 s) ≈ 1.67/s
+L = 1.67/s × 20 s ≈ 33
+- rate = 1B × 6 / (10^5 s) ≈ 60,000/s
+peak = 60,000/s × 3 = 180,000/s
+- daily = 2B × 5 = 10B
+avg = 10B / (86,400 s) ≈ 115,700/s
+quick = 10B / (10^5 s) ≈ 100,000/s
+low = 3 × 100,000/s = 300,000/s
+high = 3 × 115,700/s ≈ 350,000/s
+- cores = 300,000/s / (1,000/s) = 300
+nodes = 300 / 32 ≈ 10
+- score = Σ(count_d × 0.9^{age_d})
+0.9^{6.6} ≈ 0.5
+0.9^{30} ≈ 0.04
+- score = Σ(count_d × 0.9^{age_d})
+- cores = peak / cap
+cores = 180,000/s / (1,000/s) = 180
+- peak = 10B × 6 / (10^5 s) × 3 ≈ 1.8M/s
+- total = 200M × 5 = 1B/day
+avg = 1B / (10^5 s) ≈ 10,000/s
+- burst = 50,000,000 / (3,600 s) ≈ 14,000/s
+peak = 3 × 10,000/s = 30,000/s
+- wait = backlog / rate
+wait = 2,000,000 / (1,000/s)
+wait = 2,000 s ≈ 33 min
+- r_avg = 10 bn / (100,000 s) = 100,000/s
+r_peak = 5 × r_avg = 500,000/s
+- t = N / rate
+t_all = 24,000,000 / (20,000/s)
+t_all = 1,200 s
+t_wave = 3,000,000 / (20,000/s) = 150 s
+- posts = 500M / (10^5 s) ≈ 5,000/s
+peak posts = 5,000/s × 3 = 15,000/s
+reads = 3B / (10^5 s) ≈ 30,000/s
+peak reads = 30,000/s × 3 = 90,000/s
+- inserts = posts × f
+inserts = 500M × 200 = 100B/day
+rate = 100B / (10^5 s) ≈ 1M/s
+nodes = 1M/s / (100k/s) = 10
+- daily = 400M × 150 = 6 × 10^10
+rate = (6 × 10^10) / (8.64 × 10^4 s)
+rate ≈ 694,000/s
+peak = 694,000/s × 3 ≈ 2.1M/s
+- d = 30B / 400M = 75
+rate = 30B / (86,400 s) ≈ 350,000/s
+- t = followers / rate
+t = 50M / (1M/s) = 50 s
+- t = 50M / (1M/s) = 50 s
+daily = 20 × 50M = 1B
+- rate = 5 bn × 200 / (10^5 s) = 10M/s
+cache = 3 bn × 800 × 16 B ≈ 38 TB
+- daily = 500M × 40 = 20B/day
+avg = 20B / (10^5 s) ≈ 200,000/s
+peak = 200,000/s × 3 = 600,000/s
+- gateways = conns / cap
+gateways = 250M / 250k = 1,000
+pings = conns / interval
+pings = 250M / (30 s) ≈ 8M/s
+- rate = clients / spread
+rate = 200,000 / (10 s) = 20,000/s
+- polls = clients / interval
+polls = 250M / (2 s) = 125M/s
+useful = 600k/s / (125M/s) ≈ 0.5%
+- writes = (m / (60 s)) × members
+writes = (10 / (60 s)) × 500,000
+writes ≈ 83,000/s
+- events = users × contacts / t
+events = 250M × 200 / (600 s) ≈ 83M/s
+open = 83M/s × 0.01 ≈ 830k/s
+- rate = 50/s × 200 B = 10 KB/s
+t = limit / rate
+t = 100,000 KB / (10 KB/s) = 10,000 s
+t ≈ 2.8 hours
+- Family group: 200 inbox references
+- from the key's first brace pair if that pair is non-empty
+- The surviving share determines the capacity multiplier:
+
+```formula
+factor = Z / (Z − 1)
+factor = 3 / 2 = 1.5
+where
+factor: multiplier on the bare capacity requirement
+Z: number of equal-capacity zones, greater than one
+In words: losing one of three equal zones leaves two thirds of the fleet, so provision one and a half times the bare requirement.
+```
+- In replicated data, consistency describes which write histories a read may observe. Linearizable reads respect completed writes in real-time order; eventual consistency permits stale reads and promises convergence once updates stop and replicas can communicate.
+- A service can coordinate reads to return a completed write; merely reading an arbitrary replica does not establish that guarantee.
+- Storage used to hold memory pages outside RAM. Accessing a page that must be read back from storage can add substantial latency; the cost depends on hardware, page faults and workload.
+- A trie larger than available RAM may incur storage reads and poor tail latency when its active pages are swapped out.
+- Twitter's original 64-bit ID layout uses a sign bit, millisecond timestamp, worker ID and per-millisecond sequence. It generates unique, roughly time-ordered IDs when worker assignment, clock behaviour and restart handling prevent reuse.
+- https://github.com/twitter-archive/snowflake/blob/snowflake-2010/src/main/scala/com/twitter/service/snowflake/IdWorker.scala
+- {"group":"remove opposite-meaning collision-free alias","glossary":"hash-collision","field":"aliases","before":["hash collisions","code collision","code collisions","namespace collisions","collision-free"],"after":["hash collisions","code collision","code collisions","namespace collisions"]}
+- {"group":"distinct-user popularity is not k-anonymity","glossary":"privacy-threshold","field":"aliases","before":["distinct-user threshold","distinct-user thresholds","k-anonymity threshold"],"after":["distinct-user threshold","distinct-user thresholds"]}
+- Use sensitive-data detection and review to reduce exposure of home addresses; a detector can miss cases and does not prove privacy.
+- Converting Unicode text to a specified normalisation form so canonically equivalent sequences, such as a precomposed é and e plus a combining accent, have a consistent representation. Normalisation does not merge all visually similar characters.
+- https://www.unicode.org/reports/tr15/
+- Publishing a fully built data structure through one indivisible reference update. Correct synchronisation must make the new contents visible, and the old structure must remain alive for readers already using it.
+- A time-limited grant, such as permission to spend a reserved batch of tokens or to own a conversation. Expiration enables recovery, but a paused holder may still act: token reuse needs safe accounting and ownership writes need storage-enforced fencing.
+- {"group":"company name is not a network alias","glossary":"facebook","field":"aliases","before":["Meta Platforms"],"after":[]}
+- A message submitted through a platform push service, such as APNs or FCM, that may reach a device while its app is not running. Delivery and background execution depend on the platform, registration and device state.
+- {"group":"glossary push fields and invalidation are provider-specific","glossary":"apns","field":"aliases","before":["Apple Push Notification service","apns-collapse-id"],"after":["Apple Push Notification service"]}
+- Apple Push Notification service, the platform service for remote notifications to Apple apps. Providers submit HTTP/2 requests addressed to a device token and topic; intermediary providers still use APNs for these deliveries.
+- APNs 410 invalidates a token/topic registration at the returned timestamp; a later registration must be retained.
+- {"group":"glossary push fields and invalidation are provider-specific","glossary":"fcm","field":"aliases","before":["Firebase Cloud Messaging","collapse_key","UNREGISTERED"],"after":["Firebase Cloud Messaging"]}
+- An identifier used by a push service to address an app/device registration. Registrations can become invalid or change; follow the provider's lifecycle rules instead of assuming every invalid token proves uninstall.
+- For APNs 410, stop sending to the affected token/topic until a registration later than the invalidation timestamp supersedes it.
+- {"group":"glossary collapse is not unconditional visible-alert deduplication","glossary":"collapse-key","field":"aliases","before":["collapse keys","collapse identifiers","collapse-id"],"after":["collapse keys","collapse identifiers","collapse-id","collapse_key","apns-collapse-id"]}
+- A provider-specific tag for coalescing eligible push messages. FCM collapse keys replace matching undelivered messages; APNs collapse identifiers coalesce notifications under Apple's rules. Replacement of already displayed alerts needs the platform's display semantics.
+- Several eligible pending updates with one FCM collapse key can be replaced by the latest; this does not guarantee one visible alert.
+- One billable SMS part. A single GSM-7 part supports 160 septets, while 16-bit encoding normally supports 70 code units; extension characters and some emoji consume multiple units. Concatenation commonly reduces capacity to 153 or 67 units per part.
+- A 200-character text made entirely of single-septet GSM-7 characters normally needs two concatenated parts.
+- The default SMS character alphabet. Basic characters consume one seven-bit septet; extension-table characters consume an escape septet plus another septet.
+- A single SMS can hold 160 basic GSM-7 characters, but extension characters consume two of those units.
+- A 64-bit IEEE 754 floating-point format. Every integer through magnitude 2^53 is exactly representable, but some larger integers round to neighbouring values, so arbitrary 64-bit IDs must not be stored as scores.
+- Redis sorted-set scores are doubles: use an exactly representable time score and keep the full Snowflake ID in the member.
+- https://redis.io/docs/latest/commands/zadd/
+- A stored position meaning that all required visible messages through that boundary have been delivered or read. Advance it monotonically only after the required messages are present; intentional gaps from filtering or deletion need a declared protocol.
+- In this lesson's E2EE design, ordinary plaintext search and notification rendering run on devices; specialised encrypted-search protocols are outside its scope.
+- A group-messaging scheme in which each sender distributes sender-key material securely to group members, then encrypts each message once for server fan-out. Key distribution and rotation must follow membership and security changes.
+- The component that submits notifications through APNs or FCM to attempt to alert or wake offline devices. Push acceptance does not guarantee delivery or background execution.
+- The symbol indicating that one quantity is much larger than another in the stated context. It has no universal numerical threshold.
+- {"group":"Web Risk is a separate commercial threat service","glossary":"safe-browsing","field":"aliases","before":["Safe Browsing","Web Risk"],"after":["Safe Browsing"]}
+- atomic code collision detection
+- **Batching / token leasing.**
+- downstream reserved provider capacity
+- reserved provider capacity stops campaigns
+- {"group":"code collision detection must not open a network-collision term","glossary":"hash-collision","field":"aliases","before":["hash collisions","code collision","code collisions","namespace collisions"],"after":["hash collisions","code collision","code collisions","namespace collisions","code collision detection"]}
+- √(N) ≈ 1.88 × 10^6
+- 0.9^{14} = (0.9^7)^2 ≈ 0.229
+- d = 30B / (400M) = 75
+rate = 30B / (86,400 s) ≈ 350,000/s
+- gateways = conns / cap
+gateways = 250M / (250k) = 1,000
+pings = conns / interval
+pings = 250M / (30 s) ≈ 8M/s
+- Cryptographic hashes are designed to make finding an input for a specified output computationally difficult. A truncated code loses information and cannot uniquely identify its original URL; finding a matching guessed input is a different task and a shorter output can make matching easier.
+- The arithmetic assumes uniformly distributed codes. Taking leading digits of a variable-width integer encoding can introduce bias; use an approximately uniform mapping before relying on this model. Apply the birthday problem:
+- cuts the heavy stage fivefold; including the stated light stage cuts combined capacity fourfold,
+- NIST: day, hour and minute conversions
+- https://www.nist.gov/pml/special-publication-811/nist-guide-si-chapter-5-units-outside-si
+- two kinds of load shedding mechanism.
+
+Remaining gaps:
+
+- No deployed production/cloud/load/fault benchmark: shard/core capacities, trie memory, hit rates, raw byte sizes, GPU-equivalent work and costs remain explicit inputs. The native fixtures verify local operations, not production throughput or availability.
+- No live provider redirect-header captures or current SMS price quote. Historical WhatsApp/Discord/Meta/X reports describe their dated systems and do not certify current capacity or this proposed architecture.
+- Secure private-link capability construction, vetted format-preserving cryptography, global alias authority, quota rebalancing, permission-cache freshness and E2EE history/key transfer remain design contracts rather than complete implementations.
+- Marketing compliance and provider requirements vary by jurisdiction and version. Selected current official guidance was checked, but full jurisdictional legal implementation and future provider policy are outside this module.
+- Independent semantic review covers every active lesson and question field. Primary sources corroborate standards, provider behaviour and disputed claims; the review does not claim that each sentence or hypothetical architectural outcome was experimentally proven.
+
+Low-confidence areas:
+
+- **medium** — cs1-interview-scope-time: Practice, performance and deployment-specific details. Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- **medium** — cs1-interview-daily-rates-units: Practice, performance and deployment-specific details. Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- **medium** — cs1-interview-workload-implications: Practice, performance and deployment-specific details. Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- **medium** — cs1-interview-cache-failover-capacity: Practice, performance and deployment-specific details. Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- **medium** — cs1-interview-contract-access-patterns: Practice, performance and deployment-specific details. Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- **medium** — cs1-interview-depth-evolution-review: Practice, performance and deployment-specific details. Explicit coaching framework, hypothetical sizing and practice timings; not an employer-wide hiring rubric or capacity benchmark.
+- **medium** — cs1-url-redirect-load-cache: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-url-namespace-retention: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-url-contract-mapping-aliases: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-url-hash-snowflake-tradeoffs: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-url-range-allocation-permutation: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-url-http-cache-click-analytics: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-url-expiry-negative-cache-freshness: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-url-growth-regional-uniqueness: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-limiter-targets-capacity: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-limiter-contract-identity-routing: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-limiter-fixed-sliding-estimates: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-limiter-bucket-atomic-refill: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-limiter-fallback-leases-regions: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-limiter-concurrency-fleet-load: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-suggest-workload-snapshot-memory: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-suggest-prefix-lookup-client-contract: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-suggest-decay-privacy-freshness: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-suggest-cache-locales-personalisation: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-suggest-snapshot-rollout-growth: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-notify-volume-channel-cost: Practice, performance and deployment-specific details. Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- **medium** — cs1-notify-accept-outbox-pipeline: Practice, performance and deployment-specific details. Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- **medium** — cs1-notify-isolation-dedup-campaigns: Practice, performance and deployment-specific details. Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- **medium** — cs1-notify-retry-token-failover: Practice, performance and deployment-specific details. Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- **medium** — cs1-notify-send-time-policy-escalation: Practice, performance and deployment-specific details. Explicit workload/cost inputs and current provider guidance; bounded retries, ambiguous external effects and jurisdictional policy remain qualified.
+- **medium** — cs1-feed-contract-graph-hydration: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-feed-fanout-storage-estimates: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-feed-push-pull-celebrity-hybrid: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-feed-visibility-cache-cursors: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-feed-ranking-capacity-stages: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-feed-backlog-tiered-growth: Practice, performance and deployment-specific details. Core reasoning and selected primary facts verified; this is an illustrative architecture without a production load/fault experiment.
+- **medium** — cs1-chat-connections-storage-budgets: Practice, performance and deployment-specific details. Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- **medium** — cs1-chat-contract-partitions-path: Practice, performance and deployment-specific details. Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- **medium** — cs1-chat-session-epochs-reconnect: Practice, performance and deployment-specific details. Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- **medium** — cs1-chat-device-acks-offline-sync: Practice, performance and deployment-specific details. Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- **medium** — cs1-chat-sequence-fenced-ownership: Practice, performance and deployment-specific details. Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- **medium** — cs1-chat-groups-hot-history-presence: Practice, performance and deployment-specific details. Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- **medium** — cs1-chat-encryption-regional-growth: Practice, performance and deployment-specific details. Dated provider reports and conditional durability/retention/ownership contracts; local fixtures do not certify a deployed multi-region chat service.
+- **medium** — glossary: glossary term http-410. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term snowflake-id. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term push-notification. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term apns. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term fcm. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term device-token. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term collapse-key. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term quiet-hours. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term telegram. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term keystroke-debouncing. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term two-tier-limiting. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term push-service. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term cs1-web-risk. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
+- **medium** — glossary: glossary term cs1-fcm-unregistered. Retained existing confidence or provider/design-specific definition; current source corroboration does not establish all future deployments.
 
 ## dsa: Complexity Analysis
 

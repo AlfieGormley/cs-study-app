@@ -1,0 +1,108 @@
+[
+  {
+    "id": "cs1-notification-system-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Marketing launches a campaign to **40 million users**. Ten minutes later, users report that login OTP texts are taking 15 minutes to arrive. All messages share one queue and one worker pool. What is the best fix?",
+    "options": [
+      {
+        "text": "Add more workers to the shared pool.",
+        "explanation": "Wrong. More workers drain the backlog faster but OTPs still wait behind campaign messages, and the shared SMS provider's rate limit caps throughput anyway, so extra workers may just generate 429s."
+      },
+      {
+        "text": "Schedule campaigns only at night.",
+        "explanation": "Wrong. It reduces collisions but doesn't fix the design: OTPs are needed at night too, and global users mean it's always daytime somewhere."
+      },
+      {
+        "text": "Separate queues and worker pools per priority, reserve provider capacity for critical traffic, and throttle campaign expansion at the scheduler.",
+        "explanation": "Correct. Isolation means the critical pool never sees the campaign backlog, reserved provider capacity stops campaigns from consuming the provider's rate limit, and throttling keeps the low-priority queue from ballooning."
+      },
+      {
+        "text": "Switch OTPs from SMS to email.",
+        "explanation": "Wrong. It changes the product rather than fixing the architecture, and if email shared the same queue, the same head-of-line blocking would occur."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Diagnose: this is **head-of-line blocking**. With one FIFO queue, an OTP enqueued after 40M campaign messages waits until they're processed.\n\nQuantify: suppose the SMS provider allows 1,000 msg/s for your account. If 2M of the campaign messages are SMS:\n\n```formula\nwait = backlog / rate\nwait = 2,000,000 / (1,000/s)\nwait = 2,000 s ≈ 33 min\nwhere\nwait: how long the last queued message waits before it is sent\nbacklog: campaign SMS messages ahead in the queue, 2 million\nrate: messages per second the provider accepts, 1,000\ns: seconds; /s means per second\nmin: minutes (2,000 s / 60 ≈ 33)\n≈: approximately equal to\nIn words: two million texts drained at a thousand a second take about 33 minutes, and an OTP stuck behind them waits that long.\n```\n\nAny OTP behind that waits up to 33 minutes. Fix with three layers:\n\n1. `critical` topic + dedicated workers → OTP never queues behind campaigns.\n2. Reserve, say, 20% of provider throughput for critical.\n3. Campaign scheduler emits at a controlled rate so the low queue stays bounded.",
+    "link": {
+      "title": "Azure Architecture Center: priority queue pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/priority-queue"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q5",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Users report repeated copies of the same order-shipped push. Which mechanisms reduce duplicate sends while preserving recoverable work? Select all that apply.",
+    "options": [
+      {
+        "text": "Atomically store the idempotency key, notification and outbox event; return the existing notification for repeated keys.",
+        "explanation": "Correct. This stops producer retries (the order service timing out and calling again) from creating new notifications."
+      },
+      {
+        "text": "Use a recoverable per-destination attempt state, provider idempotency where supported, and record acceptance after acknowledgment.",
+        "explanation": "A durable attempt lease coordinates workers and permits crash recovery. Provider idempotency or reconciliation is still needed for ambiguous external outcomes; local send records alone cannot eliminate that window."
+      },
+      {
+        "text": "Switch the queue to exactly-once delivery, which guarantees the user receives exactly one push.",
+        "explanation": "Incorrect. Kafka's exactly-once semantics cover reads and writes within Kafka, not side effects like calling APNs. A crash after APNs accepts the push but before recording success still causes a resend."
+      },
+      {
+        "text": "Register the same device token only once per user, removing duplicates and stale tokens.",
+        "explanation": "Deduplicate repeated registrations for the same destination and remove stale registrations safely. Multiple active devices can legitimately require separate sends."
+      },
+      {
+        "text": "Increase the consumer's processing timeout so messages are never redelivered.",
+        "explanation": "Incorrect. Longer timeouts reduce some redeliveries but crashes and rebalances still cause them. You need idempotent processing, not just fewer retries."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Producer retries need an atomic idempotency record plus outbox. Queue redelivery needs recoverable per-destination processing. Duplicate device registrations need token deduplication. A provider-accepted/local-unrecorded crash remains ambiguous unless the provider enforces idempotency. Finite retries do not guarantee eventual delivery.",
+    "link": {
+      "title": "Firebase: FCM registration token management",
+      "url": "https://firebase.google.com/docs/cloud-messaging/manage-tokens"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A viral post gets **500 likes in two minutes**, and the author receives 500 separate \"X liked your photo\" pushes. Which changes fix the experience? Select all that apply.",
+    "options": [
+      {
+        "text": "Buffer low-priority social events for a short window keyed by user, event type and post, then send one aggregated push (\"Sam and 499 others liked your photo\").",
+        "explanation": "Correct. Content-level aggregation turns a burst into a single meaningful message and cuts volume dramatically."
+      },
+      {
+        "text": "Use APNs collapse identifiers or FCM collapse keys to coalesce eligible pushes, and platform display identifiers when visible-alert replacement is required.",
+        "explanation": "FCM collapse keys replace matching undelivered messages, not necessarily alerts already displayed. APNs coalescing and display replacement have platform-specific semantics."
+      },
+      {
+        "text": "Apply a per-user frequency cap for social pushes, with the in-app inbox still recording every event.",
+        "explanation": "Correct. A cap protects against bursts the aggregator misses; users can still see everything in the app."
+      },
+      {
+        "text": "Move likes to the critical priority queue so they're delivered faster.",
+        "explanation": "Incorrect. Speed isn't the problem; volume is. Putting social events in the critical queue would also put them in competition with OTPs."
+      },
+      {
+        "text": "Rely on the idempotency key to drop the duplicates.",
+        "explanation": "Incorrect. These aren't duplicates: each like is a distinct event with its own key. Idempotency prevents the same event being sent twice, not many similar events."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Idempotency suppresses repeated processing of the same event. Aggregation combines distinct similar events, while frequency caps bound noise. Collapse mechanisms can replace eligible pending pushes; visible notification replacement needs platform-specific display behavior. A 60-second aggregation window reduces a two-minute burst to roughly two pushes, depending on window boundaries.",
+    "link": {
+      "title": "Apple: sending notification requests to APNs",
+      "url": "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
+    }
+  }
+]

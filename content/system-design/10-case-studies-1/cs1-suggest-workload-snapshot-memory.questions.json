@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs1-typeahead-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You get **2 billion searches/day**. With debouncing, each search generates about **5** suggestion requests. What is the approximate **peak** suggestion request rate, assuming peak is 3x average?",
+    "options": [
+      {
+        "text": "About 35,000/s",
+        "explanation": "Wrong. 35,000/s is the average rate for about 3 billion requests a day. You've likely missed the peak factor and part of the requests-per-search multiplier."
+      },
+      {
+        "text": "About 100,000/s",
+        "explanation": "Wrong. That's the average rate. You must size the serving fleet for peak traffic, about 3x higher."
+      },
+      {
+        "text": "About 3,000,000/s",
+        "explanation": "Wrong. This is 10x too high: a 3M/s peak implies a 1M/s average, or about 86 billion requests a day, perhaps from counting a request for every keystroke of ~20-character queries and then applying the peak factor twice."
+      },
+      {
+        "text": "About 300,000/s",
+        "explanation": "Correct. 2 billion × 5 = 10 billion requests/day; 10 billion / 100,000 s ≈ 100,000/s average (about 116,000 using the exact day length); × 3 ≈ 300,000–350,000/s at peak."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Multiply searches by requests per search, divide by the seconds in a day, then apply the peak factor:\n\n```formula\ndaily = 2B × 5 = 10B\navg = 10B / (86,400 s) ≈ 115,700/s\nquick = 10B / (10^5 s) ≈ 100,000/s\nlow = 3 × 100,000/s = 300,000/s\nhigh = 3 × 115,700/s ≈ 350,000/s\nwhere\ndaily: suggestion requests per day\navg: the exact average requests per second\nquick: the same using 1 day ≈ 100,000 s\nlow, high: peak requests per second (3 times the average) from the rounded and the exact average\nB: billion (10^9)\n10^5: 100,000\ns: seconds; /s means per second\n≈: approximately equal to (rounded)\nIn words: 10 billion requests a day is about 100,000–116,000 a second on average, roughly 300,000–350,000 at peak.\n```\n\nWhat it implies: assuming a benchmark demonstrates 1,000 req/s per core at the target latency, that is ~350 cores at peak, i.e. a few dozen servers before caching. A CDN serving short prefixes typically absorbs a large share of this, so the origin fleet can be much smaller.",
+    "link": {
+      "title": "Meta engineering: the life of a typeahead query",
+      "url": "https://engineering.fb.com/2010/05/17/web/the-life-of-a-typeahead-query/"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your offline-built trie, with top-10 precomputed at each node, is **40 GB**. You serve 300k req/s across three regions. How should you deploy it?",
+    "options": [
+      {
+        "text": "Replicate the full trie in memory on every serving node, in every region, and scale by adding replicas.",
+        "explanation": "Correct. 40 GB fits comfortably in RAM on a standard large instance. Full replication means any node can answer any prefix, there's no cross-shard routing, and additional replicas increase capacity until shared network, deployment or load-balancing limits intervene."
+      },
+      {
+        "text": "Store it in a relational database and query it with `LIKE 'prefix%'`.",
+        "explanation": "Wrong. A B-tree index can find matching rows for a prefix, but ranking millions of matches per request is far too slow, and it ignores the precomputed top-k entirely."
+      },
+      {
+        "text": "Shard it alphabetically across 26 servers, one per first letter.",
+        "explanation": "Wrong. Alphabetical sharding is badly skewed (far more queries begin with 's' or 'c' than 'x' or 'q'), and it's unnecessary because 40 GB fits on one machine."
+      },
+      {
+        "text": "Keep it in object storage and read the relevant node on each request.",
+        "explanation": "Wrong. Object storage reads take tens of milliseconds each, consuming the whole latency budget for a single lookup. Object storage is where trie snapshots are published, not served from."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Decision process:\n\n1. **Does it fit in RAM?** 40 GB on a 128 GB machine: yes, with room for two versions during a swap (80 GB).\n2. **If it fits, replicate.** Sharding adds routing, load skew and partial-failure modes; it's only worth it when data doesn't fit.\n3. **Size the fleet**, with an explicitly assumed 1,000 req/s per core:\n\n```formula\ncores = 300,000/s / (1,000/s) = 300\nnodes = 300 / 32 ≈ 10\nwhere\ncores: CPU cores needed at full use\nnodes: servers needed if each has 32 cores\n/s: per second\n≈: approximately equal to (9.4 rounded up)\nIn words: 300,000 requests a second needs about 300 cores, or about ten 32-core machines.\n```\n\nAssuming balanced regional traffic, four nodes per region give spare capacity for a node loss in this input model. To sustain all 300,000 requests/s after losing one of three equal regions, five 32-core nodes per region leave 320 cores in the two surviving regions. Validate load redistribution and shared dependencies as well.\n\nShard (by locale first, then by hashed prefix) only when the index outgrows a single machine.",
+    "link": {
+      "title": "Elasticsearch: completion suggester",
+      "url": "https://www.elastic.co/docs/reference/elasticsearch/rest-apis/search-suggesters"
+    }
+  }
+]

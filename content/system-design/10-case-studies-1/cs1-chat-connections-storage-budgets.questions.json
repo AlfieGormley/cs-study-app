@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cs1-chat-system-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You expect **300 million concurrent connections** at peak, and you'll run each gateway at **200,000 connections** to leave headroom for failover. How many gateways do you need, and what happens if one crashes?",
+    "options": [
+      {
+        "text": "150 gateways; its users lose their messages.",
+        "explanation": "Wrong on both counts. 300M / 200k = 1,500, not 150. And messages aren't lost when a gateway dies: undelivered messages stay in device inboxes until acknowledged."
+      },
+      {
+        "text": "15,000 gateways; nothing happens because load balancers keep the sockets open.",
+        "explanation": "Wrong. 15,000 is 10x too many. And a load balancer can't keep a socket alive once the server holding it has died; the TCP connection is gone and the client must reconnect."
+      },
+      {
+        "text": "1,500 gateways; its 200k clients reconnect (with jittered backoff) to other gateways, and any unacked messages are redelivered from their inboxes.",
+        "explanation": "Correct. 300M / 200k = 1,500. Gateways hold sockets, not the only copy of messages, so a crash causes a reconnect wave, not data loss. Jitter stops the 200k reconnects from all landing in the same second."
+      },
+      {
+        "text": "1,500 gateways; the other gateways take over the dead gateway's sockets transparently.",
+        "explanation": "Wrong. TCP connections can't be migrated to another machine after a crash. Clients have to detect the failure (missed heartbeat or a reset) and reconnect."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\ngateways = conns / cap\ngateways = 300,000,000 / 200,000 = 1,500\nwhere\ngateways: gateway servers needed\nconns: concurrent connections at peak\ncap: connections each gateway is run at\nIn words: 300 million connections at 200,000 each needs 1,500 gateways.\n```\n\nIf one fails, 200,000 clients reconnect. Without jitter they might all retry within the same second, plus re-authenticate and re-register sessions, a spike other gateways must absorb. With exponential backoff and random jitter, spreading reconnects evenly over 10 seconds:\n\n```formula\nrate = clients / spread\nrate = 200,000 / (10 s) = 20,000/s\nwhere\nrate: reconnects per second hitting the remaining gateways\nclients: clients of the failed gateway\nspread: the window the random delays are spread over, 10 seconds\ns: seconds; /s means per second\nIn words: spreading 200,000 reconnects over 10 seconds gives 20,000 a second, easily shared by the other 1,499 gateways.\n```\n\nDelivery correctness comes from the inbox + ack protocol, not from the gateway: the server keeps each message until the recipient's device acks it.",
+    "link": {
+      "title": "WhatsApp blog: 1 million is so 2011",
+      "url": "https://blog.whatsapp.com/1-million-is-so-2011"
+    }
+  }
+]

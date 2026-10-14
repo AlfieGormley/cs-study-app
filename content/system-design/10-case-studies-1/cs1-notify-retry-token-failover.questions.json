@@ -1,0 +1,130 @@
+[
+  {
+    "id": "cs1-notification-system-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An SMS provider request times out after 10 s. This OTP flow explicitly tolerates occasional duplicate copies of the same code, and has a 5-minute TTL. What should the sender do?",
+    "options": [
+      {
+        "text": "Never retry; a timeout means it probably failed.",
+        "explanation": "Wrong. Timeouts are ambiguous: the provider may simply have been slow. Never retrying would drop many messages that a single retry would have delivered."
+      },
+      {
+        "text": "Retry immediately in a tight loop until it gets a definite answer.",
+        "explanation": "Wrong. Tight retries amplify load on a provider that's probably already struggling, and can push you into its rate limit, delaying every other message."
+      },
+      {
+        "text": "Move it straight to the dead-letter queue.",
+        "explanation": "Wrong. A DLQ is for messages that have failed repeatedly or permanently. A single ambiguous timeout is a classic retryable error."
+      },
+      {
+        "text": "Retry with exponential backoff and jitter (possibly via a secondary provider), and stop once the 5-minute TTL has passed.",
+        "explanation": "Use provider idempotency or status reconciliation where available, then retry the same OTP with backoff under this duplicate-tolerant policy. Stop new attempts at expiry. Failover may duplicate delivery, and TTL cannot recall messages already queued by the provider."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Weigh the outcomes:\n\n| Choice | If SMS was sent | If it wasn't |\n|---|---|---|\n| Don't retry | Fine | User locked out |\n| Retry | Duplicate OTP | Fine |\n\nUnder the explicitly duplicate-tolerant policy, a repeated copy of the same OTP is acceptable. Retry carefully, reconcile provider status where possible, and stop new attempts at expiry; already queued SMS can still arrive:\n\n```\nretry 1: wait ~1 s (rand 0.5-1.5 s)\nretry 2: wait ~2 s\nretry 3: wait ~4 s, secondary provider\n...\n```\n\nThe wait roughly doubles each time, and new attempts stop at the TTL:\n\n```formula\nwait_n ≈ b × 2^{n − 1}\nt_stop = t_0 + 300 s\nwhere\nwait_n: the approximate wait before retry n, before random jitter is applied\nb: the base delay, 1 second\nn: the retry number, 1 for the first retry\n2^{n − 1}: n − 1 copies of 2 multiplied together (1, 2, 4...)\nt_0: when the notification was created (created_at)\nt_stop: the time after which no new attempts are made\n300 s: the 5-minute TTL, in seconds\nIn words: wait about 1, 2, 4 seconds and so on between retries, randomised, and give up once five minutes have passed since the code was created.\n```\n\nJitter spreads thousands of concurrent retries so they don't hit the recovering provider at the same instant.",
+    "link": {
+      "title": "AWS Builders' Library: timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your primary SMS provider returns 5xx errors for 40% of requests. A configured secondary has suitable sender registration, consent handling and spare capacity. What should the sender do?",
+    "options": [
+      {
+        "text": "Keep sending to the primary and rely on retries to get everything through eventually.",
+        "explanation": "Wrong. Retrying against a provider that's failing 40% of the time multiplies its load, worsens its outage, and burns through OTP TTLs."
+      },
+      {
+        "text": "Stop sending SMS until the primary recovers.",
+        "explanation": "Wrong. 60% of requests still succeed, and a secondary provider is available. Stopping all SMS would turn a partial outage into a total one for login codes."
+      },
+      {
+        "text": "Fall back to push notifications for all SMS traffic.",
+        "explanation": "Push is not a substitute for every SMS workflow: many recipients lack a usable app registration, and push alone cannot verify control of a phone number. Other verification channels such as voice may exist."
+      },
+      {
+        "text": "Open a circuit breaker on the primary once the error rate exceeds a threshold, route traffic to a secondary SMS provider, and probe the primary periodically to close the breaker when it recovers.",
+        "explanation": "Correct. The circuit breaker stops wasting time and capacity on a failing dependency, failover keeps OTPs flowing, and half-open probes restore the primary automatically."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The circuit breaker has three states:\n\n```\nCLOSED    normal; track error rate\n  | error rate > 20% over 30 s\n  v\nOPEN      send everything to secondary\n  | after 60 s\n  v\nHALF-OPEN send 1% to primary as a probe\n  | probes succeed -> CLOSED\n  | probes fail    -> OPEN\n```\n\nSMS is a channel where failover is possible (Twilio, Vonage, Sinch and others can all reach the same phone numbers). Push isn't: only APNs delivers to iPhones, so for push you queue and retry with backoff instead.",
+    "link": {
+      "title": "Azure Architecture Center: circuit breaker pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your push sender's metrics show that **25%** of APNs requests return HTTP **410** (device token no longer active), and Apple has started throttling you. What should change?",
+    "options": [
+      {
+        "text": "Retry 410 responses with exponential backoff until they succeed.",
+        "explanation": "Wrong. Stop sending to that token/topic registration until a later registration supersedes the returned invalidation timestamp. Do not blindly retry the invalid registration."
+      },
+      {
+        "text": "Deactivate the affected registration, but retain a newer APNs registration if its timestamp is later than the 410 invalidation timestamp. Handle FCM UNREGISTERED and stale-token cleanup using FCM guidance.",
+        "explanation": "APNs 410 applies to the token/topic registration at the reported invalidation time. Safe cleanup removes wasted traffic; it does not prove the cause of throttling or guarantee throttling stops."
+      },
+      {
+        "text": "Fail over push traffic to a secondary push provider.",
+        "explanation": "Wrong. Only Apple can deliver to iPhones; there is no secondary APNs. And the errors aren't an outage, they're your own stale data."
+      },
+      {
+        "text": "Fall back to SMS for every 410.",
+        "explanation": "Wrong. An invalid push registration alone does not justify another contact channel. SMS fallback requires a suitable product policy and cost assumptions; this error does not prove uninstall."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Record provider acceptance separately from device delivery. For APNs 410, use the returned timestamp: stop sending until the app registers with a later timestamp. Do not let a delayed error remove that newer registration. At 850M requests/day, 25% is 212.5M wasted requests. Use FCM-specific lifecycle rules rather than assuming identical invalidation semantics.",
+    "link": {
+      "title": "Apple: sending notification requests to APNs",
+      "url": "https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Under a policy that tolerates occasional duplicates after ambiguous outcomes, which responses normally warrant retry or reconciliation with backoff within the TTL? Select all that apply.",
+    "options": [
+      {
+        "text": "HTTP 429 Too Many Requests from the SMS provider.",
+        "explanation": "Correct. You're being throttled; it's transient. Back off (respect `Retry-After` if sent) and try again."
+      },
+      {
+        "text": "A connection timeout with no response.",
+        "explanation": "The outcome is ambiguous. Prefer provider idempotency/status reconciliation; otherwise retry only under the stated duplicate-tolerant policy. A local send record does not close the provider-accepted crash window."
+      },
+      {
+        "text": "HTTP 503 Service Unavailable.",
+        "explanation": "Correct. A temporary server-side failure. Retry, and if the error rate stays high, open a circuit breaker and fail over."
+      },
+      {
+        "text": "\"Invalid phone number\" or an email hard bounce (mailbox doesn't exist).",
+        "explanation": "Incorrect. Permanent failures won't fix themselves. Mark the number or address invalid instead; retrying costs money and damages sender reputation."
+      },
+      {
+        "text": "\"Recipient has unsubscribed\" or replied STOP.",
+        "explanation": "Incorrect. This is a consent signal. Update preferences and suppress future sends; retrying would be a compliance breach."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask: **will the same request succeed later?**\n\n- 429, 5xx, timeouts: plausibly yes, so retry with exponential backoff and jitter.\n- Invalid destination, hard bounce: no, so clean up the data.\n- Unsubscribe/STOP: no, and legally you mustn't, so update preferences.\n\nAlways cap retries by the notification's TTL and an attempt count, then dead-letter.",
+    "link": {
+      "title": "AWS Builders' Library: timeouts, retries and backoff with jitter",
+      "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/"
+    }
+  }
+]

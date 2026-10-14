@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cs1-url-shortener-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague proposes generating codes by taking the first 7 base62 characters of `SHA-256(longUrl)`. The service will hold hundreds of billions of links. What is the main problem?",
+    "options": [
+      {
+        "text": "SHA-256 is too slow to compute at 3,000 writes per second.",
+        "explanation": "Wrong. No hardware benchmark is supplied; the demonstrated problem is namespace collisions, not an established hashing bottleneck."
+      },
+      {
+        "text": "Hash-based codes can't be stored in a key-value store.",
+        "explanation": "Wrong. A hash-derived code is just a string key; any KV store handles it. The issue is uniqueness, not storage."
+      },
+      {
+        "text": "Truncated hashes collide frequently at this scale, so every write needs an existence check and retry, and identical URLs from different users map to the same code.",
+        "explanation": "Correct. With a 3.5-trillion space, the birthday bound puts a 50% chance of at least one collision at ~2.2 million links. At hundreds of billions, a meaningful fraction of new inserts will collide, and dedup by URL breaks per-user ownership, expiry and analytics."
+      },
+      {
+        "text": "Hashes are reversible, so attackers can recover the long URL from the code.",
+        "explanation": "Wrong. Cryptographic hashes are designed to make finding an input for a specified output computationally difficult. A truncated code loses information and cannot uniquely identify its original URL; finding a matching guessed input is a different task and a shorter output can make matching easier. Predictable input URLs can still be guessed and hashed, and a densely occupied short namespace can be probed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The arithmetic assumes uniformly distributed codes. Taking leading digits of a variable-width integer encoding can introduce bias; use an approximately uniform mapping before relying on this model. Apply the birthday problem: when you draw random values from a space, repeats turn up far sooner than intuition suggests, after roughly the *square root* of the space size.\n\n```formula\nn_50 ≈ 1.18√(N)\nN = 62^7 ≈ 3.5 × 10^12\n√(N) ≈ 1.88 × 10^6\nn_50 ≈ 2.2 × 10^6\nwhere\nN: the number of possible 7-character base62 codes\n√: square root, the number that multiplied by itself gives the value inside\nn_50: how many random codes you can issue before a 50% chance that two are the same\n1.18: the constant √(2 × ln 2) from the birthday approximation (ln is the natural logarithm)\n10^6, 10^12: a million and a trillion\n≈: approximately equal to (rounded)\nIn words: in a 3.5-trillion space, a repeat becomes a coin flip after about 2.2 million random codes.\n```\n\nOnce the space is partly full, each new random code collides with probability equal to the fraction already used:\n\n```formula\np = stored / N\np = (350 × 10^9) / (3.5 × 10^12) = 0.1\nwhere\np: the chance a fresh random code is already taken\nstored: links already held, here 350 billion\nN: total possible codes, 3.5 trillion\nIn words: with a tenth of the codes used, one new code in ten collides.\n```\n\nSo one write in ten collides and needs a retry, each requiring an atomic conditional insert, not a racy read-before-write. Add the dedup problem (same URL → same code for every user) and a counter-based scheme is much simpler.",
+    "link": {
+      "title": "Birthday problem (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Birthday_problem"
+    }
+  }
+]

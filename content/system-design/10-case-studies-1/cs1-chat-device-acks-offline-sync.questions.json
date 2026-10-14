@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs1-chat-system-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "When should the server send the sender their **first tick** (\"sent\")?",
+    "options": [
+      {
+        "text": "As soon as the gateway receives the frame, before anything else.",
+        "explanation": "Wrong. If the gateway or chat service crashes before persisting, the message is lost, yet the sender believes it was sent and won't retry."
+      },
+      {
+        "text": "After the recipient reads it.",
+        "explanation": "Wrong. That's the read receipt (blue ticks). Tying 'sent' to reading confuses three distinct states."
+      },
+      {
+        "text": "After the recipient's device acknowledges it.",
+        "explanation": "Wrong. That's the *second* tick (delivered). If the recipient is offline for a day, the sender would see no confirmation at all and might resend repeatedly."
+      },
+      {
+        "text": "After the message has been durably persisted under a declared failure model (replica count and disk-sync policy both matter), so the client can safely drop it from its outbox.",
+        "explanation": "Correct. The ack is a promise: 'we have it and won't lose it'. Only a durable write justifies it. Until then the client keeps the message in its outbox and retries with the same clientMsgId."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Map each tick to a durable fact:\n\n| Tick | Fact | Who knows |\n|---|---|---|\n| Sent | Server has persisted it | Chat service |\n| Delivered | Device has it | Recipient app |\n| Read | App reported read state | Recipient app |\n\nFailure analysis for acking too early:\n\n```\n1. Gateway receives frame\n2. Server acks \"sent\"\n   (client deletes outbox copy)\n3. Crash before write\n   (message gone forever)\n```\n\nPersist-then-ack adds storage latency; measure it under the chosen durability policy instead of assuming a universal few milliseconds.",
+    "link": {
+      "title": "Slack engineering: real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  },
+  {
+    "id": "cs1-chat-system-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Bob's phone receives message `seq 57` from the gateway, but the connection drops before Bob's phone sends its delivery ack. What happens next in a correct design?",
+    "options": [
+      {
+        "text": "The message is lost, because the gateway already sent it.",
+        "explanation": "Wrong. Sending down a socket isn't proof of delivery. The server keeps the message in Bob's device inbox until it receives an ack, precisely to handle this case."
+      },
+      {
+        "text": "The server marks it delivered anyway, since the gateway wrote it to the socket.",
+        "explanation": "Wrong. That would show Alice two ticks for a message that might never have reached Bob's phone (if the bytes were still in a network buffer when the connection died)."
+      },
+      {
+        "text": "The sender's phone automatically resends the message with a new clientMsgId.",
+        "explanation": "Wrong. The sender already has a 'sent' ack, so it has no reason to resend. And a new clientMsgId would defeat server-side deduplication, creating a genuine duplicate."
+      },
+      {
+        "text": "On reconnect, the server redelivers seq 57 (it's still unacked in Bob's inbox); Bob's phone recognises the msgId it already has and discards the duplicate, then acks.",
+        "explanation": "Correct. Redelivery plus persistent client deduplication avoids presenting this retained message twice under the declared recovery model; it is not an unconditional exactly-once guarantee. The sender gets the 'delivered' tick once the ack arrives."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace the protocol:\n\n```\n1. Server: inbox for bob-phone: [57]\n2. Gateway pushes seq 57\n   (bytes may or may not arrive)\n3. Connection drops          (no ack)\n4. Bob reconnects:\n   \"last delivered sequence: 56\"\n5. Server resends anything unacked: 57\n6. Phone: have msgId? -> drop dup\n7. Phone acks 57 -> inbox cleared\n   -> Alice sees 2 ticks\n```\n\nThe same pattern appears on the sender side with `clientMsgId`. Idempotency keys at both ends turn unreliable networks into reliable delivery.",
+    "link": {
+      "title": "Slack engineering: real-time messaging",
+      "url": "https://slack.engineering/real-time-messaging/"
+    }
+  }
+]

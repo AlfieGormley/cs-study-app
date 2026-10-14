@@ -1,0 +1,130 @@
+[
+  {
+    "id": "cs1-news-feed-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why should home timelines in the cache store **post IDs** rather than full post objects?",
+    "options": [
+      {
+        "text": "IDs sort faster than JSON.",
+        "explanation": "Partly true but not the main reason. Sorting a capped list of 800 entries is trivial either way; the important wins are storage and mutability."
+      },
+      {
+        "text": "A post shown in a million timelines is stored once, so edits, deletions and counter updates touch one object, and timelines stay small (~16 bytes per entry).",
+        "explanation": "Correct. Storing bodies would multiply storage by the fan-out factor and turn every edit or like-count change into millions of writes. IDs plus a hydration step from a post cache avoid both."
+      },
+      {
+        "text": "Redis can't store strings longer than 64 bytes.",
+        "explanation": "Wrong. Redis string values normally support up to 512 MB; list values have different element and aggregate limits. The limit isn't technical capability but the cost of duplication."
+      },
+      {
+        "text": "So the timeline can be served without any further lookups.",
+        "explanation": "Wrong. It's the opposite: IDs require a hydration step (a multi-get from the post cache). That extra step is the price paid for storing each post once."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare the memory for 300M active timelines × 800 entries:\n\n```formula\nids = 300M × 800 × 16 B ≈ 3.8 TB\nbodies = 300M × 800 × 1 KB ≈ 240 TB\nwhere\nids: memory if timelines hold 16-byte entries (post ID + author ID)\nbodies: memory if timelines hold full posts of about 1 KB each\nM: million\nB: bytes\nKB: kilobyte, 1,000 bytes\nTB: terabyte, 10^12 bytes\n≈: approximately equal to (rounded)\nIn words: storing IDs takes about 3.8 TB; copying whole posts into every timeline would take about 240 TB, over 60 times more.\n```\n\nAnd for a deletion of a post seen by 10M followers:\n\n- IDs: mark the post deleted once; hydration drops it.\n- Full copies: 10M updates.\n\nHydration is one multi-get of ~50 posts, whose latency depends on payloads, shard fan-out, misses and workload; no benchmark is supplied.",
+    "link": {
+      "title": "InfoQ: Timelines at Scale",
+      "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user posts and immediately refreshes their home timeline, but their post isn't there because fan-out hasn't processed it yet. What's the best fix?",
+    "options": [
+      {
+        "text": "Make fan-out synchronous for all followers.",
+        "explanation": "Wrong. Synchronous fan-out to hundreds or millions of followers makes posting slow and fragile. Only the author's own view needs to be immediate."
+      },
+      {
+        "text": "Tell users that posts may take a few minutes to appear.",
+        "explanation": "Wrong. It's a poor experience and leads users to post duplicates, thinking the first attempt failed. The fix is cheap, so there's no reason to accept the problem."
+      },
+      {
+        "text": "Switch the timeline store to strong consistency across all replicas.",
+        "explanation": "Wrong. The post isn't missing because of replica lag; it hasn't been written to the timeline at all yet. Strong consistency on the cache doesn't change when fan-out runs."
+      },
+      {
+        "text": "Provide read-your-writes: insert the post into the author's own timeline synchronously (or have the client insert it optimistically), and let fan-out to followers stay asynchronous.",
+        "explanation": "Correct. The author is the one person who knows the post exists, so their immediate post-refresh interaction needs a stronger guarantee than the follower feed. A single synchronous write (or client-side insertion) fixes their experience at negligible cost."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Separate who needs what consistency:\n\n| Reader | Needs to see the post | Guarantee |\n|---|---|---|\n| Author | Immediately | Read-your-writes |\n| Followers | Within seconds | Eventual |\n\nImplementation options:\n\n1. Post service does `LPUSH timeline:{authorId} postId` before returning 201.\n2. Or, at read time, the timeline service merges the author's last few posts from their user timeline.\n3. Or, the client inserts the post into its local feed on success.\n\nFor a server-side read-your-writes guarantee, keep hydration consistent with the acknowledged post and avoid stale cache replicas. Optimistic insertion alone is only a local UI behavior and does not guarantee another device or refresh sees the post. Fan-out to everyone else remains asynchronous.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A user **unfollows** an account that posted 40 times this week. Those 40 post IDs are already in the user's precomputed timeline (a capped Redis list). What's the most practical way to stop them appearing?",
+    "options": [
+      {
+        "text": "Scan the user's timeline list and remove every ID by that author with `LREM`, synchronously in the unfollow request.",
+        "explanation": "Wrong as the main approach. It works for one user, but it needs post-to-author lookups for up to 800 entries and makes unfollow slow. Mass unfollows (spam clean-ups) would hammer Redis."
+      },
+      {
+        "text": "Filter at hydration: when building the page, drop posts whose author isn't in the reader's (cached) following set, and let the old IDs age out of the capped list.",
+        "explanation": "Correct. Hydration already fetches each post and its author, so one set-membership check per post is cheap. It needs no list rewrite, but immediate enforcement requires the following/permission cache to reflect the change."
+      },
+      {
+        "text": "Do nothing; the posts will scroll out of view eventually.",
+        "explanation": "Wrong. Users expect an unfollow to take effect immediately, and seeing posts from someone you just unfollowed (or blocked) feels broken."
+      },
+      {
+        "text": "Rebuild the user's whole timeline by pull from scratch.",
+        "explanation": "Wrong. It works but is far more expensive than needed for a small change, and doing it for every unfollow adds heavy read load on the posts store."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Treat the precomputed timeline as a list of *candidates*, not a final answer:\n\nIn production, one Redis LRANGE obtains the page and a batched lookup hydrates its post IDs. This complete Python fixture demonstrates the subsequent eligibility filtering:\n\n```python\n# Fixture represents batched reads.\ntimeline = [1, 2, 3]\nstore = {\n    1: (\"alice\", False),\n    2: (\"bob\", False),\n    3: (\"alice\", True),\n}\nfollowing = {\"alice\"}\n# Read the first page, then hydrate IDs.\nids = timeline[:50]\nposts = [(pid, *store[pid])\n         for pid in ids]\n# Re-check current follows and deletion.\nshow = [pid for pid, author, gone\n        in posts\n        if author in following\n        and not gone]\nprint(show)\n# [1]: exclude unfollowed and deleted.\n```\n\nThe same read-time filter handles unfollows, blocks, mutes and deletes, so none of them needs a fan-out of its own.",
+    "link": {
+      "title": "System Design Primer: design the Twitter timeline",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/twitter/README.md"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which visibility or permission changes must be enforced at hydration, rather than trusting earlier fan-out decisions? Select all that apply.",
+    "options": [
+      {
+        "text": "The reader has blocked or muted the author since the post was fanned out.",
+        "explanation": "Correct. Blocks and mutes must take effect immediately, and fan-out may already have placed hundreds of the author's posts in the reader's list."
+      },
+      {
+        "text": "The author has made their account protected, so only approved followers may see their posts.",
+        "explanation": "Correct. Visibility can change after fan-out. Hydration must check current permissions for each post, or private posts could leak."
+      },
+      {
+        "text": "The post has been deleted.",
+        "explanation": "Correct. Deletes are handled by marking the post once and having hydration drop it, instead of removing it from millions of timelines."
+      },
+      {
+        "text": "The post's like count has gone up.",
+        "explanation": "Incorrect. That's not a permission check. Counts come from the counter service during hydration anyway; nothing in the timeline list needs to change."
+      },
+      {
+        "text": "The author changed their display name.",
+        "explanation": "Incorrect. Profiles are hydrated from the user cache on each read, so the new name appears automatically. It isn't a visibility rule."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Use the principle: **fan-out decides what might be shown; hydration decides what may be shown.**\n\n| Change | Where enforced |\n|---|---|\n| Block, mute | read time |\n| Protected account | read time |\n| Delete | read time (flag) |\n| Counts, names | hydrated anyway |\n\nAnything that could make showing a post *wrong* (privacy, safety, legal) must be checked against current state on every read.",
+    "link": {
+      "title": "TAO: Facebook's distributed data store for the social graph",
+      "url": "https://www.usenix.org/conference/atc13/technical-sessions/presentation/bronson"
+    }
+  }
+]

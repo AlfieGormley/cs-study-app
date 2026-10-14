@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cs1-typeahead-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a plain trie (no precomputation), why is finding the top 10 completions for the prefix `s` slow?",
+    "options": [
+      {
+        "text": "Walking from the root to the node for `s` takes time proportional to the number of stored queries.",
+        "explanation": "Wrong. Reaching the prefix node takes one step per character of the prefix, here a single step. The walk is cheap; what follows isn't."
+      },
+      {
+        "text": "Tries can't store popularity scores, so you must query a database for each candidate.",
+        "explanation": "Wrong. Nodes can store any payload, including a score on terminal nodes or a precomputed top-k list. The slowness comes from the traversal, not from missing data."
+      },
+      {
+        "text": "The lookup must traverse the whole subtree under `s`, potentially millions of queries, to find the 10 most popular.",
+        "explanation": "Correct. Every query starting with `s` lives below that node. Without precomputed results you have to visit them all (or a large part) and pick the top 10, which is far too slow for a 10–20 ms budget."
+      },
+      {
+        "text": "Single-character prefixes cause hash collisions in the trie.",
+        "explanation": "Wrong. Tries aren't hash tables; each character selects a child edge. There's no collision concept here."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Split the lookup into two phases:\n\n1. **Find the prefix node**: one step per character. For `s`, that is one step.\n2. **Collect completions**: visit every terminal node in the subtree and keep the best 10. For `s`, that's millions of nodes.\n\nIn Big-O terms:\n\n```formula\nplain = O(p + S)\nprecomputed = O(p + k)\nwhere\nO(...): Big-O, \"grows at most in proportion to\" what is inside, ignoring constant factors\np: the prefix length in characters; for \"s\", p = 1\nS: the number of nodes in the subtree under the prefix, millions for \"s\"\nk: the number of suggestions returned, 10\nplain, precomputed: lookup cost without and with a stored top-k list at each node\nIn words: a plain trie pays for the whole subtree; storing the top 10 at each node leaves only the short walk plus reading 10 items.\n```\n\nPhase 2 dominates. The fix is to **precompute** the top-10 list at every node during the offline build, so phase 2 becomes \"return the stored list\". The cost is then O(p + k) plus output-string bytes, conventionally written O(p) only when output size is treated as fixed.",
+    "link": {
+      "title": "Trie (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Trie"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which client-side behaviours reduce load or improve perceived latency for typeahead? Select all that apply.",
+    "options": [
+      {
+        "text": "Debounce keystrokes, sending a request only after ~100 ms of no typing.",
+        "explanation": "Correct. Fast typists produce several keystrokes within 100 ms; debouncing collapses them into one request, cutting load substantially."
+      },
+      {
+        "text": "Cache responses by prefix in memory so backspacing reuses earlier results.",
+        "explanation": "Correct. Deleting a character returns to a prefix that was just fetched, so a local cache answers instantly with no network call."
+      },
+      {
+        "text": "Ignore responses for prefixes older than the current input.",
+        "explanation": "Correct. Responses can arrive out of order; rendering a stale one makes suggestions flicker to an older prefix. Dropping them (or cancelling the request) keeps the UI correct."
+      },
+      {
+        "text": "Retry failed suggestion requests three times with exponential backoff.",
+        "explanation": "Incorrect. By the time a retry succeeds, the user has typed more characters, so the result is useless. For typeahead, a failed request should simply be dropped."
+      },
+      {
+        "text": "Send a request for every keystroke so suggestions are always current.",
+        "explanation": "Incorrect. This multiplies load for almost no benefit, since intermediate prefixes are usually never seen by the user."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think about a user typing \"pancakes\" quickly (8 characters in ~800 ms):\n\n- **No debounce**: 8 requests.\n- **100 ms debounce**: request count depends on gaps between keystrokes; a continuous 100 ms cadence can send nearly every character, while shorter gaps coalesce.\n- **Backspace** from \"pancakes\" to \"pancake\": a cache hit only if that prefix was previously fetched; debouncing may have skipped it.\n- **Out-of-order arrival**: \"pan\" results arrive after \"pancak\" results; ignoring them avoids a visible flicker.\n\nRetries make no sense for data with a lifespan of a few hundred milliseconds.",
+    "link": {
+      "title": "Autocomplete (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Autocomplete"
+    }
+  }
+]

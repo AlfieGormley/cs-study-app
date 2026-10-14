@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cs1-news-feed-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You introduce a ranked \"For you\" feed. Each request scores **1,500 candidates** with a neural network costing an assumed **0.2 ms of normalized, additive GPU capacity per candidate**, already accounting for the selected batching strategy, at **90,000 feed requests/s** at peak. Which statement is most accurate?",
+    "options": [
+      {
+        "text": "Ranking cost is negligible compared with the Redis timeline read.",
+        "explanation": "Wrong. The supplied additive model assigns 300 milliseconds of normalised accelerator capacity per request. That is substantial work regardless of the timeline-cache latency; measure the actual ranking service before declaring it negligible."
+      },
+      {
+        "text": "That's about 27 GPU-seconds per second, easily handled by a few GPUs.",
+        "explanation": "Wrong. This drops a factor of 1,000: 0.2 ms is 0.0002 s, and 90,000 × 1,500 × 0.0002 = 27,000, not 27."
+      },
+      {
+        "text": "That's 27,000 GPU-seconds per second, so you need roughly 27,000 GPUs' worth of capacity; use a cheap first-stage model to prune to a few hundred candidates before the heavy model.",
+        "explanation": "Correct. 90,000 × 1,500 × 0.2 ms = 27,000 s of GPU time every second. Multi-stage ranking (light model on all candidates, heavy model on, say, the top 300) cuts the heavy stage fivefold; including the stated light stage cuts combined capacity fourfold, and caching recent ranked results cuts it further."
+      },
+      {
+        "text": "Score all candidates on CPU instead, because GPUs aren't used for ranking.",
+        "explanation": "Wrong. The scenario already specifies an additive GPU capacity model. A CPU implementation may be an alternative to benchmark, but changing hardware alone does not eliminate the stated inference workload."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Total GPU time per second is requests × candidates × time per candidate:\n\n```formula\nc = 90,000/s × 1,500 = 1.35 × 10^8 /s\ng = 1.35 × 10^8 /s × 0.0002 s\ng = 27,000 s/s\nwhere\nc: candidates scored per second\ng: normalised GPU-seconds of additive capacity needed every second; machine count still depends on measured hardware and utilisation\n0.0002 s: 0.2 ms (milliseconds), the assumed GPU time per candidate\ns: seconds; /s means per second\ns/s: seconds of GPU work per second of real time\n10^8: a hundred million\nIn words: 135 million candidates a second at 0.2 ms each is 27,000 seconds of GPU work every second, so about 27,000 GPUs running flat out.\n```\n\nSo you need ~27,000 GPU-equivalents running flat out (more with headroom). Reduce it:\n\n1. **Two-stage ranking**: a light model (~0.01 ms) scores all 1,500, keep the top 300 for the heavy model:\n\n```formula\nheavy = 90,000/s × 300 × 0.0002 s\nheavy = 5,400 s/s\nlight = 90,000/s × 1,500 × 0.00001 s\nlight = 1,350 s/s\ntotal = 5,400 + 1,350 = 6,750 s/s\nwhere\nheavy: GPU-seconds per second for the heavy model on the top 300\nlight: GPU-seconds per second for the light model (0.01 ms = 0.00001 s per candidate) on all 1,500\ntotal: both stages together\ns/s: seconds of GPU work per second\n/s: per second\nIn words: the heavy stage drops to a fifth; adding the cheap first stage back in, total GPU need falls about fourfold, from 27,000 to 6,750.\n```\n\n2. **Cache** ranked pages for a minute or two per user; many refreshes reuse them.\n3. **Degrade** to chronological order under extreme load.\n\nThis is why feeds such as X's and Meta's use multi-stage ranking pipelines.\n\n(Real batching and hardware can change normalized per-candidate cost in either comparison; no deployment benchmark establishes that it is lower than 0.2 ms; the point is that scoring cost scales with requests × candidates, so cutting candidates per heavy model is the main lever.)",
+    "link": {
+      "title": "Meta engineering: how machine learning powers News Feed ranking",
+      "url": "https://engineering.fb.com/2021/01/26/ml-applications/news-feed-ranking/"
+    }
+  }
+]

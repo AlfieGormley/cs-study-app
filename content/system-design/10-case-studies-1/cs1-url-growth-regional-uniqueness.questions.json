@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cs1-url-shortener-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Traffic grows 10x to **1 billion new links/day**, kept for 10 years, with 7-character codes. Which hard namespace-capacity problem follows directly from these numbers?",
+    "options": [
+      {
+        "text": "The ID coordinator can no longer keep up with block requests.",
+        "explanation": "Wrong. At 1 billion links/day the peak is about 30,000 writes/s, so 1M-ID blocks are requested about 0.03 times a second, roughly once every 33 s overall. You can also simply make blocks bigger."
+      },
+      {
+        "text": "Base62 encoding becomes too CPU-intensive.",
+        "explanation": "Wrong. Encoding takes a bounded number of divisions here; no measured CPU limit is supplied."
+      },
+      {
+        "text": "Redis can't hold the hot set.",
+        "explanation": "Daily request count does not specify the number of distinct hot keys or their memory footprint. Trace the working set and benchmark capacity; no fixed 1 TB hot set follows from this prompt."
+      },
+      {
+        "text": "The 7-character code space runs out: 3.65 trillion links needed vs ~3.5 trillion codes available.",
+        "explanation": "Correct. 1 billion × 365 × 10 = 3.65 trillion, slightly more than the 3.52 trillion 7-character codes, before counting wasted ranges. You need to move new links to 8 characters (218 trillion)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Recompute the key estimate with the new numbers:\n\n```formula\nlinks = 1 bn × 365 × 10 = 3.65 × 10^12\nspace_7 = 62^7 ≈ 3.52 × 10^12\nyears = (3.52 × 10^12) / (3.65 × 10^11)\nyears ≈ 9.6\nspace_8 = 62^8 ≈ 2.18 × 10^14\nwhere\nlinks: links created in 10 years at 1 billion a day\nbn: billion (10^9)\nspace_7, space_8: the number of 7- and 8-character base62 codes (7 or 8 copies of 62 multiplied together)\nyears: how long 7-character codes last at 365 billion (3.65 × 10^11) links a year\n10^11, 10^12, 10^14: 1 followed by that many zeros\n≈: approximately equal to (rounded)\nIn words: ten years at this rate needs 3.65 trillion codes but seven characters give only 3.52 trillion, so they run out in under ten years; eight characters give about 60 times the need.\n```\n\nYou'd exhaust 7-character codes in about 9.6 years, sooner with waste. Moving to 8 characters gives about 218 trillion codes, about 60x headroom. An 8-character string can never equal a 7-character one, so you can switch with no migration: new generated links use exactly eight characters, including left-padding, and old codes keep working. Revise alias rules or use conditional inserts because existing custom aliases may already have eight characters.\n\nThe lesson: always re-run your capacity maths when the scale changes; a constraint that was 10x away can become binding.",
+    "link": {
+      "title": "URL shortening (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/URL_shortening"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You expand to three regions so redirects are served locally. Generated-code link creation must remain available during a bounded partition while preallocated ID ranges remain; globally unique custom aliases are out of scope. Which choices fit? Select all that apply.",
+    "options": [
+      {
+        "text": "Give each region its own pre-allocated ID ranges, so regions generate codes without talking to each other.",
+        "explanation": "Correct. Disjoint ranges guarantee uniqueness with no cross-region coordination, so a partitioned region can still create links."
+      },
+      {
+        "text": "Replicate the links table asynchronously to all regions.",
+        "explanation": "Correct. Links are written once and never updated, so there are no conflicting writes to merge. Async replication keeps create latency local."
+      },
+      {
+        "text": "On a local miss, check the link's home region before returning 404.",
+        "explanation": "Correct. It covers replication lag only when the home region is reachable; it cannot resolve an unknown link during that region's isolation. The home region can be encoded in the ID range, so you know where to ask."
+      },
+      {
+        "text": "Use a single global counter with synchronous cross-region consensus for every create.",
+        "explanation": "Incorrect. Each create would pay a cross-region round trip (~100 ms), and a partitioned region couldn't create links at all, breaking the requirement."
+      },
+      {
+        "text": "Use 301 with an infinite cache so other regions are rarely asked.",
+        "explanation": "Incorrect. It doesn't help create availability, and it gives up analytics and the ability to disable abusive links."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Immutability is what makes this easy:\n\n1. **Uniqueness without coordination**: region-specific ID ranges.\n2. **Replication without conflicts**: rows never change, so last-writer-wins issues don't arise.\n3. **Lag handling**: fall back to the home region on a miss.\n\nAvoid putting anything cross-region and synchronous on the create path: it adds deployment-dependent network latency and may be unavailable in an isolated region. Disabling or deleting links still requires propagation rules even when destination mappings are immutable.",
+    "link": {
+      "title": "System Design Primer: design Pastebin / Bit.ly",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/pastebin/README.md"
+    }
+  }
+]

@@ -1,0 +1,160 @@
+[
+  {
+    "id": "cs1-typeahead-q5",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your trie rebuilds once a day. Product wants breaking-news queries (e.g. a major earthquake) to appear in suggestions **within 10 minutes**. What's the most practical design?",
+    "options": [
+      {
+        "text": "Add a small trending overlay: a stream job detects queries spiking above their baseline and publishes a small trending list that the suggest service merges into results.",
+        "explanation": "Correct. Bound the trending layer to an explicit candidate budget and index by prefix. The main trie remains a daily artifact; measure merge latency and enforce the same safety/privacy filtering on both paths."
+      },
+      {
+        "text": "Update trie nodes in place on the serving nodes on every search.",
+        "explanation": "Wrong. Updating top-k lists along every prefix path on every search means ~20 writes per search at 1B+ searches a day, with locking on hot nodes like 's'. It destroys the read-only simplicity that makes serving fast."
+      },
+      {
+        "text": "Rebuild the full trie every 10 minutes.",
+        "explanation": "Wrong. A full rebuild aggregates weeks of logs and processes hundreds of millions of queries; meeting a ten-minute rebuild cadence requires resources and measured completion time that this design has not established, and each rebuild plus rollout might not even finish in 10 minutes."
+      },
+      {
+        "text": "Lower the CDN TTL to zero.",
+        "explanation": "Wrong. Edge caching isn't the bottleneck; even with no caching, the underlying trie wouldn't contain the new query until the next daily build."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "This is the lambda-architecture pattern: a large, slow, accurate batch view plus a small, fast speed layer.\n\n1. Stream job (Flink) counts queries in 1-minute tumbling windows.\n2. Flag a query as trending when its recent count far exceeds its usual level, and distinct users exceed a threshold (to resist manipulation):\n\n```formula\nc_10 > 20 × base\nwhere\nc_10: searches for the query in the last 10 minutes\nbase: its usual (baseline) count for a 10-minute period\n>: is greater than\nIn words: a query is trending when it is being searched more than 20 times as often as normal.\n```\n\n3. Publish the trending set (a few thousand entries) to the suggest service every minute.\n4. At request time, take the trie's top-10 for the prefix, merge any trending queries matching that prefix with a boosted score, and return the top 10.\n\nKeep an explicit candidate budget and a prefix index; benchmark merging and filter checks against the serving latency target. A small overlay does not by itself prove negligible latency.",
+    "link": {
+      "title": "Count–min sketch (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Count%E2%80%93min_sketch"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A privacy review finds that a user's unusual search, including their full home address, appeared as a suggestion for others. Which pipeline change reduces this class of exposure while acknowledging that popularity alone cannot prove privacy?",
+    "options": [
+      {
+        "text": "Add the user's address to the blocklist.",
+        "explanation": "Wrong as a fix. It removes this one case but not the class of problem; every other user's private query can still leak. Blocklists are for known bad terms, not for unpredictable personal data."
+      },
+      {
+        "text": "Encrypt the search logs at rest.",
+        "explanation": "Wrong. Encryption protects logs from unauthorised access, but the pipeline still decrypts and counts them. The query would still become a suggestion."
+      },
+      {
+        "text": "Shorten the CDN TTL so the suggestion disappears faster.",
+        "explanation": "Wrong. This only changes how long cached copies live; the next trie build would still include the query."
+      },
+      {
+        "text": "Require a distinct-user eligibility threshold plus sensitive-data filtering and review; do not treat the threshold as a privacy guarantee.",
+        "explanation": "Correct. A threshold suppresses rare queries, but addresses and other personal information can be searched by many people or attacker accounts. Approximate distinct counts can also overestimate; validate eligibility conservatively."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Find where private data enters the suggestions: the aggregator counts raw searches, and a single user searching the same thing repeatedly can push it high enough for a narrow prefix.\n\nFix it at aggregation:\n\nThis Python fixture implements the distinct-identity threshold for one locale. Its input identities are assumed eligible; bot detection and sensitive-data filtering remain separate requirements.\n\n```python\n# Fixture: repeated events from one user\n# still count as only one identity.\nevents = {\n    \"rare\": [\"u1\"] * 100,\n    \"popular\": [\n        f\"u{i}\" for i in range(50)\n    ],\n}\nkeep = []\nfor query, users in events.items():\n    # Count each eligible identity once.\n    distinct_users = len(set(users))\n    if distinct_users < 50:\n        continue\n    keep.append(query)\nprint(keep)\n# ['popular']: rare has only one user.\n```\n\nA HyperLogLog can estimate candidate popularity, but its probabilistic estimate alone cannot prove that a strict eligibility threshold was reached. Counting distinct users also resists manipulation, since a bot repeating a phrase from one account gains nothing. Then add a blocklist and PII detectors (addresses, phone numbers) as additional risk reduction, with explicit review and removal procedures; none of these alone guarantees privacy.",
+    "link": {
+      "title": "Autocomplete (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Autocomplete"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Ranking uses a time-decayed score:\n\n```formula\nscore = Σ(count_d × 0.9^{age_d})\nwhere\nscore: a query's ranking score\nΣ: sigma, \"add up over every day d\"\nd: one day in the history being summed\ncount_d: searches for the query on day d\nage_d: how many days ago day d was (0 for today)\n0.9^{age_d}: age_d copies of 0.9 multiplied together\nIn words: every day of age multiplies a day's searches by 0.9.\n```\n\nQuery A had **10,000** searches exactly **14 days ago** and none since. Query B has **2,000** searches **today** and none before. Which ranks higher today?",
+    "options": [
+      {
+        "text": "B, because recent searches always outrank older ones.",
+        "explanation": "Wrong. Decay reduces old counts gradually; it doesn't zero them. Whether recent beats old depends on the numbers."
+      },
+      {
+        "text": "A, with a score of about 2,290 versus B's 2,000.",
+        "explanation": "Correct. Fourteen days of the stated daily decay leave about 23%, so A keeps about 23% of its 10,000. That's still more than B's undecayed 2,000, under the given one-day histories. At age 16 days, A falls below a fixed 2,000-point benchmark. If both queries receive no new traffic, B also decays: their score ratio stays constant, so B does not overtake A merely as time passes."
+      },
+      {
+        "text": "A, with a score of 10,000, because decay only applies after 30 days.",
+        "explanation": "Wrong. The formula decays every day's count by its age; nothing in it waits 30 days."
+      },
+      {
+        "text": "They tie, because 0.9 × 14 ≈ 12.6 and 10,000 / 12.6 ≈ 800.",
+        "explanation": "Wrong. The decay is exponential (0.9 raised to the 14th power), not multiplied by the age."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Apply the decay factor. Squaring the 7-day factor gives the 14-day one:\n\n```formula\n0.9^7 ≈ 0.478\n0.9^{14} = (0.9^7)^2 ≈ 0.229\nA = 10,000 × 0.229 ≈ 2,290\nB = 2,000 × 0.9^0 = 2,000 × 1 = 2,000\nwhere\n0.9^7: 7 copies of 0.9 multiplied together\n0.9^0: anything to the power 0 is 1, so today's searches count in full\nA, B: the two queries' scores today\n≈: approximately equal to (rounded)\nIn words: after 14 days A keeps about 23% of its 10,000 searches, about 2,290, which still beats B's 2,000.\n```\n\nA factor of 0.9/day means a half-life (the time for a weight to halve) of about 6.6 days. If you want trending queries to win faster, lower the factor (e.g. 0.7/day gives a half-life of ~2 days) or add the trending overlay, which is designed for minutes-scale freshness.",
+    "link": {
+      "title": "Exponential decay (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Exponential_decay"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Legal asks you to remove a defamatory suggestion **immediately**. Suggestions are cached at the CDN for 10 minutes and the trie rebuilds nightly. Which steps belong in your answer? Select all that apply.",
+    "options": [
+      {
+        "text": "Push the phrase to a serve-time blocklist that every suggest node checks before responding.",
+        "explanation": "Correct. A small blocklist distributed like config takes effect in seconds on the origin, without waiting for a rebuild."
+      },
+      {
+        "text": "Purge the affected prefixes from the CDN.",
+        "explanation": "Correct. Otherwise the edge keeps serving the cached response for up to 10 minutes after the origin is fixed."
+      },
+      {
+        "text": "Add the phrase to the pipeline's blocklist so tonight's build drops it at source.",
+        "explanation": "Correct. The serve-time list is a stopgap; fixing the source stops it reappearing in the next snapshot."
+      },
+      {
+        "text": "Trigger an immediate full rebuild and wait for it to roll out.",
+        "explanation": "Incorrect as the main action. No rebuild duration is established here, and rebuilding still leaves existing CDN copies stale. It's far slower than the blocklist plus purge."
+      },
+      {
+        "text": "Set the CDN TTL to zero permanently.",
+        "explanation": "Incorrect. It sacrifices most of your offload to handle a rare event that purging handles well."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Trace every layer where the bad suggestion lives:\n\n| Layer | Lifetime | Fix |\n|---|---|---|\n| Trie snapshot | until rebuild | pipeline blocklist |\n| Suggest node | until rebuild | serve-time blocklist |\n| CDN | 10 min | purge |\n| Browser | its cache TTL | accept, or keep short |\n\nA strong answer names each layer and the fastest lever for it.",
+    "link": {
+      "title": "Elasticsearch: search suggesters",
+      "url": "https://www.elastic.co/docs/reference/elasticsearch/rest-apis/search-suggesters"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Bots search \"cheap pills brand-x\" 500,000 times in a day from 300 accounts so it becomes a top suggestion for \"cheap\". Your pipeline already has a 50-distinct-user threshold. What's the best additional defence?",
+    "options": [
+      {
+        "text": "Rank by distinct users (or cap each user's contribution), and flag queries whose growth is concentrated in a few accounts or IPs.",
+        "explanation": "Correct. 300 accounts doing 500k searches is ~1,700 each, nothing like organic behaviour. Counting each user at most a few times strips most of the inflated count, and concentration anomalies flag the campaign."
+      },
+      {
+        "text": "Raise the distinct-user threshold to 1,000.",
+        "explanation": "Partly helps, but attackers can create more accounts, and a high threshold hides genuine niche queries for smaller locales. It's a blunt tool on its own."
+      },
+      {
+        "text": "Sample logs 1 in 100 so the bot's searches mostly get dropped.",
+        "explanation": "Wrong. Uniform independent sampling reduces bot and human counts in the same proportion in expectation. Random variation can change ranks, but it does not selectively remove the manipulation."
+      },
+      {
+        "text": "Turn off suggestions for the prefix \"cheap\".",
+        "explanation": "Wrong. It removes a useful prefix for everyone and the bots simply move to another prefix."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare organic and bot patterns:\n\n```formula\na = 500,000 / 300 ≈ 1,700\ncapped = 300 × 3 = 900\nwhere\na: searches per bot account in a day\ncapped: the query's count if each user can contribute at most 3 per day\n≈: approximately equal to (rounded from 1,667)\nIn words: each bot account searched about 1,700 times; capping every user at 3 cuts the bot query's count to 900.\n```\n\nWith that cap the bot query's count falls to ~900, far below genuinely popular queries. Add anomaly detection on concentration (share of volume from the top 1% of users or IPs) to catch it outright.",
+    "link": {
+      "title": "Meta engineering: the life of a typeahead query",
+      "url": "https://engineering.fb.com/2010/05/17/web/the-life-of-a-typeahead-query/"
+    }
+  }
+]

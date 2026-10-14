@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs1-rate-limiter-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your limiter runs on a 20-shard Redis Cluster. Counter keys look like `rl:{search}:user_123`. Dashboards show one shard at 100% CPU and the other 19 nearly idle, and most traffic is to `/search`. What's wrong?",
+    "options": [
+      {
+        "text": "Redis Cluster hashes the whole key, so `user_123` must be a hot user.",
+        "explanation": "Wrong. When a key contains `{...}`, Redis Cluster hashes only the part inside the braces. One hot user wouldn't explain *all* search traffic landing on one shard."
+      },
+      {
+        "text": "The hash tag `{search}` sends every client's `/search` counter to the same slot. Tag the client instead, e.g. `rl:search:{user_123}`.",
+        "explanation": "Correct. Only the tagged part picks the shard, so every key with `{search}` maps to one slot. Tagging the client spreads clients across shards and still co-locates one client's rules for multi-rule Lua scripts."
+      },
+      {
+        "text": "20 shards is too few; add more.",
+        "explanation": "Wrong. Adding shards can't help: all `{search}` keys map to the same hash slot, which lives on one shard however many you have."
+      },
+      {
+        "text": "Lua scripts are single-threaded, so one shard always does all the scripting.",
+        "explanation": "Wrong. Each shard runs its own scripts on its own keys. The imbalance comes from key placement, not from Lua."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Redis Cluster derives the slot from the key's first brace pair if that pair is non-empty:\n\n```formula\nslot = CRC16(tag) mod 16,384\nwhere\nslot: the hash slot, an integer from 0 to 16,383\nCRC16: Redis Cluster's specified 16-bit cyclic redundancy check function\ntag: the bytes inside the first non-empty brace pair; if the first opening brace has no closing brace or an empty pair, Redis hashes the entire key\nmod: remainder after division\nIn words: keys with the same valid tag select the same slot; one primary owns that slot at a time.\n```\n\n```\nrl:{search}:user_1   -> slot(search)\nrl:{search}:user_2   -> slot(search)\nrl:search:{user_1}   -> slot(user_1)\nrl:search:{user_2}   -> slot(user_2)\n```\n\nThe first scheme puts all search traffic on one shard. The second spreads by client while keeping `rl:search:{user_1}` and `rl:daily:{user_1}` together, so one script can check both atomically.",
+    "link": {
+      "title": "Envoy: global rate limiting",
+      "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/other_features/global_rate_limiting"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q9",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You must rate limit an **unauthenticated** signup endpoint against bots, served to both IPv4 and IPv6 clients. Which practices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Limit IPv6 clients by prefix (for example per /64) rather than per full address.",
+        "explanation": "Correct. A single customer is often given a whole /64, so an attacker can rotate through billions of addresses in it. Limiting by prefix treats that block as one client."
+      },
+      {
+        "text": "Set IPv4 limits loosely enough that many users behind one carrier-grade NAT address aren't blocked.",
+        "explanation": "Correct. Mobile carriers and offices put thousands of users behind one public IPv4 address. A tight per-IP limit there blocks real users."
+      },
+      {
+        "text": "Add a second, tighter limit keyed on something stronger, such as a device or session token, or require a CAPTCHA when per-IP limits trip.",
+        "explanation": "Correct. Layering limits gives protection without relying solely on IPs, which are shared and spoofable at scale through proxies."
+      },
+      {
+        "text": "Trust a client-supplied `X-Forwarded-For` header from the internet as the client's IP.",
+        "explanation": "Incorrect. Anyone can set that header. Only trust it when your own load balancer or CDN adds it, and read the address that your own infrastructure appended."
+      },
+      {
+        "text": "Fail open on this endpoint if the limiter is down, because availability always wins.",
+        "explanation": "Incorrect for this case. Signup abuse protection is security-sensitive, like login. Failing closed (or falling back to a strict local limit) is the safer choice here."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "For anonymous endpoints the key is the hard part.\n\n| Address | Pitfall | Key on |\n|---|---|---|\n| IPv6 | Rotating addresses | /64 prefix |\n| IPv4 | Shared NAT | IP, loose limit |\n\nThen add defence in depth: a device or session token, or a CAPTCHA once a coarse limit trips. Read the client IP only from headers your own edge sets.",
+    "link": {
+      "title": "Google Cloud: rate-limiting strategies and techniques",
+      "url": "https://cloud.google.com/architecture/rate-limiting-strategies-techniques"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A partner's batch job gets rate limited, and your server returns `Retry-After: 30` to each of its 5,000 worker threads. Exactly 30 seconds later, all 5,000 retry within the same 100 ms and are rejected again, over and over. What best fixes this?",
+    "options": [
+      {
+        "text": "Return `Retry-After: 0` so they retry immediately and spread out naturally.",
+        "explanation": "Wrong. Immediate retries just turn the batch into a tight loop that hammers the limiter continuously."
+      },
+      {
+        "text": "Switch from 429 to 503 so clients treat it as an outage.",
+        "explanation": "Wrong. 503 signals server unavailability rather than a client exceeding its quota, and many clients retry 503s more aggressively."
+      },
+      {
+        "text": "Add jitter: clients retry after `Retry-After` plus a random delay (and back off exponentially on repeated 429s), and the server can vary `Retry-After` slightly per request.",
+        "explanation": "Correct. The synchronised wake-up is a thundering herd. Randomising retry times spreads 5,000 retries across a window, so they drain at the allowed rate instead of colliding."
+      },
+      {
+        "text": "Raise the partner's limit to 5,000 per burst.",
+        "explanation": "Wrong as the fix. It might help this partner today, but the herd behaviour remains and returns at the next limit. Fix the retry pattern."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Without jitter:\n\n```\nat 0 s   5,000 rejected, Retry-After 30\nat 30 s  5,000 arrive in 100 ms\n      bucket allows one burst, rest\n      rejected\nat 60 s  repeat\n```\n\n(Times are in seconds.) Now give each client a random extra delay:\n\n```formula\nd = 30 s + U(0, 30 s)\nrate ≈ 5,000 / (30 s) ≈ 167/s\nwhere\nd: how long one client waits before retrying\nU(0, 30 s): a random number drawn evenly (uniformly) between 0 and 30 seconds, different for each client\nU: uniform random choice\nrate: the expected average arrival rate of the retries\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: spreading 5,000 retries evenly over a 30-second window brings them back at about 167 a second instead of all at once.\n```\n\nThat rate is an expected average; actual admission still depends on the bucket rate, burst capacity and random variation. Exponential backoff on repeated 429s spreads them further. This is the same thundering-herd fix used for reconnect storms in chat systems.",
+    "link": {
+      "title": "RFC 6585: HTTP 429 Too Many Requests",
+      "url": "https://www.rfc-editor.org/rfc/rfc6585"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cs1-notification-system-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A user schedules a weekly digest email. On Tuesday they unsubscribe from marketing. The weekly digest, enqueued on Monday for Wednesday delivery, still arrives. Where is the design flaw?",
+    "options": [
+      {
+        "text": "Preferences were checked when the notification was accepted, not when it was sent.",
+        "explanation": "Re-check current preferences and suppression state immediately before submitting a marketing send. Cache invalidation helps but does not eliminate races with already in-flight messages."
+      },
+      {
+        "text": "The email provider ignored the unsubscribe.",
+        "explanation": "Providers may enforce suppression lists, but the scenario does not establish a provider fault. The application must propagate opt-outs and avoid sending scheduled work using obsolete preferences."
+      },
+      {
+        "text": "The weekly digest should have been sent by SMS.",
+        "explanation": "Wrong. Changing channel doesn't address the stale preference check, and would send marketing via a channel the user might not have consented to either."
+      },
+      {
+        "text": "The queue retention was too long.",
+        "explanation": "Wrong. Retention determines how long Kafka keeps messages, not whether a worker consults current preferences before sending."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\nMon  accept digest, prefs OK,\n     scheduled for Wed\nTue  user unsubscribes,\n     prefs updated\nWed  digest sent, no prefs check!\n```\n\nFix:\n\n1. Move the preference check into the processing step that runs at `sendAt`.\n2. Make unsubscribe publish an event that invalidates the user's cached preferences immediately.\n3. As a last line of defence, the email sender checks a suppression list just before calling the provider.\n\nThis matters legally as well as for user trust: continuing to send marketing after consent is withdrawn can breach GDPR and the UK's PECR, and the US CAN-SPAM Act sets a hard deadline (10 business days) for honouring opt-outs.",
+    "link": {
+      "title": "RFC 8058: one-click unsubscribe",
+      "url": "https://www.rfc-editor.org/rfc/rfc8058"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To save SMS cost, you implement **channel escalation**: send a push, and send an SMS only if the push isn't opened within 5 minutes. How should the escalation be implemented?",
+    "options": [
+      {
+        "text": "Have the push sender sleep for 5 minutes, then check whether the push was opened.",
+        "explanation": "Wrong. Sleeping workers waste capacity, and if the worker restarts during the wait the escalation is lost entirely."
+      },
+      {
+        "text": "When the push is sent, schedule a delayed job for +5 minutes carrying the notification ID. When it fires, check the open status (and that the TTL hasn't expired) and only then send the SMS, using the same idempotency scheme.",
+        "explanation": "Persist the delayed job durably, check open status, TTL and current SMS permission at execution, then use recoverable per-destination processing. Local send records reduce repeats but do not remove ambiguous provider outcomes."
+      },
+      {
+        "text": "Send both push and SMS immediately; cancel the SMS if the push is opened.",
+        "explanation": "Wrong. SMS can't be recalled once the provider sends it, so you'd pay for every SMS and defeat the purpose."
+      },
+      {
+        "text": "Ask the client app to request an SMS if it doesn't receive the push.",
+        "explanation": "Wrong. If the push wasn't delivered, the app may not be running at all, so it can't ask for anything."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Persist a delayed escalation job with the original notification. At +5 minutes, re-check open status, TTL, SMS permissions and destination validity. Atomically claim a recoverable SMS attempt; reconcile or use provider idempotency before retries. A plain check-then-send can race across workers. If 60% of these pushes are confirmed opened before execution, suppressing those escalations reduces SMS volume by 60% for this flow.",
+    "link": {
+      "title": "Firebase Cloud Messaging documentation",
+      "url": "https://firebase.google.com/docs/cloud-messaging"
+    }
+  },
+  {
+    "id": "cs1-notification-system-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Marketing wants sending to **24 million users** to begin around **9 am local time**, allowing several minutes for expansion and further provider delivery delay. The scheduler expands **20,000 messages/s**. What design works best?",
+    "options": [
+      {
+        "text": "Create 24 million individual timers, one per user, in a scheduling database.",
+        "explanation": "Wrong. It works in principle but creates a huge burst of timer rows and lots of timers firing at the same instant per time zone. Grouping by time zone gives the same result far more cheaply."
+      },
+      {
+        "text": "Send everything at 9 am UTC.",
+        "explanation": "9 am UTC is 4 am in New York during standard time and 5 am during daylight time, and 6 pm in Tokyo. It does not meet local-time scheduling."
+      },
+      {
+        "text": "Group recipients by time zone and release each group as it reaches 9 am locally, expanding it at the throttled rate. A zone with 3M users takes about 2.5 minutes to expand.",
+        "explanation": "Use IANA time-zone identifiers and date-specific rules, including daylight-saving changes. A 3M-user wave needs 150 seconds just to expand; provider throughput and delivery add further delay."
+      },
+      {
+        "text": "Expand the whole segment at midnight UTC and hold all 24M messages in Kafka until each user's 9 am.",
+        "explanation": "Wrong. You'd hold a giant backlog for up to a day, and preference changes or cancellations made in the meantime would be missed unless every message was re-checked."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Expansion time is recipients divided by the expansion rate:\n\n```formula\nt = N / rate\nt_all = 24,000,000 / (20,000/s)\nt_all = 1,200 s\nt_wave = 3,000,000 / (20,000/s) = 150 s\nwhere\nt: time to expand a group of recipients into messages\nN: recipients in the group\nrate: messages the scheduler expands per second, 20,000\nt_all: time for all 24 million (20 minutes of total work, spread over the day)\nt_wave: time for one 3-million-user time-zone wave (2.5 minutes)\ns: seconds; /s means per second\nIn words: each time-zone wave takes a couple of minutes to expand, so the whole campaign is 20 minutes of work spread across the day as each time zone reaches 9 am.\n```\n\nCalculate each wave using IANA zone rules for its scheduled date. This is an expansion budget, not a delivery guarantee; re-check suppression immediately before sending and account for provider capacity.",
+    "link": {
+      "title": "Azure Architecture Center: priority queue pattern",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/patterns/priority-queue"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs1-interview-framework-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your estimates show **200 writes/s** and **2,000 reads/s** at peak, with 500 GB of data after three years. Assume a benchmark shows this workload meets its latency and recovery targets on one relational primary with a replica and cache. A candidate proposes microservices, Kafka, Cassandra and a Redis cluster. What is the best critique?",
+    "options": [
+      {
+        "text": "It's fine; interviewers reward using as many technologies as possible.",
+        "explanation": "Wrong. Interviewers penalise over-engineering. Every component adds operational cost and failure modes, and adding them without a requirement that demands them shows poor judgement."
+      },
+      {
+        "text": "Cassandra is wrong because it can't handle 200 writes/s.",
+        "explanation": "Wrong. No Cassandra benchmark is supplied. The prompt establishes that the simpler relational design already meets the targets; extra components need a concrete requirement and measured justification."
+      },
+      {
+        "text": "The load fits a single relational primary with a read replica and a modest cache; the extra components add cost and failure modes without solving a real problem at these numbers.",
+        "explanation": "Correct. The prompt explicitly supplies a successful benchmark for the simpler design. Scale the design to the numbers and say what would trigger adding more."
+      },
+      {
+        "text": "It needs a second Kafka cluster for redundancy.",
+        "explanation": "Wrong. This doubles down on the problem. Nothing in the requirements needs a log-based message broker at all, let alone two."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the load against what simple components handle:\n\n| Load | Simple capacity |\n|---|---|\n| 200 writes/s | Primary passes stated benchmark |\n| 2,000 reads/s | Replica + cache pass benchmark |\n| 500 GB | Fits the benchmarked storage plan |\n\nNothing here forces sharding or a distributed log. The senior answer is: \"Start with Postgres plus a replica and Redis. If measured write capacity becomes the limit, I would evaluate sharding by user ID; if we need async processing I'd add a queue then.\" Showing the *trigger* for each addition is what separates judgement from buzzwords.",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a design for a ride-hailing app, the main query is: \"find available drivers within 2 km of this point, many times per second\". A candidate says: \"I'll use Postgres because it's reliable.\" What is missing from the justification?",
+    "options": [
+      {
+        "text": "Nothing; reliability is the most important property of any database.",
+        "explanation": "Wrong. Reliability is necessary but says nothing about whether the store fits the access pattern. Almost every mainstream database is reliable."
+      },
+      {
+        "text": "They should have chosen MongoDB, because NoSQL always scales better.",
+        "explanation": "Wrong. Swapping one unjustified choice for another doesn't fix the reasoning. 'NoSQL scales' is exactly the fashion-driven argument to avoid."
+      },
+      {
+        "text": "The access pattern: a frequently updated geospatial proximity query. The choice should say how that is served, for example a geospatial index (PostGIS, geohash keys) or an in-memory spatial index.",
+        "explanation": "Correct. The data model step is about access patterns. Naming the query shape and how the store serves it (and at what update rate) is what makes the choice defensible."
+      },
+      {
+        "text": "The number of tables the schema will need.",
+        "explanation": "Wrong. Table count isn't a design driver. The shape and frequency of queries and writes are."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Work from the access pattern outwards:\n\n1. **Query**: nearby drivers for a point, read-heavy and latency-sensitive.\n2. **Writes**: every active driver sends a location every few seconds, so a high, constantly changing write rate.\n3. **Fit**: a geospatial index (PostGIS, or geohash-prefixed keys in Redis) answers proximity; very frequent location updates may favour an in-memory store over a durable one.\n\nA good answer: \"Driver locations go in an in-memory geo index, since they're ephemeral and updated constantly; trips and payments go in Postgres because they need transactions.\"",
+    "link": {
+      "title": "The System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  },
+  {
+    "id": "cs1-interview-framework-q10",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're writing the API for a payments-style endpoint, `POST /v1/transfers`, that mobile clients call over flaky networks, plus `GET /v1/transfers` to list a user's history. Which details are worth stating? Select all that apply.",
+    "options": [
+      {
+        "text": "An idempotency key on the POST, so a retried request after a timeout doesn't create a second transfer.",
+        "explanation": "Correct. On a flaky network the client can't tell whether a timed-out request succeeded. An idempotency key lets the server return the original result instead of executing twice."
+      },
+      {
+        "text": "Cursor-based pagination on the GET, rather than page numbers with offsets.",
+        "explanation": "Correct. Offsets are slow on large tables and skip or repeat items when new rows arrive. Keyset pagination needs a stable total order, matching cursor and suitable index; a cursor alone does not guarantee snapshot consistency."
+      },
+      {
+        "text": "Authentication on both endpoints, for example OAuth bearer tokens.",
+        "explanation": "Correct. The lesson lists authentication as a standard API-step mention, and for money movement it is non-negotiable."
+      },
+      {
+        "text": "The exact JSON field names for every response, written out in full.",
+        "explanation": "Incorrect. Field-level detail eats time and earns little. A sketch of the main fields is enough; spend the minutes on behaviour like idempotency."
+      },
+      {
+        "text": "Making the GET endpoint use POST so it can't be cached.",
+        "explanation": "Incorrect. POST can implement a query and can sometimes be cached; changing the method does not guarantee non-caching. For this simple retrieval use GET with appropriate Cache-Control."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "For each API detail ask: \"does this change correctness or scalability?\"\n\n- **Idempotency key**: prevents double transfers on retry, so it's about correctness.\n- **Cursor pagination**: keeps listing fast and stable as the table grows, so it's about scalability and correctness.\n- **Auth**: security baseline.\n- **Exact field names**: no design impact.\n- **Wrong verb**: makes things worse.\n\nA compact way to say it:\n\n```\nPOST /v1/transfers\n  Idempotency-Key: <uuid>\nGET  /v1/transfers?cursor=..&limit=50\n```",
+    "link": {
+      "title": "Tech Interview Handbook: system design",
+      "url": "https://www.techinterviewhandbook.org/system-design/"
+    }
+  }
+]

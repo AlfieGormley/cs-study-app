@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs1-typeahead-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You add personalised re-ranking based on each user's recent searches. Your CDN previously served 60% of suggestion traffic. What's the best way to keep most of that offload?",
+    "options": [
+      {
+        "text": "Include the user ID in the cache key so each user's results are cached at the edge.",
+        "explanation": "Wrong. Per-user cache keys destroy hit rates: each user's prefixes are requested only a few times, so almost every request misses and goes to the origin."
+      },
+      {
+        "text": "Disable the CDN; personalisation requires every request to reach the origin.",
+        "explanation": "Wrong. It would roughly 2.5x the origin's load (from 40% to 100% of traffic). Personalisation doesn't require giving up shared caching if you split the work."
+      },
+      {
+        "text": "Keep caching the global top-N per prefix at the edge, and apply personal re-ranking or blending on the client (or a thin per-user service) on top of those candidates.",
+        "explanation": "Correct. The expensive, shared part (candidate generation) stays cacheable. The personal part is small: re-order 50 candidates and mix in a handful of the user's recent queries, which the client already knows."
+      },
+      {
+        "text": "Precompute a personalised trie per user.",
+        "explanation": "Wrong. With hundreds of millions of users, a 40 GB trie per user is absurd. Even small per-user tries would be a massive storage and rebuild cost for little benefit."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Split the response into **shared** and **personal** parts:\n\n| Part | Varies by | Cacheable at edge? |\n|---|---|---|\n| Global top-50 for prefix | prefix, locale | Yes |\n| Recent searches, re-rank | user | Not shared across users |\n\nThe client fetches the global list (CDN hit), then merges in the user's recent searches it stores locally and applies a lightweight re-ranker. The origin still sees ~40% of traffic, as before. This is the general pattern: cache what's common, compute what's personal as late and as close to the user as possible.",
+    "link": {
+      "title": "Content delivery network (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
+    }
+  },
+  {
+    "id": "cs1-typeahead-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With 50 locales and personal history, the index grows to **400 GB**, too big for one machine. English is 40% of traffic. What sharding scheme is most sensible?",
+    "options": [
+      {
+        "text": "Shard by locale first; split large locales like English further by a hash of the prefix (or traffic-sized prefix ranges), and replicate each shard.",
+        "explanation": "Correct. Locale is a natural boundary (no request crosses it). Hashing spreads distinct prefixes but cannot split one hot prefix; use caching/replication for that key, and replicas give throughput and redundancy."
+      },
+      {
+        "text": "Shard by first letter across 26 machines for all locales together.",
+        "explanation": "Wrong. Letter distribution is heavily skewed (many more queries begin with 's' than 'x'), and non-Latin scripts don't map onto 26 letters at all."
+      },
+      {
+        "text": "Shard by user ID so personal history stays together.",
+        "explanation": "Wrong. Most of the index is global, so every request would have to fan out to every shard to find completions for a prefix."
+      },
+      {
+        "text": "Store it in one 400 GB process with swap enabled.",
+        "explanation": "Wrong. Paging trie nodes to disk turns microsecond lookups into millisecond ones and wrecks tail latency."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Pick the shard key from the request: every request carries a locale and a prefix.\n\n1. **Locale**: no cross-locale requests, so locale shards are independent.\n2. **Within English** (the largest): hash the full prefix (with a flattened `prefix → list` store) or use ranges sized by measured traffic.\n3. **Replicate** each shard for throughput.\n\nAvoid raw alphabetical ranges: the busiest letters get many times the load of the quietest.",
+    "link": {
+      "title": "Trie (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Trie"
+    }
+  }
+]

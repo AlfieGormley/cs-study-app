@@ -44,18 +44,24 @@ author/independent-verifier process. Existing skipped-content decisions below re
 - Complexity's formula-format follow-up is independently verified and stamped: 290 cards, 208 independent
   maths assertions and no unresolved active formatting hits. All 35 IDs, 81 questions, 44 native fences,
   confidence records and 14 archival files are preserved. The new full preview `1f3f05933373` passes 61 tests,
-  all 357 unit/908 question mobile renders and ten actual module lesson/quiz routes; publication is pending.
+  all 357 unit/908 question mobile renders and ten actual module lesson/quiz routes. Published sixth-batch
+  commit `76a9331`: GitHub Pages succeeded, and all four live files match `1f3f05933373`.
 - Distributed systems is independently verified and stamped (40 short units, 96 preserved questions).
   Its broad real-time aliases have also been independently narrowed to consistency-ordering phrases.
   API design's code-format follow-up is complete: four checked native examples, zero unresolved active
   pseudocode/format debt. Architecture is independently verified and its isolated full build/mobile checks
   pass (41 units, 108 questions; ten-module preview version `925d0c7768db`). Reliability (38 units/97 questions)
-  and case studies 1 (43 units/85 questions) are now under separate independent reviews. Complexity's required
-  formula-format follow-up is verified. Case studies 2 is being authored.
+  remains under independent review. Case studies 1 is independently verified and stamped (43 units/85
+  questions/103 formula cards/183 glossary terms); its 12 compiled dictionary meaning probes pass.
+  Complexity's required formula-format follow-up is verified and published. Case studies 2 (42 units/101
+  questions) is under independent review; DSA linear structures is being authored next in course order.
   The user confirmed course order, with system design next. Remaining modules are queued.
 - Current reports: [short-lessons-report.md](short-lessons-report.md). Working queue and baseline snapshots:
   `/tmp/cs-study-short-lessons/queue.json`, `original-index.json`, `original-questions.json`; baseline commit
   `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`. The full original course has 482 lessons and 5,565 questions.
+- Case studies 1 integration candidate: verified eleven-module full build `48856bef26a5`, 83 originals
+  → 400 units with 993 questions. All mobile renders and eleven actual lesson/quiz routes pass; 61 Node
+  tests pass, all original questions survive, and all 964 original files remain byte-identical.
 - Root owns shared code and generated assets. `/tmp/cs-study-short-lessons/preview-verified.mjs` builds isolated
   previews from the last published release and overlays currently verified modules, allowing pending author
   files to stay out of releases. Previously converted modules retain their last verified units during follow-up

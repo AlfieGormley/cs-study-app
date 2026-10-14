@@ -1,0 +1,70 @@
+[
+  {
+    "id": "cs1-url-shortener-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your product manager wants accurate click counts and the ability to disable malicious links instantly. Which redirect status should the service return?",
+    "options": [
+      {
+        "text": "301 Moved Permanently, because it is the standard for URL redirects.",
+        "explanation": "Wrong as stated. Without cache headers, browsers may cache a 301 indefinitely, so repeat clicks never reach you and you can't reliably disable the link. Provider-wide header claims require current representative response captures, which are not supplied."
+      },
+      {
+        "text": "404 Not Found, then let the browser search for the URL.",
+        "explanation": "Wrong. 404 means the resource doesn't exist. It would break every link."
+      },
+      {
+        "text": "200 OK with a page containing a JavaScript redirect.",
+        "explanation": "Wrong. It works, but adds a full page load, breaks non-browser clients (curl, bots, some email clients) and harms SEO. Use a proper HTTP redirect."
+      },
+      {
+        "text": "302 Found (or 307) with Cache-Control: no-store; enforce blocking on the redirect path and measure analytics delivery separately.",
+        "explanation": "Correct. Explicit no-store avoids retaining this redirect in compliant HTTP caches. It cannot take back destinations already resolved by a client, guarantee click-event delivery, or instantly invalidate your own cache layers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Choose an explicit cache policy. A 301 is heuristically cacheable; temporary redirects can also be cached with explicit freshness. For the stated control requirement, use 302/307 with `Cache-Control: no-store`, and make origin/edge blocking checks sufficiently fresh. Requests already redirected cannot be recalled. Click analytics also need delivery, deduplication and bot-counting rules; HTTP status alone cannot guarantee accurate counts. Exact provider cache settings are omitted because no reproducible dated captures are available.",
+    "link": {
+      "title": "MDN: 302 Found",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/302"
+    }
+  },
+  {
+    "id": "cs1-url-shortener-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "The redirect path must hold **p99 under 50 ms at 30,000 req/s** while also recording click analytics. Which design choices help? Select all that apply.",
+    "options": [
+      {
+        "text": "Publish a click event to Kafka asynchronously and return the redirect without waiting for the acknowledgement.",
+        "explanation": "Correct. Decoupling analytics from the request path means the redirect's latency depends only on the lookup. If Kafka is slow, buffer or drop events rather than delay redirects."
+      },
+      {
+        "text": "Increment a `click_count` column in the links table on every redirect.",
+        "explanation": "Incorrect. A synchronous write per redirect adds latency and creates hot rows for viral links, causing lock contention exactly when traffic is highest."
+      },
+      {
+        "text": "Read-through cache in Redis plus a short-lived negative cache for unknown codes.",
+        "explanation": "Correct. Most lookups hit memory, and negative caching stops bots probing random codes from falling through to the database."
+      },
+      {
+        "text": "A small in-process LRU cache on each redirect server for the hottest links.",
+        "explanation": "Correct. It avoids a network hop for viral links and protects the Redis shard that owns a hot key from saturating."
+      },
+      {
+        "text": "Use a 2PC transaction across the links store and the analytics store so both are always consistent.",
+        "explanation": "Incorrect. Two-phase commit adds multiple round trips and blocks on the slowest participant. Analytics can be eventually consistent; a redirect must not wait on it."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Budget the 50 ms:\n\n| Step | Illustrative latency input, not a benchmark |\n|---|---|\n| In-process cache hit | < 0.1 ms |\n| Redis hit | ~0.5–1 ms |\n| KV store read | ~5–10 ms |\n| Sync DB write | +5–20 ms, worse under contention |\n\nKeep only reads on the critical path and push every write (analytics) off it. Layered caches handle hot keys; negative caching handles bots. Synchronous work can increase latency and contention; whether it violates 50 ms needs a representative load test.",
+    "link": {
+      "title": "System Design Primer",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/README.md"
+    }
+  }
+]

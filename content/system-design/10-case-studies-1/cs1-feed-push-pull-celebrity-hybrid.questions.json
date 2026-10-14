@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cs1-news-feed-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the stated read-heavy workload, why might a feed default to **fan-out on write** (precomputing each follower's timeline) rather than **fan-out on read**?",
+    "options": [
+      {
+        "text": "Because writes are far more frequent than reads.",
+        "explanation": "Wrong. It's the other way round: feeds are read many times more often than posts are written. That imbalance is precisely why precomputing at write time pays off."
+      },
+      {
+        "text": "Because fan-out on read can't show posts in time order.",
+        "explanation": "Wrong. Fan-out on read can order posts perfectly with a k-way merge by timestamp. The issue is cost and latency, not ordering."
+      },
+      {
+        "text": "Because reads vastly outnumber writes, so moving the merging work to the (asynchronous) write path makes the hot read path a single cache lookup.",
+        "explanation": "Correct. You pay the fan-out cost once per post, off the user's critical path, instead of on every one of the many timeline loads."
+      },
+      {
+        "text": "Because fan-out on write uses less storage.",
+        "explanation": "Wrong. Fan-out on write uses *more* storage: a post ID is copied into every follower's timeline. It trades storage and write work for read speed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the work per day with 500M posts, 3B timeline reads, 200 average followers and users following ~200 accounts:\n\n```formula\npush = 500M × 200 = 100B/day\npull = 3B × 200 = 600B/day\npull / push = 6\nwhere\npush: timeline appends per day with fan-out on write (posts × followers), done by background workers\npull: lookups per day with fan-out on read (timeline loads × accounts followed), done while the user waits\nM: million\nB: billion\nday: one day; /day means per day\nIn words: pushing costs 100 billion background appends a day; pulling costs 600 billion lookups a day on the hot path, six times as many.\n```\n\nPull performs 6x as many enumerated operations in this simplified model; lookups and appends do not have identical cost, all of it while a user is waiting. Push's work happens in background workers, so the timeline load is one Redis read plus hydration.",
+    "link": {
+      "title": "InfoQ: Timelines at Scale",
+      "url": "https://www.infoq.com/presentations/Twitter-Timeline-Scalability/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your feed service has a user with **50 million followers** who posts 20 times a day. Your fan-out fleet sustains **1 million inserts/s** in total. Which approach should you take for this account?",
+    "options": [
+      {
+        "text": "Don't fan out this account's posts; at read time, fetch this account's recent posts from its (heavily cached) user timeline and merge them into each follower's precomputed timeline.",
+        "explanation": "Correct. This is the hybrid model. Each follower pays a single extra lookup for each celebrity they follow, and that celebrity's timeline is so frequently read it's always cached."
+      },
+      {
+        "text": "Fan out on write like everyone else, but add more fan-out workers.",
+        "explanation": "Wrong. Each post would need 50M inserts, ~50 s of the *entire* fleet's capacity, and 20 posts/day is 1 billion inserts from one account. When several celebrities post at once, ordinary users' feeds back up for minutes. Scaling workers treats the symptom expensively."
+      },
+      {
+        "text": "Switch the entire platform to fan-out on read.",
+        "explanation": "Wrong. This fixes one account by making every timeline read expensive for every user: hundreds of lookups and a merge per load, on the hot path."
+      },
+      {
+        "text": "Fan out only to followers whose user IDs hash to an even number.",
+        "explanation": "Wrong. Half the followers would never see the post. Arbitrary sampling breaks correctness; the hybrid gives everyone the post without the write amplification."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Cost of pushing:\n\n```formula\nt = 50M / (1M/s) = 50 s\ndaily = 20 × 50M = 1B\nwhere\nt: whole-fleet time to fan out one post\ndaily: inserts per day from this one account (20 posts a day)\nM: million\nB: billion\ns: seconds; /s means per second\nIn words: each post ties up the entire fan-out fleet for 50 seconds, and the account generates a billion inserts a day on its own.\n```\n\nCost of pulling instead:\n\n- Each follower's timeline load adds one cached lookup (the celebrity's last ~20 posts) and a merge of a few items into a sorted list.\n- The celebrity's user timeline is requested millions of times, so it stays hot in cache.\n\nSo set a threshold (e.g. > 1M followers) above which accounts are pulled, not pushed.",
+    "link": {
+      "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
+      "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A celebrity with 40M followers posts, and fan-out takes several minutes. A follower near the front of the list replies within seconds, and the reply is fanned out to mutual followers *before* the original reaches them. They see the reply before the post it answers. What's the best structural fix?",
+    "options": [
+      {
+        "text": "Make the reply's fan-out wait until the celebrity's fan-out has finished.",
+        "explanation": "Wrong. Cross-post dependencies in the fan-out pipeline would be complex and fragile, and would delay replies by minutes."
+      },
+      {
+        "text": "Use the hybrid model: don't fan out the celebrity's posts; merge them in at read time from their cached user timeline, so everyone sees the original as soon as it exists.",
+        "explanation": "Correct. With pull for huge accounts, pull avoids the bulk fan-out delay, but stale source/cache reads and partial failures can still hide the parent. If causal presentation is required, fetch or defer replies whose parent is unavailable."
+      },
+      {
+        "text": "Sort each timeline by post ID before returning it.",
+        "explanation": "Partly helps ordering within a timeline, but it can't show a post that hasn't arrived in that timeline yet. The reply still appears without its parent."
+      },
+      {
+        "text": "Add more fan-out workers so the celebrity's fan-out completes in under 5 seconds.",
+        "explanation": "Wrong as the main fix. 40M inserts in 5 s means 8M inserts/s just for one post, many times a normal fleet's capacity, and the race returns as soon as several celebrities post together."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The race exists because one post's delivery is spread over minutes:\n\n```\nat 0 s     celebrity posts\nat 5 s    follower A gets it, replies\nat 10 s   reply fanned out to B\nat 3 min  original finally reaches B\n```\n\nWith pull for huge accounts, B's read at 10 s can merge the original from the celebrity's user timeline without waiting for bulk fan-out, provided that read sees the committed post. Stale caches or failed lookups still need parent fetching or deferral. Do not infer causality from Snowflake IDs under clock skew; use the reply-parent relationship if parent-before-reply display is required.",
+    "link": {
+      "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
+      "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
+    }
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cs1-rate-limiter-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your fleet handles **800,000 requests/s**. Each check is one Redis round trip, and a Redis shard comfortably handles **80,000 ops/s**. You want 50% headroom. How many primary shards do you need?",
+    "options": [
+      {
+        "text": "10",
+        "explanation": "Wrong. 800k / 80k = 10 runs every shard at 100% with no headroom; any load skew or spike would push shards over capacity and blow your latency budget."
+      },
+      {
+        "text": "100",
+        "explanation": "Wrong. 100 shards would run at 8k ops/s each (10% utilisation). It works but costs 5x what's needed. Over-provisioning is a legitimate choice, but it isn't what 50% headroom implies."
+      },
+      {
+        "text": "5",
+        "explanation": "Wrong. 5 shards would each need 160k ops/s, twice their comfortable capacity."
+      },
+      {
+        "text": "20",
+        "explanation": "Correct. With 50% headroom, each shard should run at about 40k ops/s. 800k / 40k = 20 shards."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Headroom means running each shard below its comfortable maximum, so first find the target load per shard, then divide:\n\n```formula\ntarget = cap × (1 − headroom)\ntarget = 80,000/s × 0.5 = 40,000/s\nshards = load / target\nshards = 800,000/s / (40,000/s) = 20\nwhere\ntarget: operations per second each shard should run at\ncap: what one shard comfortably handles, 80,000 operations per second\nheadroom: the spare fraction to keep, 50% = 0.5\nshards: primary shards needed\nload: Redis calls per second, one per request: 800,000\n/s: per second\nIn words: at half of its 80,000 capacity, each shard takes 40,000 checks a second, so 800,000 checks need 20 shards.\n```\n\nAdd one replica each for failover: 40 Redis nodes in total.\n\nIllustrative memory arithmetic, assuming 100 bytes per rule per key:\n\n```formula\nmemory = 10M × 2 × 100 B = 2 GB\nm_shard = 2 GB / 20 = 100 MB\nwhere\nmemory: total counter memory for 10 million keys with 2 rules each\nm_shard: memory each of the 20 shards holds\nM: million\nB: bytes\nGB: gigabyte, 10^9 bytes\nMB: megabyte, 10^6 bytes\nIn words: two gigabytes of counters split over 20 shards is about 100 MB each, before other overhead.\n```\n\nMeasure actual memory before declaring throughput the limiting resource. If you also use local rejection caching (gateways remember \"key over limit until a given time\"), abusive clients stop generating Redis calls, so the real load is usually lower.",
+    "link": {
+      "title": "Envoy: global rate limiting",
+      "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/other_features/global_rate_limiting"
+    }
+  }
+]

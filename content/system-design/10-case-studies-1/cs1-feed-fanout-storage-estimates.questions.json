@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs1-news-feed-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your platform has **400 million posts/day** and the average post reaches **150 eligible follower timelines**. With pure fan-out on write, roughly how many timeline inserts per second must the fan-out fleet sustain on average?",
+    "options": [
+      {
+        "text": "About 4,600/s",
+        "explanation": "Wrong. That's the post rate (400M / 86,400). It forgets that each post is inserted into 150 timelines."
+      },
+      {
+        "text": "About 70,000/s",
+        "explanation": "Wrong. This is roughly 6B inserts/day, about 10x too low. Check the multiplication: 400M × 150 = 60B, not 6B."
+      },
+      {
+        "text": "About 60 million/s",
+        "explanation": "Wrong. 60 billion is the *daily* total; you still need to divide by the ~86,400 seconds in a day."
+      },
+      {
+        "text": "About 700,000/s",
+        "explanation": "Correct. 400M × 150 = 60B inserts/day; 60B / 86,400 ≈ 694,000/s. At a 3x peak, plan for about 2M/s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Each post is inserted once per eligible follower, so multiply, then divide by the seconds in a day:\n\n```formula\ndaily = 400M × 150 = 6 × 10^10\nrate = (6 × 10^10) / (8.64 × 10^4 s)\nrate ≈ 694,000/s\npeak = 694,000/s × 3 ≈ 2.1M/s\nwhere\ndaily: timeline inserts per day (60 billion)\nrate: average inserts per second\n8.64 × 10^4: 86,400, the seconds in a day\npeak: inserts per second at an assumed 3x peak\nM: million\n10^10, 10^4: 1 followed by 10 or 4 zeros\ns: seconds; /s means per second\n≈: approximately equal to (rounded)\nIn words: 60 billion inserts a day is about 700,000 a second on average and about 2 million a second at peak.\n```\n\nIs that feasible? Use a representative pipelined-fan-out benchmark to determine per-shard capacity and memory; a generic Redis operation rate does not establish how many nodes absorb this workload. Note that the average hides the skewed distribution: the celebrity accounts in the tail are what break it.",
+    "link": {
+      "title": "System Design Primer: design the Twitter timeline",
+      "url": "https://github.com/donnemartin/system-design-primer/blob/master/solutions/system_design/twitter/README.md"
+    }
+  },
+  {
+    "id": "cs1-news-feed-q10",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a hypothetical feed, 400M posts produce 30B eligible timeline inserts per day: 75 per post. A naive calculation instead uses 200 followers per account. Which explanation could account for the difference?",
+    "options": [
+      {
+        "text": "Twitter only delivered every third tweet to save resources.",
+        "explanation": "Wrong. The stated hypothetical workload does not establish sampling. The eligible-recipient count may instead differ from an unweighted follower average."
+      },
+      {
+        "text": "Follower counts are heavily skewed and many accounts post to few or inactive followers, and fan-out only writes to users who have a cached timeline.",
+        "explanation": "Correct as a possible explanation: posting frequency weights the follower distribution, and eligibility/activity filters reduce deliveries. A skewed distribution alone does not prove that post-weighted fan-out is lower."
+      },
+      {
+        "text": "Each delivery covered several followers at once using Redis transactions.",
+        "explanation": "Wrong. A delivery here is one insert into one timeline. Batching changes the number of network calls, not the number of deliveries."
+      },
+      {
+        "text": "The 30 billion figure counts only celebrity tweets.",
+        "explanation": "Wrong. The prompt counts all eligible inserts, not just celebrity posts. It supplies no historical celebrity-only measurement."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nd = 30B / (400M) = 75\nrate = 30B / (86,400 s) ≈ 350,000/s\nwhere\nd: timeline deliveries per post (tweet)\nrate: average deliveries per second\nB: billion\nM: million\ns: seconds; /s means per second\n≈: approximately equal to (rounded from 347,000)\nIn words: 30 billion deliveries from 400 million posts is 75 per post, about 350,000 a second.\n```\n\nTwo effects could explain a lower eligible-recipient mean in this hypothetical dataset:\n\n1. **Skewed distribution**: mean follower counts are pulled up by a few accounts with millions of followers, but most tweets come from ordinary accounts.\n2. **Activity**: timelines are kept only for active users, so dormant followers receive nothing.\n\nLesson for interviews: an unweighted account-average follower count is not a safe upper bound. Use the post-weighted eligible-recipient mean; prolific high-follower accounts can make it larger.",
+    "link": {
+      "title": "High Scalability: the architecture Twitter uses to deal with 150M active users",
+      "url": "https://highscalability.com/the-architecture-twitter-uses-to-deal-with-150m-active-users/"
+    }
+  }
+]

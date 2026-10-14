@@ -1,0 +1,40 @@
+[
+  {
+    "id": "cs1-rate-limiter-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Every customer is within their 100 requests/minute limit, yet the API falls over. A heavy report endpoint takes ~20 s per call, and a sales event has tripled overall traffic. Which mechanisms directly bound concurrent work or shed aggregate overload? Select all that apply.",
+    "options": [
+      {
+        "text": "A per-customer **concurrency limiter** (for example, at most 5 in-flight report requests).",
+        "explanation": "Correct. Request-rate limits don't cap how much work is in progress. At 100/min with 20 s each, one customer can hold ~33 requests in flight; a concurrency cap bounds that directly."
+      },
+      {
+        "text": "A fleet-wide **load shedding** mechanism that drops low-priority traffic when total utilisation is too high.",
+        "explanation": "Correct. Per-key limits can't protect you when every client is individually well-behaved but the total exceeds capacity. Stripe runs fleet-level load shedding mechanisms for exactly this."
+      },
+      {
+        "text": "Lower every customer's per-minute limit by half.",
+        "explanation": "Incorrect. It punishes all customers permanently for a temporary capacity problem, and still doesn't bound slow, concurrent work."
+      },
+      {
+        "text": "Move the rate limiter from the gateway into each backend service.",
+        "explanation": "Incorrect. Moving the limiter doesn't change what it measures. The gap is concurrency and overall capacity, not limiter placement."
+      },
+      {
+        "text": "Prioritise critical traffic (e.g. payments) over less critical (e.g. reports) when shedding.",
+        "explanation": "Correct. Shedding by priority keeps the most important requests flowing while the system is overloaded."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Little's law links stable averages: mean in-flight work is the accepted arrival rate multiplied by mean duration. It is not a hard instantaneous concurrency cap.\n\n```formula\nL = λ × W\nλ = 100 / (60 s) ≈ 1.67/s\nL = 1.67/s × 20 s ≈ 33\nwhere\nL: average requests in flight (started, not finished)\nλ: lambda, the average accepted arrival rate per customer: 100 per minute\nW: average time per request, 20 seconds\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: a customer sending 100 slow requests a minute keeps about 33 of them running at once.\n```\n\nThat's per customer, all within the rate limit. So you need:\n\n1. **Concurrency limits** per customer for slow endpoints.\n2. **Fleet-wide load shedding** for aggregate overload.\n3. **Priorities** so shedding drops the least important work first.\n\nStripe's write-up describes exactly this layering: request-rate limiter, concurrency limiter, and two kinds of load shedding mechanism.",
+    "link": {
+      "title": "Stripe: scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  }
+]

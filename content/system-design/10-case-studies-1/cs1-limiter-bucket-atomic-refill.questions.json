@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cs1-rate-limiter-q3",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API serves a mobile app that, on launch, fires **15 requests in under a second**, then is quiet. You want an average of **1 request/second** per user. Which algorithm fits best?",
+    "options": [
+      {
+        "text": "Fixed window of 1 request per 1-second window.",
+        "explanation": "Wrong. It accepts at most one per fixed window (possibly two if the burst straddles a boundary), far short of the requested launch burst."
+      },
+      {
+        "text": "Leaky bucket draining 1 request/s.",
+        "explanation": "Wrong. A leaky bucket smooths output to exactly 1/s, so the 15 launch requests would queue for up to 15 seconds, making the app feel broken."
+      },
+      {
+        "text": "Token bucket with capacity 20 and refill rate 1 token/s.",
+        "explanation": "Correct. The bucket starts full, so the 15-request launch burst is served immediately, while the 1 token/s refill enforces the long-run average. This is exactly the burst-plus-average shape token buckets are designed for."
+      },
+      {
+        "text": "Sliding window log with a limit of 1 per second.",
+        "explanation": "Wrong. It is exact, but exact enforcement of 1/s rejects the burst just as the fixed window does, and it costs more memory."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A token bucket has two settings, and the lazy refill rule ties them together:\n\n```formula\nT_new = min(B, T + Δt × r)\nT_new = min(20, 5 + 15 s × 1/s) = 20\nwhere\nT_new: tokens after refilling\nT: tokens left after the last use, here 5\nB: the capacity, the largest burst you will serve at once; the launch burst is 15, so 20 leaves room\nr: the refill rate, the sustained average allowed, 1 token per second (1/s)\nΔt: seconds since the bucket was last updated, here 15 s of quiet\nmin: \"the smaller of\", so the bucket never holds more than B\ns: seconds\nIn words: after 15 quiet seconds at one token a second, the bucket is back to full.\n```\n\nTimeline: launch at time 0 takes 15 tokens (20 → 5). Over the next 15 s of quiet, the bucket refills to 20. A misbehaving client sending continuously gets at most 20 immediately, then 1 a second thereafter. That's why Stripe and AWS API Gateway use token buckets for API limits.",
+    "link": {
+      "title": "Stripe: scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each of 200 gateway nodes implements the limit as: read the Redis count; if it is below the limit, separately write back one more and allow. Under load, clients exceed their limits. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "Redis is losing writes; enable AOF persistence.",
+        "explanation": "Wrong. Persistence affects durability across restarts, not concurrent correctness. The writes aren't lost; they overwrite each other."
+      },
+      {
+        "text": "Read-modify-write race: two nodes read the same value and both allow. Use an atomic operation (`INCR` and compare the returned value, or a Lua script).",
+        "explanation": "Correct. Between GET and SET another node can read the same count. Redis executes `INCR` and Lua scripts atomically, so each request sees a unique, up-to-date count in one round trip."
+      },
+      {
+        "text": "The limit is too high; halve it to compensate.",
+        "explanation": "Wrong. Halving the limit hides the bug inconsistently: overshoot depends on concurrency, so quiet clients are now over-restricted while busy ones still overshoot."
+      },
+      {
+        "text": "Use a distributed lock (e.g. Redlock) around each check.",
+        "explanation": "Wrong as a first choice. A lock fixes the race but adds several round trips per request and becomes a bottleneck for hot keys. Atomic server-side operations solve it in one round trip."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Interleave two gateways, A and B, with limit 100 and count 99:\n\n```\nA: GET -> 99   (99 < 100, allow)\nB: GET -> 99   (99 < 100, allow)\nA: SET 100\nB: SET 100\n```\n\nTwo requests allowed, count says 100: the client got 101. Fix:\n\nA native Redis Lua script can combine the increment, first-key expiry and decision. The caller supplies an aligned-minute key as KEYS[1] and a limit such as 100 as ARGV[1].\n\n```lua\n-- KEYS[1] includes the aligned minute.\n-- INCR returns the updated count.\nlocal n = redis.call('INCR', KEYS[1])\nif n == 1 then\n  -- Expiry cleans up an old minute key.\n  redis.call('EXPIRE', KEYS[1], 60)\nend\nlocal limit = tonumber(ARGV[1])\n-- 1 allows; 0 rejects beyond the limit.\nreturn n <= limit and 1 or 0\n```\n\nIn a local Redis fixture with the count set to 99, successive calls return 1 then 0: request 100 is allowed and request 101 is rejected. This counts attempted requests, including rejections. The key’s minute identifier, rather than its cleanup TTL, defines the fixed window.\n\n(Run the INCR and EXPIRE together in a Lua script; a plain MULTI cannot branch on the queued INCR result so a crash between them can't leave a key that never expires.)\n\nFor a token bucket, put refill + decrement in one Lua script so the whole step is atomic, and read time with `redis.call('TIME')` to avoid gateway clock skew.",
+    "link": {
+      "title": "Redis: INCR (including the rate limiter pattern)",
+      "url": "https://redis.io/docs/latest/commands/incr/"
+    }
+  }
+]

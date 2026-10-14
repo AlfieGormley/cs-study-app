@@ -1,0 +1,100 @@
+[
+  {
+    "id": "cs1-rate-limiter-q6",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "The Redis cluster backing your limiter has a partial outage: 30% of checks time out. Assume ordinary API quota overruns are acceptable during this outage, while authentication abuse must remain bounded. Which responses fit that policy? Select all that apply.",
+    "options": [
+      {
+        "text": "Fail open for ordinary API limits: allow the request after a short timeout (~5–10 ms) and emit a metric.",
+        "explanation": "Correct. The limiter exists to protect the API; rejecting 30% of legitimate traffic because the limiter is sick turns a partial limiter outage into an API outage."
+      },
+      {
+        "text": "Fail closed for login attempts and password resets.",
+        "explanation": "Correct. These limits defend against brute-force attacks. Briefly rejecting some logins is less harmful than letting attackers try unlimited passwords while the limiter is down."
+      },
+      {
+        "text": "Fall back to per-gateway in-memory buckets sized at roughly limit ÷ number of gateways.",
+        "explanation": "Correct. Local approximate limiting keeps some protection in place. It's inaccurate if load balancing is uneven, but far better than no limit at all."
+      },
+      {
+        "text": "Retry each timed-out Redis call up to 5 times before deciding.",
+        "explanation": "Incorrect. Retries multiply load on an already struggling cluster and add tens of milliseconds to every request. Use short timeouts and a fallback, not aggressive retries."
+      },
+      {
+        "text": "Return 429 to every request until Redis recovers.",
+        "explanation": "Incorrect. This blocks all customers, including well-behaved ones, making the limiter the cause of a total outage."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask, for each limit: **what's worse, over-admitting or rejecting?**\n\n| Limit | Worse outcome | Policy |\n|---|---|---|\n| API quota | Rejecting paying users | Fail open |\n| Login attempts | Brute force | Fail closed |\n\nThen layer a degraded mode: local buckets give partial protection with no network dependency. Avoid retry storms: a 5 ms timeout with zero retries targets a bounded network wait; scheduling, queueing and the fallback also contribute to measured tail latency while Redis recovers.",
+    "link": {
+      "title": "Stripe: scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q7",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A customer has a global limit of **10,000 requests/minute**, and you serve them from **US and EU** regions. A cross-region round trip is ~90 ms. Which design best balances accuracy and latency?",
+    "options": [
+      {
+        "text": "Each region enforces locally against a share of the limit; reserve shares so their sum stays within the quota and rebalance without double allocation.",
+        "explanation": "Correct. Local enforcement avoids the 90 ms remote round trip. Static shares can preserve the total allowance but strand capacity in an idle region. Async full-quota replicas require separately justified overshoot bounds."
+      },
+      {
+        "text": "Every check in either region goes to a single US Redis cluster.",
+        "explanation": "Wrong. EU requests would pay ~90 ms extra on every call, far over the 1–2 ms budget, and an Atlantic link problem would break EU rate limiting entirely."
+      },
+      {
+        "text": "Use a synchronously replicated multi-region database with strong consistency for counters.",
+        "explanation": "Wrong. A commit quorum spanning these regions requires cross-region coordination; the supplied 90 ms round trip would exceed this check's budget. Quorum placement and the client's region determine which requests pay that delay. Strong consistency is overkill for a counter where a few percent overshoot is acceptable."
+      },
+      {
+        "text": "Give each region the full 10,000/min limit independently.",
+        "explanation": "Wrong. The customer could get up to 20,000/min, a 100% overshoot. That's a pricing and protection failure, not an acceptable approximation."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Quantify the overshoot of the async option. With a 1-second sync interval, the overshoot is roughly what the other region admits before the next sync:\n\n```formula\nrate = 10,000 / (60 s) ≈ 167/s\nover ≈ rate × t_sync = 167/s × 1 s = 167\nshare = over / limit\nshare = 167 / 10,000 ≈ 1.7%\nwhere\nrate: the customer's limit as a per-second rate\nover: extra requests admitted beyond the limit before the regions next exchange counts\nt_sync: the sync interval, 1 second\nshare: the overshoot as a fraction of the per-minute limit\nlimit: the global limit, 10,000 requests per minute\ns: seconds; /s means per second\n≈: approximately equal to\nIn words: a client sending at its limit can slip about one second of extra traffic through, roughly 2% of its per-minute limit.\n```\n\nIf both regions admit a second's worth, the overshoot is up to about 333, around 3%. So for a client sending at about its limit the overshoot is roughly 167–333 requests, or 2–3% of the limit.\n\nA client blasting both regions far above its limit can overshoot by more within that second, which is why the async scheme is usually paired with a per-region per-second cap.\n\nCompare that with adding 90 ms to every EU request. Acceptable overshoot is a policy choice; gossip alone gives no small bound during an extended partition. The static-split variant (e.g. US 6,000, EU 4,000) is simpler still but unfair when traffic shifts between regions.",
+    "link": {
+      "title": "Google Cloud: rate-limiting strategies and techniques",
+      "url": "https://cloud.google.com/architecture/rate-limiting-strategies-techniques"
+    }
+  },
+  {
+    "id": "cs1-rate-limiter-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To save Redis calls, each of **200 gateways** leases **10 tokens** at a time from a client's central bucket. A small customer has **100 tokens available in the current window**, with no refill during this burst and no outstanding earlier leases. Their traffic is spread evenly across all gateways. What goes wrong?",
+    "options": [
+      {
+        "text": "Nothing: leasing is always accurate because tokens are only spent once.",
+        "explanation": "Wrong. Tokens are spent once, but where they sit matters. Leased tokens are stranded on whichever gateways took them."
+      },
+      {
+        "text": "The customer gets 2,000 requests/minute because each gateway gets its own 10.",
+        "explanation": "Wrong. Leases come out of the central bucket, so only 100 tokens are available in this stated window. The problem is the opposite: under-admission."
+      },
+      {
+        "text": "The first 10 gateways to ask take all 100 tokens; requests landing on the other 190 gateways are rejected even though most leased tokens sit unused.",
+        "explanation": "Correct. Leasing only works when the limit is large compared with the lease size times the number of gateways. Here 10 × 200 = 2,000 tokens would be needed to give every gateway one lease; the customer has 100."
+      },
+      {
+        "text": "Redis load increases, because leasing adds a call per request.",
+        "explanation": "Wrong. Leasing reduces Redis calls; that's its purpose. The issue is accuracy for small limits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare lease capacity with the limit:\n\n```formula\nleased = G × lease = 200 × 10 = 2,000\nserved = limit / lease = 100 / 10 = 10\nwhere\nleased: tokens needed to give every gateway one lease\nG: the number of gateways, 200\nlease: tokens per lease, 10\nlimit: tokens the customer has this window, 100\nserved: how many gateways can get a lease before the tokens run out\nIn words: one lease for every gateway would need 2,000 tokens, but the customer's 100 tokens cover only 10 gateways.\n```\n\nBefore any further refill or window reset, only 10 of the 200 gateways can obtain a lease. With traffic spread evenly, 190 / 200 = 95% of requests hit a gateway with no tokens.\n\nFixes:\n- Lease only for keys whose limit is much larger than the gateway count times the lease size (e.g. limits above ~100k/min).\n- Scale the lease size with the limit (e.g. 1% of it).\n- Use direct Redis checks for small keys, which are low-traffic anyway.",
+    "link": {
+      "title": "Stripe: scaling your API with rate limiters",
+      "url": "https://stripe.com/blog/rate-limiters"
+    }
+  }
+]

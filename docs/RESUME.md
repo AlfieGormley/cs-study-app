@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 17/76 modules; 126 originals → 630 short lessons with 1507 focused questions.
+- Independently verified: 18/76 modules; 133 originals → 667 short lessons with 1589 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `20f676c`, version `45a08d278f4b`, 584 short lessons/1411 focused questions
-  across 16 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `1a15bbb45e9e`, 17 modules/630 units/1507 questions.
+- Latest confirmed live release: `f1a24c6`, version `1a15bbb45e9e`, 630 short lessons/1507 focused questions
+  across 17 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `746a07f3b723`, 18 modules/667 units/1589 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
   Complexity and Sound & Digital Audio are also published; Complexity’s formula follow-up is complete
@@ -18,9 +18,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- dsa/dsa-graphs: verifying; /root/graphs_short_verify.
 - dsa/dsa-techniques: verifying; /root/techniques_short_verify.
 - dsa/dsa-dp: authoring; /root/dp_short_author.
+- dsa/dsa-patterns: authoring; /root/patterns_short_author.
 
 Verification and integration:
 

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 17/76. Updated 2026-10-14.
+Verified modules: 18/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -24,6 +24,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Hash Tables & Hashing | 6 | 37 | 73 | 103 | 158 | 371 | 76 |
 | dsa/Trees & Heaps | 7 | 35 | 80 | 75 | 170 | 417 | 90 |
 | dsa/Sorting & Searching | 8 | 46 | 96 | 95 | 194 | 431 | 82 |
+| dsa/Graphs | 7 | 37 | 82 | 115 | 177 | 818 | 131 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -2090,6 +2091,163 @@ Low-confidence areas:
 - **medium** — glossary:sequential-access-dsa: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
 - **medium** — glossary:swift-lang: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
 - **medium** — glossary:t-digest: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+
+## dsa: Graphs
+
+[Independent verification record](../content/dsa/06-graphs/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Current Neo4j block formats inline relationships and use trees for dense relationships; direct-pointer wording cannot describe every format.
+- Attach the current primary implementation source to the vendor-specific caveat.
+- Use a valid positive-argument bound including an edgeless graph and singleton vertex.
+- Lazy code can pop a vertex more than once; distinguish indexed and lazy implementations.
+- The equality counts visits/list entries rather than asserting a literal instruction count.
+- Multi-source BFS optimises equal-cost edge distance rather than unequal road travel times.
+- Black does not imply every reachable vertex has finished; reachable ancestors may still be grey.
+- An inverse-Ackermann bound of four is a practical-size convention, not a universal bound for every integer.
+- Parallel structure does not guarantee measured speedup for every implementation.
+- Provide primary bibliographic provenance for the retained history.
+- Per-edge contributions must be distinguished from aggregate residual capacity.
+- State the no-antiparallel assumption in the standalone formula card.
+- Backward contribution can share direction with an original opposite edge.
+- The real code skips some rows, so n cubed is the unskipped count rather than an exact count for every input.
+- Consistent degree semantics including loops.
+- Grammar correction.
+- Count the represented operations rather than claim exact program steps.
+- An empty-edge heap still starts with one source entry.
+- Avoid logarithms of zero and retain a valid simple-graph bound.
+- Update the verbal reading of the corrected bound.
+- Do not erase setup work for an edgeless graph.
+- The quiz’s optimality explanations need non-negative costs.
+- Put the scalar substitution into words outside the formula card.
+- The priority equation already has its defined standalone card.
+- Use prose for the already defined equation.
+- Express the condition in words outside its formula card.
+- Logarithm bases between zero and one reverse the arbitrage inequality.
+- Reachability does not establish direct edges or the baseline route cost.
+- No justified baseline cost of four for the route through vertex two.
+- Do not assume the reported route passes through the negative cycle vertex.
+- A partial final machine word must be counted; n divided by w is not an exact row cost.
+- Clarify this work model rather than make an exact runtime claim.
+- The prompt compares illustrative growth expressions, not literal comparison counts.
+- Distinguish the prompt’s tie order from a general strict-order guarantee.
+- Remove duplicated wording and an uncarded symbolic relation.
+- Use words for the lower bound outside the defined formula card.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Use conventional implicit scalar multiplication with explicit grouping; retain multiplication signs between numbers and ambiguous names.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Correct definition, input assumptions or an alias that opens another mathematical meaning.
+- Provide a precise distinct definition for an existing phrase whose prior alias captured another concept.
+- Provide a precise distinct definition for an existing phrase whose prior alias captured another concept.
+- Provide a precise distinct definition for an existing phrase whose prior alias captured another concept.
+- Do not place undefined English conditions in equation lines.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Keep actual maths in its defined formula card, clarify prerequisites and preserve the appropriate dictionary meaning.
+- Do not treat every bidirectional algorithm as BFS.
+- State non-collinearity and handle geometric/numeric degeneracies; the thirty-thousand-edge figure is an upper scale, not an observed dataset count.
+- Kahn’s ready queue is not BFS distance layering; executable statements remain unchanged.
+- A genuine Rule 6 asymptotic expression still needs locally defined quantities.
+- Use primary evidence for the numerical result.
+- Attach precise reviewed sources; no performance figure imported from their benchmarks.
+- Exact octile distance uses square-root-two diagonals; a literal cost of 1.41 would make that heuristic slightly overestimate.
+
+Remaining gaps:
+
+- All 37 units and all 82 questions were read including keys, distractors, explanations, comments and prerequisites. Reviewed relevant primary definitions/theorems plus mathematical reasoning and fetched background glossary references; no exhaustive sentence-to-source matrix or atomic factual-claim total is claimed.
+- No original substantive topic intentionally omitted. Dinic, push–relabel, Hopcroft–Karp, Hungarian, min-cost flow, planarity/biconnected algorithms, 2-SAT, ALT and contraction hierarchies retain conceptual coverage rather than gaining complete implementations.
+- Native checks execute every 29 lesson and five question Python fences with documented earlier helpers/imports or explicitly initialised fragment context. Bounded/random fixtures supplement reasoning; they do not prove all general algorithmic or complexity statements. Recursive routines retain the configured recursion-depth and simple/numbered-graph preconditions.
+- No physical-phone timing, commercial route-planner, social-network implementation, Python-memory, Neo4j, GPU/distributed, C/NumPy, production outage or speed benchmark was run. Existing unsupported performance/implementation gaps remain qualified in the text.
+- Primary PDFs were read at relevant theorem/history sections, not cover to cover. The original A* scan was inspected visually at printed pages 103–104; weighted proof at ICAPS page 356. Chazelle book text extraction was corrupt and was not treated as history evidence; the original archive and EMS translation/history supplied that evidence.
+- Optional new research probes returned three 404s and GNU Make pages returned 403; these are recorded transport/research failures, not included as new lesson links. All 72 actual lesson/question URLs load. Current tool facts rely on fetched official Python/Gradle/Bazel and underlying source semantics, without claiming a particular deployment.
+- Compiler-level dictionary evidence uses the real compiler’s glossary-collection block in a scratch copy and the app’s exactTerm/linkTerms implementation. Correct pre-existing Heap and nondecreasing definitions explicitly explain both meanings and were preserved; precise network-prefix and infinity-sentinel phrases avoid unrelated sequence/node definitions. Root performs full app/mobile/PWA integration after this scoped handoff.
+
+Low-confidence areas:
+
+- **medium** — graph-matrices-csr: Neo4j physical relationship layout and implementation-specific traversal costs. Current official store-format documentation confirms multiple physical layouts; wording now distinguishes record and block formats. No live Neo4j query/memory benchmark was run.
+- **medium** — graph-prim-boruvka: GPU/distributed Boruvka implementation performance. Original implementation/paper supports the existence and parallel structure of these methods. No paper performance figure is imported and no GPU/distributed experiment was run.
+- **medium** — graph-dsu-cost-kruskal: Inverse-Ackermann practical constant. The conventional four-or-so practical value depends on definition and input-size convention; unconditional inequality removed and text explicitly qualifies it.
+- **medium** — graph-traversal-memory: Tree-frontier and iterative-deepening leading memory models. The calculations explicitly assume full tree search without a global visited set; they do not represent measured Python memory.
+- **medium** — graph-state-search-bidirectional: Tree-like effective branching estimates for two-ended searches. Degree variation, overlap, direction and stopping rules determine real work; exact hypothetical model arithmetic verified, no social-network measurement.
+- **medium** — graph-mst-clustering-tours: 1926 Moravian power-network history. Original archive bibliographic entry and translated original paper/history by Nešetřil and Nešetřilová were read. The Czech original itself was not translated independently.
 
 ## synth: Sound & Digital Audio
 

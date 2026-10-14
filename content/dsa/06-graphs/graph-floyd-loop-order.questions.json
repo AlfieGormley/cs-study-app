@@ -1,0 +1,92 @@
+[
+  {
+    "id": "graph-all-pairs-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Roughly how many inner-loop steps does the full triple-loop Floyd–Warshall take, without skipping rows that have no route to k, on a graph with 1,000 vertices?",
+    "options": [
+      {
+        "text": "About 10⁹",
+        "explanation": "Correct. Three nested loops over one thousand vertices each: 1,000³ = 10⁹."
+      },
+      {
+        "text": "About 10⁶",
+        "explanation": "That is n², the size of the output table. Floyd–Warshall does n rounds over the whole table."
+      },
+      {
+        "text": "About 10⁶ × log 1,000",
+        "explanation": "There is no logarithmic factor: no min-heap or sorting is involved."
+      },
+      {
+        "text": "It depends mostly on the number of edges",
+        "explanation": "Floyd–Warshall's cost is n³ whatever m is. That is exactly why it loses to n × Dijkstra on sparse graphs."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The loops are `for k`, `for i`, `for j`, each over all n vertices.\n2. Count the iterations:\n\n```formula\nI = n^3\nI = 1000^3 = 10^9\nwhere\nn: the number of vertices; 1,000\nI: the number of inner-loop iterations\nIn words: three nested loops over n vertices run n cubed times.\n```\n\n3. The edge count m only affects initialisation, which is O(m): proportional to m.\n4. This counts loop iterations, not elapsed time. Runtime estimates are absent because no reproducible benchmark is provided.",
+    "link": {
+      "title": "Floyd–Warshall algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm"
+    }
+  },
+  {
+    "id": "graph-all-pairs-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "After running Floyd–Warshall you find `d[4][4] = -3`. What does that tell you?",
+    "options": [
+      {
+        "text": "Vertex 4 has a graph self-loop of weight −3",
+        "explanation": "Possibly, but not necessarily. A negative closed walk can produce a negative diagonal; the reported finite value need not equal the weight of any single simple cycle."
+      },
+      {
+        "text": "There is a negative closed walk from 4 back to 4, so routes through its mutually reachable negative cycle have no finite shortest cost",
+        "explanation": "Correct. A path from 4 back to 4 costs less than 0, so you could go round it repeatedly and make paths through 4 as cheap as you like."
+      },
+      {
+        "text": "The algorithm has a bug; the diagonal must always be 0",
+        "explanation": "The diagonal starts at 0, but it can be improved by a cycle i → ... → i with negative total weight."
+      },
+      {
+        "text": "The shortest path from 4 to itself is 3 edges long",
+        "explanation": "d stores distances (sums of weights), not edge counts."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Initially d[i][i] = 0 for every i.\n2. It only changes if a round trip through some vertex k is negative:\n\n```formula\nd[i][k] + d[k][i] < 0\nwhere\ni: the vertex on the diagonal entry d[i][i]\nk: some other vertex used as a stop\nd[i][k]: the best known distance from i to k\nd[k][i]: the best known distance from k back to i\n<: is less than\nIn words: if going out to k and back costs less than nothing, the diagonal entry drops below 0.\n```\n3. So d[4][4] < 0 means 4 can reach a negative cycle and be reached back from it; 4 need not itself lie on a negative simple cycle.\n4. Any pair (u, v) where u can reach 4 and 4 can reach v then has distance −∞; the finite numbers Floyd–Warshall printed for such pairs are meaningless.",
+    "link": {
+      "title": "Floyd–Warshall — cp-algorithms",
+      "url": "https://cp-algorithms.com/graph/all-pair-shortest-path-floyd-warshall.html"
+    }
+  },
+  {
+    "id": "graph-all-pairs-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague writes Floyd–Warshall with k innermost:\n\n```python\nfor i in range(n):\n    for j in range(n):\n        for k in range(n):\n            d[i][j] = min(d[i][j],\n                d[i][k] + d[k][j])\n```\n\nOn the lesson's example graph (true answer d[1][0] = 5 via 1→2→3→0), what does this report for d[1][0]?",
+    "options": [
+      {
+        "text": "5, the same as the correct version",
+        "explanation": "The loop order matters. When d[1][0] is computed, d[1][3] has not been computed yet (it is still ∞), so the route 1→2→3→0 is invisible."
+      },
+      {
+        "text": "8, the direct edge",
+        "explanation": "The entry is improved, but only to seven through vertex two. It is not left at its initial value of eight."
+      },
+      {
+        "text": "7",
+        "explanation": "Correct. With i outermost, d[1][0] is finalised while d[1][3] is still ∞ and d[2][0] is still 5, so the best it finds is 1→2→0 = 7."
+      },
+      {
+        "text": "An error, because the indices go out of range",
+        "explanation": "The indices are all in range; the code runs fine and silently gives a wrong answer, which is what makes this bug dangerous."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Rows are processed in order i = 0, 1, 2, 3, and d[i][j] is finished after its inner k loop.\n2. Row 0 first: d[0][2] = 5 and d[0][3] = 6 (via 1, then via 2). Fine so far.\nEvery candidate keeps the smaller of the current distance and the route through the intermediate vertex, using the earlier recurrence.\n\n3. Row 1: j = 0 is computed before j = 3. The candidates are:\n   - At intermediate vertex zero, the entry remains eight.\n   - At intermediate vertex two, the available 1→2→0 route improves the entry to seven.\n   - At intermediate vertex three, the route through it is still unknown: the needed 1→3 entry is computed too late.\n4. The code leaves the 1→0 entry at seven, while the real route 1→2→3→0 costs five. The defined card below gives both calculations.\n\nWith k outermost, by the time any pair uses k as a stop, every entry has already absorbed intermediates 0..k − 1.\n\n```formula\nd[1][0] = min(8, 2 + 5) = 7\nd_true[1][0] = 2 + 1 + 2 = 5\nwhere\nd[1][0]: result of the incorrectly ordered loops for this pair\nd_true[1][0]: actual shortest distance in edge-cost units\nmin: smaller argument\nIn words: The incorrect loops find the two-edge route but miss the cheaper route through vertices two and three.\n```\n\n",
+    "link": {
+      "title": "Floyd–Warshall algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm"
+    }
+  }
+]

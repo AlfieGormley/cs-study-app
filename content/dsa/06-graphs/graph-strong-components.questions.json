@@ -1,0 +1,95 @@
+[
+  {
+    "id": "graph-dfs-applications-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "How many strongly connected components does this directed graph have?\n\n```\n0 -> 1   1 -> 2   2 -> 0\n1 -> 3   3 -> 4   4 -> 5\n5 -> 4   5 -> 6\n```",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "This lumps 3 in with {4, 5}. 3 reaches 4, but nothing in {4, 5} leads back to 3."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. {0, 1, 2}, {3}, {4, 5} and {6}. The condensation is a chain: {0,1,2} → {3} → {4,5} → {6}."
+      },
+      {
+        "text": "3",
+        "explanation": "This misses that 3 and 6 are each a separate singleton SCC. Every vertex belongs to exactly one SCC."
+      },
+      {
+        "text": "7",
+        "explanation": "This counts each vertex alone, ignoring the cycles 0→1→2→0 and 4→5→4."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 0→1→2→0 is a cycle: {0, 1, 2} are mutually reachable.\n2. 1→3 leaves that cycle. Can 3 get back? 3→4→5→6 never returns to 0, 1, 2. So 3 is separate.\n3. 4→5→4 is a cycle: {4, 5}.\n4. Does 4 or 5 reach 3? No: 3 has only one incoming edge, from 1. So {3} is a singleton.\n5. 6 has no outgoing edges: {6}.\n\nTotal: **4**. Tarjan would emit them sinks first: {6}, {4, 5}, {3}, {0, 1, 2}.",
+    "link": {
+      "title": "Strongly connected components — cp-algorithms",
+      "url": "https://cp-algorithms.com/graph/strongly-connected-components.html"
+    }
+  },
+  {
+    "id": "graph-dfs-applications-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about SCC algorithms are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Kosaraju's algorithm needs the reversed (transposed) graph",
+        "explanation": "Correct. Its second pass runs DFS on the graph with every edge reversed, which costs O(n + m) extra space if reverse adjacency is not already available."
+      },
+      {
+        "text": "Tarjan's algorithm emits SCCs in reverse topological order of the condensation",
+        "explanation": "Correct. A component is popped only after every component reachable from it has been popped, so sinks come out first."
+      },
+      {
+        "text": "The condensation (each SCC collapsed to a vertex) can contain cycles",
+        "explanation": "Impossible. A cycle between two SCCs would make all their vertices mutually reachable, so they would be one SCC."
+      },
+      {
+        "text": "Kosaraju's second pass starts from vertices in increasing finish time",
+        "explanation": "It must be *decreasing*. The last-finishing vertex lies in a source SCC, which becomes a sink in the reversed graph, so its DFS stays inside one component."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "- **Kosaraju**: pass 1 records finish times on G. Pass 2 runs on Gᵀ, the transpose of G: the same graph with every edge reversed, starting from the latest finisher each time. Each DFS tree in pass 2 is one SCC.\n- **Tarjan**: one pass; when `low[u] == index[u]`, u is a root, and everything above it on the stack is its SCC. Because DFS finishes descendants first, sink components are completed first.\n- **Condensation**: always a DAG, by the maximality of SCCs.\n\nBoth are O(n + m), where n is the number of vertices and m the number of edges: they grow in proportion to the size of the graph.",
+    "link": {
+      "title": "Strongly connected component — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Strongly_connected_component"
+    }
+  },
+  {
+    "id": "graph-dfs-applications-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A monorepo build tool has 50,000 targets and 400,000 dependency edges. Some teams have created circular dependencies. You must report every group of mutually dependent targets and build the acyclic targets whose dependencies are not blocked by those cycles. Edges point from target to prerequisite. What is the best approach?",
+    "options": [
+      {
+        "text": "Compute SCCs with Tarjan, report every SCC larger than one target (or with a graph self-loop), mark those components and all targets depending on them as blocked, then build the rest in reverse topological order of the condensation",
+        "explanation": "Correct. Tarjan finds SCCs in O(n + m). Propagate blockage from cyclic prerequisites to their dependents; its sink-first component order then places remaining prerequisites before targets."
+      },
+      {
+        "text": "Run Kahn's algorithm and report the vertices it cannot output as the cycle",
+        "explanation": "Kahn's leftover set includes vertices merely *downstream* of a cycle, and lumps separate cycles together. It cannot tell you the groups."
+      },
+      {
+        "text": "Compute the transitive closure with Floyd–Warshall and find pairs that reach each other",
+        "explanation": "That works in principle but costs O(n³) time (n is the number of targets, 50,000), about 1.25 × 10¹⁴ operations, and n² = 2.5 × 10⁹ matrix cells. Far too slow for 50,000 vertices."
+      },
+      {
+        "text": "Repeatedly find a cycle with DFS, delete one of its edges, and restart",
+        "explanation": "Each restart is O(n + m), possibly once per cycle edge, and deleting edges changes the dependency semantics. It does not report the groups."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. \"Mutually dependent\" means mutually reachable: that is exactly an SCC.\nHere n counts the 50,000 targets and m the 400,000 dependency edges.\n\n2. Tarjan: one DFS, O(n + m), growing in proportion to vertices plus edges; their sum of 450,000 is a scale parameter, not an exact instruction count. Each SCC with at least two vertices (or a target depending on itself) is a cycle group to report.\n3. Collapse each SCC to one vertex: the condensation is a DAG.\n4. Tarjan emits SCCs sinks first. A target's dependencies are the targets it has edges to, which must be built before it, and those are emitted first. First exclude cyclic SCCs and all targets that transitively depend on them. Tarjan’s order is a valid prerequisite-first order for the remaining singleton components; it does not resolve builds inside cycles.\n5. Compare with Floyd–Warshall, which loops over every triple of vertices:\n\n```formula\nT_FW = n^3\nT_FW = (5 × 10^4)^3 = 1.25 × 10^14\nT_T = n + m = 450000\nwhere\nT_FW: Floyd–Warshall’s cubic growth expression\nT_T: Tarjan's scale, vertices plus edges\nn: the number of targets; 50,000\nm: the number of dependency edges; 400,000\nIn words: the cubic expression is about 300 million times the linear scale; this is not a measured runtime ratio.\n```",
+    "link": {
+      "title": "Tarjan's strongly connected components algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tarjan%27s_strongly_connected_components_algorithm"
+    }
+  }
+]

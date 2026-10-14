@@ -1,0 +1,100 @@
+[
+  {
+    "id": "sort-linear-time-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these can realistically be sorted in **linear (or expected linear) time** with a non-comparison sort? Select all that apply.\n\nHere n is the number of input elements. Big O is an asymptotic upper bound; Θ and Ω denote matching growth and a lower bound.",
+    "options": [
+      {
+        "text": "10 million `uint16` sensor readings",
+        "explanation": "Correct. There are only 65,536 possible values, fewer than the 10 million readings, so counting sort (or one or two radix passes) is linear."
+      },
+      {
+        "text": "1 million IPv4 addresses",
+        "explanation": "Correct. They are 32-bit integers: LSD radix sort with 4 byte-sized passes."
+      },
+      {
+        "text": "1 million names with locale-aware collation",
+        "explanation": "No linear-in-record-count guarantee follows for arbitrary-length names. ICU can produce byte collation keys suitable for radix sorting, but key generation and total key length must be included."
+      },
+      {
+        "text": "1 million floats drawn uniformly from [0, 1)",
+        "explanation": "Correct. Bucket sort with n buckets runs in expected O(n) on uniform data (and radix sort on the float bit patterns also works)."
+      },
+      {
+        "text": "1 million objects ordered by an arbitrary user-supplied comparator",
+        "explanation": "No. If all you have is a comparator, you're in the comparison model, and the Ω(n log n) lower bound applies (n is the number of objects)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "The question to ask is: **can I turn the key into small integer digits?**\n\n- uint16: yes, directly (65,536 possible values).\n- IPv4: yes, 4 bytes.\n- Uniform floats: yes (or radix on bits); the bucket is computed, not compared:\n\n```formula\nj = ⌊xn⌋\nwhere\nj: the bucket index, 0 to n − 1\nx: the float being placed, in [0, 1)\nn: the number of buckets, one per value; here 1,000,000\n⌊ ⌋: the floor: round down to a whole number\nIn words: multiply the value by the number of buckets and round down.\n```\n\n- Collated strings: byte collation keys are possible, but their lengths and generation costs are not bounded by the number of records.\n- Arbitrary comparator: by definition, only comparisons are available.",
+    "link": {
+      "title": "Radix sort — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Radix_sort"
+    }
+  },
+  {
+    "id": "sort-linear-time-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Bucket sort (n buckets over [0, 1), insertion sort inside each bucket) is used on 100,000 latency values that have been scaled to [0, 1). Suppose 99% are independently uniform within [0.000, 0.001), presented in random order. At this fixed n, what cost increase should you expect?\n\nHere n is the number of input elements. Big O is an asymptotic upper bound; Θ and Ω denote matching growth and a lower bound.",
+    "options": [
+      {
+        "text": "It still runs in O(n), since bucket sort is linear",
+        "explanation": "Bucket sort is linear only in expectation under a uniform distribution. Skewed data breaks that assumption."
+      },
+      {
+        "text": "About 99,000 values land in the first ~100 buckets, so insertion sort inside them can do roughly 25 million shifts at this n",
+        "explanation": "Correct. With 100,000 buckets of width 1/100,000 = 0.00001, [0, 0.001) spans 100 buckets holding ~990 values each. Insertion sort costs ~990²/4 per bucket, ≈ 25 million shifts total, versus ~100,000 for uniform data."
+      },
+      {
+        "text": "It fails with an error because buckets overflow",
+        "explanation": "Buckets are dynamic lists; they grow. The problem is time, not errors."
+      },
+      {
+        "text": "It becomes O(n log n), the same as a comparison sort",
+        "explanation": "With insertion sort inside buckets, crowded buckets cost quadratic time in their size, rather than logarithmic-factor linear time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nw = 1 / n = 1 / 100000 = 0.00001\nB = 0.001 / w = 100\nm = 0.99n / B = 99000 / 100 = 990\nS ≈ Bm^2 / 4 = 100 × 990^2 / 4\nS ≈ 2.45 × 10^7\nwhere\nw: the width of one bucket\nn: the number of values, and of buckets; here 100,000\nB: the number of buckets the crowded range [0, 0.001) covers\nm: the values per crowded bucket\nS: the total insertion-sort shifts in the crowded buckets\nm^2: m squared, m × m\n≈: approximately equal to\nIn words: 99,000 values pile into 100 buckets of 990, and insertion sort's quadratic cost there adds up to about 24.5 million shifts.\n```\n\n1. Bucket width 0.00001, so the crowded range covers 100 buckets.\n2. 99% of 100,000 = 99,000 values in those 100 buckets: about 990 per bucket.\n3. Insertion sort on 990 random values: about 245,000 shifts each, ≈ 24.5 million in total.\n\nUniform data would have about 1 value per bucket, so around 100,000 operations. The estimated shift count is much larger; it does not establish a 250× wall-clock slowdown. With a fixed-width uniform subrange as n grows, expected time can still be O(n) with a larger constant. Fixes: choose bucket boundaries from a **sample** of the data (sample sort), use a log scale for latencies, or use a fallback sort inside large buckets.",
+    "link": {
+      "title": "Bucket sort — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bucket_sort"
+    }
+  },
+  {
+    "id": "sort-linear-time-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do GPU sorting libraries such as NVIDIA's CUB typically use radix sort rather than quicksort or merge sort?\n\nHere n is the number of input elements. Big O is an asymptotic upper bound; Θ and Ω denote matching growth and a lower bound.",
+    "options": [
+      {
+        "text": "Its counting and scatter passes are data-parallel, so many GPU threads can process digits concurrently",
+        "explanation": "Correct. Each pass is a histogram (count), a prefix sum (scan) and a scatter, all of which parallelise very well. GPU comparison sorts are also useful and can be efficient; supported key types and workload determine the choice."
+      },
+      {
+        "text": "Radix sort uses less memory than any comparison sort",
+        "explanation": "LSD radix sort needs an O(n) output buffer (n is the number of keys), more than in-place quicksort. Memory isn't the reason."
+      },
+      {
+        "text": "GPUs cannot compare numbers",
+        "explanation": "GPUs compare numbers perfectly well; branching on those comparisons is what is expensive when threads diverge."
+      },
+      {
+        "text": "Radix sort is stable, and GPUs require stability",
+        "explanation": "LSD radix sort is stable, but that's a bonus, not the reason. GPUs have no stability requirement."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "One LSD pass breaks down into three bulk operations:\n\n1. **Histogram:** every thread counts digit values for its chunk.\n2. **Prefix sum (scan):** combine the counts into output offsets; there are well-known parallel scan algorithms.\n3. **Scatter:** every element is written to its computed position.\n\nNone of these needs per-element branching on comparisons, so GPU threads stay in lockstep. With 32-bit keys and 8-bit digits, that's just 4 passes over the data.",
+    "link": {
+      "title": "Radix sort — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Radix_sort"
+    }
+  }
+]

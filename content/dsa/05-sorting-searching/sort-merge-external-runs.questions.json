@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sort-merge-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You must sort a 200 GB file using a 4 GB run-data budget plus additional working memory using external merge sort. Run generation makes 4 GB sorted runs, and the merge phase can merge all runs at once. How many runs are there, and how many times is each record read from disk in total?",
+    "options": [
+      {
+        "text": "50 runs; each record is read twice",
+        "explanation": "Correct. 200 / 4 = 50 runs. Each record is read once to create its run and once more during the single 50-way merge (and written twice)."
+      },
+      {
+        "text": "50 runs; each record is read about log₂ 50 ≈ 6 times",
+        "explanation": "That would be a sequence of 2-way merges. A k-way merge with a heap handles all 50 runs in a single pass."
+      },
+      {
+        "text": "200 runs; each record is read once",
+        "explanation": "Runs are as big as memory (4 GB), not 1 GB. And every record must be read at least twice: once to make runs, once to merge."
+      },
+      {
+        "text": "1 run; each record is read once",
+        "explanation": "200 GB can't be sorted in 4 GB of memory in one go; that is why we need runs at all."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nr = D / M = 200 GB / 4 GB = 50\nB = r × 60 MB = 3000 MB = 3 GB\nwhere\nr: the number of sorted runs\nD: the size of the file, 200 gigabytes\nM: the run size, 4 gigabytes\nB: the total input-buffer memory for the 50-way merge, at 60 MB per run\nGB: gigabyte, 1,000,000,000 bytes\nMB: megabyte, 1,000,000 bytes\nIn words: 200 GB in 4 GB pieces is 50 runs, and 50 buffers of 60 MB use about 3 GB in the merge.\n```\n\n**Phase 1 (runs):** read 4 GB, sort in memory, write a sorted run. 200 / 4 = **50 runs**. Every record: 1 read, 1 write.\n\n**Phase 2 (merge):** open all 50 runs with a buffer each (for example 60 MB each, leaving room for an output buffer and overhead). A min-heap of size 50 picks the smallest front element, O(log 50) heap work per output record, with implementation-dependent constants. Every record: 1 read, 1 write.\n\nTotal: each record read **twice** and written twice, all sequentially. Sequential I/O is the point: random disk access would be orders of magnitude slower.",
+    "link": {
+      "title": "External sorting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/External_sorting"
+    }
+  },
+  {
+    "id": "sort-merge-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A nightly report query in PostgreSQL is slow. `EXPLAIN ANALYZE` shows `Sort Method: external merge  Disk: 900000kB` with the default `work_mem`. What is the most direct fix?",
+    "options": [
+      {
+        "text": "Switch the table to a hash index",
+        "explanation": "Hash indexes can't provide ordering at all, so they can't remove a sort."
+      },
+      {
+        "text": "Run `VACUUM` on the table",
+        "explanation": "VACUUM reclaims dead tuples and updates visibility info; it doesn't change how much memory a sort gets."
+      },
+      {
+        "text": "Increase `max_connections`",
+        "explanation": "That allows more sessions but, if anything, reduces how much memory you can safely give each one."
+      },
+      {
+        "text": "Raise `work_mem` for this query's session so the sort fits in memory (or add a B-tree index that provides the order)",
+        "explanation": "Correct. The sort spilled ~900 MB to disk because it exceeded `work_mem` (default 4 MB). A sufficiently large, safely budgeted work_mem can keep it in memory; disk spill size is not its memory requirement. A matching B-tree index may allow a sort-free plan if the planner chooses it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `external merge` means PostgreSQL ran an external merge sort: it wrote sorted runs to temp files and merged them, because the data didn't fit in `work_mem`.\n2. The default `work_mem` is 4 MB; the displayed disk use is not a measurement of the memory needed for an in-memory sort.\n3. Fix options, in order of directness:\n  - Test a larger session-local work_mem within the total memory budget and remeasure; 1 GB is not guaranteed sufficient. Multiple operators, sessions and parallel workers can consume separate allowances.\n  - Add a B-tree index on the `ORDER BY` columns, so rows can be read already in order.\n4. Re-run `EXPLAIN ANALYZE` and look for `Sort Method: quicksort  Memory: ...`.",
+    "link": {
+      "title": "PostgreSQL resource consumption settings",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-resource.html"
+    }
+  }
+]

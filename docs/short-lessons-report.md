@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 16/76. Updated 2026-10-14.
+Verified modules: 17/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -23,6 +23,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Arrays, Lists, Stacks & Queues | 6 | 32 | 67 | 54 | 293 | 511 | 82 |
 | dsa/Hash Tables & Hashing | 6 | 37 | 73 | 103 | 158 | 371 | 76 |
 | dsa/Trees & Heaps | 7 | 35 | 80 | 75 | 170 | 417 | 90 |
+| dsa/Sorting & Searching | 8 | 46 | 96 | 95 | 194 | 431 | 82 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -1948,6 +1949,147 @@ Low-confidence areas:
 - **medium** — glossary: glossary term merkle-patricia-trie. Official Ethereum encoding exception checked; implementation summary is deliberately simplified and version-sensitive.
 - **medium** — glossary: glossary term xarray. Current kernel official docs support its API and radix-tree relationship, but definition remains a simplified implementation summary.
 - **medium** — glossary: glossary term fgrep. Current GNU fixed-pattern algorithm documented; earlier historical attribution replaced because original implementation history was not independently corroborated.
+
+## dsa: Sorting & Searching
+
+[Independent verification record](../content/dsa/05-sorting-searching/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Replaced the approximate heap-height histogram written as an exact finite inequality with the valid sum over floor(n / 2^h) nodes reaching each descent height; applied it to both lesson and question.
+- Included the initial quicksort stack frame in a safe floor(log2(n)) + 1 bound; preserved the million-element answer of about twenty frames.
+- Removed the false claim that maximum displacement three means every inversion partner lies within three positions. Bound inversions by total absolute displacement instead; checked every permutation through seven elements.
+- Separated insertion-sort growth proxies from actual instruction counts. The four-million figure is a bound on n plus inversions, not a literal timing or step count.
+- Preserved finite rounding allowances in median-of-medians recursion and separated the conservative 294-element exclusion bound from an actual observed count. The 706 answer remains unchanged.
+- Used ceiling for general radix digit widths; the 32-bit/base-256 and 64-bit/base-256 exact pass examples remain unchanged.
+- Hedged cache-fit and radix-base speed claims using representation, workload and hardware assumptions. Removed the unsupported universal radix-base sweet spot.
+- Stated that heap rejection frequency depends on arrival order, and that logarithmic growth proxies compare different operations rather than measured runtime factors.
+- Clarified compare-by-key labelled records for the insertion-stability question; default Python tuple ordering would also compare the labels.
+- Added local teaching for Java binarySearch insertion encoding, JavaScript default string ordering, deterministic SQL pagination ties, nearest-bound queries and NumPy partition mutation/order contracts.
+- Moved the original non-comparison applicability question after bucket-sort teaching. Its former signed/string encoding unit now has a small focused sign-bit question.
+- Corrected ten old glossary objects: work_mem hash multipliers/multiple budgets, single-partition versus complete Lomuto quicksort cost, Hoare swap-model caveats, versioned minrun, nonunique insertion positions, nonmandated partial_sort implementations, NumPy ties/copy semantics, top-k at one item, adaptive alias coverage, and precise rabbit/turtle aliases.
+- Added two narrow glossary entries for databases and key comparisons, reused existing two’s-complement/XOR entries elsewhere, and left 182 original glossary objects unchanged.
+- Converted/reworded inherited inline mathematical derivations and table equations while retaining the worked card mathematics; added explicit grouping and conventional implicit scalar products. All 141 remaining active finder hits have exact-file/context evidence and an allowed exception or genuine false-positive explanation.
+- Closing formula fences must be on their own line.
+- Shown insertion implementation shifts rather than swaps.
+- Information bound is not generally achievable exact optimum.
+- Exact minimum can exceed the information bound.
+- Distinguish lower bound from achievable optimum.
+- For non-power-of-two brackets the winner can play fewer rounds.
+- Tournament finalist rounds depend on byes.
+- Define new bound operator.
+- This is a comparison model, not every input or optimized heap implementation.
+- State input assumptions.
+- Asymptotic n log k proxy cannot be stated as exact instruction upper bound.
+- C++ draft algorithm is not mandated.
+- Do not equate one swap with one array write.
+- Avoid reintroducing the false individual near-neighbour inversion argument.
+- Actual code includes initialization, decrement and writes; proxy is not runtime steps.
+- Correct binary/decimal units while retaining answer index.
+- Expected swap ratio needs its explicit probability model.
+- A different line or gap does not guarantee a miss.
+- Remove universal unsupported runtime superiority.
+- Comparison models do not establish measured speed ranking.
+- Median first pivot alone does not imply best case for recursive run.
+- A linear fallback does not erase excessive prefix work.
+- Sum gives upper bound on range width, not an exact count for every weight arrangement.
+- Historical 1.17 dtype rule is not current rule.
+- Infinite geometric sum equals rather than strictly below twice first term.
+- Compiler language flag does not prove library conforms.
+- Rust panic=abort does not unwind.
+- Stable sort can outperform unstable on favourable runs.
+- Uniform average qualifier and lower-bound versus optimum distinction.
+- Distinguish Java wrap from undefined signed overflow or checked arithmetic.
+- Wrong replacement direction cannot maintain largest either.
+- Full triangular cost applies to extreme ranks; median selection can stop after only half are eliminated.
+- Median-of-three cannot use a last-pivot triangular constant as an exact attack count.
+- Verbal equivalent of a non-code symbolic calculation; its existing worked card supplies the derivation.
+- Prune unreachable outcomes so leaf average corresponds to uniform distinct permutations.
+- Specify the average distribution.
+- A node height is longest descendant path, not global bottom level.
+- Approximate fractional histogram was presented as exact finite counts.
+- Clarify depth variable and include initial root frame.
+- Exact verbal equivalent outside formula cards; formula or program examples remain intact.
+- State even domain for literal half-as-copies explanation.
+- Clarify the factorial proof domain.
+- Add primary source for randomized median leading coefficient.
+- Primary source for expected selection comparison formula.
+- Primary source for 1.9 coefficient and analyzed unsampled model.
+- Primary paper supports exact historical run-stack failure size.
+- Primary implementation source for integer and floating transforms.
+- Distinguish historical dtype rule from current API.
+- Strict smaller/larger wording excludes valid equal-key placements.
+- Ten updates can create ten older versions, and visibility controls deadness.
+- Percentile ties and interpolation do not give exact tail percentages.
+- Avoid exact one-in-hundred strict exceedance claim.
+- Prefix work budget is necessary as well as fallback complexity.
+- Express zero-based selection rank in words rather than pseudocode range.
+- Use verbal invariant; retain formal time bound.
+- Do not disguise return-value mathematics as informal pseudocode equations.
+- Numeric observed outputs retain the example without illegal function-call assignment syntax.
+- Visiting smaller first but still recursively visiting larger does not alone ensure bounded simultaneous frames.
+- Make the fourth strict-weak-order condition explicit, not just order transitivity.
+- Define the incomparability/equivalence predicate locally.
+- Explain the fourth condition accurately.
+- The incomparability alias must explain comparator equivalence as well as order transitivity.
+- Current primary implementation confirms the hybrid; exact adoption year was not supported by the fetched release notes.
+- Use unambiguous conventional implicit scalar multiplication; numerical products, units and ambiguous named factors retain signs.
+- Qualify hardware-dependent prefetch success.
+- Do not guarantee every next line ready.
+- Counter representation and actual cache size matter.
+- No universal radix table residency guarantee.
+
+Remaining gaps:
+
+- No universal wall-clock sorting ratio, crossover size, cache-residency guarantee or GPU benchmark is supplied; these require a named representation, implementation, target and workload.
+- Production implementations, locale-collation encoding, distributed sample sort, full floating-search tolerance design and percentile-summary accuracy proofs remain surveys rather than complete implementations.
+- The deliberately invalid C++ comparator was actually run in an isolated bounded ASan fixture; its observed overflow is not a promised portable outcome. The intentionally nonterminating Python search was run with an explicit iteration guard.
+- Compiled app routes, SVG diagrams, PWA/offline update behavior, completion-age migration and publication are the coordinator’s full-app integration checks after this scoped review.
+
+Low-confidence areas:
+
+- **medium** — sort-bucket-distribution: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — sort-comparator-ordering: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-dual-pivot-contracts: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — sort-heap-practical-cost: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-insertion-shifts: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-introsort-fallback: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — sort-key-caching: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-library-hybrids: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — sort-merge-choosing: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-merge-external-runs: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — sort-pivot-costs: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-properties-inversions: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-radix-encoded-keys: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-radix-width-cost: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-search-progress-overflow: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-search-root-applications: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — sort-selection-hybrid-fallback: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — sort-selection-many-ranks: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-simple-production: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-stable-multi-key: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — sort-stream-top-k-heaps: Practical speed, layout or leading comparison model. Core algorithm and mathematics verified. Runtime/cache observations depend on representation, input, comparator and hardware; no reproducible production benchmark or portable invalid-comparator output is claimed.
+- **medium** — sort-timsort-merge-policy: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — sort-timsort-natural-runs: Library algorithms, defaults or historical implementation details. Core contract and cited implementation verified against fetched primary documentation/source, but current choices and configured values are version-sensitive. Historical bibliography details not directly supported by a primary text remain contextual survey material.
+- **medium** — glossary:analytic-engine: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:android: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:cpu-prefetcher: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:database-page-dsa: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:david-musser: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:dotnet: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:driftsort: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:hdr-histogram: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:innodb-dsa: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:ipnsort: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:jon-bentley: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:l1-cache: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:l2-cache: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:minrun: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:np-sort: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:rust-sort-unstable: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:sequential-access-dsa: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:swift-lang: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
+- **medium** — glossary:t-digest: Contextual implementation, performance or historical specificity. Primary contracts and core meaning were checked, but implementation changes, workload dependence or historical bibliographic specifics are not portable guarantees. Unchanged inherited verification records retain their original confidence/hashes; this new scoped caution is explicit.
 
 ## synth: Sound & Digital Audio
 

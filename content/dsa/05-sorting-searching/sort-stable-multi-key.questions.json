@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sort-real-world-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this JavaScript print?\n\n```js\n// Default sorting compares strings.\nconsole.log([10, 9, 1].sort());\n```",
+    "options": [
+      {
+        "text": "`[1, 9, 10]`",
+        "explanation": "That's numeric order, which you only get with a comparator such as `(a, b) => a - b`."
+      },
+      {
+        "text": "`[10, 9, 1]`",
+        "explanation": "The array is definitely reordered; `sort()` sorts in place and returns the array."
+      },
+      {
+        "text": "`[1, 10, 9]`",
+        "explanation": "Correct. With no comparator, JavaScript converts elements to strings and compares them lexicographically: \"1\" < \"10\" < \"9\"."
+      },
+      {
+        "text": "`[9, 10, 1]`",
+        "explanation": "No ordering, numeric or string, puts 9 first and 1 last."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `Array.prototype.sort()` with no comparator converts each element to a string.\n2. Strings compare character by character: \"1\" vs \"10\": \"1\" is a prefix, so it is smaller. \"10\" vs \"9\": '1' < '9', so \"10\" is smaller.\n\n```\n\"1\" < \"10\" < \"9\"\n-> [1, 10, 9]\n```\n\n3. For numbers, always pass a comparator: `.sort((a, b) => a - b)` gives `[1, 9, 10]`. (Subtraction is safe for ordinary JS numbers, which are doubles, but avoid it with NaN.)",
+    "link": {
+      "title": "Getting things sorted in V8 — V8 blog",
+      "url": "https://v8.dev/blog/array-sort"
+    }
+  },
+  {
+    "id": "sort-real-world-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this Python code print?\n\n```python\n# Names are sorted before departments.\nr = [(\"cat\",\"IT\"), (\"ann\",\"HR\"),\n     (\"bob\",\"IT\"), (\"dan\",\"HR\")]\nr.sort(key=lambda p: p[0])\nr.sort(key=lambda p: p[1])\n# Equal departments retain name order.\nprint([p[0] for p in r])\n```",
+    "options": [
+      {
+        "text": "`['ann', 'bob', 'cat', 'dan']`",
+        "explanation": "This is just the first sort. The second sort reorders by department, and stability keeps name order only *within* each department."
+      },
+      {
+        "text": "`['dan', 'ann', 'cat', 'bob']`",
+        "explanation": "This assumes the second sort reverses ties. Stable sorts preserve the existing order of equal keys."
+      },
+      {
+        "text": "`['ann', 'dan', 'cat', 'bob']`",
+        "explanation": "HR is right, but within IT the earlier sort put bob before cat, and a stable sort keeps that."
+      },
+      {
+        "text": "`['ann', 'dan', 'bob', 'cat']`",
+        "explanation": "Correct. The second sort groups by department (HR before IT); because Python's sort is stable, names within each department keep the alphabetical order from the first sort."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. After sorting by name: ann(HR), bob(IT), cat(IT), dan(HR).\n2. Sort by department. HR: ann, dan (in their current order). IT: bob, cat.\n\n```\n['ann', 'dan', 'bob', 'cat']\n```\n\nThis is the **sort by secondary key first, then primary** idiom. It works only because each sort is stable. The one-step equivalent is `r.sort(key=lambda p: (p[1], p[0]))`.",
+    "link": {
+      "title": "Sorting techniques — Python docs",
+      "url": "https://docs.python.org/3/howto/sorting.html"
+    }
+  },
+  {
+    "id": "sort-real-world-q9",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A REST API pages through orders with `ORDER BY created_date LIMIT 50 OFFSET n`, and many orders share the same date. Users report items that appear on two pages and others that never appear. Assume the queried rows do not change between requests. What is the ordering problem and fix?",
+    "options": [
+      {
+        "text": "Ties on `created_date` have no defined order, so each page query may order them differently; add a unique tiebreaker such as `ORDER BY created_date, id`",
+        "explanation": "Correct. SQL guarantees no particular order for ties (the planner may use different sort methods or plans per query). A unique final key makes the order total and pagination consistent."
+      },
+      {
+        "text": "The database is losing rows; run a consistency check",
+        "explanation": "No data is lost. The order of rows with equal sort keys simply isn't fixed between queries."
+      },
+      {
+        "text": "OFFSET is too slow; switch to a larger page size",
+        "explanation": "Page size doesn't fix inconsistent ordering of ties; it only changes where the boundaries fall."
+      },
+      {
+        "text": "The database uses an unstable sort; switching to a stable sort setting fixes it",
+        "explanation": "Stability wouldn't help across separate queries anyway: each query sorts its own input, whose initial order isn't guaranteed either."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Suppose 120 orders all have the same `created_date`, 30 September 2026.\n2. Query 1 (OFFSET 0) and query 2 (OFFSET 50) each sort independently. Ties can come out in a different order each time (different plan, parallel workers, top-N heapsort for small limits).\n3. An order at position 49 in query 1 might be at position 51 in query 2: it appears on both pages. Another might drop from 51 to 49 and appear on neither.\n4. Fix: make the ordering **total**: `ORDER BY created_date, id`. Concurrent inserts, deletes and updates can still change OFFSET pages; use an appropriate snapshot or keyset policy. With non-null keys and matching ORDER BY, keyset pagination uses: `WHERE (created_date, id) > (:last_date, :last_id)`.",
+    "link": {
+      "title": "Stable sorting algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Stable_sorting_algorithm"
+    }
+  }
+]

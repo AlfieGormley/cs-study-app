@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 16/76 modules; 118 originals → 584 short lessons with 1411 focused questions.
+- Independently verified: 17/76 modules; 126 originals → 630 short lessons with 1507 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `85bc52f`, version `2527ff3025f3`, 549 short lessons/1331 focused questions
-  across 15 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `45a08d278f4b`, 16 modules/584 units/1411 questions.
+- Latest confirmed live release: `20f676c`, version `45a08d278f4b`, 584 short lessons/1411 focused questions
+  across 16 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `1a15bbb45e9e`, 17 modules/630 units/1507 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
   Complexity and Sound & Digital Audio are also published; Complexity’s formula follow-up is complete
@@ -18,9 +18,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- dsa/dsa-sorting: authoring; sorting_short_author.
-- dsa/dsa-graphs: authoring; graphs_short_author.
-- dsa/dsa-techniques: authoring; /root/techniques_short_author.
+- dsa/dsa-graphs: verifying; /root/graphs_short_verify.
+- dsa/dsa-techniques: verifying; /root/techniques_short_verify.
+- dsa/dsa-dp: authoring; /root/dp_short_author.
 
 Verification and integration:
 

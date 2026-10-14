@@ -1,0 +1,92 @@
+[
+  {
+    "id": "lin-queues-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport heapq\nh = []\nfor x in [5, 1, 4, 2]:\n    heapq.heappush(h, x)\nprint(heapq.heappop(h),\n      heapq.heappop(h))\n```",
+    "options": [
+      {
+        "text": "`5 1`",
+        "explanation": "That's FIFO order. A priority queue ignores arrival order and returns the best key."
+      },
+      {
+        "text": "`1 2`",
+        "explanation": "Correct. `heapq` always pops the smallest remaining value: 1, then 2."
+      },
+      {
+        "text": "`2 4`",
+        "explanation": "That's LIFO order (last pushed first). A heap orders by value, not by time."
+      },
+      {
+        "text": "`5 4`",
+        "explanation": "That's max-heap behaviour. Python's `heapq` is a **min**-heap: the smallest value comes out first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. After the pushes, the list is `[1, 2, 4, 5]` (a valid heap: each parent ≤ its children).\n2. `heappop` removes the root, 1, and restores the heap: `[2, 5, 4]`.\n3. The next `heappop` returns 2.\n4. Output: `1 2`.\n\nFor a max-heap, push `-x` and negate on the way out: `-heapq.heappop(h)`.",
+    "link": {
+      "title": "heapq — Python docs",
+      "url": "https://docs.python.org/3/library/heapq.html"
+    }
+  },
+  {
+    "id": "lin-queues-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A scheduler does `heapq.heappush(h, (job.priority, job.data))`, where `data` is a dict. It works in testing but crashes in production with `TypeError: '<' not supported between instances of 'dict' and 'dict'`. Why, and what's the fix?",
+    "options": [
+      {
+        "text": "Two jobs had equal priority, so tuple comparison fell through to comparing the dicts; push `(priority, next(counter), data)` with `counter = itertools.count()`",
+        "explanation": "Correct. Tuples compare element by element. A unique, increasing counter breaks every tie before the dicts are reached, and also keeps equal-priority jobs in FIFO order."
+      },
+      {
+        "text": "`heapq` can't store tuples; use a custom class",
+        "explanation": "Tuples are the normal way to attach priorities in `heapq`. The issue is what happens when the first elements tie."
+      },
+      {
+        "text": "Priorities must be positive integers",
+        "explanation": "Any comparable keys work, including negatives and floats. The crash comes from the second tuple element."
+      },
+      {
+        "text": "The heap needs `heapify` before each push",
+        "explanation": "`heappush` maintains the heap invariant itself. `heapify` is for turning an existing unordered list into a heap."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `(1, {...}) < (1, {...})`: first elements are equal (1 == 1), so Python compares the second elements: dict < dict → TypeError.\n2. In tests, priorities happened to be unique, so the dicts were never compared.\n3. Fix:\n\n```python\nimport heapq, itertools\ncounter = itertools.count()\nheapq.heappush(\n    h, (prio, next(counter), data))\n```\n\n4. Now ties are settled by the counter (always unique), so the data is never compared, and among equal priorities the earliest pushed is popped first. The heapq docs recommend exactly this pattern.",
+    "link": {
+      "title": "heapq — Python docs",
+      "url": "https://docs.python.org/3/library/heapq.html"
+    }
+  },
+  {
+    "id": "lin-queues-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A simulation performs one million inserts into a priority queue and then the same number of remove-min operations. Assume random insertion ranks for a descending sorted array, constant-time key comparisons, and no bulk heapify. Which gives the expected shift count and a rough O(n log n) heap-operation model?",
+    "options": [
+      {
+        "text": "Sorted array: O(n log n); binary heap: quadratic work",
+        "explanation": "This swaps them. Inserting into a sorted array shifts elements: O(n) each. The heap is the O(log n) structure."
+      },
+      {
+        "text": "Unsorted array is best: n inserts at O(1) each",
+        "explanation": "The inserts are cheap, but each remove-min scans all remaining items: about half the square of the item count in comparisons in total, just as bad as the sorted array."
+      },
+      {
+        "text": "Both O(n log n), because binary search finds the sorted position in O(log n)",
+        "explanation": "Binary search finds the position quickly, but inserting there still shifts all later elements: O(n) per insert."
+      },
+      {
+        "text": "Sorted array: about 250 billion element shifts; binary heap: about 40 million modelled level operations",
+        "explanation": "Correct. Each sorted insert shifts on average half the elements; with a heap, the rough height model charges about twenty levels per push and per pop at this problem size."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Here n is the item or input-value count; k is the window size where used.\n\n| Structure | insert | pop-min | total |\n|---|---|---|---|\n| Unsorted | O(1) | O(n) | O(n²) |\n| Sorted | O(n) | O(1) | O(n²) |\n| Heap | O(log n) | O(log n) | O(n log n) |\n\nFor one million inserted items:\n\n1. Sorted array: a uniformly ranked insertion shifts half of the previously stored items on average.\n\n```formula\nshifts = n(n − 1) / 4\nshifts ≈ n^2 / 4\nshifts ≈ (10^6)^2 / 4 = 2.5 × 10^11\nwhere\nshifts: element moves over all inserts\nn: the number of inserts (10^6)\n≈: approximately equal to\nIn words: on average each insert shifts half the items already stored, so the total grows with n squared.\n```\n\nWorst-case front insertion instead approaches half the square of the input count.\n2. Heap: each push and each pop climbs at most one tree level per step:\n\n```formula\nops ≈ 2n log_2(n)\nops ≈ 2 × 10^6 × 20 = 4 × 10^7\nwhere\nops: modelled heap level operations\nn: the number of items (10^6)\nlog_2: logarithm base 2: halvings from n to 1; log_2(10^6) ≈ 20\n2: one push plus one pop per item\n≈: approximately equal to\nIn words: n pushes and n pops, each costing about log₂ n steps.\n```\n3. These abstract operation counts differ by several thousand, but shifts and heap comparisons have different costs; this is not a measured speed ratio. (If all items are known up front, `heapify` builds the heap in O(n).)",
+    "link": {
+      "title": "Priority queue — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Priority_queue"
+    }
+  }
+]

@@ -1,0 +1,130 @@
+[
+  {
+    "id": "lin-linked-lists-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In which scenario does a doubly linked list clearly beat a dynamic array?",
+    "options": [
+      {
+        "text": "An LRU cache that, on each hit, must move an entry (found via a hash map) to the front",
+        "explanation": "Correct. The hash map hands you the node directly, so unlinking it and re-inserting at the front is O(1). An array would have to shift up to n elements."
+      },
+      {
+        "text": "Reading elements by index for a paginated API",
+        "explanation": "Index access is O(1) for an array and O(n) for a list. This is an array's best case."
+      },
+      {
+        "text": "Storing 10 million floats and repeatedly summing them",
+        "explanation": "Summing is a sequential scan, where an array's contiguous layout and prefetching can favour an array. Separately allocated list nodes add links and dependent loads; they do not guarantee one cache miss per node."
+      },
+      {
+        "text": "Appending log lines to the end and occasionally reading the last 100",
+        "explanation": "Append is amortised O(1) on an array and the last 100 are contiguous. A list offers no advantage and costs more memory."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Here n is the list length, and k is the requested position where used.\n\nHere n is the number of entries. Ask: do I already have a reference to the node I need to modify, and must I modify the middle?\n\n1. LRU hit on key K: `node = map[K]` (O(1)).\n2. Unlink: `node.prev.next = node.next; node.next.prev = node.prev` (O(1)).\n3. Insert after the sentinel (O(1)).\n4. Array alternative: find K's position (O(1) via map), but moving it to the front shifts everything before it (O(n)), and stored positions of the shifted entries must be updated.\n\nIn the other scenarios you either scan or index, where arrays win.",
+    "link": {
+      "title": "Doubly linked list — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Doubly_linked_list"
+    }
+  },
+  {
+    "id": "lin-linked-lists-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You insert integers one at a time into a sorted sequence, using a linear search then insertion. Why can std::vector outperform std::list despite shifting elements? This asks about an architectural possibility, not a measured benchmark.",
+    "options": [
+      {
+        "text": "The list was much faster, because its insert is O(1) while the vector's is O(n)",
+        "explanation": "Both are O(n) per operation, because the list still has to do an O(n) linear search to find the insertion point. And the list's search is slow."
+      },
+      {
+        "text": "They performed about the same, since both are O(n²) overall",
+        "explanation": "Same complexity, but the constant factors can differ; their size requires measurement."
+      },
+      {
+        "text": "The vector can benefit from contiguous scanning and shifting, while separately allocated list nodes add dependent pointer loads",
+        "explanation": "Correct. The vector's shift is essentially a `memmove` of contiguous memory, and its scan is cache- and prefetcher-friendly. The list's scan is a chain of dependent loads with frequent cache misses, which can dominate. Actual results depend on the workload and machine."
+      },
+      {
+        "text": "The vector was faster only because it used binary search",
+        "explanation": "The question specifies linear search for both. Binary search can also use linked iterators, but finding midpoints still requires linear total traversal rather than random access."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Here n is the list length, and k is the requested position where used.\n\nWith n items already stored:\n\n1. Per insert, both structures do: find position (O(n) scan) + insert.\n2. Vector insert: shift ~n/2 elements with `memmove`, whose throughput depends on the machine and element type.\n3. List insert: allocate a node, rewire 4 pointers. Cheap in itself.\n4. But the search: the vector scans contiguous ints (16 per 64-byte cache line, prefetched). The list visits a separate heap node per step; each `next` must load before the following address is known, so cache misses can serialize those loads. Neither a miss at every node nor a fixed slowdown is guaranteed.\n5. Over n inserts both are O(n²) in total. Possible result: contiguous access outweighs shifting. No specific speedup or historical dataset is asserted here. The lesson: Big-O counts operations, not cache misses.",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  },
+  {
+    "id": "lin-linked-lists-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A circular **singly** linked list is stored with only a `tail` pointer (so `tail.next` is the head). Which operations are O(1)? Select all that apply.",
+    "options": [
+      {
+        "text": "Insert at the front",
+        "explanation": "Correct. Create `n`, set `n.next = tail.next`, then `tail.next = n`. The tail doesn't change."
+      },
+      {
+        "text": "Insert at the back",
+        "explanation": "Correct. Insert at the front as above, then advance `tail = n`. The new node becomes the tail."
+      },
+      {
+        "text": "Remove from the front",
+        "explanation": "Correct. `tail.next = tail.next.next` skips the old head (handle the one-element case by setting tail to None)."
+      },
+      {
+        "text": "Remove from the back",
+        "explanation": "Incorrect. You'd need the node before the tail to make it the new tail, and in a singly linked list that means walking all the way round: O(n)."
+      },
+      {
+        "text": "Read the k-th element",
+        "explanation": "Incorrect. Still O(k + 1), including the value read: circularity doesn't give random access."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Here n is the list length, and k is the requested position where used.\n\nList 1 → 2 → 3 → (back to 1), tail = 3.\n\n```\npush_front(0):\n  n.next = tail.next  (0 -> 1)\n  tail.next = n       (3 -> 0)\n  0 1 2 3, tail 3\n\npush_back(4):\n  push_front(4), then tail = 4\n  0 1 2 3 4, tail 4\n\npop_front:\n  tail.next = tail.next.next\n  1 2 3 4\n\npop_back: need node 3 to become\n  tail, but no prev pointer: walk\n  the ring. O(n)\n```\n\nFor a list of n nodes, the back removal is O(n); the other three operations are O(1). That makes this layout a natural O(1) **queue** (push back, pop front) using a single pointer.",
+    "link": {
+      "title": "Linked list — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Linked_list"
+    }
+  },
+  {
+    "id": "lin-linked-lists-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In Haskell, `xs = [2, 3, 4]` and `ys = 1 : xs` (prepend 1). What does creating `ys` cost, and what happens to `xs`?",
+    "options": [
+      {
+        "text": "O(1): one new node is created that points at `xs`; both lists stay valid and share the nodes 2, 3, 4",
+        "explanation": "Correct. This is structural sharing. Because no one can mutate the shared nodes, both versions remain correct forever. It's why singly linked lists are the default sequence in functional languages."
+      },
+      {
+        "text": "O(n): `xs` is copied into a new list, so `xs` and `ys` are independent",
+        "explanation": "Copying isn't needed. Since lists are immutable, `ys` can safely reuse `xs`'s nodes."
+      },
+      {
+        "text": "O(1), but `xs` is now invalid because its head moved",
+        "explanation": "`xs` still points at the node holding 2, which hasn't changed. Nothing about `xs` is altered."
+      },
+      {
+        "text": "O(n), because the new head must be linked from the old tail",
+        "explanation": "That describes appending, not prepending. Appending to an immutable list is O(n), because every node on the path must be copied."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Here n is the list length, and k is the requested position where used.\n\n```\nys -> [1] -+\n           v\nxs ------> [2] -> [3] -> [4]\n```\n\n1. `1 : xs` allocates one cons cell with value 1 and `next = xs`. O(1).\n2. `xs` is untouched; it's still the list starting at 2.\n3. Sharing is safe only because the nodes are immutable. In a mutable language, changing `xs[0]` would silently change `ys[1]`.\n4. The flip side: appending to the end (`xs ++ [5]`) of an n-node list must copy all n nodes, O(n), since the last node's `next` can't be changed.",
+    "link": {
+      "title": "Linked list — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Linked_list"
+    }
+  }
+]

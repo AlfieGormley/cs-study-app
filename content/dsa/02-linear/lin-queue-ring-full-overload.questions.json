@@ -1,0 +1,70 @@
+[
+  {
+    "id": "lin-queues-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A ring buffer stores only `head` (next to read) and `tail` (next to write) indices, with no count. A colleague reports that `is_full()` and `is_empty()` both return True after certain sequences. Why, and what's a standard fix?",
+    "options": [
+      {
+        "text": "Integer overflow in the indices; use 64-bit integers",
+        "explanation": "Overflow isn't what's happening: the indices are taken modulo capacity and stay small. The problem is an ambiguous state."
+      },
+      {
+        "text": "Dequeue must reset head to 0 when the buffer empties",
+        "explanation": "Resetting doesn't help: a full buffer can also have head == tail (after wrapping), so the ambiguity remains."
+      },
+      {
+        "text": "The capacity isn't a power of two",
+        "explanation": "Power-of-two sizes let you use a bit mask instead of `%`. They don't change the empty/full ambiguity."
+      },
+      {
+        "text": "`head == tail` both when the buffer is empty and when it's full; fix by keeping a count or by always leaving one slot unused",
+        "explanation": "Correct. With n slots and only two indices modulo n, there are n possible gaps (0..n−1) but n + 1 possible fill levels (0..n). One extra bit of state, a count or a wasted slot, resolves it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Capacity 4, head = tail = 0 (empty).\n\n1. Enqueue 4 items: tail advances 0→1→2→3→0. Now head = 0, tail = 0, but the buffer is full.\n2. Empty and full look identical. Counting the states shows why two indices can't tell them apart:\n\n```formula\ngaps = cap\nlevels = cap + 1\nwhere\ngaps: distinct values of (tail − head) mod cap: 0 up to cap − 1\nlevels: possible fill levels: 0 up to cap items\ncap: the number of slots (4 here)\nmod: modulo, the remainder after dividing\nIn words: there is one more fill level than there are index gaps, so two fill levels (empty and full) must share a gap of 0.\n```\n3. Fix A: track `count`. Empty: count == 0. Full: count == cap.\n4. Fix B: treat `(tail + 1) % cap == head` as full, so you only ever store cap − 1 items.\n5. Fix C: let head and tail grow forever (no modulo), index with `% cap`, and test `tail - head == cap` for full.",
+    "link": {
+      "title": "Circular buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circular_buffer"
+    }
+  },
+  {
+    "id": "lin-queues-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A web scraper's producer thread finds 5,000 URLs per second and puts them on an **unbounded** `queue.Queue()`; consumer threads can fetch only 1,000 per second. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The queue grows by about 4,000 items per second until the process runs out of memory",
+        "explanation": "Correct. Arrivals exceed departures by 4,000/s, so without a bound the backlog grows linearly: 14.4 million items per hour."
+      },
+      {
+        "text": "Using `queue.Queue(maxsize=10_000)` makes `put` block when it's full, slowing the producer to the consumers' pace",
+        "explanation": "Correct. This is backpressure: the bounded queue pushes the slowdown upstream instead of absorbing it as memory."
+      },
+      {
+        "text": "Switching to `collections.deque` would solve the problem, because it's faster",
+        "explanation": "Incorrect. Speed of the queue isn't the bottleneck; the consumers are. A faster unbounded queue grows just as quickly."
+      },
+      {
+        "text": "A bounded queue alone doesn't make the consumers faster; you still need more consumers, or to drop or sample work, to keep up",
+        "explanation": "Correct. Bounding protects memory and makes overload visible, but throughput is set by the consumers."
+      },
+      {
+        "text": "Item latency stays constant because the queue is FIFO",
+        "explanation": "Incorrect. With a growing backlog, each new URL waits behind everything queued before it, so latency climbs steadily."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. The backlog grows at the difference between the two rates:\n\n```formula\nbacklog = (r_in − r_out) × t\nbacklog = (5,000 − 1,000) × 600\nbacklog = 2,400,000 items\nwait = backlog / r_out\nwait = 2,400,000 / 1,000 = 2,400 s\nwhere\nbacklog: URLs waiting in the queue\nr_in: arrival rate, items per second (5,000)\nr_out: consumer rate, items per second (1,000)\nt: time since start, in seconds (600 s = 10 min)\nwait: how long a new arrival waits, in seconds\ns: seconds\nitems: queued URLs (a count, not a unit of measurement)\nIn words: 4,000 extra items pile up each second; a new item then waits for everything ahead of it to drain at 1,000 per second.\n```\n\n2. After 10 minutes: 2.4 million queued URLs. If each takes ~200 bytes plus object overhead, that's hundreds of MB and climbing.\n3. Latency: a newly arriving item with 2.4 million items ahead waits about 2,400 s (40 min) at 1,000/s.\n4. `Queue(maxsize=N)`: `put` blocks when full (or raises `queue.Full` with `block=False`), so the producer slows to 1,000/s.\n5. Real fixes for throughput: more consumers, batching, or shedding load. Message brokers like Kafka and SQS persist the backlog to disk, but the same arithmetic applies.",
+    "link": {
+      "title": "queue — Python docs",
+      "url": "https://docs.python.org/3/library/queue.html"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "lin-strings-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A log formatter builds a line from n fields, each of length k, with `line = line + field` in a loop. Assume no in-place optimisation. What is the total copying work?",
+    "options": [
+      {
+        "text": "O(nk), the same as `\"\".join(fields)`",
+        "explanation": "`join` is O(nk) because it allocates once. Repeated `+` copies everything built so far on every iteration."
+      },
+      {
+        "text": "O(n log n · k)",
+        "explanation": "There's no halving anywhere. The copies grow linearly per iteration, giving an arithmetic series, which is quadratic."
+      },
+      {
+        "text": "O(n²k)",
+        "explanation": "Correct. Each iteration copies everything built so far plus the new field, so the copying grows every time; the total grows quadratically in the field count, multiplied by the field length (see the worked example)."
+      },
+      {
+        "text": "O(k), since only one field is added at a time",
+        "explanation": "Adding one field is cheap only for a mutable buffer. Under the question’s full-copy assumption, the growing prefix is copied into a longer value. Observable immutability alone does not rule out internal optimisations."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Here n counts input text units or fields as stated in the problem, and k is the length of each field where used.\n\nHere n is the number of fields and k the length of each field, in characters.\n\n1. Each iteration adds another equal-sized field to the growing prefix.\n2. A full-copy concatenation copies both the previous prefix and the new field; the per-iteration copying grows with the iteration number.\n3. Add up every iteration:\n\n```formula\ntotal = k + 2k + ... + nk\ntotal = kn(n + 1) / 2\ntotal = 20 × 1,000 × 1,001 / 2\ntotal ≈ 10,000,000 characters\nwhere\ntotal: characters copied over the loop\nn: number of fields (here 1,000)\nk: characters per field (here 20)\n≈: approximately equal to\ncharacters: the unit of text being copied\nIn words: iteration i copies i fields' worth of text, so the total is k times 1 + 2 + ... + n, which grows with n squared: O(n²k).\n```\n\n4. One thousand fields of twenty characters give about ten million copied characters under the full-copy loop model.\n5. Joining once copies each character once:\n\n```formula\nC_join = nk\nC_join = 1000 × 20 = 20,000\nwhere\nC_join: copied output characters in one join\nn: field count, one thousand\nk: characters per field, twenty\nIn words: The joined payload needs only twenty thousand character copies; inspecting every piece adds work proportional to the piece count.\n```\n\n\n\nOption B's log n factor would need something to halve or double each step; nothing does here. (log₂ n is the number of times you can halve n before reaching 1: about 10 for 1,000 fields.)",
+    "link": {
+      "title": "Programming FAQ — Python docs",
+      "url": "https://docs.python.org/3/faq/programming.html"
+    }
+  },
+  {
+    "id": "lin-strings-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This Java method is very slow for 200,000 rows. What's the best fix?\n\n```java\nString csv = \"\";\n// Each row adds one output record.\nfor (Row r : rows) {\n  // Copy the accumulated prefix again.\n  csv = csv + r.toCsv() + \"\\n\";\n}\n```",
+    "options": [
+      {
+        "text": "Nothing; `javac` already compiles `+` into a StringBuilder, so this is linear",
+        "explanation": "`javac` optimises each expression, but it creates a fresh builder (or concat call) per iteration that still copies the whole `csv` string so far. The loop is quadratic."
+      },
+      {
+        "text": "Use `csv.concat(...)` instead of `+`",
+        "explanation": "`concat` still allocates a new String containing all previous characters. Same O(n²) behaviour."
+      },
+      {
+        "text": "Mark `csv` as `final` so the JVM can optimise it",
+        "explanation": "A `final` variable can't be reassigned at all, so the loop wouldn't compile. Immutability is the problem, not the solution."
+      },
+      {
+        "text": "Create one `StringBuilder` before the loop, `append` each row and newline, and call `toString()` once at the end",
+        "explanation": "Correct. The builder is a growable text buffer with amortised O(k + 1) cost to append k characters, so the total work is linear in the output size."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Here n counts input text units or fields as stated in the problem, and k is the length of each field where used.\n\n1. Suppose each row produces about fifty characters plus a newline. Each iteration grows the prefix by another fifty-one characters.\n2. Iteration i copies all of them into a new String, so the total is an arithmetic series:\n\n```formula\ntotal = k × n(n + 1) / 2\ntotal = 51 × 200,000 × 200,001 / 2\ntotal = 1,020,005,100,000\ntotal ≈ 1.02 × 10^12\nwhere\ntotal: characters copied over the whole loop\nn: number of rows (200,000)\nk: characters per output record, including its newline; here fifty-one\n≈: approximately equal to\nIn words: every row re-copies all the rows before it, so the work grows with the square of the row count: about 1.02 trillion character copies.\n```\n\nThat is O(n²): far too slow.\n3. With one `StringBuilder`, each append writes into spare capacity; when full, the buffer roughly doubles. Across positive-length rows, total building work is linear in row count plus output size, excluding the work inside toCsv: 200,000 rows of fifty-one characters produce about 10.2 million characters.\n4. Code:\n\n```java\nStringBuilder sb =\n    new StringBuilder();\n// Each row adds one output record.\nfor (Row r : rows) {\n  // Grow the mutable buffer instead.\n  sb.append(r.toCsv())\n    .append('\\n');\n}\nString csv = sb.toString();\n```",
+    "link": {
+      "title": "StringBuilder — Java SE 21 API",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/StringBuilder.html"
+    }
+  }
+]

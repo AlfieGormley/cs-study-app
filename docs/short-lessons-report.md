@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 14/76. Updated 2026-10-14.
+Verified modules: 15/76. Updated 2026-10-14.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -20,6 +20,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | system-design/Case Studies I | 7 | 43 | 85 | 103 | 183 | 773 | 66 |
 | system-design/Case Studies II | 8 | 42 | 101 | 105 | 238 | 495 | 68 |
 | dsa/Complexity Analysis | 7 | 35 | 81 | 290 | 150 | 830 | 32 |
+| dsa/Arrays, Lists, Stacks & Queues | 6 | 32 | 67 | 54 | 293 | 511 | 82 |
 | dsa/Hash Tables & Hashing | 6 | 37 | 73 | 103 | 158 | 371 | 76 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
@@ -1644,6 +1645,129 @@ Low-confidence areas:
 - **medium** — cx-amortised-latency: Resize latency and Redis incremental-rehash implementation. The data movement model and current Redis source are checked. The module does not claim a reproducible latency distribution or promise that every incremental step has a fixed wall-clock bound.
 - **medium** — cx-constants-locality: Practical performance ratios, sorting/multiplication crossover and cache-line assumptions. Algorithm and implementation structure are source-checked; the preserved qualitative several-times performance language has no reproducible target-specific benchmark.64-byte lines and8-byte elements are explicit illustrative assumptions where calculations depend on them.
 - **medium** — cx-measuring-algorithms: Historical Knuth quotation and deployment-specific timing interpretation. timeit measurement guidance is fetched and ratios recomputed. The original quotation attribution is retained but its primary paper was inaccessible through the web tool; the citation is not upgraded to high confidence.
+
+## dsa: Arrays, Lists, Stacks & Queues
+
+[Independent verification record](../content/dsa/02-linear/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- A hardware **prefetcher** can recognise a sequential pattern and fetch later lines ahead of demand; effectiveness depends on the processor, stride and workload.
+- dependent pointer loads can make the list slower, but no speed ratio follows without measuring the workload.
+- and that can dominate running time, depending on the cache hierarchy and workload.
+- Here n is the square grid’s side length; r and c are its zero-based row and column indices.
+- 32 KiB.
+- Whether the lines survive until the next column depends on cache capacity, associativity and conflict behaviour; the access pattern alone does not fix the miss count.
+- Result: B can be slower despite identical arithmetic; a speed ratio needs a measurement.
+- 32 KiB
+- a conventional 64-bit CPython build
+- a conventional GIL-enabled CPython build can use `realloc` to extend a block in place when the allocator permits. The free-threaded build’s resize path instead allocates replacement storage and copies references.
+- 500,000 pointer slots (typically 8 bytes each on a conventional 64-bit build)
+- result += word   # full-copy model
+- Under the question’s full-copy assumption, the growing prefix is copied into a longer value. Observable immutability alone does not rule out internal optimisations.
+- total = k × n(n + 1) / 2
+total = 51 × 200,000 × 200,001 / 2
+total = 1,020,005,100,000
+total ≈ 1.02 × 10^12
+- k: characters per output record, including its newline; here fifty-one
+- about 1.02 trillion character copies.
+- total building work is linear in row count plus output size, excluding the work inside toCsv:
+- An ordinary nonempty proper CPython slice such as `s[1:]` generally copies its selected characters; empty and full unchanged slices can reuse objects.
+- For a matching palindrome, the slices also create quadratic memory traffic. With a configured recursion limit of 1,000, input lengths near two thousand can fail sooner than the naive frame count suggests because caller frames also count; check sys.getrecursionlimit().
+- it costs O(k + 1), including the final value read; this is O(n)
+- O(k + 1): follow k `next` pointers, then read the value
+- O(k + 1) total work including the final read, and O(n) in the worst case.
+- Reading the head (zero-based position 0)
+- total ≈ n^2 / 4
+- `i < n / 2`
+- For a sequence of n elements, keeping both head and tail handles for the doubly linked representation and using constant-time value/allocation operations:
+- prefetching can favour an array. Separately allocated list nodes add links and dependent loads; they do not guarantee one cache miss per node.
+- can differ; their size requires measurement.
+- so cache misses can serialize those loads. Neither a miss at every node nor a fixed slowdown is guaranteed.
+- Still O(k + 1), including the value read:
+- # Buggy: no head-removal case.
+- switches from None to the other head, then walks
+- in CPython with sys.getrecursionlimit() set to 1,000.
+- the configured limit of 1,000
+- The question specifies a recursion limit of 1,000
+- In the ordinary unoptimised call-stack model, each active call has a **stack frame** retaining its arguments, local state and a **return address** (where to continue when it finishes). Returning releases that frame. Registers, inlining, tail calls and runtime-managed frames can change the physical layout.
+- (configured as 1,000 in this example)
+- removes the interpreter’s recursive-call depth limit
+- still subject to memory, container and process-resource limits.
+- Without optimisation, C recursion can exhaust a configured native thread stack. A guard-page fault is common, but the stack layout, protection and resulting failure depend on the platform.
+- With the recursion limit configured as 1,000, a straightforward five-thousand-level recursive factorial exceeds it and raises RecursionError.
+- events = pushes + pops + exits
+events ≤ n + n + n = 3n
+- events: counted push events, pop events and final failed while checks; a successful while check is charged together with its ensuing pop, not counted separately
+- three counted events per input value. Each event takes fixed work under this model; this is not an exact count of Python instructions or individual comparisons.
+- at most three counted events per input item, grouping each successful while check with its pop. It is O(n), not an exact machine-instruction count.
+- total: pushes, pop events including their successful checks, and final failed while checks; successful checks are not counted separately
+- three counted events per element, each doing bounded work
+- For the sorted-array row, keep descending order and remove the minimum at the end without shifting; insertion bounds are amortised over backing growth. In the table, log n means
+- {"glossary":"next-greater-element","field":"aliases","before":["next-greater","next greater","next-smaller"],"after":["next-greater","next greater"]}
+- A Python library for numerical computing. Its ndarray represents an array with a fixed dtype, shape and strides; newly allocated numeric arrays commonly use contiguous storage, while views can be noncontiguous and object arrays store references rather than raw numeric values.
+- An array organised by row and column. A rectangular built-in C or C++ array occupies contiguous slots, with row-major ordering; other representations such as Java arrays of row arrays or NumPy strided views need not be one contiguous block.
+- Wrapping a primitive value, such as a Java int, as an object reference, such as Integer, so it can be used where objects are required. Boxed objects add headers and reference access, but caching can let several boxed values share one object. ArrayList<Integer> stores references; int[] stores primitive values directly.
+- Python’s built-in mapping from keys to values, implemented as a hash table. Keys must be hashable: str and int qualify, and a tuple qualifies only when all its elements are hashable. A list cannot be used as a key; immutability alone does not guarantee hashability.
+- Joining strings end to end. In a full-copy model the result copies both inputs, with work proportional to their combined length. Some runtimes can reuse or extend unshared storage while preserving observable string immutability, so allocation behaviour is implementation-dependent.
+- A contiguous run of text units taken from a string, such as "ell" from "hello". Ordinary proper String.substring results in OpenJDK have copied their selected units since Java 7u6; an unchanged whole-string result can reuse the original.
+- Associating a variable name with an object, or changing that association. After s += "x" on a Python string, other names still observe the old text. A runtime may reuse unshared internal storage when no alias can observe a mutation; rebinding does not promise a fresh allocation.
+- A value whose observable contents cannot change after creation. Operations return a result without changing the old value; an unchanged result may reuse the old object. Strings in Python, Java, JavaScript, C# and Go are immutable.
+- Converting Unicode text to a specified normal form so canonically equivalent sequences compare equally, for example composing e plus U+0301 to é under NFC. It does not make every visually identical string equal: unrelated characters can look alike.
+- The configured limit on nested interpreter calls, inspected with sys.getrecursionlimit(). Conventional CPython builds commonly start at 1,000, but configuration and implementation matter. Exceeding it raises RecursionError; excessively raising it can still crash a process on some platforms.
+- In Java, a synchronized method or block acquires a particular monitor so threads holding that same monitor cannot execute their critical sections simultaneously. Different monitors do not exclude each other. Runtime optimisations can remove some uncontended locking overhead.
+- A variable local to a function or method invocation. Conceptually its state belongs to that call; actual storage can use registers, native stack slots or runtime-managed frame/object storage rather than one universal layout.
+- IEEE 754 binary64 floating-point format: 64 bits (8 bytes), with roughly 15–16 significant decimal digits. Java double uses this format, conventional C/C++ double implementations and CPython float do too; the C and C++ languages do not universally require double to be binary64.
+- A value referring to a memory location or object. Conventional 64-bit CPython builds use 8-byte object pointers, but the representation and width depend on the language implementation and ABI. A Python list’s slots refer to objects stored separately.
+- When requested data is absent from a cache level and must come from another level or main memory. The extra cost depends on hardware, contention and the access pattern; a miss does not always mean a main-memory read.
+- Processor hardware that predicts some future memory accesses, such as sequential streams, and fetches cache lines ahead of demand. Supported patterns and effectiveness vary by processor, strides, working set and contention.
+- Following dependent references where the next address becomes known only after the current load completes. This limits overlap of loads along that chain; other independent work can still overlap, and actual cost depends on the cache state and hardware.
+- With doubling at full capacity and halving when at or below half full, a full 1,024-slot array can grow on push and shrink on pop repeatedly. A strictly-below-half rule needs a nearby alternating sequence; quarter-full shrinking leaves a larger gap.
+- Short Message Service. An ordinary single segment has up to 140 payload bytes, traditionally enough for 160 GSM 7-bit basic-alphabet characters or 70 UCS-2 code units; GSM extension characters consume two septets, concatenation reduces payload, and services that support non-BMP emoji typically use UTF-16 surrogate pairs that consume two 16-bit units.
+- They transfer a **cache line**, whose size depends on the processor; this example assumes 64 bytes,
+- one aligned 64-byte cache line contains sixteen 4-byte integers.
+- A conventional CPython build commonly starts with a recursion limit of 1,000;
+- When the buffer is not full, the next free slot at the back is `count` places after `head`,
+- https://opendatastructures.org/ods-python/3_2_DLList_Doubly_Linked_Li.html
+- https://docs.oracle.com/en/java/javase/21/vm/java-hotspot-virtual-machine-performance-enhancements.html
+- A HotSpot JVM representation using 32-bit offsets for many object references in a 64-bit process. With eight-byte object alignment these can address a heap of about 32 GiB; actual use and supported sizes depend on JVM configuration and alignment, rather than every 64-bit JVM reference being four bytes.
+- The fixed-size block transferred or stored as a unit by a CPU cache. Line size depends on the processor and cache level. An aligned 64-byte line contains sixteen 4-byte integers or eight 8-byte doubles; the course’s numerical examples assume that width rather than a universal hardware guarantee.
+- https://numpy.org/doc/stable/reference/arrays.ndarray.html
+- https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Integer.html#valueOf(int)
+- https://docs.oracle.com/en/java/javase/21/vm/java-hotspot-virtual-machine-performance-enhancements.html
+- int32: 4-byte slots, start address 1000
+- n: the positive number of elements appended, at least one
+
+- # Older no-larger values cannot win.
+
+Remaining gaps:
+
+- All six original topics retained across32 focused units; substantive diagrams/native fragments preserved apart from the two explicitly documented conversion/trace-format changes. No original question was lost, added, retyped, relevelled or rekeyed.
+- No physical hardware locality/latency benchmark, allocator real-time test, GC timing, concurrent ring/lock-free-stack verification, service load test or user-visible grapheme production parser was executed. The content states those limits.
+- Both C++ snippets were compiled in an isolated GCC14/libstdc++14 container. ASan reports expected use-after-free for the deliberately unsafe quiz under this implementation; no particular undefined output, universal initial capacity or growth factor is guaranteed. No stalled host sanitizer was rerun.
+- The two merge-question ellipsis skeletons are labelled partial and executed only on empty inputs to avoid presenting them as full merges; the complete lesson merge was executed on sorted inputs, ties and disjoint lists.
+- Intel landing page and ARM manual paths returned403; AMD portal returned an HTML shell and an attempted direct AMD PDF failed. They are not claimed as factual hardware corroboration. The active hardware example now explicitly assumes64-byte lines and removes unsupported speed ratios.
+- Original-reader links include authoritative secondary explanations. Actual source claims use independently fetched CPython/OpenJDK/Unicode/C++/Linux/NumPy material and direct derivation; this report does not claim a unique sentence-to-primary-source mapping for every prose sentence.
+- Whole isolated release/mobile rendering, original-progress dates, offline update and publication are the coordinator’s checks; no shared generated files were written by this verifier.
+
+Low-confidence areas:
+
+- **medium** — lin-array-cache-row-layout: Cache locality effects depend on hardware and workload; no latency or speed ratio was measured. The numerical example now assumes a64-byte line rather than certifying a universal size.. Cache locality effects depend on hardware and workload; no latency or speed ratio was measured. The numerical example now assumes a64-byte line rather than certifying a universal size.
+- **medium** — lin-array-runtime-layouts: CPython3.14/OpenJDK21 details checked against fetched source; growth, reference width and GIL/free-threaded resize paths are implementation-dependent and time-sensitive. Illustrative JVM storage is an assumed model, not a measured object layout.. CPython3.14/OpenJDK21 details checked against fetched source; growth, reference width and GIL/free-threaded resize paths are implementation-dependent and time-sensitive. Illustrative JVM storage is an assumed model, not a measured object layout.
+- **medium** — lin-string-immutable-sharing: Runtime-specific sharing/interning examples checked against current source; language implementations and optimisation paths may change.. Runtime-specific sharing/interning examples checked against current source; language implementations and optimisation paths may change.
+- **medium** — lin-string-unicode-units: Encoding units and scalar/grapheme distinctions verified against Unicode/PEP393; runtime compact-string representations are implementation/version-specific.. Encoding units and scalar/grapheme distinctions verified against Unicode/PEP393; runtime compact-string representations are implementation/version-specific.
+- **medium** — lin-string-building-cost: Full-copy model and newline-inclusive arithmetic verified, but actual allocation/optimisation/performance depends on compiler/runtime; no timing benchmark is asserted.. Full-copy model and newline-inclusive arithmetic verified, but actual allocation/optimisation/performance depends on compiler/runtime; no timing benchmark is asserted.
+- **medium** — lin-string-operation-pitfalls: Historical Java7u5 versus7u6 source directly confirms proper-substring copying. CPython search thresholds and cached-object shortcuts are version-dependent.. Historical Java7u5 versus7u6 source directly confirms proper-substring copying. CPython search thresholds and cached-object shortcuts are version-dependent.
+- **medium** — lin-list-circular-tradeoffs: Portable pointer/iterator contracts checked; real allocation/locality/latency trade-offs are explicitly workload-dependent and not benchmarked.. Portable pointer/iterator contracts checked; real allocation/locality/latency trade-offs are explicitly workload-dependent and not benchmarked.
+- **medium** — lin-list-reversal-pattern: Native algorithm and bounded cases verified; startup/default recursion limit checked against CPython header and configured runtime, rather than a universal safe input length.. Native algorithm and bounded cases verified; startup/default recursion limit checked against CPython header and configured runtime, rather than a universal safe input length.
+- **medium** — lin-list-middle-cycle-detection: Detection proof and625 independent shapes verified. Named-algorithm historical attribution rests on fetched authoritative reference rather than an original Floyd publication.. Detection proof and625 independent shapes verified. Named-algorithm historical attribution rests on fetched authoritative reference rather than an original Floyd publication.
+- **medium** — lin-list-cycle-entry-proof: Reset proof recomputed including completed slow laps and head-start cycles; named historical attribution uses an authoritative reference.. Reset proof recomputed including completed slow laps and head-start cycles; named historical attribution uses an authoritative reference.
+- **medium** — lin-stack-storage-choices: Standard-library operation contracts and native snippets verified; Treiber/ABA/reclamation are an introductory conceptual outline, not a validated concurrent implementation or latency guarantee.. Standard-library operation contracts and native snippets verified; Treiber/ABA/reclamation are an introductory conceptual outline, not a validated concurrent implementation or latency guarantee.
+- **medium** — lin-stack-nested-state: Ordinary call-frame model explicitly qualified; native thread-stack layout/failure and CPython guarded frames vary by runtime and configuration.. Ordinary call-frame model explicitly qualified; native thread-stack layout/failure and CPython guarded frames vary by runtime and configuration.
+- **medium** — lin-stack-shunting-yard: Conversion/evaluation traces recomputed independently. Full production grammar with unary operators/functions is expressly outside this short unit.. Conversion/evaluation traces recomputed independently. Full production grammar with unary operators/functions is expressly outside this short unit.
+- **medium** — lin-queue-ring-full-overload: Single-threaded ring, bitmask and constant-rate backlog models verified; concurrent wraparound protocols and production service throughput are separate contracts.. Single-threaded ring, bitmask and constant-rate backlog models verified; concurrent wraparound protocols and production service throughput are separate contracts.
+- **medium** — lin-queue-deque-ends: CPython3.14 block source and Java21 docs verified; implementation layout and individual thread-safe operations are not whole-protocol atomicity guarantees.. CPython3.14 block source and Java21 docs verified; implementation layout and individual thread-safe operations are not whole-protocol atomicity guarantees.
+- **medium** — lin-queue-priority-ties: Python3.14 max-heap APIs/Java21 contracts checked; level/shift models are abstract operations and do not certify a measured speedup.. Python3.14 max-heap APIs/Java21 contracts checked; level/shift models are abstract operations and do not certify a measured speedup.
 
 ## dsa: Hash Tables & Hashing
 

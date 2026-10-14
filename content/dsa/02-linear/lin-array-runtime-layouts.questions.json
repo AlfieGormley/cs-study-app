@@ -1,0 +1,108 @@
+[
+  {
+    "id": "lin-arrays-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is wrong with this C++?\n\n```cpp\nstd::vector<int> v = {1, 2, 3};\n// Remember the current backing address.\nint* p = &v[0];\nfor (int i = 0; i < 100; i++)\n  v.push_back(i);\n// Growth may have invalidated p.\nstd::cout << *p;\n```",
+    "options": [
+      {
+        "text": "`p` may dangle: reallocation moves the elements, so `*p` is undefined behaviour",
+        "explanation": "Correct. When capacity runs out, vector allocates a new block, moves the elements and frees the old one. Pointers, references and iterators into the old block are invalidated."
+      },
+      {
+        "text": "`push_back` is O(n), so the loop is quadratic",
+        "explanation": "`push_back` is amortised O(1). The loop is linear overall; performance isn't the problem."
+      },
+      {
+        "text": "Nothing; it prints 1",
+        "explanation": "It might print 1 by luck, but the vector almost certainly reallocated while growing from 3 to 103 elements, so `p` points into freed memory."
+      },
+      {
+        "text": "It doesn't compile: you can't take the address of a vector element",
+        "explanation": "Taking `&v[0]` is perfectly legal (it's how you pass vector data to C APIs). The bug is using it after the vector may have moved."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Here n is the number of array elements; i is a zero-based index where used.\n\n1. `v` starts with size 3 and some small capacity (often 3).\n2. `p` points at the first slot of that block.\n3. Appending past capacity triggers reallocation: new block (say capacity 6, then 12, 24, ...), elements copied, old block freed.\n4. `p` still holds the old address. Dereferencing it reads freed memory: undefined behaviour. It may print 1, garbage, or crash, and sanitizers flag it.\n5. (For n elements, a single `push_back` that reallocates is O(n), but the loop as a whole is amortised O(1) per call.)\n6. Fixes: call `v.reserve(103)` before taking `p`, or store the **index** 0 and use `v[0]` later.",
+    "link": {
+      "title": "std::vector — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/container/vector"
+    }
+  },
+  {
+    "id": "lin-arrays-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about CPython's `list` are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It stores pointers to objects, not the objects themselves",
+        "explanation": "Correct. Each slot is a pointer (8 bytes on 64-bit). The int or str objects live separately on the heap, which is why lists can hold mixed types."
+      },
+      {
+        "text": "It over-allocates so that most appends need no reallocation",
+        "explanation": "Correct. The growth rule adds about 12.5% plus a small constant, giving capacities 4, 8, 16, 24, 32, 40, 52, ..."
+      },
+      {
+        "text": "`[1, 2, 3, 4]` stores the four integer values in one contiguous block of 4-byte slots",
+        "explanation": "Incorrect. That describes `array.array('i')` or a NumPy array. A list's contiguous block holds pointers; the int objects themselves are elsewhere."
+      },
+      {
+        "text": "`pop(0)` is O(n) because the remaining elements shift left",
+        "explanation": "Correct. Removing the first slot moves every other pointer down by one. Use `collections.deque.popleft()` for O(1)."
+      },
+      {
+        "text": "It doubles its capacity each time it fills, like libstdc++'s vector",
+        "explanation": "Incorrect. CPython's factor is about 1.125, much milder than doubling. Growth is still geometric, so append is still amortised O(1)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Here n is the number of array elements; i is a zero-based index where used.\n\n1. Layout: a list object holds a length, a capacity (`allocated`) and a pointer to an array of `PyObject*`.\n2. For incremental growth, CPython’s `list_resize` first computes the new capacity as `(n + (n >> 3) + 6) & ~3`. In maths notation:\n\n```formula\nnew ≈ n + n / 8 + 6\nnew = 9 + 1 + 6 = 16\nwhere\nnew: the new capacity, in pointer slots\nn: the number of elements needed (here 9)\n≈: approximately: n/8 is rounded down (that's n >> 3) and the total is rounded down to a multiple of 4 (that's & ~3)\nIn words: room for n, plus an eighth more, plus 6 spare slots, rounded down to a multiple of 4.\n```\n\n3. On a conventional 64-bit CPython build with 8-byte pointers, `sys.getsizeof` can reveal backing-array capacity jumps. A large bulk extension can suppress most spare room; the displayed growth rule is not the only branch of list_resize.\n4. `pop(0)` on a list of n elements shifts the other n − 1 pointers: O(n).\n5. For compact numeric storage use `array` or NumPy, which store raw machine values contiguously.",
+    "link": {
+      "title": "CPython listobject.c (list_resize)",
+      "url": "https://github.com/python/cpython/blob/main/Objects/listobject.c"
+    }
+  },
+  {
+    "id": "lin-arrays-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Java service stores 10 million independently boxed sensor readings outside the Integer cache range in an `ArrayList<Integer>`. Which statements about switching to `int[]` are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Memory drops substantially, because each element becomes a 4-byte value instead of a reference to a separate boxed `Integer` object",
+        "explanation": "Correct. Actual headers and references depend on the JVM layout. For an illustrative 16-byte object and 4-byte compressed reference, each independently boxed value costs substantially more than a 4-byte primitive array element."
+      },
+      {
+        "text": "Summing needs fewer indirections and gains contiguous primitive storage, which can improve speed",
+        "explanation": "Correct. An `int[]` streams through the cache. `ArrayList<Integer>` stores references that point to objects scattered on the heap, so each read is an extra indirection and a possible cache miss."
+      },
+      {
+        "text": "Appending becomes cheaper, because `int[]` grows by 2x instead of 1.5x",
+        "explanation": "Incorrect. `int[]` is a static array: it can't grow at all. You'd have to manage resizing yourself (or pre-size it)."
+      },
+      {
+        "text": "Pre-sizing with `new ArrayList<>(10_000_000)` would avoid both the boxing and the pointer chasing",
+        "explanation": "Incorrect. Pre-sizing avoids the resize copies, but the list still holds references to boxed `Integer` objects."
+      },
+      {
+        "text": "Garbage-collection work falls, since there are far fewer objects for the collector to track",
+        "explanation": "Correct. One `int[]` is a single object. Ten million `Integer`s (outside the small cached range) are ten million extra objects occupying heap space and requiring eventual reclamation."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. The assumed list holds references to separately boxed Integer values. Exact object headers, compressed references and alignment depend on the JVM configuration.\n2. Illustrative layout, excluding container headers and spare capacity: assume 4-byte references and 16-byte boxed objects.\n\n```formula\nB_list = N(R + B_obj)\nB_list = 10^7(4 + 16) = 2 × 10^8\nB_array = NI\nB_array = 10^7 × 4 = 4 × 10^7\nwhere\nB_list: reference slots plus boxed-object storage, in bytes\nB_array: primitive array payload storage, in bytes\nN: element count, ten million\nR: bytes per reference in the assumed compressed-reference layout, four\nB_obj: assumed bytes per boxed Integer object, sixteen\nI: bytes per Java int value, four\nIn words: Under the stated illustrative layout, the list payload and boxes use about 200 decimal megabytes against forty for primitive values.\n```\n\n3. List access loads a reference and then the object; primitive array access loads the value from contiguous storage.\n4. `int[]` is fixed-size; growth is your problem (`Arrays.copyOf`).\n5. Libraries like fastutil or Eclipse Collections provide resizable primitive lists (`IntArrayList`) that give you both.",
+    "link": {
+      "title": "ArrayList — Java SE 21 API",
+      "url": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/ArrayList.html"
+    }
+  }
+]

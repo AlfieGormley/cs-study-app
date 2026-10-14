@@ -1,116 +1,61 @@
-# Short lessons and code comments: ACTIVE (14 October 2026)
+# Short lessons and code comments: ACTIVE (2026-10-14)
 
-The user chose separate short lessons, each with its own completion status and focused questions. Continue
-converting the existing course and adding useful code comments; the first published batch is a milestone,
-not completion of the whole task. Follow [short-lessons-brief.md](short-lessons-brief.md) and the mandatory
-author/independent-verifier process. Existing skipped-content decisions below remain in force.
+Continue until the whole course is converted. The user chose actual short lessons with separate completion
+dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
+to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Published commit `82eb4aa`: Fundamentals, Complexity Analysis and Sound & Digital Audio; 20 originals
-  became 94 short lessons with 234 questions. All original question IDs/keys remain, plus three new questions.
-- The first batch preserves original completion dates in its new parts, independently tracks new completions,
-  redirects old links and resumes saved quizzes. Full staged build, 54 tests, all new mobile lesson/question
-  renders, navigation, age controls, offline practice and installed-app update checks passed. GitHub Pages
-  succeeded and live files match version `d4511ae2ebbf`.
-- Networking, caching and system-design databases are independently verified and stamped. The current
-  verified build contains 204 short lessons replacing 43 originals across six modules, with 512 associated
-  questions. All 5,565 original course question IDs remain, plus five new questions.
-- Second-batch integration: full verified-snapshot build version `0e1dfffd8410`, 56 tests and all 204 new
-  lesson/512 question mobile renders pass. An unlabelled Cypher query's accidental diagram classification was
-  fixed; real diagrams remain. Precise database glossary terms prevent incorrect cross-subject definitions.
-- Published second-batch commit `3a834e9`: GitHub Pages succeeded and live app, assets, progress migration
-  helper and course index match the tested build. Installed-app update and offline completion-age practice pass.
-- Further mobile integration checks confirm successive release migrations preserve earlier deliberate
-  unmarking, exact dates and reading/answer/bookmark history; saved quizzes resolve original question IDs;
-  re-completion dates only that child today, and age filters count active units without archived duplicates.
-- Messaging is independently verified and stamped. The current verified snapshot has seven converted modules:
-  51 originals became 238 short lessons with 608 focused questions. Version `d25fe18527e2` passes 61 tests,
-  all lesson/question mobile renders, actual lesson/quiz routes in every converted module, original answer-key
-  preservation, completion-age controls, offline practice and installed-app update checks.
-- Published third-batch commit `1a0ad7d`: messaging and the precise server-duration glossary phrase.
-  GitHub Pages succeeded; live app, asset manifest, progress helper and index match `d25fe18527e2`.
-- Current release candidate: nine converted modules, 67 originals → 316 short units with 800 questions.
-  Full verified-snapshot version `d63a1a489233`, 61 tests, all mobile lesson/question renders and actual
-  lesson/quiz routes in all nine modules pass. All 5,565 original course question IDs/keys/types/option counts
-  are preserved. Previously published Complexity units remain active while its format follow-up is authored.
-- Published fourth-batch commit `8ffe365`: distributed systems and API design. GitHub Pages succeeded;
-  four live app/manifest/progress/index files match `d63a1a489233`. Installed-app and offline age-practice
-  checks pass. Architecture is verified but remains pending integration/publication.
-- Architecture release candidate: ten converted modules, 76 originals → 357 units with 908 questions.
-  Verified full build `925d0c7768db`, 61 tests, all mobile renders and ten real module lesson/quiz routes pass.
-  Installed-app update, progress preservation and offline age controls pass; all 964 archival files remain
-  byte-identical. Complexity retains its published version while the format follow-up is reviewed.
-- Published fifth-batch commit `2657005`: Architecture. GitHub Pages succeeded, and all four live
-  app/manifest/progress/index files match the tested `925d0c7768db` release.
-- Complexity's formula-format follow-up is independently verified and stamped: 290 cards, 208 independent
-  maths assertions and no unresolved active formatting hits. All 35 IDs, 81 questions, 44 native fences,
-  confidence records and 14 archival files are preserved. The new full preview `1f3f05933373` passes 61 tests,
-  all 357 unit/908 question mobile renders and ten actual module lesson/quiz routes. Published sixth-batch
-  commit `76a9331`: GitHub Pages succeeded, and all four live files match `1f3f05933373`.
-- Distributed systems is independently verified and stamped (40 short units, 96 preserved questions).
-  Its broad real-time aliases have also been independently narrowed to consistency-ordering phrases.
-  API design's code-format follow-up is complete: four checked native examples, zero unresolved active
-  pseudocode/format debt. Architecture is independently verified and its isolated full build/mobile checks
-  pass (41 units, 108 questions; ten-module preview version `925d0c7768db`). Reliability is independently
-  verified and stamped (38 units/97 questions/105 cards/207 glossary terms). Case studies 1 is independently
-  verified and stamped (43 units/85
-  questions/103 formula cards/183 glossary terms); its 12 compiled dictionary meaning probes pass.
-  Complexity's required formula-format follow-up is verified and published. Case studies 2 is independently
-  verified and stamped (42 units/101 questions/105 cards/238 glossary terms). DSA linear and trees are being
-  authored; hashing (37 units/73 questions) is under independent review, continuing in course order.
-  The user confirmed course order, with system design next. Remaining modules are queued.
-- Current reports: [short-lessons-report.md](short-lessons-report.md). Working queue and baseline snapshots:
-  `/tmp/cs-study-short-lessons/queue.json`, `original-index.json`, `original-questions.json`; baseline commit
-  `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`. The full original course has 482 lessons and 5,565 questions.
-- The user explicitly says to run until completion without further approval questions. Continue the authorised
-  content conversions and publications without task confirmations; runtime permission controls remain external.
-  DSA linear is now under independent review (32 units/67 questions); hashing is also under review, and trees
-  is finishing author checks (35 initial units/80 original questions).
-- Case studies 1 integration candidate: verified eleven-module full build `48856bef26a5`, 83 originals
-  → 400 units with 993 questions. All mobile renders and eleven actual lesson/quiz routes pass; 61 Node
-  tests pass, all original questions survive, and all 964 original files remain byte-identical.
-- Published seventh-batch commit `d02b679`: Case Studies I. GitHub Pages succeeded and all four live
-  app/manifest/progress/index files match the tested `48856bef26a5` release. Installed-app update, offline
-  age practice and twelve compiled dictionary probes pass.
-- Reliability integration candidate: twelve-module verified full build `0136066f140a`, 91 originals →
-  438 units with 1,090 questions. All mobile renders and twelve actual lesson/quiz routes pass; 61 Node tests,
-  original question preservation and all 964 archival comparisons pass. All 18 compiled dictionary probes
-  pass, including precise definitions, intentional absence and representative inline contexts.
-- Published eighth-batch commit `8f0be42`: Reliability. GitHub Pages succeeded and all four live
-  app/manifest/progress/index files match `0136066f140a`. Installed-app update, offline completion-age practice
-  and dictionary context checks pass.
-- Complete system-design candidate: all eleven modules now have 413 short units with 1,041 questions.
-  The thirteen-module verified full build `75de57f32921` has 99 originals → 480 units/1,191 questions;
-  all mobile renders, thirteen actual module lesson/quiz routes, 61 Node tests, original question preservation
-  and 964 archive comparisons pass. Case Studies II's twelve dictionary ID/definition/negative probes pass,
-  and earlier Reliability/Case Studies I meanings remain correct in the new compiled subject dictionary.
-- Published ninth-batch commit `a108c72`: all system-design modules are converted. GitHub Pages succeeded,
-  and all four live app/manifest/progress/index files match the tested `75de57f32921` release.
-- Terminal permissions are now full access with approval policy never. Do not pass `sandbox_permissions`
-  to commands. Linear and trees resumed after the settings interruption; hashing review continues.
-- Hashing is independently verified and stamped: 37 units/73 questions/103 cards/158 glossary terms.
-  All original questions, twelve archives, native code and fourteen drawings/traces are preserved.
-  Verified fourteen-module preview `95bc1aa0dc67` has 105 originals → 517 units/1,264 questions; all phone
-  renders and fourteen real lesson/quiz routes, 61 Node tests, eighteen dictionary probes, question
-  preservation and 964 archive comparisons pass. Installed-app and completion-age checks are complete.
-- Linear is finishing independent review. Parent executed its Java and bounded GCC14/ASan fixtures and
-  fetched primary/supplemental sources; the 44-link check passes. Trees is finishing author handoff; its
-  isolated parent-network source evidence is `sources-parent-network.json` (144/144 HTTP 200).
-  Sorting/searching is being authored next. Older worker network restrictions are handled from the enabled
-  parent without requesting approvals; do not rerun failed transport unnecessarily.
-- Root owns shared code and generated assets. `/tmp/cs-study-short-lessons/preview-verified.mjs` builds isolated
-  previews from the last published release and overlays currently verified modules, allowing pending author
-  files to stay out of releases. Previously converted modules retain their last verified units during follow-up
-  drafts; the original baseline remains fixed for preservation audits.
-  Do not publish generated data built from unverified content. The final whole-course migration audit is
-  `scripts/audit-short-lessons.mjs` with the original index and question snapshots as arguments. Add
-  `--partial` for interim releases: every original course question must survive, and converted modules also
-  preserve original answer keys, question types and option counts. The final audit must omit `--partial`.
-  `/tmp/cs-study-short-lessons/audit-archives.mjs` compares all 964 original MD/question files against the fixed
-  baseline using Git blobs; all currently remain byte-identical. Repeat after final content work.
-- Integration follow-ups are recorded in the working queue. The request-duration glossary phrase and
-  Complexity's formula-format follow-up are independently verified. Complexity's 198 remaining active
-  matches are individually documented exceptions/false positives; no actual active violation remains.
+- Independently verified: 15/76 modules; 111 originals → 549 short lessons with 1331 focused questions.
+- The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
+  converted question types, answer keys and option counts are preserved. All 964 original MD/question
+  files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
+- Latest confirmed live release: `219c259`, version `95bc1aa0dc67`, 517 short lessons/1264 focused questions
+  across 14 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated verified candidate: `2527ff3025f3`, 15 modules/549 units/1331 questions.
+  Check candidate versus last live version before calling it published.
+- All eleven system-design modules are converted and published: 413 short units/1,041 questions.
+  Complexity and Sound & Digital Audio are also published; Complexity’s formula follow-up is complete
+  (290 cards, 208 independent maths checks, no unresolved active format issues).
 
+Current allocations:
+
+- dsa/dsa-trees: verifying; trees_short_verify.
+- dsa/dsa-sorting: authoring; sorting_short_author.
+- dsa/dsa-graphs: authoring; graphs_short_author.
+
+Verification and integration:
+
+- Follow `docs/CONTENT_PROCESS.md` and `docs/short-lessons-brief.md`: one author and a different real
+  independent verifier per module. No root self-stamping and no changes to the legacy exception list.
+- Root owns shared code/generated assets. Preview only verified modules; do not publish data compiled
+  from current unverified drafts. Every active formula hit needs conversion or a genuine documented
+  exception/false positive; code comments and actual outputs need native checks.
+- The latest candidate passes the full isolated build, 61 Node tests, all short lesson/question phone
+  renders and real lesson/quiz routes in every converted module. Installed-app updates, exact progress
+  preservation, offline practice, completion-age sliders/text input and dictionary integration pass.
+- Previously published short units remain active during follow-ups. Migrations copy exact old completion
+  dates once, retain deliberate unmarking across batches and preserve saved quizzes/answers/bookmarks.
+- Root must check exact staged source with a whole build and question audit before each content release.
+  Candidate counts/tests and honest corrections/gaps/confidence are in `docs/short-lessons-report.md`.
+
+Working evidence and helpers:
+
+- `/tmp/cs-study-short-lessons/queue.json` is the authoritative working queue; copy it through
+  `report-progress.mjs` to `docs/short-lessons-queue.json`. Original snapshots are `original-index.json`
+  and `original-questions.json`; never overwrite their fixed baseline.
+- `preview-verified.mjs` starts from the last confirmed live release and overlays only status `verified`
+  modules. Pending published follow-ups keep their last verified short units rather than reverting.
+- `report-progress.mjs` reports the previous live source for pending published follow-ups and current
+  verified source for ready modules. `check-staged-release.mjs` rejects unverified staged modules,
+  builds an exact index snapshot, compares generated assets and audits original questions.
+- `audit-archives.mjs` compares all 964 originals to Git blobs. Final whole-course migration audit is
+  `scripts/audit-short-lessons.mjs` with the original snapshots; interim batches use `--partial`, but
+  the final audit MUST omit it. Finish all 76 modules/all 482 mappings before calling the task done.
+- `write-active-resume.mjs` regenerates this active section while preserving historical handoffs below.
+
+Terminal permissions are full access with approval policy never: omit `sandbox_permissions`,
+`justification` and `prefix_rule` from commands. Continue without task confirmations. Some older worker
+sessions retain network/socket restrictions; root can execute their scoped download/native helper and
+return evidence for independent review. Keep downloader outputs isolated to avoid concurrent overwrite.
 Historical notes below are superseded where they conflict with this active task or already published changes.
 
 ---

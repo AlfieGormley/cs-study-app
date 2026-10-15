@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fs-crash-consistency-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "After a crash, ext4 scans its journal and finds a transaction with a begin block (TxB) and all its logged metadata blocks, but **no** commit block (TxE). What does recovery do? Focus on journaled metadata under the teaching protocol, not rollback of unjournaled file data.",
+    "options": [
+      {
+        "text": "Replays it, since all the data blocks are present",
+        "explanation": "Without the commit block there's no proof the transaction is complete. A partial one could be missing blocks or contain garbage."
+      },
+      {
+        "text": "Discards it: the change is treated as never having happened, and the file system stays at its last committed state",
+        "explanation": "Correct. Only committed transactions are replayed. An uncommitted one hadn't been checkpointed yet, so the in-place structures are still in their old, consistent state."
+      },
+      {
+        "text": "Runs a full fsck to decide",
+        "explanation": "The whole point of the journal is to avoid a full scan."
+      },
+      {
+        "text": "Marks the file system read-only until an administrator intervenes",
+        "explanation": "An incomplete transaction is the normal result of crashing mid-write, and is handled automatically."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The protocol's states:\n\n```\nTxB+blocks  TxE  checkpoint   on crash\nno          no   no           nothing\nyes         no   no           discard\nyes         yes  no/partial   replay\nyes         yes  yes          replay\n                              (harmless)\n```\n\n1. Checkpointing (writing blocks in place) only starts after TxE is durable.\n2. So with no TxE, the metadata from this transaction must not have been checkpointed. Unjournaled file data can already have reached its home location.\n3. Discarding the transaction leaves the old, consistent state. Its journaled metadata changes are not replayed, which is acceptable: they were never acknowledged as durable.",
+    "link": {
+      "title": "OSTEP: Crash Consistency: FSCK and Journaling (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-journaling.pdf"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A file system designer sends the journal's begin block, the logged metadata blocks **and** the commit block to the disk in one batch, to save a round trip. What can go wrong? Assume the naive protocol has neither an ordering guarantee nor transaction-integrity verification.",
+    "options": [
+      {
+        "text": "Nothing; the disk always writes blocks in the order they were submitted",
+        "explanation": "Disks and controllers reorder writes freely to optimise head movement or flash parallelism, unless told otherwise with flushes or FUA."
+      },
+      {
+        "text": "The disk may persist the commit block before the logged blocks; after a crash, recovery sees a \"committed\" transaction and replays garbage into the file system",
+        "explanation": "Correct. A commit marker alone is insufficient if it can persist before its dependencies. An asynchronous checksummed journal can reject incomplete transactions, but it still needs a complete durable commit before acknowledging success. journal_async_commit and journal_checksum are distinct settings."
+      },
+      {
+        "text": "The journal fills up twice as fast",
+        "explanation": "The number of blocks written is the same either way; only the ordering guarantee changes."
+      },
+      {
+        "text": "Recovery would discard every transaction, losing all changes",
+        "explanation": "Recovery discards only transactions without a valid commit block. The danger is the opposite: wrongly *accepting* a broken one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "In the naive protocol, the commit marker can persist while some logged blocks do not, allowing invalid replay. One remedy orders and flushes log contents before the durable commit record. An asynchronous protocol can use transaction checksums to reject incomplete records, but must still ensure all required writes are stable before promising durability. Checksums detect incomplete/corrupt records; they do not themselves persist data or universally make commits faster.",
+    "link": {
+      "title": "OSTEP: Crash Consistency: FSCK and Journaling (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-journaling.pdf"
+    }
+  }
+]

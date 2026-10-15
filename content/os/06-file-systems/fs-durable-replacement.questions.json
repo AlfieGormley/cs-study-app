@@ -1,0 +1,70 @@
+[
+  {
+    "id": "fs-crash-consistency-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program creates a **new** file `order-1001.json`, writes it, calls `fsync` on its descriptor, closes it and reports success. It never fsyncs the directory. Power fails a second later. What can happen?",
+    "options": [
+      {
+        "text": "Nothing can go wrong: fsync made the file durable",
+        "explanation": "`fsync` on the file flushes its contents and inode, but the *name* lives in the parent directory's data. That's a separate file that hasn't been flushed."
+      },
+      {
+        "text": "The file's contents may be corrupted",
+        "explanation": "The contents and inode were flushed by `fsync`; the risk lies with the name, not the bytes."
+      },
+      {
+        "text": "After reboot, `order-1001.json` may not exist at all, even though its data reached the disk",
+        "explanation": "Correct as a general Linux filesystem portability concern: file fsync does not by itself guarantee persistence of the parent directory entry. Directory synchronization support and semantics must be checked."
+      },
+      {
+        "text": "The file will appear in `lost+found` every time",
+        "explanation": "Only fsck puts files in `lost+found`. With a journal there's usually no fsck, and the file system may simply have no committed entry for the name."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Creating a file changes two objects: the new inode (plus its data) and the parent directory (a new entry).\n2. `fsync(file_fd)` guarantees the first.\n3. The directory's new entry is durable only after it's committed. On ext4, `fsync` on a new file often commits the entry as a side effect of the journal, but POSIX doesn't promise it and other file systems differ.\n4. On Linux filesystems supporting directory fsync, explicitly synchronize the directory and check errors:\n\n```python\n# Persist the new directory entry too.\ndfd = os.open(dirname, os.O_RDONLY)\nos.fsync(dfd)\nos.close(dfd)\n```\n\nThe same applies after `rename`.",
+    "link": {
+      "title": "Files are hard — Dan Luu",
+      "url": "https://danluu.com/file-consistency/"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You want to replace `settings.json` so that after a crash at **any** moment you see either the complete old version or the complete new one, and once your function returns, the new version is durable. Which steps are needed? Select all that apply. Assume the old file and its directory entry are already durable, a trusted stable directory, full successful writes, checked errors, and a filesystem/device with the required rename/fsync crash guarantees.",
+    "options": [
+      {
+        "text": "Write the new contents to a temporary file in the same directory and `fsync` it before renaming",
+        "explanation": "Correct. Without this `fsync`, the rename can become durable before the data does, which is the ext4 zero-length file problem."
+      },
+      {
+        "text": "`rename()` the temporary file over `settings.json`",
+        "explanation": "Correct. rename within one file system is atomic: the name points at the old inode or the new one, never at a half-written file."
+      },
+      {
+        "text": "`fsync` the parent directory after the rename",
+        "explanation": "Correct. The rename is a change to the directory. Until the directory is flushed, a crash can bring back the old version even though you reported success."
+      },
+      {
+        "text": "Open the temporary file with `O_DIRECT`",
+        "explanation": "`O_DIRECT` bypasses the page cache but doesn't on its own guarantee durability or ordering; you'd still need `fsync`. It's beside the point here."
+      },
+      {
+        "text": "Write directly into `settings.json` with `O_TRUNC`, then `fsync`",
+        "explanation": "Truncating then writing in place has a window where the file is empty or partly written. A crash there loses both versions."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The three-step pattern, and what each step protects:\n\n```\n1 write tmp + fsync(tmp)\n    data durable before name\n2 rename(tmp, settings.json)\n    atomic swap of the name\n3 fsync(dir)\n    the swap itself is durable\n```\n\nCrash between 1 and 2: old file intact, stray tmp file.\nCrash between 2 and 3: old or new, both complete.\nAfter 3: new, durably.\n\n`O_TRUNC` in place breaks atomicity, and `O_DIRECT` doesn't address it.",
+    "link": {
+      "title": "Files are hard — Dan Luu",
+      "url": "https://danluu.com/file-consistency/"
+    }
+  }
+]

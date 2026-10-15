@@ -7,7 +7,7 @@
       "ordinary file",
       "ordinary files"
     ],
-    "definition": "An ordinary file whose contents are just a sequence of bytes the operating system doesn't interpret, as opposed to special files such as directories, devices, pipes and sockets.",
+    "definition": "An ordinary file presenting a byte sequence to applications. The operating system tracks metadata and does not impose an application-level content format; special features such as executable loading can interpret particular formats.",
     "example": "A JPEG photo and a SQLite database are both regular files.",
     "source": "https://man7.org/linux/man-pages/man7/inode.7.html"
   },
@@ -74,9 +74,9 @@
       "mounted",
       "mount"
     ],
-    "definition": "A directory where another file system is attached into the tree, so its files appear underneath that directory.",
+    "definition": "A location where a filesystem is attached to a process-visible tree. Usually this is a directory, although Linux bind mounts can also attach a file onto a file. Views can differ between mount namespaces.",
     "example": "Mounting a USB stick at /mnt/usb makes its files appear as /mnt/usb/...",
-    "source": "https://en.wikipedia.org/wiki/Mount_(computing)"
+    "source": "https://man7.org/linux/man-pages/man2/mount.2.html"
   },
   {
     "id": "mount-namespace",
@@ -105,8 +105,8 @@
       "read call",
       "read calls"
     ],
-    "definition": "The system call that copies up to a requested number of bytes from an open file into a buffer and advances the offset. It can return fewer bytes than asked, and 0 at end of file.",
-    "example": "read(fd, buf, 100) on a 7-byte file returns 7.",
+    "definition": "A system call that attempts to read up to a requested byte count into a buffer. Seekable files advance their open-description offset by bytes read; a positive-length regular-file read returns zero at end of file, while zero-length requests and some special objects need different interpretation.",
+    "example": "With a positive count, no concurrent modifiers and a successful full transfer, reading at the start of a seven-byte regular file returns seven bytes when one hundred were requested.",
     "source": "https://man7.org/linux/man-pages/man2/read.2.html"
   },
   {
@@ -116,8 +116,8 @@
       "write call",
       "write calls"
     ],
-    "definition": "The system call that copies bytes from a buffer to an open file, pipe or socket. For ordinary buffered files it returns once the data is in the page cache, not once it is on disk, and it can transfer fewer bytes than asked.",
-    "example": "write(fd, b'hello', 5) normally returns 5 long before the bytes reach the disk.",
+    "definition": "A system call that attempts to transfer bytes from a buffer to an open object. It can make partial progress or fail; ordinary buffered file completion does not promise durability, and the call can also block on allocation, writeback or throttling.",
+    "example": "A successful ordinary buffered write can return before its bytes are durable; callers must inspect the accepted byte count and later synchronization errors.",
     "source": "https://man7.org/linux/man-pages/man2/write.2.html"
   },
   {
@@ -175,7 +175,7 @@
     "id": "umask",
     "term": "umask",
     "aliases": [],
-    "definition": "A per-process mask of permission bits to remove from newly created files. A requested mode of 0644 with a umask of 022 stays 0644; with 077 it becomes 0600.",
+    "definition": "A process creation mask that removes permission bits from requested new-file modes when no default access-control list overrides that creation rule. With ordinary mode processing, requested 0644 stays 0644 under mask 022 and becomes 0600 under mask 077.",
     "example": "A typical umask of 022 stops new files being writable by group and others.",
     "source": "https://man7.org/linux/man-pages/man2/umask.2.html"
   },
@@ -208,9 +208,9 @@
     "id": "world-readable",
     "term": "World-readable",
     "aliases": [],
-    "definition": "A file whose permission bits let every user read it (the 'others' read bit is set).",
+    "definition": "A file whose permission mode grants read access to the other-user class. Actual access can still fail because of directory search permissions, access-control rules or other security checks.",
     "example": "Mode 644 makes a file world-readable.",
-    "source": "https://en.wikipedia.org/wiki/File-system_permissions"
+    "source": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
   },
   {
     "id": "python-os-module",
@@ -633,18 +633,19 @@
       "mtime",
       "ctime"
     ],
-    "definition": "A file's three classic timestamps: atime (last access), mtime (last modification of the contents) and ctime (last change to the inode, such as permissions).",
+    "definition": "Classic file timestamps: atime records access, mtime records content modification, and ctime records status changes such as writes or permission changes. Ctime is not creation time; some filesystems separately expose a birth time.",
     "example": "chmod changes ctime but not mtime.",
     "source": "https://man7.org/linux/man-pages/man7/inode.7.html"
   },
   {
     "id": "noatime",
-    "term": "noatime",
+    "term": "noatime and relatime",
     "aliases": [
-      "relatime"
+      "relatime",
+      "noatime"
     ],
-    "definition": "A mount option that stops reads from updating atime, avoiding a metadata write on every read. relatime, the Linux default, updates it only occasionally.",
-    "example": "Mounting a busy mail spool with noatime removes many small writes.",
+    "definition": "Mount options controlling access-time updates. Noatime suppresses ordinary access-time updates; relatime normally updates them when the old atime precedes mtime or ctime, or is older than a day. They are different policies.",
+    "example": "Noatime suppresses access-time updates; relatime permits selected updates while reducing their frequency.",
     "source": "https://man7.org/linux/man-pages/man8/mount.8.html"
   },
   {
@@ -671,7 +672,7 @@
     "aliases": [
       "HTree"
     ],
-    "definition": "ext4's hashed directory index: a shallow B-tree-like structure keyed on a hash of each name, so lookups in huge directories take about O(log n) steps instead of scanning every entry.",
+    "definition": "Ext4’s shallow hash-indexed directory structure. A name hash selects candidate leaf ranges, followed by name comparisons; hash collisions can require additional scanning, so this is not a universal logarithmic worst-case lookup guarantee.",
     "example": "A directory with 100,000 entries can be searched in a few block reads with htree.",
     "source": "https://docs.kernel.org/filesystems/ext4/directory.html"
   },
@@ -682,7 +683,7 @@
       "hard links",
       "hardlink"
     ],
-    "definition": "An additional directory entry pointing at the same inode. All names are equal peers; the file survives until the last name is removed. Hard links cannot cross file systems or (normally) point at directories.",
+    "definition": "An additional directory entry naming the same inode. Names are peers, and removing one does not remove another; reclamation also depends on remaining open or mapped references and filesystem features. Ordinary hard links stay within one filesystem and normally cannot target directories.",
     "example": "ln a b makes b a second name for a's inode.",
     "source": "https://man7.org/linux/man-pages/man2/link.2.html"
   },
@@ -705,9 +706,9 @@
       "link counts",
       "nlink"
     ],
-    "definition": "The number of directory entries (names) pointing at an inode, stored in the inode. A file's storage can be freed only when it reaches zero and no process still has it open.",
+    "definition": "The number of directory entries referencing an inode, subject to filesystem-specific directory-count rules. A zero link count alone does not free storage while open descriptions, mappings, snapshots or other retaining references remain.",
     "example": "Two hard links give a file link count 2.",
-    "source": "https://man7.org/linux/man-pages/man7/inode.7.html"
+    "source": "https://man7.org/linux/man-pages/man2/unlink.2.html"
   },
   {
     "id": "ln",
@@ -733,9 +734,9 @@
     "aliases": [
       "fast symlinks"
     ],
-    "definition": "A symbolic link whose target is short enough (under 60 bytes on ext4) to be stored inside the inode itself, so following it needs no extra block read.",
+    "definition": "A symbolic link whose target bytes fit inside the inode, rather than a separate payload block. Classic ext4 short targets under 60 bytes can use this layout; inode and target-path lookup can still require I/O.",
     "example": "ln -s ../lib lib on ext4 creates a fast symlink.",
-    "source": "https://docs.kernel.org/filesystems/ext4/index.html"
+    "source": "https://docs.kernel.org/filesystems/ext4/ifork.html"
   },
   {
     "id": "contiguous-allocation",
@@ -835,9 +836,9 @@
       "extent-mapped",
       "extent"
     ],
-    "definition": "A single record mapping a run of consecutive file blocks onto consecutive device blocks: logical start, length and physical start. In ext4 each takes 12 bytes and covers up to 32,768 blocks.",
+    "definition": "A record mapping a run of consecutive logical file blocks onto a run of consecutive physical blocks. Ext4 uses 12-byte extent records; initialized extents can cover 32,768 blocks, while unwritten extents have a different encoded limit.",
     "example": "One extent can say 'file blocks 0–2,999 are at disk blocks 81,920–84,919'.",
-    "source": "https://en.wikipedia.org/wiki/Extent_(file_systems)"
+    "source": "https://docs.kernel.org/filesystems/ext4/ifork.html"
   },
   {
     "id": "extent-tree",
@@ -884,7 +885,7 @@
       "fallocate",
       "posix_fallocate"
     ],
-    "definition": "Reserving space for a file in advance, for example with fallocate, so later writes won't fail for lack of space and can land in a better layout. It does not guarantee physical contiguity.",
+    "definition": "Reserving storage for a file before later writes, using an allocation mode intended for that purpose. Successfully reserved ranges can avoid later ENOSPC failures from lack of data space, but writes can still fail for other reasons. Not every fallocate mode allocates space, and physical contiguity is not guaranteed.",
     "example": "fallocate -l 10G db.img reserves 10 GiB before the database starts writing.",
     "source": "https://man7.org/linux/man-pages/man2/fallocate.2.html"
   },
@@ -895,7 +896,7 @@
       "sparse files",
       "sparse-aware"
     ],
-    "definition": "A file with holes: ranges that were never written and have no blocks allocated, which read back as zeros. Its logical size can be far larger than its disk usage.",
+    "definition": "A file containing holes: logical ranges with no allocated payload blocks that read as zeros. Holes can arise through extending beyond EOF or punching out previously allocated ranges; logical size can greatly exceed disk usage.",
     "example": "truncate -s 10G disk.img creates a 10 GiB file that uses almost no space.",
     "source": "https://en.wikipedia.org/wiki/Sparse_file"
   },
@@ -906,9 +907,9 @@
       "file hole",
       "file holes"
     ],
-    "definition": "A range of a sparse file with no allocated blocks. Reading it returns zeros without any disk I/O for that range.",
-    "example": "A VM image with 44 GB of holes uses only 6 GB on disk.",
-    "source": "https://en.wikipedia.org/wiki/Sparse_file"
+    "definition": "A logical range in a file without allocated payload blocks, which reads as zeros. Resolving its mapping or reading neighboring data can still cause metadata I/O or other storage activity.",
+    "example": "Ignoring metadata and other retained versions, a fifty-gigabyte logical image with forty-four gigabytes of holes may allocate only about six gigabytes of payload.",
+    "source": "https://man7.org/linux/man-pages/man2/lseek.2.html"
   },
   {
     "id": "truncate",
@@ -973,9 +974,9 @@
       "e2fsck",
       "btrfs check"
     ],
-    "definition": "File system check: a tool run after a crash that scans all metadata, rebuilds bitmaps, fixes link counts and moves orphaned inodes to lost+found. It restores consistency, not correct contents, and its time grows with the file system's size. e2fsck is ext2/3/4's version.",
+    "definition": "Filesystem-specific checking tools that inspect and, where supported and requested, repair metadata consistency. Work depends on metadata volume, layout and algorithms; repairing consistency does not prove that file payload is correct. E2fsck checks ext filesystems, while btrfs check has different repair semantics.",
     "example": "A full fsck of a multi-terabyte array of hard disks can take hours.",
-    "source": "https://man7.org/linux/man-pages/man8/fsck.8.html"
+    "source": "https://man7.org/linux/man-pages/man8/e2fsck.8.html"
   },
   {
     "id": "lost-found",
@@ -1068,16 +1069,14 @@
     "id": "journal-replay",
     "term": "Replay (log)",
     "aliases": [
-      "replayed",
-      "replaying",
       "journal replay",
       "log replay",
       "roll forward",
       "rolls forward"
     ],
-    "definition": "Re-applying committed log records after a crash so the on-disk structures reach the state the log describes. Replaying the same transaction twice is harmless.",
-    "example": "At mount, ext4 replays every committed transaction still in the journal.",
-    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-journaling.pdf"
+    "definition": "Applying valid committed journal changes after a crash to restore the state described by the log. Simple block-redo records are idempotent, although real filesystems also need transaction ordering, checksums and revoke handling.",
+    "example": "At recovery, ext4 validates journal transactions and replays relevant committed changes according to ordering and revoke rules.",
+    "source": "https://docs.kernel.org/filesystems/ext4/journal.html"
   },
   {
     "id": "jbd2",
@@ -1097,9 +1096,9 @@
       "full data journaling",
       "data=journal mode"
     ],
-    "definition": "The ext4 mode that journals file data as well as metadata, so every data byte is written twice: once to the journal, once to its home location.",
+    "definition": "Ext4’s mode that journals payload as well as metadata. In a simple write-traffic model new payload is written to the journal and later to its home location; batching and repeated overwrites make actual device traffic and speed workload-dependent.",
     "example": "Streaming 1 GB in data=journal mode writes about 2 GB.",
-    "source": "https://docs.kernel.org/admin-guide/ext4.html"
+    "source": "https://www.kernel.org/doc/html/latest/admin-guide/ext4.html"
   },
   {
     "id": "ordered-mode",
@@ -1164,7 +1163,9 @@
       "copy-on-write file systems",
       "CoW file systems",
       "CoW designs",
-      "CoW storage"
+      "CoW storage",
+      "filesystem CoW",
+      "filesystem copy-on-write"
     ],
     "definition": "Never overwriting live data: a change is written to a new location and then the pointer to it is updated, all the way up to a new root. A crash before the root switch leaves the old version intact. Also used for memory pages after fork.",
     "example": "Btrfs and ZFS are copy-on-write file systems.",
@@ -1182,14 +1183,15 @@
   },
   {
     "id": "snapshot",
-    "term": "Snapshot (file system)",
+    "term": "Filesystem snapshot",
     "aliases": [
       "file system snapshot",
-      "native filesystem snapshots"
+      "native filesystem snapshots",
+      "filesystem snapshots"
     ],
-    "definition": "A read-only, point-in-time view of a file system or volume. On copy-on-write systems it initially shares all blocks with the live data and only consumes space as data changes.",
+    "definition": "A point-in-time filesystem or volume view. Copy-on-write snapshots initially share stored blocks and retain old versions as data changes; snapshots can be read-only or writable depending on the system and configuration.",
     "example": "A Btrfs snapshot before an upgrade lets you roll back if it fails.",
-    "source": "https://en.wikipedia.org/wiki/Snapshot_(computer_storage)"
+    "source": "https://btrfs.readthedocs.io/en/latest/Subvolumes.html"
   },
   {
     "id": "silent-corruption",
@@ -1204,16 +1206,17 @@
   },
   {
     "id": "nocow",
-    "term": "NOCOW",
+    "term": "Btrfs NOCOW and nodatasum",
     "aliases": [
       "nodatacow",
       "nodatasum",
       "chattr +C",
-      "NOCOW files"
+      "NOCOW files",
+      "NOCOW"
     ],
-    "definition": "A Btrfs attribute (set with chattr +C on an empty file or a directory) that makes files be overwritten in place instead of copy-on-write. It also disables data checksums and compression for those files.",
+    "definition": "Btrfs NOCOW suppresses normal copy-on-write for eligible file data and implies no data checksumming or compression; it can be set on an empty file or inherited from a directory. Shared snapshot extents still require copying on modification. Nodatasum alone disables data checksums without being equivalent to NOCOW.",
     "example": "Databases on Btrfs are often placed in a chattr +C directory to limit fragmentation.",
-    "source": "https://btrfs.readthedocs.io/en/latest/"
+    "source": "https://btrfs.readthedocs.io/en/latest/ch-file-attributes.html"
   },
   {
     "id": "chattr",
@@ -1230,9 +1233,9 @@
       "WA",
       "write amplification factor"
     ],
-    "definition": "How many bytes are physically written for each byte the application or host asked to write. Copy-on-write paths, journaling and SSD garbage collection all raise it; 1 is ideal.",
-    "example": "An SSD cleaning blocks that are 75% valid has write amplification of about 4.",
-    "source": "https://en.wikipedia.org/wiki/Write_amplification"
+    "definition": "The ratio of bytes written at a specified lower layer to bytes written at the specified upper layer. Cleaning, journaling and copy-on-write can increase it; define the layers and whether compression or deduplication is included before treating one as a lower bound.",
+    "example": "In the simplified steady-state cleaning model, victim blocks with 75% valid data imply about four flash writes per host write.",
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-ssd.pdf"
   },
   {
     "id": "zil",
@@ -1280,7 +1283,7 @@
       "rename()",
       "os.replace"
     ],
-    "definition": "The system call that changes a file's name, replacing any existing file at the target. Within one file system it is atomic: other processes see the old file or the new one, never a mix.",
+    "definition": "A filesystem operation that changes a name and can atomically replace an existing destination within one filesystem, subject to type and permission rules. Atomic name visibility does not guarantee crash durability, and open descriptors can continue referencing the old inode.",
     "example": "Writing config.tmp then renaming it over config.json updates the file atomically.",
     "source": "https://man7.org/linux/man-pages/man2/rename.2.html"
   },
@@ -1306,7 +1309,7 @@
     "id": "fsyncgate",
     "term": "fsyncgate",
     "aliases": [],
-    "definition": "The 2018 discovery, reported by Craig Ringer, that PostgreSQL could lose data on Linux because a failed fsync could mark unwritten pages clean, so retrying fsync later reported success.",
+    "definition": "The 2018 PostgreSQL/Linux writeback-error investigation showing that a successful later fsync could follow an earlier reported error without recovering data that failed writeback. Error reporting and failed-page handling are distinct; a blind retry is not a recovery protocol.",
     "example": "After fsyncgate, PostgreSQL 11.2 started to PANIC on data-file fsync failure.",
     "source": "https://wiki.postgresql.org/wiki/Fsync_Errors"
   },
@@ -1324,7 +1327,7 @@
     "id": "errseq-t",
     "term": "errseq_t",
     "aliases": [],
-    "definition": "The Linux 4.13 mechanism for tracking write-back errors per file with a sequence counter, so each open file description can see an error recorded since it last checked.",
+    "definition": "Linux writeback-error tracking introduced in 4.13, using an error sequence sampled by relevant open file descriptions. It improves observing new errors but is not an unlimited queue of every failure and does not preserve lost dirty data for retry.",
     "example": "With errseq_t, two processes that both call fsync can each learn of a write-back error.",
     "source": "https://www.kernel.org/doc/html/latest/core-api/errseq.html"
   },
@@ -1378,9 +1381,9 @@
     "aliases": [
       "force unit access"
     ],
-    "definition": "Force Unit Access: a flag on a write telling the drive to put that write on stable media before completing it, bypassing its volatile cache for that write.",
+    "definition": "Force Unit Access: a write request requiring that write to be on nonvolatile storage before successful completion. It need not literally bypass every cache; the device must meet the requested persistence contract.",
     "example": "ext4 can write the journal commit block with FUA.",
-    "source": "https://en.wikipedia.org/wiki/Disk_buffer#Write_acceleration"
+    "source": "https://docs.kernel.org/block/writeback_cache_control.html"
   },
   {
     "id": "power-loss-protection",
@@ -1389,9 +1392,9 @@
       "PLP",
       "power loss protection"
     ],
-    "definition": "Capacitors or batteries in a drive or controller that supply enough energy, on power failure, to write cached data to stable media.",
-    "example": "An SSD with power-loss protection can safely complete flushes quickly.",
-    "source": "https://en.wikipedia.org/wiki/Solid-state_drive"
+    "definition": "A device mechanism, often using stored capacitor or battery energy, that preserves specified data or internal state across power loss. Coverage differs by product; verify which acknowledged writes and mapping metadata are protected.",
+    "example": "Check the SSD specification to learn which buffered payload or mapping state its power-loss protection preserves.",
+    "source": "https://docs.kernel.org/block/writeback_cache_control.html"
   },
   {
     "id": "zero-length-file",
@@ -1411,7 +1414,7 @@
       "flash pages",
       "page (flash)"
     ],
-    "definition": "In NAND flash, the unit that is read or programmed, often 16 KiB; many pages make up one erase block. (A memory page is a different, though similarly named, unit.)",
+    "definition": "In NAND flash, a unit read or programmed under device-specific rules. Page size depends on the device; 16 KiB is an illustrative size. Multiple flash pages make up an erase block. A virtual-memory page is a different unit.",
     "example": "A 4 MiB erase block might hold 256 flash pages of 16 KiB.",
     "source": "https://en.wikipedia.org/wiki/Flash_memory"
   },
@@ -1427,14 +1430,15 @@
   },
   {
     "id": "cache-hit",
-    "term": "Page cache hit",
+    "term": "Storage-cache hit",
     "aliases": [
-      "cache hits",
-      "page cache hits"
+      "page-cache hit",
+      "page-cache hits",
+      "storage-cache hits"
     ],
-    "definition": "A lookup that finds the wanted data already in the cache, so no slower storage access is needed.",
-    "example": "Reading a page that is already in the page cache is a cache hit: just a memory copy.",
-    "source": "https://en.wikipedia.org/wiki/Cache_(computing)"
+    "definition": "A storage-cache lookup that finds the required valid contents already resident. A page-cache hit can avoid a payload storage read while metadata work, destination-page faults or other I/O may still occur.",
+    "example": "A valid page-cache hit can avoid a file-payload read from storage, while copying to a user buffer may still be needed.",
+    "source": "https://www.kernel.org/doc/html/latest/filesystems/vfs.html"
   },
   {
     "id": "drop-caches",
@@ -1442,7 +1446,7 @@
     "aliases": [
       "/proc/sys/vm/drop_caches"
     ],
-    "definition": "A Linux control file: writing 3 to it discards clean page-cache, dentry and inode cache contents, used to test cold-cache performance. It does not write dirty data, so run sync first.",
+    "definition": "A Linux control that attempts to reclaim clean page-cache and/or reclaimable slab objects such as dentries and inodes. Writing three requests both classes. Dirty objects are not written or freed by this operation, and not every referenced object can be reclaimed. It changes system-wide cache state, so controlled experiments belong in an isolated environment.",
     "example": "sync; echo 3 > /proc/sys/vm/drop_caches empties the clean caches on a test box.",
     "source": "https://docs.kernel.org/admin-guide/sysctl/vm.html"
   },
@@ -1534,9 +1538,9 @@
       "unmounting",
       "unmounted"
     ],
-    "definition": "Detaching a mounted file system. umount first writes back all its dirty data, so it can wait a long time on a slow device.",
+    "definition": "Detaching a mounted filesystem. Normal unmount can wait for pending writeback and fail if the mount is busy; lazy and forced unmount options have different semantics and do not imply every pending write is durable.",
     "example": "umount /mnt/usb can take minutes after a big copy to a slow stick.",
-    "source": "https://man7.org/linux/man-pages/man8/umount.8.html"
+    "source": "https://man7.org/linux/man-pages/man2/umount.2.html"
   },
   {
     "id": "sync-command",
@@ -1544,18 +1548,19 @@
     "aliases": [
       "sync()"
     ],
-    "definition": "The command and system call that write all dirty data to storage. POSIX only requires sync() to schedule the writes, but on Linux it waits for them to complete.",
+    "definition": "The sync command and system call request writeback of cached filesystem changes. POSIX permits sync() to schedule writes; Linux waits for I/O completion. Completion cannot establish successful persistence if errors occur, and the sync() call has no error return.",
     "example": "Run sync before pulling power from a test machine.",
     "source": "https://man7.org/linux/man-pages/man2/sync.2.html"
   },
   {
     "id": "o-dsync",
-    "term": "O_DSYNC",
+    "term": "O_DSYNC and O_SYNC",
     "aliases": [
-      "O_SYNC"
+      "O_SYNC",
+      "O_DSYNC"
     ],
-    "definition": "Open flags that make each write wait for storage: it returns only once the data (O_DSYNC) or data plus metadata (O_SYNC) is on stable storage, like an fsync after every write.",
-    "example": "A log opened with O_DSYNC needs no separate fdatasync call.",
+    "definition": "Open flags that request synchronized write completion. O_DSYNC covers data and metadata necessary to retrieve it, while O_SYNC also covers other associated file metadata. Supported filesystems and devices must honor that synchronization contract.",
+    "example": "Successful O_DSYNC writes provide data-integrity completion under the supported filesystem/device contract; persisting a new filename may still require syncing its directory.",
     "source": "https://man7.org/linux/man-pages/man2/open.2.html"
   },
   {
@@ -1564,7 +1569,7 @@
     "aliases": [],
     "definition": "Caching the same data twice, once in an application's own cache and again in the kernel's page cache, wasting memory and adding a copy.",
     "example": "InnoDB with buffered I/O can hold the same 16 KiB page in its buffer pool and the page cache.",
-    "source": "https://dev.mysql.com/doc/refman/8.4/en/innodb-parameters.html"
+    "source": "https://docs.oracle.com/cd/E17952_01/mysql-8.4-en/innodb-parameters.html"
   },
   {
     "id": "scylladb",
@@ -1783,9 +1788,9 @@
       "disk seek",
       "seek times"
     ],
-    "definition": "The time a hard disk takes to move its heads to the right track, typically a few milliseconds and dependent on distance. (lseek, by contrast, just moves a file offset and costs no seek.)",
+    "definition": "The time an HDD takes to move its heads to the needed track; request distance, scheduling and the device affect it. Lseek changes a logical file offset without itself issuing a physical seek, though later I/O may need one.",
     "example": "An 8 ms average seek limits a disk to about 125 seeks per second.",
-    "source": "https://en.wikipedia.org/wiki/Hard_disk_drive_performance_characteristics#Seek_time"
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf"
   },
   {
     "id": "rotational-latency",
@@ -1800,10 +1805,8 @@
   {
     "id": "transfer-time",
     "term": "Transfer time",
-    "aliases": [
-      "transfer rate"
-    ],
-    "definition": "The time spent actually moving the data, as opposed to waiting for the transfer to start. For a disk it is the time to read or write once the head is in position; for a 4 KiB request on a disk streaming 200 MB/s, about 0.02 ms.",
+    "aliases": [],
+    "definition": "The duration spent moving data once a transfer has begun, distinct from the transfer rate (bytes per second). For a disk it excludes seek and rotational wait; a 4 KiB request at an assumed 200 MB/s takes about 0.02 ms to transfer.",
     "example": "For random 4 KiB reads, transfer time is tiny next to seek and rotation.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf"
   },
@@ -1849,7 +1852,7 @@
       "sequential I/O",
       "sequential access"
     ],
-    "definition": "Random I/O touches scattered locations; sequential I/O reads or writes consecutive locations in order. On hard disks sequential access is hundreds of times faster because it avoids seeks.",
+    "definition": "Random I/O accesses scattered positions, while sequential I/O accesses consecutive ranges. HDD sequential workloads can avoid repeated seeks and rotation delays, but the performance ratio depends on request size, queueing, caching and device.",
     "example": "Reading a file front to back is sequential I/O.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf"
   },
@@ -1868,12 +1871,11 @@
     "id": "512e",
     "term": "512e",
     "aliases": [
-      "512-byte emulation",
-      "Advanced Format"
+      "512-byte emulation"
     ],
-    "definition": "A hard disk with 4 KiB physical sectors that presents 512-byte logical sectors for compatibility. Writes that are not 4 KiB-aligned force a read-modify-write inside the drive.",
+    "definition": "A drive exposing 512-byte logical sectors over 4 KiB physical sectors. A write that partially covers physical sectors can require internal read-modify-write work. Advanced Format also includes native-4-KiB designs and is not synonymous with 512e.",
     "example": "A partition starting at sector 63 on a 512e drive makes every 4 KiB write misaligned.",
-    "source": "https://en.wikipedia.org/wiki/Advanced_Format"
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf"
   },
   {
     "id": "smr",
@@ -1882,7 +1884,7 @@
       "shingled magnetic recording",
       "shingled"
     ],
-    "definition": "Shingled magnetic recording: hard disks whose tracks overlap like roof tiles to fit more data, so rewriting one track disturbs its neighbours. Random writes become very slow once the drive's cache region fills.",
+    "definition": "Shingled magnetic recording overlaps adjacent HDD tracks to increase density. Updating tracks can require band rewriting; performance and suitability depend on host-managed or drive-managed design, cache state and workload.",
     "example": "A drive-managed SMR disk can slow drastically during a RAID rebuild.",
     "source": "https://en.wikipedia.org/wiki/Shingled_magnetic_recording"
   },
@@ -1906,7 +1908,7 @@
       "bits per cell",
       "Bits/cell"
     ],
-    "definition": "One storage transistor in NAND flash. Storing more bits per cell (by distinguishing more charge levels) raises density but lowers speed and endurance.",
+    "definition": "A storage element in NAND flash that represents data using distinguishable charge states. More bits per cell increase density; speed and endurance tradeoffs depend on NAND generation, design and programming mode rather than a universal cross-product ranking.",
     "example": "A QLC cell distinguishes 16 charge levels to store 4 bits.",
     "source": "https://en.wikipedia.org/wiki/Multi-level_cell"
   },
@@ -1918,7 +1920,7 @@
       "SLC cache",
       "SLC flash"
     ],
-    "definition": "Single-level cell flash: 1 bit per cell, the fastest and most durable kind. Many desktop and laptop SSDs run part of their flash in SLC mode as a fast write cache.",
+    "definition": "Single-level cell flash stores one bit per cell. It generally offers simpler programming and greater endurance than multi-bit modes within comparable technology; SSDs may use part of multi-bit NAND in an SLC-like cache mode.",
     "example": "Writes land in the SLC cache first and are folded into TLC later.",
     "source": "https://en.wikipedia.org/wiki/Multi-level_cell"
   },
@@ -1940,7 +1942,7 @@
       "triple-level cell",
       "TLC"
     ],
-    "definition": "Triple-level cell flash: 3 bits per cell, the most common type in current desktop and laptop SSDs.",
+    "definition": "Triple-level cell NAND stores three bits per cell. Its density, programming behavior and endurance depend on the particular NAND technology and device design.",
     "example": "A TLC cell must distinguish 8 charge levels.",
     "source": "https://en.wikipedia.org/wiki/Multi-level_cell"
   },
@@ -1951,7 +1953,7 @@
       "quad-level cell",
       "QLC flash"
     ],
-    "definition": "Quad-level cell flash: 4 bits per cell, dense and cheap but slower to write and less durable.",
+    "definition": "Quad-level cell NAND stores four bits per cell. Compared with fewer-bit modes of comparable technology, it trades tighter charge-state margins and more complex programming for density; whole-device speed and endurance depend on design and workload.",
     "example": "QLC drives suit read-heavy archives better than busy databases.",
     "source": "https://en.wikipedia.org/wiki/Multi-level_cell"
   },
@@ -1964,9 +1966,9 @@
       "program (write)",
       "page programs"
     ],
-    "definition": "Writing data into erased NAND flash pages. A page can be programmed only after its block has been erased.",
+    "definition": "Programming NAND changes cell charge to store data, subject to device-specific page and partial-program restrictions. Reusing a programmed location generally requires erasing its containing erase block; some NAND permits specified multi-pass programming.",
     "example": "Changing one programmed page requires writing the new data to a different, erased page.",
-    "source": "https://en.wikipedia.org/wiki/Flash_memory"
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-ssd.pdf"
   },
   {
     "id": "flash-erase",
@@ -1974,9 +1976,7 @@
     "aliases": [
       "erase block",
       "erase blocks",
-      "erase unit",
-      "erase",
-      "erased"
+      "erase unit"
     ],
     "definition": "Resetting a whole NAND flash block (many pages, often megabytes) so its pages can be programmed again. Erasing is slow and wears the cells.",
     "example": "A block of 256 × 16 KiB pages must be erased as one 4 MiB unit.",
@@ -2044,7 +2044,7 @@
       "out-of-place writes",
       "out-of-place"
     ],
-    "definition": "Writing updated data to a fresh location instead of overwriting the old one, then updating a map and marking the old copy invalid. Flash requires it; log-structured and copy-on-write designs use it too.",
+    "definition": "Writing updated data to a fresh location instead of overwriting the old one, then updating a map and marking the old copy invalid. SSD FTLs use this to accommodate NAND erase/program restrictions; log-structured and copy-on-write designs use it too.",
     "example": "An SSD rewriting LBA 7 puts the new data in the next free page.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-ssd.pdf"
   },
@@ -2111,9 +2111,9 @@
       "HMB",
       "host-memory-buffer"
     ],
-    "definition": "An NVMe feature that lets a DRAM-less SSD borrow a small part of the host's RAM to cache its mapping table.",
+    "definition": "An optional NVMe feature allowing a controller to use a host-provided memory region. SSDs, especially DRAM-less designs, can use it for mapping or other controller data; the feature is not restricted to devices without DRAM.",
     "example": "A DRAM-less NVMe drive might use 64 MiB of host memory buffer.",
-    "source": "https://en.wikipedia.org/wiki/NVM_Express"
+    "source": "https://nvmexpress.org/wp-content/uploads/NVM-Express-Base-Specification-Revision-2.1-2024.08.05-Ratified.pdf"
   },
   {
     "id": "over-provisioning",
@@ -2178,7 +2178,7 @@
     ],
     "definition": "Storage Networking Industry Association, which publishes storage standards including the Solid State Storage Performance Test Specification for measuring steady-state SSD performance.",
     "example": "SNIA's test specification preconditions a drive before measuring.",
-    "source": "https://www.snia.org/tech_activities/standards/curr_standards/pts"
+    "source": "https://www.snia.org/solid-state-sss"
   },
   {
     "id": "tbw",
@@ -2188,7 +2188,7 @@
     ],
     "definition": "Terabytes written: an SSD's endurance rating, the total host writes the warranty covers.",
     "example": "A 1 TB drive at 0.3 DWPD for 5 years is rated about 547.5 TBW.",
-    "source": "https://en.wikipedia.org/wiki/Solid-state_drive"
+    "source": "https://americas.kioxia.com/content/dam/kioxia/en-us/business/memory/asset/KIOXIA-SSD-NAND-Endurance-Tech-Brief.pdf"
   },
   {
     "id": "dwpd",
@@ -2198,7 +2198,7 @@
     ],
     "definition": "Drive writes per day: an endurance rating saying how many times the drive's full capacity may be written each day for the warranty period.",
     "example": "1 DWPD on a 2 TB drive means 2 TB of writes per day.",
-    "source": "https://en.wikipedia.org/wiki/Solid-state_drive"
+    "source": "https://americas.kioxia.com/content/dam/kioxia/en-us/business/memory/asset/KIOXIA-SSD-NAND-Endurance-Tech-Brief.pdf"
   },
   {
     "id": "sata",
@@ -2206,9 +2206,9 @@
     "aliases": [
       "Serial ATA"
     ],
-    "definition": "Serial ATA, the common interface for desktop hard disks and SSDs, with a 6 Gb/s link (about 600 MB/s of data) and AHCI's single command queue.",
-    "example": "A SATA SSD tops out near 550 MB/s however fast its flash is.",
-    "source": "https://en.wikipedia.org/wiki/SATA"
+    "definition": "Serial ATA, a storage link family with multiple generations; SATA 6 Gb/s is one common generation. AHCI controllers support a command list per port, while achieved payload throughput depends on encoding, protocol, device and workload.",
+    "example": "The six-gigabit SATA link can constrain an SSD even when its internal flash could run faster; achieved rates need a specified device and workload.",
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf"
   },
   {
     "id": "sas",
@@ -2250,9 +2250,9 @@
       "CQ",
       "submission/completion queues"
     ],
-    "definition": "The paired ring buffers NVMe (and io_uring) use: the host places commands in a submission queue and the device posts results to a completion queue, often one pair per CPU core.",
-    "example": "Core 2 submits on SQ2 and reaps results from CQ2.",
-    "source": "https://en.wikipedia.org/wiki/NVM_Express"
+    "definition": "A ring in which software places commands, paired with a completion ring reporting finished work. NVMe hardware queue counts and CPU mappings depend on controller and driver limits; io_uring has related software submission/completion rings with its own semantics.",
+    "example": "A driver may submit through a selected SQ and consume completions from its associated CQ; queue numbers and CPU assignments vary.",
+    "source": "https://docs.kernel.org/block/blk-mq.html"
   },
   {
     "id": "doorbell",
@@ -2271,7 +2271,7 @@
     "aliases": [
       "multi-queue block layer"
     ],
-    "definition": "Linux's multi-queue block layer, which gives each CPU its own software queue and maps them onto the device's hardware queues to avoid lock contention.",
+    "definition": "Linux’s multi-queue block layer, which uses per-CPU or per-node software staging queues and maps work to available hardware dispatch queues. Multiple CPUs can share a hardware queue, and queue management still involves synchronization.",
     "example": "NVMe drivers on Linux use blk-mq.",
     "source": "https://docs.kernel.org/block/blk-mq.html"
   },
@@ -2293,7 +2293,7 @@
       "RAID0",
       "striping"
     ],
-    "definition": "Striping data across disks with no redundancy: capacity and speed add up, but losing any one disk loses the volume.",
+    "definition": "Striping across members without redundancy. It exposes their combined modeled capacity and can use parallel I/O, but achieved speed depends on workload and a member failure can make the striped volume unusable.",
     "example": "Four disks in RAID 0 are about four times as likely to fail as one.",
     "source": "https://en.wikipedia.org/wiki/Standard_RAID_levels#RAID_0"
   },
@@ -2326,9 +2326,9 @@
     "aliases": [
       "RAID5"
     ],
-    "definition": "Striping with one rotating parity chunk per stripe: one disk's capacity goes to parity, and the array survives any single disk failure. A small write costs 4 disk I/Os.",
+    "definition": "Striping with one parity chunk per stripe, normally rotated across members, giving one member’s capacity to parity and surviving one member failure in an otherwise healthy array. A healthy isolated read-modify-write small write uses four disk I/Os in the teaching model; caching and full-stripe writes change that cost.",
     "example": "Six 4 TB disks in RAID 5 give 20 TB usable.",
-    "source": "https://en.wikipedia.org/wiki/Standard_RAID_levels#RAID_5"
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-raid.pdf"
   },
   {
     "id": "raid-6",
@@ -2336,9 +2336,9 @@
     "aliases": [
       "RAID6"
     ],
-    "definition": "Striping with two independent parity chunks (P and Q) per stripe: two disks' capacity goes to parity and the array survives any two failures. A small write costs 6 disk I/Os.",
+    "definition": "Striping with two independent parity syndromes per stripe, reserving two members’ capacity and recovering any two missing chunks in a healthy codeword. The isolated healthy-array read-modify-write model uses six disk I/Os; actual implementations can use different paths.",
     "example": "Twelve disks in RAID 6 give ten disks' capacity.",
-    "source": "https://en.wikipedia.org/wiki/Standard_RAID_levels#RAID_6"
+    "source": "https://docs.kernel.org/admin-guide/md.html"
   },
   {
     "id": "stripe",
@@ -2466,7 +2466,7 @@
       "Z2",
       "Z3"
     ],
-    "definition": "ZFS's parity RAID (single, double or triple parity as RAID-Z, Z2, Z3). It uses variable-width stripes and copy-on-write, so stripes are never updated in place and there is no write hole.",
+    "definition": "ZFS’s parity RAID family, with one, two or three parity columns in RAID-Z1, RAID-Z2 and RAID-Z3. Its copy-on-write transaction protocol prevents incomplete new stripes from becoming committed live state when the storage durability contract is honored, avoiding the classic in-place parity write hole.",
     "example": "A six-disk raidz2 vdev survives any two disk failures.",
     "source": "https://openzfs.github.io/openzfs-docs/Basic%20Concepts/RAIDZ.html"
   },
@@ -2569,9 +2569,9 @@
     "aliases": [
       "Zettabyte File System"
     ],
-    "definition": "A copy-on-write file system and volume manager from Sun (2005) that merges RAID, volume management and the file system, with checksums on every block, snapshots and its own ARC cache.",
+    "definition": "A copy-on-write filesystem and volume manager developed at Sun, integrating storage pools, redundancy, snapshots and ARC caching. Metadata and ordinary file data use integrity checks according to format and dataset settings; file-data checksumming is configurable.",
     "example": "A ZFS pool can detect and repair a corrupted block from a mirror copy.",
-    "source": "https://openzfs.github.io/openzfs-docs/"
+    "source": "https://openzfs.github.io/openzfs-docs/man/master/7/zfsprops.7.html"
   },
   {
     "id": "openzfs",
@@ -2616,7 +2616,7 @@
     "id": "xfs-growfs",
     "term": "xfs_growfs",
     "aliases": [],
-    "definition": "The tool that resizes a mounted XFS file system. Growth is routine; shrinking is limited to the last allocation group with restrictions.",
+    "definition": "A tool for resizing a mounted XFS filesystem. Growth is widely supported; current upstream documentation describes restricted last-allocation-group shrinking, whose availability depends on installed kernel, tools and filesystem geometry.",
     "example": "xfs_growfs /data grows the file system to fill an enlarged volume.",
     "source": "https://man7.org/linux/man-pages/man8/xfs_growfs.8.html"
   },
@@ -2636,8 +2636,8 @@
       "cp --reflink",
       "reflink copies"
     ],
-    "definition": "A copy that shares the original's extents on disk until one of them is modified, so copying a huge file is nearly instant and takes no extra space at first.",
-    "example": "cp --reflink=always vm.img vm2.img on XFS or Btrfs completes in moments.",
+    "definition": "A copy operation that initially shares file extents and separates modified regions through copy-on-write. It can avoid copying payload, but still needs metadata work and space; duration depends on the file and filesystem.",
+    "example": "A supported reflink copy can share an image’s existing extents while allocating metadata for the new file.",
     "source": "https://man7.org/linux/man-pages/man2/ioctl_ficlone.2.html"
   },
   {
@@ -2677,7 +2677,7 @@
       "btrfs send",
       "zfs send"
     ],
-    "definition": "Btrfs and ZFS features that serialise the difference between two snapshots into a stream, used for efficient incremental backups to another machine.",
+    "definition": "Btrfs and ZFS facilities for serialising snapshot contents into a stream for transfer and reconstruction. A full stream sends a baseline; an incremental stream describes changes relative to a suitable earlier snapshot.",
     "example": "btrfs send -p old new | ssh backup btrfs receive /backups sends only changes.",
     "source": "https://btrfs.readthedocs.io/en/latest/Send-receive.html"
   },
@@ -2734,7 +2734,7 @@
       "scrubbing",
       "parity scrub"
     ],
-    "definition": "Reading all allocated data in a pool or array and verifying it against checksums or parity, repairing what it can from redundant copies.",
+    "definition": "An integrity scan of data covered by a pool or array’s checksums or parity, with repair where a valid redundant copy permits it. Coverage, excluded regions and repair behavior depend on the system; a scrub is not a backup or proof every physical sector is readable.",
     "example": "A monthly zpool scrub finds latent bad sectors before a disk fails.",
     "source": "https://openzfs.github.io/openzfs-docs/"
   },
@@ -2753,7 +2753,7 @@
     "id": "l2arc",
     "term": "L2ARC",
     "aliases": [],
-    "definition": "Level-2 ARC: an optional SSD that extends ZFS's read cache beyond RAM. It does not speed up synchronous writes.",
+    "definition": "An optional second-level ZFS read cache, commonly on SSD, extending the in-memory ARC. It does not serve as the synchronous-write intent log; read-cache effects can still indirectly alter a mixed workload.",
     "example": "An L2ARC SSD can hold blocks evicted from the in-memory ARC.",
     "source": "https://openzfs.github.io/openzfs-docs/"
   },
@@ -2765,9 +2765,9 @@
       "separate intent log",
       "log device"
     ],
-    "definition": "Separate log device: a fast, durable device (usually a power-loss-protected SSD, often mirrored) that holds the ZFS intent log so synchronous writes commit faster.",
+    "definition": "A separate device holding ZFS intent-log records for synchronous operations. A suitable durable low-latency device can help when log commit is the bottleneck; it is not a general write cache or a promise of faster asynchronous writes.",
     "example": "Adding a mirrored SLOG can cut NFS sync-write latency on an HDD pool.",
-    "source": "https://openzfs.github.io/openzfs-docs/"
+    "source": "https://openzfs.github.io/openzfs-docs/man/master/7/zpoolconcepts.7.html"
   },
   {
     "id": "sync-write",
@@ -2776,14 +2776,11 @@
       "synchronous writes",
       "sync writes",
       "sync write",
-      "synchronous operations",
-      "synchronous I/O",
-      "synchronous operation",
       "synchronous-write"
     ],
-    "definition": "A write that must be durable before it is acknowledged, such as one followed by fsync, an NFS commit or a database log flush.",
+    "definition": "In filesystem durability discussions, a write whose requested persistence must complete before success is acknowledged, such as a synchronous ZFS operation or a write followed by successful fsync. Synchronous API execution alone does not imply storage durability.",
     "example": "Databases issue synchronous writes for every transaction commit.",
-    "source": "https://openzfs.github.io/openzfs-docs/"
+    "source": "https://man7.org/linux/man-pages/man2/open.2.html"
   },
   {
     "id": "sync-disabled",
@@ -2811,7 +2808,7 @@
       "recordsize",
       "record sizes"
     ],
-    "definition": "The ZFS dataset property setting the maximum block size for files, often tuned to match a database's page size.",
+    "definition": "A ZFS dataset property suggesting the maximum block size used for ordinary files, with actual block behavior and exceptions depending on file size, writes and configuration. Database workloads should measure the interaction with their page and update sizes.",
     "example": "A PostgreSQL dataset might use recordsize=8K or 16K after testing.",
     "source": "https://openzfs.github.io/openzfs-docs/"
   },
@@ -2986,7 +2983,7 @@
     "aliases": [
       "key-value stores"
     ],
-    "definition": "A database that stores values under unique keys with get and put operations, without tables or a query language.",
+    "definition": "A store whose basic abstraction associates each key with a value, usually exposed through get, put and delete operations. Implementations may also offer queries, indexes, namespaces or tables; those features are not ruled out by the key-value model.",
     "example": "Redis and RocksDB are key-value stores.",
     "source": "https://en.wikipedia.org/wiki/Key%E2%80%93value_database"
   },
@@ -3017,9 +3014,9 @@
     "aliases": [
       "statelessness"
     ],
-    "definition": "A server that keeps no per-client session state between requests, so every request carries all it needs. NFSv3's core protocol was designed this way to simplify crash recovery.",
+    "definition": "A server protocol design that avoids particular per-client session state, with requests carrying enough context to execute. NFSv3 avoids core open-file state, but duplicate caches, unstable writes and separate lock services still involve state.",
     "example": "An NFSv3 READ carries the file handle, offset and count.",
-    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/dist-nfs.pdf"
+    "source": "https://datatracker.ietf.org/doc/html/rfc1813"
   },
   {
     "id": "open-file-state",
@@ -3039,7 +3036,9 @@
       "dirfh",
       "NFS file handle",
       "NFS file handles",
-      "the file handle"
+      "the file handle",
+      "file handle",
+      "file handles"
     ],
     "definition": "An opaque token an NFS server gives clients to identify a file, typically encoding the file system, inode number and a generation number.",
     "example": "READ(fh, offset=8192, count=4096) names the file only by its handle.",
@@ -3051,7 +3050,7 @@
     "aliases": [
       "generation numbers"
     ],
-    "definition": "A counter stored with an inode and bumped when the inode number is reused, so an old NFS file handle for a deleted file can't accidentally open a new file.",
+    "definition": "A value used to distinguish successive objects that reuse an inode number, commonly included in filesystem-specific NFS file handles. It helps reject a stale handle rather than silently identifying a later file.",
     "example": "A handle with generation 7 is stale once the inode is reused at generation 8.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/dist-nfs.pdf"
   },
@@ -3062,9 +3061,9 @@
       "non-idempotent",
       "non-idempotent operations"
     ],
-    "definition": "An operation whose effect or reply differs when repeated. Retrying it after a lost reply can give a misleading result, as when a repeated REMOVE reports 'no such file'.",
+    "definition": "An operation for which repeated execution can have additional effects beyond one execution. Lost-reply retries also need care even when final state is unchanged: a repeated REMOVE can report missing after an earlier successful deletion, and a recreated name could be removed by a retry.",
     "example": "Removing a name is non-idempotent; reading a fixed byte range of an unchanged file is idempotent.",
-    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/dist-nfs.pdf"
+    "source": "https://datatracker.ietf.org/doc/html/rfc1813"
   },
   {
     "id": "hard-mount",
@@ -3073,8 +3072,8 @@
       "hard mounts",
       "hard-mounted"
     ],
-    "definition": "The default NFS mount behaviour: a timed-out request is retried indefinitely, so applications hang rather than see errors while the server is down.",
-    "example": "A hard-mounted home directory freezes programs until the server returns.",
+    "definition": "The default Linux NFS retry policy for timed-out requests: retries normally continue indefinitely instead of giving up after the soft-mount retry limit. Other errors and supported interruption behavior can still terminate operations.",
+    "example": "A process waiting on a timed-out hard-mounted request can remain blocked while the server is unavailable.",
     "source": "https://man7.org/linux/man-pages/man5/nfs.5.html"
   },
   {
@@ -3108,7 +3107,7 @@
       "replay cache",
       "duplicate request handling"
     ],
-    "definition": "A server-side cache of recent requests and their replies, so a retransmitted request gets the original reply instead of being executed twice.",
+    "definition": "A cache of recent requests and replies that can answer recognized retransmissions without re-executing them. Coverage depends on retained cache state and protocol rules; it is not an unlimited exactly-once guarantee.",
     "example": "A duplicate request cache replays REMOVE's success instead of returning ENOENT.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/dist-nfs.pdf"
   },
@@ -3118,8 +3117,8 @@
     "aliases": [
       "close-to-open"
     ],
-    "definition": "NFS's guarantee that when one client closes (or fsyncs) a file and another opens it afterwards, the second sees the first's changes. Between those points there are no promises.",
-    "example": "A writes and closes status.txt; B's later open revalidates and reads the new data.",
+    "definition": "NFS client behavior that flushes changes on close and revalidates attributes on a later open. Visibility relies on supported settings, successful writeback and no intervening conflicting changes; applications must check write, sync and close errors. It is not continuous coherence.",
+    "example": "With close-to-open behavior enabled and successful close/writeback, a later opener revalidates the file before using cached data.",
     "source": "https://man7.org/linux/man-pages/man5/nfs.5.html"
   },
   {
@@ -3145,12 +3144,9 @@
   {
     "id": "flock",
     "term": "flock",
-    "aliases": [
-      "lock files",
-      "lock file"
-    ],
-    "definition": "A Unix call for advisory whole-file locks; lock files are a convention of creating a file to claim a resource. Both behave differently, or unreliably, over NFS.",
-    "example": "Two NFS clients using a lock file can both believe they hold it.",
+    "aliases": [],
+    "definition": "A Unix advisory whole-file locking call. It differs from lock-file conventions that create or name a file to claim a resource. Linux NFS emulation and interactions with other locking APIs depend on kernel, server and mount settings.",
+    "example": "Check the actual Linux NFS mount and server locking behavior before relying on flock across clients.",
     "source": "https://man7.org/linux/man-pages/man2/flock.2.html"
   },
   {
@@ -3232,7 +3228,7 @@
     "aliases": [
       "NFSv4.1 sessions"
     ],
-    "definition": "An NFSv4.1 feature giving each client channel numbered slots with a reply cache, so retransmitted requests are recognised and answered without re-executing them.",
+    "definition": "NFSv4.1 state organizing requests into numbered slots with sequence and replay-cache rules. Recognized retries can receive cached results without repeating the operation; session loss, cache choices and protocol recovery still need handling.",
     "example": "NFSv4.1 sessions make REMOVE retries safe within the slot rules.",
     "source": "https://datatracker.ietf.org/doc/html/rfc8881"
   },
@@ -3252,7 +3248,7 @@
     "aliases": [
       "Google File System"
     ],
-    "definition": "The Google File System (2003): a distributed file system for huge, mostly appended files on thousands of cheap machines, with one master for metadata and chunkservers storing 64 MiB chunks in triplicate.",
+    "definition": "The Google File System (2003): a distributed file system for huge, mostly appended files on thousands of cheap machines, with one master for metadata and chunkservers storing 64 MB (the original paper’s notation) chunks in triplicate.",
     "example": "GFS stored Google's web crawls.",
     "source": "https://storage.googleapis.com/gweb-research2023-media/pubtools/4446.pdf"
   },
@@ -3303,7 +3299,7 @@
     "aliases": [
       "chunkservers"
     ],
-    "definition": "A GFS storage server holding 64 MiB chunks; the GFS equivalent of an HDFS DataNode.",
+    "definition": "A GFS storage server holding 64 MB (the original paper’s notation) chunks; the GFS equivalent of an HDFS DataNode.",
     "example": "Each GFS chunk is stored on three chunkservers.",
     "source": "https://storage.googleapis.com/gweb-research2023-media/pubtools/4446.pdf"
   },
@@ -3326,7 +3322,7 @@
       "64 MiB chunk",
       "GFS chunks"
     ],
-    "definition": "GFS's unit of file storage, 64 MiB in the paper, each replicated on several chunkservers.",
+    "definition": "GFS's unit of file storage, 64 MB (the original paper’s notation) in the paper, each replicated on several chunkservers.",
     "example": "A 1 GiB GFS file is 16 chunks of 64 MiB.",
     "source": "https://storage.googleapis.com/gweb-research2023-media/pubtools/4446.pdf"
   },
@@ -3348,7 +3344,8 @@
     "aliases": [
       "file system namespace",
       "HDFS namespace",
-      "namespace mutations"
+      "namespace mutations",
+      "filesystem namespace"
     ],
     "definition": "The tree of file and directory names in a file system. HDFS's NameNode holds its namespace in memory; federation splits it across NameNodes.",
     "example": "Creating /logs/2026/10 changes the HDFS namespace.",
@@ -3404,7 +3401,7 @@
     "aliases": [
       "record appends"
     ],
-    "definition": "GFS's operation for concurrent appends: GFS chooses the offset and writes each record atomically at least once, so readers may see duplicates and padding.",
+    "definition": "GFS’s append operation: the system chooses an offset and a successful operation appends the record atomically at least once. Concurrent clients and retries can leave duplicates, padding and inconsistent intervening regions, requiring record identifiers and validation.",
     "example": "Many clients can record-append log entries to one GFS file at once.",
     "source": "https://storage.googleapis.com/gweb-research2023-media/pubtools/4446.pdf"
   },
@@ -3414,7 +3411,7 @@
     "aliases": [
       "at least once"
     ],
-    "definition": "A delivery or write guarantee that the operation happens one or more times, so duplicates are possible and readers must deduplicate.",
+    "definition": "A guarantee that an acknowledged delivery or operation has occurred one or more times under the protocol’s assumptions. Retries can create duplicates, so consumers may need deduplication; it does not claim every failed invocation completed.",
     "example": "GFS record append is at-least-once, so records need unique IDs.",
     "source": "https://storage.googleapis.com/gweb-research2023-media/pubtools/4446.pdf"
   },
@@ -3445,7 +3442,7 @@
       "Java heap",
       "JVM heap"
     ],
-    "definition": "The memory area where a Java virtual machine (JVM) allocates objects. The HDFS NameNode keeps its whole namespace on the JVM heap.",
+    "definition": "The memory area where a Java virtual machine (JVM) allocates objects. The HDFS NameNode keeps its whole filesystem namespace on the JVM heap.",
     "example": "A NameNode might run with a 64 GB heap.",
     "source": "https://en.wikipedia.org/wiki/Java_virtual_machine"
   },
@@ -3552,8 +3549,27 @@
       "hierarchical namespace",
       "hierarchical-namespace"
     ],
-    "definition": "A Google Cloud Storage bucket option that stores folders as real directory entries instead of treating '/' in object names as a naming convention, so folders can be renamed or listed as one operation.",
+    "definition": "A Google Cloud Storage bucket capability exposing folder resources and hierarchical namespace operations, including folder rename. This is an object-storage API feature rather than general POSIX filesystem semantics.",
     "example": "Renaming a folder in a hierarchical-namespace bucket is a single folder rename, not a copy of every object under the prefix.",
     "source": "https://cloud.google.com/storage/docs/hns-overview"
+  },
+  {
+    "id": "os-dirty-file-data",
+    "term": "Dirty file data",
+    "aliases": [
+      "dirty file contents",
+      "dirty data"
+    ],
+    "definition": "Modified file contents held in memory that have not yet been successfully written back to their storage destination. Ordinary buffered write acceptance does not make those bytes durable; writeback or synchronization can still fail.",
+    "source": "https://docs.kernel.org/admin-guide/sysctl/vm.html"
+  },
+  {
+    "id": "storage-transfer-rate",
+    "term": "Storage transfer rate",
+    "aliases": [
+      "transfer rate"
+    ],
+    "definition": "The amount of storage data moved per unit time, commonly bytes per second. It is a rate rather than the duration of one transfer; dividing a byte count by a matching byte-per-second rate gives seconds. Workload, device and interface limits affect the achieved rate.",
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf"
   }
 ]

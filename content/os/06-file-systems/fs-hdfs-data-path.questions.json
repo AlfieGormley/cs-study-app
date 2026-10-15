@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fs-modern-distributed-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An HDFS client reads a 10 GiB replicated file with 128 MiB blocks. How does the data travel?",
+    "options": [
+      {
+        "text": "All 10 GiB stream through the NameNode, which fetches blocks from DataNodes",
+        "explanation": "This is the bottleneck GFS and HDFS were designed to avoid. The master handles metadata only."
+      },
+      {
+        "text": "The client broadcasts a request to every DataNode and takes the first answer",
+        "explanation": "There is no broadcast in this path. The NameNode maintains reported replica locations; failures can make those reports stale, so clients may need another replica."
+      },
+      {
+        "text": "The NameNode copies the file to the client's local disk first",
+        "explanation": "No copy is staged anywhere. The client streams blocks from DataNodes."
+      },
+      {
+        "text": "The client asks the NameNode for block locations, then reads each block directly from a DataNode holding a replica",
+        "explanation": "Correct. The NameNode returns which DataNodes hold each block; the bulk data flows between client and DataNodes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. 10 GiB / 128 MiB = 80 blocks, numbered 0–79.\n2. The client obtains block locations from the NameNode, potentially in batches.\n3. It reads payload directly from suitable DataNodes, preferring nearby replicas and retrying alternatives when necessary.\n4. The NameNode handles metadata RPCs; DataNodes deliver the 10 GiB payload.",
+    "link": {
+      "title": "HDFS Architecture — Apache Hadoop",
+      "url": "https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An eligible writer DataNode on rack R1 writes a replicated HDFS block with replication factor 3. Assume the default policy, enough eligible nodes on R1 and another rack, and a healthy completed write pipeline. Where are replicas placed and how many cross-rack payload hops are used?",
+    "options": [
+      {
+        "text": "One on the writer's node in R1, and two on different nodes in one other rack; one cross-rack transfer in the write pipeline",
+        "explanation": "Correct. The write pipeline goes R1 → R2 (crossing once), then R2 → R2 within the remote rack. Losing any one rack still leaves a replica."
+      },
+      {
+        "text": "All three replicas on R1; zero cross-rack transfers",
+        "explanation": "That's fast to write but loses every replica if R1's switch or power fails."
+      },
+      {
+        "text": "One replica each on three different racks; two cross-rack transfers",
+        "explanation": "That maximises spread, but the default policy deliberately uses only two racks to cut cross-rack write traffic."
+      },
+      {
+        "text": "Two on R1 and one on another rack; two cross-rack transfers",
+        "explanation": "The policy puts two replicas on the *remote* rack, so that the second hop of the write pipeline stays inside that rack."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Default policy with replication 3:\n   - replica 1: the writer's own node (if it's a DataNode), on R1\n   - replica 2: a node on a different rack, R2\n   - replica 3: a different node on R2\n2. The write is pipelined: client → node1 → node2 → node3.\n\n```\nnode1 (R1) --cross-rack--> node2 (R2)\nnode2 (R2) --same rack---> node3 (R2)\n```\n\n3. One cross-rack hop, and any single rack failure leaves at least one replica.\n4. The trade-off: reads can only spread over two racks, not three.",
+    "link": {
+      "title": "HDFS Architecture — Apache Hadoop",
+      "url": "https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-hdfs/HdfsDesign.html"
+    }
+  }
+]

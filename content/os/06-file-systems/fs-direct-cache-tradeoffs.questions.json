@@ -1,0 +1,70 @@
+[
+  {
+    "id": "fs-page-cache-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about opening a file with `O_DIRECT` on Linux are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Direct I/O can impose file/system-specific buffer, offset and length alignment requirements",
+        "explanation": "Correct. STATX_DIOALIGN can report requirements where supported; misaligned requests may fail or fall back depending on the filesystem."
+      },
+      {
+        "text": "It lets a database with its own buffer pool avoid caching the same page twice",
+        "explanation": "True. That's the main reason InnoDB is commonly run with `innodb_flush_method=O_DIRECT`: it avoids double buffering."
+      },
+      {
+        "text": "Once a direct `write` returns, the data is guaranteed to survive a power cut",
+        "explanation": "False. The data may sit in the device's volatile write cache, and metadata such as file size isn't necessarily flushed. You still need `fsync` or `O_DSYNC`."
+      },
+      {
+        "text": "It can avoid the ordinary page-cache read-ahead and repeated cache-hit benefit, so application caching/batching becomes important",
+        "explanation": "Correct. Performance depends on request sizes, queue depth and workload. The block layer/device can still merge or optimize requests."
+      },
+      {
+        "text": "It makes the kernel compress the data before sending it to disk",
+        "explanation": "False. `O_DIRECT` controls caching only; it doesn't transform data."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Direct I/O changes caching behavior, with filesystem-specific support and alignment constraints. It can reduce duplicate buffering for an application cache, but does not ensure metadata/device-cache durability. It bypasses ordinary page-cache hit/readahead behavior; application batching and device-level optimizations still matter. It is not itself a compression request.",
+    "link": {
+      "title": "open(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/open.2.html"
+    }
+  },
+  {
+    "id": "fs-page-cache-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 64 GiB MySQL server runs InnoDB with a 48 GiB buffer pool and `innodb_flush_method=fsync` (buffered I/O). Under load, the kernel starts swapping out parts of the buffer pool, and latency spikes. Which cache-related explanation and configuration experiment are relevant, subject to measuring other users of memory?",
+    "options": [
+      {
+        "text": "Buffered I/O can duplicate data between InnoDB and page cache; evaluate supported O_DIRECT configuration and total memory budgeting",
+        "explanation": "Correct. Direct data-file I/O can reduce duplicate buffering, but does not eliminate every cache, non-pool allocation or cause of swapping. Measure pressure and workload performance."
+      },
+      {
+        "text": "The buffer pool is too small; raise it to 60 GiB",
+        "explanation": "This makes memory pressure worse. The OS, connections and the page cache already need more than the remaining 16 GiB."
+      },
+      {
+        "text": "Turn off read-ahead on the device",
+        "explanation": "Read-ahead affects how much is pulled into the page cache, but the root cause is caching every page twice; this would only trim it slightly."
+      },
+      {
+        "text": "Lower `dirty_ratio` to 5",
+        "explanation": "That reduces dirty data and write stalls, but the pressure here comes from clean duplicate pages, not dirty ones."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "In the default 16 KiB InnoDB page-size configuration, buffered data-file reads can leave copies in both the buffer pool and page cache. Reclaim decisions can swap anonymous pool memory under pressure. Supported direct-I/O settings can reduce that duplication, but the process still has other allocations and the kernel retains other caches. Budget all users of memory and validate performance. PostgreSQL documentation presents 25% shared_buffers as a starting point for a dedicated server, not a universal optimum.",
+    "link": {
+      "title": "open(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/open.2.html"
+    }
+  }
+]

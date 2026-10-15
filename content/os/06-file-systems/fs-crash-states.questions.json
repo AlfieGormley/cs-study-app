@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fs-crash-consistency-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A non-journaling file system is appending a block to a file. It must write the data block, the inode and the data bitmap. Power fails after the **inode and bitmap** reach the disk, but before the data block does. What is the state after reboot? Assume the lesson's ordinary non-checksummed three-block teaching model, with no concurrent changes.",
+    "options": [
+      {
+        "text": "Inconsistent: the inode points at a block the bitmap says is free",
+        "explanation": "That's the \"inode only\" case. Here the bitmap was written too, so the two agree."
+      },
+      {
+        "text": "Consistent metadata, but the file's new block contains whatever garbage was there before, and fsck can't tell",
+        "explanation": "Correct. The inode and bitmap agree, so every metadata check passes. Only the contents are wrong, and fsck doesn't inspect contents."
+      },
+      {
+        "text": "A leaked block that fsck will reclaim",
+        "explanation": "A leak means the bitmap marks a block as used that no inode references. Here the inode does reference it."
+      },
+      {
+        "text": "Everything is fine, because the data is still in the page cache",
+        "explanation": "The page cache is in RAM and was wiped by the power cut."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Go through the three structures:\n\n```\ndata block   OLD contents (not written)\ninode        size + pointer  (written)\nbitmap       block marked used (written)\n```\n\n1. Does the inode point at a used block? Yes, the bitmap agrees.\n2. Is the block claimed by one inode only? Yes.\n3. So fsck finds no inconsistency.\n4. But reading the file returns the block's previous contents, possibly another user's deleted data.\n\nThis is why ext4's ordered mode writes data blocks *before* the metadata that points at them.",
+    "link": {
+      "title": "OSTEP: Crash Consistency: FSCK and Journaling (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-journaling.pdf"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A server with a 60 TB array of hard disks crashes. On reboot, a full `fsck` runs on its non-journaled file system and takes over three hours. Why so slow?",
+    "options": [
+      {
+        "text": "fsck only repairs the blocks that were being written at the crash, but has to wait for the disks to spin up",
+        "explanation": "If fsck knew which blocks were in flight, it would be fast. Its problem is that it *doesn't* know."
+      },
+      {
+        "text": "fsck must scan all the file system's metadata (every inode, every directory, the bitmaps), so its time scales with the size of the file system, not the damage",
+        "explanation": "Correct. Without a log of what was in progress, the only way to find inconsistencies is to check everything. That's what journaling fixes."
+      },
+      {
+        "text": "fsck also verifies every data block's checksum",
+        "explanation": "Classic fsck doesn't read file contents; ext2/3 have no data checksums to verify."
+      },
+      {
+        "text": "fsck is single-threaded and can't use the RAID array",
+        "explanation": "Parallelism would help a little, but the real problem is the total amount of metadata it has to read."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A classic full checker must inspect broadly enough to reconcile inode/block ownership, directories and allocation metadata. Its cost depends on metadata volume, layout, algorithms and hardware, not just the damaged bytes. Journal replay usually bounds normal crash-recovery work to relevant log transactions, but neither a fixed runtime nor freedom from all later full checks follows. The stated three-hour result is hypothetical.",
+    "link": {
+      "title": "fsck — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Fsck"
+    }
+  }
+]

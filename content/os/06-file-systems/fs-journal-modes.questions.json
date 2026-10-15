@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fs-crash-consistency-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An application streams 1 GB of new data into a file on ext4. Roughly how much is written to the disk in `data=journal` mode compared with the default `data=ordered` mode? Use a simplified completed-journal-plus-checkpoint payload-traffic model, ignoring device amplification and repeated overwrites.",
+    "options": [
+      {
+        "text": "About 1 GB in both modes; only metadata differs",
+        "explanation": "In `data=journal`, the data blocks themselves go through the journal, so every data byte is written twice."
+      },
+      {
+        "text": "About 2 GB in `data=journal` and about 1 GB in `data=ordered` (plus a little metadata in both)",
+        "explanation": "Correct. Full data journaling writes each block to the journal, then again to its home location. Ordered mode writes data once, in place, and journals only the small metadata changes."
+      },
+      {
+        "text": "About 3 GB in `data=journal`, since the journal is written, read and checkpointed",
+        "explanation": "Checkpointing writes the blocks once more in place, usually from memory, not from a re-read of the journal. That's two writes, not three."
+      },
+      {
+        "text": "About 1 GB in `data=journal` and 2 GB in `data=ordered`",
+        "explanation": "This has the modes backwards: ordered mode doesn't put data in the journal at all."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nmode      journal  in place  total\njournal   ~1 GB    ~1 GB     ~2 GB\nordered   meta     ~1 GB     ~1 GB\nwriteback meta     ~1 GB     ~1 GB\n```\n\n```formula\nW_journal ≈ 2D = 2 × 1 GB = 2 GB\nW_ordered ≈ D = 1 GB\nwhere\nW_journal: bytes written to the device in data=journal mode, small metadata aside\nW_ordered: bytes written in data=ordered mode, small metadata aside\nD: the new file data the application writes; here 1 GB\n≈: approximately equal to\nGB: gigabyte, 10^9 bytes\nIn words: journaling the data writes every byte twice, once to the journal and once to its home; ordered mode writes it once.\n```\n\n1. `data=journal`: data and metadata are logged, committed, then checkpointed to their final location.\n2. `data=ordered`: data goes straight to its final location *first*, then the metadata transaction commits.\n3. Extent metadata can be compact for long runs; file fragmentation and allocation metadata add work.\n\nThe model illustrates additional traffic, not an exact throughput ratio or measured hardware write amplification.",
+    "link": {
+      "title": "ext4 mount options — kernel.org",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/ext4.html"
+    }
+  },
+  {
+    "id": "fs-crash-consistency-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program appends a record to a log file on ext4 (default `data=ordered`) and never calls `fsync`. Power fails 2 seconds later. Which outcome is **not** possible after reboot? Assume a newly allocated data block, functioning storage honoring flushes, and no corruption outside the modeled crash.",
+    "options": [
+      {
+        "text": "The file is unchanged: the append is simply lost",
+        "explanation": "Possible. Neither the data nor the metadata transaction may have been written in 2 seconds; ext4 commits about every 5 seconds."
+      },
+      {
+        "text": "The file contains the new record",
+        "explanation": "Possible. If the commit and its data write happened before the power cut, the append survived."
+      },
+      {
+        "text": "The file's size has grown, but the new bytes are leftover contents from some other, previously deleted file",
+        "explanation": "Correct, this is the impossible one. Ordered mode writes data blocks *before* committing the metadata that points to them, so the size can't grow over unwritten blocks. That outcome is possible in `data=writeback`."
+      },
+      {
+        "text": "The file system mounts normally without a full fsck",
+        "explanation": "Possible. Normal journal recovery can avoid a full checker; its runtime is not fixed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In ordered mode, a transaction that extends the inode to new blocks commits only after those blocks are on disk.\n2. For the simplified new-block transaction, relevant states include:\n   - nothing committed → old file;\n   - committed → new data, already written.\n3. \"Bigger file over garbage\" would need committed metadata pointing at unwritten blocks. Ordered mode forbids exactly that.\n4. In `writeback` mode there's no such ordering, and stale data can appear.\n\nNote that neither mode guarantees your 2-second-old write survived. Successful appropriate synchronization, such as fsync plus required directory synchronization, provides durability under the storage contract. Other synchronous I/O mechanisms can also provide it.",
+    "link": {
+      "title": "ext4 mount options — kernel.org",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/ext4.html"
+    }
+  }
+]

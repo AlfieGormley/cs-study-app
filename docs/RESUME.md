@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 27/76 modules; 192 originals → 1011 short lessons with 2267 focused questions.
+- Independently verified: 28/76 modules; 198 originals → 1049 short lessons with 2341 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `204bb54`, version `174fa08ae42c`, 936 short lessons/2114 focused questions
-  across 25 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `e4141d42cb6d`, 27 modules/1011 units/2267 questions.
+- Latest confirmed live release: `6a4a57b`, version `e4141d42cb6d`, 1011 short lessons/2267 focused questions
+  across 27 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `905c43ab82b3`, 28 modules/1049 units/2341 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -19,9 +19,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- os/os-filesystems: authoring; /root/filesystems_short_author.
-- os/os-io: authoring; /root/io_short_author.
-- os/os-virtualisation: authoring; /root/virtualisation_short_author.
+- os/os-io: verifying; /root/io_short_verify.
+- os/os-virtualisation: verifying; /root/virtualisation_short_verify.
+- networks/net-foundations: authoring; /root/network_foundations_short_author.
 
 Verification and integration:
 

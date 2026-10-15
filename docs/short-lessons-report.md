@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 27/76. Updated 2026-10-15.
+Verified modules: 28/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -34,6 +34,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | os/Concurrency & Synchronisation | 6 | 33 | 68 | 26 | 325 | 508 | 56 |
 | os/Deadlock & Liveness | 6 | 32 | 66 | 32 | 167 | 514 | 47 |
 | os/Memory Management | 7 | 42 | 85 | 80 | 253 | 474 | 39 |
+| os/File Systems & Storage | 6 | 38 | 74 | 48 | 338 | 450 | 43 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3187,6 +3188,85 @@ Low-confidence areas:
 - **medium** — mem-glibc-retention: Allocator retention and alternative allocator comparisons. glibc2.39 source and native chunk fixture checked; RSS, contention, allocation lifetimes and alternative allocator performance remain workload-dependent without comparative benchmarks.
 - **medium** — mem-container-budgets: Kubernetes/runtime/container policy. Primary documentation checked; exact behaviour depends on deployed runtime, cgroup mode, Kubernetes features and flags. No production OOM, JVM/Go/Node memory-pressure deployment was exercised.
 - **medium** — glossary: Inherited medium-confidence generic and product/configuration definitions. Existing medium ratings retained except Denning, whose original paper is now fetched. Additional time-sensitive platform/allocator entries remain medium; no low-confidence entries remain.
+
+## os: File Systems & Storage
+
+[Independent verification record](../content/os/06-file-systems/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Wrong RAID reconstruction example referred to a failed disk1 but reconstructed the different final data chunk; now the surviving chunks reconstruct disk1 correctly.
+- Ext4 htree lookup no longer promises a generic logarithmic worst-case bound; hash-leaf scanning and collisions are explained.
+- Current PostgreSQL discussion qualifies normal buffered I/O with its developer-only direct-I/O option and measurement-based buffer sizing.
+- NVMe differentiates 65,536 queue slots from 65,535 outstanding commands; the standard’s stated outstanding-command bound is sourced.
+- Fast symlink lookup avoids a separate target-payload read, not every inode or path I/O.
+- Globally ambiguous dirty-data, storage-cache-hit and NFS-handle links resolve to file-storage definitions; actual compiled ID, definition and rendered button checks pass.
+- Snapshot, NOCOW/nodatasum, FUA, reflink, RAID-write-cost and filesystem-checker definitions lose unsupported unconditional guarantees; valid original definitions remain unchanged.
+- Writeback-error reporting is separated from preserving failed dirty bytes; a successful fsync retry is not recovery.
+- NFS retries distinguish non-idempotent effects from changed replies, and replay caches are scoped to retained protocol state.
+- GFS at-least-once guarantee is explicitly for successful appends, and original-paper chunk-size notation is retained instead of implying an independently established byte convention.
+- Code comments explain remaining bytes, shared offsets, payload mapping, output meaning and durable publication; all original executable ASTs remain unchanged.
+- Fraction denominators, exponents and unit conversions are explicitly grouped; clear scalar products use ordinary implicit algebra. Numeric assumptions remain labeled models rather than benchmark observations.
+- Dentry cache and payload page cache are different caches; VFS documentation.
+- Read-only open does not replace prior contents.
+- Typographical duplicate.
+- Dirty thresholds are not hard universal backlog guarantees.
+- Pointer payload excludes interior pointer blocks and final-block rounding.
+- Distinguish computed pointer payload from allocated metadata.
+- Preserve conventional product/acronym capitalisation.
+- Preserve conventional product/acronym capitalisation.
+- Preserve conventional product/acronym capitalisation.
+- Preserve conventional product/acronym capitalisation.
+- Preserve conventional product/acronym capitalisation.
+- Preserve conventional product/acronym capitalisation.
+- Closing code fence must occupy its own line; prose otherwise swallowed.
+- Closing code fence must occupy its own line; prose otherwise swallowed.
+- Remove atomic-sector simplification and misleading no-recovery implication from answer explanations.
+- Payload cache hit does not promise no device I/O; avoid universal latency ratio and shared-host cache operation advice.
+- Little’s law describes an average; NVMe does not guarantee one hardware queue per CPU.
+- Traffic amplification alone does not establish exact physical wear or lifetime.
+- Match lesson’s device-specific programming caveat.
+- Restore spaces between product and version.
+- {'glossary': 'transfer-time', 'before': {'id': 'transfer-time', 'term': 'Transfer time', 'aliases': ['transfer rate'], 'definition': 'The time spent actually moving the data, as opposed to waiting for the transfer to start. For a disk it is the time to read or write once the head is in position; for a 4 KiB request on a disk streaming 200 MB/s, about 0.02 ms.', 'example': 'For random 4 KiB reads, transfer time is tiny next to seek and rotation.', 'source': 'https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf'}, 'after': {'id': 'transfer-time', 'term': 'Transfer time', 'aliases': [], 'definition': 'The duration spent moving data once a transfer has begun, distinct from the transfer rate (bytes per second). For a disk it excludes seek and rotational wait; a 4 KiB request at an assumed 200 MB/s takes about 0.02 ms to transfer.', 'example': 'For random 4 KiB reads, transfer time is tiny next to seek and rotation.', 'source': 'https://pages.cs.wisc.edu/~remzi/OSTEP/file-disks.pdf'}}
+- {'glossary': 'sparse-file', 'before': {'id': 'sparse-file', 'term': 'Sparse file', 'aliases': ['sparse files', 'sparse-aware'], 'definition': 'A file with holes: ranges that were never written and have no blocks allocated, which read back as zeros. Its logical size can be far larger than its disk usage.', 'example': 'truncate -s 10G disk.img creates a 10 GiB file that uses almost no space.', 'source': 'https://en.wikipedia.org/wiki/Sparse_file'}, 'after': {'id': 'sparse-file', 'term': 'Sparse file', 'aliases': ['sparse files', 'sparse-aware'], 'definition': 'A file containing holes: logical ranges with no allocated payload blocks that read as zeros. Holes can arise through extending beyond EOF or punching out previously allocated ranges; logical size can greatly exceed disk usage.', 'example': 'truncate -s 10G disk.img creates a 10 GiB file that uses almost no space.', 'source': 'https://en.wikipedia.org/wiki/Sparse_file'}}
+- {'glossary': 'hmb', 'before': {'id': 'hmb', 'term': 'Host memory buffer', 'aliases': ['HMB', 'host-memory-buffer'], 'definition': "An NVMe feature that lets a DRAM-less SSD borrow a small part of the host's RAM to cache its mapping table.", 'example': 'A DRAM-less NVMe drive might use 64 MiB of host memory buffer.', 'source': 'https://en.wikipedia.org/wiki/NVM_Express'}, 'after': {'id': 'hmb', 'term': 'Host memory buffer', 'aliases': ['HMB', 'host-memory-buffer'], 'definition': 'An optional NVMe feature allowing a controller to use a host-provided memory region. SSDs, especially DRAM-less designs, can use it for mapping or other controller data; the feature is not restricted to devices without DRAM.', 'example': 'A DRAM-less NVMe drive might use 64 MiB of host memory buffer.', 'source': 'https://en.wikipedia.org/wiki/NVM_Express'}}
+- {'glossary': 'out-of-place-write', 'before': {'id': 'out-of-place-write', 'term': 'Out-of-place write', 'aliases': ['out-of-place writes', 'out-of-place'], 'definition': 'Writing updated data to a fresh location instead of overwriting the old one, then updating a map and marking the old copy invalid. Flash requires it; log-structured and copy-on-write designs use it too.', 'example': 'An SSD rewriting LBA 7 puts the new data in the next free page.', 'source': 'https://pages.cs.wisc.edu/~remzi/OSTEP/file-ssd.pdf'}, 'after': {'id': 'out-of-place-write', 'term': 'Out-of-place write', 'aliases': ['out-of-place writes', 'out-of-place'], 'definition': 'Writing updated data to a fresh location instead of overwriting the old one, then updating a map and marking the old copy invalid. SSD FTLs use this to accommodate NAND erase/program restrictions; log-structured and copy-on-write designs use it too.', 'example': 'An SSD rewriting LBA 7 puts the new data in the next free page.', 'source': 'https://pages.cs.wisc.edu/~remzi/OSTEP/file-ssd.pdf'}}
+- {'glossary': 'preallocation', 'before': {'id': 'preallocation', 'term': 'Preallocation', 'aliases': ['fallocate', 'posix_fallocate'], 'definition': "Reserving space for a file in advance, for example with fallocate, so later writes won't fail for lack of space and can land in a better layout. It does not guarantee physical contiguity.", 'example': 'fallocate -l 10G db.img reserves 10 GiB before the database starts writing.', 'source': 'https://man7.org/linux/man-pages/man2/fallocate.2.html'}, 'after': {'id': 'preallocation', 'term': 'Preallocation', 'aliases': ['fallocate', 'posix_fallocate'], 'definition': 'Reserving storage for a file before later writes, using an allocation mode intended for that purpose. Successfully reserved ranges can avoid later ENOSPC failures from lack of data space, but writes can still fail for other reasons. Not every fallocate mode allocates space, and physical contiguity is not guaranteed.', 'example': 'fallocate -l 10G db.img reserves 10 GiB before the database starts writing.', 'source': 'https://man7.org/linux/man-pages/man2/fallocate.2.html'}}
+- {'glossary': 'drop-caches', 'before': {'id': 'drop-caches', 'term': 'drop_caches', 'aliases': ['/proc/sys/vm/drop_caches'], 'definition': 'A Linux control file: writing 3 to it discards clean page-cache, dentry and inode cache contents, used to test cold-cache performance. It does not write dirty data, so run sync first.', 'example': 'sync; echo 3 > /proc/sys/vm/drop_caches empties the clean caches on a test box.', 'source': 'https://docs.kernel.org/admin-guide/sysctl/vm.html'}, 'after': {'id': 'drop-caches', 'term': 'drop_caches', 'aliases': ['/proc/sys/vm/drop_caches'], 'definition': 'A Linux control that attempts to reclaim clean page-cache and/or reclaimable slab objects such as dentries and inodes. Writing three requests both classes. Dirty objects are not written or freed by this operation, and not every referenced object can be reclaimed. It changes system-wide cache state, so controlled experiments belong in an isolated environment.', 'example': 'sync; echo 3 > /proc/sys/vm/drop_caches empties the clean caches on a test box.', 'source': 'https://docs.kernel.org/admin-guide/sysctl/vm.html'}}
+- {'glossary': 'sync-command', 'before': {'id': 'sync-command', 'term': 'sync (command)', 'aliases': ['sync()'], 'definition': 'The command and system call that write all dirty data to storage. POSIX only requires sync() to schedule the writes, but on Linux it waits for them to complete.', 'example': 'Run sync before pulling power from a test machine.', 'source': 'https://man7.org/linux/man-pages/man2/sync.2.html'}, 'after': {'id': 'sync-command', 'term': 'sync (command)', 'aliases': ['sync()'], 'definition': 'The sync command and system call request writeback of cached filesystem changes. POSIX permits sync() to schedule writes; Linux waits for I/O completion. Completion cannot establish successful persistence if errors occur, and the sync() call has no error return.', 'example': 'Run sync before pulling power from a test machine.', 'source': 'https://man7.org/linux/man-pages/man2/sync.2.html'}}
+- {'glossary': 'send-receive', 'before': {'id': 'send-receive', 'term': 'send/receive', 'aliases': ['btrfs send', 'zfs send'], 'definition': 'Btrfs and ZFS features that serialise the difference between two snapshots into a stream, used for efficient incremental backups to another machine.', 'example': 'btrfs send -p old new | ssh backup btrfs receive /backups sends only changes.', 'source': 'https://btrfs.readthedocs.io/en/latest/Send-receive.html'}, 'after': {'id': 'send-receive', 'term': 'send/receive', 'aliases': ['btrfs send', 'zfs send'], 'definition': 'Btrfs and ZFS facilities for serialising snapshot contents into a stream for transfer and reconstruction. A full stream sends a baseline; an incremental stream describes changes relative to a suitable earlier snapshot.', 'example': 'btrfs send -p old new | ssh backup btrfs receive /backups sends only changes.', 'source': 'https://btrfs.readthedocs.io/en/latest/Send-receive.html'}}
+- Do not rank arbitrary generations/devices universally by bits per cell.
+- Correct acronym capitalisation.
+- Use exact binary capacity name matching the card calculation.
+- Supply the correct storage-rate meaning after removing the dimensionally wrong duration alias.
+- Use explicit filesystem CoW wording so compiled glossary opens storage-tree semantics rather than the earlier process-memory COW definition.
+- Disambiguate filesystem CoW terminology from process-memory COW in standalone quiz wording.
+- Use explicit filesystem CoW wording so compiled glossary opens storage-tree semantics rather than the earlier process-memory COW definition.
+- Disambiguate filesystem CoW terminology from process-memory COW in standalone quiz wording.
+- Use explicit filesystem CoW wording so compiled glossary opens storage-tree semantics rather than the earlier process-memory COW definition.
+- Use explicit filesystem CoW wording so compiled glossary opens storage-tree semantics rather than the earlier process-memory COW definition.
+- Add precise filesystem aliases that survive earlier module ownership; leave the process-memory term unchanged.
+- Cite independently fetched NVMe primary specification for host-memory-buffer capability.
+- Use a device-dependent illustrative flash-page size rather than unsupported frequency wording.
+- Use explicit filesystem namespace wording so HDFS name trees do not open the earlier Linux-isolation glossary term.
+- Add precise filesystem namespace alias and clarify NameNode’s namespace in its heap definition.
+
+Remaining gaps:
+
+- No actual power-cut crash campaign or storage-error injection was run. Native success/error-path fixtures do not establish real-device durability.
+- No physical HDD/SSD/NVMe/RAID performance measurement, NAND endurance test, NFS multi-client deployment, ZFS pool or HDFS/GFS cluster was created. Numerical workloads and error probabilities are explicitly illustrative.
+- Original application code fragments remain partial where originally partial: file-server fd/socket values, mapping input files and directory fixtures are supplied by bounded tests, with no claim these fragments form complete production services.
+- Physical iPhone behavior and publication are integration responsibilities after independent verification.
+- Some ancillary history/general terminology rests on authoritative teaching or inherited secondary references; confidence is medium where primary coverage or applicability is incomplete. All lesson confidence is conservatively medium, with no unresolved low-confidence core claim.
+- One direct Linux AHCI source fetch returned HTTP 429 during this pass; AHCI command-count comparison is corroborated by fetched NVMe/authoritative documentation and previous authored source evidence.
+
+Low-confidence areas:
+
+- **medium** — fs-ext4-xfs-choices: Filesystem resizing, features and configuration details. Current fetched upstream manuals support core claims, but installed versions and geometry vary. XFS shrinking is explicitly restricted and version-dependent.
+- **medium** — fs-hdfs-consistency-cost: Hadoop API restrictions and object-store product features. Fetched versioned/current documentation; these facts are configuration/version dependent. No cluster or cloud deployment was created.
+- **medium** — fs-raid-rebuild-risk: Storage latency, bandwidth, endurance and error models. Calculations independently recomputed from labelled assumptions; no physical devices, error-rate campaign or performance benchmark validates empirical outcomes.
+- **medium** — fs-durable-replacement: Crash durability of atomic replacement and logs. Primary contracts and native success/injected application-error fixtures checked. No power-cut campaign or real storage failure injection; filesystem/device contracts remain assumptions.
+- **medium** — fs-flash-erase-rules: NAND generation and implementation details. The text deliberately omits universal geometry/endurance/speed promises. Ancillary historical/general definitions use authoritative teaching material; no identified NAND-device validation.
 
 ## synth: Sound & Digital Audio
 

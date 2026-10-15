@@ -1,0 +1,92 @@
+[
+  {
+    "id": "fs-page-cache-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An on-call alert says a database host is \"out of memory\". You run `free -h`:\n\n```\n      total  used  free  cache  avail\nMem:   31Gi  6.2G  1.1G   24Gi   24Gi\n```\n\nWhat is the right reading?",
+    "options": [
+      {
+        "text": "The host is nearly out of memory: only 1.1 GiB is free",
+        "explanation": "Low completely unused memory is not sufficient evidence of exhaustion. Reclaimable cache can be reused, though not necessarily instantly."
+      },
+      {
+        "text": "The host reports about 24 GiB available without swapping; low free alone does not establish host memory exhaustion",
+        "explanation": "MemAvailable estimates free and reclaimable memory. It is useful evidence, but cgroup limits, fragmentation and workload pressure can still constrain allocations."
+      },
+      {
+        "text": "Something is leaking 24 GiB, because the cache should be empty on an idle machine",
+        "explanation": "The kernel deliberately fills unused RAM with file data. Empty RAM does nothing useful; a full cache is normal, not a leak."
+      },
+      {
+        "text": "The host needs swap, because the cache can only be freed by writing it to swap",
+        "explanation": "Clean reclaimable disk-backed cache does not need swapping. Anonymous memory and tmpfs/shmem can use swap; it is not limited to heap and stack."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "This illustrative summary reports substantial MemAvailable, which estimates capacity usable without swapping. Free/used/cache column definitions vary with procps versions; used is not simply live application memory, and cache is not all instantly reclaimable. Correlate the alert with PSI, cgroup limits, swap and reclaim statistics. No exact microsecond reclaim time or diagnosis of the alert's implementation follows from this display.",
+    "link": {
+      "title": "Page cache — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Page_cache"
+    }
+  },
+  {
+    "id": "fs-page-cache-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You run `grep -r TODO src/` on a 2 GB source tree. The first run takes 40 s; running it again straight away takes 1.5 s. What explains the difference? In this hypothetical measurement, tracing confirms the first run reads file payload from storage and the second serves it from resident page cache.",
+    "options": [
+      {
+        "text": "grep builds an index on the first run and reuses it",
+        "explanation": "grep keeps no state between runs. Each invocation reads the files from scratch."
+      },
+      {
+        "text": "The SSD's own cache warmed up, so it now answers faster",
+        "explanation": "Device caching can affect timing, but the supplied trace specifically identifies host page-cache hits. No universal SSD-cache capacity or speed-gain threshold is implied."
+      },
+      {
+        "text": "The first run populated the page cache, so the second run avoids payload storage reads in the traced workload",
+        "explanation": "Correct under the supplied trace. Resident valid file pages can supply payload through memory copies; metadata work and unrelated I/O may still occur. The timing difference is hypothetical, not a universal RAM/storage ratio."
+      },
+      {
+        "text": "The CPU's L3 cache now holds the files",
+        "explanation": "The trace identifies kernel page-cache residency, not a CPU-cache-resident entire source tree. CPU-cache capacities depend on the actual processor."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Run 1: each `read` misses the page cache, so the kernel reads blocks from the device (plus read-ahead). Time is dominated by I/O.\n2. The pages stay cached afterwards, because the RAM is otherwise idle.\n3. Run 2: each `read` finds the page by (inode, offset) and just copies it. Time is dominated by grep's CPU work.\n\nWhen you benchmark, say whether it was **cold** or **warm** cache. For controlled cold-cache experiments, Linux exposes drop_caches. Use an isolated disposable environment because it changes system-wide cache state; this question does not execute it.",
+    "link": {
+      "title": "Page cache — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Page_cache"
+    }
+  },
+  {
+    "id": "fs-page-cache-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A nightly backup tool reads a 2 TB data directory once, sequentially, and streams it to object storage. During the backup, the web application on the same host gets much slower, even though CPU and disk bandwidth have headroom. If tracing confirms application refaults caused by cache pressure, which mitigation should be tested?",
+    "options": [
+      {
+        "text": "Read-ahead is too small; raise `read_ahead_kb` for the backup",
+        "explanation": "A larger readahead window can increase cache pressure, but effects depend on access and reclaim; it is not guaranteed to worsen every workload."
+      },
+      {
+        "text": "The backup holds a lock on the files, blocking the application",
+        "explanation": "Ordinary reads do not automatically take application advisory locks, but internal locking and filesystem-specific waits still exist. The supplied evidence identifies cache pressure."
+      },
+      {
+        "text": "The backup's reads are filling the page cache and evicting the application's hot pages; the backup should use `posix_fadvise(..., POSIX_FADV_DONTNEED)` on what it has read",
+        "explanation": "Correct as a mitigation to test. DONTNEED is advisory, can affect other users of shared cached data and may not evict dirty or partial pages. Direct I/O is another option with compatibility/alignment tradeoffs."
+      },
+      {
+        "text": "The backup's dirty pages are triggering write throttling of the application's writes",
+        "explanation": "Reading file payload does not normally dirty that payload, though atime/metadata or other output can become dirty. The stated evidence is cache pressure."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The symptom: slow app, idle CPU, disk not saturated.\n2. The app's working set used to live in the page cache. Now its reads miss.\n3. Why? The backup reads 2 TB through the cache. Each new page needs a free page, and reclaim takes older pages, including the app's.\n4. The backup may not reuse these pages, though other applications could.\n\nFix:\n\n```\nread chunk at off, len\nposix_fadvise(fd, off, len,\n    POSIX_FADV_DONTNEED)\n```\n\nNewer kernels' MGLRU and the inactive list soften this, but hints are advisory; validate their effect and avoid discarding shared hot ranges.",
+    "link": {
+      "title": "posix_fadvise(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/posix_fadvise.2.html"
+    }
+  }
+]

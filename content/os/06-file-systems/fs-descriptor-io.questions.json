@@ -1,0 +1,101 @@
+[
+  {
+    "id": "fs-file-abstraction-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A freshly started Python script (with only stdin, stdout and stderr open) runs:\n\n```python\n# Closing a frees its descriptor.\na = os.open(\"x.txt\", os.O_RDONLY)\nb = os.open(\"y.txt\", os.O_RDONLY)\nos.close(a)\nc = os.open(\"z.txt\", os.O_RDONLY)\nprint(a, b, c)\n```\n\nWhat is printed? Assume os is imported where needed, calls succeed, the regular file has no concurrent modifiers, and transfers complete fully except at EOF.",
+    "options": [
+      {
+        "text": "`0 1 2`",
+        "explanation": "Descriptors 0, 1 and 2 are already taken by stdin, stdout and stderr, so new files cannot get them unless one of those is closed."
+      },
+      {
+        "text": "`3 4 5`",
+        "explanation": "This assumes descriptors are handed out in ever-increasing order. In fact `open` returns the *lowest* unused number, and 3 became free again when `a` was closed."
+      },
+      {
+        "text": "`3 4 3`",
+        "explanation": "Correct. `a` gets 3 (lowest free), `b` gets 4, closing `a` frees 3, so `c` reuses 3."
+      },
+      {
+        "text": "`1 2 3`",
+        "explanation": "Numbering does not start at 1; 0 is a valid descriptor (stdin), and 1 and 2 are in use."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. At start, the fd table has 0, 1 and 2 in use.\n2. `open(\"x.txt\")` returns the lowest unused number: **3**.\n3. `open(\"y.txt\")`: lowest unused is **4**.\n4. `close(a)` frees 3.\n5. `open(\"z.txt\")`: lowest unused is **3** again.\n\n```\nstep        in use\nstart       0 1 2\nopen x      0 1 2 3\nopen y      0 1 2 3 4\nclose 3     0 1 2 4\nopen z      0 1 2 3 4\n```\n\nThe \"lowest free number\" rule is guaranteed by POSIX, and shells rely on it: closing fd 1 and then opening a file is the old way to redirect stdout.",
+    "link": {
+      "title": "open(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/open.2.html"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`notes.txt` contains exactly the 10 bytes `0123456789`. What does this print?\n\n```python\n# Each read advances this open offset.\nfd = os.open(\"notes.txt\", os.O_RDONLY)\nos.read(fd, 4)\nos.read(fd, 4)\nprint(os.read(fd, 4))\nprint(os.read(fd, 4))\n```\n\nAssume os is imported where needed, calls succeed, the regular file has no concurrent modifiers, and transfers complete fully except at EOF.",
+    "options": [
+      {
+        "text": "`b'89'` then `b''`",
+        "explanation": "Correct. The offset advances 0 → 4 → 8. The third read asks for 4 bytes but only 2 remain, so it returns `b'89'`. The fourth is at end of file and returns `b''`."
+      },
+      {
+        "text": "`b'0123'` then `b'4567'`",
+        "explanation": "This ignores the current offset. Each `read` continues from where the previous one stopped; it does not restart at the beginning."
+      },
+      {
+        "text": "`b'89'` then an EOFError",
+        "explanation": "Hitting end of file is not an error at the system call level. `read` simply returns 0 bytes, which Python shows as `b''`."
+      },
+      {
+        "text": "`b'89\\x00\\x00'` then `b''`",
+        "explanation": "`read` never pads a short result. It returns exactly the bytes available, so the result is 2 bytes long, not 4."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Track the offset:\n\n```\ncall      offset   returns\nread 4    0 -> 4   b'0123'\nread 4    4 -> 8   b'4567'\nread 4    8 -> 10  b'89'   (short)\nread 4    10       b''     (EOF)\n```\n\nTwo lessons:\n\n1. A short read (fewer bytes than requested) is normal and not an error.\n2. A zero-byte result for a positive-length regular-file or byte-stream read indicates EOF under this model; a request for zero bytes does not test EOF. Loops that read a file should stop on `b''`, not when the result is shorter than requested (on a pipe, a short read doesn't mean the end).",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  },
+  {
+    "id": "fs-file-abstraction-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these can legitimately make a `read` or `write` call transfer **fewer** bytes than requested, without it being an error? Select all that apply.",
+    "options": [
+      {
+        "text": "Reading 4,096 bytes from a pipe when the writer has only written 100 so far",
+        "explanation": "Correct for the stated pipe scenario: a read can return the available 100 bytes. Socket options and message/stream semantics can change waiting behavior."
+      },
+      {
+        "text": "Reading 4,096 bytes from a regular file starting 10 bytes before its end",
+        "explanation": "Correct. The read stops at end of file and returns 10 bytes."
+      },
+      {
+        "text": "A signal arriving after some bytes of a slow read have been transferred",
+        "explanation": "Correct. If a signal interrupts a read on a slow device such as a terminal or socket after data has been moved, the call returns the partial count instead of failing with `EINTR`."
+      },
+      {
+        "text": "Writing 1 MB to a file on a disk with only 200 KB free",
+        "explanation": "Correct: a write can make partial progress and return a count. ENOSPC may instead occur immediately or be delayed until a later write/fsync, depending on allocation and buffering."
+      },
+      {
+        "text": "Merely setting FD_CLOEXEC on an existing descriptor",
+        "explanation": "FD_CLOEXEC controls descriptor inheritance across successful exec; setting it does not itself change file length or read/write transfer counts."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Short transfers come from the source or destination having less room or data than you asked for:\n\n| Case | Why short |\n|---|---|\n| Pipe/socket | Only partial data has arrived |\n| Near EOF | File ends |\n| Signal | Interrupted after progress |\n| Disk full | Only part fits |\n\nFD_CLOEXEC affects exec inheritance, not transfer size. By contrast, truncating a file can cause later reads to encounter EOF.\n\nThe practical rule: always loop until the full count has been transferred (or `read` returns 0 for EOF), for example:\n\n```python\n# Continue from the unwritten suffix.\nwhile view:\n    n = os.write(fd, view)\n    if n <= 0:\n        raise OSError(\"write stalled\")\n    view = view[n:]\n```\n\nThis loop assumes blocking stream/file output and lets Python errors propagate; nonblocking output needs readiness handling.",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  }
+]

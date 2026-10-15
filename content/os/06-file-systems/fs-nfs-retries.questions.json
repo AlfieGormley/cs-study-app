@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fs-modern-distributed-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An NFSv3 server executes `REMOVE(dirfh, \"tmp.lock\")`, but its success reply is lost. Assume the retry is re-executed without duplicate suppression, nobody recreates the name, and the client does not normalize the second error. What reply reaches the application?",
+    "options": [
+      {
+        "text": "Success, because all NFS operations are idempotent",
+        "explanation": "False. A repeated REMOVE can find that the name has already disappeared. Even repeated reads can return different bytes if another client modifies the file."
+      },
+      {
+        "text": "`ENOENT` (no such file), even though its delete succeeded; servers keep a duplicate request cache to replay the first reply instead",
+        "explanation": "Correct under the stated assumptions. A duplicate-request cache can instead recognize the retransmission using RPC/client identity and replay a remembered success. Such a cache has bounded lifetime and capacity."
+      },
+      {
+        "text": "The file is deleted twice, corrupting the directory",
+        "explanation": "Deleting a name that's already gone doesn't corrupt anything; it just fails."
+      },
+      {
+        "text": "The client hangs forever because hard mounts never retry",
+        "explanation": "Hard mounts retry indefinitely; that's how the retry happened at all."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. First REMOVE deletes the name and returns success, but that reply is lost.\n2. A re-executed REMOVE finds no name and returns ENOENT in this scenario.\n3. A duplicate-request cache can replay the first reply rather than execute again; it must distinguish clients as well as requests.\n4. NFSv3 EXCLUSIVE CREATE has a verifier specifically supporting retransmission, so not every exclusive-create retry simply fails.\n5. NFSv4.1 sessions add replay controls within defined session/slot/cache rules; they are not an unbounded guarantee of exactly-once application effects.",
+    "link": {
+      "title": "OSTEP: Sun's Network File System (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/dist-nfs.pdf"
+    }
+  },
+  {
+    "id": "fs-modern-distributed-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two Linux machines mount the same NFSv3 export with default options. On machine A, a program writes a new line to `status.txt` and keeps the file open. Two seconds later, on machine B, a program opens `status.txt` and reads it. What does B see?",
+    "options": [
+      {
+        "text": "Always the new line, because NFS is a shared disk",
+        "explanation": "NFS clients cache writes locally. Nothing forces A's data to the server until it closes, fsyncs or the cache flushes."
+      },
+      {
+        "text": "Possibly the old contents: close-to-open consistency only promises B sees A's writes if A has closed (or fsynced) the file before B opens it",
+        "explanation": "Correct. A's dirty data may still be local. With close-to-open enabled, successful writeback and no intervening writer, B's later open revalidates A's changes. Check write, fsync and close errors."
+      },
+      {
+        "text": "An `ESTALE` error, because the file is open on another client",
+        "explanation": "`ESTALE` happens when the file handle no longer refers to a file, for example after deletion on the server, not because someone else has it open."
+      },
+      {
+        "text": "Nothing: B blocks until A closes the file",
+        "explanation": "NFSv3 has no such coordination between clients."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "One possible execution is:\n\n1. A writes into its local dirty cache.\n2. A has not closed or fsynced; background writeback has not sent these bytes yet.\n3. B opens and revalidates against the server, which still has the old data.\n4. B reads old contents. Other timings can expose the new data sooner.\n\nApplications coordinating through close-to-open must successfully flush/close before notifying the reader, check errors, and account for other concurrent writers.",
+    "link": {
+      "title": "OSTEP: Sun's Network File System (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/dist-nfs.pdf"
+    }
+  }
+]

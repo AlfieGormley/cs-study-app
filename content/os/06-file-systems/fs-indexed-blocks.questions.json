@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fs-on-disk-structures-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A teaching file system uses 1 KiB blocks, 4-byte block pointers and inodes with 12 direct pointers, one single-indirect and one double-indirect pointer (no triple). What is the largest file it can hold?",
+    "options": [
+      {
+        "text": "About 268 KiB",
+        "explanation": "That counts only the 12 direct blocks and the single-indirect block (12 + 256). The double-indirect pointer adds far more."
+      },
+      {
+        "text": "About 64 MiB",
+        "explanation": "Correct. Each 1 KiB block holds 256 pointers: 12 + 256 + 256² = 65,804 blocks × 1 KiB ≈ 64.3 MiB."
+      },
+      {
+        "text": "About 16 GiB",
+        "explanation": "That includes a triple-indirect level (256³ blocks). This design stops at double-indirect."
+      },
+      {
+        "text": "About 4 TiB",
+        "explanation": "That's the figure for 4 KiB blocks with triple-indirect pointers (ext2/3 style), not for this configuration."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Work out how many pointers fit in one block, then add up the data blocks each level reaches:\n\n```formula\nk = B_blk / p = 1,024 B / (4 B) = 256\nN_max = 12 + k + k^2\nN_max = 12 + 256 + 65,536 = 65,804\nS_max = N_max B_blk\nS_max = 65,804 × 1 KiB ≈ 64.3 MiB\nwhere\nk: the number of block pointers in one indirect block\nB_blk: the block size; here 1 KiB = 1,024 bytes\np: the size of one pointer; here 4 bytes (B)\nN_max: the most data blocks one inode can reach: 12 direct, k through the single-indirect block, k^2 through the double-indirect tree\nk^2: k squared, k × k\nS_max: the largest file the inode can describe\nB: byte\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\n≈: approximately equal to\nIn words: a 1 KiB block holds 256 four-byte pointers, so the double-indirect level alone reaches 65,536 blocks, and the whole inode about 64 MiB.\n```\n\n2. The double-indirect level dominates. Each extra level of indirection multiplies capacity by 256 here (by 1,024 with 4 KiB blocks), which is why ext2/3 needed a triple level to reach terabytes.",
+    "link": {
+      "title": "ext4: the inode block map — kernel.org",
+      "url": "https://www.kernel.org/doc/html/latest/filesystems/ext4/ifork.html"
+    }
+  },
+  {
+    "id": "fs-on-disk-structures-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An ext3-style file system has 4 KiB blocks, 12 direct pointers and 1,024 pointers per indirect block. The file's inode is already cached in memory, but no other blocks are. How many disk reads does it take to read the byte at offset 100 KiB? Use a toy uncached block-read model with allocated data, no holes, readahead or other cache effects.",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "One read would be enough only if the byte were in the first 12 blocks (0–48 KiB), which direct pointers cover."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. Offset 100 KiB is in file block 25. Blocks 12–1,035 go through the single-indirect pointer, so you read the indirect block, then the data block."
+      },
+      {
+        "text": "3",
+        "explanation": "Three reads would mean the double-indirect level, which only starts at file block 1,036 (about 4 MiB in)."
+      },
+      {
+        "text": "4",
+        "explanation": "Four reads are needed only for the triple-indirect range, past about 4 GiB."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Find which file block holds the byte, and which pointer in the indirect block names it:\n\n```formula\ni = ⌊x / B_blk⌋\ni = 100 KiB / (4 KiB) = 25\nj = i − 12 = 25 − 12 = 13\nwhere\ni: the file block number holding the byte, counting from 0\nx: the byte offset; here 100 KiB\nB_blk: the block size; here 4 KiB\n⌊ ⌋: the floor: round down to a whole number\nj: the position of the pointer inside the single-indirect block (the 12 direct pointers cover blocks 0 to 11 first)\nKiB: kibibyte, 1,024 bytes\nIn words: byte 100 KiB sits in file block 25, which is the 14th block past the 12 direct ones, so it is pointer number 13 in the single-indirect block.\n```\n\n2. Map it to the pointer level:\n\n```\nblocks 0..11       direct\nblocks 12..1035    single-indirect\nblocks 1036..      double-indirect\n```\n\n3. Block 25 is in the single-indirect range.\n4. Reads: the indirect block (to get pointer 13), then the data block. That's **2**.\n\nAn extent-mapped ext4 file whose extents fit in the inode needs just 1 read here.",
+    "link": {
+      "title": "ext4: the inode block map — kernel.org",
+      "url": "https://www.kernel.org/doc/html/latest/filesystems/ext4/ifork.html"
+    }
+  }
+]

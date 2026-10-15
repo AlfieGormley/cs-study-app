@@ -1,0 +1,70 @@
+[
+  {
+    "id": "fs-storage-devices-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A RAID 6 array has **12 disks at 200 random IOPS** each. The workload is 50% random reads and 50% random small writes. Roughly what IOPS can the array deliver? Use the ideal balanced uncached read-modify-write model, with enough concurrency and no merging of writes into full stripes.",
+    "options": [
+      {
+        "text": "About 2,400",
+        "explanation": "That's raw read IOPS. Each small write on RAID 6 costs six disk I/Os."
+      },
+      {
+        "text": "About 1,200",
+        "explanation": "This halves the total, as if writes cost 2 I/Os like a mirror. RAID 6 has two parities to update."
+      },
+      {
+        "text": "About 690",
+        "explanation": "Correct. Each logical I/O costs 0.5 × 1 + 0.5 × 6 = 3.5 disk I/Os on average, and 2,400 / 3.5 ≈ 686."
+      },
+      {
+        "text": "About 400",
+        "explanation": "That's the all-write figure (2,400 / 6). Half the workload is reads, which cost only one I/O."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Raw capacity: 12 disks × 200 IOPS = 2,400 disk IOPS.\n2. Cost per logical operation:\n   - read: 1 disk I/O\n   - small write on RAID 6: read the old data and both parity chunks (P and Q), then write all three = 6 I/Os\n3. Average the cost over the mix, then divide the raw capacity by it:\n\n```formula\nR = nr = 12 × 200 = 2,400\nk = f_r + f_w w\nk = 0.5 × 1 + 0.5 × 6 = 3.5\nIOPS = R / k = 2,400 / 3.5 ≈ 686\nwhere\nR: the array's raw capacity, in disk I/O operations per second\nn: the number of disks; here 12\nr: random IOPS one disk delivers; here 200\nk: the average number of disk I/Os per logical operation\nf_r, f_w: the fractions of operations that are reads and writes; here 0.5 each\nw: the disk I/Os one small write costs; 6 on RAID 6 (a read costs 1)\nIOPS: logical I/O operations per second the array delivers\n≈: approximately equal to\nIn words: half the operations cost 1 disk I/O and half cost 6, an average of 3.5, so 2,400 raw IOPS buy about 686 logical ones.\n```\n\nOn RAID 10 the same mix would cost 0.5 + 0.5 × 2 = 1.5 disk I/Os per operation, giving 1,600 IOPS, which is why write-heavy databases often use mirrors.",
+    "link": {
+      "title": "OSTEP: Redundant Arrays of Inexpensive Disks (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-raid.pdf"
+    }
+  },
+  {
+    "id": "fs-storage-devices-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these protect a parity array against the **RAID 5 write hole** (a crash between writing new data and writing the matching parity)? Select all that apply.",
+    "options": [
+      {
+        "text": "A hardware RAID controller with a battery- or flash-backed write cache",
+        "explanation": "Protects. The in-flight data and parity survive power loss in the cache and are completed when power returns."
+      },
+      {
+        "text": "Linux md's write journal or partial parity log (PPL)",
+        "explanation": "Protects. md records the pending stripe update (journal) or enough parity information (PPL) to fix the stripe after a crash."
+      },
+      {
+        "text": "ZFS RAID-Z",
+        "explanation": "RAID-Z writes new stripes and commits references through its filesystem CoW transaction protocol. A crash can leave incomplete new blocks physically present, but they must not be accepted as committed live stripes."
+      },
+      {
+        "text": "Using a larger stripe unit, such as 1 MiB instead of 64 KiB",
+        "explanation": "Doesn't protect. Bigger chunks change performance characteristics, but a crash can still separate the data write from the parity write."
+      },
+      {
+        "text": "Switching to RAID 0 for speed",
+        "explanation": "Doesn't protect anything: RAID 0 has no parity to get wrong, but also no redundancy at all."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The write hole exists because a stripe update is two or more independent writes with no atomicity.\n\nAny fix must make the update atomic or recoverable:\n\n1. Non-volatile cache: finishes the update after the crash. ✓\n2. md journal / PPL: logs enough to redo or repair it, like a file system journal. ✓\n3. RAID-Z: never updates a stripe in place; the old stripe stays valid until the new one is complete and referenced. ✓\n4. Stripe size: unrelated to atomicity. ✗\n5. RAID 0: removes the redundancy you were trying to protect. ✗",
+    "link": {
+      "title": "RAID arrays (md) — Linux kernel documentation",
+      "url": "https://docs.kernel.org/admin-guide/md.html"
+    }
+  }
+]

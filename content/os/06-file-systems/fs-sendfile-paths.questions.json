@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fs-page-cache-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A static file server sends a 1 GiB file with this loop:\n\n```python\n# Partial loop: fd and sock exist.\nwhile chunk := os.read(fd, 65536):\n    sock.sendall(chunk)\n```\n\nAssume every `sendall` is one `send` syscall. Roughly how many system calls does it make, and how many bytes does the **CPU** copy? Also assume each read returns a full 64 KiB chunk until EOF and the conventional two-CPU-copy socket path.",
+    "options": [
+      {
+        "text": "About 16,000 syscalls and 1 GiB copied",
+        "explanation": "16,384 is the number of chunks, but each chunk needs a `read` *and* a `send`, and each of those makes a CPU copy."
+      },
+      {
+        "text": "2 syscalls and 0 bytes copied",
+        "explanation": "That describes roughly what a single large `sendfile` call can achieve with scatter-gather DMA, not this loop."
+      },
+      {
+        "text": "About 32,000 syscalls and 4 GiB copied",
+        "explanation": "There are four copies in total, but two of them (disk → cache, socket buffer → NIC) are DMA by the devices, not by the CPU."
+      },
+      {
+        "text": "About 32,000 syscalls and 2 GiB copied",
+        "explanation": "Correct. 1 GiB ÷ 64 KiB = 16,384 chunks; each costs a `read` and a `send` (≈ 32,769 including the final empty `read`), and each byte is copied by the CPU twice: cache → user, user → socket."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Count the chunks, the syscalls and the bytes the CPU copies:\n\n```formula\nn = S / c = 2^30 B / (2^16 B) = 2^14\nn = 16,384\nk = 2n + 1 = 32,769\nX = 2S = 2 GiB\nwhere\nn: the number of 64 KiB chunks\nS: the file size; here 1 GiB = 2^30 bytes (2^30 means 30 copies of 2 multiplied together)\nc: the chunk size; here 64 KiB = 65,536 = 2^16 bytes\nk: the number of system calls: a read and a send per chunk, plus a final read that returns empty at end of file\nX: the bytes copied by the CPU: each byte once from page cache to user buffer, and once from user buffer to socket buffer\nB: byte\nGiB: gibibyte, 2^30 bytes\nKiB: kibibyte, 1,024 bytes\nIn words: 1 GiB in 64 KiB pieces is 16,384 chunks, each costing two syscalls, and every byte is copied twice by the CPU.\n```\n\n2. Where the copies happen:\n\n```\ndisk -> cache      DMA\ncache -> user      CPU\nuser -> socket buf CPU\nsocket buf -> NIC  DMA\n```\n\nWith `os.sendfile` the data never visits user space: far fewer syscalls, and suitable kernel/NIC paths can avoid payload CPU copies; short returns and offloads determine actual counts.",
+    "link": {
+      "title": "sendfile(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/sendfile.2.html"
+    }
+  },
+  {
+    "id": "fs-page-cache-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A video CDN node serves large files over HTTPS with nginx and `sendfile on;`. Profiling shows the CPU busy copying and encrypting data in user space, as if `sendfile` weren't helping. Why, and what restores the benefit?",
+    "options": [
+      {
+        "text": "`sendfile` only works on UDP sockets; switch to QUIC",
+        "explanation": "`sendfile` works with TCP sockets; that's its main use. QUIC encrypts in user space too, so it wouldn't help."
+      },
+      {
+        "text": "The page cache is disabled for large files",
+        "explanation": "There is no size limit that turns off the page cache for normal files."
+      },
+      {
+        "text": "TLS encryption happens in user space, so the bytes must pass through the process anyway; kernel TLS (kTLS) lets the kernel encrypt during `sendfile`",
+        "explanation": "With compatible versions, TLS ciphers and configuration, kTLS can move record processing into the kernel/offload path and allow sendfile integration. It does not promise zero CPU work or universally zero copies."
+      },
+      {
+        "text": "`sendfile` needs `O_DIRECT` on the source file",
+        "explanation": "`sendfile` reads from the page cache; it doesn't need or benefit from `O_DIRECT`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Zero-copy works because the kernel sends the page cache bytes **as they are**.\n2. HTTPS needs each TLS record encrypted. With OpenSSL in user space, the plaintext must be read into the process, encrypted, and written to the socket.\n3. That is the full read/write path again, plus encryption.\n4. With kTLS, after the handshake the session keys are handed to the kernel. `sendfile` can then encrypt in the kernel (or offload to the NIC).\n\nPlaintext serving can use an optimized sendfile path; HTTPS needs compatible TLS integration such as kTLS to avoid the usual user-space plaintext read path. Exact copy counts and offload benefits depend on configuration.",
+    "link": {
+      "title": "Zero-copy — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Zero-copy"
+    }
+  }
+]

@@ -1,0 +1,130 @@
+[
+  {
+    "id": "fp-laziness-q2",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these Python expressions produce a lazy object that computes its items only as they're requested? Select all that apply.",
+    "options": [
+      {
+        "text": "`range(10**9)`",
+        "explanation": "Correct. `range` stores only start, stop and step, and works out each number on demand. Its stored representation does not grow with the number of represented elements, apart from integer-bound sizes."
+      },
+      {
+        "text": "`[x * 2 for x in data]`",
+        "explanation": "Square brackets make a list comprehension, which runs the whole loop immediately and stores every result."
+      },
+      {
+        "text": "`map(str, data)`",
+        "explanation": "Correct. In Python 3, `map` returns an iterator that applies `str` one item at a time as you iterate."
+      },
+      {
+        "text": "`(x * 2 for x in data)`",
+        "explanation": "Correct. Round brackets make a generator expression: per-item multiplication is deferred; the leftmost iterable expression and iterator are evaluated when the generator expression is created."
+      },
+      {
+        "text": "`sorted(data)`",
+        "explanation": "`sorted` must see every element before it can return the first one, so it builds a full list eagerly."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Ask of each: does it return a list now, or an object that produces values on demand?\n\n- `range` - lazy sequence object.\n- `[...]` - list, fully built.\n- `map` - iterator (lazy since Python 3; in Python 2 it returned a list).\n- `(...)` - generator.\n- `sorted` - a new list. It can't be lazy in general, because the smallest item might be the last one in the input.\n\nsys.getsizeof reports only shallow object size. Iterators can retain large input objects or buffers, so it is not a total-memory test.",
+    "link": {
+      "title": "Python Types — primary reference",
+      "url": "https://docs.python.org/3/library/stdtypes.html"
+    }
+  },
+  {
+    "id": "fp-laziness-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\n# Creating g leaves its body suspended.\ndef gen():\n    print(\"start\")\n    yield 1\n    print(\"after 1\")\n    yield 2\n\ng = gen()\nprint(\"made\")\nprint(next(g))\n```",
+    "options": [
+      {
+        "text": "`start`, `made`, `1`",
+        "explanation": "Calling `gen()` does not run any of the body. It only creates the generator object, so `start` can't come first."
+      },
+      {
+        "text": "`made`, `start`, `1`",
+        "explanation": "Correct. The body starts on the first `next`, runs until the first `yield`, and pauses there."
+      },
+      {
+        "text": "`made`, `start`, `1`, `after 1`",
+        "explanation": "After yielding 1 the generator is paused. `after 1` would only print on a second `next(g)`."
+      },
+      {
+        "text": "`made`, `1`",
+        "explanation": "The body really does run when `next` is called, including the `print(\"start\")` before the `yield`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace step by step:\n\n1. `g = gen()` - creates a paused generator; the body hasn't started.\n2. `print(\"made\")` - prints `made`.\n3. `next(g)` - resumes the body from the top: prints `start`, then hits `yield 1` and pauses, handing 1 back.\n4. `print(...)` prints `1`.\n\nOutput:\n\n```\nmade\nstart\n1\n```\n\nThe generator body runs only in pieces, between `yield`s, as values are requested.",
+    "link": {
+      "title": "Python Expressions — primary reference",
+      "url": "https://docs.python.org/3/reference/expressions.html"
+    }
+  },
+  {
+    "id": "fp-laziness-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague's PySpark script does `rdd = sc.textFile(path).map(parse).filter(is_valid)` and then exits. It finishes in under a second on a 2 TB dataset and the cluster shows no tasks. What's going on?",
+    "options": [
+      {
+        "text": "Spark cached the result from a previous run",
+        "explanation": "Nothing was computed, so nothing could have been cached. Caching also has to be requested explicitly with `cache()` or `persist()`."
+      },
+      {
+        "text": "`map` and `filter` are transformations, which only build a plan; record transformations do not execute until an action such as count() or saveAsTextFile(); setup may still inspect metadata",
+        "explanation": "Correct. Spark defers execution so it can see the whole pipeline before scheduling work. Without an action the plan is never executed."
+      },
+      {
+        "text": "`parse` failed silently on the first record, so Spark stopped",
+        "explanation": "Errors inside a lazy transformation would only surface when an action forces it; here nothing ran at all, so `parse` was never called."
+      },
+      {
+        "text": "Spark processes files lazily one line at a time, and 2 TB fits in a second on a big cluster",
+        "explanation": "No tasks were scheduled, so no record processing occurred. The question needs no universal claim about cluster throughput. The real cause is that no action was called."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. textFile constructs a source RDD; map and filter create derived RDDs describing transformations.\n2. Spark only builds a lineage graph: read file, then parse, then filter.\n3. An action (`count`, `collect`, `take`, `saveAsTextFile`) asks for a result and triggers the job.\n4. The script never called one, so no tasks ran.\n\nThis is the same deferred execution as Python generators or Django QuerySets, and the same pitfall: errors and costs show up where the result is demanded, not where the pipeline was written.",
+    "link": {
+      "title": "RDD Programming Guide — Apache Spark",
+      "url": "https://spark.apache.org/docs/latest/rdd-programming-guide.html"
+    }
+  },
+  {
+    "id": "fp-laziness-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "How many `gen` lines are printed before the `4`?\n\n```python\n# The consumer pulls through both\n# stages.\ndef nums():\n    for i in range(1, 100):\n        print(\"gen\", i)\n        yield i\n\nevens = (n for n in nums()\n         if n % 2 == 0)\nbig = (n * n for n in evens)\nprint(next(big))\n```",
+    "options": [
+      {
+        "text": "0, because generators print nothing until fully consumed",
+        "explanation": "Generators run their body piece by piece as items are pulled, so `nums` does print as it goes."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. `next(big)` pulls one item from `evens`, which pulls from `nums` until it finds an even number: 1 (rejected), then 2 (accepted). 2 × 2 = 4."
+      },
+      {
+        "text": "49, one per even number below 100",
+        "explanation": "Nothing runs ahead. The pipeline is pull-based: each stage asks the one before it for exactly what it needs."
+      },
+      {
+        "text": "99, because `evens` must filter all of `nums` first",
+        "explanation": "That's how a list comprehension would behave. With generator expressions, filtering happens one item at a time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Follow the demand backwards from `next(big)`:\n\n1. `big` needs one value from `evens`.\n2. `evens` asks `nums` for an item: prints `gen 1`, gets 1, odd, rejected.\n3. Asks again: prints `gen 2`, gets 2, even, accepted.\n4. `big` squares it: 4.\n\nOutput:\n\n```\ngen 1\ngen 2\n4\n```\n\nThe other 97 numbers are never generated. This is how the lesson's log pipeline stops reading a 50 GB file once it has 10 matches.",
+    "link": {
+      "title": "Python Expressions — primary reference",
+      "url": "https://docs.python.org/3/reference/expressions.html"
+    }
+  }
+]

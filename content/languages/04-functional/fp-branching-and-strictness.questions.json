@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fp-recursion-tail-calls-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "How many times is `fib` called in total (including the first call) when evaluating `fib(5)`?\n\n```python\n# Count calls including the base cases.\ndef fib(n):\n    if n < 2:\n        return n\n    return fib(n - 1) + fib(n - 2)\n```",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "Memoization would execute the body for six distinct n values, 0 through 5, not five. Without it, the same values are recomputed many times."
+      },
+      {
+        "text": "9",
+        "explanation": "This undercounts the tree. Note the leaf calls `fib(1)` and `fib(0)` each count as calls too."
+      },
+      {
+        "text": "15",
+        "explanation": "Correct. Each call counts itself plus all the calls its two children make. That gives 1, 1, 3, 5, 9 and 15 calls for `fib(0)` up to `fib(5)`."
+      },
+      {
+        "text": "32",
+        "explanation": "2⁵ = 32 is a rough upper bound for a binary tree of depth 5, but the tree is lopsided (the `n - 2` branch is shallower), so the real count is lower."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each call to `fib(n)` with n ≥ 2 counts itself plus the calls of its two children:\n\n```formula\nC(0) = 1\nC(1) = 1\nC(n) = 1 + C(n − 1) + C(n − 2)\nC(2) = 1 + C(1) + C(0) = 3\nC(3) = 1 + C(2) + C(1) = 5\nC(4) = 1 + C(3) + C(2) = 9\nC(5) = 1 + C(4) + C(3) = 15\nwhere\nC(n): the total number of calls made to evaluate fib(n), counting the first call\nn: the argument passed to fib, a whole number\nIn words: a call for n ≥ 2 is one call plus everything its fib(n − 1) and fib(n − 2) children do; the base cases fib(0) and fib(1) are one call each.\n```\n\nThe count grows exponentially:\n\n```formula\nC(n) ≈ 1.45φ^n\nC(30) ≈ 1.45 × 1860498\nC(30) ≈ 2.7 × 10^6\nwhere\nC(n): the total number of calls for fib(n)\nn: the argument passed to fib\nφ: phi, the golden ratio, (1 + √5) / 2 ≈ 1.618\nφ^n: n copies of φ multiplied together (φ^30 ≈ 1,860,498)\n√: square root\n1.45: the constant 2 × φ / √5 ≈ 1.447, from Binet's closed-form formula for Fibonacci numbers\n≈: approximately equal to\nIn words: each step up in n multiplies the number of calls by about 1.6, so fib(30) makes about 2.7 million calls (exactly 2,692,537).\n```\n\n With `@functools.cache` each `fib(k)` runs once, so six cache misses/body executions for fib(5); cache-hit wrapper calls still occur.",
+    "link": {
+      "title": "Sicp",
+      "url": "https://sicp.sourceacademy.org/chapters/1.2.2.html"
+    }
+  },
+  {
+    "id": "fp-recursion-tail-calls-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In GHCi (no optimisation), `foldl (+) 0 [1..10^8]` uses a huge amount of memory (and may overflow), while `foldl' (+) 0 [1..10^8]` avoids the linear chain of accumulator thunks. Why?",
+    "options": [
+      {
+        "text": "`foldl` is not tail-recursive, so it builds stack frames",
+        "explanation": "`foldl` *is* tail-recursive. The problem is what the accumulator contains, not the shape of the recursion."
+      },
+      {
+        "text": "Laziness makes `foldl` build a chain of unevaluated thunks `(((0+1)+2)+3)...`; `foldl'` forces the accumulator at every step",
+        "explanation": "Correct. Each step wraps the old accumulator in a new suspended addition instead of computing a number. 10⁸ thunks fill the heap, and evaluating the chain can overflow the stack. `foldl'` evaluates the sum as it goes."
+      },
+      {
+        "text": "`foldl'` uses machine integers while `foldl` uses arbitrary-precision integers",
+        "explanation": "Both use whatever numeric type is inferred. The prime means 'strict', not a different number type."
+      },
+      {
+        "text": "`[1..10^8]` is fully materialised by `foldl` but streamed by `foldl'`",
+        "explanation": "Both consume the list lazily as they go. The leak is in the accumulator, not the list."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `foldl f z (x:xs) = foldl f (f z x) xs`. The call is in tail position.\n2. But Haskell doesn't evaluate `f z x` until needed. So the accumulator becomes:\n\n```\n0\n(0+1)\n((0+1)+2)\n(((0+1)+2)+3)\n...\n```\n\n3. After 10⁸ steps there are 10⁸ suspended additions on the heap.\n4. `foldl'` uses `seq` to force `f z x` to a value before recursing, so the accumulator is forced to WHNF each step. Its numeric storage still depends on the inferred type and magnitude.\n\nWith `-O`, GHC's strictness analysis often rescues `foldl` for `Int`, which is why the problem shows up most in GHCi.",
+    "link": {
+      "title": "Haskell List — primary reference",
+      "url": "https://hackage.haskell.org/package/base/docs/Data-List.html"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fp-functors-monads-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `Result` helpers, with `recip = lambda n: Ok(1 / n)`, what does this return?\n\n```python\n# An error skips subsequent callbacks.\nparse(\"0\").flat_map(positive) \\\n          .flat_map(recip)\n```",
+    "options": [
+      {
+        "text": "`Ok(inf)`",
+        "explanation": "Python doesn't return infinity for `1 / 0`; it raises. But `recip` isn't even reached here, because `positive` rejects 0."
+      },
+      {
+        "text": "A `ZeroDivisionError` exception",
+        "explanation": "That would happen if `recip` ran with 0. It doesn't: the chain is already on the error track after `positive`."
+      },
+      {
+        "text": "`Err('must be > 0')`",
+        "explanation": "Correct. `parse` succeeds with `Ok(0)`, `positive` returns `Err('must be > 0')`, and `flat_map` on an `Err` skips `recip` entirely."
+      },
+      {
+        "text": "`Err('not a number: 0')`",
+        "explanation": "`\"0\"` is all digits, so `parse` succeeds. The failure comes one step later."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Walk the railway:\n\n| Step | Input | Output |\n|---|---|---|\n| `parse` | `\"0\"` | `Ok(0)` |\n| `positive` | `0` | `Err('must be > 0')` |\n| `recip` | skipped | `Err(...)` |\n\n`Err.flat_map` returns `self` without calling the function, so once any step fails, the rest are skipped and the first error message is what you get back. That's the same short-circuiting as the nested-`if` staircase, with the reason attached.",
+    "link": {
+      "title": "Railway Oriented Programming — Scott Wlaschin",
+      "url": "https://fsharpforfunandprofit.com/rop/"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In this Rust function, `read` succeeds but `parse` returns `Err(e)`. What happens?\n\n```rust\n// Track where early propagation exits.\nfn load(p: &str)\n    -> Result<Cfg, Error> {\n  let text = read(p)?;\n  let cfg = parse(&text)?;\n  validate(&cfg)?;\n  Ok(cfg)\n}\n```",
+    "options": [
+      {
+        "text": "The program panics",
+        "explanation": "The ordinary Result ? path returns an error instead of deliberately panicking like unwrap on Err. User-defined error conversion or destructors can still panic."
+      },
+      {
+        "text": "load returns an Err with the converted error immediately; validate never runs",
+        "explanation": "Correct. `?` on an `Err` returns it from the enclosing function straight away, so later steps are skipped."
+      },
+      {
+        "text": "`cfg` is set to a default value and `validate` runs",
+        "explanation": "Rust doesn't invent defaults. If you wanted that, you'd write `.unwrap_or_default()` explicitly."
+      },
+      {
+        "text": "`load` returns `Ok(cfg)` with a partially built config",
+        "explanation": "There is no `cfg` to return: the error short-circuits before `cfg` is bound."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Read each `?` as 'unwrap the `Ok` or bail out with the `Err`':\n\n1. `read(p)?` - `Ok(text)`, unwrap, continue.\n2. `parse(&text)?` - `Err(e)`, so `return Err(e)` (converted with `From` if the error types differ).\n3. `validate` and `Ok(cfg)` are never reached.\n\nIt's the `Result` monad's `flat_map` written as straight-line code, the same way `await` is for Promises.",
+    "link": {
+      "title": "Recoverable Errors with Result — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch09-02-recoverable-errors-with-result.html"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 45/76. Updated 2026-10-15.
+Verified modules: 46/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -52,6 +52,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | languages/Programming Paradigms | 6 | 31 | 68 | 20 | 449 | 568 | 52 |
 | languages/Type Systems | 6 | 26 | 69 | 28 | 264 | 387 | 38 |
 | languages/Memory Management & Garbage Collection | 6 | 26 | 66 | 29 | 277 | 398 | 80 |
+| languages/Functional Programming | 6 | 33 | 68 | 43 | 248 | 392 | 82 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3891,6 +3892,42 @@ Low-confidence areas:
 - **medium** — gc-rust-drop-borrows: Runtime implementation, optimisation, collector defaults/costs or pedagogical model details. Primary standards/runtime/project sources and bounded native examples checked. Versioned implementation choices and workload-dependent latency, allocation placement, retention and tuning remain qualified; no production benchmark or universal ABI guarantee.
 - **medium** — gc-rust-reference-lifetimes: Runtime implementation, optimisation, collector defaults/costs or pedagogical model details. Primary standards/runtime/project sources and bounded native examples checked. Versioned implementation choices and workload-dependent latency, allocation placement, retention and tuning remain qualified; no production benchmark or universal ABI guarantee.
 - **medium** — gc-rust-shared-unsafe: Runtime implementation, optimisation, collector defaults/costs or pedagogical model details. Primary standards/runtime/project sources and bounded native examples checked. Versioned implementation choices and workload-dependent latency, allocation placement, retention and tuning remain qualified; no production benchmark or universal ABI guarantee.
+
+## languages: Functional Programming
+
+[Independent verification record](../content/languages/04-functional/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Fixed a real compiled glossary collision in the JavaScript freeze quiz: non-strict opened non-strict evaluation. The prompt now uses JavaScript sloppy-mode script, with an actual whole-renderer assertion for the correct definition and absence of the opposite-sense term.
+- Made safe-publication examples explicitly Java-specific: a volatile field is not a universal language-independent synchronisation rule.
+- Corrected remaining glossary assumptions about Haskell Int and generic 64-bit pointers, JavaScript recursion error types, enumerable object spread, and compiler/runtime-dependent tail support.
+- Strengthened the well-founded-measure definition with finite recursive branching and terminating nonrecursive work; corrected the naive Fibonacci tree claim that every level branches twice.
+- Aligned persistent-structure and HAMT wording with actual implementations: bitmap entries can be key/value pairs or children; balanced trees do not require every leaf at nearly the same depth; memoised work must actually be shared.
+- Scoped immutable identity/change detection, container-functor intuition, async/await behavior, Spark metadata/setup work and F# builder-based computation expressions to their actual contracts.
+- Replaced 23 unrelated question reading links with primary sources for the actual JavaScript, Haskell, Python, Rust or HAMT mechanism being tested.
+- Kept the intentionally lazy ten-million-element fold as an honest bounded incomplete run (status 137 under 384 MB), while independently running the exact strict counterpart and finite forcing/space models. No portable OOM threshold is claimed.
+
+Remaining gaps:
+
+- The original module teaches practical monad patterns, not a full category-theory development or general proofs for partial/effectful programs.
+- Promise cancellation and scheduling, transformer stacks, streaming-library resource protocols, and library implementation internals are qualified introductory coverage rather than exhaustive implementations.
+- No production performance benchmark or universal memory threshold is claimed; vector allocation is an explicit pointer-payload model and collector costs depend on workload.
+- No arbitrary-program functor/monad proof, portable recursion threshold or production benchmark is claimed. The lazy ten-million fold remains a bounded incomplete execution; strict counterpart and finite forcing/law models pass.
+- Runtime comparison rows without executable fences are primary-source reviewed. Native displayed Python/Node/Haskell/Rust code and supplemental Java Optional cases were exercised with explicit local fixtures; no real external service is called.
+
+Low-confidence areas:
+
+- **medium** — fp-runtime-tail-guarantees: Tail support is compiler, engine and mode dependent; official rules and installed runtime checks do not establish an exhaustive current engine matrix.. Tail support is compiler, engine and mode dependent; official rules and installed runtime checks do not establish an exhaustive current engine matrix.
+- **medium** — fp-branching-and-strictness: Exact recursion arithmetic is verified; GHC transformations and the space of a lazy accumulator depend on execution mode and numeric representation.. Exact recursion arithmetic is verified; GHC transformations and the space of a lazy accumulator depend on execution mode and numeric representation.
+- **medium** — fp-generator-streams: Standard rules and current official APIs are verified; installed engine support and query-planner optimisations can change.. Standard rules and current official APIs are verified; installed engine support and query-planner optimisations can change.
+- **medium** — fp-lazy-resource-costs: The exact illustrative ten-million-element lazy fold was attempted under 384 MB and terminated with status 137 before completion. This is a bounded incomplete run, not a portable OOM proof. The exact strict counterpart returned 50,000,005,000,000; smaller lazy/strict and forcing semantics passed.. The exact illustrative ten-million-element lazy fold was attempted under 384 MB and terminated with status 137 before completion. This is a bounded incomplete run, not a portable OOM proof. The exact strict counterpart returned 50,000,005,000,000; smaller lazy/strict and forcing semantics passed.
+- **medium** — fp-maybe-mapping: Laws are checked on explicitly pure finite value models, not all Python objects, partial callbacks or observable allocation identity.. Laws are checked on explicitly pure finite value models, not all Python objects, partial callbacks or observable allocation identity.
+- **medium** — fp-list-async-chains: The chaining analogies are source-checked; Promise scheduling, error conversion and builder-based computation expressions keep their own semantics.. The chaining analogies are source-checked; Promise scheduling, error conversion and builder-based computation expressions keep their own semantics.
+- **medium** — fp-effect-boundaries: Promise assimilation and current error/type APIs are primary-source verified. No unrestricted Promise monad instance or universal compile-time error enforcement is asserted.. Promise assimilation and current error/type APIs are primary-source verified. No unrestricted Promise monad instance or universal compile-time error enforcement is asserted.
+- **medium** — fp-hamt-updates: Layout and thresholds refer to documented implementations. Exact payload arithmetic is a model, not a measured allocation or latency ratio.. Layout and thresholds refer to documented implementations. Exact payload arithmetic is a model, not a measured allocation or latency ratio.
+- **medium** — fp-snapshot-sharing: Reference checks and immutable sharing require the documented API, publication and lifetime assumptions; no universal speed or render guarantee is claimed.. Reference checks and immutable sharing require the documented API, publication and lifetime assumptions; no universal speed or render guarantee is claimed.
+- **medium** — fp-transient-builds: Current library ownership/lifetime contracts and CPython implementation were checked; allocation and performance depend on library version and workload.. Current library ownership/lifetime contracts and CPython implementation were checked; allocation and performance depend on library version and workload.
 
 ## synth: Sound & Digital Audio
 

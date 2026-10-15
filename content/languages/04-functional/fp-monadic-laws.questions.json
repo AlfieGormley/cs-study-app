@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fp-functors-monads-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You refactor `m.flat_map(f).flat_map(g)` into `m.flat_map(h)` where `h = lambda x: f(x).flat_map(g)`, pulling two steps into one helper. Which monad law guarantees the result is the same?",
+    "options": [
+      {
+        "text": "Wrapping then chaining does nothing extra (left identity)",
+        "explanation": "That law is about `Some(x).flat_map(f)` equalling `f(x)`. It doesn't say anything about regrouping two steps."
+      },
+      {
+        "text": "Chaining with wrap does nothing (right identity)",
+        "explanation": "That law says `m.flat_map(Some)` is `m`. No wrap function appears in this refactor."
+      },
+      {
+        "text": "Grouping doesn't matter (associativity)",
+        "explanation": "Correct. Associativity says you can bracket a chain of steps however you like, so extracting or inlining a helper is safe."
+      },
+      {
+        "text": "The functor law that mapping identity does nothing",
+        "explanation": "That's a law for `map`, and the refactor is about the nesting of `flat_map`s, not the identity function."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Write both sides with brackets:\n\n```formula\n(m >>= f) >>= g\n  = m >>= (λx. f(x) >>= g)\nwhere\n>>=: \"bind\", Haskell's symbol for flat_map: m >>= f means m.flat_map(f)\nm: the starting box value\nf, g: the two box-returning steps\nx: the plain value inside m, passed to the combined step\nλ: lambda, marking an anonymous function: λx. e takes x and returns e (in Python, lambda x: e; in Haskell, \\x -> e)\nIn words: running f then g as two separate binds gives the same result as one bind of the combined step \"f, then g\".\n```\n\nThe first runs `f` on `m`, then `g` on the result. The second packages 'run `f`, then `g`' as one function and runs that on `m`. Associativity says these are always equal.\n\nIn practice, that justifies regrouping lawful chains. Concrete async/Rust refactors must additionally preserve scheduling, cancellation, error conversion and resource lifetimes.",
+    "link": {
+      "title": "Haskell base: functor and monad laws",
+      "url": "https://hackage.haskell.org/package/base/docs/Control-Monad.html"
+    }
+  },
+  {
+    "id": "fp-functors-monads-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A teammate writes `flat_map` for `Maybe` as `return Some(f(self.value))` (when a value is present). What does `Some(2).flat_map(lambda x: Some(x + 1))` return, and which law is broken?",
+    "options": [
+      {
+        "text": "`Some(3)`; no law is broken",
+        "explanation": "The extra `Some(...)` wrap means the function's own box gets wrapped again, so you don't get `Some(3)`."
+      },
+      {
+        "text": "`Some(Some(3))`; left identity is broken, since `Some(2).flat_map(f)` should equal `f(2)`, which is `Some(3)`",
+        "explanation": "Correct. This 'flat_map' is really `map`: it doesn't flatten. The left identity law catches it directly."
+      },
+      {
+        "text": "`Some(Some(3))`; associativity is broken but the identities hold",
+        "explanation": "Left identity already fails on this single call: `f(2)` is `Some(3)`, but the result is `Some(Some(3))`."
+      },
+      {
+        "text": "`Nothing`, because the value is double-wrapped",
+        "explanation": "Nothing makes the result empty; `ok` is true at both levels. It's simply nested one level too deep."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `Some(2)` has a value, so the buggy code runs `Some(f(2))`.\n2. `f(2)` = `Some(3)`.\n3. Result: `Some(Some(3))`.\n\nLeft identity says wrapping a value and then chaining `f` must be the same as just calling `f`:\n\n```formula\nwrap(x) >>= f = f(x)\nSome(2) >>= f = f(2) = Some(3)\nwhere\n>>=: \"bind\", Haskell's symbol for flat_map: m >>= f means m.flat_map(f)\nwrap: put a plain value into a box; for Maybe, that is Some\nSome: the Maybe constructor for a present value\nx: any plain value, here 2\nf: the box-returning function lambda x: Some(x + 1)\nIn words: binding f onto a freshly wrapped 2 must give exactly f(2), which is Some(3).\n```\n\nThe buggy version returns `Some(Some(3))` instead, which is not `Some(3)`, so it breaks the law.\n\nThe fix is to return `f(self.value)` unwrapped. Writing the three laws as unit tests is a cheap way to catch this kind of bug in a hand-rolled box type.",
+    "link": {
+      "title": "Haskell base: functor and monad laws",
+      "url": "https://hackage.haskell.org/package/base/docs/Control-Monad.html"
+    }
+  }
+]

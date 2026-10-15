@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fp-persistent-data-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You update one element of a persistent vector of about 1,000,000 elements (a 4-level, 32-way trie, 8-byte pointers). Ignoring headers, alignment, metadata and tail handling, roughly how much pointer-slot payload is copied, compared with copying a flat array of 1,000,000 pointers?",
+    "options": [
+      {
+        "text": "About 32 bytes versus 8 MB",
+        "explanation": "Only one slot changes, but whole nodes are copied, not single slots; each node is a 32-pointer array."
+      },
+      {
+        "text": "About 1 KB versus 8 MB",
+        "explanation": "Correct. 4 nodes on the path, each 32 pointers × 8 bytes = 256 bytes, so about 1,024 bytes. A full copy is 1,000,000 × 8 = 8 MB."
+      },
+      {
+        "text": "About 256 KB versus 8 MB",
+        "explanation": "That would be copying about a thousand nodes. Path copying copies only the 4 on the path."
+      },
+      {
+        "text": "8 MB either way",
+        "explanation": "Path copying shares every node off the path, so it doesn't copy the whole vector."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nL = ⌈log_32(1000000)⌉ = 4\nM_path = L × 32 × 8 B\nM_path = 4 × 32 × 8 B = 1024 B\nM_full = 10^6 × 8 B = 8 MB\nwhere\nL: the number of levels on the path from root to element\nlog_32: the base-32 logarithm: how many times you divide by 32 to reach 1\n⌈ ⌉: the ceiling: round up to a whole number\nM_path: the memory allocated by the update: one fresh 32-slot node per level\nM_full: the memory to copy a flat array of a million pointers\n32: the number of pointer slots per node\n8: the size of one pointer, in bytes\nB: bytes\nMB: megabytes, millions of bytes\nIn words: 4 nodes of 256 bytes is 1,024 bytes in this pointer-slot model, against 8 MB for a full copy.\n```\n\nThe flat payload is 7,812.5 times the path payload. Actual allocation depends on headers, alignment, representation, metadata and tail handling. The trade-off is that a lookup does 4 dependent pointer loads instead of 1.",
+    "link": {
+      "title": "Data Structures — Clojure reference",
+      "url": "https://clojure.org/reference/data_structures"
+    }
+  },
+  {
+    "id": "fp-persistent-data-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A simplified HAMT bitmap node storing only child pointers has the bitmap `0b10110` (bit 0 is the rightmost) and a compact child array. A lookup's 5 hash bits select slot 4. Which array index holds that child?",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "That would be true in an uncompressed 32-slot array. The compact array only stores occupied slots, so you count set bits instead."
+      },
+      {
+        "text": "2",
+        "explanation": "Correct. Bits 1, 2 and 4 are set. Slots 1 and 2 come before slot 4, so the child is at array index 2."
+      },
+      {
+        "text": "3",
+        "explanation": "That's the total number of set bits. The index is the number of set bits *below* slot 4."
+      },
+      {
+        "text": "The child is absent",
+        "explanation": "Bit 4 is set (0b1_0110), so the slot is occupied. An absent slot would have its bit clear."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Bitmap `0b10110`: bits set at positions 1, 2, 4.\n2. Check bit 4 is set: yes, so a child exists.\n3. Count the set bits below slot 4:\n\n```formula\nidx = popcount(bm & (2^s − 1))\nidx = popcount(0b10110 & 0b01111)\nidx = popcount(0b00110) = 2\nwhere\nidx: the child's position in the compact array, counting from 0\npopcount: population count: the number of 1 bits in a binary number\nbm: the node's bitmap, 0b10110 (one bit per slot; 1 means occupied)\ns: the slot chosen by the hash bits, here 4\n2^s − 1: a mask whose s lowest bits are 1, here 0b01111\n&: bitwise AND: keeps a bit only where both numbers have a 1\n0b: prefix marking a binary number\nIn words: keep only the bitmap bits for slots below s, count them, and that count is where the child sits in the compact array.\n```\n\n4. Two occupied slots (1 and 2) come before slot 4, so it's array index 2.\n\n```\nslot:  4 3 2 1 0\nbit:   1 0 1 1 0\narray: [s1, s2, s4]\nindex:   0   1   2\n```\n\nPopulation count has efficient hardware support on many targets, but generated instructions and cost vary; compression is not free.",
+    "link": {
+      "title": "Clojure Hamt — primary reference",
+      "url": "https://raw.githubusercontent.com/clojure/clojure/master/src/jvm/clojure/lang/PersistentHashMap.java"
+    }
+  }
+]

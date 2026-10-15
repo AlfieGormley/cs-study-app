@@ -1,0 +1,130 @@
+[
+  {
+    "id": "fp-laziness-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\n# The first sum consumes this generator.\nsq = (x * x for x in range(4))\nprint(sum(sq))\nprint(sum(sq))\n```",
+    "options": [
+      {
+        "text": "`14` then `14`",
+        "explanation": "That's what you'd get with a list. A generator can be consumed only once, so the second `sum` sees nothing."
+      },
+      {
+        "text": "`14` then `0`",
+        "explanation": "Correct. The first `sum` exhausts the generator. The second iterates an empty generator and returns the sum of nothing, 0."
+      },
+      {
+        "text": "`14` then an error",
+        "explanation": "Iterating an exhausted generator isn't an error; it simply yields no more items."
+      },
+      {
+        "text": "`30` then `0`",
+        "explanation": "0² + 1² + 2² + 3² = 0 + 1 + 4 + 9 = 14. `range(4)` stops before 4, so 16 isn't included."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `range(4)` gives 0, 1, 2, 3, so the squares are 0, 1, 4, 9.\n2. First `sum`: 0 + 1 + 4 + 9 = 14. The generator is now exhausted.\n3. Second `sum`: the generator yields nothing, and `sum([])` is **0**.\n\nThis one-shot behaviour causes real bugs: a function that loops over its argument twice (say, once to validate and once to process) silently processes nothing if you pass it a generator. Use a list, or tee with care: tee buffers items when consumers diverge, potentially retaining the whole input.",
+    "link": {
+      "title": "Python Expressions — primary reference",
+      "url": "https://docs.python.org/3/reference/expressions.html"
+    }
+  },
+  {
+    "id": "fp-laziness-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This function raises `ValueError: I/O operation on closed file` when its result is iterated. Which rewrite fixes it while keeping it lazy?\n\n```python\n# The returned generator outlives with.\ndef read_lines(path):\n    with open(path) as f:\n        return (l.strip() for l in f)\n```",
+    "options": [
+      {
+        "text": "Replace `return (...)` with `yield from (l.strip() for l in f)`",
+        "explanation": "Correct. The function becomes a generator itself, so the `with` block stays open until the caller has finished iterating (or the generator is closed)."
+      },
+      {
+        "text": "Replace `return (...)` with `return [l.strip() for l in f]`",
+        "explanation": "This does fix the error, but it reads the whole file into a list immediately, so it's no longer lazy."
+      },
+      {
+        "text": "Move `return` outside the `with` block",
+        "explanation": "The file is still closed when the `with` block ends, before the caller starts iterating, so the error remains."
+      },
+      {
+        "text": "Open the file with `open(path, \"r\", buffering=0)`",
+        "explanation": "Text I/O with buffering switched off also raises ValueError; changing buffering would not fix lifetime. The issue is lifetime: `with` closes it on `return`, before any line is read."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Why it fails:\n\n1. `return (...)` creates a generator but doesn't read any lines.\n2. Returning leaves the `with` block, which closes `f`.\n3. The caller iterates; the generator asks the closed file for a line, and Python raises `ValueError`.\n\nThe fix is to make `read_lines` itself a generator:\n\n```python\n# Yielding keeps the context suspended.\ndef read_lines(path):\n    with open(path) as f:\n        yield from (l.strip()\n                    for l in f)\n```\n\nNow the body (including the open `with`) is suspended between items and exits on exhaustion, explicit close, or an escaping exception. If a caller stops early while retaining the generator, it must close it to release the file promptly. The list version also works, but gives up streaming.",
+    "link": {
+      "title": "Python Expressions — primary reference",
+      "url": "https://docs.python.org/3/reference/expressions.html"
+    }
+  },
+  {
+    "id": "fp-laziness-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In an execution where the compiler does not strictify the lazy fold, why can foldl (+) 0 [1..10^7] retain far more accumulator memory than foldl' (+) 0 [1..10^7]?",
+    "options": [
+      {
+        "text": "`foldl` copies the list before folding it",
+        "explanation": "Neither fold copies the list. The memory goes into the accumulator, not the input."
+      },
+      {
+        "text": "`foldl` builds a chain of about 10^7 unevaluated additions in the accumulator, which are only collapsed at the end; `foldl'` forces the accumulator at each step",
+        "explanation": "Correct. Laziness means `acc + x` is stored as a thunk each time, nesting deeper and deeper. `foldl'` uses `seq` to evaluate it to a number before moving on, so it avoids the linear thunk chain; storage for a growing arbitrary-precision number is separate."
+      },
+      {
+        "text": "`foldl'` runs in parallel and `foldl` doesn't",
+        "explanation": "The prime means *strict*, not parallel. Both are sequential left folds."
+      },
+      {
+        "text": "`foldl` is not tail recursive",
+        "explanation": "`foldl` is tail recursive. The problem isn't stack frames from the recursion itself but the huge thunk it builds up as the accumulator."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Expand a few steps of the lazy `foldl`:\n\n```\nfoldl (+) 0 [1,2,3,...]\n= foldl (+) (0+1) [2,3,...]\n= foldl (+) ((0+1)+2) [3,...]\n= ...\n```\n\nNothing forces `(0+1)+2`, so after n steps the accumulator is a thunk of n nested additions, and evaluating it at the end can overflow the stack:\n\n```formula\nacc_n = ((0 + x_1) + x_2) + ... + x_n\nM_lazy(n) = O(n)\nM_strict(n) = O(1)\nwhere\nacc_n: the lazy accumulator after n steps, stored as unevaluated additions\nx_1, x_2, x_n: the list elements, in order\nn: the number of elements folded so far\nM_lazy(n): the memory held by the lazy accumulator: one suspended addition per element\nM_strict(n): the accumulator memory when foldl' forces each step, counted in values held\nO(n): Big-O notation: grows in proportion to n\nO(1): Big-O notation: stays below a fixed bound (here, one number), however large n is\n...: \"and so on\" for the elements in between\nIn words: the lazy fold keeps one pending addition per element, so 10^7 elements leave 10^7 thunks; the strict fold keeps just the running total.\n```\n\n`foldl'` does `acc' = acc + x` and then `seq acc' ...`, so numeric addition is forced each step; arbitrary-precision values may still grow in size:\n\n```\n0 -> 1 -> 3 -> 6 -> ...\n```\n\nThat uses a bounded number of accumulator values, rather than n suspended additions; bit storage depends on the numeric type. This is the classic laziness **space leak**: the final value is small, but the thunks describing it are huge.",
+    "link": {
+      "title": "Haskell List",
+      "url": "https://hackage.haskell.org/package/base/docs/Data-List.html"
+    }
+  },
+  {
+    "id": "fp-laziness-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In Haskell, forcing undefined raises an exception (which can be caught in an appropriate IO context). Which of these evaluate without crashing? Select all that apply.",
+    "options": [
+      {
+        "text": "`seq (undefined, 1) \"ok\"`",
+        "explanation": "Correct. `seq` forces its first argument only to weak head normal form, i.e. the outermost constructor. The pair constructor is there, so its contents are never touched."
+      },
+      {
+        "text": "`seq undefined \"ok\"`",
+        "explanation": "To reach WHNF, `seq` must evaluate `undefined` itself, which crashes."
+      },
+      {
+        "text": "`length [undefined, undefined]`",
+        "explanation": "Correct. `length` walks the list's spine (the `:` cells) but never looks at the elements, so the result is 2."
+      },
+      {
+        "text": "`fst (1, undefined)`",
+        "explanation": "Correct. `fst` returns the first component and never inspects the second."
+      },
+      {
+        "text": "`sum [1, undefined]`",
+        "explanation": "`sum` needs the value of every element to add them, so it forces `undefined` and crashes."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "For each expression, ask what actually gets inspected.\n\n1. `seq (undefined, 1) ...` - WHNF of a pair is just `(_, _)`. Safe.\n2. `seq undefined ...` - WHNF of `undefined` means evaluating it. Crash.\n3. `length` - counts `:` cells only. Returns 2.\n4. `fst` - takes the left slot. Returns 1.\n5. `sum` - must add `1 + undefined`. Crash.\n\nThis is why `seq` alone doesn't fix every space leak: forcing a pair or a list only forces its outer shell. deepseq follows its NFData instance to force represented data more deeply; it does not evaluate arbitrary function bodies.",
+    "link": {
+      "title": "Haskell List",
+      "url": "https://hackage.haskell.org/package/base/docs/Data-List.html"
+    }
+  }
+]

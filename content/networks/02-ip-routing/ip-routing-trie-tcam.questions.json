@@ -1,0 +1,96 @@
+[
+  {
+    "id": "ip-routing-basics-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A plain binary trie holds any valid IPv4 prefix set. What is the maximum number of bit-consuming edges followed from its root in one lookup? Do not count the root as an edge.",
+    "options": [
+      {
+        "text": "About 20, the depth of a balanced tree over a million routes",
+        "explanation": "That's the depth of a balanced search tree over N keys:\n\n```formula\nlog_2(N) = log_2(1,000,000) ≈ 20\nwhere\nlog_2(N): the base-2 logarithm: how many times N can be halved before reaching 1\nN: the number of keys (routes), here a million\n≈: approximately equal to\nIn words: a balanced tree over a million keys is about 20 levels deep.\n```\n\nA trie's depth is set by the key length, not the number of keys."
+      },
+      {
+        "text": "About 1,000,000, one per prefix",
+        "explanation": "That's the cost of checking every route. The point of a trie is to avoid looking at every route."
+      },
+      {
+        "text": "1, because tries use hashing",
+        "explanation": "A plain binary trie follows address bits; it does not use one hash lookup. TCAM timing is hardware-dependent."
+      },
+      {
+        "text": "32, one per address bit",
+        "explanation": "Correct. Each step consumes one bit of the destination, so the walk is at most 32 levels for IPv4 (128 for IPv6). Multibit tries cut this by taking several bits per step."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```formula\ns ≤ W = 32\nwhere\ns: the edges followed from the root in one lookup\nW: the address width in bits, 32 for IPv4\n≤: is at most\nIn words: each edge consumes one address bit, so there can be no more edges than bits.\n```\n\nThe root has depth 0 and an IPv4 /32 node has depth 32, so a lookup visits at most 33 nodes including the root. The algorithmic bound is O(W), Big-O notation for \"grows at most in proportion to W\". Storage arrangement, caching and compression determine actual accesses and time; they are not necessarily one fixed-cost read per abstract node.",
+    "link": {
+      "title": "Trie — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Trie"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A software bug loads a router's TCAM with entries sorted **shortest prefix first**, including 0.0.0.0/0. The TCAM returns the first matching entry. What happens to traffic?",
+    "options": [
+      {
+        "text": "Nothing changes; TCAM always finds the longest matching IP prefix regardless of order",
+        "explanation": "The question specifies a first-match priority TCAM. This model needs an ordering/priority scheme that implements LPM; not every hardware design has identical ordering semantics."
+      },
+      {
+        "text": "Everything goes to the default route, because 0.0.0.0/0 is first and matches every address",
+        "explanation": "Correct. The /0 entry is all wildcards, so it matches every lookup. With it at the top, every more specific route is hidden behind it."
+      },
+      {
+        "text": "Lookups slow down to a linear scan",
+        "explanation": "Changing entry order changes this priority model's chosen match; it does not turn the specified parallel matching operation into a sequential scan."
+      },
+      {
+        "text": "Packets with no specific route are dropped",
+        "explanation": "It's the reverse: the default matches first, so even destinations with specific routes go to the default next hop."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. TCAM entry for 0.0.0.0/0: 32 \"don't care\" bits. It matches anything.\n2. Every entry is compared in parallel; the priority encoder picks the lowest-index match.\n3. With shortest first, index 0 is the /0. It always matches, so it always wins.\n4. Result: every packet goes to the default next hop.\n5. Correct ordering puts /32s first and /0 last, so the first match is the longest.",
+    "link": {
+      "title": "Content-addressable memory — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Content-addressable_memory"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about hardware forwarding capacity and Cisco's documented 2014 TCAM-exhaustion issue are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "Some documented Catalyst 6500/7600 configurations had a finite default FIB TCAM allocation and could enter an exception state when exceeded",
+        "explanation": "Correct. Cisco FN63866 documents the affected configurations and default 512k allocation; this is not a universal limit for all routers."
+      },
+      {
+        "text": "Cisco reported that some entries could be software switched, with possible elevated CPU usage and connectivity impact",
+        "explanation": "Correct for the documented exception condition. This does not prove every overflowing router uses the same fallback."
+      },
+      {
+        "text": "TCAMs are used because they are cheap and low-power compared with DRAM",
+        "explanation": "TCAM provides parallel masked matching, but its cost, power and timing depend on the design. It is not universally cheap, low-power or a one-cycle complete forwarding pipeline."
+      },
+      {
+        "text": "Correct aggregation can reduce the prefix entries a receiving router must represent",
+        "explanation": "Correct. Actual FIB savings depend on accepted routes, remaining more-specifics, address families and hardware encoding; every advertisement need not become one entry everywhere."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Cisco's field notice documents particular finite TCAM allocations and exception behaviour, including software switching of some entries. Routing visibility and hardware allocation are deployment-specific. Proper aggregation can reduce represented prefixes, but advertised aggregates must preserve intended reachability and cannot be treated as an unconditional fix for every capacity problem.",
+    "link": {
+      "title": "Cisco FN63866: TCAM exhaustion",
+      "url": "https://www.cisco.com/c/en/us/support/docs/field-notices/638/fn63866.html"
+    }
+  }
+]

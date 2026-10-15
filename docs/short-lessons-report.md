@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 32/76. Updated 2026-10-15.
+Verified modules: 33/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -38,6 +38,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | os/I/O & Event-Driven Servers | 6 | 32 | 67 | 29 | 356 | 455 | 66 |
 | os/Virtualisation & Containers | 6 | 29 | 66 | 34 | 510 | 605 | 36 |
 | networks/Network Foundations & the Link Layer | 6 | 37 | 72 | 81 | 431 | 629 | 41 |
+| networks/IP, Addressing & Routing | 7 | 38 | 84 | 54 | 435 | 611 | 64 |
 | networks/Transport Layer: TCP & UDP in Depth | 7 | 43 | 81 | 89 | 319 | 532 | 48 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
@@ -3216,6 +3217,40 @@ Low-confidence areas:
 - **medium** — nf-shared-ethernet: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
 - **medium** — nf-arp-cache-failover: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
 - **medium** — nf-stp-recovery: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
+
+## networks: IP, Addressing & Routing
+
+[Independent verification record](../content/networks/02-ip-routing/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- maxLength applies to a particular validated record; another covering record can authorise the route. NotFound uses validated records, and the AS path supplies a claimed origin rather than authenticated history.
+- Replaced the misleading independent-lost-KEEPALIVE model with accepted UPDATE/KEEPALIVE receipt, the one-third scheduling recommendation and TCP delivery/retransmission limitations.
+- Qualified RIP’s ordinary one-cost links and OSPF DR/BDR adjacency-count domain, compatibility and convergence assumptions. Reverse-path checks do not authenticate every source or universally prevent spoofing.
+- Removed actual HTTP-field, cryptographic-integrity, CPU-word-size, TLS-proxy, software-service-layer, TCP-listening-socket, TCP/QUIC-PTO, register-allocation, SMTP reverse-path, unit-operation-cost, split-DNS, canary-traffic, Agile-WIP, nanosecond, global-TLB-page and IPsec NAT-T matches from active prose and questions. Added precise application NAT traversal and routing link cost concepts.
+- An observed transport address need not be globally reachable or usable by a different peer.
+- Explained IPv6 Next Header extension headers and ICMPv4/ICMPv6 numbers, the zero-exponent power-of-two case and the /32 exception to the interesting-octet shortcut. Removed unsourced unicast prevalence.
+- Preserved and checked RFC 6691 MSS/option distinctions, ID-wrap dimensions, 4-to-3 modulo assumptions, scoped OSPF flooding, DHCP cookie/BOOTP overlap, qualified defaults/traversal/DAD/ARP guarantees, standalone prerequisites and explanatory code comments.
+
+Remaining gaps:
+
+- No live BGP announcements, rogue DHCP injection, host route changes, firewall changes or physical-router experiments were performed. No protocol convergence, forwarding latency, current market share or Internet adoption benchmark is claimed.
+- The Python examples are bounded teaching models, not complete parsers, routers, NATs, OSPF speakers or DHCP clients. Their omissions are retained beside the code.
+- The illustrative Linux ip-route/ip-rule mutation commands were source-checked rather than executed against a full matching topology; this remains a concrete execution gap for the verifier.
+- Author phone verification uses exact app CSS, Markdown renderer, glossary compiler section and diagram compiler in an isolated fixture. Full production lesson/quiz routes, progress migration, PWA update and offline checks remain coordinating integration work after independent verification.
+- Inherited omitted-after-review notes remain explicit: no unsupported universal OS defaults, pricing/allocation timeline, route/adoption counts, timing guarantees, client-mode prevalence or incident financial-loss total was reintroduced.
+- The standalone OSPF cost model does not model platform maximum-cost handling or every vendor rounding policy; its examples stay within the specified positive 16-bit interface-cost range.
+- All 435 glossary definitions, examples and aliases were read. The actual compiled renderer was separately inspected for opposite meanings; precise application NAT traversal and routing link cost were added rather than changing other modules’ aliases.
+- Primary-source review uses relevant passages, not a claim to have read entire protocol specifications or to have independently reproduced historical Internet outages.
+
+Low-confidence areas:
+
+- **medium** — ip-ospf-interface-costs: Integer truncation in the stated classic Cisco-style bandwidth-derived cost model.. The fetched Cisco FAQ states reference/interface bandwidth, default 100 Mbit/s, a 16-bit limit and manual overrides. Truncation is a teaching-model assumption consistent with quoted examples, not a portable protocol mandate or independently measured current router behaviour.
+- **medium** — ip-ospf-worked-spf: The 1,000-vertex/3,000-edge illustration of about 40,000 counted steps.. The substituted asymptotic expression is correct, but omits constants, implementation details and arbitrary-precision costs. It is explicitly an order-of-magnitude illustration, not a runtime measurement.
+- **medium** — ip-bgp-rpki-validation: ASPA verification specification status.. The retrieved primary datatracker page identifies draft-ietf-sidrops-aspa-verification-28, dated 24 August 2026, still an Internet-Draft as of this review. Status and validation coverage can change.
+- **medium** — ip-routing-ecmp-asymmetry: Illustrative source-policy route/rule mutation commands.. Syntax, separate table reachability and rule precedence were independently checked against fetched iproute2 manuals. No matching Linux topology was configured or mutated in this review; the Python lookup does not establish those exact commands at runtime.
+- **medium** — ip-bgp-routing-incidents: Historical incident details and approximate duration in the Facebook glossary entry.. Primary RIPE diagrams, affected-network postmortems and original Cloudflare analysis support the reported narratives, not independent packet-level reconstruction. The roughly six-hour duration remains an approximate timeline description rather than a duration stated in Meta’s post.
+- **medium** — glossary: Vendor/platform/default and optional ecosystem descriptions listed as medium-confidence glossary entries.. Primary documentation and standards support the stated examples and qualified mechanisms. They do not establish universal hardware cost, network prevalence, current platform defaults, measured convergence or every product configuration. Generic supplementary descriptions retain their existing secondary links; no benchmark or universal configuration claim is inferred.
 
 ## networks: Transport Layer: TCP & UDP in Depth
 

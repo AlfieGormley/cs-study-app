@@ -1,0 +1,96 @@
+[
+  {
+    "id": "ip-dhcp-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A desktop is configured to use DHCPv4 with automatic link-local fallback. Its logs show unanswered DHCP requests followed by self-configuration of 169.254.37.200. What happened?",
+    "options": [
+      {
+        "text": "The ISP has assigned it a carrier-grade NAT address",
+        "explanation": "169.254.0.0/16 is IPv4 link-local, not the 100.64.0.0/10 shared address space reserved for uses such as carrier-grade NAT."
+      },
+      {
+        "text": "It is using a private address from the office DHCP pool, so the router must be down",
+        "explanation": "RFC 3927 says link-local addresses SHOULD NOT be configured manually or by DHCP. Here the logs establish local fallback rather than a normal lease; office networks are not restricted to RFC 1918 addressing."
+      },
+      {
+        "text": "Its IPv6 link-local address is being shown as IPv4",
+        "explanation": "IPv6 link-local is fe80::/10. 169.254.0.0/16 is the IPv4 link-local range."
+      },
+      {
+        "text": "DHCP failed, so it self-assigned an IPv4 link-local address",
+        "explanation": "Correct in this explicitly logged case. The host fell back after unanswered DHCP requests. The link-local address itself would not prove the cause without that context."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. 169.254.37.200 lies in the automatically selectable IPv4 link-local range.\n2. Here the configuration and logs establish that unanswered DHCP requests preceded fallback. Link-local alone does not establish that sequence in every system.\n3. Check server reachability, pool availability, VLAN membership, relay configuration and packet filtering. Link-local traffic cannot be forwarded off-link.",
+    "link": {
+      "title": "RFC 3927: IPv4 link-local addressing",
+      "url": "https://www.rfc-editor.org/rfc/rfc3927"
+    }
+  },
+  {
+    "id": "ip-dhcp-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Following the lesson's end-to-end walk-through, the laptop (192.168.1.42, port 51000) sends a TCP SYN with TTL 64 to 198.51.100.80:443. The home router's public address is 203.0.113.7 and it picks NAT port 40000. What is true of the packet as it leaves the router's WAN interface? Assume this illustrative IPv4 router decrements TTL by exactly one and uses Ethernet on the WAN.",
+    "options": [
+      {
+        "text": "Source 192.168.1.42:51000, destination 198.51.100.80:443, TTL 64",
+        "explanation": "That's the packet on the LAN. The router decrements TTL and NAT rewrites the private source before it leaves."
+      },
+      {
+        "text": "Source 203.0.113.7:40000, destination 198.51.100.80:443, TTL 63",
+        "explanation": "Correct. NAPT replaces the private source address and port, the destination is unchanged, and TTL drops by one at the router."
+      },
+      {
+        "text": "Source 203.0.113.7:40000, destination the ISP router's IP, TTL 63",
+        "explanation": "In this ordinary forwarding example, the IP destination stays the remote server. The Ethernet destination identifies the ISP next hop."
+      },
+      {
+        "text": "Source 203.0.113.7:51000, destination 198.51.100.80:443, TTL 64",
+        "explanation": "The prompt explicitly assigns translated port 40000, and this router decrements TTL to 63. NAPT can preserve a source port when its mapping policy permits; it does not universally change it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "At the home router:\n\n1. TTL 64 → **63**; recompute header checksum.\n2. LPM: default route towards the ISP.\n3. NAPT: 192.168.1.42:51000 → **203.0.113.7:40000**; record the mapping; fix the IP and TCP checksums.\n4. Destination stays **198.51.100.80:443**.\n5. New frame: source MAC = router's WAN MAC, destination MAC = ISP next hop.",
+    "link": {
+      "title": "Network address translation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Network_address_translation"
+    }
+  },
+  {
+    "id": "ip-dhcp-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about configuring IPv6 hosts are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "DHCPv6 does not supply the standard IPv6 default-router discovery mechanism; hosts normally learn default routers through RAs",
+        "explanation": "Correct. Address leasing and default-router discovery are separate. Static default routes are also possible, so “always from RAs” would be too strong."
+      },
+      {
+        "text": "DHCPv6 uses UDP ports 546 (client) and 547 (server)",
+        "explanation": "Correct. Different ports from DHCPv4's 68 and 67."
+      },
+      {
+        "text": "DHCPv6 clients find servers by broadcasting to 255.255.255.255",
+        "explanation": "IPv6 has no broadcast at all. DHCPv6 clients use a link-local multicast group instead."
+      },
+      {
+        "text": "DHCPv6 prefix delegation can give a requesting router a /56, from which it can form 256 /64 prefixes",
+        "explanation": "Correct. 64 − 56 = 8 subnet bits, and 8 copies of 2 multiplied together is 256 /64s. Delegation size and usable subnets depend on provider policy and configuration."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. DHCPv6 is separate from the standard RA-based default-router discovery mechanism: true. Static routes are an alternative.\n2. DHCPv6 uses UDP 546 for clients and 547 for servers/relays: true.\n3. IPv4 broadcast 255.255.255.255 is not used by IPv6 DHCP: false.\n4. A /56 contains 256 /64 prefixes: true; this arithmetic does not assert every provider delegates /56.\n\n```formula\nS = 2^(64 − 56) = 2^8 = 256\nwhere\nS: the number of /64 prefixes in a /56\n2^8: 8 copies of 2 multiplied together\nIn words: 8 bits between /56 and /64 number 256 subnets.\n```",
+    "link": {
+      "title": "RFC 9915: DHCP for IPv6",
+      "url": "https://www.rfc-editor.org/rfc/rfc9915.html"
+    }
+  }
+]

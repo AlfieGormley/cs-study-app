@@ -1,0 +1,62 @@
+[
+  {
+    "id": "ip-routing-basics-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A switch uses stable per-flow 5-tuple hashing over four equal-cost uplinks. What is a principal reason to choose this instead of per-packet round-robin across paths with different delays?",
+    "options": [
+      {
+        "text": "Hashing spreads load more evenly than round-robin",
+        "explanation": "Round-robin balances packet counts across the four links, but varying packet sizes and link conditions mean that is not necessarily balanced byte load or utilisation. Flow hashing can also be imbalanced when large flows collide."
+      },
+      {
+        "text": "Round-robin isn't allowed by the IP specification",
+        "explanation": "Nothing in IP forbids it. It's avoided for a transport-layer reason."
+      },
+      {
+        "text": "It reduces cross-path reordering that can trigger spurious transport loss recovery",
+        "explanation": "Correct. Path affinity reduces one source of reordering; TCP can tolerate some reordering, and the exact recovery response depends on the algorithm."
+      },
+      {
+        "text": "Hashing lets the switch skip the routing table lookup",
+        "explanation": "The lookup still happens; it returns a set of next hops, and the hash picks one of them."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Packets sent over different paths can arrive out of order because delays differ. Stable flow hashing tends to keep a flow on one next hop while the path set and hash inputs remain stable, reducing that cause of reordering. It does not guarantee order during path changes, and elephant flows can still produce imbalance. Per-packet ECMP is possible; this is a design trade-off, not an IP prohibition.",
+    "link": {
+      "title": "Equal-cost multi-path routing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing"
+    }
+  },
+  {
+    "id": "ip-routing-basics-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux server has eth0 (10.0.0.5/24, default via 10.0.0.1) and eth1 (192.168.50.5/24, connected route only). A SYN from 192.168.60.20 to 192.168.50.5 arrives via eth1. Captures confirm it is accepted and the SYN-ACK leaves eth0, but the required network reply path is via 192.168.50.1. No overriding policy applies. Which change can direct replies from 192.168.50.5 through eth1?",
+    "options": [
+      {
+        "text": "Install a source-specific routing table with the eth1 connected route and gateway default, plus an appropriately prioritised rule for source 192.168.50.5",
+        "explanation": "Correct. The current default selects eth0. A complete source-specific table can select eth1 for replies with this source; a destination-specific route is another option for a narrower requirement."
+      },
+      {
+        "text": "ARP fails on eth1; add a static ARP entry for the client",
+        "explanation": "The client isn't on eth1's link, so the server never ARPs for it. The issue is which route the reply uses."
+      },
+      {
+        "text": "The server's TTL is too low; raise net.ipv4.ip_default_ttl",
+        "explanation": "The captures establish which interface the reply leaves by. Raising TTL does not select the desired next hop."
+      },
+      {
+        "text": "Linux can't reply from a different interface's address; bind the service to 10.0.0.5",
+        "explanation": "Linux will happily send a packet with source 192.168.50.5 out of eth0. That's precisely the problem, not a limitation."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The destination 192.168.60.20 matches neither connected subnet, so the main default selects eth0. For the specified source-specific requirement, an illustrative configuration is:\n\n```sh\nip route add 192.168.50.0/24 \\\n  dev eth1 scope link table 100\nip route add default \\\n  via 192.168.50.1 dev eth1 table 100\nip rule add priority 1000 \\\n  from 192.168.50.5/32 table 100\n```\n\nAssume table 100 and priority 1000 are unused and no earlier rule overrides the lookup. Validate the result with `ip route get` including the source. The table needs gateway reachability, not just a bare default. Firewall and reverse-path settings are separate checks; captures, not missing replies alone, established this route choice.",
+    "link": {
+      "title": "ip-rule(8) manual page",
+      "url": "https://man7.org/linux/man-pages/man8/ip-rule.8.html"
+    }
+  }
+]

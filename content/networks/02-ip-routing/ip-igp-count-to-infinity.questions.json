@@ -1,0 +1,101 @@
+[
+  {
+    "id": "ip-interior-routing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Routers in a line, `N -- C -- B -- A`, run RIP **without** split horizon. B reaches N at 2 via C; A at 3 via B. The B–C link fails. A's next update says \"N: 3\". What does B do? Assume no hold-down or alternative route, and A's stale update arrives before it processes any failure information.",
+    "options": [
+      {
+        "text": "Ignores it, because A is further from N than B used to be",
+        "explanation": "Plain distance vector accepts any route better than what it has. B has nothing now, so 3 + 1 looks like an improvement."
+      },
+      {
+        "text": "Installs N at 3 via A",
+        "explanation": "B must add its routing link cost to A (1 hop). A's 3 becomes B's 4."
+      },
+      {
+        "text": "Marks N unreachable and tells A immediately",
+        "explanation": "That's what triggered updates plus poisoning would aim for, but in this scenario A's update arrives first and B believes it."
+      },
+      {
+        "text": "Installs N at 4 via A, creating a loop between A and B",
+        "explanation": "Correct. B can't know A's route goes through B. Packets for N now bounce A to B to A, and the two routers count up by 2 per exchange until 16."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. B loses its route via C.\n2. A advertises N at 3 (its route via B, but B can't tell).\n3. B computes 1 + 3 = **4 via A** and installs it.\n4. A's route is via B, so A updates to 4 + 1 = 5; then B to 6, and so on.\n5. At 16 both declare N unreachable. Until then packets for N loop until TTL expiry.\n\nSplit horizon would stop step 2: A wouldn't advertise N to B, the neighbour it learnt it from.",
+    "link": {
+      "title": "Distance-vector routing protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Distance-vector_routing_protocol"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are mechanisms distance-vector protocols use to reduce count-to-infinity problems? Select all that apply.",
+    "options": [
+      {
+        "text": "Split horizon",
+        "explanation": "Correct. Suppress reverse advertisements on the incoming interface. This prevents the lesson's two-router feedback example; an existing two-router loop can still require timeout with simple split horizon."
+      },
+      {
+        "text": "Poison reverse",
+        "explanation": "Correct. Advertise the route back to where you learnt it with metric infinity, explicitly telling the neighbour not to use you."
+      },
+      {
+        "text": "Raising infinity from 16 to 255 for larger networks",
+        "explanation": "A bigger infinity makes counting to it take *longer*. RIP's tiny infinity is a deliberate trade-off."
+      },
+      {
+        "text": "Triggered updates",
+        "explanation": "Correct. Triggered updates do not wait for the next periodic update; small randomised delays rate-limit repeated triggers."
+      },
+      {
+        "text": "Implementation-specific hold-down policies",
+        "explanation": "Correct as a possible mitigation. Acceptance rules differ and can delay valid alternatives; RFC 2453 does not prescribe one universal hold-down algorithm."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Count to infinity happens because stale good news (\"I can reach N\") keeps circulating after a failure.\n\n- Split horizon and poison reverse stop the news going back where it came from.\n- Triggered updates spread the bad news faster.\n- Implementation-specific hold-down can restrict stale alternatives after a failure; its rules may also delay valid recovery.\n- A bigger infinity only lengthens the count. That's the odd one out.",
+    "link": {
+      "title": "Split horizon route advertisement — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Split_horizon_route_advertisement"
+    }
+  },
+  {
+    "id": "ip-interior-routing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A RIP network uses split horizon on every router. In which situation can count to infinity still happen?",
+    "options": [
+      {
+        "text": "Never; split horizon eliminates count to infinity",
+        "explanation": "Split horizon does not prevent every loop through three or more routers. Simple split horizon also need not immediately clear an already existing two-router loop."
+      },
+      {
+        "text": "Only when links have different bandwidths",
+        "explanation": "RIP ignores bandwidth. The problem is about topology, not link speed."
+      },
+      {
+        "text": "When the failure is inside a loop of three or more routers, so a stale route can travel round the ring and come back via a different neighbour",
+        "explanation": "Correct. Split horizon stops a route going back the way it came, but in a ring it can go A to B to C and back to A through a different interface, which split horizon allows."
+      },
+      {
+        "text": "Only when hold-down timers are also enabled",
+        "explanation": "Hold-down is a mitigation, not a cause."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Consider a ring A–B–C with the only route to N originally through C. C loses N; A learns the failure but B still has stale reachability via C. B can advertise that stale route to A (a different interface from C). A can then advertise its newly selected route via B to C. C can select A, forming a three-router loop under suitable update ordering. Split horizon alone cannot detect the whole path. Additional controls and eventual unreachable information are required; link-state designs can also have transient forwarding loops during convergence.",
+    "link": {
+      "title": "Split horizon route advertisement — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Split_horizon_route_advertisement"
+    }
+  }
+]

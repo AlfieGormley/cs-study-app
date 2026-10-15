@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 32/76 modules; 223 originals → 1190 short lessons with 2627 focused questions.
+- Independently verified: 33/76 modules; 230 originals → 1228 short lessons with 2711 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `86a766d`, version `6737a7523f6d`, 1147 short lessons/2546 focused questions
-  across 31 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `6ceba26c0ce9`, 32 modules/1190 units/2627 questions.
+- Latest confirmed live release: `17d4498`, version `6ceba26c0ce9`, 1190 short lessons/2627 focused questions
+  across 32 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `e234ebdba0ac`, 33 modules/1228 units/2711 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -19,9 +19,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- networks/net-ip: verifying; /root/network_ip_short_verify.
 - networks/net-application: authoring; /root/network_application_short_author.
 - networks/net-security: authoring; /root/network_security_short_author.
+- networks/net-modern: authoring; /root/network_modern_short_author.
 
 Verification and integration:
 

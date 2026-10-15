@@ -1,0 +1,100 @@
+[
+  {
+    "id": "ip-ipv4-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Classic Unix `traceroute` sends UDP probes to high, unused ports. How does it know a probe has reached the destination itself rather than an intermediate router? Assume replies are permitted and delivered, and the destination really has no UDP socket bound to the probe port.",
+    "options": [
+      {
+        "text": "traceroute compares the reply's source address with a DNS lookup of the target",
+        "explanation": "traceroute does compare addresses, but the stopping signal is the change of ICMP message type. A multi-homed host may even reply from a different address."
+      },
+      {
+        "text": "The destination replies with ICMP Time Exceeded with a special code",
+        "explanation": "For these probes, forwarding TTL expiry produces Time Exceeded. At the destination the unused UDP port instead produces Port Unreachable; Time Exceeded also has a separate reassembly-timeout code."
+      },
+      {
+        "text": "The destination replies with ICMP Port Unreachable, because nothing listens on that port",
+        "explanation": "Correct. A router reports Time Exceeded (type 11); the destination host, finding no process on the UDP port, returns Destination Unreachable, code 3 (port unreachable). That different message ends the trace."
+      },
+      {
+        "text": "The destination replies with a UDP packet echoing the probe",
+        "explanation": "Nothing listens on the port, so there is no application to send UDP back. The reply is ICMP from the kernel."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A probe sent with a small TTL, say 3, reaches the third router with TTL 1; that router decrements it to 0, drops it and sends **ICMP type 11** (Time Exceeded).\n2. When TTL is large enough, the probe reaches the destination intact.\n3. The destination's kernel finds no socket on the probe's destination port and returns **ICMP type 3, code 3** (Port Unreachable).\n4. traceroute sees the different type and stops.\n5. Windows `tracert` uses ICMP Echo probes instead and stops on an Echo Reply (type 0).",
+    "link": {
+      "title": "Traceroute — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Traceroute"
+    }
+  },
+  {
+    "id": "ip-ipv4-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your traceroute shows `* * *` at hop 4, but hops 5 to 9 reply normally and the destination is reached with low latency. What is the best interpretation?",
+    "options": [
+      {
+        "text": "Hop 4 is dropping all traffic, so the path is broken",
+        "explanation": "Later probes reached further nodes, so the observations do not show that all traffic was blocked. Different probes can use different paths."
+      },
+      {
+        "text": "No reply was received for those probes; suppression, filtering or loss are possible, and later probes did reach further",
+        "explanation": "Correct. Stars do not identify whether the probe or response was lost or suppressed, and do not prove a transit outage."
+      },
+      {
+        "text": "The destination is blocking traceroute",
+        "explanation": "The trace includes a destination reply. Missing replies from intermediate probes do not, by themselves, establish that the destination blocks the traffic; filtering can depend on the probe and path."
+      },
+      {
+        "text": "There is a routing loop at hop 4",
+        "explanation": "These observations do not establish a loop. Loops, routing changes and load balancing require additional evidence; repeated addresses are not a universal signature."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each star means the reply deadline for one traceroute probe expired. A router may suppress or rate-limit Time Exceeded; either direction may filter or lose packets. Later replies show successful further reachability for other probes, which can follow different paths. They do not establish that forwarding at one device is entirely faultless or identify the cause of the missing reply.",
+    "link": {
+      "title": "Traceroute — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Traceroute"
+    }
+  },
+  {
+    "id": "ip-ipv4-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about ordinary ICMPv4 error handling are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The error types discussed here quote the offending IP header and at least its first 8 payload bytes when available",
+        "explanation": "Correct. The traditional format supports identifying the original packet. The quote can be longer and cannot contain bytes absent from the triggering packet."
+      },
+      {
+        "text": "A host never generates an ICMP error in response to an ICMP error message",
+        "explanation": "Correct. Otherwise two hosts could bounce errors back and forth indefinitely."
+      },
+      {
+        "text": "Routers commonly rate-limit the ICMP messages they generate",
+        "explanation": "Correct. Rate limiting protects resources and limits error traffic. Missing traceroute replies can also arise from filtering or loss; implementation is not universally a slow CPU path."
+      },
+      {
+        "text": "ICMP runs over UDP port 7",
+        "explanation": "Incorrect. ICMP is carried directly in IP with protocol number 1. Port 7 is the old UDP/TCP echo service, unrelated to ping."
+      },
+      {
+        "text": "Blocking all ICMP improves security with no side effects",
+        "explanation": "Blanket blocking can impair ICMP-based PMTUD and diagnostics. Some endpoints recover through packetisation-layer probing, so a black hole is not inevitable."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The covered errors quote the original header and initial payload, permitting matching when enough identifying data is available. ICMPv4 suppresses errors about errors and other prohibited cases such as non-initial fragments and broadcast/multicast traffic. Rate limiting can suppress responses. ICMPv4 is IP protocol 1, not UDP port 7. Necessary errors include IPv4 type 3/code 4 for classical PMTUD; ICMPv6 type 2 serves the corresponding IPv6 role.",
+    "link": {
+      "title": "RFC 792: Internet Control Message Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc792"
+    }
+  }
+]

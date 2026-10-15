@@ -1,0 +1,95 @@
+[
+  {
+    "id": "ip-bgp-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In this hypothetical validation exercise, the only covering validated ROA record says: prefix `192.0.0.0/22`, max length 23, origin AS 65010. Which announcements are **Invalid** under route origin validation? Select all that apply.",
+    "options": [
+      {
+        "text": "192.0.2.0/24 from AS 65010",
+        "explanation": "Correct, Invalid. The origin is right, but /24 is longer than the ROA's max length of 23."
+      },
+      {
+        "text": "192.0.2.0/23 from AS 65010",
+        "explanation": "Valid: covered by the ROA, origin matches and /23 is within max length."
+      },
+      {
+        "text": "192.0.2.0/23 from AS 64666",
+        "explanation": "Correct, Invalid. A ROA covers the prefix but authorises a different origin AS."
+      },
+      {
+        "text": "198.51.100.0/24 from AS 64666",
+        "explanation": "NotFound, not Invalid. No ROA covers 198.51.100.0/24, so validation has no opinion."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "For each route, ask: is it covered by a ROA? If so, both checks must pass:\n\n```formula\na = a_ROA\np ≤ L\nwhere\na: the route's origin AS, the last ASN in its path\na_ROA: the AS the ROA authorises, 65010\np: the route's prefix length\nL: the ROA's max length, 23\n≤: is at most\nIn words: the origin must be the authorised AS and the prefix no longer than 23 bits.\n```\n\n| Route | Check | State |\n|---|---|---|\n| /24 from 65010 | 24 > 23 | Invalid |\n| /23 from 65010 | all ok | Valid |\n| /23 from 64666 | wrong origin | Invalid |\n| 198.51.100.0/24 | no ROA | NotFound |\n\nNetworks configured to reject Invalid routes drop those two. A different covering record that authorises a route could instead make it Valid; this exercise specifies only one.",
+    "link": {
+      "title": "RFC 6811: BGP Prefix Origin Validation",
+      "url": "https://www.rfc-editor.org/rfc/rfc6811"
+    }
+  },
+  {
+    "id": "ip-bgp-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hypothetical validation exercise, AS 65010 is authorised by a validated ROA for a /24. An attacker advertises that /24 with AS_PATH `64666 65010`. What does origin validation establish?",
+    "options": [
+      {
+        "text": "Invalid, because 64666 isn't in the ROA",
+        "explanation": "ROV checks only the **origin**, the last ASN in the path. Here that's 65010, which matches the ROA."
+      },
+      {
+        "text": "NotFound, because the path is longer than one AS",
+        "explanation": "NotFound means no ROA covers the prefix. One does."
+      },
+      {
+        "text": "Valid: the origin matches, but ROV does not authenticate the intervening path",
+        "explanation": "Correct. The final ASN and prefix length match the authorisation. ROV alone cannot tell whether the preceding AS relationship is genuine."
+      },
+      {
+        "text": "Valid, and nothing can detect it",
+        "explanation": "ROV’s limitation does not mean no defence exists. Appropriately configured prefix/path filters and deployed path-validation mechanisms can help, with their own assumptions and coverage limits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. For this AS_SEQUENCE, the claimed origin is 65010.\n2. The validated record authorises that origin and /24: Valid.\n3. Origin validation does not authenticate the preceding 64666 entry.\n4. Whether this route wins depends on competing routes and policy; its relative length is not specified.\n5. Additional filtering or AS-path validation requires appropriate trusted data and deployment. Merely naming ASPA or BGPsec does not guarantee detection in this scenario.",
+    "link": {
+      "title": "RFC 6811: origin-validation security limitations",
+      "url": "https://www.rfc-editor.org/rfc/rfc6811"
+    }
+  },
+  {
+    "id": "ip-bgp-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hypothetical routing exercise, a company announces only 203.0.112.0/22 from AS 65010. To \"be flexible\", its ROA says max length 24. What risk does this create, and what's the fix?",
+    "options": [
+      {
+        "text": "None; a looser max length only makes more of your own announcements Valid",
+        "explanation": "It also makes an attacker's more-specific announcements Valid, if they forge your ASN as origin."
+      },
+      {
+        "text": "Your /22 becomes Invalid because it's shorter than 24",
+        "explanation": "Max length is an upper bound. Anything from /22 to /24 under the ROA's prefix with the right origin is Valid."
+      },
+      {
+        "text": "Routers reject ROAs with max length greater than the prefix length",
+        "explanation": "Max length longer than the prefix is allowed; it's just discouraged when you don't announce those lengths."
+      },
+      {
+        "text": "A forged-origin /24 can pass ROV and win LPM where installed; restrict max length to 22 if only the /22 is authorised",
+        "explanation": "Correct. The broader max length permits the forged-origin /24. Where it is accepted and installed beside the /22, LPM selects it. Restricting length makes that /24 Invalid; local rejection policy is still required."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Hypothetical ROA: 203.0.112.0/22, max length 24, origin 65010.\n2. The attacker claims 203.0.113.0/24 with path `64666 65010`.\n3. Prefix coverage, origin and permitted length match: Valid.\n4. Where installed with the /22, the /24 wins forwarding for its addresses.\n5. Restricting max length to 22 makes that /24 Invalid, assuming no other authorising record, so networks configured to reject Invalid routes discard it.\n6. A forged-origin /22 can still pass origin validation and compete under normal policy; removing excess maxLength is not complete path authentication.",
+    "link": {
+      "title": "RFC 9319: The Use of maxLength in the RPKI",
+      "url": "https://www.rfc-editor.org/rfc/rfc9319"
+    }
+  }
+]

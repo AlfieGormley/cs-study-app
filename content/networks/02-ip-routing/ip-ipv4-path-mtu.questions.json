@@ -1,0 +1,62 @@
+[
+  {
+    "id": "ip-ipv4-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After a VPN change, small TCP exchanges work but larger transfers stall. The firewall blocks inbound ICMP. Which is a plausible cause to investigate, rather than a diagnosis established by these symptoms alone?",
+    "options": [
+      {
+        "text": "TCP's congestion window is too small",
+        "explanation": "A small positive congestion window generally limits throughput. The packet-size pattern makes MTU handling worth investigating, but a capture is needed."
+      },
+      {
+        "text": "DNS is failing for large sites",
+        "explanation": "A DNS problem does not directly explain a stall in an already established transfer to the same address."
+      },
+      {
+        "text": "The VPN encrypts traffic, which is too slow for large transfers",
+        "explanation": "Encryption load can affect performance, but encryption alone does not establish why the size-dependent stall occurs."
+      },
+      {
+        "text": "A PMTUD black hole: full-size packets with DF set are dropped at the tunnel, and the ICMP 'Fragmentation Needed' replies never arrive",
+        "explanation": "Correct as a hypothesis. If encapsulation makes packets too large, DF prevents fragmentation, ICMP feedback is blocked and probing does not recover, classic PMTUD can fail."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Check captures and interface/path MTUs to confirm whether oversized DF packets are dropped and whether corresponding ICMP errors reach the sender. Tunnel overhead matters relative to the actual outer MTU; not every tunnel has the same inner limit. Permit necessary MTU feedback, set a suitable interface MTU, or use appropriate TCP MSS/PLPMTUD support. TCP MSS adjustment must cover relevant directions and does not fix UDP. Retries can ultimately time out rather than continue forever.",
+    "link": {
+      "title": "Path MTU Discovery — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Path_MTU_Discovery"
+    }
+  },
+  {
+    "id": "ip-ipv4-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your router runs a GRE tunnel over IPv4 across an Ethernet path (MTU 1,500). GRE adds a 20-byte outer IPv4 header and a 4-byte GRE header. To avoid fragmentation of TCP traffic inside the tunnel, what MSS should the router clamp SYNs to (assume no IP or TCP options)? Assume inner IPv4, this MTU in both directions, and clamping advertisements in both SYN directions.",
+    "options": [
+      {
+        "text": "1,456",
+        "explanation": "This subtracts the tunnel overhead but only one 20-byte header for the inner packet. Both the inner IP and TCP headers count."
+      },
+      {
+        "text": "1,460",
+        "explanation": "That's the normal MSS for a 1,500-byte link. It ignores the 24 bytes the tunnel adds."
+      },
+      {
+        "text": "1,476",
+        "explanation": "That's the tunnel's MTU (1,500 − 24). The MSS counts only TCP payload, so you must also subtract the inner IP and TCP headers."
+      },
+      {
+        "text": "1,436",
+        "explanation": "Correct. The tunnel MTU is 1,500 − 20 − 4 = 1,476 bytes. Each inner packet spends 20 bytes on IP and 20 on TCP, so the MSS is 1,476 − 40 = 1,436 bytes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Outer path MTU: 1,500 bytes. GRE overhead: 20 (outer IP) + 4 (GRE) = 24 bytes.\n2. Each inner packet: inner IP 20 + TCP 20 + payload.\n\n```formula\nMTU_t = 1500 − 20 − 4 = 1476 B\nMSS = MTU_t − H_IP − H_TCP\nMSS = 1476 − 20 − 20 = 1436 B\nwhere\nMTU_t: the tunnel's MTU: the largest inner IP packet that fits inside the 1,500-byte outer path, in bytes (B)\nMSS: maximum segment size: the most TCP data one segment may carry, in bytes\nH_IP: the inner IPv4 header, 20 bytes without options\nH_TCP: the TCP header, 20 bytes without options\nB: bytes; one byte is 8 bits\nIn words: take the outer and GRE headers off 1,500 to get the tunnel MTU, then take the inner IP and TCP headers off that to get the most data per segment.\n```\n\n```\n|outer IP 20|GRE 4|IP 20|TCP 20|data|\n <---------------- 1500 ----------->\n```\n\n3. Clamping the relevant MSS advertisements in both directions limits both peers under these header/path assumptions. A single SYN advertises only what its sender can receive; other packet types and later path changes need separate handling.",
+    "link": {
+      "title": "Path MTU Discovery — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Path_MTU_Discovery"
+    }
+  }
+]

@@ -36,9 +36,9 @@
       "in parallel",
       "parallel speed-up"
     ],
-    "definition": "Running several computations at literally the same instant, on different CPU cores. It needs more than one core; concurrency on one core only takes turns.",
+    "definition": "Executing computations simultaneously on available hardware execution resources. Several physical cores can provide parallelism; simultaneous multithreading can also let hardware threads share a core’s execution resources.",
     "example": "Summing four quarters of an array on four cores at once is parallelism.",
-    "source": "https://en.wikipedia.org/wiki/Parallel_computing"
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
   },
   {
     "id": "gui",
@@ -47,7 +47,7 @@
       "graphical user interface",
       "GUIs"
     ],
-    "definition": "Graphical user interface: windows, buttons and menus that you click, rather than typed commands. GUI programs keep one thread free to react to input so the interface never freezes.",
+    "definition": "Graphical user interface: windows, buttons and menus used to interact with a program. Keeping slow work off the event-handling thread can improve responsiveness; a separate thread does not by itself guarantee the interface never freezes.",
     "example": "A photo editor's GUI stays responsive while a worker thread applies a slow filter.",
     "source": "https://en.wikipedia.org/wiki/Graphical_user_interface"
   },
@@ -81,7 +81,7 @@
       "scheduling priorities"
     ],
     "definition": "A value that tells the scheduler how important a thread is compared with others. Depending on the policy it is a strict rank (real-time) or a weight affecting its CPU share (Linux nice).",
-    "example": "A thread with real-time priority 50 always runs before a normal-priority thread on the same CPU.",
+    "example": "An eligible real-time-priority-50 thread normally outranks fair-class work, subject to bandwidth controls and fair-server service.",
     "source": "https://man7.org/linux/man-pages/man7/sched.7.html"
   },
   {
@@ -139,9 +139,9 @@
       "many-to-many",
       "many-to-many model"
     ],
-    "definition": "A threading model in which M user threads are multiplexed onto N kernel threads, with N usually around the number of cores. It gives cheap threads and real parallelism but needs the runtime and kernel schedulers to cooperate.",
-    "example": "Go runs hundreds of thousands of goroutines (M) on a handful of OS threads (N).",
-    "source": "https://en.wikipedia.org/wiki/Thread_(computing)#M:N_(hybrid_threading)"
+    "definition": "A threading model that multiplexes user-visible threads over kernel threads. Several kernel threads permit simultaneous execution; the number depends on the runtime, blocking calls, configured parallelism and workload.",
+    "example": "Go multiplexes goroutines over OS threads; GOMAXPROCS limits simultaneous Go execution rather than the total OS-thread count.",
+    "source": "https://go.dev/src/runtime/HACKING"
   },
   {
     "id": "ngpt",
@@ -260,8 +260,8 @@
       "carrier threads",
       "carrier OS threads"
     ],
-    "definition": "An OS thread on which the Java runtime runs (\"mounts\") a virtual thread. When the virtual thread blocks, it is unmounted and the carrier runs another.",
-    "example": "By default the number of carrier threads roughly equals the number of CPU cores.",
+    "definition": "An OS thread that executes a Java virtual thread while it is mounted. Many blocking operations unmount the virtual thread, freeing the carrier; pinning and some native or runtime operations can instead retain a carrier, depending on the JDK version.",
+    "example": "JDK 21 can pin a virtual thread during certain synchronized or native operations; later JDKs changed some pinning cases.",
     "source": "https://openjdk.org/jeps/444"
   },
   {
@@ -352,8 +352,8 @@
       "L1/L2",
       "cache hit"
     ],
-    "definition": "Small, fast memory on the CPU chip that keeps copies of recently used main-memory data. L1 is smallest and fastest and private to a core, L2 is larger, and L3 (the last-level cache) is shared by the cores of a chip. A miss means fetching from slower RAM.",
-    "example": "A typical core has 32–48 KB of L1 data cache, while a chip's shared L3 may be tens of megabytes.",
+    "definition": "Small, fast hardware storage keeping copies of memory data or instructions. Cache levels and sharing vary by CPU; a miss at one level can be served by another cache, another core or main memory.",
+    "example": "Inspect the machine’s cache topology rather than assuming every socket shares one L3 cache.",
     "source": "https://en.wikipedia.org/wiki/CPU_cache"
   },
   {
@@ -439,7 +439,7 @@
       "error code",
       "error codes"
     ],
-    "definition": "A small integer naming a failure, such as `EAGAIN` or `EBUSY`. Unix system calls put it in `errno`; pthreads functions return it directly.",
+    "definition": "An integer identifying a failure, such as EAGAIN or EBUSY. Many Unix calls report failure and set errno; pthread_create and pthread_join instead return an error number directly. Always check the particular API’s contract.",
     "example": "`strerror(EAGAIN)` gives \"Resource temporarily unavailable\".",
     "source": "https://man7.org/linux/man-pages/man3/errno.3.html"
   },
@@ -534,7 +534,7 @@
     "id": "executorservice",
     "term": "ExecutorService",
     "aliases": [],
-    "definition": "Java's standard interface for thread pools: you submit tasks and get back futures for their results.",
+    "definition": "Java’s task-execution service interface, supporting submission, futures and orderly shutdown. Thread pools are common implementations, but an ExecutorService can use other strategies, including one virtual thread per task.",
     "example": "`Executors.newFixedThreadPool(8)` returns an ExecutorService with 8 workers.",
     "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ExecutorService.html"
   },
@@ -553,16 +553,16 @@
       "ThreadPoolExecutor()"
     ],
     "definition": "Python's thread pool class. `max_workers` sets the pool size; since Python 3.13 the default is `min(32, (os.process_cpu_count() or 1) + 4)`.",
-    "example": "`ThreadPoolExecutor(max_workers=10).map(fetch, range(20))` runs `fetch` on 10 threads.",
+    "example": "With max_workers=10, at most ten pool jobs execute at once; idle workers are reused and fewer may be needed.",
     "source": "https://docs.python.org/3/library/concurrent.futures.html"
   },
   {
     "id": "processpoolexecutor",
     "term": "ProcessPoolExecutor",
     "aliases": [],
-    "definition": "Python's pool of worker processes. Each process has its own interpreter (and GIL), so CPU-bound Python code runs in parallel, at the cost of pickling arguments and results. Its default size is the usable CPU count.",
+    "definition": "Python’s executor using worker processes, so independent pure-Python jobs can run simultaneously on several CPUs. Arguments and results must be serialisable. Since Python 3.13 its default uses os.process_cpu_count(), which reflects affinity rather than a cgroup CPU quota; platform limits also apply.",
     "example": "`ProcessPoolExecutor(max_workers=8)` can keep 8 cores busy with pure-Python work.",
-    "source": "https://docs.python.org/3/library/concurrent.futures.html"
+    "source": "https://docs.python.org/3.14/library/concurrent.futures.html"
   },
   {
     "id": "max-workers",
@@ -626,7 +626,7 @@
       "GIL-enabled",
       "GIL-releasing"
     ],
-    "definition": "Global Interpreter Lock: a lock in standard CPython that a thread must hold to execute Python bytecode, so only one thread runs Python code at a time. It is released during blocking I/O and by many C extensions.",
+    "definition": "Global Interpreter Lock: in GIL-enabled CPython, a thread must hold its interpreter’s GIL to execute Python bytecode. Blocking I/O and many native operations release it. Isolated interpreters can have separate GILs, and free-threaded builds can run without one.",
     "example": "Two threads running a pure-Python loop take about as long as running it twice serially.",
     "source": "https://docs.python.org/3/glossary.html#term-global-interpreter-lock"
   },
@@ -711,7 +711,7 @@
       "free-threaded Python",
       "python3.14t"
     ],
-    "definition": "A build of CPython with no GIL (PEP 703), so Python threads run truly in parallel. Experimental in 3.13 and officially supported, but not the default, from 3.14.",
+    "definition": "An optional CPython build supporting execution with the GIL disabled: experimental in 3.13 and supported from 3.14. Actual GIL state depends on startup settings and imported extensions; loading an incompatible extension can re-enable it.",
     "example": "The free-threaded interpreter is usually installed as `python3.14t`.",
     "source": "https://docs.python.org/3/howto/free-threading-python.html"
   },
@@ -743,7 +743,7 @@
       "pickling data"
     ],
     "definition": "Python's way of serialising objects into bytes so they can be sent to another process. Process pools pickle every argument and result.",
-    "example": "Passing a 100 MB image to a worker process means pickling 100 MB.",
+    "example": "Sending a large ordinary array through a process pool can incur serialization and copying; shared-memory designs can avoid moving the full payload.",
     "source": "https://docs.python.org/3/library/pickle.html"
   },
   {
@@ -754,15 +754,15 @@
       "concurrent.interpreters",
       "InterpreterPoolExecutor"
     ],
-    "definition": "An extra, isolated Python interpreter inside the same process, with its own GIL. Python 3.14 added `concurrent.interpreters` and `InterpreterPoolExecutor` to use them.",
+    "definition": "An additional Python interpreter inside one process, with separate interpreter state. Python 3.14's InterpreterPoolExecutor uses isolated interpreters with their own GILs, enabling independent bytecode execution on several cores. Historically, not every subinterpreter configuration had a separate GIL.",
     "example": "An InterpreterPoolExecutor with 4 workers can run pure-Python code on 4 cores in one process.",
-    "source": "https://docs.python.org/3/library/concurrent.interpreters.html"
+    "source": "https://docs.python.org/3.14/library/concurrent.futures.html"
   },
   {
     "id": "asyncio",
     "term": "asyncio",
     "aliases": [],
-    "definition": "Python's standard library for cooperative concurrency: coroutines run on a single-threaded event loop and give up control at `await` points.",
+    "definition": "Python’s asynchronous-I/O framework using cooperative tasks on event loops. An event loop runs one task or callback at a time; other work runs when it returns or suspends. An await expression need not suspend if its result is already available.",
     "example": "`asyncio.run(main())` starts an event loop.",
     "source": "https://docs.python.org/3/library/asyncio.html"
   },
@@ -774,7 +774,7 @@
       "asyncio tasks",
       "asyncio task"
     ],
-    "definition": "A function that can pause and later resume where it left off. In asyncio, coroutines pause at `await` so the event loop can run others.",
+    "definition": "A computation that can suspend and later resume. Calling an async Python function creates a coroutine object; a task drives its execution. Awaiting may suspend that task, but an immediately available result need not yield control.",
     "example": "`async def fetch(): await asyncio.sleep(1)` defines a coroutine.",
     "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
@@ -784,7 +784,7 @@
     "aliases": [
       "await point"
     ],
-    "definition": "The Python keyword that pauses a coroutine until something it depends on is ready, letting the event loop run other tasks meanwhile.",
+    "definition": "A Python expression that obtains a result from an awaitable. If obtaining it suspends the task, the event loop can run other work; an await that completes immediately need not yield control.",
     "example": "`data = await reader.read(100)` lets other coroutines run while waiting for data.",
     "source": "https://docs.python.org/3/reference/expressions.html#await"
   },
@@ -851,7 +851,8 @@
     "term": "Waiting time",
     "aliases": [
       "average waiting time",
-      "average waiting"
+      "average waiting",
+      "waiting times"
     ],
     "definition": "The total time a job spends ready in the queue but not running. For a job that never blocks, it is turnaround time minus its CPU burst.",
     "example": "A 3 ms job queued behind a 24 ms one waits 24 ms.",
@@ -912,7 +913,7 @@
       "nonpreemptive",
       "cooperative multitasking"
     ],
-    "definition": "Scheduling in which a running thread keeps the CPU until it voluntarily gives it up (by blocking, yielding or finishing). One thread that never yields freezes everything else.",
+    "definition": "Scheduling in which execution continues until the running task blocks, yields or finishes. A task that never cooperates can stall other work sharing that cooperative scheduler or event loop; it does not automatically stop independently scheduled OS threads.",
     "example": "Windows 3.1 and classic Mac OS used cooperative multitasking.",
     "source": "https://en.wikipedia.org/wiki/Cooperative_multitasking"
   },
@@ -953,8 +954,8 @@
     "term": "Convoy effect",
     "aliases": [],
     "definition": "Under FCFS, short jobs queuing behind one long job, like cars behind a lorry. I/O-bound jobs pile up behind a CPU hog while devices sit idle.",
-    "example": "Three 3 ms jobs behind a 100 ms job each wait over 100 ms.",
-    "source": "https://en.wikipedia.org/wiki/Convoy_effect"
+    "example": "Three 3 ms jobs behind one 100 ms job wait 100, 103 and 106 ms when all arrive together.",
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf"
   },
   {
     "id": "sjf",
@@ -966,9 +967,9 @@
       "non-preemptive SJF",
       "shortest next CPU burst"
     ],
-    "definition": "Shortest job first: the policy that always runs the waiting job with the shortest next CPU burst. When all jobs arrive together it minimises average waiting time, but it needs burst lengths in advance and can starve long jobs.",
+    "definition": "Shortest job first selects the available job with the shortest next CPU burst. For independent known bursts arriving together on one CPU with zero switch cost, it minimises average waiting time. Unknown bursts require estimates, and repeated short arrivals can starve longer work.",
     "example": "Jobs of 6, 2 and 3 ms run in the order 2, 3, 6 under SJF.",
-    "source": "https://en.wikipedia.org/wiki/Shortest_job_next"
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched.pdf"
   },
   {
     "id": "srtf",
@@ -1060,7 +1061,7 @@
       "RTPRIO",
       "rtprio"
     ],
-    "definition": "The 1–99 priority of a Linux SCHED_FIFO or SCHED_RR thread, where higher wins. Any runnable real-time thread runs before every normal thread on that CPU.",
+    "definition": "The 1–99 priority of a Linux SCHED_FIFO or SCHED_RR thread, where higher numbers win within the RT class. Eligible RT work normally outranks fair work, subject to bandwidth limits and deadline-class fair-server service.",
     "example": "A SCHED_FIFO thread at priority 50 preempts one at priority 10.",
     "source": "https://man7.org/linux/man-pages/man7/sched.7.html"
   },
@@ -1115,9 +1116,9 @@
     "aliases": [
       "ACM Turing Award"
     ],
-    "definition": "The ACM A.M. Turing Award, computing's most prestigious prize. Fernando Corbató received it in 1990 for his work on time-sharing systems.",
+    "definition": "The Association for Computing Machinery’s A.M. Turing Award recognises major contributions to computing. Fernando Corbató received the 1990 award for work on time-sharing systems.",
     "example": "Corbató won the 1990 Turing Award.",
-    "source": "https://amturing.acm.org/award_winners/corbato_1009471.cfm"
+    "source": "https://news.mit.edu/2019/mit-professor-emeritus-fernando-corby-corbato-computing-pioneer-dies-0715"
   },
   {
     "id": "time-allotment",
@@ -1268,9 +1269,9 @@
       "priority-inheriting",
       "PI"
     ],
-    "definition": "A fix for priority inversion: while a thread holds a lock that a higher-priority thread is waiting for, it temporarily runs at the waiter's priority. It must be transitive along chains of locks.",
+    "definition": "A locking protocol that raises a holder’s effective priority to that of higher-priority waiters so intermediate-priority work cannot keep delaying the holder. Boosts propagate along blocking chains; remaining boosts from other held locks may persist after one unlock.",
     "example": "With inheritance, a low thread holding H's lock runs at H's priority until it unlocks.",
-    "source": "https://en.wikipedia.org/wiki/Priority_inheritance"
+    "source": "https://docs.kernel.org/locking/rt-mutex.html"
   },
   {
     "id": "priority-ceiling",
@@ -1367,9 +1368,9 @@
       "refcount",
       "refcounts"
     ],
-    "definition": "A number stored with an object saying how many references to it exist. CPython frees an object when its reference count drops to zero, which is why updating counts from many threads at once needed protection (the GIL).",
-    "example": "Assigning an object to a second variable raises its reference count from 1 to 2.",
-    "source": "https://docs.python.org/3/glossary.html#term-reference-count"
+    "definition": "A count tracking references to an object. In CPython it participates in object lifetime management, alongside cycle collection; immortal objects and free-threaded implementations require additional rules. A simple increment/decrement model does not describe every object or guarantee immediate destruction.",
+    "example": "For an ordinary non-immortal CPython object, adding a strong reference normally increases its reference count.",
+    "source": "https://docs.python.org/3.14/c-api/refcounting.html"
   },
   {
     "id": "cfs",
@@ -1389,7 +1390,7 @@
       "Earliest Eligible Virtual Deadline First"
     ],
     "definition": "Earliest Eligible Virtual Deadline First: the fair-class scheduler in Linux since 6.6, from a 1995 paper by Stoica and Abdel-Wahab. Among tasks that are owed CPU (eligible), it runs the one with the earliest virtual deadline.",
-    "example": "Under EEVDF, a task asking for a 1 ms slice is picked sooner than one with a 3 ms slice.",
+    "example": "For equally weighted eligible fresh requests starting at the same virtual runtime, a 1 ms slice has an earlier deadline than a 3 ms slice.",
     "source": "https://docs.kernel.org/scheduler/sched-eevdf.html"
   },
   {
@@ -1435,9 +1436,9 @@
       "fair class",
       "idle class"
     ],
-    "definition": "In Linux, one of a stack of schedulers checked in strict order: stop, deadline, rt (real-time), fair (normal tasks), ext and idle. A task in a higher class runs before any task in a lower one, subject to bandwidth limits.",
-    "example": "A SCHED_FIFO thread (rt class) runs before every SCHED_NORMAL thread (fair class).",
-    "source": "https://man7.org/linux/man-pages/man7/sched.7.html"
+    "definition": "One level in Linux’s scheduler hierarchy, such as deadline, real-time, fair or idle. Higher eligible classes normally take precedence, subject to bandwidth limits. A deadline-class fair server can dispatch fair work even while RT work is runnable.",
+    "example": "An unthrottled FIFO task normally outranks fair work, with fair-server service as a separate qualification.",
+    "source": "https://docs.kernel.org/scheduler/sched-deadline.html"
   },
   {
     "id": "scheduling-policy",
@@ -1463,7 +1464,7 @@
     "id": "sched-batch",
     "term": "SCHED_BATCH",
     "aliases": [],
-    "definition": "A fair-class Linux policy for non-interactive CPU-bound work: it gets its normal share but is preempted less, favouring long, cache-friendly runs.",
+    "definition": "A Linux fair-class policy for non-interactive work that retains nice-based proportional sharing while adjusting wake-up treatment. It is a policy hint, not a fixed long time slice or a universal promise of fewer preemptions.",
     "example": "`chrt -b 0 ./build` runs a build under SCHED_BATCH.",
     "source": "https://man7.org/linux/man-pages/man7/sched.7.html"
   },
@@ -1482,7 +1483,7 @@
       "FIFO policy",
       "FF"
     ],
-    "definition": "A Linux real-time policy: the thread runs until it blocks, yields or is preempted by a higher real-time priority. No time slice. `ps` shows it as FF.",
+    "definition": "A Linux real-time policy with no round-robin time slice. It normally continues until blocking, yielding or preemption by higher-priority or higher-class work; bandwidth throttling and fair-server service also qualify this. ps displays FF.",
     "example": "`chrt -f 50 ./audio-engine` runs a program under SCHED_FIFO priority 50.",
     "source": "https://man7.org/linux/man-pages/man7/sched.7.html"
   },
@@ -1563,7 +1564,7 @@
       "ideal CPU",
       "ideal multi-tasking CPU"
     ],
-    "definition": "CFS's imaginary reference CPU that runs all n runnable tasks at once, each at 1/n speed. The real scheduler tracks how far each task is from what it would have got there.",
+    "definition": "The fair scheduler's imaginary reference that serves runnable competitors simultaneously in proportion to their scheduling weights. Equal weights give equal shares; unequal weights do not.",
     "example": "With 4 tasks, the ideal CPU would run each at a quarter speed simultaneously.",
     "source": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
   },
@@ -1576,9 +1577,9 @@
       "virtual runtime",
       "smallest vruntime"
     ],
-    "definition": "A task's CPU time scaled by its weight, kept in nanoseconds by Linux's fair scheduler. It grows at real speed for nice 0, slower for heavier tasks and faster for lighter ones; the fair scheduler favours the smallest.",
+    "definition": "CPU execution time scaled by scheduling weight and tracked in nanoseconds by Linux’s fair class. Nice 0 advances at the reference rate; higher-weight tasks advance more slowly. Classic CFS selects the smallest vruntime; EEVDF also requires eligibility and virtual-deadline comparison.",
     "example": "A nice 5 task running 6 ms gains about 18.3 ms of vruntime.",
-    "source": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
+    "source": "https://docs.kernel.org/scheduler/sched-eevdf.html"
   },
   {
     "id": "red-black-tree-os",
@@ -1588,17 +1589,16 @@
       "rbtree"
     ],
     "definition": "A self-balancing binary search tree that keeps itself roughly balanced, so finding, inserting and removing take O(log n) time for n items. CFS keeps runnable tasks in one, ordered by vruntime.",
-    "example": "With 1,000 runnable tasks, an insertion takes about 10 steps.",
+    "example": "A balanced tree keeps path lengths logarithmic in its number of nodes; the exact comparisons and rotations depend on its shape and operation.",
     "source": "https://en.wikipedia.org/wiki/Red%E2%80%93black_tree"
   },
   {
     "id": "leftmost-node",
     "term": "Leftmost node",
     "aliases": [
-      "leftmost",
-      "rightmost"
+      "leftmost"
     ],
-    "definition": "In a search tree ordered by a key, the node with the smallest key, reached by always going left. CFS caches it so picking the task with least vruntime is instant.",
+    "definition": "In a binary search tree, the node with the smallest key, reached by repeatedly following left children. Classic CFS caches this node for fast smallest-vruntime selection. The rightmost node is the opposite extreme, not an alias.",
     "example": "In a tree of vruntimes 10, 25, 40 and 70, the leftmost node holds 10.",
     "source": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
   },
@@ -1610,7 +1610,7 @@
       "sched_min_granularity",
       "small granularity"
     ],
-    "definition": "A minimum amount of running time before the fair scheduler will preempt a task in favour of another, so tasks do not swap every microsecond.",
+    "definition": "The scale of scheduling time decisions. Classic CFS used minimum-granularity tunables to avoid excessively short service slices; exact preemption rules and tunables depend on kernel version and scheduling policy.",
     "example": "CFS's default minimum granularity was 0.75 ms, scaled up on bigger machines.",
     "source": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
   },
@@ -1631,7 +1631,7 @@
     "id": "min-vruntime",
     "term": "min_vruntime",
     "aliases": [],
-    "definition": "The fair scheduler's running floor of the smallest vruntime in a run queue. It only increases, and waking or new tasks are placed relative to it.",
+    "definition": "A monotonic per-run-queue virtual-runtime reference in Linux's fair scheduler. Classic CFS places sleepers relative to it; EEVDF adds lag-aware placement. It is maintained as a floor from tracked entities rather than always equalling the smallest current queued value.",
     "example": "A task waking after a minute is moved up to near min_vruntime rather than keeping its old tiny vruntime.",
     "source": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
   },
@@ -1653,7 +1653,7 @@
       "latency period",
       "sched_latency"
     ],
-    "definition": "A latency a system aims to meet. In CFS it was specifically the period within which the scheduler aimed to run every runnable task once: 6 ms times a factor that grows with the CPU count (24 ms with 8 or more CPUs).",
+    "definition": "A target for service timing. In classic CFS, it was the scheduling period aimed at giving runnable tasks service, extended when minimum granularity required it. Historical defaults used 6 ms before CPU-count scaling; this is not an application-response guarantee.",
     "example": "With 4 runnable tasks and a 24 ms target latency, each got about 6 ms per round.",
     "source": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
   },
@@ -1663,7 +1663,7 @@
     "aliases": [
       "minimum slices"
     ],
-    "definition": "The smallest slice a fair-scheduled task gets, so that with hundreds of tasks each still runs long enough to be worthwhile.",
+    "definition": "Classic CFS's minimum-granularity target used when choosing scheduling periods and service slices. It helps avoid excessively small slices as runnable task counts grow; weights and other preemption conditions still affect actual execution.",
     "example": "CFS's 0.75 ms minimum, scaled ×4 on 8 CPUs, is 3 ms.",
     "source": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
   },
@@ -1710,7 +1710,7 @@
       "earliest virtual deadline"
     ],
     "definition": "In EEVDF, a task's vruntime plus its requested slice scaled by its weight. Among eligible tasks, the one with the earliest virtual deadline runs next.",
-    "example": "A nice 0 task at vruntime 10 asking for 0.5 ms has a virtual deadline of 10.5.",
+    "example": "A fresh nice 0 request starting at virtual runtime 10 ms with a 0.5 ms slice has virtual deadline 10.5 ms.",
     "source": "https://docs.kernel.org/scheduler/sched-eevdf.html"
   },
   {
@@ -1728,15 +1728,11 @@
     "id": "base-slice",
     "term": "Base slice",
     "aliases": [
-      "default slice",
-      "custom slice",
-      "shorter slice",
-      "requested slice",
-      "requested slices"
+      "default slice"
     ],
-    "definition": "The slice a fair-class task requests by default under EEVDF: 0.75 ms unscaled, 3 ms on machines with 8 or more CPUs. Since Linux 6.12 a task can request its own (0.1–100 ms) through sched_setattr().",
-    "example": "An audio thread requesting a 1 ms slice gets earlier deadlines than with the 3 ms default.",
-    "source": "https://docs.kernel.org/scheduler/sched-eevdf.html"
+    "definition": "The default service request used by EEVDF when a task has no custom slice. In reviewed Linux 6.12 source it is 0.75 ms before default logarithmic CPU-count scaling, reaching 3 ms at eight or more CPUs. Settings and later kernels can differ.",
+    "example": "For equal starting virtual runtimes and fresh requests, a nice 0 task's 1 ms slice has an earlier deadline than a 3 ms request.",
+    "source": "https://raw.githubusercontent.com/torvalds/linux/v6.12/kernel/sched/fair.c"
   },
   {
     "id": "sched-setattr",
@@ -1754,9 +1750,9 @@
     "id": "deferred-dequeue",
     "term": "Deferred dequeue",
     "aliases": [],
-    "definition": "An EEVDF refinement (Linux 6.12) in which a task that sleeps while owing CPU (negative lag) stays on the run queue until its lag has decayed, so a short sleep cannot wipe out its debt.",
+    "definition": "An EEVDF technique introduced in Linux 6.12 that can keep an over-served sleeping task represented on the run queue until negative lag decays. The sleeping task is not thereby runnable; this prevents brief sleeps erasing its service debt.",
     "example": "A task 2 ms ahead of its share that sleeps briefly is not put back as if its debt had been cleared.",
-    "source": "https://lwn.net/Articles/969062/"
+    "source": "https://docs.kernel.org/scheduler/sched-eevdf.html"
   },
   {
     "id": "fair-c",
@@ -1774,7 +1770,7 @@
     "aliases": [
       "group-scheduling"
     ],
-    "definition": "Fair scheduling in two levels: the CPU is divided between groups (cgroups or autogroups) by group weight first, then between the tasks inside each group by their own weights.",
+    "definition": "Hierarchical fair scheduling that divides contended CPU service among sibling task groups by group weight, then among their members. Groups can be nested beyond two levels; quotas and topology also constrain service.",
     "example": "A 16-thread process alone in its group gets the same share as a 1-thread process in another equal-weight group.",
     "source": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
   },
@@ -1872,9 +1868,9 @@
       "Earliest Deadline First",
       "earliest deadline first"
     ],
-    "definition": "Earliest Deadline First: a real-time policy that always runs the task whose deadline is soonest. On one CPU it meets all deadlines whenever total utilisation is at most 100% (with deadlines equal to periods).",
+    "definition": "Earliest Deadline First selects the ready job with the earliest absolute deadline. On one ideal preemptive CPU, independent periodic tasks with deadlines equal to periods are schedulable when total worst-case utilisation is at most one; blocking, overhead, different deadlines and multiprocessors require additional analysis.",
     "example": "SCHED_DEADLINE dispatches tasks by EDF.",
-    "source": "https://en.wikipedia.org/wiki/Earliest_deadline_first_scheduling"
+    "source": "https://docs.kernel.org/scheduler/sched-deadline.html"
   },
   {
     "id": "cbs",
@@ -1934,7 +1930,7 @@
       "root domains"
     ],
     "definition": "In Linux, a set of CPUs that share real-time and deadline admission accounting. By default all CPUs form one root domain.",
-    "example": "On an 8-CPU root domain, deadline tasks may reserve up to 8 × 0.95 = 7.6 CPUs by default.",
+    "example": "An eight-CPU root domain with a configured 95% total deadline-bandwidth limit has 7.6 CPUs of reservation capacity before accounting for fair-server reservations.",
     "source": "https://docs.kernel.org/scheduler/sched-deadline.html"
   },
   {
@@ -1964,7 +1960,7 @@
     "aliases": [
       "/sys/kernel/debug/sched/"
     ],
-    "definition": "A Linux virtual filesystem, usually at /sys/kernel/debug, for kernel debugging information. Scheduler tunables moved there in 5.13.",
+    "definition": "A Linux filesystem exposing kernel debugging interfaces, usually mounted at /sys/kernel/debug. Several fair-scheduler debug tunables moved there in Linux 5.13; other scheduling controls remain sysctls and access depends on configuration and permissions.",
     "example": "`ls /sys/kernel/debug/sched/` lists the scheduler's debug tunables.",
     "source": "https://docs.kernel.org/filesystems/debugfs.html"
   },
@@ -2009,9 +2005,9 @@
       "NUMA-aware",
       "NUMA-blind"
     ],
-    "definition": "Non-uniform memory access: a design where each CPU socket (node) has its own local memory, and reaching another node's memory is slower. Software runs best when threads use memory on their own node.",
+    "definition": "Non-uniform memory access: memory-access cost depends on the relationship between a CPU and the memory node holding a page. Nodes need not map one-to-one to sockets; topology and workload determine the local/remote cost.",
     "example": "On a two-socket server, a thread on node 1 reading node 0's memory crosses the interconnect.",
-    "source": "https://man7.org/linux/man-pages/man7/numa.7.html"
+    "source": "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
   },
   {
     "id": "numa-node",
@@ -2023,9 +2019,9 @@
       "memory node",
       "memory nodes"
     ],
-    "definition": "A group of CPUs together with the memory local to them. Accesses within a node are faster than to another node's memory.",
+    "definition": "A locality domain for memory allocation and CPU access. A NUMA node may contain CPUs, memory or both; memoryless and CPU-less nodes exist. Relative access cost depends on the hardware topology.",
     "example": "`numactl --hardware` lists each node's CPUs and memory.",
-    "source": "https://man7.org/linux/man-pages/man7/numa.7.html"
+    "source": "https://www.kernel.org/doc/html/v6.11/mm/numa.html"
   },
   {
     "id": "last-level-cache",
@@ -2034,7 +2030,7 @@
       "LLC",
       "MC(LLC)"
     ],
-    "definition": "The largest, slowest CPU cache before main memory, usually L3, shared by all cores on a chip or chiplet.",
+    "definition": "The final hardware cache level before accesses proceed beyond the cache hierarchy. It is often an L3 shared by a group of cores, but level, size and sharing vary by CPU design.",
     "example": "Waking a thread on a CPU sharing its last-level cache keeps much of its data warm.",
     "source": "https://en.wikipedia.org/wiki/CPU_cache"
   },
@@ -2065,14 +2061,11 @@
     "aliases": [
       "per-CPU run queues",
       "per-CPU queues",
-      "per-CPU queue",
-      "global queue",
-      "single shared queue",
-      "global-queue"
+      "per-CPU queue"
     ],
-    "definition": "A design where each CPU has its own run queue and schedules from it without a shared lock. It scales and keeps cache affinity, but queues can become unbalanced; a single global queue is balanced but contended.",
+    "definition": "A scheduling design with a queue for each CPU rather than one global queue. Per-queue locking reduces shared contention and helps locality; migration and wake-up placement must address imbalance.",
     "example": "Linux has used per-CPU run queues since 2.6.0.",
-    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-multi.pdf"
+    "source": "https://docs.kernel.org/scheduler/sched-domains.html"
   },
   {
     "id": "load-imbalance",
@@ -2091,7 +2084,7 @@
       "thread migration",
       "migrating tasks"
     ],
-    "definition": "Moving a thread from one CPU's run queue to another's, or moving memory pages between NUMA nodes. It fixes imbalance but costs cache (and memory) locality.",
+    "definition": "Moving a task between CPUs or run queues. This can balance runnable work but may disturb cache or NUMA locality. Moving physical memory pages between nodes is page migration, a related but different operation.",
     "example": "The balancer migrates a thread from a busy CPU to an idle one.",
     "source": "https://docs.kernel.org/scheduler/sched-domains.html"
   },
@@ -2117,9 +2110,9 @@
     "id": "tokio",
     "term": "Tokio",
     "aliases": [],
-    "definition": "The most widely used asynchronous runtime for Rust. Its multi-threaded scheduler uses per-worker queues with work stealing.",
+    "definition": "An asynchronous runtime for Rust. Its multi-threaded scheduler uses worker queues and work stealing; a separate current-thread runtime runs tasks on its calling thread.",
     "example": "A Rust web server built on Tokio runs many async tasks on a few threads.",
-    "source": "https://tokio.rs/"
+    "source": "https://docs.rs/tokio/latest/tokio/runtime/index.html"
   },
   {
     "id": "cpu-load-balancing",
@@ -2165,7 +2158,7 @@
       "migration cost"
     ],
     "definition": "A Linux tunable (0.5 ms by default) below which a task that ran recently counts as cache-hot, so the balancer prefers not to move it.",
-    "example": "A task that ran 0.2 ms ago is left where it is.",
+    "example": "A task that ran 0.2 ms ago may be treated as cache-hot under the checked 0.5 ms threshold; other migration conditions still matter.",
     "source": "https://docs.kernel.org/scheduler/sched-debug.html"
   },
   {
@@ -2186,9 +2179,9 @@
       "SMT siblings",
       "sibling hyper-threads"
     ],
-    "definition": "The other logical CPU(s) on the same physical core. Siblings share execution units and L1/L2 caches, so two busy siblings each run slower than on separate cores.",
+    "definition": "Another logical CPU sharing one physical core through simultaneous multithreading. Siblings share some execution and cache resources; whether co-running jobs gain throughput or suffer contention depends on the hardware and workload.",
     "example": "On a CPU where 0/1 are siblings, `taskset -c 0,1` puts two threads on one core.",
-    "source": "https://en.wikipedia.org/wiki/Simultaneous_multithreading"
+    "source": "https://docs.kernel.org/scheduler/sched-capacity.html"
   },
   {
     "id": "pinning",
@@ -2200,7 +2193,7 @@
       "pinned thread"
     ],
     "definition": "Restricting a thread to particular CPUs with a hard affinity mask, so the balancer can no longer move it elsewhere.",
-    "example": "Pinning a latency-critical thread to an isolated CPU keeps other work off that core.",
+    "example": "Pinning restricts this thread; separately exclude competing work and inspect SMT siblings when seeking a dedicated core.",
     "source": "https://man7.org/linux/man-pages/man2/sched_setaffinity.2.html"
   },
   {
@@ -2263,8 +2256,8 @@
       "CPU requests",
       "requests (weights)"
     ],
-    "definition": "In Kubernetes, the CPU a container is guaranteed when the node is busy. It becomes the container's cgroup CPU weight.",
-    "example": "A pod requesting 500m CPU is guaranteed about half a CPU under contention.",
+    "definition": "A Kubernetes CPU reservation used for placement and for proportional CPU sharing under contention. It maps to cgroup CPU shares or weight; it is not a hard CPU cap, nor a promise that every workload always receives that throughput.",
+    "example": "A 500m CPU request contributes a half-CPU reservation for placement and proportional shares under contention; achieved service depends on the competing hierarchy and capacity.",
     "source": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
   },
   {
@@ -2273,7 +2266,7 @@
     "aliases": [
       "CPU limits"
     ],
-    "definition": "In Kubernetes, the most CPU a container may use. It becomes a cgroup `cpu.max` quota over a 100 ms period, so exceeding it causes throttling.",
+    "definition": "A Kubernetes CPU limit normally enforced through cgroup bandwidth quota, causing throttling when that budget is exhausted. The accounting period is commonly 100 ms but is configurable; ancestor limits and CPU-manager configuration can also matter.",
     "example": "A 2-CPU limit allows 200 ms of CPU time per 100 ms period.",
     "source": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
   },
@@ -2292,13 +2285,12 @@
     "term": "Remote memory access",
     "aliases": [
       "remote memory",
-      "local allocation",
       "remote NUMA access",
       "remote node"
     ],
-    "definition": "On a NUMA machine, a CPU reading or writing memory attached to another node, which is slower than local memory on its own node.",
+    "definition": "Access by a CPU to memory placed on another NUMA node. It can incur additional interconnect traffic and latency compared with local access; the cost depends on topology and workload.",
     "example": "`numactl --hardware` reports local distance 10 and remote distance often around 20.",
-    "source": "https://man7.org/linux/man-pages/man7/numa.7.html"
+    "source": "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
   },
   {
     "id": "first-touch",
@@ -2309,9 +2301,9 @@
       "first write fault",
       "first-write faults"
     ],
-    "definition": "Linux's default NUMA placement: a new page is given physical memory on the node of the CPU that first writes it, not where it is later used.",
-    "example": "An array initialised by one thread on node 0 lives entirely on node 0.",
-    "source": "https://man7.org/linux/man-pages/man7/numa.7.html"
+    "definition": "Under Linux’s usual local policy, a write fault on new private anonymous memory commonly allocates a physical page near the CPU handling it. Explicit policy, cpusets, memory pressure, huge pages and later migration can alter placement.",
+    "example": "With local policy, enough node-0 memory and no later migration, a main thread on node 0 can place a newly written private array there.",
+    "source": "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
   },
   {
     "id": "interleave",
@@ -2322,9 +2314,9 @@
       "page interleaving",
       "interleave policy"
     ],
-    "definition": "Spreading a program's pages round robin across NUMA nodes, so no single node's memory carries all the traffic.",
+    "definition": "A NUMA policy that distributes page allocations across selected nodes in a repeating pattern. It spreads placement rather than making every thread’s accesses local, and cannot guarantee the elimination of bandwidth hot spots.",
     "example": "`numactl --interleave=all ./db` alternates pages between all nodes.",
-    "source": "https://man7.org/linux/man-pages/man8/numactl.8.html"
+    "source": "https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html"
   },
   {
     "id": "numactl",
@@ -2368,9 +2360,9 @@
     "aliases": [
       "buffer pools"
     ],
-    "definition": "A database's in-memory cache of disk pages, often tens or hundreds of gigabytes and shared by all its threads.",
+    "definition": "A database’s memory cache of database pages, reducing disk reads and buffering changes. Its size and whether processes or threads share it depend on the database and configuration.",
     "example": "PostgreSQL's shared_buffers is its buffer pool.",
-    "source": "https://en.wikipedia.org/wiki/Database_buffer"
+    "source": "https://www.postgresql.org/docs/18/runtime-config-resource.html"
   },
   {
     "id": "cpu-max",
@@ -2392,7 +2384,7 @@
       "ancestor quotas",
       "CPU quotas"
     ],
-    "definition": "The CPU time a cgroup may use in each period, pooled across all its threads and CPUs. When it runs out the whole group is throttled until the next period. Quotas on parent (ancestor) groups apply too.",
+    "definition": "A cgroup CPU-time budget shared across its fair-class tasks and CPUs over an accounting period. Exhausted local runtime allocations throttle affected queues. Ancestor budgets, per-CPU accounting and burst credit can change the exact timing; a perfectly simultaneous group-wide stop is an ideal model.",
     "example": "A 200 ms quota is spent in 25 ms by 8 busy threads.",
     "source": "https://docs.kernel.org/scheduler/sched-bwc.html"
   },
@@ -2450,9 +2442,9 @@
       "percentile",
       "percentiles"
     ],
-    "definition": "p99 is the value that 99% of measurements fall below; p50 is the median. Latency is often reported as p50 and p99 to show typical and worst-case behaviour.",
-    "example": "If p50 is 4 ms and p99 is 79 ms, 1 request in 100 waits at least 79 ms.",
-    "source": "https://en.wikipedia.org/wiki/Percentile"
+    "definition": "A value locating a proportion of a measured distribution: p50 is the median and p99 marks the 99th percentile under the chosen calculation method. P99 describes a high quantile, not the single worst case.",
+    "example": "A measured p99 of 79 ms marks a high quantile; ties, interpolation and sample size affect how many observations are at or beyond it.",
+    "source": "https://www.itl.nist.gov/div898/handbook/prc/section2/prc262.htm"
   },
   {
     "id": "cpu-stat",
@@ -2462,7 +2454,7 @@
       "nr_throttled",
       "throttled_usec"
     ],
-    "definition": "The cgroup v2 file with CPU statistics; with a cpu.max limit it includes `nr_periods` (enforcement periods that have elapsed), `nr_throttled` (how many of them ended with the group throttled) and `throttled_usec` (total throttled time, µs).",
+    "definition": "A cgroup v2 CPU-statistics file. With CPU bandwidth control, nr_periods counts enforcement periods and nr_throttled counts those with throttling; their ratio is a period fraction, not CPU utilisation or wall-time loss. throttled_usec measures aggregate throttling and must be interpreted with CPU count and hierarchy in mind.",
     "example": "`nr_throttled 9100` out of `nr_periods 36000` means about a quarter of periods throttled.",
     "source": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
   },
@@ -2498,5 +2490,53 @@
     "definition": "The Linux command that shows CPU topology: sockets, cores, threads, caches and NUMA nodes. `-e` lists each logical CPU with its core and socket.",
     "example": "`lscpu -e` shows which logical CPUs are SMT siblings.",
     "source": "https://man7.org/linux/man-pages/man1/lscpu.1.html"
+  },
+  {
+    "id": "sched-single-threaded-program",
+    "term": "Single-threaded program",
+    "aliases": [
+      "single-threaded",
+      "single-threaded code"
+    ],
+    "definition": "A program using one application thread of execution. Its own instructions cannot execute simultaneously on several CPUs, though libraries, asynchronous devices or kernel work may provide concurrency on its behalf.",
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+  },
+  {
+    "id": "sched-linux-fair-class",
+    "term": "Linux fair scheduler",
+    "aliases": [
+      "fair scheduler",
+      "fair-scheduler",
+      "fair-class"
+    ],
+    "definition": "Linux’s proportional-share scheduling class for ordinary tasks. Nice values and group weights determine relative CPU service. Classic CFS used smallest virtual runtime; EEVDF instead chooses the earliest virtual deadline among eligible tasks.",
+    "source": "https://docs.kernel.org/scheduler/sched-eevdf.html"
+  },
+  {
+    "id": "sched-deadline-runtime-parameter",
+    "term": "Deadline runtime parameter",
+    "aliases": [
+      "runtime parameter"
+    ],
+    "definition": "The CPU-time budget reserved for a SCHED_DEADLINE task over its period. It should cover the task’s required execution under the stated scheduling assumptions; budget exhaustion can throttle the task.",
+    "source": "https://docs.kernel.org/scheduler/sched-deadline.html"
+  },
+  {
+    "id": "sched-relative-deadline-parameter",
+    "term": "Relative scheduling deadline",
+    "aliases": [
+      "deadline parameter"
+    ],
+    "definition": "The allowed time from a job’s release to its required completion. In Linux SCHED_DEADLINE it is supplied separately from CPU runtime and period; admission alone does not prove the application can meet it.",
+    "source": "https://docs.kernel.org/scheduler/sched-deadline.html"
+  },
+  {
+    "id": "sched-deadline-period-parameter",
+    "term": "Deadline period parameter",
+    "aliases": [
+      "period parameter"
+    ],
+    "definition": "The nominal interval between releases of a repeating SCHED_DEADLINE job and its CPU reservation. A period differs from the relative completion deadline and from a cgroup CPU-quota accounting period.",
+    "source": "https://docs.kernel.org/scheduler/sched-deadline.html"
   }
 ]

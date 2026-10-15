@@ -1,0 +1,70 @@
+[
+  {
+    "id": "sched-linux-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Linux's `SCHED_FIFO` and `SCHED_RR` are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Real-time priorities run from 1 to 99, and a higher number wins",
+        "explanation": "Correct. Unlike nice, RT priorities are 'higher is higher'."
+      },
+      {
+        "text": "Ignoring throttling and higher scheduling classes, FIFO has no time slice and runs until blocking, yielding or higher RT priority preemption",
+        "explanation": "Correct. FIFO has no time slice at all."
+      },
+      {
+        "text": "SCHED_RR threads rotate with a time slice only among threads of the same priority",
+        "explanation": "Correct. A higher-priority RR thread still preempts immediately; the slice (100 ms by default) only matters for ties."
+      },
+      {
+        "text": "A SCHED_RR thread that uses its slice drops to the fair class",
+        "explanation": "RR threads are never demoted out of the rt class. They go to the back of the queue for their own priority."
+      },
+      {
+        "text": "Any user can set SCHED_FIFO on their own processes",
+        "explanation": "It needs root, CAP_SYS_NICE, or a suitable RLIMIT_RTPRIO, because an RT thread can starve the whole system."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Options A, B and C are true under the stated exclusions. RT priority is 1–99; FIFO has no quantum; RR rotates equals. RR does not demote into fair scheduling. Option E is false: setting FIFO requires CAP_SYS_NICE or suitable RLIMIT_RTPRIO permissions, not merely ownership.",
+    "link": {
+      "title": "sched(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/sched.7.html"
+    }
+  },
+  {
+    "id": "sched-linux-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A single-CPU system allows deadline tasks up to **95%** of the CPU. Two `SCHED_DEADLINE` tasks already run: 30 ms per 100 ms, and 40 ms per 100 ms. A third asks for **runtime 12 ms, period 40 ms**. What happens?",
+    "options": [
+      {
+        "text": "It's accepted and all three tasks will occasionally miss deadlines",
+        "explanation": "SCHED_DEADLINE's point is that it doesn't overcommit. It checks before accepting."
+      },
+      {
+        "text": "sched_setattr() fails with EBUSY because total utilisation would be 100%, over the 95% limit",
+        "explanation": "Correct. 0.30 + 0.40 + 0.30 = 1.00 > 0.95, so admission control rejects the new task up front."
+      },
+      {
+        "text": "It's accepted at a lower real-time priority",
+        "explanation": "Deadline tasks don't have priorities to fall back on. Either the reservation fits or it is refused."
+      },
+      {
+        "text": "It's accepted, and the kernel shortens its runtime to fit",
+        "explanation": "The kernel doesn't silently change a task's parameters. It returns an error so the caller can decide."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each task's utilisation is its runtime divided by its period. Add them up and compare with the limit:\n\n```formula\nU = t_run / T\nU_tot = (30 ms / 100 ms)\n      + (40 ms / 100 ms)\n      + (12 ms / 40 ms)\nU_tot = 0.30 + 0.40 + 0.30 = 1.00\nU_tot = 1.00 > U_max = 0.95\nwhere\nU: one task's utilisation, the fraction of the CPU it reserves\nt_run: the task's runtime per period, in milliseconds (ms)\nT: the task's period, in ms\nU_tot: the total utilisation if the new task were accepted\nU_max: the admission limit on this one-CPU system, 0.95\n>: greater than\nms: milliseconds, thousandths of a second\nIn words: the three reservations together would need the whole CPU, more than the 95 % allowed, so the new one is refused.\n```\n\nThe request is rejected with EBUSY, assuming otherwise valid parameters and permissions. A request of 10 ms per 40 ms (0.25) makes the total exactly 0.95 and passes this bandwidth check. Passing admission does not alone prove all application deadlines will be met.",
+    "link": {
+      "title": "Deadline Task Scheduling — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-deadline.html"
+    }
+  }
+]

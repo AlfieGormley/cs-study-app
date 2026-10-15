@@ -1,0 +1,70 @@
+[
+  {
+    "id": "sched-multicore-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On an 8-CPU Linux machine with no restrictions, what does this print?\n\n```python\nimport os\nos.sched_setaffinity(0, {1, 5})\n# Second call replaces the first mask.\nos.sched_setaffinity(0, {5, 6})\nprint(sorted(os.sched_getaffinity(0)))\n```",
+    "options": [
+      {
+        "text": "[5]",
+        "explanation": "That would be the intersection of the two masks. Each call *replaces* the mask; it doesn't intersect with the previous one."
+      },
+      {
+        "text": "[1, 5, 6]",
+        "explanation": "That would be the union. sched_setaffinity sets a new mask rather than adding to the old one."
+      },
+      {
+        "text": "[0, 1, 2, 3, 4, 5, 6, 7]",
+        "explanation": "The calls do take effect (pid 0 means the calling thread), so the mask is no longer all CPUs."
+      },
+      {
+        "text": "[5, 6]",
+        "explanation": "Correct. The second call replaces the mask with {5, 6}."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `sched_setaffinity(0, mask)` sets the calling thread's allowed CPUs to exactly `mask`.\n2. First call: {1, 5}.\n3. Second call replaces it: {5, 6}.\n4. `sched_getaffinity(0)` returns {5, 6}; sorted → `[5, 6]`.\n\nThe kernel will now only run this thread on CPUs 5 and 6, and children created with `fork()` inherit that mask.",
+    "link": {
+      "title": "sched_setaffinity(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/sched_setaffinity.2.html"
+    }
+  },
+  {
+    "id": "sched-multicore-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about Linux's multicore CPU load balancing are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A CPU that is about to go idle tries to pull work from a busier CPU first",
+        "explanation": "Correct. This is 'newidle' balancing, one of the three triggers alongside periodic and wake-up balancing."
+      },
+      {
+        "text": "Balancing across NUMA nodes is done as eagerly as between SMT siblings",
+        "explanation": "It's the reverse. Moving between siblings is cheap (shared caches), so it happens readily; crossing NUMA nodes loses cache and memory locality, so it's done reluctantly."
+      },
+      {
+        "text": "When a thread wakes, the kernel prefers its previous CPU or an idle CPU sharing the same last-level cache",
+        "explanation": "Correct. Wake-up placement balances keeping a warm cache against finding an idle CPU quickly."
+      },
+      {
+        "text": "A task that ran very recently may be treated as cache-hot and left where it is",
+        "explanation": "Correct. Below the migration-cost threshold (0.5 ms by default) the balancer prefers not to move it."
+      },
+      {
+        "text": "Load is measured purely as the number of runnable tasks on each CPU",
+        "explanation": "Linux considers runnable counts alongside PELT load, runnable and utilization averages, CPU capacity and other signals. It does not rely purely on task counts."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "The correct statements are A, C and D. Newidle balancing may pull work; wake-up placement considers locality and idle CPUs; recently running tasks may be treated as cache-hot. Cross-node balancing has different costs. Linux uses multiple signals, including task counts and distinct PELT averages; no one metric describes every balancing decision.",
+    "link": {
+      "title": "Scheduler Domains — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-domains.html"
+    }
+  }
+]

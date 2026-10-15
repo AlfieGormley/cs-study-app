@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sched-multicore-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does Linux give each CPU its own run queue instead of sharing one global queue?",
+    "options": [
+      {
+        "text": "A global queue can't support priorities",
+        "explanation": "A single queue can hold priorities perfectly well. The problems are contention and affinity, not expressiveness."
+      },
+      {
+        "text": "Per-CPU queues guarantee perfect load balance",
+        "explanation": "It's the opposite: per-CPU queues can become imbalanced, which is why Linux needs migration and CPU load balancing."
+      },
+      {
+        "text": "Per-CPU queues avoid a single lock contended by every CPU, and keep threads on the CPU where their cache is warm",
+        "explanation": "Correct. Scalability and cache affinity are the two wins. The cost is imbalance, which the CPU load balancer fixes."
+      },
+      {
+        "text": "Each CPU runs a different scheduling algorithm",
+        "explanation": "Every CPU runs the same scheduling classes. Only the queue of tasks differs."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the two designs:\n\n| | Global queue | Per-CPU queues |\n|---|---|---|\n| Locking | One lock for all CPUs | Mostly local |\n| Affinity | Threads hop CPUs | Threads stay put |\n| Balance | Automatic | Needs migration |\n\nOn a many-core machine, a single scheduling lock can become contended and migrations can discard useful locality; the actual cost depends on implementation and workload. A global queue can also use affinity heuristics. So Linux uses per-CPU queues and pays for it with a CPU load balancer.",
+    "link": {
+      "title": "Multiprocessor Scheduling (Advanced) — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-multi.pdf"
+    }
+  },
+  {
+    "id": "sched-multicore-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A machine has 4 physical cores with 2 hyper-threads each (CPUs 0–7, where 0/1, 2/3, 4/5 and 6/7 are siblings). You pin two CPU-bound, cache-heavy threads with `taskset -c 0,1`. The rest of the machine is idle. Compared with letting the scheduler place them, what do you expect?",
+    "options": [
+      {
+        "text": "Same throughput, since each thread has its own logical CPU",
+        "explanation": "Distinct logical-CPU identifiers do not imply separate physical cores. Sharing core resources can constrain throughput compared with independent cores; the effect needs measurement."
+      },
+      {
+        "text": "Better throughput, because the threads share an L1 cache",
+        "explanation": "Sharing a cache can help data-sharing workloads, but separate cache-heavy working sets can contend; sharing is not a general throughput guarantee."
+      },
+      {
+        "text": "The scheduler will move one thread to another core to fix the imbalance",
+        "explanation": "A hard affinity mask is never overridden by the CPU load balancer. It can only choose within CPUs 0 and 1."
+      },
+      {
+        "text": "Usually lower throughput for this contending workload: both are restricted to one core while separate cores are idle",
+        "explanation": "The mask prevents spreading onto physical cores. This creates a plausible resource bottleneck, rather than a universal measured speed ratio; verify on the actual CPU and workload."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. CPUs 0 and 1 are **SMT siblings**: one core, shared execution units and L1/L2.\n2. Two CPU-bound threads there each get only part of that core.\n3. Unpinned, the balancer would see 3 idle physical cores and spread the threads onto separate cores.\n4. The affinity mask forbids that, so the kernel can't fix it.\n\nLesson: if you pin, pin to **different cores** (e.g. `taskset -c 0,2`), and know your topology (`lscpu -e`).",
+    "link": {
+      "title": "Scheduler Domains — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-domains.html"
+    }
+  }
+]

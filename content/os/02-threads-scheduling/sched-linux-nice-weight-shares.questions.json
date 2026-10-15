@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sched-linux-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two CPU-bound tasks compete alone in the same fair group on one CPU: a nice 19 backup and a nice 0 service, with no quota or higher-class interference. What share does the backup receive?",
+    "options": [
+      {
+        "text": "The backup never runs while the service is busy",
+        "explanation": "That's strict-priority thinking. Nice is a weight, so the backup still gets a small proportional share."
+      },
+      {
+        "text": "The backup gets about half the CPU",
+        "explanation": "Half would mean equal weights. Nice 19's weight (15) is far smaller than nice 0's (1024)."
+      },
+      {
+        "text": "Roughly 1–2% of the CPU",
+        "explanation": "Correct: 15 / (1024 + 15) is about 1.44%. SCHED_IDLE offers still lower-weight background scheduling, not strict idle-only execution."
+      },
+      {
+        "text": "The backup is moved into the idle scheduling class",
+        "explanation": "Nice never changes a task's class. The idle class only holds the per-CPU idle task."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Within one fair group, each task's share is its weight divided by the total weight:\n\n```formula\ns_b = w_b / (w_s + w_b)\ns_b = 15 / (1024 + 15)\ns_b = 15 / 1039 ≈ 0.0144 ≈ 1.44 %\nwhere\ns_b: the backup's share of the CPU, as a fraction\nw_b: the backup's weight at nice 19, 15\nw_s: the service's weight at nice 0, 1024\n≈: approximately equal to (rounded)\n%: per cent, hundredths\nIn words: the backup's weight is a tiny fraction of the total, so it gets a tiny but non-zero share.\n```\n\nThe service receives about 98.56%. These are long-run proportions under the stated assumptions. SCHED_IDLE remains in the fair class and does not guarantee execution only when all normal tasks are absent.",
+    "link": {
+      "title": "sched(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/sched.7.html"
+    }
+  },
+  {
+    "id": "sched-linux-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two continuously CPU-bound tasks compete alone in the same fair group on one CPU, without quotas or higher-class work. Both start at nice 0 and get 50%. You successfully renice one to nice 1 (weight 820). Roughly what shares do they now get?",
+    "options": [
+      {
+        "text": "50% / 50%; one nice step is too small to matter",
+        "explanation": "A nice step changes the weight by about 1.25×, which noticeably shifts the split."
+      },
+      {
+        "text": "About 55.5% / 44.5%",
+        "explanation": "Correct: 1024/1844 ≈ 55.5% and 820/1844 ≈ 44.5%, a gap of about 11.1 percentage points. Each share changes about 5.5 points from 50%."
+      },
+      {
+        "text": "About 80% / 20%",
+        "explanation": "That would be a weight ratio of 4:1, roughly six nice steps, not one."
+      },
+      {
+        "text": "100% / 0%, because the higher-priority task always runs",
+        "explanation": "That's strict priority. CFS shares in proportion to weight."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Within one fair group, each task's share is its weight divided by the total weight:\n\n```formula\ns_0 = 1024 / (1024 + 820)\ns_0 = 1024 / 1844 ≈ 0.5553\ns_1 = 820 / 1844 ≈ 0.4447\nwhere\ns_0: the share of the task still at nice 0 (weight 1024), as a fraction\ns_1: the share of the reniced task at nice 1 (weight 820)\n≈: approximately equal to (rounded)\nIn words: the nice 0 task now gets about 55.5 % and the nice 1 task about 44.5 %.\n```\n\nThe gap is about 11.06 percentage points. Each share moved about 5.53 percentage points from 50%; this is not a fixed share change for every possible workload.",
+    "link": {
+      "title": "CFS Scheduler — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
+    }
+  },
+  {
+    "id": "sched-linux-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A task at **nice 5** (weight 335) runs for **6 ms** of real CPU time. By how much does its vruntime increase?",
+    "options": [
+      {
+        "text": "6 ms",
+        "explanation": "That's the increase for a nice 0 task, whose weight is exactly 1024. Lighter tasks' vruntime grows faster."
+      },
+      {
+        "text": "About 2 ms",
+        "explanation": "That divides instead of multiplying: it would be the increase for a task *heavier* than nice 0 (weight ≈ 3072)."
+      },
+      {
+        "text": "About 18.3 ms",
+        "explanation": "Correct. Scale the 6 ms of real service by the reference weight 1024 divided by 335; the virtual increment is about 18.3 ms."
+      },
+      {
+        "text": "335 ms",
+        "explanation": "The weight is a scaling factor, not a time: the increase is 6 ms × 1024 / 335."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. vruntime grows by the real time run, scaled by 1024 over the task's weight:\n\n```formula\nv_add = (1024t_run) / w\nv_add = 6 ms × 1024 / 335\nv_add = 6144 ms / 335 ≈ 18.3 ms\nwhere\nv_add: how much the task's vruntime grows, in milliseconds (ms)\nt_run: the real CPU time it ran, 6 ms\nw: the task's weight, 335 at nice 5 (1024 at nice 0)\n≈: approximately equal to (rounded)\nms: milliseconds, thousandths of a second\nIn words: a task lighter than nice 0 has a virtual clock that runs faster than real time, here about three times faster.\n```\n\n2. Compare a nice 0 task: 6 ms × 1024 / 1024 = 6 ms.\n\nSince CFS runs whichever task has the smallest vruntime, the nice 5 task drifts rightwards in the tree about 3× faster and receives roughly a third as much CPU service as a nice 0 competitor under sustained same-group contention; this does not specify dispatch counts.",
+    "link": {
+      "title": "CFS Scheduler — Linux kernel docs",
+      "url": "https://docs.kernel.org/scheduler/sched-design-CFS.html"
+    }
+  }
+]

@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 23/76 modules; 167 originals → 873 short lessons with 1981 focused questions.
+- Independently verified: 24/76 modules; 173 originals → 904 short lessons with 2048 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `31d0c9b`, version `8b977959ee5e`, 844 short lessons/1913 focused questions
-  across 22 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `ccafb2dedf40`, 23 modules/873 units/1981 questions.
+- Latest confirmed live release: `9b2cf05`, version `ccafb2dedf40`, 873 short lessons/1981 focused questions
+  across 23 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `a3671687cb63`, 24 modules/904 units/2048 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -19,9 +19,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- os/os-threads: verifying; /root/scheduling_short_verify.
 - os/os-sync: authoring; /root/sync_short_author.
 - os/os-deadlock: authoring; /root/deadlock_short_author.
+- os/os-memory: authoring; /root/memory_short_author.
 
 Verification and integration:
 

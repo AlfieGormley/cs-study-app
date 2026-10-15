@@ -1,0 +1,168 @@
+[
+  {
+    "id": "sched-threads-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these does each thread in a process get **its own copy** of?",
+    "options": [
+      {
+        "text": "The heap",
+        "explanation": "The heap is shared: memory one thread allocates with `malloc` (or any Python object it creates) is visible to every thread that has a pointer to it."
+      },
+      {
+        "text": "Global variables",
+        "explanation": "Globals live in the process's data segment, which all threads share. That is exactly why unprotected globals cause races."
+      },
+      {
+        "text": "The table of open file descriptors",
+        "explanation": "File descriptors belong to the process. If one thread opens a file, another thread can read from that descriptor, and closing it closes it for all."
+      },
+      {
+        "text": "The stack",
+        "explanation": "Correct. Each thread has its own stack holding its local variables and return addresses, because each thread is at a different point in its own chain of function calls."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Ask what a thread *is*: an independent sequence of execution. To run independently it needs:\n\n1. its own program counter (where it is in the code);\n2. its own registers;\n3. its own **stack**, because each thread is in a different chain of function calls with different local variables.\n\nEverything else (code, heap, globals, open files) belongs to the process and is shared. So the stack is the per-thread item.",
+    "link": {
+      "title": "Concurrency: An Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sched-threads-q2",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Select **all** of the following that are shared by every thread of a single process.",
+    "options": [
+      {
+        "text": "Objects allocated on the heap",
+        "explanation": "Correct. There is one heap per process; any thread holding a pointer or reference can use the object."
+      },
+      {
+        "text": "Open file descriptors",
+        "explanation": "Correct. The file descriptor table belongs to the process (on Linux, threads are created with `CLONE_FILES`)."
+      },
+      {
+        "text": "The program counter",
+        "explanation": "Wrong: each thread is at its own point in the code, so each has its own program counter. Sharing it would mean they were one thread."
+      },
+      {
+        "text": "Global variables",
+        "explanation": "Correct. Globals live in the shared data segment, which is why they need protection when several threads write them."
+      },
+      {
+        "text": "The CPU registers",
+        "explanation": "Wrong: registers are part of each thread's private execution context; the kernel saves and restores them on every switch."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Sort each item into \"process resource\" or \"execution context\":\n\n| Item | Belongs to |\n|---|---|\n| Heap | Process (shared) |\n| File descriptors | Process (shared) |\n| Globals | Process (shared) |\n| Program counter | Thread (private) |\n| Registers | Thread (private) |\n\nThe execution context (PC, registers, stack) is what makes a thread a thread. Everything else is shared.",
+    "link": {
+      "title": "Concurrency: An Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sched-threads-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Three threads each run `work()` once, concurrently. What does each thread print?\n\n```c\n#include <stdatomic.h>\natomic_int hits = 0;\n\nvoid *work(void *arg) {\n    int mine = 0;\n    mine++;\n    /* One indivisible shared update. */\n    atomic_fetch_add(&hits, 1);\n    printf(\"mine=%d\\n\", mine);\n    return NULL;\n}\n```",
+    "options": [
+      {
+        "text": "`mine=1`, `mine=2`, `mine=3` in some order",
+        "explanation": "This would be true only if `mine` were shared. It is a local variable, so each thread has its own copy on its own stack."
+      },
+      {
+        "text": "`mine=1` three times",
+        "explanation": "Correct. `mine` lives on each thread's private stack, starts at 0 and is incremented once, so every thread prints 1. It is `hits` that is shared."
+      },
+      {
+        "text": "`mine=3` three times",
+        "explanation": "That assumes all three increments land on the same variable before anyone prints. Locals are per thread, so no thread ever sees another's increment."
+      },
+      {
+        "text": "It is unpredictable because of a data race on `mine`",
+        "explanation": "There is no race on `mine`, and the shared `hits` update uses an atomic operation. Each call prints its own `mine` value."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each call has its own automatic `mine` variable, increments it from 0 to 1 and prints `mine=1`. The shared `hits` counter is now atomic, so three completed calls increment it to 3 without a data race. The original non-atomic `hits++` would make the entire C program undefined, even though `mine` itself was not shared.",
+    "link": {
+      "title": "Concurrency: An Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sched-threads-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select **all** correct reasons why switching between two threads of the **same** process is usually cheaper than switching between two different processes.",
+    "options": [
+      {
+        "text": "The page tables stay the same, so there is no address-space switch",
+        "explanation": "Correct. Both threads use the same address space, so the kernel doesn't load a new page-table root."
+      },
+      {
+        "text": "Cached address translations in the TLB stay valid",
+        "explanation": "Correct. Because the address space doesn't change, the TLB entries still apply, avoiding a burst of TLB misses afterwards."
+      },
+      {
+        "text": "Threads don't have registers that need saving",
+        "explanation": "Wrong: every thread has its own registers and the kernel must save and restore them on each switch, just as for processes."
+      },
+      {
+        "text": "The kernel is not involved in switching between kernel threads",
+        "explanation": "Wrong: kernel threads are scheduled by the kernel, so a switch still involves entering the kernel. Only user-level threads avoid it."
+      },
+      {
+        "text": "The CPU caches are more likely to hold useful data",
+        "explanation": "Correct. The threads share code and often data, so the incoming thread may find some of its working set already in cache."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Both cases save/restore thread state. Sharing an address space can avoid changing memory maps, and shared code/data can preserve useful locality. Translation validity is not guaranteed cache residency; PCID can preserve process translations too. These are possible savings, not a universal ordering of measured switch latency.",
+    "link": {
+      "title": "Concurrency: An Introduction — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sched-threads-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A worker in a 50-thread process incurs a memory fault that generates SIGSEGV, with its default terminating disposition unchanged. What happens?",
+    "options": [
+      {
+        "text": "The whole process, including all 50 threads, is killed",
+        "explanation": "Correct. Threads share one address space and one set of signal dispositions, so a fatal signal in any thread terminates the entire process."
+      },
+      {
+        "text": "Only that worker thread dies; the other 49 keep serving",
+        "explanation": "That is the isolation processes give you, not threads. A SIGSEGV's default action terminates the whole process."
+      },
+      {
+        "text": "The thread is restarted automatically by the threads library",
+        "explanation": "pthreads has no supervisor that restarts crashed threads. The default action for SIGSEGV kills the process."
+      },
+      {
+        "text": "Nothing, because each thread has its own private memory",
+        "explanation": "Threads share memory; only their stacks are separate, and even those aren't protected. A NULL dereference raises SIGSEGV for the process."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "SIGSEGV with its ordinary default action terminates the process, ending all 50 threads. Separate processes provide a memory-isolation boundary, but shared resources and recovery policy can still couple failures; a worker crash does not guarantee that every other service process continues uninterrupted.",
+    "link": {
+      "title": "pthreads(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pthreads.7.html"
+    }
+  }
+]

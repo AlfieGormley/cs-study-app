@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 23/76. Updated 2026-10-15.
+Verified modules: 24/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -30,6 +30,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Problem-Solving Patterns | 8 | 42 | 89 | 77 | 105 | 313 | 189 |
 | dsa/Advanced Structures & Algorithms | 7 | 49 | 84 | 124 | 144 | 476 | 70 |
 | os/OS Basics & Processes | 6 | 29 | 68 | 25 | 467 | 611 | 171 |
+| os/Threads & Scheduling | 6 | 31 | 67 | 55 | 232 | 404 | 45 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -2847,6 +2848,103 @@ Low-confidence areas:
 - **medium** — glossary: os-nanosecond. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
 - **medium** — glossary: os-cpu-cache. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
 - **medium** — glossary: os-kernel-extension. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+
+## os: Threads & Scheduling
+
+[Independent verification record](../content/os/02-threads-scheduling/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- It is called exponential because each update multiplies older contributions by the complement of the latest-burst weight. With the weight set to one half, the burst before last counts a quarter, the one before that an eighth, and so on. For a fixed weight strictly between zero and one, old contributions approach zero without reaching it in exact arithmetic. At a weight of one, only the latest burst counts; at zero, the prediction never updates.
+- t_cpu: positive CPU-compute time per piece of work, in milliseconds (ms); 10 ms here (the estimate is undefined for zero compute time)
+- a server that creates one thread per request without admission or concurrency limits has **no application-level bound**: a traffic spike can create thousands of threads until resource limits or failures intervene.
+- A bounded **thread pool** reuses workers and caps active jobs; its submission queue still needs an overload policy.
+- The preceding units explain thread state and runtime mappings. This unit uses the POSIX threads (**pthreads**) API on Linux and macOS to partition an array and combine completed results. Later units cover ownership, pools and Python's interpreter lock.
+- As C runs, its vruntime rises. The current task is normally kept outside the queued-task tree, then reinserted at its new ordering position when descheduled. Classic CFS compares its service with queued competitors and applies slice/granularity and wake-up checks to decide when to reschedule; the picture shows key ordering rather than a node continuously moving through the tree.
+- A higher weight makes vruntime grow *more slowly*, so it needs more real CPU service to reach the same virtual-clock advance. This explains the larger fair share under classic CFS and EEVDF; EEVDF additionally compares eligibility and virtual deadlines.
+- N_eff: the group's quota-to-period capacity ceiling in CPUs' worth of service; it can be fractional and is not an affinity mask
+- It returns the address of a local object whose lifetime ends on return, so dereferencing it later is undefined behaviour
+- Correct. The automatic result object dies when compute returns. Retained or cached stack storage does not extend its lifetime; a later dereference can fail in arbitrary ways.
+- Correct. Some thread resources and the return value remain available for a later join. Automatic local objects have already ended their lifetimes; retained stack storage does not keep them alive.
+- Returning from main ends the process and all its threads. In an ordinary run main returns while the worker is sleeping, so nothing is printed. This is the likely result, rather than a timing guarantee: if main is descheduled long enough after creation, the worker could print before main resumes. Check pthread_create for failure and join a successfully created thread before returning, or call pthread_exit(NULL) to end only the main thread.
+- False sharing: the counters occupy one cache line, so alternating writes from different cores can transfer its ownership
+- Correct. This CPU loop neither returns nor suspends, so the event loop cannot resume its other tasks. An await only yields if it actually suspends; returning also gives control back.
+- A short I/O-bound burst that becomes ready during the long FCFS burst waits until that burst finishes. Until it runs and issues its next read, the disk may be idle. Several waiting jobs can then issue reads in a cluster. Exact CPU and disk utilisation needs the omitted disk-service times. Under an ideal round-robin model with a 10 ms quantum, short bursts can run after the current quantum and other queued bursts, rather than after a whole 100 ms CPU burst. This can reduce the convoy delay; no fixed throughput gain or disk-idle fraction follows from the supplied numbers alone.
+- Nice values run from −20 to 19. Lower nice means greater fair-scheduling weight, so the nice −5 task receives more long-run CPU service than the nice 10 task under the specified same-group contention. This is weighted sharing rather than strict preemption: the nice 10 task still receives a share. Linux real-time priorities use the opposite numeric direction and a different scheduling class.
+- Two continuously CPU-bound tasks compete alone in the same fair group on one CPU, without quotas or higher-class work. Both start at nice 0 and get 50%. You successfully renice one to nice 1 (weight 820). Roughly what shares do they now get?
+- Weight sets long-run share under same-group sustained contention; equal nice weights receive equal shares when no other constraints intervene. A slice affects virtual deadlines. For fresh requests at equal virtual runtimes:
+
+```formula
+d = v + (1024r) / w
+d_audio = v + 1 ms
+d_hog = v + 3 ms
+where
+d: a fresh request's virtual deadline, in milliseconds (ms)
+v: its starting virtual runtime, in ms; equal for these two requests
+r: its requested slice, in ms
+w: its weight, 1024 for both nice 0 tasks
+d_audio, d_hog: deadlines of the fresh audio and CPU-heavy requests, in ms
+ms: milliseconds, thousandths of a second
+In words: at equal starting virtual runtimes the shorter fresh request has the earlier virtual deadline.
+```
+
+The audio request therefore has the earlier deadline in that comparison. At later selections, virtual runtimes, eligibility, request progress and preemption protection can differ; an arbitrary audio deadline is not always earlier. A shorter slice does not guarantee a wall-clock latency or change the scheduling class.
+- A 500m CPU request contributes a half-CPU reservation for placement and proportional shares under contention; achieved service depends on the competing hierarchy and capacity.
+- With local policy, enough node-0 memory and no later migration, a main thread on node 0 can place a newly written private array there.
+- Pinning restricts this thread; separately exclude competing work and inspect SMT siblings when seeking a dedicated core.
+- An eight-CPU root domain with a configured 95% total deadline-bandwidth limit has 7.6 CPUs of reservation capacity before accounting for fair-server reservations.
+- A measured p99 of 79 ms marks a high quantile; ties, interpolation and sample size affect how many observations are at or beyond it.
+- A task that ran 0.2 ms ago may be treated as cache-hot under the checked 0.5 ms threshold; other migration conditions still matter.
+- With max_workers=10, at most ten pool jobs execute at once; idle workers are reused and fewer may be needed.
+- {"glossary":"base-slice","field":"aliases","before":["default slice","custom slice","shorter slice","requested slice","requested slices"],"after":["default slice"]}
+- For equal starting virtual runtimes and fresh requests, a nice 0 task's 1 ms slice has an earlier deadline than a 3 ms request.
+- For equally weighted eligible fresh requests starting at the same virtual runtime, a 1 ms slice has an earlier deadline than a 3 ms slice.
+- A fresh nice 0 request starting at virtual runtime 10 ms with a 0.5 ms slice has virtual deadline 10.5 ms.
+- A monotonic per-run-queue virtual-runtime reference in Linux's fair scheduler. Classic CFS places sleepers relative to it; EEVDF adds lag-aware placement. It is maintained as a floor from tracked entities rather than always equalling the smallest current queued value.
+- Classic CFS's minimum-granularity target used when choosing scheduling periods and service slices. It helps avoid excessively small slices as runnable task counts grow; weights and other preemption conditions still affect actual execution.
+- A balanced tree keeps path lengths logarithmic in its number of nodes; the exact comparisons and rotations depend on its shape and operation.
+- A count tracking references to an object. In CPython it participates in object lifetime management, alongside cycle collection; immortal objects and free-threaded implementations require additional rules. A simple increment/decrement model does not describe every object or guarantee immediate destruction.
+- For an ordinary non-immortal CPython object, adding a strong reference normally increases its reference count.
+- An additional Python interpreter inside one process, with separate interpreter state. Python 3.14's InterpreterPoolExecutor uses isolated interpreters with their own GILs, enabling independent bytecode execution on several cores. Historically, not every subinterpreter configuration had a separate GIL.
+- A cgroup CPU-time budget shared across its fair-class tasks and CPUs over an accounting period. Exhausted local runtime allocations throttle affected queues. Ancestor budgets, per-CPU accounting and burst credit can change the exact timing; a perfectly simultaneous group-wide stop is an ideal model.
+- A locality domain for memory allocation and CPU access. A NUMA node may contain CPUs, memory or both; memoryless and CPU-less nodes exist. Relative access cost depends on the hardware topology.
+- The final hardware cache level before accesses proceed beyond the cache hierarchy. It is often an L3 shared by a group of cores, but level, size and sharing vary by CPU design.
+- The fair scheduler's imaginary reference that serves runnable competitors simultaneously in proportion to their scheduling weights. Equal weights give equal shares; unequal weights do not.
+- Hierarchical fair scheduling that divides contended CPU service among sibling task groups by group weight, then among their members. Groups can be nested beyond two levels; quotas and topology also constrain service.
+- Sending a large ordinary array through a process pool can incur serialization and copying; shared-memory designs can avoid moving the full payload.
+- one CPU burst, defined in the next unit
+- In the preceding feedback-trace unit, B uses 2 ms per burst.
+- | 2.4 | O(n): scan runnable tasks |
+- summary: N:1 cannot
+
+Remaining gaps:
+
+- No universal benchmark is supplied for thread creation, switching, false sharing, NUMA penalties, maximum thread count, pool speed-up or physical-phone performance. Examples distinguish models and observed timings.
+- The module explains rather than fully implements Linux EEVDF, hierarchical admission, NUMA balancing, deferred dequeue and RT inheritance. General schedulability proofs, nested-lock worst-case bounds and real production workloads are outside this split.
+- Diagnostic commands include host-specific placeholders and illustrative output. chrt flags and safe policy inspection were checked; an actual ./audio-engine or ./render implementation is not supplied.
+- The historical starvation anecdote remains explicitly omitted for lack of reliable primary evidence; all substantive audited material otherwise remains.
+- No physical phone, production-kernel latency benchmark, full EEVDF simulation or worst-case schedulability proof was performed in this module verification. Root performs app rendering, offline and deployment integration.
+
+Low-confidence areas:
+
+- **medium** — sched-thread-shared-private: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-thread-kernel-mappings: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-thread-lightweight-limits: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-pool-reuse-waves: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-pool-capacity-deadlock: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-python-gil-parallelism: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-cpu-bursts-preemption: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-linux-history-classes: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-linux-cfs-sleep-slices: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-linux-eevdf-eligibility: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-linux-group-fairness-tools: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-linux-real-time-reservations: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-multicore-topology-queues: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-multicore-balancing-affinity: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-multicore-numa-placement: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-container-weights-quotas: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-container-throttle-latency: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+- **medium** — sched-container-runtime-cpu-count: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
 
 ## synth: Sound & Digital Audio
 

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sched-priority-mlfq-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two continuously CPU-bound Linux fair-class tasks compete alone on one CPU in the same fair group, without quotas or higher-class work. One has nice 10 and the other nice −5. Which does the scheduler favour?",
+    "options": [
+      {
+        "text": "The nice 10 process, because a higher number means higher priority",
+        "explanation": "That's the convention for Linux real-time priorities (1–99) and Windows, not for nice values. Nice runs the other way: a 'nicer' process is more generous to others."
+      },
+      {
+        "text": "The nice −5 process",
+        "explanation": "Lower nice means greater fair-scheduling weight when competing within the same scheduling group. Lowering nice normally needs permission, but RLIMIT_NICE can authorise an unprivileged process to do so."
+      },
+      {
+        "text": "Neither; nice only affects I/O priority",
+        "explanation": "I/O priority is a separate setting (ionice). Nice directly changes the CPU share a thread gets."
+      },
+      {
+        "text": "Neither; nice values only matter for real-time threads",
+        "explanation": "It's the reverse: nice applies to normal (non-real-time) threads. Real-time threads use a separate 1–99 priority."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Nice values run from −20 to 19. Lower nice means greater fair-scheduling weight, so the nice −5 task receives more long-run CPU service than the nice 10 task under the specified same-group contention. This is weighted sharing rather than strict preemption: the nice 10 task still receives a share. Linux real-time priorities use the opposite numeric direction and a different scheduling class.",
+    "link": {
+      "title": "Scheduling: The Multi-Level Feedback Queue — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-sched-mlfq.pdf"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A strict, preemptive priority scheduler runs a steady stream of high-priority web requests. A low-priority log-cleanup job has been ready for an hour and has never run. What is this called, and what is the classic fix?",
+    "options": [
+      {
+        "text": "Priority inversion; fix it with priority inheritance",
+        "explanation": "Inversion is when a high-priority thread is stuck behind lower-priority ones because of a lock. Here no lock is involved: the low-priority job is simply always outranked."
+      },
+      {
+        "text": "Deadlock; fix it by ordering lock acquisition",
+        "explanation": "Deadlock needs a cycle of threads waiting on each other. The web requests are making progress; only the low-priority job is stuck."
+      },
+      {
+        "text": "Starvation; fix it with aging",
+        "explanation": "Correct. The job is perpetually outranked, which is starvation. Aging raises its priority the longer it waits until it eventually wins."
+      },
+      {
+        "text": "Convoy effect; fix it with a shorter quantum",
+        "explanation": "The convoy effect is short jobs stuck behind a long one under FCFS. Changing the quantum doesn't help a job that is never selected at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. No circular blocking dependency is described: high-priority requests keep running while cleanup remains ready. Deadlock can involve resources other than locks, but that is not the mechanism here.\n2. Is the job ready but never chosen because higher-priority work keeps arriving? Yes. That is **starvation**.\n3. The fix must eventually let the job win. **Aging** does this: each second it waits, its priority improves, until it outranks the newcomers, runs, and drops back.\n\nMLFQ's periodic priority boost is another cure for the same problem.",
+    "link": {
+      "title": "Starvation (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Starvation_(computer_science)"
+    }
+  },
+  {
+    "id": "sched-priority-mlfq-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Priorities run from 0 (highest) to 127. A waiting thread improves by one level every 2 seconds, starting at 100. How long until it reaches the same priority as work arriving at priority 40?",
+    "options": [
+      {
+        "text": "About 60 seconds",
+        "explanation": "That's the number of levels to climb (100 − 40 = 60), but it forgets that each level takes 2 seconds."
+      },
+      {
+        "text": "About 120 seconds",
+        "explanation": "Correct. It must climb 60 levels at 2 seconds each: 60 × 2 = 120 seconds."
+      },
+      {
+        "text": "About 200 seconds",
+        "explanation": "Aging lowers the numeric priority under this model. The question asks when it reaches 40; actual service also depends on the runnable queue and tie-breaking."
+      },
+      {
+        "text": "Never, because the stream never stops",
+        "explanation": "That would be true without aging. Aging is exactly what guarantees it eventually runs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count the levels to climb, then multiply by the time per level:\n\n```formula\nΔp = p_start − p_load = 100 − 40 = 60\nt_age = Δp t_step\nt_age = 60 × 2 s = 120 s\nwhere\nΔp: delta p, the number of priority levels the thread must climb\np_start: the thread's starting priority number, 100\np_load: the priority number of the arriving work, 40\nt_age: the time until the thread reaches priority 40, in seconds (s)\nt_step: the time to improve by one level, 2 s\ns: seconds\nIn words: 60 levels at 2 seconds each takes 120 seconds.\n```\n\nThat establishes equal priority, not an exact first-run time. Tie-breaking, queue length and scheduling overhead determine when it actually runs.",
+    "link": {
+      "title": "Aging (scheduling) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Aging_(scheduling)"
+    }
+  }
+]

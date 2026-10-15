@@ -1,0 +1,70 @@
+[
+  {
+    "id": "sched-thread-apis-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select **all** statements that are true for the standard (GIL) build of CPython.",
+    "options": [
+      {
+        "text": "Two threads running a pure-Python CPU-bound loop do not run in parallel",
+        "explanation": "Correct. Only the thread holding the GIL executes bytecode, so the threads take turns."
+      },
+      {
+        "text": "The GIL makes `counter = bump(counter)` safe to run from several threads without a lock",
+        "explanation": "Wrong: a thread can lose the GIL between reading `counter` and writing it back, so updates get lost. The GIL protects the interpreter, not your invariants."
+      },
+      {
+        "text": "The GIL is released while a thread waits in a blocking `socket.recv`",
+        "explanation": "Correct. Blocking I/O releases the GIL, which is why threads are fine for I/O-bound Python."
+      },
+      {
+        "text": "A large NumPy matrix multiplication in one thread need not stop other threads running Python",
+        "explanation": "Many numerical NumPy operations release the GIL, letting other Python threads run. This is not true for every NumPy operation; object-dtype work and callbacks need additional care."
+      },
+      {
+        "text": "Python threads are green threads scheduled by the interpreter, not the OS",
+        "explanation": "Wrong: CPython threads are real OS threads (1:1). The GIL limits which one may run bytecode, but the OS schedules them."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "The GIL is one lock that must be held to **execute Python bytecode**.\n\n1. Pure-Python CPU work: always needs the GIL, so no parallelism.\n2. Blocking I/O and long C-level work that release the GIL: other threads run meanwhile.\n3. Correctness: the GIL is not a portable atomicity guarantee for multi-step shared operations; switching points and extension behaviour vary.\n4. Implementation: `threading.Thread` creates a real OS thread; the OS schedules it, and it then waits for the GIL.",
+    "link": {
+      "title": "Global interpreter lock — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Global_interpreter_lock"
+    }
+  },
+  {
+    "id": "sched-thread-apis-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "For independent pure-Python CPU-bound image jobs in one GIL-enabled CPython interpreter, which option can use multiple CPU cores, provided job sizes amortise startup and data-transfer overhead?",
+    "options": [
+      {
+        "text": "`ThreadPoolExecutor(max_workers=8)`",
+        "explanation": "Threads share one GIL, so pure-Python CPU work runs on one core at a time. Expect roughly no speed-up."
+      },
+      {
+        "text": "`ThreadPoolExecutor(max_workers=64)`",
+        "explanation": "More threads make it worse: still one GIL, now with more switching."
+      },
+      {
+        "text": "`ProcessPoolExecutor(max_workers=8)`",
+        "explanation": "Correct. Each worker process has its own interpreter and its own GIL, so 8 processes can run on 8 cores. The cost is pickling the images in and the results out."
+      },
+      {
+        "text": "Lower `sys.setswitchinterval` so threads take turns faster",
+        "explanation": "That changes how often the GIL changes hands, not how many threads hold it at once. It adds overhead without adding parallelism."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The work is pure Python and CPU-bound, so it needs the GIL the whole time.\n2. In one process, only one thread can hold the GIL at once: threads give about 1×.\n3. Separate processes each have their own GIL, so 8 processes can use 8 cores.\n4. Overheads: process start-up and pickling. For images, passing file paths rather than pixel data keeps that cheap.\n\n(Alternatives: rewrite the filter with NumPy, which releases the GIL, or use a free-threaded Python build.)",
+    "link": {
+      "title": "concurrent.futures — Python docs",
+      "url": "https://docs.python.org/3/library/concurrent.futures.html"
+    }
+  }
+]

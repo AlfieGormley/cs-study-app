@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sched-linux-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On one CPU, process P has **16** CPU-bound threads and process Q has **1**. All are nice 0. First they're in the **same** cgroup; then each process is moved into its **own** cgroup with equal `cpu.weight`. What share does Q get in each case?",
+    "options": [
+      {
+        "text": "About 6% (1/17), then 50%",
+        "explanation": "Correct. Linux schedules threads, so in one group Q gets 1 of 17 equal shares. With separate equal-weight groups, CPU is split 50/50 between groups first."
+      },
+      {
+        "text": "50%, then 50%",
+        "explanation": "Process-level fairness only happens when processes are in separate groups. Within one group, each thread is an equal competitor."
+      },
+      {
+        "text": "About 6% (1/17) in both cases",
+        "explanation": "Separate groups change the first level of division: groups share by weight before threads share within a group."
+      },
+      {
+        "text": "Nearly 0%, then about 6%",
+        "explanation": "Fair scheduling never starves a nice 0 thread. And with equal-weight groups Q gets half, not 1/17."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "**Same group**: the fair scheduler sees 17 equal-weight threads.\n\n```formula\ns_Q = 1 / 17 ≈ 0.059 ≈ 5.9 %\ns_P = 16 / 17 ≈ 0.94 ≈ 94 %\nwhere\ns_Q: Q's share of the CPU (one of 17 equal shares)\ns_P: P's share (16 of 17 equal shares)\n≈: approximately equal to (rounded)\n%: per cent, hundredths\nIn words: with equal weights, CPU is split by counting threads.\n```\n\n**Separate groups, equal weight**: CPU is first divided between groups, then within each.\n\n```formula\ns_grp = 1 / 2 = 50 %\ns_t = 50 % / 16 ≈ 3.1 %\nwhere\ns_grp: each group's share (two groups, equal weight)\ns_t: the share of each of P's 16 threads\n≈: approximately equal to (rounded)\n%: per cent, hundredths\nIn words: the groups split the CPU in half first; Q's single thread keeps all of its half, while P's half is cut 16 ways.\n```\n\nThis is why systemd puts services in their own cgroups and why autogroup exists: so that thread count doesn't decide who gets the CPU.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "sched-linux-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume two equal-weight autogroups compete on one CPU in the root CPU cgroup, with no quotas or higher-class interference. On a desktop with autogroup enabled, a `make -j32` runs in terminal 1. In terminal 2 you start a video encoder and run `renice -n -10` on it, hoping to give it most of the CPU over the build. Assume the renice succeeds and both workloads remain CPU-bound. It barely changes the between-group share. Why?",
+    "options": [
+      {
+        "text": "renice only takes effect after the process restarts",
+        "explanation": "Nice changes apply immediately to running threads."
+      },
+      {
+        "text": "Negative nice values are ignored for non-root users",
+        "explanation": "Without sufficient RLIMIT_NICE or privilege, lowering the numeric nice value fails rather than silently succeeding. Assume the requested change succeeds here."
+      },
+      {
+        "text": "The encoder is I/O-bound, so CPU weight doesn't matter",
+        "explanation": "The question assumes CPU-bound encoding and build work. Group scheduling explains why changing an individual thread weight may not change the group share."
+      },
+      {
+        "text": "Each terminal session is its own group; nice only competes with threads in the same group, so the two groups still split the CPU by group weight",
+        "explanation": "Correct. Under group scheduling, the CPU is shared between the session groups first. Nice only reorders threads inside the encoder's own group."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Autogroup puts each session (terminal) in its own task group.\n2. The fair scheduler first divides CPU between groups by group weight. The two groups get roughly equal shares.\n3. Inside each group, threads share by their nice weights.\n4. The encoder is alone in its group, so changing its nice changes its share **within that group**, i.e. not at all relative to the build.\n\nFix: raise the group's weight instead (`/proc/<pid>/autogroup` accepts a nice value for the whole autogroup, or use cgroup `cpu.weight`).",
+    "link": {
+      "title": "sched(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/sched.7.html"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sched-threads-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 64-bit Linux service requests 10,000 threads, each with an explicitly configured 8 MiB user stack. It has 32 GiB of RAM. Which statement correctly distinguishes virtual reservations from physical memory?",
+    "options": [
+      {
+        "text": "It needs about 80 GB of RAM, so thread creation fails partway through",
+        "explanation": "This confuses reserved virtual memory with physical memory. Stacks are mapped lazily; untouched pages use no RAM."
+      },
+      {
+        "text": "User stacks reserve about 78.125 GiB of address space; physical memory is demand-backed, but creation can still fail because of resource or commit limits",
+        "explanation": "10,000 × 8 MiB = 80,000 MiB = 78.125 GiB of virtual stack space, excluding guards and other mappings. Actual resident and kernel memory, commit policy and task limits determine feasibility."
+      },
+      {
+        "text": "All 10,000 threads share one 8 MB stack, so it uses only 8 MB",
+        "explanation": "Each thread needs its own stack; sharing one would mean threads overwrite each other's local variables."
+      },
+      {
+        "text": "It is impossible: Linux allows at most 1,024 threads per process",
+        "explanation": "There is no 1,024 limit. Limits come from settings such as `threads-max`, `pid_max`, `ulimit -u` and memory, and are typically far higher."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Add up what is reserved and, separately, what might actually be touched:\n\n```formula\nM_res = N s_stack\nM_res = 10000 × 8 MiB = 80000 MiB\nM_res = (80000 / 1024) GiB = 78.125 GiB\nM_used = N(s_user + s_kern)\nM_used = 10000 × (20 KiB + 16 KiB)\nM_used = 360000 KiB = 351.5625 MiB\nwhere\nM_res: the virtual address space reserved for user stacks\nN: the number of threads, 10,000\ns_stack: the configured user-stack size per thread, 8 MiB\nM_used: a hypothetical amount of stack memory actually backed by RAM\ns_user: an assumed 20 KiB of each user stack actually touched (an illustration, not a measurement)\ns_kern: the kernel stack per thread, assumed 16 KiB\nKiB: kibibyte, 1024 bytes\nMiB: mebibyte, 1024 KiB (1,048,576 bytes)\nGiB: gibibyte, 1024 MiB\nIn words: the reservations add up to far more than the 32 GiB of RAM, but RAM is only used for pages that are touched, which here is well under a gibibyte.\n```\n\nUser-stack reservations total 78.125 GiB. The touched-stack subtotal is about 351.6 MiB; task metadata, guard pages, other mappings and other memory add costs. This does not establish that 10,000 creations succeed: check limits, commit policy and workload.",
+    "link": {
+      "title": "pthreads(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/pthreads.7.html"
+    }
+  },
+  {
+    "id": "sched-threads-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Thread A calls `fork()` while thread B, in the same process, is inside a logging library's `log()` function holding the library's internal mutex. In the child, the single thread then calls `log()`. What is the risk?",
+    "options": [
+      {
+        "text": "None: the child gets fresh copies of all locks in the unlocked state",
+        "explanation": "`fork()` copies memory as-is, so a lock that was held is copied in its held state. Nothing resets it."
+      },
+      {
+        "text": "The child deadlocks: it has a copy of the lock in its held state, but thread B was not copied, so nothing will ever release it",
+        "explanation": "Correct. Only the calling thread exists in the child. The lock B held is still marked as held in the child's memory, and its owner is gone."
+      },
+      {
+        "text": "Thread B is copied too and finishes its `malloc`, releasing the lock",
+        "explanation": "POSIX `fork()` duplicates only the calling thread. Thread B doesn't exist in the child."
+      },
+      {
+        "text": "The kernel detects the held lock and makes `fork()` fail",
+        "explanation": "The kernel knows nothing about user-space locks like a library's mutex. `fork()` succeeds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `fork()` makes the child's memory a copy-on-write copy of the parent's, including the bytes that represent locks.\n2. Only the thread that called `fork()` is duplicated.\n3. At the instant of the fork, B held the logging mutex, so the copied mutex says \"held\".\n4. In the child, `log()` tries to take the mutex and waits forever for an owner that doesn't exist.\n\n(glibc protects its own `malloc` locks with special fork handling, but an arbitrary library's locks are not protected.) The rule: after `fork()` in a multithreaded program, call only async-signal-safe functions until `exec()`. Tools like `posix_spawn` avoid the problem.",
+    "link": {
+      "title": "fork(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/fork.2.html"
+    }
+  },
+  {
+    "id": "sched-threads-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Go service on Linux has 100,000 goroutines, each waiting on its own TCP connection most of the time. `GOMAXPROCS` is 4. Roughly how many OS threads does the process use?",
+    "options": [
+      {
+        "text": "About 100,000: one per goroutine",
+        "explanation": "That would be a 1:1 model. Go multiplexes goroutines onto a small number of OS threads."
+      },
+      {
+        "text": "Exactly 1: Go runs all goroutines on a single thread",
+        "explanation": "That would be N:1, and Go would be unable to use more than one core. Go runs goroutines on up to GOMAXPROCS threads at once."
+      },
+      {
+        "text": "GOMAXPROCS limits simultaneous Go execution to 4; network waiters are parked, but total OS-thread count is not determined by these facts",
+        "explanation": "Go can multiplex many network waiters without one OS thread each. Runtime work, blocking calls, cgo and locked threads affect the total; four is an execution-parallelism limit."
+      },
+      {
+        "text": "About 25,000: one OS thread per 4 goroutines",
+        "explanation": "There is no fixed ratio of goroutines to threads. Thread counts follow parallelism (GOMAXPROCS) plus threads stuck in blocking syscalls, not goroutine count."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Four Ps (the Go scheduler's logical processors, one per unit of GOMAXPROCS) limit simultaneous ordinary Go execution to four threads. Network goroutines can park on the Linux netpoller without dedicating one thread to each connection. The total thread count also depends on runtime, blocking calls and thread-affinity requirements, so it cannot be calculated from the supplied goroutine count and GOMAXPROCS alone.",
+    "link": {
+      "title": "Container-aware GOMAXPROCS — The Go Blog",
+      "url": "https://go.dev/blog/container-aware-gomaxprocs"
+    }
+  }
+]

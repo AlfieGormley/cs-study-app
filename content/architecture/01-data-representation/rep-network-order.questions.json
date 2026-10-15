@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rep-memory-layout-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A C server on x86-64 sets `addr.sin_port = 8080;` (forgetting `htons`) and successfully binds and listens, with the other socket fields correctly set. Which port does it actually listen on?",
+    "options": [
+      {
+        "text": "8080",
+        "explanation": "The kernel reads `sin_port` as big-endian. On a little-endian host the value 8080 is stored as bytes `90 1F`, which the kernel reads as 0x901F."
+      },
+      {
+        "text": "36,895",
+        "explanation": "Correct. 8080 = 0x1F90, stored little-endian as `90 1F`. Read in network (big-endian) order, that is 0x901F = 36,895."
+      },
+      {
+        "text": "0",
+        "explanation": "Nothing is truncated or zeroed. Both bytes survive; only their order is wrong."
+      },
+      {
+        "text": "`bind` fails with an error",
+        "explanation": "An unconverted port does not inherently make bind fail. The question stipulates that binding and listening succeed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. 8080 in hex: 8080 = 31 × 256 + 144 = 0x1F90.\n2. On little-endian x86, the 16-bit field holds bytes `90 1F` (low byte first).\n3. `sin_port` is defined to be in network byte order (big-endian), so the kernel reads `90 1F` as 0x901F.\n4. 0x901F = 144 × 256 + 31 = **36,895**.\n\n`ss -ltn` would show the server on :36895. Fix: `addr.sin_port = htons(8080);`.",
+    "link": {
+      "title": "byteorder(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/byteorder.3.html"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A protocol sends a 32-bit length field in network byte order. The bytes on the wire are `00 00 01 F4`. A C program on x86-64 reads them with `uint32_t len; memcpy(&len, buf, 4);` and forgets `ntohl`. What value does `len` hold?",
+    "options": [
+      {
+        "text": "500",
+        "explanation": "500 (0x000001F4) is the intended value, which you only get after `ntohl` converts from big-endian."
+      },
+      {
+        "text": "62,465",
+        "explanation": "That is 0xF401, swapping only the last two bytes. All four bytes are reversed."
+      },
+      {
+        "text": "4,093,706,240",
+        "explanation": "Correct. Little-endian reads the first byte as least significant: 0xF4010000 = 4,093,706,240."
+      },
+      {
+        "text": "0",
+        "explanation": "The first two bytes being 00 doesn't make the value 0; on a little-endian host those zeros become the **low** bytes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Big-endian meaning: `00 00 01 F4` = 0x000001F4 = 256 + 244 = **500**.\n2. `memcpy` copies the bytes unchanged into `len`'s memory.\n3. x86-64 reads memory little-endian, so the byte at the lowest address is least significant:\n\n```\nbytes: 00 00 01 F4\nvalue: 0xF4010000\n```\n\n4. Work out the value from its bytes:\n\n```formula\nv = 0xF4 × 2^24 + 0x01 × 2^16\nv = 244 × 16,777,216 + 65,536\nv = 4,093,706,240\nwhere\nv: the value len ends up holding, 0xF4010000\n2^24: 16,777,216, the weight of the most significant byte of a 32-bit value\n2^16: 65,536, the weight of the third byte up\nIn words: the byte F4 lands in the top position and 01 in the next, giving about 4.1 billion instead of 500.\n```\n\nSo `len` is **4,093,706,240**.\n\nA program then tries to allocate 4 GB for a 500-byte message. Unchecked length fields like this are a common source of crashes and memory-safety bugs; always convert and validate.",
+    "link": {
+      "title": "byteorder(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/byteorder.3.html"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rep-text-encoding-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Customer names and reviews on your site show `donâ€™t` where users typed `don’t` (with a curly apostrophe, U+2019). What has happened?",
+    "options": [
+      {
+        "text": "The text was stored as UTF-16 and read as UTF-8",
+        "explanation": "Typical UTF-16 encodings of this ASCII-heavy text introduce NULs when misread as UTF-8; they do not explain the specific E2 80 99 → â€™ transformation."
+      },
+      {
+        "text": "The database cannot store characters above U+FFFF",
+        "explanation": "U+2019 is in the BMP, so even MySQL's 3-byte `utf8` can store it. That limitation affects supplementary characters, including some emoji; BMP emoji still fit."
+      },
+      {
+        "text": "The apostrophe's UTF-8 bytes were decoded as Windows-1252",
+        "explanation": "Correct. U+2019 is `E2 80 99` in UTF-8; in Windows-1252 those bytes are â, € and ™."
+      },
+      {
+        "text": "The browser's font has no curly apostrophe glyph",
+        "explanation": "A missing glyph shows as a box or a fallback glyph, not as three specific different characters."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. U+2019 needs 3 UTF-8 bytes: `E2 80 99`.\n2. Decoding those bytes one per character with Windows-1252:\n\n```\nE2 -> â\n80 -> €\n99 -> ™\n```\n\n3. Result: `â€™`.\n\nFind the boundary where the encoding was lost: a database connection without `charset=utf8mb4`, a CSV opened with the system default, or a missing `charset=utf-8` in the HTTP header. If this exact reversible mis-decoding is confirmed, s.encode('cp1252').decode('utf-8') can undo it. It is not a general repair: mixed encodings, replacement characters or lost bytes may make reversal impossible; preserve a copy first.",
+    "link": {
+      "title": "Mojibake — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Mojibake"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A MySQL 8.4 table uses `CHARACTER SET utf8`. Inserting a review containing 😀 fails with `Incorrect string value: '\\xF0\\x9F\\x98\\x80'`. Text with é and € works. Why?",
+    "options": [
+      {
+        "text": "MySQL's `utf8` is an alias for `utf8mb3`, which allows at most 3 bytes per character, and 😀 needs 4",
+        "explanation": "Correct. é (2 bytes) and € (3 bytes) fit, but anything above U+FFFF needs 4 bytes. Convert the column to `utf8mb4`."
+      },
+      {
+        "text": "Emoji are not part of Unicode, so MySQL rejects them",
+        "explanation": "Emoji are ordinary Unicode code points; 😀 is U+1F600."
+      },
+      {
+        "text": "The client sent UTF-16, which MySQL cannot parse",
+        "explanation": "Those bytes are UTF-8 for 😀, not UTF-16. Connection configuration still needs checking alongside the column encoding."
+      },
+      {
+        "text": "The column is too short for a 4-character string",
+        "explanation": "😀 is one character. The limit is on bytes per character, not on the number of characters."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The bytes in the error, `F0 9F 98 80`, start with `11110`, so this is a 4-byte UTF-8 sequence for a code point above U+FFFF.\n2. MySQL's legacy `utf8` (now named `utf8mb3`) stores at most 3 bytes per character, covering only the BMP.\n3. é (`C3 A9`) and € (`E2 82 AC`) fit within 3 bytes, so they work.\n4. Example migration syntax for MySQL 8.x (the chosen collation also changes comparison semantics; review indexes and uniqueness before applying):\n\n```sql\nALTER TABLE reviews\n  CONVERT TO CHARACTER SET\n  utf8mb4\n  COLLATE utf8mb4_0900_ai_ci;\n```\n\nAlso set the connection charset to `utf8mb4`, or the driver may mangle the bytes before they arrive.",
+    "link": {
+      "title": "The utf8mb4 character set — MySQL docs",
+      "url": "https://dev.mysql.com/doc/refman/8.0/en/charset-unicode-utf8mb4.html"
+    }
+  },
+  {
+    "id": "rep-text-encoding-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A web server rejects any URL path containing `../`, *then* decodes it with an obsolete decoder that accepts overlong UTF-8 sequences. An attacker sends the bytes `2E 2E C0 AF`. What does that decoder turn `C0 AF` into, and why is this dangerous?",
+    "options": [
+      {
+        "text": "It produces / (U+002F), creating ../ and potentially bypassing the traversal filter",
+        "explanation": "Correct for the stipulated obsolete decoder. Whether access escapes the root also depends on subsequent path resolution and containment checks."
+      },
+      {
+        "text": "`¯` (U+00AF), which is harmless",
+        "explanation": "This reads the second byte as Latin-1. In UTF-8 the payload bits come from both bytes: `00000` + `101111`."
+      },
+      {
+        "text": "Nothing: `C0` is not a valid byte at all, so it is ignored",
+        "explanation": "A conforming UTF-8 decoder rejects the sequence or follows an error policy such as replacement; permissive decoding does not necessarily mean accepting overlongs as characters."
+      },
+      {
+        "text": "U+C0AF, a Hangul syllable",
+        "explanation": "UTF-8 bytes are not the code point. Stripping the marker bits leaves only 11 bits."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `C0` = `110 00000` → 2-byte lead, payload `00000`.\n2. `AF` = `10 101111` → payload `101111`.\n3. Combined: `00000101111` = 0x2F = `/`.\n4. The shortest form of `/` is the single byte `2F`; using two bytes is an **overlong** encoding, forbidden by RFC 3629.\n5. The filter saw `2E 2E C0 AF`, no `../`, and passed it. After decoding it became `../`.\n\nThis is essentially the 2000 IIS \"Unicode\" directory traversal. Defence: strictly decode, apply protocol-specific canonicalisation, validate the resulting path, and enforce filesystem containment. Unicode NFC by itself does not prevent traversal.",
+    "link": {
+      "title": "UTF-8: overlong encodings — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/UTF-8"
+    }
+  }
+]

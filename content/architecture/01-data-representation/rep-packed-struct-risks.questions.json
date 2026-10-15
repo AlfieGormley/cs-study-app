@@ -1,0 +1,138 @@
+[
+  {
+    "id": "rep-memory-layout-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An x86-64 Linux kernel driver fills a `struct info { char flags; long id; }` on the stack, sets both fields, and copies the whole struct to user space with `copy_to_user`. A security review flags it as an information leak. Why?",
+    "options": [
+      {
+        "text": "`long` has a different size in user space",
+        "explanation": "On a given 64-bit Linux ABI, kernel and user `long` are both 8 bytes. Compat layers aside, that is not the leak."
+      },
+      {
+        "text": "Seven bytes of padding can retain or acquire unspecified data; copying the entire object can disclose it",
+        "explanation": "Correct. Field assignments do not guarantee padding bytes. Explicitly encode fields in a defined output layout; a source-level memset followed by stores is not a universal portable-C padding guarantee."
+      },
+      {
+        "text": "`copy_to_user` copies the struct in big-endian order",
+        "explanation": "`copy_to_user` copies raw bytes in order; it does no byte swapping, and byte order is not a confidentiality issue."
+      },
+      {
+        "text": "Stack memory is always readable from user space",
+        "explanation": "Kernel stack memory is not mapped into user space. The leak happens only because the driver explicitly copies uninitialised bytes out."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Under the stated ABI, flags is at offset 0 and id at 8, leaving seven padding bytes.\n2. Assigning fields does not specify their values.\n3. Copying the whole representation can leak stale information.\n4. Encode the intended fields into a fully initialised output buffer; do not rely on portable C to preserve zero padding after subsequent member stores. Implementation-specific zeroing fixes require checking the compiler and generated code.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Firmware for a strict-alignment microcontroller uses this fragment, with h pointing to a valid hdr at a four-byte-aligned address:\n\n```c\nstruct __attribute__((packed)) hdr {\n  uint8_t  type;\n  uint32_t len;\n};\nuint32_t *p = &h->len;\nuse(*p);\n```\n\nIt crashes with an alignment fault, although `h->len` read directly works. Why?",
+    "options": [
+      {
+        "text": "`len` is at offset 1, so `p` is a misaligned `uint32_t *`; the compiler emits a normal 4-byte load through it, which faults",
+        "explanation": "Correct. Direct `h->len` access is compiled with byte-safe loads because the compiler knows the member is packed. Through a plain pointer that knowledge is lost."
+      },
+      {
+        "text": "Packed structs are stored big-endian",
+        "explanation": "Packing changes padding, not byte order. Endianness would give a wrong value, not a fault."
+      },
+      {
+        "text": "`h` itself must be on the heap",
+        "explanation": "Where the struct lives does not matter. The problem is the alignment of the address being loaded from."
+      },
+      {
+        "text": "`uint32_t` cannot be packed",
+        "explanation": "The compiler extension allows this integer member in a packed struct. A plain pointer can lose the compiler's knowledge of reduced member alignment."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. With eight-bit bytes and the stated compiler extension, packed layout: `type` at 0, `len` at 1–4. sizeof = 5.\n2. If `h` is 4-byte aligned, the member address is `(unsigned char *)h + 1`, not a multiple of 4. Plain h + 1 advances by sizeof *h, not one byte.\n3. `h->len`: the compiler knows the field may be misaligned and emits byte loads plus shifts.\n4. `*p`: `p` is an ordinary `uint32_t *`, assumed aligned, so the compiler may emit an alignment-requiring load. That explains the stipulated fault; the exact instruction sequence depends on compilation.\n\nGCC warns with `-Waddress-of-packed-member`. Safer: `uint32_t v; memcpy(&v, (const unsigned char *)h + 1, sizeof v);`.",
+    "link": {
+      "title": "The Lost Art of Structure Packing — Eric S. Raymond",
+      "url": "http://www.catb.org/esr/structure-packing/"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about alignment are true? Select all that apply.",
+    "options": [
+      {
+        "text": "On x86, a `lock`-prefixed atomic on data that spans two cache lines (a split lock) is far slower than an aligned one and can stall other cores",
+        "explanation": "Correct. The CPU has to lock the bus or equivalent to keep the operation atomic across two lines."
+      },
+      {
+        "text": "A suitably aligned ordinary 8-byte hardware load/store to ordinary write-back memory on x86-64 is non-tearing; C data-race rules still apply",
+        "explanation": "Correct. Hardware atomicity of this access does not make unsynchronised conflicting accesses to a plain C object valid."
+      },
+      {
+        "text": "In C, dereferencing a misaligned `int *` is undefined behaviour even on x86",
+        "explanation": "Correct. The hardware may tolerate it, but the language does not, and the optimiser (for example, the vectoriser) may assume alignment."
+      },
+      {
+        "text": "x86 raises a fault on every misaligned load",
+        "explanation": "x86 handles misaligned ordinary loads in hardware, usually with little or no penalty within a cache line. Strict-alignment CPUs are the ones that fault."
+      },
+      {
+        "text": "`memcmp` on two structs reliably tells you whether all their members are equal",
+        "explanation": "Padding bytes are unspecified, so two structs with equal members can differ in their padding and compare unequal."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Split locks: true. Linux on recent Intel CPUs can detect them and warn about or slow down the offending process.\n2. Aligned 8-byte atomicity on x86-64: true; this is why aligned `uint64_t` loads and stores need no lock to avoid tearing (though C atomics or other synchronisation are needed to avoid data races, not merely to request ordering).\n3. UB in C: true; use `memcpy` for unaligned reads.\n4. x86 faults: false; it tolerates misalignment (some instruction forms require alignment, and alignment-checking modes can also fault).\n5. `memcmp` on structs: false because of padding.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "rep-memory-layout-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For `uint32_t x = 0x12345678;` on hosts with eight-bit bytes and 32-bit int, which operations expose different byte orders between little- and big-endian systems? Select all that apply.",
+    "options": [
+      {
+        "text": "`(x >> 24) & 0xFF`",
+        "explanation": "Shifts are defined on values, not memory, so this is always the most significant byte."
+      },
+      {
+        "text": "`((unsigned char *)&x)[0]`",
+        "explanation": "Correct. This reads whichever byte sits at the lowest address: the least significant byte on little-endian, the most significant byte on big-endian."
+      },
+      {
+        "text": "`memcpy(buf, &x, 4)` then sending `buf` over a socket",
+        "explanation": "Correct. The raw buffers have different byte sequences; what a receiver makes of them depends on its decoder."
+      },
+      {
+        "text": "`x * 256`",
+        "explanation": "Arithmetic works on values. The product is the same everywhere (mod 2³²)."
+      },
+      {
+        "text": "Writing an array of `x` with `fwrite` and reading it with `fread` on the other kind of machine",
+        "explanation": "Correct. The file stores raw memory bytes, so a big-endian reader sees every value byte-swapped."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Endianness only shows when you look at the **bytes in memory**:\n\n| Expression | Touches memory bytes? |\n|---|---|\n| `(x >> 24) & 0xFF` | no |\n| `((uchar*)&x)[0]` | yes |\n| `memcpy` + send | yes |\n| `x * 256` | no |\n| `fwrite`/`fread` | yes |\n\nPortable code converts at the boundary with `htonl`/`ntohl`, or builds bytes with shifts, so the in-program arithmetic never needs to care.",
+    "link": {
+      "title": "Endianness — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Endianness"
+    }
+  }
+]

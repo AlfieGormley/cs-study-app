@@ -4,24 +4,26 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 36/76 modules; 248 originals → 1343 short lessons with 2921 focused questions.
+- Independently verified: 37/76 modules; 254 originals → 1380 short lessons with 2997 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `4d2f203`, version `1436abbe92ac`, 1306 short lessons/2847 focused questions
-  across 35 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `c5d7aab2b9d9`, 36 modules/1343 units/2921 questions.
+- Latest confirmed live release: `49c5fdd`, version `c5d7aab2b9d9`, 1343 short lessons/2921 focused questions
+  across 36 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `70e7edc49a8f`, 37 modules/1380 units/2997 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
   Sound & Digital Audio is also published. Complexity’s formula follow-up is complete
   (290 cards, 208 independent maths checks, no unresolved active format issues).
+- All eight operating-systems modules are converted and published: 266 short units/561 questions.
+- All six networking modules are converted and published: 233 short units/447 questions.
 
 Current allocations:
 
-- architecture/arch-data: authoring; /root/architecture_data_short_author.
-- architecture/arch-logic: authoring; /root/architecture_logic_short_author.
-- architecture/arch-isa: authoring; /root/architecture_isa_short_author.
+- architecture/arch-logic: verifying; /root/architecture_logic_short_verify.
+- architecture/arch-isa: verifying; /root/architecture_isa_short_verify.
+- architecture/arch-pipeline: authoring; /root/architecture_pipeline_short_author.
 
 Verification and integration:
 

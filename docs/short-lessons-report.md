@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 36/76. Updated 2026-10-15.
+Verified modules: 37/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -43,6 +43,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | networks/Application-Layer Protocols | 6 | 42 | 69 | 65 | 623 | 734 | 49 |
 | networks/Network Security | 6 | 36 | 67 | 40 | 371 | 514 | 46 |
 | networks/Wireless, Mobile & Modern Networks | 6 | 37 | 74 | 73 | 531 | 715 | 28 |
+| architecture/Data Representation | 6 | 37 | 76 | 60 | 393 | 566 | 52 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3472,6 +3473,49 @@ Low-confidence areas:
 - **medium** — wm-cellular-performance-edge: Radio energy, mobility, slicing and edge deployment outcomes. 3GPP Release17, ITU and platform guidance support the mechanisms; no operator/modem measurements or end-to-end guarantees are claimed.
 - **medium** — wm-fabric-queues-dctcp: Fabric queues, recovery defaults and current cloud/network operational behaviour. Current primary implementation/vendor documents checked; hardware policies, defaults and product features are time-sensitive. All numerical capacity and queue examples are conditional models.
 - **medium** — wm-internet-commercial-routing: Commercial tiers, routing incidents and policy models. Original Gao/Rexford, RFCs and operator incident reports checked. Commercial classification and the simplified export policy are not universal protocol requirements.
+
+## architecture: Data Representation
+
+[Independent verification record](../content/architecture/01-data-representation/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- 37 short units preserve the six original scopes, dates/migration ownership and focused question prerequisites; comments explain operations and demonstrated outputs.
+- Corrected Rust char-versus-str syntax; general logical shifts now include left and right with promoted C type/count restrictions.
+- Separated algebraic associativity from parser associativity and precomposed from decomposed Unicode; removed HFS/HFS+, JIS/Shift JIS and LLVM/Clang alias conflations; collation names resolve to collation rather than encoding.
+- Qualified size_t comparison promotions, finite floating-spacing endpoints and exact binary64 scaling limits; compiler wrap flags no longer imply a measured universal performance cost.
+- Corrected C0 versus DELETE, canonical Unicode decomposition (including Hangul), RFC publication streams, locally administered MAC addresses, decimal rounding limits and uninitialised-storage semantics.
+- Qualified packing of nested/explicitly aligned structs, SIGBUS versus the final partial mapped page, x86 baseline/APX register counts, and Roaring container selection; avoided Arm Normal-memory definitions in x86 byte-atomicity prose.
+- Primary inquiry/FAA/GAO reports checked; unsupported prevalence/ranking/frequency examples removed or replaced, with implementation and historical limitations recorded.
+- The winning generic register definition now covers hardware storage banks as well as CPU architectural registers. Actual “hardware register” lookup previously opened an OS device-controller status-register definition; local general aliases now prevent that wrong sense in Architecture.
+
+Remaining gaps:
+
+- All six original scopes retained in 37 focused units, with all 72 original question contracts and 44 executable statement sets preserved; four questions fill newly focused units.
+- No physical cache-line, atomicity, split-lock, DMA or accelerator benchmark: implementation-dependent performance is qualified.
+- MySQL8.4 charset and migration syntax are source-checked, not executed on a MySQL8.4 service. Native C17 builtin checked arithmetic ran; C23 stdckdint/stdbit library availability was not exercised.
+- Peripheral historical adoption/prevalence and product examples are medium confidence; this review does not certify every implementation/version. The unverified YouTube counter anecdote and unsupported fastest-computer ranking are omitted or replaced by directly checked examples.
+- Rust str.len syntax is corrected from primary Rust documentation; no native Rust compiler was available. Java21, Node25, Python3.14 and NumPy2.5 examples were run.
+
+Low-confidence areas:
+
+- **medium** — rep-bit-byte-word-units: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-signed-representations: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-overflow-failures: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-xor-and-applications: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-float-fields: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-floating-practice: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-ascii-and-codepoints: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-utf8-bytes: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-utf16-pairs: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-string-lengths: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-unicode-normalisation: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-text-boundaries: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-endian-byte-order: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-alignment-rules: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-struct-layout: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-packed-struct-risks: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- **medium** — rep-native-layout-performance: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
 
 ## synth: Sound & Digital Audio
 

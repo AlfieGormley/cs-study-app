@@ -1,0 +1,70 @@
+[
+  {
+    "id": "rep-bitwise-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Compiled with GCC or Clang on x86-64, what does this print?\n\n```c\n/* Shift versus division rounding. */\nint x = -21;\nprintf(\"%d %d\\n\", x >> 2, x / 4);\n```",
+    "options": [
+      {
+        "text": "`-5 -5`",
+        "explanation": "`x / 4` is −5 (truncation towards zero), but an arithmetic right shift floors, giving −6."
+      },
+      {
+        "text": "`-6 -5`",
+        "explanation": "Correct. `>>` on a negative int is an arithmetic shift here, which rounds −5.25 towards negative infinity (−6). `/` truncates towards zero (−5)."
+      },
+      {
+        "text": "`-6 -6`",
+        "explanation": "C99 and later require integer `/` to truncate towards zero, so −21 / 4 is −5, not −6."
+      },
+      {
+        "text": "A huge positive number, then `-5`",
+        "explanation": "That would be a **logical** shift of the 32-bit pattern. GCC and Clang implement `>>` on signed ints as arithmetic, preserving the sign."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. −21 / 4 = −5.25 mathematically. The two operators round it differently:\n\n```formula\n⌊−21 / 4⌋ = ⌊−5.25⌋ = −6\ntrunc(−21 / 4) = trunc(−5.25) = −5\nwhere\n⌊ ⌋: floor: round down to the next whole number, towards negative infinity; an arithmetic right shift does this\ntrunc: truncation: drop the fractional part, rounding towards zero; C's integer / does this\nIn words: rounding −5.25 down gives −6, but chopping off its fraction gives −5.\n```\n\n2. `x / 4`: C truncates towards zero → **−5**.\n3. `x >> 2`: right shift of a negative int is implementation-defined; GCC, Clang and MSVC use arithmetic shift, which is floor division by 4 → **−6**.\n\nIn bits (8 shown):\n\n```\n-21 = 1110 1011\n>>2 = 1111 1010 = -6\n```\n\nThis is why a compiler cannot turn signed `x / 4` into a bare shift; one possible implementation adds 3 to negative values before arithmetic shifting, unless analysis permits a simpler operation.",
+    "link": {
+      "title": "Arithmetic shift — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Arithmetic_shift"
+    }
+  },
+  {
+    "id": "rep-bitwise-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In ISO C23, with 32-bit int and uint32_t defined as unsigned int, which expressions have undefined behaviour? Select all that apply.",
+    "options": [
+      {
+        "text": "`1 << 31`",
+        "explanation": "Correct. `1` is a signed `int`, and the result 2³¹ is not representable in it. Write `1u << 31`."
+      },
+      {
+        "text": "`1u << 31`",
+        "explanation": "Unsigned shifts are defined as long as the count is less than the width. The result is 0x80000000."
+      },
+      {
+        "text": "`x << 32` where `x` is `uint32_t`",
+        "explanation": "Correct. A shift count greater than or equal to the width of the (promoted) type is undefined, even for unsigned types."
+      },
+      {
+        "text": "`-8 >> 1`",
+        "explanation": "Right-shifting a negative value is **implementation-defined**, not undefined. GCC and Clang document it as arithmetic, giving −4."
+      },
+      {
+        "text": "`(uint8_t)0xFF << 24`",
+        "explanation": "Correct, and subtle. The `uint8_t` is promoted to signed `int` before shifting, and 255 × 2²⁴ = 0xFF000000 exceeds `INT_MAX`. Cast to `uint32_t` first."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Go through the C rules for `E1 << E2` (the C standard's names: E1 is the value being shifted, E2 the shift count):\n\n1. The count must be in 0 to width − 1, otherwise UB. That rules out `x << 32`.\n2. If the promoted E1 is signed, E1 must be non-negative and the multiplied result representable, otherwise UB. `1 << 31` gives 2³¹ > `INT_MAX`.\n3. Integer promotion happens first: `uint8_t` becomes `int`. So `(uint8_t)0xFF << 24` is a signed shift whose result, 4,278,190,080, does not fit. This bites code assembling bytes into words: use `(uint32_t)b << 24`.\n4. `1u << 31` is fine. `-8 >> 1` is implementation-defined, which is a weaker category: the compiler must pick and document a behaviour.",
+    "link": {
+      "title": "Shift operators — cppreference (C)",
+      "url": "https://en.cppreference.com/w/c/language/operator_arithmetic"
+    }
+  }
+]

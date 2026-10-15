@@ -1,0 +1,122 @@
+[
+  {
+    "id": "adv-designing-structures-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the O(1) `RandomizedSet`, how does `remove(x)` remove an element from the middle of the array without an O(n) shift?",
+    "options": [
+      {
+        "text": "It marks the slot as deleted and skips such slots in `get_random`",
+        "explanation": "Tombstones keep removal O(1) but break `get_random`: you would have to retry on deleted slots, and the array would grow without bound."
+      },
+      {
+        "text": "It sorts the array and binary searches for `x`",
+        "explanation": "Sorting is O(n log n) and binary search is O(log n), where n is the number of elements in the array; neither gives O(1), and the map already knows the index."
+      },
+      {
+        "text": "It uses `list.remove(x)`, which is O(1) in Python",
+        "explanation": "`list.remove` scans for the value and shifts every later element left: O(n), where n is the number of elements."
+      },
+      {
+        "text": "It copies the last element into `x`'s slot, updates that element's index in the map, and pops the end",
+        "explanation": "Correct. Only the end of the array changes size, and popping the end is amortised O(1), including occasional resizing. The cost is that array order is not preserved, which a set does not need."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Example: `items = [10, 20, 30, 40]`, remove 20.\n1. `i = pos[20] = 1`, `last = 40`.\n2. `items[1] = 40` gives `[10, 40, 30, 40]`.\n3. `pos[40] = 1`.\n4. `items.pop()` gives `[10, 40, 30]`.\n5. `del pos[20]`.\n\nThe operation is expected amortised O(1), accounting for hashing and resizing. Nothing after index 1 moved.",
+    "link": {
+      "title": "random — Python docs",
+      "url": "https://docs.python.org/3/library/random.html"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A `RandomizedSet` holds `items = [10, 20, 30, 40]` with `pos = {10: 0, 20: 1, 30: 2, 40: 3}`. After `remove(10)` then `remove(20)`, what are `items` and `pos`?",
+    "options": [
+      {
+        "text": "`items = [30, 40]`, `pos = {30: 0, 40: 1}`",
+        "explanation": "This is what deleting and moving later array elements down one slot would produce. The swap-with-last strategy never shifts, so order is not preserved."
+      },
+      {
+        "text": "`items = [40, 30]`, `pos = {40: 3, 30: 1}`",
+        "explanation": "The array is right but `pos[40]` is stale. The code updates the moved element's index (`pos[last] = i`) precisely so a later `remove(40)` does not read past the end."
+      },
+      {
+        "text": "`items = [40, 30]`, `pos = {40: 0, 30: 1}`",
+        "explanation": "Correct. Removing 10 pulls 40 into index 0; removing 20 pulls 30 into index 1. The map index of each relocated array entry is updated."
+      },
+      {
+        "text": "`items = [40, 20, 30]`, `pos = {40: 0, 20: 1, 30: 2}`",
+        "explanation": "This stops after the first removal. The second `remove(20)` also runs and pulls 30 forward."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `remove(10)`: `i = 0`, `last = 40`. Copy: `[40, 20, 30, 40]`, set `pos[40] = 0`, pop: `[40, 20, 30]`, delete `pos[10]`.\n2. `remove(20)`: `i = 1`, `last = 30`. Copy: `[40, 30, 30]`, set `pos[30] = 1`, pop: `[40, 30]`, delete `pos[20]`.\n3. Final: `items = [40, 30]`, `pos = {40: 0, 30: 1}`.\n\nCheck the invariant: for every value v, `items[pos[v]] == v`. Here `items[0] = 40` and `items[1] = 30`.",
+    "link": {
+      "title": "random — Python docs",
+      "url": "https://docs.python.org/3/library/random.html"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague reorders the end of `remove` to:\n\n```python\nself.items[i] = last\ndel self.pos[x]\nself.pos[last] = i\nself.items.pop()\n```\n\nStarting from an empty set, they run `insert(5)`, `remove(5)`, `insert(5)`. What does the second `insert(5)` return?",
+    "options": [
+      {
+        "text": "`True`, and the set contains 5",
+        "explanation": "This would be right with the original order. With the new order, the map still claims 5 is present after the removal."
+      },
+      {
+        "text": "It raises `KeyError` inside `remove`",
+        "explanation": "`del self.pos[x]` runs while 5 is still in the map, so no `KeyError` occurs."
+      },
+      {
+        "text": "`False`, even though `items` is empty",
+        "explanation": "Correct. When `x` is the last element, `last == x`, so `pos[last] = i` re-creates the entry just deleted. The map says 5 is present, the array is empty, and `insert(5)` refuses."
+      },
+      {
+        "text": "It raises `IndexError` because `items` is empty",
+        "explanation": "`insert` never indexes the array; it only checks the map and appends."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace `remove(5)` with `items = [5]`, `pos = {5: 0}`:\n```\ni = 0, last = 5\nitems[0] = 5      [5]\ndel pos[5]        {}\npos[5] = 0        {5: 0}   (re-added!)\nitems.pop()       []\n```\nNow `insert(5)` sees `5 in self.pos` and returns `False`. A later `get_random` would also crash on an empty list while the map is non-empty.\n\nThe original order (`pos[last] = i` first, then `del pos[x]`) handles `last == x` because the delete runs last.",
+    "link": {
+      "title": "random — Python docs",
+      "url": "https://docs.python.org/3/library/random.html"
+    }
+  },
+  {
+    "id": "adv-designing-structures-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You extend `RandomizedSet` to allow duplicates by mapping each value to a set of indices. After `insert(1)`, `insert(1)`, `insert(2)`, `insert(3)`, then `remove(3)`, what is the probability that `get_random()` returns 1?",
+    "options": [
+      {
+        "text": "1/2, because there are two distinct values left",
+        "explanation": "That would be sampling distinct values. The multiset design samples array slots, so a value's chance is proportional to its count."
+      },
+      {
+        "text": "2/3",
+        "explanation": "Correct. After the removal the array is `[1, 1, 2]`. Each slot is equally likely, and two of the three slots hold 1."
+      },
+      {
+        "text": "1/3, because each value is equally likely",
+        "explanation": "Each *slot*, not each value, is equally likely; 1 occupies two slots."
+      },
+      {
+        "text": "2/4, because four items were inserted",
+        "explanation": "The removal of 3 shrank the array to three slots, so the denominator is 3."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Inserts give `items = [1, 1, 2, 3]`, `pos = {1: {0, 1}, 2: {2}, 3: {3}}`.\n2. `remove(3)`: take index 3 from `pos[3]`; 3 is also the last element, so the swap is a no-op; pop. `items = [1, 1, 2]`.\n3. `get_random` picks a slot uniformly, so each value's chance is its share of the slots:\n\n```formula\nP(v) = c_v / n\nP(1) = 2 / 3 ≈ 0.67\nP(2) = 1 / 3 ≈ 0.33\nwhere\nv: a value in the multiset\nP(v): the probability get_random returns v, from 0 to 1\nc_v: the number of copies of v in the array\nn: the number of array slots, 3 here\n≈: approximately equal to\nIn words: 1 fills two of the three slots, so it comes back two times in three.\n```\n\nThis count-weighted behaviour is usually what a multiset sampler is meant to do.",
+    "link": {
+      "title": "random — Python docs",
+      "url": "https://docs.python.org/3/library/random.html"
+    }
+  }
+]

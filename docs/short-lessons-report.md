@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 21/76. Updated 2026-10-15.
+Verified modules: 22/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -28,6 +28,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Recursion, Backtracking & Greedy | 6 | 40 | 71 | 106 | 142 | 575 | 104 |
 | dsa/Dynamic Programming | 7 | 46 | 80 | 154 | 155 | 473 | 42 |
 | dsa/Problem-Solving Patterns | 8 | 42 | 89 | 77 | 105 | 313 | 189 |
+| dsa/Advanced Structures & Algorithms | 7 | 49 | 84 | 124 | 144 | 476 | 70 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -2487,6 +2488,115 @@ Low-confidence areas:
 - **medium** — pat-grid-prefix: Historical attribution of the summed-area table to Crow 1984. Read the original Viola–Jones 2001 paper, its four-reference construction and Crow 1984 bibliography. Direct Crow mirror retrieval was blocked; original Crow paper was not independently read in full.
 - **medium** — pat-lowest-bit: Kernighan/Wegner historical attribution. The glossary now explicitly attributes the 1960 priority report to Sean Anderson citing Knuth; original Wegner paper and K&R exercise were not retrieved. The algorithm itself is independently verified.
 - **medium** — glossary: Kernighan/Wegner historical attribution. Retained medium confidence in kernighan-method; source reports attribution indirectly, and wording now says so.
+
+## dsa: Advanced Structures & Algorithms
+
+[Independent verification record](../content/dsa/10-advanced/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- The cited document was Efraimidis’s weighted-sampling paper, not the LFU design. Freshly fetched the actual Matani–Shah–Mitra paper and checked its frequency/list construction.
+- State both the deletion-only contract and final-graph initialisation locally, not only in the takeaway/question.
+- The split moved the trace to the next unit; retain enough local numeric context.
+- The shown Python slice copies the full candidate. Hash collisions need not compare every character, but slice construction still costs linear work in candidate length.
+- Keep the linear candidate-cost argument tied to the actual Python program, including early mismatch cases.
+- Prefix hashing is taught in the following short unit; this takeaway should describe the current unit.
+- The eighteen-character bound includes both searches; three comparisons is the bound for each search.
+- The copied reservoir comment described stream items seen rather than Fisher–Yates’s remaining prefix.
+- The deliberately biased loop does not permanently fix the current position.
+- Match the exact partial/full definitions in the fetched Driscoll–Sarnak–Sleator–Tarjan paper.
+- Navigation keystrokes do not shift document text, and copying versus shifting depends on mutable/immutable representation.
+- State the representation being compared.
+- A generic string does not universally provide constant-time character indexing, for example Rust UTF-8 strings.
+- Persistence is not literally free: freshly inserted text, retained nodes and reclamation have costs.
+- No universal slowdown or typical chunk-size range follows without a stated implementation and workload benchmark.
+- A million-node chain has one fewer edge than nodes, consistently with the lesson’s depth convention.
+- The card already counts both boundaries; avoid presenting the total as the per-boundary bound.
+- The pigeonhole principle guarantees a collision, not occupancy of every possible hash value in an arbitrary hash function.
+- The trace begins with an existing leaf; make the initial state explicit.
+- Keep the proven shape/chunking explanation without an unsupported general chunk-size claim.
+- The reachable fraction is positive; rounding language must not turn it into zero.
+- Use the actual constant-time LFU design paper.
+- Avoid an unconditional speed/concurrency advantage.
+- Use the fetched original non-blocking-algorithm paper for the system-wide progress definition.
+- Check virtual-node DSU modelling and the approximate large-grid site threshold against the primary course specification.
+- The historical extra edge is not uniquely inferable from the graph alone.
+- Read the actual Kasai et al. paper for the LCP drop-by-one/linear-time result.
+- Read the original online suffix-tree construction paper.
+- Read the original 2003 integer-alphabet skew/DC3 paper.
+- Distinguish the repeated substring from its numeric length.
+- An adjacent forward link has span one, not zero intervening nodes; Redis’s internal rank is one-based while ZRANK is zero-based.
+- This is the appropriate weighted-sampling paper, previously mislabelled as the LFU paper.
+- Do not imply that every individual operation needs inverse-Ackermann worst-case time.
+- Qualify CPython’s whole-string-slice fast path while retaining the proven upper bound and proper-slice worst case.
+- Avoid claiming every candidate necessarily copies or compares every character.
+- The existing formula card retains the symbolic relation; use words in prose.
+- Keep the exact symbolic count in the following formula card.
+- Preserve the numeric grouping counterexample in readable prose.
+- Do not leave symbolic boundary-product calculations in prose; retain them in the explained card and actual Python below.
+- The quoted expression was mathematical pseudocode, not Python syntax; the following counterexample question retains the actual modulo calculation in a card.
+- Use a verbal operation, not invalid pseudo-Python, alongside the existing modulo formula card.
+- t[1..8] is invalid Python and was wrongly categorised as real program code by the author’s finder ledger.
+- The actual symbolic reconstruction belongs in the question’s self-contained worked formula card.
+- A function-call assignment is not valid Python; the full self-contained calculation already appears in the worked formula card.
+- Use the actual function call as code, not invalid assignment syntax.
+- A hypothetical character equality is not a valid string-element assignment in Python.
+- Keep real array reads distinct from a mathematical character-equality relation.
+- Keep actual reads distinct from invalid Python string-element assignment syntax.
+- Separate the numeric loop-step bound from its asymptotic class.
+- Retain the independently defined mathematical counterexample in the worked card rather than pseudo-code ranges in a claimed function call.
+- The actual build program computes the jump explicitly; avoid presenting an undeclared mathematical helper as runnable code.
+- Use conventional implicit multiplication between clearly defined scalar factors and before function calls; preserve number-by-number and matrix-product signs.
+- The same weighted-sampling/LFU source mismatch also affected the frequency-bucket glossary entry.
+- The two-remainder normalisation can overflow when the modulus approaches a signed type’s limit; native Java confirms a counterexample. The displayed fixed small-modulus examples remain valid.
+- The ordinary verb State otherwise opens the dynamic-programming state definition.
+- The phrase direct access otherwise opens the filesystem DAX definition.
+- The phrase node model otherwise opens the Node.js runtime definition.
+- An array-range table must not open the all-pairs-shortest-path graph definition.
+- Distinguish the commonly reported early attribution from the independently read 1994 paper; record the remaining attribution uncertainty as medium confidence.
+- Avoid uncarded symbolic child-index arithmetic and an undefined index variable in the standalone prompt.
+- Retain the additive one in the bound so it does not collapse to zero when the sample equals the population.
+- The API’s zero boundary needs explicit treatment; writing the digit zero would otherwise suggest one bit.
+- The bare half-open phrase opened the TCP connection-state definition; the existing precise half-open ranges alias opens the mathematical interval definition.
+- Path-length parity in a weighted DSU is not an error-detection parity bit.
+- Actual rendered dictionary links exposed cross-subject aliases for C integer rank, SQL pushdown, root-user, I/O code paths, STUN checks, error-checking parity, CIDR prefix lengths, packet reordering, lexer longest-match, register allocation, Monte Carlo coin flips, database index ranges, encryption cut-and-paste, thread priority, server redundancy, database rows and audio scales. Narrowed the local phrases to their algorithmic meanings; shared dictionaries unchanged.
+- Added the precise bits of entropy alias to the corrected local entropy definition; avoided tokenised full-text-search terminology in the genome character-scan example. Rechecked all actual rendered fallback contexts.
+- A numeric function call is still mathematical notation, not a plain numeric exception; keep the symbolic O(log C) argument with its defined domain in the worked example.
+- Distinguish the fetched public Java contract from an unsupported comparative lock-free-design claim.
+- Avoid an unsupported universal practical recommendation for large static RMQ workloads; preserve both the linear-space technique and the simpler sparse-table trade-off.
+- State non-empty input domains before logarithmic sparse-table formulas, and retain the huge Ackermann comparison as a mathematical scale without relying on an unfetched cosmological atom estimate.
+
+Remaining gaps:
+
+- The module retains introductions rather than full implementations for weighted/rollback DSU, two-dimensional and order-statistic Fenwick variants, implicit treaps, distributed reservoirs, disjoint sparse tables, specialised linear RMQ, persistent order statistics and fully balanced rope editing. This matches original scope; the user’s material was divided rather than removed.
+- No production cloud/database/cache workload, lock-free concurrent algorithm, hardware timing, physical-device performance or Clojure allocation benchmark is claimed.
+- Actual core examples use Python; C and Java scratch checks validate the existing modulo portability discussion.
+- Finite native oracles are not formal asymptotic proofs, benchmarks or concurrent progress proofs. No physical phone/browser checks were performed by this module verifier; root performs whole-preview mobile, PWA and migration integration.
+- Four formerly pseudocode shuffle quiz options now execute as real Python. Every actual body/question Python fragment was run with explicitly stated earlier class/import context; C and Java modulo discussion also ran natively.
+- The 1989 Ryabko historical text and 1989 Fredman–Saks proof were not re-fetched; their specific provenance limits are recorded above. Two unrelated HTTP-200 HTML responses were excluded as evidence. Failed background URLs are transport evidence, not successful fact checks.
+
+Low-confidence areas:
+
+- **medium** — adv-lfu-frequency-buckets: Redis/Caffeine approximation examples. Source-backed implementation examples and practical cache-policy trade-offs; version/configuration/workload can differ.
+- **medium** — adv-composite-edge-cases: Concurrent cache design trade-offs. The lesson states the synchronisation need; no production throughput or concurrent-runtime benchmark was executed.
+- **medium** — adv-dsu-amortised-analysis: Ackermann convention and lower-bound provenance. Exact diagonal convention and arithmetic checked; original Tarjan paper and original later research on lower bounds read, but the Fredman–Saks 1989 proof itself was not re-fetched.
+- **medium** — adv-fenwick-prefix-blocks: Ryabko 1989 historical priority. Fenwick’s actual 1994 paper and Ryabko’s own bibliography/1992 paper were fetched. The 1989 text could not be fetched; the earlier priority is explicitly attributed to historical accounts.
+- **medium** — adv-kmp-linear-choice: CPython forward-search implementation. Pinned CPython 3.14 source checked; algorithm selection can change in other versions.
+- **medium** — adv-skiplist-costs-uses: Redis, RocksDB, LevelDB and Java implementation examples. Pinned Redis 8.2 constants and Java SE 21 public API verified; other versions/configurations can differ. No lock-free progress is promised from the public Java contract.
+- **medium** — adv-reservoir-variants: Algorithm L and variant introductions. Original ACM abstract and current OpenTelemetry implementation checked; no full Algorithm L implementation or production skipping benchmark is supplied in the lesson. Weighted/hypergeometric laws checked algebraically and with finite exact oracles.
+- **medium** — adv-persistent-history-uses: Product-specific persistence examples. Clojure sources, Git objects, database/filesystem documentation checked; no Clojure allocation, live database, filesystem or concurrency benchmark was executed.
+- **medium** — adv-rope-operations-tradeoffs: Editor implementations and workload trade-offs. Pinned/historical engineering accounts checked; no universal chunk size, speedup or exact reclamation cost is promised.
+- **medium** — glossary:adv-approximate-lru: Approximate LRU. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
+- **medium** — glossary:adv-lock-free: Lock-free. System-wide progress definition checked against original non-blocking algorithm research; no concurrent skip-list implementation was executed or proved here.
+- **medium** — glossary:adv-ackermann-function: Ackermann function. Explicit Ackermann–Péter convention and small diagonal values checked; original historical definition paper not re-fetched.
+- **medium** — glossary:adv-cell-probe-model: Cell-probe model. The logarithmic-word-size model and matching amortised bound checked in a fetched original later research paper; the 1989 lower-bound proof itself not re-fetched.
+- **medium** — glossary:adv-number-of-islands-ii: Number of islands II. Paid exercise provenance unavailable; the definition describes and independently checks the incremental-grid/DSU problem without claiming to reproduce the inaccessible page.
+- **medium** — glossary:adv-redis-sorted-set: Redis sorted set. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
+- **medium** — glossary:adv-concurrentskiplistmap: ConcurrentSkipListMap. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
+- **medium** — glossary:adv-algorithm-l: Algorithm L. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
+- **medium** — glossary:adv-clojure: Clojure. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
+- **medium** — glossary:adv-xi-editor: Xi editor. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
+- **medium** — glossary:adv-vs-code: VS Code. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
 
 ## synth: Sound & Digital Audio
 

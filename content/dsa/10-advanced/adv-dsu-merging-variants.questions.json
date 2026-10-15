@@ -1,0 +1,100 @@
+[
+  {
+    "id": "adv-union-find-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these problems is union-find a good fit for? Select all that apply.",
+    "options": [
+      {
+        "text": "Counting connected components as network links come up one at a time",
+        "explanation": "Correct. Each successful union reduces the count by one, and you can answer after every new edge without recomputing."
+      },
+      {
+        "text": "Merging user accounts that share any email address",
+        "explanation": "Correct. Union-find computes the transitive closure of the shared-email links, under the exercise's identity assumptions."
+      },
+      {
+        "text": "Finding strongly connected components of a directed graph",
+        "explanation": "Union-find has no notion of direction. SCCs need Tarjan's or Kosaraju's DFS-based algorithms."
+      },
+      {
+        "text": "Detecting whether adding an edge creates a cycle in an undirected graph",
+        "explanation": "Correct. If both endpoints already have the same root, the edge closes a cycle."
+      },
+      {
+        "text": "Finding the shortest path between two cities",
+        "explanation": "Union-find tells you *whether* two nodes are connected, not how far apart. Use BFS or Dijkstra."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Union-find answers one kind of question: \"are these in the same group?\", where groups only ever merge.\n- Incremental components: groups merge as edges arrive. Fits.\n- Accounts merge: accounts merge via shared emails. Fits.\n- SCCs: depend on edge direction, which union-find ignores. Does not fit.\n- Undirected cycle check: same-group test before merging. Fits.\n- Shortest paths: need distances, which union-find does not track. Does not fit.",
+    "link": {
+      "title": "Disjoint-set data structure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Disjoint-set_data_structure"
+    }
+  },
+  {
+    "id": "adv-union-find-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In accounts merge there are A accounts, each with at least one email, and E email occurrences in total. Treat email hashing and comparisons as constant-cost operations; and the output must list each person's emails sorted. Using the lesson's approach, what is the overall time complexity?",
+    "options": [
+      {
+        "text": "O(A² · E), comparing every pair of accounts",
+        "explanation": "That is the brute-force approach. The `owner` map avoids pairwise comparison entirely."
+      },
+      {
+        "text": "O(E α(A)), because union-find is nearly linear",
+        "explanation": "This counts only the unions and finds. Sorting the emails in each group costs more."
+      },
+      {
+        "text": "O(E log E), dominated by sorting the emails within groups",
+        "explanation": "Correct. Each email causes at most one union and one find: O(E α(A)), where α is the inverse Ackermann function, at most 4 in practice. Sorting the groups costs O(E log E) in total, which dominates."
+      },
+      {
+        "text": "O(A log A), sorting the accounts",
+        "explanation": "Accounts are never sorted; emails are, and there can be many more emails than accounts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Building `owner` and calling `union`: one dict lookup and at most one union per email: O(E α(A)).\n2. Grouping: one `find` per distinct email: O(E α(A)).\n3. Sorting: the groups split the emails between them, so the sorts together cost at most one big sort:\n\n```formula\nΣ_i k_i × log(k_i) ≤ Σ_i k_i × log(E)\nΣ_i k_i ≤ E\nΣ_i k_i × log(k_i) ≤ E log(E)\nwhere\ni: the number of a group (one merged person)\nk_i: the number of distinct emails in group i\nE: the total number of email occurrences across all accounts, which is at least the number of distinct emails\nΣ_i: the sum over every group i\nlog: the logarithm; its base only changes a constant factor\n≤: is at most\nIn words: sorting each group separately never costs more than sorting all the emails together, because no group is bigger than the whole.\n```\n\n4. Total: O(E log E), where O(f) means \"grows at most in proportion to f\" and A is the number of accounts. This holds under the stated unit-cost email model; with unbounded string lengths include hashing and comparison costs.\n\nWithout the output sorting requirement, the algorithm would be effectively linear.",
+    "link": {
+      "title": "Disjoint Set Union — cp-algorithms",
+      "url": "https://cp-algorithms.com/data_structures/disjoint_set_union.html"
+    }
+  },
+  {
+    "id": "adv-union-find-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A network starts with all links up. Over the day, links fail one at a time (they never come back), and after each failure you must report the number of connected components. You know the full failure list in advance. How do you use union-find?",
+    "options": [
+      {
+        "text": "Call a `split` operation on the DSU for each failed link",
+        "explanation": "Union-find has no split: path compression and merged trees destroy the information about which edge joined what."
+      },
+      {
+        "text": "Process the failures in reverse: start from the final graph, add links back in reverse failure order with `union`, record the counts, then reverse the answers",
+        "explanation": "Correct. In reverse, deletions become insertions, which union-find handles in near O(1) each. This offline trick is standard."
+      },
+      {
+        "text": "Rebuild the DSU from scratch after each failure",
+        "explanation": "This works but costs O(V + E α(V)) per failure, throwing away the point of the structure."
+      },
+      {
+        "text": "Union-find cannot help; run BFS after each failure",
+        "explanation": "BFS after each failure is also O(V + E) per step. The reverse trick makes union-find fit perfectly."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Let the failures be f1, f2, ..., fk. The final graph G_k has all of them removed.\n2. Build a DSU on G_k (union every surviving edge). Record its component count: the answer after fk.\n3. Add fk back with `union`: the count is the answer after f(k−1).\n4. Continue down to f1. Adding f1 back gives the original graph.\n5. Reverse the recorded list to get answers in time order.\n\nThe total cost, including singleton initialisation:\n\n```formula\nT = O(V + (E + k) × α(V))\nwhere\nT: the total running time of the offline method\nV: the number of vertices (network nodes)\nE: the number of links in the original network\nk: the number of failures\nα(V): the inverse Ackermann function of V, at most 4 in practice\nO(f): grows at most in proportion to f\nIn words: one pass to set up the vertices, then roughly constant work per surviving link and per restored link.\n```\n\nFor ten thousand nodes, fifty thousand links and a thousand failures, substituting into the growth model gives a scale near 214,000 before hidden constants. This is an asymptotic illustration, rather than a measured primitive-step count. Do not include the restored original graph in answers requested only after failures. The requirement is knowing the whole sequence up front (\"offline\").",
+    "link": {
+      "title": "Disjoint Set Union — cp-algorithms",
+      "url": "https://cp-algorithms.com/data_structures/disjoint_set_union.html"
+    }
+  }
+]

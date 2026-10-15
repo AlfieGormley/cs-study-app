@@ -66,6 +66,11 @@ resolve to another module's definition. Prefer precise existing aliases or narro
 a stream processor's clock timestamp in system design. Time-window sizes, algorithm sliding windows,
 instruction windows and TCP windows likewise need the definition appropriate to their context.
 
+Formula lint is a heuristic, so also inspect the prose, tables and diagrams. Symbolic indexing ranges
+such as “vertices 0 to n − 1” need a card or equivalent natural-language wording. Define coordinates
+and other variables locally in each short unit. Inline code formatting is an exception only for real
+program code. Keep closing fences on their own lines so they cannot swallow following prose.
+
 Update `verification.json` so `lessons` contains precisely the active new ids, with genuine confidence
 scores, sources and a record of the split/comment changes. Original verification entries may be retained
 under `archivedLessons` for provenance. Stamp only after reviewing. Run the scoped build, formula lint,

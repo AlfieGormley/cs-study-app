@@ -81,6 +81,12 @@ compiled identity, full definition and surrounding text. Review the foreign-subj
 ambiguous terms within the same subject. A foreign definition can be correct; check its meaning rather
 than removing links mechanically. This diagnostic does not replace source review or a stamped build.
 
+Return replayable dictionary checks in the verifier report's `dictionaryProbes` array. Each item records
+`phrase`, `subject`, `id` (or `null` for an intentionally unlinked phrase), and, for positive checks, the
+full expected `definition` and actual `rendered` HTML. Keep summary counts and paths to larger ledgers
+in a separate field. The integration checker rejects malformed or empty probe arrays; it must not
+silently skip a module because its report uses a different schema.
+
 Formula lint is a heuristic, so also inspect the prose, tables and diagrams. Symbolic indexing ranges
 such as “vertices 0 to n − 1” need a card or equivalent natural-language wording. Define coordinates
 and other variables locally in each short unit. Inline code formatting is an exception only for real

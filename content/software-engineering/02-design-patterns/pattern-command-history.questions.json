@@ -1,0 +1,126 @@
+[
+  {
+    "id": "pattern-behavioural-1-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which scenario is the clearest fit for the **command** pattern?",
+    "options": [
+      {
+        "text": "Notifying the cache, search index and application audit log when a product changes",
+        "explanation": "Several independent reactions to one change is observer's territory."
+      },
+      {
+        "text": "A drawing app where every action must be undoable and redoable",
+        "explanation": "Correct. Each action becomes an object with `execute()` and `undo()`, kept on a history stack, so the editor can step backwards and forwards."
+      },
+      {
+        "text": "Choosing between gzip and zstd compression at run time",
+        "explanation": "Picking one interchangeable algorithm is strategy."
+      },
+      {
+        "text": "Making a third-party SDK match your interface",
+        "explanation": "Translating interfaces is the adapter pattern, a structural pattern."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Command is about turning a request into a value. What does undo need?\n\n1. A log of what was done, and its arguments.\n2. A way to reverse each action.\n3. An ordered history.\n\nCommand objects provide 1 and 2; a stack of them provides 3. The other scenarios don't need requests to be stored, so other patterns fit better.",
+    "link": {
+      "title": "Command pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Command_pattern"
+    }
+  },
+  {
+    "id": "pattern-behavioural-1-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `Editor` and `Insert`, what is `e.doc` at the end?\n\n```python\ne = Editor()\ne.run(Insert(e.doc, \"a\"))\ne.run(Insert(e.doc, \"b\"))\ne.undo()\n# A new action clears redo history.\ne.run(Insert(e.doc, \"c\"))\ne.redo()\n```",
+    "options": [
+      {
+        "text": "`['a', 'c', 'b']`",
+        "explanation": "This assumes the undone `b` is still on the redo stack. `run` clears `undone`, so it's gone."
+      },
+      {
+        "text": "`['a', 'c']`, with no error",
+        "explanation": "`redo` pops from `undone`, which is empty after `run` cleared it. Popping an empty list raises, so the code doesn't finish quietly."
+      },
+      {
+        "text": "`IndexError` is raised by `redo`; `e.doc` is `['a', 'c']`",
+        "explanation": "Correct. Running `c` cleared the redo history, so `redo()` calls `pop()` on an empty list and raises `IndexError`. The document still holds `['a', 'c']`."
+      },
+      {
+        "text": "`['a', 'b', 'c']`",
+        "explanation": "`undo()` removed `b` before `c` was inserted, so `b` isn't in the document."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace doc, done and undone:\n\n```\nrun a   doc [a]    done [a]\nrun b   doc [a,b]  done [a,b]\nundo    doc [a]    undone [b]\nrun c   doc [a,c]  done [a,c]\n        undone cleared -> []\nredo    [].pop() -> IndexError\n```\n\nClearing redo history on a new action is the intended linear-history policy in this example, but a real `redo()` should check for an empty stack (and the UI should grey out the button) rather than crash.",
+    "link": {
+      "title": "Command pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Command_pattern"
+    }
+  },
+  {
+    "id": "pattern-behavioural-1-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are real-world uses of the **command** pattern? Select all that apply.",
+    "options": [
+      {
+        "text": "Django migration operations, which implement both `database_forwards` and `database_backwards`",
+        "explanation": "Correct. Migration operations package changes as objects. Reversibility depends on the operation and supplied reverse implementation; not every migration can be undone."
+      },
+      {
+        "text": "`executor.submit(fn, *args)` in `concurrent.futures`",
+        "explanation": "Correct. The call is packaged with its arguments and handed to a pool to execute later on another thread or process."
+      },
+      {
+        "text": "Celery's `task.delay(...)`, which serialises a call and puts it on a message broker",
+        "explanation": "Correct. The request becomes data on a queue, run later by a worker, which is the command idea across process boundaries."
+      },
+      {
+        "text": "`sorted(items, key=len)`",
+        "explanation": "Incorrect. `key` is a strategy: an algorithm plugged into `sorted`, called immediately, not a request stored for later."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Test: is a *request* turned into an object that can be stored, moved or reversed?\n\n1. Migration operation: stored in a file, applied, and reversed when supported → yes.\n2. `submit`: queued for a worker thread → yes.\n3. Celery task: serialised and sent to a broker → yes.\n4. `key=len`: called in place to compare items → no; that's strategy.",
+    "link": {
+      "title": "Migration operations — Django docs",
+      "url": "https://docs.djangoproject.com/en/stable/ref/migration-operations/"
+    }
+  },
+  {
+    "id": "pattern-behavioural-1-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your app models payments as commands with `execute()` and `undo()`. A `CapturePayment` command has already taken £50 from a customer's card when the user clicks Undo. What should `undo()` do?",
+    "options": [
+      {
+        "text": "Delete the payment record so it's as if it never happened",
+        "explanation": "The money has really moved at the card network. Deleting your record hides it without returning the money, and destroys the payment history."
+      },
+      {
+        "text": "Raise an error: commands with side effects can't be part of an undo history",
+        "explanation": "They can, as long as 'undo' means a compensating action. Refusing outright is unnecessarily limiting."
+      },
+      {
+        "text": "Roll back the database transaction",
+        "explanation": "The transaction committed long ago, and the card network is outside your database anyway. A rollback can't undo another system's action."
+      },
+      {
+        "text": "If refunding is permitted and supported, request an idempotent compensating refund and track its actual outcome alongside the capture",
+        "explanation": "Correct. A refund is a new external operation that can fail or remain pending; do not mark the capture as erased or the refund as successful before confirmation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Distinguish **local** state (a document in memory) from **external** effects (money moved, email sent).\n2. Local state can be truly reversed.\n3. External effects need a new action that offsets the first: a refund, a cancellation email, a release of stock.\n4. Record both, so the log still tells the truth:\n\n```\n10:01 capture  +£50\n10:03 refund   -£50\n```\n\nThis compensating-action idea is also how the saga pattern handles failures in distributed transactions.",
+    "link": {
+      "title": "Command pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Command_pattern"
+    }
+  }
+]

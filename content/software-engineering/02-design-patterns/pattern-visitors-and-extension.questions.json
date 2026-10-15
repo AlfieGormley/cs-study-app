@@ -1,0 +1,126 @@
+[
+  {
+    "id": "pattern-behavioural-2-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport ast\n\nclass Names(ast.NodeVisitor):\n    def __init__(self):\n        self.found = []\n\n    def visit_Name(self, node):\n        # Collect identifier references.\n        self.found.append(node.id)\n\ntree = ast.parse(\"y = f(x) + x\")\nv = Names()\nv.visit(tree)\nprint(v.found)\n```",
+    "options": [
+      {
+        "text": "`['x']`",
+        "explanation": "The identifiers in this expression are ast.Name nodes, including the assignment target `y` and the called function `f`, not just variables being read."
+      },
+      {
+        "text": "`['y', 'f', 'x', 'x']`",
+        "explanation": "Correct. `generic_visit` walks the tree in field order: the target `y`, then the value `f(x) + x`, whose left side is the call (`f`, then its argument `x`) and right side is `x`."
+      },
+      {
+        "text": "`['f', 'x', 'y']`",
+        "explanation": "The visitor collects in traversal order and doesn't remove duplicates. `Assign`'s `targets` field is visited before its `value`."
+      },
+      {
+        "text": "`[]`, because `visit` only looks at the topmost tree node",
+        "explanation": "For node types with no `visit_*` method (like `Module`, `Assign`, `BinOp`), `visit` falls back to `generic_visit`, which recurses into children."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The tree:\n\n```\nModule\n  Assign\n    targets: Name y\n    value: BinOp(+)\n      left: Call\n        func: Name f\n        args: Name x\n      right: Name x\n```\n\n1. `visit(Module)`: no `visit_Module`, so `generic_visit` recurses.\n2. Same for `Assign`, `BinOp`, `Call`.\n3. Each `Name` reaches `visit_Name`: y, f, x, x.\n\nNote `visit_Name` doesn't call `generic_visit` itself. That's fine here because `Name` has no child nodes of interest, but in general forgetting it stops traversal below that node.",
+    "link": {
+      "title": "ast — Abstract syntax trees — Python docs",
+      "url": "https://docs.python.org/3/library/ast.html"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A compiler has 30 AST node types and 8 passes written as visitors. The language adds a new node type, `Await`. Separately, the team wants a new linting pass. Which addition can be localised to one new visitor class without editing existing node classes or passes?",
+    "options": [
+      {
+        "text": "Adding `Await` is cheaper: one new class",
+        "explanation": "With visitors, a new node type needs a `visit_Await` method in each of the 8 visitors (or a sensible generic fallback), so each pass must be considered; an existing generic fallback may already suffice."
+      },
+      {
+        "text": "Both cost the same, because visitors decouple everything",
+        "explanation": "Visitors decouple operations from nodes, but the dependency between each visitor and the full set of node types remains."
+      },
+      {
+        "text": "Neither can be done without rewriting the node classes",
+        "explanation": "A new visitor needs no change to the nodes at all; that's the visitor pattern's main benefit."
+      },
+      {
+        "text": "The linting pass can be localised to one new visitor; handling Await may require updates across existing visitors",
+        "explanation": "Correct for the classic visitor structure. Locality is the advantage; one new visitor may still need many methods, so class count alone does not establish lower implementation effort."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Draw the grid: rows are node types, columns are passes.\n\n```\n          pass1 ... pass8 lint\nNum         x         x    +\nAdd         x         x    +\n...30 rows\nAwait       +   ...   +    +\n```\n\n1. New **column** (lint): one visitor class with up to 30 methods, written in one place. Nothing else changes.\n2. New **row** (`Await`): one method added in each of 8 visitors.\n3. Visitors organise code by column. Choose them when columns (operations) grow faster than rows (types), as in a compiler with a relatively stable node family.\n\nThis compares where changes live, not their total cost: up to 30 new methods can exceed the work of 8 small handler changes.",
+    "link": {
+      "title": "Expression problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Expression_problem"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a classic (Java-style) visitor, `node.accept(visitor)` calls `visitor.visit(this)` with overloads visit(Node) and visit(Add). Why is this two-step call needed in languages like Java and C++?",
+    "options": [
+      {
+        "text": "Method overloads are chosen by the *static* type of the argument, so `visitor.visit(node)` with `node` typed as `Node` can't pick `visit(Add)`; `accept` adds a second dynamic dispatch on the node",
+        "explanation": "Correct. Virtual calls dispatch on the receiver only. `node.accept` dispatches on the node's runtime type, and inside `Add.accept`, `this` has static type `Add`, so the right overload is chosen. Two single dispatches make a double dispatch."
+      },
+      {
+        "text": "To make the code thread-safe",
+        "explanation": "`accept` has nothing to do with concurrency; it's about choosing which method to run."
+      },
+      {
+        "text": "Because visitors can't access node fields directly",
+        "explanation": "Visitors receive the node as an argument and can read its public fields. The issue is choosing the right method, not access."
+      },
+      {
+        "text": "To let the node refuse to be visited",
+        "explanation": "A node could do that in `accept`, but that's not why the pattern needs it. The reason is dispatching on two runtime types."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Java/C++ choose an **overload** at compile time from the argument's declared type.\n2. In `for (Node n : nodes) v.visit(n);`, `n` is declared `Node`, so `visit(Node)` is chosen, never `visit(Add)`.\n3. Fix: ask the node to call back.\n\n```\nn.accept(v)        dispatch 1: on n\n  Add.accept:\n    v.visit(this)  this is Add\n                   dispatch 2: on v\n```\n\n4. Python avoids this by dispatching on `type(node).__name__` at run time, so `accept` isn't needed, which is what `ast.NodeVisitor` does.",
+    "link": {
+      "title": "Double dispatch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Double_dispatch"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're writing a Python tool that evaluates a small expression tree with 4 node types. Which are reasonable alternatives to a visitor class hierarchy? Select all that apply.",
+    "options": [
+      {
+        "text": "One function using `match node:` with a `case` per node type (Python 3.10+)",
+        "explanation": "Correct. Structural pattern matching keeps the whole operation in one place, like a visitor, with less ceremony. Classes need `__match_args__` (dataclasses set it automatically) for positional patterns."
+      },
+      {
+        "text": "`functools.singledispatch`, registering one implementation per node type",
+        "explanation": "Correct. It dispatches a function on its first argument's type, and new types can be registered from other modules."
+      },
+      {
+        "text": "An `eval()` method on each node class",
+        "explanation": "Correct. With only one or two operations, methods on the nodes are the simplest design. It's the other side of the expression problem: cheap new types, costlier new operations."
+      },
+      {
+        "text": "A singleton that holds every node",
+        "explanation": "Incorrect. Singleton controls how many instances exist; it does nothing to route an operation to per-type code."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "All three valid options answer the same question, 'which code runs for this node type?':\n\n```python\n# Enable positional class patterns.\nNum.__match_args__ = (\"v\",)\nAdd.__match_args__ = (\"l\", \"r\")\n\ndef ev(n):\n    match n:\n        case Num(v):\n            return v\n        case Add(l, r):\n            return ev(l) + ev(r)\n```\n\n1. `match`: one function per operation.\n2. `singledispatch`: one registered function per type, per operation.\n3. Methods: one method per operation, per class.\n\nPick by which axis grows: operations (visitor, `match`, `singledispatch`) or types (methods).",
+    "link": {
+      "title": "PEP 636 — Structural pattern matching tutorial",
+      "url": "https://peps.python.org/pep-0636/"
+    }
+  }
+]

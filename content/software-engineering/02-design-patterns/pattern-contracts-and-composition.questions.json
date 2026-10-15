@@ -1,0 +1,92 @@
+[
+  {
+    "id": "pattern-why-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A notification system has 3 channels (email, SMS, Slack) and 3 optional features (retry, logging, rate limiting) that can be combined freely. If every combination of channel and features is its own subclass, how many concrete classes could you need, and how many does a composition-based design need?",
+    "options": [
+      {
+        "text": "9 subclasses versus 6 composable classes",
+        "explanation": "9 is 3 × 3, which assumes each channel takes at most one feature. Features combine freely, so you need every subset of features, not each one alone."
+      },
+      {
+        "text": "24 subclasses versus 6 composable classes",
+        "explanation": "Correct. Each channel can have any subset of 3 features: 2 × 2 × 2 = 8 subsets, times 3 channels = 24. With composition you write 3 channels and 3 wrappers and stack them at run time."
+      },
+      {
+        "text": "27 subclasses versus 9 composable classes",
+        "explanation": "27 is 3 × 3 × 3, which counts the wrong thing. Each feature is either on or off (2 choices), giving 2 × 2 × 2 = 8 feature sets per channel, not 27."
+      },
+      {
+        "text": "Inheritance and composition need the same number of classes",
+        "explanation": "This misses the point of the principle. Inheritance needs one class per *combination*; composition needs one class per *part*."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each feature is either on or off, so first count the possible feature sets, then multiply by the number of channels:\n\n```formula\nN_inherit = c × 2^f\nN_inherit = 3 × 2^3 = 3 × 8 = 24\nwhere\nN_inherit: the number of subclasses needed when every combination of a channel and a set of features is its own class (a plain count, no unit)\nc: the number of channels (email, SMS, Slack); here 3\nf: the number of optional features (retry, logging, rate limiting), each on or off independently; here 3\n2^f: f copies of 2 multiplied together; it counts the possible feature sets, including 'no features' (2 × 2 × 2 = 8)\nIn words: every channel needs one subclass per feature set, so 3 channels × 8 feature sets = 24 subclasses.\n```\n\nWith composition, each channel and each feature is written once, and you stack them at run time:\n\n```\nRetry(Log(Email()))\nRateLimit(SMS())\n```\n\n```formula\nN_compose = c + f = 3 + 3 = 6\nwhere\nN_compose: the number of classes in the composition-based design (a plain count, no unit)\nc: the number of channel classes; here 3\nf: the number of feature wrapper classes; here 3\nIn words: composition needs one class per part, so the counts add instead of multiply.\n```\n\nAdd a fourth feature and inheritance doubles to 3 × 16 = 48 subclasses, while composition grows to 3 + 4 = 7 classes. This explosion is why the GoF said to favour composition.",
+    "link": {
+      "title": "Composition over inheritance — Python Design Patterns guide",
+      "url": "https://python-patterns.guide/gang-of-four/composition-over-inheritance/"
+    }
+  },
+  {
+    "id": "pattern-why-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A report generator is written as `def render(report, out): out.write(...)`. Tests pass an `io.StringIO`, production passes a file opened for writing, and a new feature passes a network socket wrapper. Which principle is this design following?",
+    "options": [
+      {
+        "text": "Favour inheritance so subclasses can override `write`",
+        "explanation": "The function does not require a shared base class. StringIO and text files do have an IO hierarchy, but a separately written wrapper can satisfy the same contract without inheriting from it."
+      },
+      {
+        "text": "Don't repeat yourself",
+        "explanation": "DRY is about not duplicating knowledge. The design does avoid three copies of `render`, but the mechanism that makes it work is depending on an interface."
+      },
+      {
+        "text": "The singleton pattern",
+        "explanation": "Singleton ensures one instance of a class. Here many different objects are passed in, which is the opposite."
+      },
+      {
+        "text": "Program to an interface, not an implementation",
+        "explanation": "Correct. `render` depends only on 'something with `write`'. Any object meeting that interface can be substituted, which is duck typing in Python."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. What does `render` need from `out`? Only a `write(text)` method.\n2. Does it check the class? No: no `isinstance`, no base class.\n3. So any object satisfying the required write(text) behaviour works: `StringIO`, a text file, a socket wrapper, a test fake.\n4. That is the GoF principle \"program to an interface, not an implementation\". In Python, you can document the interface with `typing.Protocol`, but Python attempts the operations at runtime; neither duck typing nor annotations proactively validate the complete behavioural contract.",
+    "link": {
+      "title": "Design Patterns (the GoF book) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Design_Patterns"
+    }
+  },
+  {
+    "id": "pattern-why-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Consider this code:\n\n```python\nclass Retry:\n    def __init__(self, inner, tries=3):\n        self.inner = inner\n        self.tries = tries\n\n    def send(self, msg):\n        send = self.inner.send\n        for i in range(self.tries):\n            try:\n                # Stop after a\n                # successful call.\n                return send(msg)\n            except ConnectionError:\n                # Re-raise on the last\n                # attempt.\n                if i == self.tries - 1:\n                    raise\n```\n\nAn `inner.send` fails with `ConnectionError` twice and then succeeds. With `tries=3`, how many times is `inner.send` called, and what happens?",
+    "options": [
+      {
+        "text": "Once; the first `ConnectionError` propagates to the caller",
+        "explanation": "The `except` catches the error and only re-raises when `i == tries - 1`. On the first attempt `i` is 0, so the loop continues."
+      },
+      {
+        "text": "Three times; the third call's result is returned",
+        "explanation": "Correct. Attempts 0 and 1 fail and are swallowed because they aren't the last. Attempt 2 succeeds and `return` exits with its result."
+      },
+      {
+        "text": "Three times; then `ConnectionError` is raised because the retries ran out",
+        "explanation": "The third call succeeds, so `return` runs before any re-raise could. The error is only re-raised if the *last* attempt fails."
+      },
+      {
+        "text": "Four times; `range(3)` plus the initial call",
+        "explanation": "There is no separate initial call. `range(3)` yields 0, 1, 2, so there are at most three calls in total."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the loop:\n\n```\ni=0  send -> ConnectionError\n     i == 2? no  -> swallow\ni=1  send -> ConnectionError\n     i == 2? no  -> swallow\ni=2  send -> OK\n     return result\n```\n\n3 calls, success. Note what makes this composition: `Retry` doesn't know or care whether `inner` is email, SMS or another wrapper. It only depends on the `send` interface.",
+    "link": {
+      "title": "Decorator pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Decorator_pattern"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 55/76. Updated 2026-10-15.
+Verified modules: 56/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -62,6 +62,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | security/Systems Security | 2 | 15 | 23 | 21 | 200 | 259 | 47 |
 | security/Security Engineering in Practice | 4 | 23 | 45 | 13 | 252 | 333 | 47 |
 | software-engineering/Design Principles & Clean Code | 6 | 26 | 69 | 8 | 292 | 395 | 45 |
+| software-engineering/Design Patterns | 6 | 28 | 66 | 13 | 273 | 380 | 54 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4499,6 +4500,41 @@ Low-confidence areas:
 
 - **medium** — sep-coupling-boundaries: The additional external-coupling category is an explicitly traditional taxonomy drawn from secondary reference material; the original Structured Design textbook supports the core coupling/cohesion concepts but does not use this exact six-label list.. Core technical content independently verified; this explicitly qualified reference taxonomy/heuristic lacks the original-source support described here.
 - **medium** — sep-knowledge-abstractions: The rule of three is presented as a practical heuristic, not a measured theorem. Its exact count is corroborated by the cited reference; an original Don Roberts source was not available, so personal attribution was removed.. Core technical content independently verified; this explicitly qualified reference taxonomy/heuristic lacks the original-source support described here.
+
+## software-engineering: Design Patterns
+
+[Independent verification record](../content/software-engineering/02-design-patterns/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Removed the surviving false no-other-owner comment from the Django weak-receiver quiz; actual DEBUG cache retention and eventual weak collection are independently reproduced.
+- Corrected Java constructor/__new__, shared copy semantics, value-object immutability, interning lifetime, Kafka retention, general Unicode scope, iterator/collection hook contracts, server cursors and STL iterator requirements in standalone definitions.
+- Fixed actual compiler wrong-sense popups for shared Python instances, file resources, callback scheduling overhead, object-state lifecycles, fetched batch size, value objects, decimal inputs, Python generator expressions, application audit records, Spring/Python containers, boolean fields, interpreter-pattern names and ordinary wording previously captured as property-test shrinking.
+- Added five precise source-verified popup entries; retained all 66 original quiz IDs/types/levels/answer indices/option count/order semantics. Clarified six option-text locations at the same original indices; no false clause is kept by inventing a rescue premise.
+- Removed unsupported compiler-frequency language and ancillary precise dates/priority claims; recorded retained secondary historical attributions and conventional design heuristics as medium.
+
+Remaining gaps:
+
+- The original selected catalogue remains: chain of responsibility, interpreter, mediator and memento are introduced, without new standalone implementations.
+- No production Qt/Java UI, Spring deployment, Celery broker, remote payment/cloud effect or production server database was deployed. Exact Python fences, real Django 5.2.18/SQLite, and documented API semantics were checked; illustrative fixtures do not prove omitted business operations.
+- Several naturally small named-pattern units are below 400 words; they keep coherent boundaries, realistic three-minute study targets and focused questions.
+- Library API statements are tied to fetched documentation; PBKDF2’s million iterations is explicitly Django 5.2-specific and CPython integer caching is explicitly an implementation detail.
+
+Low-confidence areas:
+
+- **medium** — pattern-copying-prototypes: Java cloning preference is conventional design advice, rather than an API rule.. Core technical behaviour verified; retained ancillary historical/descriptive judgement has the stated limited provenance.
+- **medium** — pattern-tangled-responsibilities: Koenig naming attribution and original Blob naming rely on secondary historical accounts; attribution is qualified.. Core technical behaviour verified; retained ancillary historical/descriptive judgement has the stated limited provenance.
+- **medium** — pattern-legacy-and-duplication: Golden-hammer/lava-flow names and rule of three are contextual design heuristics; source dates not primary-verified were removed.. Core technical behaviour verified; retained ancillary historical/descriptive judgement has the stated limited provenance.
+- **medium** — glossary:anti-pattern: anti-pattern. Koenig attribution rests on secondary historical accounts; now explicitly commonly attributed.
+- **medium** — glossary:andrew-koenig: andrew-koenig. Original 1995 article unavailable; credited wording makes attribution explicit.
+- **medium** — glossary:kent-beck: kent-beck. Biographical association checked through author/book accounts and secondary biography; unsupported priority/rediscovery details removed.
+- **medium** — glossary:copy-constructor: copy-constructor. Java preference is design advice rather than an API guarantee.
+- **medium** — glossary:telescoping-constructor: telescoping-constructor. Historical motivation and pattern terminology are conventional author advice rather than a Java requirement.
+- **medium** — glossary:god-object: god-object. Core responsibilities/coupling description checked; original AntiPatterns Blob naming depends on secondary book accounts.
+- **medium** — glossary:lava-flow: lava-flow. Core legacy-code risk checked against Foote/Fowler; exact AntiPatterns label definition uses secondary historical catalogue.
+- **medium** — glossary:golden-hammer: golden-hammer. Named heuristic, not a measured universal rule. Exact Maslow/date attribution removed from lesson.
+- **medium** — glossary:characterization-test: characterization-test. Core preserve-existing-behaviour concept checked; terminology also rests on secondary description of Feathers’s practice.
+- **medium** — glossary:dylan: dylan. Language behaviour and Apple manual primary; ancillary early-1990s history is secondary.
 
 ## synth: Sound & Digital Audio
 

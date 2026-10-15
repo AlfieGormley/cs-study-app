@@ -1,0 +1,96 @@
+[
+  {
+    "id": "pattern-anti-patterns-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A codebase contains `if order.state == 4 and total > 249.99: ship_cost = 0`. Which smell is this, and what's the fix?",
+    "options": [
+      {
+        "text": "Lava flow; delete the line",
+        "explanation": "Lava flow is dead code nobody dares remove. This line is live business logic; the problem is that its meaning is hidden."
+      },
+      {
+        "text": "God object; split the class",
+        "explanation": "One line doesn't tell you anything about class size. The visible problem is unexplained literal values."
+      },
+      {
+        "text": "Magic numbers; replace them with named constants or an enum, such as `OrderState.PAID` and `FREE_SHIPPING_THRESHOLD`",
+        "explanation": "Correct. Named values document intent, can be changed in one place, and make the rule searchable."
+      },
+      {
+        "text": "Golden hammer; use a different language",
+        "explanation": "Golden hammer is about applying a favourite tool everywhere. Nothing here suggests the language is the issue."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Preserve the rule before changing it: total > 249.99 is not generally equivalent to total >= 250 when fractional pennies are possible.\n2. Name the existing values:\n\n```python\n# Name values without changing the rule.\nPAID_STATE_CODE = 4\nFREE_SHIPPING_OVER = 249.99\n\nif (order.state == PAID_STATE_CODE\n        and total > FREE_SHIPPING_OVER):\n    ship_cost = 0\n```\n\n3. Converting to an Enum, Decimal or integer pennies can be a separate deliberate migration, with a specified rounding and boundary policy. A readability refactor shouldn't silently change that policy.",
+    "link": {
+      "title": "Magic number (programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Magic_number_(programming)"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nprint(0.1 + 0.2 == 0.3)\n\n# Strings preserve these decimal inputs.\nfrom decimal import Decimal as D\nprint(D(\"0.1\") + D(\"0.2\")\n      == D(\"0.3\"))\n```",
+    "options": [
+      {
+        "text": "`True` then `True`",
+        "explanation": "0.1, 0.2 and 0.3 have no exact binary floating-point representation, so the float sum is 0.30000000000000004, not 0.3."
+      },
+      {
+        "text": "`False` then `False`",
+        "explanation": "`Decimal` built from strings represents these values exactly in base 10, so the decimal comparison is True."
+      },
+      {
+        "text": "`False` then `True`",
+        "explanation": "Correct. Floats are binary approximations; `Decimal(\"0.1\")` is exact. This is why money as a bare float is a classic case of primitive obsession."
+      },
+      {
+        "text": "`True` then `False`",
+        "explanation": "This reverses the behaviour. Floats are the ones that can't represent 0.1 exactly."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In binary, 0.1 = 0.0001100110011... repeating, so it's rounded.\n2. `0.1 + 0.2` gives `0.30000000000000004`, while `0.3` rounds to a slightly different double → `False`.\n3. `Decimal(\"0.1\")` stores the decimal digits exactly → `0.3 == 0.3` → `True`.\n4. Note `Decimal(0.1)` (from a float) would carry the float's error in; build from strings.\n\nWrapping money in a `Money` type based on `Decimal` puts this rule in one place.",
+    "link": {
+      "title": "Primitive obsession — Refactoring.Guru",
+      "url": "https://refactoring.guru/smells/primitive-obsession"
+    }
+  },
+  {
+    "id": "pattern-anti-patterns-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A class does this:\n\n```python\nclass Checkout:\n    def pay(self, order):\n        # Resolve dependencies inside\n        # pay.\n        gw = Locator.get(\"payments\")\n        db = Locator.get(\"db\")\n        ...\n```\n\nWhich criticisms of this **service locator** usage are valid? Select all that apply.",
+    "options": [
+      {
+        "text": "`Checkout`'s constructor and signature don't reveal that it needs a payment gateway and a database",
+        "explanation": "Correct. Dependencies are hidden in method bodies, so readers and callers can't see them without reading the code."
+      },
+      {
+        "text": "A test must remember to register fakes in the global locator, and forgetting one fails only at run time",
+        "explanation": "Correct. Missing dependencies are discovered when `pay()` runs, not when `Checkout` is constructed."
+      },
+      {
+        "text": "Tests running in parallel can interfere through the shared global registry",
+        "explanation": "Correct. The locator is global mutable state; two tests registering different fakes can see each other's."
+      },
+      {
+        "text": "Python can't look up objects by string key",
+        "explanation": "Incorrect. Lookups by key are trivial in Python. The problems are about hidden dependencies and global state, not mechanics."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Compare with constructor injection:\n\n```python\nclass Checkout:\n    def __init__(self, gw, db):\n        # Keep the injected\n        # collaborators.\n        self.gw = gw\n        self.db = db\n```\n\n1. **Visibility:** the signature lists every dependency.\n2. **Fail fast:** forgetting one raises `TypeError` at construction.\n3. **Isolation:** each test builds its own `Checkout(FakeGw(), FakeDb())`, with no shared registry.\n\nA composition root (one place at start-up) wires the real objects together.",
+    "link": {
+      "title": "Inversion of Control Containers and the Dependency Injection pattern — Martin Fowler",
+      "url": "https://martinfowler.com/articles/injection.html"
+    }
+  }
+]

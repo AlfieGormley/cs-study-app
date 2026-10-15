@@ -1,0 +1,100 @@
+[
+  {
+    "id": "pattern-creational-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the most idiomatic way to get a single shared configuration object in Python?",
+    "options": [
+      {
+        "text": "Override `__new__` so the class always returns the same instance",
+        "explanation": "This works, but it is more machinery than needed and still surprises readers (`Config()` looks like it makes a new object)."
+      },
+      {
+        "text": "Use a metaclass that caches instances",
+        "explanation": "Metaclass singletons work but are the heaviest option, and they make the class harder to subclass and test. Python has a simpler built-in mechanism."
+      },
+      {
+        "text": "Create the instance at module level and import it",
+        "explanation": "Correct for ordinary imports of the same module name within one interpreter. A module-level object is shared there; explicit injection can make the dependency clearer."
+      },
+      {
+        "text": "Store it in an environment variable",
+        "explanation": "Environment variables hold strings, not objects. You might *read* configuration from them, but that doesn't give you a shared Python object."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The singleton problem: one instance, shared access.\n2. For ordinary same-name imports in one interpreter, the first `import settings` runs the file; later imports reuse `sys.modules['settings']`.\n3. So `settings = _Settings()` at module level is created once.\n4. `from settings import settings` anywhere returns that same object.\n5. Reloads, aliases and separate processes are exceptions to this sharing. No __new__ tricks or metaclass are needed for the ordinary case. This is why many say Python doesn't need the GoF singleton.",
+    "link": {
+      "title": "The Global Object pattern — Python Design Patterns guide",
+      "url": "https://python-patterns.guide/python/module-globals/"
+    }
+  },
+  {
+    "id": "pattern-creational-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A service calls `Database.instance()` (a classic singleton) from deep inside its business logic. Which problems does this cause? Select all that apply.",
+    "options": [
+      {
+        "text": "Tests can share state through the singleton and affect each other",
+        "explanation": "Correct. One test's writes or configuration changes persist into the next unless every test remembers to reset the instance."
+      },
+      {
+        "text": "The function's signature hides that it depends on a database",
+        "explanation": "Correct. Callers can't see the dependency, and can't pass a fake without patching globals."
+      },
+      {
+        "text": "Supporting a second database (a read replica, a second tenant) becomes hard",
+        "explanation": "Correct. 'There's only one' is baked into every call site. When that stops being true, every call needs changing."
+      },
+      {
+        "text": "Python can't import the module more than once, so it will crash",
+        "explanation": "Incorrect. Importing again just reuses the cached module; nothing crashes. Being cached is what makes module-level singletons work."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Compare the two shapes:\n\n```python\n# hidden dependency\ndef close_order(id):\n    db = Database.instance()\n    ...\n\n# explicit dependency\ndef close_order(id, db):\n    ...\n```\n\n1. **Testing:** the second version takes a fake `db`; the first needs patching and reset.\n2. **Visibility:** the second says what it needs.\n3. **Multiplicity:** the second works with any number of databases.\n4. Imports are cached, so there's no crash. The problems are design problems, not runtime errors.",
+    "link": {
+      "title": "Singleton pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Singleton_pattern"
+    }
+  },
+  {
+    "id": "pattern-creational-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these correctly match a real library to the creational pattern it uses? Select all that apply.",
+    "options": [
+      {
+        "text": "SQLAlchemy's `select(User).where(...).order_by(...)`: builder",
+        "explanation": "Correct. Each call returns a new statement with one more clause, and the SQL is compiled at the end. The immutable steps mean partial queries can be reused safely."
+      },
+      {
+        "text": "`logging.getLogger(\"app\")`: returns the same object for the same name, a singleton-style registry",
+        "explanation": "Correct. Loggers are cached by name in the logging manager, so every module asking for `\"app\"` shares one logger."
+      },
+      {
+        "text": "`copy.deepcopy()` with `__deepcopy__`: prototype",
+        "explanation": "Correct. Creating a new object by cloning an existing one, with a hook for classes to control how, is the prototype pattern."
+      },
+      {
+        "text": "Java's `BufferedInputStream(new FileInputStream(f))`: abstract factory",
+        "explanation": "Incorrect. Wrapping a stream to add buffering behind the same interface is the decorator pattern, a structural pattern."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Match each by intent:\n\n1. **SQLAlchemy select:** assembling a complex object step by step → builder.\n2. **getLogger:** one shared instance per key → singleton-like registry (sometimes called a multiton).\n3. **deepcopy:** new object from an existing one → prototype.\n4. **BufferedInputStream:** same interface, added behaviour, wrapping an inner object → decorator, not creational at all.",
+    "link": {
+      "title": "logging — Python docs",
+      "url": "https://docs.python.org/3/library/logging.html"
+    }
+  }
+]

@@ -1,0 +1,126 @@
+[
+  {
+    "id": "pattern-behavioural-1-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nhandlers = []\nlog = []\n\ndef once(x):\n    log.append(f\"once {x}\")\n    # Mutate the list being traversed.\n    handlers.remove(once)\n\ndef always(x):\n    log.append(f\"always {x}\")\n\nhandlers += [once, always]\nfor h in handlers:\n    h(1)\nprint(log)\n```",
+    "options": [
+      {
+        "text": "`['once 1', 'always 1']`",
+        "explanation": "This is what you'd get iterating over a copy (`list(handlers)`). Here the loop iterates over the list being mutated."
+      },
+      {
+        "text": "`['always 1']`",
+        "explanation": "`once` is first in the list and runs before it removes itself, so `once 1` is logged."
+      },
+      {
+        "text": "A `RuntimeError` for changing a list during iteration",
+        "explanation": "That error is raised for dicts and sets changing size during iteration. Lists don't check; they silently skip or repeat elements."
+      },
+      {
+        "text": "`['once 1']`",
+        "explanation": "Correct. `once` removes itself, shifting `always` from index 1 to index 0. The loop's next index is 1, which is now past the end, so `always` is skipped."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "A list iterator just tracks an index:\n\n```\nindex 0: once -> log, remove once\n  list is now [always]\nindex 1: past the end -> stop\n```\n\n`always` never runs. This is why the lesson's `Event.emit` loops over `list(self._handlers)`: a copy is unaffected by subscribers removing themselves (a common pattern for one-shot handlers).",
+    "link": {
+      "title": "Observer pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Observer_pattern"
+    }
+  },
+  {
+    "id": "pattern-behavioural-1-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A desktop app opens and closes a chart window many times. Each window subscribes to a `prices_changed` event but never unsubscribes. Memory grows steadily and CPU climbs on each price update. What's happening?",
+    "options": [
+      {
+        "text": "The lapsed listener problem: the event's handler list keeps every closed window alive, and each still receives updates",
+        "explanation": "Correct. The subject holds strong references to the handlers, and a bound method references its window. Closed windows can't be garbage-collected, and each update calls all of them."
+      },
+      {
+        "text": "Python's garbage collector doesn't collect objects with methods",
+        "explanation": "The garbage collector collects any object with no remaining references. The problem is that the handler list *is* a remaining reference."
+      },
+      {
+        "text": "Too many events are being emitted; throttle the price feed",
+        "explanation": "Throttling would hide the symptom but the leak would continue: the number of live handlers grows with every window opened."
+      },
+      {
+        "text": "The windows are singletons",
+        "explanation": "Each opening creates a new window, so there are many instances; that's exactly why they pile up."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `prices_changed.subscribe(self.redraw)`: `self.redraw` is a bound method holding a reference to `self`.\n2. Closing the window removes your references, but the event's list still has one.\n3. After opening and closing it 50 times, 50 dead windows are alive and all redraw on each tick.\n4. Fixes:\n   - unsubscribe in the window's close handler\n   - or store `weakref.WeakMethod(self.redraw)` in the subject\n\nDjango signals use weak references by default for exactly this reason.",
+    "link": {
+      "title": "Lapsed listener problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Lapsed_listener_problem"
+    }
+  },
+  {
+    "id": "pattern-behavioural-1-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a Django project, a developer writes this inside a function that runs at start-up:\n\n```python\ndef setup():\n    def audit(sender, **kw):\n        write_audit(kw[\"instance\"])\n    # No lasting strong owner is\n    # arranged for this callback.\n    post_save.connect(audit,\n                      sender=Order)\n```\n\nAudit logging works for a while, then silently stops. Why?",
+    "options": [
+      {
+        "text": "`post_save` only fires for the first save of each model",
+        "explanation": "Normal successful model save() calls emit post_save for creation and updates. Bulk update APIs and skipped saves do not necessarily emit it; the question concerns receiver lifetime."
+      },
+      {
+        "text": "Signals hold receivers weakly by default; once no strong reference keeps the local audit function alive, it can be garbage-collected",
+        "explanation": "Correct. connect(weak=True) is the default. setup does not arrange a lasting strong owner for audit. Incidental references, including debug inspection caches, can delay collection; they are not a lifecycle guarantee. Define the receiver at module level or pass weak=False."
+      },
+      {
+        "text": "`sender=Order` must be a string",
+        "explanation": "`sender` is normally the model class itself. A wrong sender would mean the handler never fires, not that it stops later."
+      },
+      {
+        "text": "Django removes receivers after a timeout",
+        "explanation": "There's no timeout on receivers. They're removed by `disconnect()` or by garbage collection of weakly referenced functions."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `post_save.connect(audit)` stores a **weak** reference by default, to avoid lapsed listeners.\n2. `audit` is a local function; this setup does not arrange a lasting strong owner for it.\n3. After `setup()` returns, once any other incidental strong references also disappear, `audit` can be collected. Debug inspection caches can temporarily retain it; the timing is not guaranteed.\n4. The weak reference goes dead, and Django skips it. No error is raised.\n5. Fix: define `audit` at module level (usually with `@receiver(post_save, sender=Order)`) or pass `weak=False`.\n\nWeak references solve one observer pitfall but introduce this one.",
+    "link": {
+      "title": "Signals — Django docs",
+      "url": "https://docs.djangoproject.com/en/stable/topics/signals/"
+    }
+  },
+  {
+    "id": "pattern-behavioural-1-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An `order_paid` event has three observers: send receipt email (slow, ~800 ms), update analytics, and **reserve stock**. It's emitted synchronously in the payment request. Which concerns are valid? Select all that apply.",
+    "options": [
+      {
+        "text": "The slow email handler adds latency to every payment request",
+        "explanation": "Correct. Synchronous observers run inside the emitter's call. Push slow, optional work like email onto a queue."
+      },
+      {
+        "text": "If analytics raises an exception, later handlers might not run, depending on how `emit` handles errors",
+        "explanation": "Correct. A naive loop stops at the first exception, so stock reservation could be skipped because analytics failed. Decide on and document the error policy."
+      },
+      {
+        "text": "Stock reservation is required for correctness, so hiding it in an observer with no ordering or failure guarantees is risky",
+        "explanation": "Correct. Observers suit optional side effects. Steps the business depends on belong in explicit code (or a workflow with retries), where failure is visible."
+      },
+      {
+        "text": "Observers can't receive arguments, so the order id can't be passed",
+        "explanation": "Incorrect. `emit(*args)` passes any arguments to every handler; the lesson's example passes the order id."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Sort the handlers by how critical they are:\n\n| Handler | Critical? | Where |\n|---|---|---|\n| Reserve stock | Yes | Explicit call |\n| Email | No, slow | Queue |\n| Analytics | No | Observer |\n\nWhen every handler completes normally, synchronous emission waits for all of them in turn. Ignoring time spent selecting and calling callbacks, their durations add in this simple sequential cost model:\n\n```formula\nT_emit = t_email + t_analytics + t_stock\nT_emit ≈ 800 ms + t_analytics + t_stock\nwhere\nT_emit: modelled blocking time for normally completing sequential handlers, excluding time spent selecting and calling callbacks, in milliseconds (ms)\nt_email: time taken by the receipt-email handler; about 800 ms here\nt_analytics: time taken by the analytics handler, in ms\nt_stock: time taken by the stock-reservation handler, in ms\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: handlers run one after another, so their times add up, and the slow email alone adds about 800 ms to every payment.\n```\n\n1. Move the email to a queue and `emit` stops paying its 800 ms.\n2. A naive `for fn in handlers: fn()` aborts on the first exception.\n3. Use observers for things that may fail on their own without breaking the main flow.",
+    "link": {
+      "title": "Observer pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Observer_pattern"
+    }
+  }
+]

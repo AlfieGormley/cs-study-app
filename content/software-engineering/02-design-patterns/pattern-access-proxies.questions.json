@@ -1,0 +1,96 @@
+[
+  {
+    "id": "pattern-structural-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `LazyReport` proxy, what is printed?\n\n```python\n# Creation and first access differ.\nr = LazyReport()\nprint(\"made\")\nprint(r.total())\nprint(r.total())\n```",
+    "options": [
+      {
+        "text": "`expensive load`, `made`, `3`, `3`",
+        "explanation": "`LazyReport.__init__` only sets `_real = None`. The expensive `BigReport` isn't created until the first `total()` call."
+      },
+      {
+        "text": "`made`, `expensive load`, `3`, `expensive load`, `3`",
+        "explanation": "After the first call, `_real` holds the `BigReport`, so the `is None` check fails and no reload happens."
+      },
+      {
+        "text": "`made`, `expensive load`, `3`, `3`",
+        "explanation": "Correct. Construction is cheap; the first `total()` triggers the load and caches the real object; the second call reuses it."
+      },
+      {
+        "text": "`made`, `3`, `3`",
+        "explanation": "The proxy does create a `BigReport` eventually, and its `__init__` prints `expensive load`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nLazyReport()      _real = None\nprint(\"made\")     made\nr.total()         _real is None:\n                  BigReport() prints\n                  \"expensive load\"\n                  -> 3\nr.total()         _real exists -> 3\n```\n\nThis is a **virtual proxy**: same interface as the real object, but it controls when the real one is created. Django's `SimpleLazyObject` does this for `request.user`.",
+    "link": {
+      "title": "Proxy pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Proxy_pattern"
+    }
+  },
+  {
+    "id": "pattern-structural-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Django template loops over 100 orders and prints `order.customer.name`. Each order has a non-null customer foreign key that is not cached or prefetched, and the manager performs no automatic joins. What happens, and which pattern is responsible?",
+    "options": [
+      {
+        "text": "1 query: the ORM loads all customers with the orders automatically",
+        "explanation": "Only if you ask for it with `select_related(\"customer\")`. By default related objects load lazily on first access."
+      },
+      {
+        "text": "101 queries: one for the orders, then one per customer when each lazy proxy is first touched",
+        "explanation": "Correct. This is the N+1 query problem. The lazy-loading proxy hides each database call behind attribute access. Fix it with `select_related`."
+      },
+      {
+        "text": "2 queries: one for orders, one for all customers",
+        "explanation": "That's what `prefetch_related` would do. Plain lazy loading has no batching, so each access is its own query."
+      },
+      {
+        "text": "An error, because lazy objects can't be used in templates",
+        "explanation": "Lazy loading is transparent to templates. That transparency is exactly why the extra queries go unnoticed."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `Order.objects.all()`: **1** query.\n2. Each `order.customer` is not loaded yet. First access runs `SELECT ... FROM customer WHERE id = ?`.\n3. 100 orders → **100** more queries.\n\n```formula\nQ = 1 + N\nQ = 1 + 100 = 101\nwhere\nQ: the total number of database queries the template triggers (a plain count, no unit)\nN: the number of orders in the list, each with one lazily loaded customer; here 100\nIn words: one query fetches the list, then each item costs one more hidden query, hence the name N+1.\n```\n\n4. Fix: `Order.objects.select_related(\"customer\")` joins in one query.\n\nThe proxy's strength (callers don't notice loading) is also its weakness: callers don't notice loading.",
+    "link": {
+      "title": "Proxy pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Proxy_pattern"
+    }
+  },
+  {
+    "id": "pattern-structural-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A team wraps an internal HTTP service in a class so calls look like `inventory.reserve(sku, qty)`, as if it were local. Which risks of this **remote proxy** should the design address? Select all that apply.",
+    "options": [
+      {
+        "text": "Calls can fail or time out, so callers need timeouts and error handling the local-looking API doesn't suggest",
+        "explanation": "Correct. The network is not reliable; a proxy that hides this invites code with no failure handling."
+      },
+      {
+        "text": "Each call costs a network round trip, so a loop of small calls can be far slower than one batched call",
+        "explanation": "Correct. Latency isn't zero. A chatty interface that looks cheap locally can turn into hundreds of round trips."
+      },
+      {
+        "text": "Retrying a timed-out `reserve` may reserve twice unless the operation is idempotent",
+        "explanation": "Correct. After a timeout you don't know whether the server acted. Retries need an idempotency key or a naturally idempotent operation."
+      },
+      {
+        "text": "Python can't forward method calls to another object",
+        "explanation": "Incorrect. Forwarding is easy (explicit methods or `__getattr__`), and `xmlrpc.client.ServerProxy` does exactly that. The risks are semantic, not mechanical."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "A remote proxy makes three things invisible that are very visible in production:\n\n1. **Failure:** add timeouts and typed errors to the proxy's API.\n2. **Latency:** offer batch methods (`reserve_many`) so callers don't loop.\n3. **Uncertain outcomes:** use the same idempotency key on retries, with server-side atomic deduplication tied to the effect and a retention policy covering the retry window. Sending a key alone does not enforce this.\n\nTransparency is a feature for lazy local loading, but a hazard across a network.",
+    "link": {
+      "title": "Proxy pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Proxy_pattern"
+    }
+  }
+]

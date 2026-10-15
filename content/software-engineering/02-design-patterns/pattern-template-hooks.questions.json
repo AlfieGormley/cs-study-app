@@ -1,0 +1,96 @@
+[
+  {
+    "id": "pattern-behavioural-2-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In `unittest`, you write `setUp`, `tearDown` and `test_*` methods, and the framework's `run()` calls them in order. Which pattern is this?",
+    "options": [
+      {
+        "text": "Template method",
+        "explanation": "Correct. `TestCase.run()` is a fixed skeleton (set up, run test, tear down, record result) that calls steps your subclass overrides."
+      },
+      {
+        "text": "Strategy",
+        "explanation": "Strategy passes an interchangeable algorithm *into* an object. Here the steps are supplied by *subclassing* and called by a base-class algorithm."
+      },
+      {
+        "text": "Observer",
+        "explanation": "Nothing subscribes to events here; the base class calls fixed hook methods in a fixed order."
+      },
+      {
+        "text": "Visitor",
+        "explanation": "Visitor dispatches an operation over a structure of different node types. There's no such structure here."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Look for the shape:\n\n```\nTestCase.run():       base class\n  self.setUp()        hook\n  self.test_x()       your step\n  self.tearDown()     hook\n```\n\n1. The algorithm lives in the base class.\n2. Subclasses fill in steps but don't control the order.\n3. The base calls the subclass (\"don't call us, we'll call you\").\n\nThat is template method. `socketserver.BaseRequestHandler` (setup, handle, finish) is another stdlib example.\n\nThis is the normal successful-setup path; if setUp fails, unittest skips the test and tearDown (registered cleanups are separate).",
+    "link": {
+      "title": "unittest — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.html"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are template methods in Python's standard library? Select all that apply.",
+    "options": [
+      {
+        "text": "`socketserver.BaseRequestHandler`, whose constructor calls `setup()`, `handle()` and `finish()`",
+        "explanation": "Correct. The constructor is the fixed skeleton; you override `handle()` (and optionally the other two)."
+      },
+      {
+        "text": "`collections.abc.Mapping`, which provides `get`, `items` and `__contains__` built on your `__getitem__`, `__iter__` and `__len__`",
+        "explanation": "Correct. The mixin methods are algorithms written in terms of abstract steps that subclasses supply."
+      },
+      {
+        "text": "`threading.Thread`, where `start()` arranges for your overridden `run()` to be called",
+        "explanation": "Correct. `start()` handles the thread machinery and calls the `run()` hook. (You can also pass `target=` instead, which is the strategy-style alternative.)"
+      },
+      {
+        "text": "`functools.partial`",
+        "explanation": "Incorrect. `partial` fixes some arguments of a function. There's no base-class skeleton calling overridable steps."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Test each: is there a base-class algorithm that calls steps a subclass provides?\n\n1. `BaseRequestHandler.__init__` → `setup(); handle(); finish()`. Yes.\n2. `Mapping.get(k)` → tries `self[k]`, falls back to default. Yes.\n3. `Thread.start()` → new OS thread → `self.run()`. Yes.\n4. `partial(f, x)` → just a callable with pre-filled arguments. No.\n\n`Thread` is a nice contrast: subclassing and overriding `run` is template method; passing `target=fn` is strategy.",
+    "link": {
+      "title": "socketserver — Python docs",
+      "url": "https://docs.python.org/3/library/socketserver.html"
+    }
+  },
+  {
+    "id": "pattern-behavioural-2-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A base class `Exporter.export()` calls `self.open()`, `self.write_rows()` and `self.close()`. Over time, subclasses appear for every combination of format (CSV, JSON, Parquet) and destination (local disk, S3, GCS), giving 9 subclasses. What's the best refactor?",
+    "options": [
+      {
+        "text": "Add another level of inheritance: `CsvExporter`, then `CsvS3Exporter`",
+        "explanation": "More inheritance makes the combinatorial explosion worse. Each new format or destination still multiplies the class count."
+      },
+      {
+        "text": "Merge everything into one class with `if format == ...` and `if dest == ...` branches",
+        "explanation": "That removes subclasses but recreates the conditional sprawl the patterns were meant to avoid, and every new format means editing the core."
+      },
+      {
+        "text": "Make each exporter a singleton",
+        "explanation": "The number of instances isn't the problem; the number of *classes* is."
+      },
+      {
+        "text": "Keep the template method but pass a format strategy and a destination strategy into one `Exporter`",
+        "explanation": "Correct. Two independent dimensions are the bridge/strategy signal. 3 formats + 3 destinations = 6 small classes instead of 9 subclasses, and the gap grows with each addition."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Template method varies steps by subclass, giving one fixed combination per class.\n2. Two independent axes → combinations multiply.\n\n```formula\nN_sub = F × D = 3 × 3 = 9\nN_comp = F + D = 3 + 3 = 6\nwhere\nN_sub: the number of subclasses with one per format-and-destination pair (a plain count, no unit)\nN_comp: the number of strategy classes when formats and destinations are separate strategy objects (not counting the one Exporter class that holds them)\nF: the number of export formats (CSV, JSON, Parquet); here 3\nD: the number of destinations (local disk, S3, GCS); here 3\nIn words: subclassing every pair multiplies the counts; composing two strategies adds them.\n```\n\nWith a fourth format and a fourth destination: 4 × 4 = 16 subclasses versus 4 + 4 = 8 classes.\n\n3. Compose instead:\n\n```python\n# Supply independent collaborators.\nExporter(fmt=Csv(),\n         dest=S3(bucket))\n```\n\n4. The skeleton (`open`, write, `close`) can stay in `Exporter`; it just delegates steps to the parts.",
+    "link": {
+      "title": "Template method pattern — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Template_method_pattern"
+    }
+  }
+]

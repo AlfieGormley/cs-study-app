@@ -1,0 +1,62 @@
+[
+  {
+    "id": "pattern-creational-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport copy\nbase = {\"tags\": [\"a\"]}\n# Copy only the outer container.\nc = copy.copy(base)\nc[\"tags\"].append(\"b\")\nprint(base[\"tags\"])\n```",
+    "options": [
+      {
+        "text": "`['a']`",
+        "explanation": "That would be true for `copy.deepcopy`. A shallow copy creates a new outer dict but both dicts point at the same inner list."
+      },
+      {
+        "text": "`['a', 'b']`",
+        "explanation": "Correct. `copy.copy` copies only the top level. `c[\"tags\"]` and `base[\"tags\"]` are the same list object, so appending through one is visible through the other."
+      },
+      {
+        "text": "`['b']`",
+        "explanation": "`append` adds to the end of the existing list; it doesn't replace its contents."
+      },
+      {
+        "text": "A `TypeError`, because dicts can't be copied",
+        "explanation": "Dicts can be copied with `copy.copy`, `dict.copy()` or `dict(base)`. All three are shallow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Draw the references:\n\n```\nbase --> {tags: ---+\n                   |\nc    --> {tags: ---+--> ['a']\n```\n\n1. `copy.copy` makes a **new** outer dict `c`.\n2. Its values are the **same** objects as in `base`.\n3. `c[\"tags\"].append(\"b\")` mutates the shared list.\n4. `base[\"tags\"]` is that list: `['a', 'b']`.\n\nThe prototype pattern in Python is the `copy` module, and this shared-nested-state trap is its main pitfall.",
+    "link": {
+      "title": "copy — Shallow and deep copy operations — Python docs",
+      "url": "https://docs.python.org/3/library/copy.html"
+    }
+  },
+  {
+    "id": "pattern-creational-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You keep a custom Session object with ordinary instance attributes and no copy or serialization hooks with default headers and an open connection pool, and create per-request sessions with `copy.deepcopy(prototype)`. What is the most likely problem?",
+    "options": [
+      {
+        "text": "Nothing: deep copy duplicates everything correctly",
+        "explanation": "Deep copy recursively copies Python objects, but OS resources such as sockets and locks can't be meaningfully duplicated."
+      },
+      {
+        "text": "The copies will share the same headers dict",
+        "explanation": "That's the shallow-copy problem. `deepcopy` copies the nested dict too."
+      },
+      {
+        "text": "`deepcopy` is only defined for built-in types",
+        "explanation": "`deepcopy` supports many user-defined objects, and classes can customise it with `__deepcopy__`. The problem is specifically resources that can't be duplicated."
+      },
+      {
+        "text": "Deep-copying the pool's sockets or locks will raise an error or produce broken objects",
+        "explanation": "Correct. Sockets, locks and open file objects can't be pickled or copied, so `deepcopy` typically raises `TypeError`. Copy only the configuration, and share or recreate the resources."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. For this ordinary object without hooks, deepcopy traverses its stored state, falling back on the pickle protocol (`__reduce_ex__`) for objects it doesn't know.\n2. `threading.Lock`, sockets and similar objects refuse to be pickled, so you get `TypeError: cannot pickle '_thread.lock' object` or similar.\n3. Sharing a connection is safe only under an explicit ownership and concurrency contract; blindly copying pool state does not establish that contract.\n4. Fix: make the prototype hold only plain configuration, or implement `__deepcopy__` to copy settings and share or recreate the pool.",
+    "link": {
+      "title": "copy — Shallow and deep copy operations — Python docs",
+      "url": "https://docs.python.org/3/library/copy.html"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "virt-k8s-os-view-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Suppose unreclaimable cgroup memory pressure invokes OOM handling, the container main process is killed with SIGKILL, and the runtime identifies the event as OOM. Which termination report is expected?",
+    "options": [
+      {
+        "text": "The container is throttled until usage falls",
+        "explanation": "Memory allocation can be throttled through memory.high, but the question specifies an actual main-process OOM kill."
+      },
+      {
+        "text": "The kubelet moves the pod to another node with more memory",
+        "explanation": "Kubernetes does not live-migrate pods. A pod removed by node-pressure eviction or killed is restarted or replaced, not moved."
+      },
+      {
+        "text": "The pod swaps to disk without limit",
+        "explanation": "Swap support and limits depend on configuration. The question already specifies unrecoverable pressure and a kill, not unlimited swap."
+      },
+      {
+        "text": "OOMKilled with exit code 137; restart behavior depends on policy",
+        "explanation": "Correct. Under the stated main-process OOM kill, 128+9 gives 137. SIGKILL from other causes can also produce 137."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The stated OOM handler killed the container main process with SIGKILL, signal 9. Exit codes for signal deaths follow the shell convention:\n\n```formula\nE = 128 + s = 128 + 9 = 137\nwhere\nE: the exit code reported for a process killed by a signal\ns: the signal number; SIGKILL is 9\nIn words: for the stated SIGKILL death, this reporting convention gives 137. An explicit normal exit can also return 137, so the number alone cannot prove signal death or OOM.\n```\n\nThe runtime reports OOMKilled and exit code 137. Restart policy determines what follows. Killing only a child or seeing 137 without OOM evidence would require a different diagnosis.",
+    "link": {
+      "title": "Resource management for pods and containers — Kubernetes docs",
+      "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
+    }
+  },
+  {
+    "id": "virt-k8s-os-view-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A single-container pod has a 1 GiB effective memory limit, no swap, and a memory emptyDir whose size permits 900 MiB of writes. Assume those writes succeed; the app then tries to retain another 200 MiB heap with little other reclaimable memory. What is likely?",
+    "options": [
+      {
+        "text": "Nothing; emptyDir lives on the node's disk, outside the memory limit",
+        "explanation": "With `medium: Memory`, emptyDir is tmpfs, held in RAM and charged to the pod's memory cgroup."
+      },
+      {
+        "text": "The pod is likely OOM-killed: tmpfs pages are charged to the cgroup and cannot be reclaimed like ordinary page cache, so 900 + 200 MiB exceeds 1 GiB",
+        "explanation": "Correct under the assumptions: shmem cannot be discarded as clean disk cache, and swap is unavailable. The total exceeds the accounted-memory budget; actual allocation/OOM handling determines which process fails."
+      },
+      {
+        "text": "The kernel evicts the tmpfs files to make room",
+        "explanation": "tmpfs data has no backing file. Without swap, the kernel cannot drop it, and it won't delete your files."
+      },
+      {
+        "text": "The write fails with ENOSPC at 512 MiB, protecting the heap",
+        "explanation": "The question says 900 MiB writes succeeded. A separately configured volume size limit can instead cause ENOSPC; it does not inherently reserve heap capacity."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nU = 900 MiB + 200 MiB = 1100 MiB\nM_max = 1 GiB = 1024 MiB\nU > M_max\nwhere\nU: memory charged to the cgroup: tmpfs pages plus the new heap\nM_max: the effective memory limit\nMiB: mebibyte, 1,048,576 bytes\nGiB: gibibyte, 1024 MiB\n>: is greater than\nIn words: the charges total 1100 MiB, more than the 1024 MiB limit, even before other charges.\n```\n\nWithout swap or enough reclaimable data, the retained allocations cannot all fit. Expect allocation failure/OOM handling rather than silent deletion of tmpfs files. If the container main process is OOM-killed, termination can be reported as OOMKilled; a child victim need not end the container.",
+    "link": {
+      "title": "Resource management for pods and containers — Kubernetes docs",
+      "url": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
+    }
+  }
+]

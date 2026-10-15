@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 29/76 modules; 204 originals → 1081 short lessons with 2408 focused questions.
+- Independently verified: 30/76 modules; 210 originals → 1110 short lessons with 2474 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `96287e7`, version `905c43ab82b3`, 1049 short lessons/2341 focused questions
-  across 28 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `ac3514892cee`, 29 modules/1081 units/2408 questions.
+- Latest confirmed live release: `5f720a9`, version `ac3514892cee`, 1081 short lessons/2408 focused questions
+  across 29 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `bc05cde18068`, 30 modules/1110 units/2474 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -19,9 +19,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- os/os-virtualisation: verifying; /root/virtualisation_short_verify.
 - networks/net-foundations: authoring; /root/network_foundations_short_author.
 - networks/net-ip: authoring; /root/network_ip_short_author.
+- networks/net-tcp: authoring; /root/network_tcp_short_author.
 
 Verification and integration:
 

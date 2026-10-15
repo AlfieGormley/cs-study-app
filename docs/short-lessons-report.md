@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 29/76. Updated 2026-10-15.
+Verified modules: 30/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -36,6 +36,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | os/Memory Management | 7 | 42 | 85 | 80 | 253 | 474 | 39 |
 | os/File Systems & Storage | 6 | 38 | 74 | 48 | 338 | 450 | 43 |
 | os/I/O & Event-Driven Servers | 6 | 32 | 67 | 29 | 356 | 455 | 66 |
+| os/Virtualisation & Containers | 6 | 29 | 66 | 34 | 510 | 605 | 36 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3388,6 +3389,79 @@ Low-confidence areas:
 - **medium** — io-flow-steering-transmit: Version/configuration-specific OS, runtime and device behavior, historical attributions and illustrative performance models.. Primary core mechanisms and stated examples checked; finite fixtures are not deployment/hardware validation. Current versions, supported feature combinations and measured performance require target-specific confirmation.
 - **medium** — io-dpdk-data-path: Version/configuration-specific OS, runtime and device behavior, historical attributions and illustrative performance models.. Primary core mechanisms and stated examples checked; finite fixtures are not deployment/hardware validation. Current versions, supported feature combinations and measured performance require target-specific confirmation.
 - **medium** — io-xdp-packet-classification: Version/configuration-specific OS, runtime and device behavior, historical attributions and illustrative performance models.. Primary core mechanisms and stated examples checked; finite fixtures are not deployment/hardware validation. Current versions, supported feature combinations and measured performance require target-specific confirmation.
+
+## os: Virtualisation & Containers
+
+[Independent verification record](../content/os/08-virtualisation/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Mandatory architectural exits are not selected solely by VMM configuration.
+- The separate following unit owns migration failure/compatibility handling.
+- Grammar.
+- Preserve acronym capitalisation in newly added standalone introduction.
+- Preserve acronym capitalisation in newly added standalone introduction.
+- Preserve acronym capitalisation in newly added standalone introduction.
+- Preserve acronym capitalisation in newly added standalone introduction.
+- 128-plus-signal is a reporting convention, not a reversible diagnosis of every exit value.
+- Keep the standalone question formula as precise as the lesson.
+- Adjustment ordering does not imply strict actual OOM victim ordering.
+- RUN/COPY/ADD can produce no exported changeset in empty/optimised cases; test the metadata distinction without assuming a guaranteed layer.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Independent source review: remove overbroad or incomplete interpretation.
+- Shares equation must include the specified clamp, including a zero request; definitions alone did not make the raw equation bounded.
+- Qualify immediate/complete containment claims; kernel waits and external resource/configuration exceptions matter.
+- Qualify immediate/complete containment claims; kernel waits and external resource/configuration exceptions matter.
+- Qualify immediate/complete containment claims; kernel waits and external resource/configuration exceptions matter.
+- Remove unsupported prevalence, universal performance or policy guarantee; retain the sourced mechanism.
+- Remove unsupported prevalence, universal performance or policy guarantee; retain the sourced mechanism.
+- Remove unsupported prevalence, universal performance or policy guarantee; retain the sourced mechanism.
+- Remove unsupported prevalence, universal performance or policy guarantee; retain the sourced mechanism.
+
+Remaining gaps:
+
+- No actual KVM guest, VM live migration, SR-IOV VF assignment or IOMMU isolation experiment; KVM control flow was compiled against synthetic ioctl responses, including normal and error paths.
+- No Kubernetes cluster, gVisor, Firecracker or Kata deployment, vulnerability exploit, hostile-tenant test or production benchmark. Admission exceptions, feature gates, runtime versions and exact OOM/latency outcomes remain deployment checks.
+- Image recipes ran with compatible minimal teaching projects. Layer-retention fixtures inspect real archive contents, not a 300/600 MB transfer/compression benchmark; Go/Python outputs do not establish production application compatibility.
+- Historical Intel manual URL returns 403 and current Linux capability-header endpoint returned 429. Established mechanisms were cross-checked against retrieved original papers, KVM documentation, Linux manuals and native headers; no claim that the blocked latest architectural manual was fetched.
+- All 510 glossary entries and aliases received semantic review, with primary Linux/OCI/runtime/Kubernetes references supporting mechanisms. Product summaries and implementation-dependent performance/security outcomes retain medium confidence rather than a claim of exhaustive deployment proof.
+
+Low-confidence areas:
+
+- **medium** — virt-vm-purpose-types: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-pv-exit-costs: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-guest-mode-kvm: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-shadow-nested: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-device-io: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-namespace-views: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-cgroup-budgets: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-runtime-stack: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-capability-sets: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-lsm-userns: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-shared-kernel-gvisor: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-microvm-boundaries: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-pod-processes: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-pod-request-weights: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-pod-quota-latency: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-pod-qos-eviction: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-pod-security-runtime: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
+- **medium** — virt-microvm-boundaries: Published Firecracker startup and VMM-memory targets. Upstream SPECIFICATION scopes these to particular hosts, small VM, tuned kernel and exclusions; not measured in this review.
+- **medium** — glossary: Product and deployment-dependent glossary summaries. Listed medium entries depend on maintained products, policy versions or configuration; core definitions were checked, not every possible installation.
 
 ## synth: Sound & Digital Audio
 

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "virt-isolation-security-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does a seccomp-bpf filter decide?",
+    "options": [
+      {
+        "text": "Which files a process may open, by path",
+        "explanation": "Filters see only raw register values and cannot follow the pointer to a path string. Path policy is an LSM's job."
+      },
+      {
+        "text": "How much CPU and memory the process may use",
+        "explanation": "That is cgroups. seccomp does not account for resources."
+      },
+      {
+        "text": "Which UIDs inside the container map to which host UIDs",
+        "explanation": "That is user namespace ID mapping."
+      },
+      {
+        "text": "Whether each system call (by number, architecture and raw argument values) is allowed, fails with an errno, or kills the process",
+        "explanation": "Correct. The kernel runs the classic BPF program on every syscall entry and acts on its return value."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. seccomp-bpf installs a classic BPF program in the kernel.\n2. On each syscall it receives `struct seccomp_data`: syscall number, architecture, instruction pointer and six argument registers.\n3. It returns an action such as ALLOW, ERRNO, KILL_PROCESS, TRAP, USER_NOTIF or LOG.\n4. It cannot dereference pointers, so it judges numbers, not path strings.",
+    "link": {
+      "title": "Seccomp BPF — Linux kernel documentation",
+      "url": "https://docs.kernel.org/userspace-api/seccomp_filter.html"
+    }
+  },
+  {
+    "id": "virt-isolation-security-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team wants a seccomp rule meaning \"allow `openat()` only for paths under `/app/data`\". Why won't a seccomp-bpf filter do this reliably?",
+    "options": [
+      {
+        "text": "seccomp filters can only kill processes, not allow selectively",
+        "explanation": "Filters can return ALLOW, ERRNO, TRAP, LOG and more, and can test argument values. The limitation is elsewhere."
+      },
+      {
+        "text": "`openat` cannot be filtered because it is too frequent",
+        "explanation": "Any syscall number can be filtered, and Docker's profile already handles common ones."
+      },
+      {
+        "text": "The path argument is a pointer into user memory: classic BPF filters see only the pointer value, and even a checked copy could be changed by another thread before the kernel uses it (TOCTOU)",
+        "explanation": "Correct. Path-based rules belong in an LSM (AppArmor, SELinux) or a USER_NOTIF supervisor that handles the call carefully."
+      },
+      {
+        "text": "seccomp only works for 32-bit processes",
+        "explanation": "Seccomp filtering is available on supported Linux architectures/configurations, not only 32-bit processes. ABI-specific numbering must be handled."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `openat(dirfd, pathname, flags)`: `pathname` is a user-space address.\n2. The filter sees `args[1]`, a 64-bit number such as `0x7ffd...`. Classic BPF cannot load memory at that address.\n3. Even if a supervisor read the string, a second thread could rewrite it between the check and the kernel's own copy: a time-of-check to time-of-use race.\n4. So use AppArmor/SELinux rules on paths and labels, which the kernel evaluates on the resolved object.",
+    "link": {
+      "title": "Seccomp BPF — Linux kernel documentation",
+      "url": "https://docs.kernel.org/userspace-api/seccomp_filter.html"
+    }
+  },
+  {
+    "id": "virt-isolation-security-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a vulnerable kernel permits unprivileged user namespaces. Pod seccomp is unset, kubelet seccompDefault is off, and admission injects no profile. Compare Docker with a deployed profile that denies the unshare call needed for an example exploit. Which seccomp difference matters?",
+    "options": [
+      {
+        "text": "Equally protected, since both use runc",
+        "explanation": "The runtime is the same, but the seccomp profile is not. Without RuntimeDefault, Kubernetes runs pods unconfined."
+      },
+      {
+        "text": "Better protected, because Kubernetes always applies stricter profiles",
+        "explanation": "Historically Kubernetes defaulted to *Unconfined*, which is less strict than Docker's default."
+      },
+      {
+        "text": "Protected, because capabilities alone block `unshare`",
+        "explanation": "Creating a user namespace is allowed for unprivileged users on many distros and then yields capabilities inside it. That is how CVE-2022-0185 worked."
+      },
+      {
+        "text": "The unconfined pods lack that syscall restriction; the specified Docker profile blocks that entry path",
+        "explanation": "Correct for the given configurations. Other controls and patches also affect exploitability; RuntimeDefault means the selected runtime's profile, not a fixed universal policy."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "In the stated pod configuration no seccomp profile blocks the call. The specified Docker profile denies it, closing that particular route. Enable an appropriate profile and patch the kernel; test workload compatibility and do not infer immunity from one blocked syscall.",
+    "link": {
+      "title": "Restrict a container's syscalls with seccomp — Kubernetes docs",
+      "url": "https://kubernetes.io/docs/tutorials/security/seccomp/"
+    }
+  },
+  {
+    "id": "virt-isolation-security-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An x86-64 denylist permits unmatched calls, blocks syscall 59, ignores arch, and runs on a kernel with i386 compatibility enabled. With valid i386 arguments, how could execve evade that one rule?",
+    "options": [
+      {
+        "text": "By calling `execve` through the 32-bit `int 0x80` ABI, where its number is 11, so the rule for 59 doesn't match",
+        "explanation": "Correct. Syscall numbers are per ABI. Filters must check `arch` first and kill or deny unexpected architectures."
+      },
+      {
+        "text": "By renaming the binary it executes",
+        "explanation": "Filters see syscall numbers, not file names. Renaming does nothing to the number."
+      },
+      {
+        "text": "By calling `execve` from a second thread",
+        "explanation": "Filters are inherited by every thread created after installation (and can be synced across threads with TSYNC). A new thread is still filtered."
+      },
+      {
+        "text": "It cannot: syscall numbers are the same on every ABI",
+        "explanation": "They are not. On the i386 ABI, `execve` is 11 and number 59 is a different call."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The i386 ABI execve number is 11 rather than native x86-64 number 59, so a denylist ignoring ABI can miss it. Validate supported ABIs and use correct per-ABI rules. Also handle x32 number encoding: x32 shares AUDIT_ARCH_X86_64 and sets __X32_SYSCALL_BIT, so checking arch alone is not enough. Existing threads also require correct filter synchronisation.",
+    "link": {
+      "title": "Seccomp BPF — Linux kernel documentation",
+      "url": "https://docs.kernel.org/userspace-api/seccomp_filter.html"
+    }
+  }
+]

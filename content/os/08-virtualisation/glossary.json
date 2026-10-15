@@ -93,7 +93,7 @@
       "KVM",
       "Kernel-based Virtual Machine"
     ],
-    "definition": "A Linux kernel module that turns Linux into a hypervisor by driving the CPU's hardware virtualisation (VT-x or AMD-V). A userspace VMM such as QEMU or Firecracker runs each VM as a process with one thread per vCPU.",
+    "definition": "Linux kernel virtualisation support used with a userspace virtual machine monitor. On x86 it uses Intel VT-x or AMD-V; KVM also supports other processor architectures, including arm64. A conventional userspace VMM runs a host thread for each vCPU.",
     "example": "QEMU calls the KVM_RUN ioctl on a vCPU thread; KVM runs the guest until a VM exit needs attention.",
     "source": "https://docs.kernel.org/virt/kvm/api.html"
   },
@@ -152,8 +152,8 @@
     "id": "bochs",
     "term": "Bochs",
     "aliases": [],
-    "definition": "An open-source x86 emulator that interprets every guest instruction in software instead of running it directly on the CPU. Portable and precise, but much slower than virtualisation.",
-    "source": "https://en.wikipedia.org/wiki/Bochs"
+    "definition": "An open-source x86 machine emulator that interprets guest instructions in software rather than executing them directly on the host CPU. Compatibility and performance depend on the emulation configuration and workload.",
+    "source": "https://bochs.sourceforge.io/"
   },
   {
     "id": "qemu",
@@ -198,9 +198,9 @@
       "user-space",
       "userland"
     ],
-    "definition": "Everything that runs outside the kernel, in the CPU's less privileged mode: ordinary programs, daemons and libraries. They reach the kernel only through system calls.",
+    "definition": "Programs and libraries running outside the kernel, normally with restricted CPU privileges. They request kernel services through system calls; interrupts and exceptions can also transfer control into the kernel.",
     "example": "QEMU runs in userspace; KVM runs in the kernel.",
-    "source": "https://en.wikipedia.org/wiki/User_space_and_kernel_space"
+    "source": "https://man7.org/linux/man-pages/man7/signal.7.html"
   },
   {
     "id": "vcpu",
@@ -349,8 +349,8 @@
       "POPF",
       "POPFD"
     ],
-    "definition": "The x86 instruction that pops a value from the stack into the flags register. In user mode it silently leaves the interrupt flag unchanged instead of trapping, which broke classic trap-and-emulate.",
-    "source": "https://www.felixcloutier.com/x86/popf:popfd:popfq"
+    "definition": "The x86 instruction that pops a stack value into the flags register. In the classic protected-mode case with current privilege above I/O privilege, a valid POPFD leaves the interrupt flag unchanged without trapping merely for that attempted change; other faults and operating modes have different rules.",
+    "source": "https://www.usenix.org/legacy/publications/library/proceedings/sec2000/full_papers/robin/robin_html/index.html"
   },
   {
     "id": "interrupt-flag",
@@ -392,8 +392,8 @@
       "IOPL",
       "I/O privilege level"
     ],
-    "definition": "A two-bit field in the x86 flags register. Code whose CPL is greater than IOPL may not change the interrupt flag or use I/O ports directly.",
-    "source": "https://en.wikipedia.org/wiki/FLAGS_register"
+    "definition": "A two-bit field in the x86 flags register that controls certain I/O and interrupt-flag privileges relative to the current privilege level. When CPL is greater than IOPL, the I/O-permission bitmap may still permit individual ports; interrupt-flag instructions have instruction- and mode-specific rules.",
+    "source": "https://man7.org/linux/man-pages/man2/ioperm.2.html"
   },
   {
     "id": "protected-mode",
@@ -422,8 +422,8 @@
       "SGDT",
       "SIDT"
     ],
-    "definition": "x86 instructions that store the location of the global and interrupt descriptor tables. They do not trap in user mode, so a guest could see where the real tables are and detect the hypervisor.",
-    "source": "https://en.wikipedia.org/wiki/X86_virtualization"
+    "definition": "x86 instructions that store the global and interrupt descriptor-table locations. Classic CPUs allowed unprivileged use, exposing real machine state to deprivileged guests; modern User-Mode Instruction Prevention can restrict them.",
+    "source": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/kernel/umip.c"
   },
   {
     "id": "descriptor-table",
@@ -459,8 +459,8 @@
       "supervisor mode",
       "kernel-mode"
     ],
-    "definition": "The CPU's privileged mode, in which privileged instructions are allowed and all memory can be reached. The kernel (or hypervisor) runs here.",
-    "source": "https://en.wikipedia.org/wiki/CPU_modes"
+    "definition": "A CPU privilege mode intended for operating-system code, permitting operations unavailable to ordinary applications. Page permissions, virtualisation controls and other protection mechanisms still apply; the mode alone does not grant unconditional access to every resource.",
+    "source": "https://docs.kernel.org/virt/kvm/api.html"
   },
   {
     "id": "user-mode",
@@ -512,8 +512,8 @@
     "aliases": [
       "precise exceptions"
     ],
-    "definition": "An exception reported so that every earlier instruction has finished and no later one has had any effect, making the exact faulting instruction identifiable.",
-    "source": "https://en.wikipedia.org/wiki/Exception_handling"
+    "definition": "An exception presented as a well-defined architectural boundary: preceding instructions have completed and following instructions have no visible architectural effect. Faults identify the faulting instruction; traps may report the following instruction, according to the exception type.",
+    "source": "https://iitd-plos.github.io/col718/ref/asplos235_adams.pdf"
   },
   {
     "id": "indirect-jump",
@@ -577,8 +577,8 @@
       "shared-memory rings",
       "shared-ring I/O"
     ],
-    "definition": "A circular buffer in memory that two parties, such as a guest and a host back end, both read and write, so requests and replies pass without copying through the hypervisor.",
-    "source": "https://en.wikipedia.org/wiki/Circular_buffer"
+    "definition": "A circular queue in memory shared by two participants, such as a guest driver and host backend. It can exchange requests and references to buffers without a separate copying channel for every message; payload copies may still occur.",
+    "source": "https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html"
   },
   {
     "id": "paravirtual-driver",
@@ -652,7 +652,7 @@
     "id": "steal-time",
     "term": "Steal time",
     "aliases": [],
-    "definition": "CPU time a guest's vCPU wanted to run but the host gave to something else. Tools such as top report it as st; a high value means host-side contention.",
+    "definition": "Guest CPU accounting for time unavailable because the host did not run the virtual CPU, according to the platform accounting rules. High reported steal suggests host-side scheduling delay; it does not identify a particular neighbour or prove which placement change will help.",
     "example": "top showing 30% st means a runnable vCPU waited for real CPU almost a third of the time.",
     "source": "https://man7.org/linux/man-pages/man5/proc_stat.5.html"
   },
@@ -771,9 +771,9 @@
       "exit cost",
       "exit handling"
     ],
-    "definition": "The CPU switching from a guest back to the hypervisor because of an event the hypervisor asked to intercept, such as HLT or an I/O port access. Each exit saves and loads state, so exits are a main cost of virtualisation.",
+    "definition": "A transition from guest execution to the hypervisor for an architecturally required or configured event. State handling and software work can add overhead, but not every hardware exit returns to a userspace VMM.",
     "example": "A guest NIC driver poking emulated registers may cause several VM exits per packet.",
-    "source": "https://en.wikipedia.org/wiki/X86_virtualization"
+    "source": "https://docs.kernel.org/virt/kvm/api.html"
   },
   {
     "id": "exit-reason",
@@ -963,8 +963,8 @@
       "shadow tables",
       "shadow-table"
     ],
-    "definition": "Page tables a hypervisor builds that map guest virtual addresses straight to host physical addresses, kept in sync with the guest's own tables by trapping its page-table writes. Used before nested paging hardware.",
-    "source": "https://en.wikipedia.org/wiki/Shadow_page_table"
+    "definition": "A hypervisor-built mapping from guest virtual addresses directly to host physical addresses. Guest mapping changes must be reconciled, for example by write protection, trapping, batching and other optimisations; a separate exit for every write is not required.",
+    "source": "https://docs.kernel.org/virt/kvm/x86/mmu.html"
   },
   {
     "id": "gva",
@@ -1114,8 +1114,8 @@
       "accessed/dirty-bit",
       "accessed/dirty updates"
     ],
-    "definition": "Bits in a page-table entry that the MMU sets when the page is read (accessed) or written (dirty), so the OS can tell which pages are in use or modified.",
-    "source": "https://en.wikipedia.org/wiki/Page_table"
+    "definition": "Status bits in page-table entries that hardware may update while translating accesses: accessed records use, and dirty records writes. Exact update rules and hardware support depend on the translation stage and architecture.",
+    "source": "https://docs.kernel.org/virt/kvm/x86/mmu.html"
   },
   {
     "id": "tlb-miss",
@@ -1123,8 +1123,8 @@
     "aliases": [
       "TLB misses"
     ],
-    "definition": "A memory access whose translation is not in the TLB, so the MMU must walk the page tables. Under nested paging this walk can take up to 24 memory reads instead of 4.",
-    "source": "https://en.wikipedia.org/wiki/Translation_lookaside_buffer"
+    "definition": "An access whose required translation is absent from the translation lookaside buffer, potentially requiring a page-table walk. Four ordinary-page guest levels and four nested levels need 24 page-table-entry reads in an entirely uncached structural model, excluding the data access and status updates.",
+    "source": "https://docs.kernel.org/virt/kvm/x86/mmu.html"
   },
   {
     "id": "page-walk",
@@ -1250,7 +1250,7 @@
       "avail ring",
       "used ring"
     ],
-    "definition": "virtio's shared-memory queue. The driver puts buffer descriptors in a descriptor table and their indexes in the available (avail) ring; the device returns finished ones through the used ring.",
+    "definition": "A shared-memory queue used by a virtio driver and device to describe buffers and report completions. A split virtqueue uses descriptor, available and used areas; the standard also defines packed virtqueues with a different layout.",
     "source": "https://docs.oasis-open.org/virtio/virtio/v1.2/virtio-v1.2.html"
   },
   {
@@ -1315,7 +1315,7 @@
     "aliases": [
       "VFIO assignment"
     ],
-    "definition": "A Linux framework (Virtual Function I/O) that safely exposes a PCI device to userspace or a VM, using the IOMMU to restrict the device's DMA.",
+    "definition": "A Linux framework for exposing device access to userspace, including virtual machine monitors. Conventional assignment of DMA-capable devices to untrusted guests uses correctly configured IOMMU protection; unsafe no-IOMMU modes are not an equivalent isolation boundary.",
     "source": "https://docs.kernel.org/driver-api/vfio.html"
   },
   {
@@ -1325,8 +1325,8 @@
       "IOMMU protection",
       "input-output memory management unit"
     ],
-    "definition": "An MMU for devices: it translates and restricts the addresses a device uses for DMA, so an assigned device can only reach its guest's memory.",
-    "source": "https://en.wikipedia.org/wiki/Input–output_memory_management_unit"
+    "definition": "Hardware that translates and checks device DMA addresses against configured mappings. It helps confine an assigned device to permitted memory, but device topology, mapping configuration and interrupt isolation also matter.",
+    "source": "https://docs.kernel.org/driver-api/vfio.html"
   },
   {
     "id": "iommu-group",
@@ -1334,7 +1334,7 @@
     "aliases": [
       "IOMMU groups"
     ],
-    "definition": "The smallest set of devices the IOMMU can isolate from each other. All devices in a group must be assigned together.",
+    "definition": "A set of devices treated as the minimum isolation unit for conventional VFIO ownership because their topology or hardware can prevent independent isolation. All group devices must be detached from incompatible host drivers for the group to be viable; they need not all be actively used by the guest.",
     "source": "https://docs.kernel.org/driver-api/vfio.html"
   },
   {
@@ -1383,8 +1383,8 @@
       "direct memory access",
       "DMA-capable"
     ],
-    "definition": "A device reading or writing RAM directly, without the CPU copying each byte. Without an IOMMU, a device can DMA anywhere in memory.",
-    "source": "https://en.wikipedia.org/wiki/Direct_memory_access"
+    "definition": "Device access to memory without the CPU copying every byte. A correctly configured IOMMU can limit reachable addresses; without it, hardware and platform routing still determine the address space reachable by that device.",
+    "source": "https://docs.kernel.org/driver-api/vfio.html"
   },
   {
     "id": "sr-iov",
@@ -1464,8 +1464,8 @@
       "live-migration",
       "VM migration"
     ],
-    "definition": "Moving a running VM from one host to another with only a brief pause, by copying its memory, CPU and device state while it keeps running.",
-    "source": "https://en.wikipedia.org/wiki/Live_migration"
+    "definition": "Transferring a running virtual machine between hosts, including memory, CPU and supported device state. Pause time and failure handling depend on the workload, device support and migration protocol; a universally brief pause is not guaranteed.",
+    "source": "https://www.qemu.org/docs/master/devel/migration/main.html"
   },
   {
     "id": "pre-copy",
@@ -1474,7 +1474,7 @@
       "pre-copy",
       "pre-copy migrated"
     ],
-    "definition": "Live migration that copies all memory while the VM runs, then repeatedly recopies pages dirtied meanwhile, and finally pauses the VM briefly to copy the rest.",
+    "definition": "A migration approach that copies memory while the guest runs, then recopies dirty pages before a final paused transfer. Whether the dirty set shrinks depends on distinct dirty-page production and effective copying capacity.",
     "source": "https://www.usenix.org/legacy/event/nsdi05/tech/full_papers/clark/clark.pdf"
   },
   {
@@ -1529,9 +1529,7 @@
   {
     "id": "hot-unplug",
     "term": "Hot-unplug",
-    "aliases": [
-      "hot-plug"
-    ],
+    "aliases": [],
     "definition": "Removing a device from a running system without shutting it down. A VM's SR-IOV VF is often hot-unplugged before migration.",
     "source": "https://en.wikipedia.org/wiki/Hot_swapping"
   },
@@ -1714,7 +1712,8 @@
     "term": "Mount namespace (mnt)",
     "aliases": [
       "mount namespace",
-      "mount namespaces"
+      "mount namespaces",
+      "mnt"
     ],
     "definition": "A namespace giving its processes a private copy of the mount table, so mounts made inside need not appear on the host. The first namespace type, added in Linux 2.4.19 (2002).",
     "source": "https://man7.org/linux/man-pages/man7/mount_namespaces.7.html"
@@ -1808,7 +1807,6 @@
     "term": "Cgroups v2",
     "aliases": [
       "cgroup v2",
-      "V2",
       "unified hierarchy"
     ],
     "definition": "The current cgroup design: one unified hierarchy for all controllers, normally mounted at /sys/fs/cgroup, controlled by files such as cpu.max and memory.max.",
@@ -1949,7 +1947,7 @@
     "id": "workdir-overlay",
     "term": "workdir (overlayfs)",
     "aliases": [
-      "workdir"
+      "overlayfs workdir"
     ],
     "definition": "In overlayfs, an empty scratch directory on the same file system as upperdir, used to prepare files before moving them into place atomically. (In a Dockerfile, WORKDIR is unrelated.)",
     "source": "https://docs.kernel.org/filesystems/overlayfs.html"
@@ -1971,7 +1969,7 @@
       "copied up",
       "copy up"
     ],
-    "definition": "What overlayfs does the first time a lower-layer file is modified: it copies the whole file into the upper layer, then changes the copy.",
+    "definition": "Overlayfs creation of an upper version of a lower-layer object before a change requiring it. Data modification normally needs file-level copy-up; metadata-only handling, sparse extents and backing-filesystem cloning can change physical copying and allocation costs.",
     "example": "Appending 10 bytes to a 1 GB lower file first copies the full 1 GB into upperdir.",
     "source": "https://docs.kernel.org/filesystems/overlayfs.html"
   },
@@ -2054,7 +2052,7 @@
       "Docker-managed volumes",
       "Docker volumes"
     ],
-    "definition": "Storage managed by Docker (or Kubernetes) that lives outside a container's writable layer, so data persists and avoids copy-up costs.",
+    "definition": "Storage managed by Docker outside a container writable image layer. It can persist after that container is removed; Kubernetes volumes are a broader, separate API and are not synonymous with Docker-managed volumes.",
     "source": "https://docs.docker.com/engine/storage/volumes/"
   },
   {
@@ -2139,7 +2137,7 @@
     "aliases": [
       "setns()"
     ],
-    "definition": "A system call that joins an existing namespace through a file descriptor such as /proc/<pid>/ns/net. Runtimes use it for docker exec and for joining a pod's shared namespaces.",
+    "definition": "A Linux system call that changes namespace membership using a namespace descriptor, subject to permission and type-specific rules. Selecting a PID namespace affects subsequently created children rather than changing the caller's current PID membership.",
     "source": "https://man7.org/linux/man-pages/man2/setns.2.html"
   },
   {
@@ -2195,7 +2193,7 @@
       "namespace init",
       "container's init"
     ],
-    "definition": "The first process in a PID namespace. It adopts orphaned processes and must reap them; signals from inside its namespace reach it only if it has installed a handler; and when it exits the kernel kills everything else in the namespace.",
+    "definition": "The first process in a PID namespace. Its exit kills the remaining namespace processes; ordinary signals require installed handlers, while an ancestor namespace can force SIGKILL or SIGSTOP. It must reap children adopted by it, though a nearer subreaper can adopt orphans first.",
     "source": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
   },
   {
@@ -2246,14 +2244,14 @@
     "id": "sigterm",
     "term": "SIGTERM",
     "aliases": [],
-    "definition": "Signal 15, the polite request to terminate. A process can catch it to clean up; container stop sends it first.",
-    "source": "https://man7.org/linux/man-pages/man7/signal.7.html"
+    "definition": "Signal 15, a request to terminate that a process can handle or ignore. Container runtimes often use it as a default stop signal, but image, runtime and orchestration settings can select another signal.",
+    "source": "https://docs.docker.com/reference/cli/docker/container/stop/"
   },
   {
     "id": "sigkill",
     "term": "SIGKILL",
     "aliases": [],
-    "definition": "Signal 9, which kills a process immediately; it cannot be caught or ignored. The OOM killer sends it.",
+    "definition": "Signal 9 requests forced process termination and cannot be caught, blocked or ignored. Termination need not finish immediately while a task is stuck in an uninterruptible kernel wait; PID namespace init also has special delivery rules. The OOM killer uses SIGKILL.",
     "source": "https://man7.org/linux/man-pages/man7/signal.7.html"
   },
   {
@@ -2369,8 +2367,8 @@
       "host-root",
       "host root"
     ],
-    "definition": "The all-powerful account, UID 0. Linux splits its power into capabilities; in a user namespace container root can be an ordinary user on the host.",
-    "source": "https://en.wikipedia.org/wiki/Superuser"
+    "definition": "The traditional Unix superuser identity, UID 0. On Linux its authority also depends on capabilities, user-namespace scope and security policies; container UID 0 may map to an ordinary host UID.",
+    "source": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
   },
   {
     "id": "rootless",
@@ -2449,7 +2447,7 @@
     "aliases": [
       "CRIU"
     ],
-    "definition": "Saving a running process's complete state to disk and recreating it later, possibly on another machine. CRIU does this on Linux.",
+    "definition": "Saving enough supported process state to recreate execution later, possibly on another machine. CRIU provides this on Linux, with kernel, external-resource and application compatibility constraints; not every running process can be restored transparently.",
     "source": "https://criu.org/Main_Page"
   },
   {
@@ -2465,7 +2463,7 @@
     "id": "cpu-max",
     "term": "cpu.max",
     "aliases": [],
-    "definition": "The cgroup v2 file holding a CPU quota and period in microseconds. '50000 100000' allows 50 ms of CPU per 100 ms; 'max 100000' means no limit.",
+    "definition": "The cgroup v2 fair-scheduler CPU quota and period, expressed in microseconds. The value 50000 100000 allows an aggregate 50 milliseconds per 100-millisecond period; max removes this group's quota, while ancestor and other restrictions can still apply.",
     "source": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
   },
   {
@@ -2490,14 +2488,14 @@
     "id": "memory-max",
     "term": "memory.max",
     "aliases": [],
-    "definition": "The cgroup v2 hard memory limit. Above it the kernel reclaims memory and, if that fails, the cgroup OOM killer acts.",
+    "definition": "The cgroup v2 accounted-memory limit. Reclaim and cgroup OOM handling can follow pressure at the limit; temporary overages and allocation failures without an OOM kill are possible.",
     "source": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
   },
   {
     "id": "memory-high",
     "term": "memory.high",
     "aliases": [],
-    "definition": "The cgroup v2 memory throttling threshold: above it the group's allocations are slowed and reclaimed, but nothing is killed.",
+    "definition": "The cgroup v2 threshold above which allocations are throttled and sent into reclaim. Exceeding this threshold does not itself invoke the OOM killer, though another effective memory limit may do so.",
     "source": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
   },
   {
@@ -2507,7 +2505,7 @@
       "memory.min",
       "memory.low"
     ],
-    "definition": "cgroup v2 memory protections: memory below memory.min is never reclaimed, and below memory.low only reclaimed if nothing else is available.",
+    "definition": "Cgroup v2 hard and best-effort memory-reclaim protections, respectively, within their effective boundaries. Ancestor protections and overcommit affect those boundaries; protecting too much memory can lead to OOM rather than making all allocations succeed.",
     "source": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
   },
   {
@@ -2585,7 +2583,7 @@
     "aliases": [
       "fork bombs"
     ],
-    "definition": "A program that creates processes endlessly until the process table or memory is exhausted. pids.max stops it.",
+    "definition": "A program that repeatedly creates processes until resources are exhausted. A suitable pids.max bounds tasks in its cgroup and can contain process growth; other limits and sufficient headroom are still needed to protect the host.",
     "source": "https://en.wikipedia.org/wiki/Fork_bomb"
   },
   {
@@ -2628,8 +2626,8 @@
     "id": "anonymous-memory",
     "term": "Anonymous memory",
     "aliases": [],
-    "definition": "Memory not backed by a file, such as a program's heap and stack. Without swap it cannot be reclaimed.",
-    "source": "https://docs.kernel.org/admin-guide/mm/concepts.html"
+    "definition": "Memory without ordinary file backing, such as heap and stack pages. Retained anonymous data cannot simply be discarded like clean disk cache; swap, explicit release or application-supported discard mechanisms can allow reclamation.",
+    "source": "https://man7.org/linux/man-pages/man2/madvise.2.html"
   },
   {
     "id": "cfs",
@@ -2920,8 +2918,8 @@
       "content addressing",
       "digest-addressed"
     ],
-    "definition": "Storing and naming data by a hash of its contents, so the name always identifies exactly those bytes and identical data is stored once.",
-    "source": "https://en.wikipedia.org/wiki/Content-addressable_storage"
+    "definition": "Identifying stored bytes by a digest computed from those bytes. Matching content can be verified and reused; actual deduplication across stores and repositories depends on the implementation.",
+    "source": "https://github.com/opencontainers/image-spec/blob/main/spec.md"
   },
   {
     "id": "blob",
@@ -3012,7 +3010,7 @@
     "aliases": [
       "diff_ids"
     ],
-    "definition": "The digest of an uncompressed layer tar, recorded in the image config; the manifest instead lists compressed layer digests.",
+    "definition": "The digest of an uncompressed image-layer tar stream, recorded in the image configuration. A manifest descriptor identifies the layer blob in its declared media type, which may be compressed or uncompressed.",
     "source": "https://github.com/opencontainers/image-spec/blob/main/config.md"
   },
   {
@@ -3040,7 +3038,7 @@
     "id": "gzip",
     "term": "gzip",
     "aliases": [],
-    "definition": "A widely used compression format; most image layers are gzip-compressed tar archives.",
+    "definition": "A standard compressed-data format commonly used for container image layers and tar archives. Compression reduces bytes, without encrypting them.",
     "source": "https://en.wikipedia.org/wiki/Gzip"
   },
   {
@@ -3050,7 +3048,7 @@
       "zstd",
       "Zstandard"
     ],
-    "definition": "A modern compression format from Meta, faster than gzip at similar ratios; supported for OCI layers.",
+    "definition": "Zstandard, a compression format originally developed at Facebook, now Meta. It offers configurable compression levels and is supported by OCI layer media types; speed and compression-ratio comparisons depend on data, settings and implementation.",
     "source": "https://en.wikipedia.org/wiki/Zstd"
   },
   {
@@ -3132,9 +3130,9 @@
     "aliases": [
       "docker exec -it"
     ],
-    "definition": "The Docker command that starts an extra process inside an already running container. The runtime joins that process to the container's namespaces and cgroup (with setns), rather than creating a new container.",
+    "definition": "The Docker command that starts an extra process inside an already running container. A runtime helper prepares namespace membership, root, credentials, cgroup membership and security settings; setns selects namespaces, while cgroup placement uses separate interfaces.",
     "example": "docker exec -it web sh opens a shell inside the running container named web.",
-    "source": "https://docs.docker.com/reference/cli/docker/container/exec/"
+    "source": "https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md"
   },
   {
     "id": "containerd",
@@ -3152,8 +3150,8 @@
       "containerd-shim-runc-v2",
       "runc-v2 shim"
     ],
-    "definition": "A small process that sits between containerd and running containers: it calls runc, keeps container I/O and exit status, and lets containers survive a containerd restart.",
-    "source": "https://github.com/containerd/containerd/blob/main/core/runtime/v2/README.md"
+    "definition": "A process supervising container tasks independently of the containerd daemon, including I/O and exit reporting. Tasks can survive compatible daemon restarts when the shims and tasks remain running; service-manager shutdown and upgrade compatibility still matter.",
+    "source": "https://github.com/containerd/containerd/blob/main/docs/runtime-v2.md"
   },
   {
     "id": "snapshotter",
@@ -3178,7 +3176,7 @@
     "id": "live-restore",
     "term": "Live restore",
     "aliases": [],
-    "definition": "A Docker daemon option that keeps containers running while dockerd is stopped or upgraded.",
+    "definition": "A Docker daemon option intended to keep containers running while the daemon is unavailable. Supported upgrades, connection recovery and logging limits are documented constraints, so it does not guarantee every stop or upgrade is harmless.",
     "source": "https://docs.docker.com/engine/daemon/live-restore/"
   },
   {
@@ -3253,7 +3251,7 @@
       "RUN",
       "RUN steps"
     ],
-    "definition": "The Dockerfile instruction that runs a command during the build and saves its file-system changes as a new layer.",
+    "definition": "The Dockerfile instruction that executes a command during the build. Its resulting filesystem changes can form an image layer; empty results and builder optimisations can affect exported layers.",
     "source": "https://docs.docker.com/reference/dockerfile/#run"
   },
   {
@@ -3262,7 +3260,7 @@
     "aliases": [
       "COPY"
     ],
-    "definition": "The Dockerfile instruction that copies files from the build context (or another stage) into the image, creating a layer.",
+    "definition": "The Dockerfile instruction that copies selected files from a build context or another stage into the build filesystem. Resulting changes can become a layer, subject to empty results and builder optimisations.",
     "source": "https://docs.docker.com/reference/dockerfile/#copy"
   },
   {
@@ -3297,8 +3295,8 @@
       "ENTRYPOINT",
       "Entrypoint"
     ],
-    "definition": "The Dockerfile instruction setting the executable a container always runs; CMD supplies its default arguments.",
-    "source": "https://docs.docker.com/reference/dockerfile/#entrypoint"
+    "definition": "A Dockerfile instruction setting the default entrypoint for container execution; CMD commonly provides default arguments. Runtime overrides such as Docker --entrypoint can replace it.",
+    "source": "https://docs.docker.com/reference/dockerfile/"
   },
   {
     "id": "df-expose",
@@ -3450,19 +3448,17 @@
       "setuid binary",
       "setuid-root binary"
     ],
-    "definition": "A compiled program file the operating system can execute. A setuid binary runs with its owner's privileges, not the caller's.",
-    "source": "https://en.wikipedia.org/wiki/Executable"
+    "definition": "A file containing compiled program instructions. A set-user-ID executable may change the effective user identity on exec, subject to conditions such as no_new_privs, mount settings and other kernel checks.",
+    "source": "https://man7.org/linux/man-pages/man2/execve.2.html"
   },
   {
     "id": "build-secret",
     "term": "Build secret mount",
     "aliases": [
       "secret mount",
-      "--mount=type=secret",
-      "cache mount",
-      "--mount=type=cache"
+      "--mount=type=secret"
     ],
-    "definition": "BuildKit mounts that expose a file to a single RUN step only: a cache mount keeps a package cache between builds, and a secret mount provides credentials, without either being saved in a layer.",
+    "definition": "A BuildKit mount that temporarily exposes a secret during a build step without automatically adding the mounted file to the layer. A command can still copy the secret into outputs or logs, so the mount is not a guarantee against leaks.",
     "source": "https://docs.docker.com/build/building/secrets/"
   },
   {
@@ -3495,8 +3491,8 @@
       "docker.sock",
       "/var/run/docker.sock"
     ],
-    "definition": "The Unix socket (/var/run/docker.sock) where dockerd listens. Anyone who can talk to a rootful daemon through it can effectively become root on the host.",
-    "source": "https://docs.docker.com/engine/security/#docker-daemon-attack-surface"
+    "definition": "A Unix socket commonly used to access the Docker daemon API. Unrestricted access to an ordinary rootful daemon can grant host-root-equivalent authority; rootless scope and authorization policy can change that authority.",
+    "source": "https://docs.docker.com/engine/extend/plugins_authorization/"
   },
   {
     "id": "crictl",
@@ -3514,8 +3510,8 @@
       "id_rsa",
       "private key file"
     ],
-    "definition": "The secret half of an SSH key pair, often stored as ~/.ssh/id_rsa. Anyone with it can authenticate as its owner.",
-    "source": "https://en.wikipedia.org/wiki/Secure_Shell"
+    "definition": "The secret component of an SSH key pair, often stored in a file such as ~/.ssh/id_rsa. It may be encrypted with a passphrase; theft enables attempted use of that identity where the matching public key is authorised, subject to key protection and server policy.",
+    "source": "https://man.openbsd.org/ssh-keygen"
   },
   {
     "id": "key-rotation",
@@ -3566,8 +3562,7 @@
     "id": "multi-tenant",
     "term": "Multi-tenant",
     "aliases": [
-      "multi-tenancy",
-      "single-tenant"
+      "multi-tenancy"
     ],
     "definition": "Running workloads from different, possibly mutually hostile, customers (tenants) on shared infrastructure.",
     "source": "https://en.wikipedia.org/wiki/Multitenancy"
@@ -3581,7 +3576,7 @@
       "capability scope",
       "capability-set configuration"
     ],
-    "definition": "Linux's split of root's power into separate privileges, such as CAP_NET_BIND_SERVICE or CAP_SYS_ADMIN: 41 of them, numbered 0 to 40, on kernels since 5.9. The kernel checks the relevant capability, not UID 0, before a privileged action.",
+    "definition": "Linux privileges that divide many traditional root powers, such as CAP_NET_BIND_SERVICE and CAP_SYS_ADMIN. Kernels since 5.9 define 41 capability numbers, 0–40; capability checks have namespace scope, and other permission or security checks can still apply.",
     "source": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
   },
   {
@@ -3592,7 +3587,10 @@
       "permitted set",
       "bounding set",
       "inheritable set",
-      "ambient set"
+      "ambient set",
+      "effective capability set",
+      "permitted capability set",
+      "bounding capability set"
     ],
     "definition": "Each thread has five capability sets: effective (what the kernel checks now), permitted (the most it can make effective), inheritable and ambient (what can pass across exec) and bounding (a limit on capabilities gained from files on exec).",
     "source": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
@@ -3657,7 +3655,7 @@
     "aliases": [
       "DAC_OVERRIDE"
     ],
-    "definition": "The capability to bypass file read, write and execute permission checks.",
+    "definition": "The capability to bypass discretionary file read/write permission checks and many execute checks. It does not override every LSM rule, and executing a regular file still requires at least one execute-permission bit.",
     "source": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
   },
   {
@@ -3737,8 +3735,7 @@
     "term": "Dropping ALL capabilities",
     "aliases": [
       "--cap-drop=ALL",
-      "cap-drop=ALL",
-      "ALL"
+      "cap-drop=ALL"
     ],
     "definition": "Removing every capability from a container, then adding back only the few it really needs.",
     "source": "https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities"
@@ -3820,8 +3817,7 @@
       "seccomp filter",
       "seccomp filters",
       "seccomp profile",
-      "seccomp profiles",
-      "seccomp-unconfined"
+      "seccomp profiles"
     ],
     "definition": "A Linux feature that filters a process's system calls. In filter mode (seccomp-bpf) a small BPF program checks each call's number, architecture and raw arguments and returns an action such as allow or fail.",
     "source": "https://docs.kernel.org/userspace-api/seccomp_filter.html"
@@ -3948,11 +3944,10 @@
     "id": "audit-arch",
     "term": "AUDIT_ARCH",
     "aliases": [
-      "AUDIT_ARCH_X86_64",
-      "__X32_SYSCALL_BIT"
+      "AUDIT_ARCH_X86_64"
     ],
-    "definition": "The architecture identifier seccomp filters see (for example AUDIT_ARCH_X86_64), used to tell ABIs apart before trusting a syscall number.",
-    "source": "https://docs.kernel.org/userspace-api/seccomp_filter.html"
+    "definition": "The architecture identifier in seccomp input, used to select the correct syscall ABI rules. The x32 ABI shares AUDIT_ARCH_X86_64 but marks syscall numbers with __X32_SYSCALL_BIT; that marker is not itself an architecture identifier.",
+    "source": "https://man7.org/linux/man-pages/man2/seccomp.2.html"
   },
   {
     "id": "tsync",
@@ -4030,12 +4025,10 @@
     "id": "kernel-exploit",
     "term": "Kernel exploit",
     "aliases": [
-      "kernel exploits",
-      "exploit chain",
-      "VM escape"
+      "kernel exploits"
     ],
-    "definition": "Code that abuses a kernel bug to gain privileges or break out of an isolation boundary such as a container or VM.",
-    "source": "https://en.wikipedia.org/wiki/Privilege_escalation"
+    "definition": "Code that abuses a kernel vulnerability to gain privileges or cross an isolation boundary. A VM escape or exploit chain can involve other components and is not necessarily a kernel exploit.",
+    "source": "https://gvisor.dev/docs/architecture_guide/security/"
   },
   {
     "id": "keyctl",
@@ -4044,14 +4037,14 @@
       "keyctl",
       "kexec_load"
     ],
-    "definition": "Rarely needed Linux system calls: keyctl manages the kernel keyring and kexec_load loads a new kernel to boot. Container seccomp profiles block them.",
-    "source": "https://man7.org/linux/man-pages/man2/keyctl.2.html"
+    "definition": "Linux system calls for keyring management and loading a replacement kernel, respectively. Container seccomp policies may restrict them; the effective rule depends on the deployed profile, architecture and capabilities.",
+    "source": "https://docs.docker.com/engine/security/seccomp/"
   },
   {
     "id": "mac",
     "term": "Mandatory access control",
     "aliases": [],
-    "definition": "Security policy set by the administrator and enforced by the kernel on every access, which ordinary users and root processes cannot override.",
+    "definition": "Access-control policy enforced by the operating system beyond ordinary owner/group file permissions. A policy can restrict root processes too, subject to the enabled LSM, selected rules and authority to change the policy.",
     "source": "https://en.wikipedia.org/wiki/Mandatory_access_control"
   },
   {
@@ -4091,7 +4084,7 @@
     "id": "etc-shadow",
     "term": "/etc/shadow",
     "aliases": [],
-    "definition": "The Linux file holding users' password hashes, readable only by root and the shadow group.",
+    "definition": "The Linux file commonly storing password hashes and account-ageing data. Access is governed by the actual owner, group, file mode and other controls; it is normally restricted to privileged account-management access.",
     "source": "https://man7.org/linux/man-pages/man5/shadow.5.html"
   },
   {
@@ -4100,8 +4093,8 @@
     "aliases": [
       "docker-default"
     ],
-    "definition": "A path-based Linux Security Module used by Ubuntu and Debian. Docker loads a docker-default profile that denies writes to most of /proc/sys and /sys, and mounting.",
-    "source": "https://apparmor.net/"
+    "definition": "A path-based Linux Security Module. On supported hosts with AppArmor enabled, Docker normally uses a docker-default profile that restricts operations such as mounting and writes to sensitive proc/sys paths; custom, unconfined and privileged configurations differ.",
+    "source": "https://docs.docker.com/engine/security/apparmor/"
   },
   {
     "id": "selinux",
@@ -4279,14 +4272,14 @@
     "id": "sbin-init",
     "term": "/sbin/init",
     "aliases": [],
-    "definition": "The program a Linux kernel starts first as PID 1.",
-    "source": "https://en.wikipedia.org/wiki/Init"
+    "definition": "A conventional path for the userspace init program started by the Linux kernel as PID 1. Kernel command-line settings and an initial RAM filesystem may select a different init path.",
+    "source": "https://docs.kernel.org/admin-guide/init.html"
   },
   {
     "id": "lambda",
     "term": "AWS Lambda",
     "aliases": [],
-    "definition": "AWS's serverless functions service, which runs each function in Firecracker microVMs.",
+    "definition": "AWS's serverless functions service. AWS documents Firecracker microVMs as part of its execution infrastructure; an execution environment can be reused for successive function invocations.",
     "source": "https://aws.amazon.com/lambda/"
   },
   {
@@ -4327,8 +4320,8 @@
       "privileged containers",
       "privileged: true"
     ],
-    "definition": "A container started with --privileged (or privileged: true in Kubernetes): it gets all capabilities and host devices, and default seccomp and LSM confinement are switched off.",
-    "source": "https://docs.docker.com/reference/cli/docker/container/run/#privileged"
+    "definition": "A container given broad runtime privileges. Ordinary rootful Docker --privileged grants broad capabilities and device access and relaxes default seccomp and LSM restrictions; rootless scope, host policy and exposed devices still affect its authority.",
+    "source": "https://docs.docker.com/engine/containers/run/"
   },
   {
     "id": "runtime-default",
@@ -4380,7 +4373,7 @@
       "pods",
       "Pods"
     ],
-    "definition": "Kubernetes' smallest deployable unit: one or more containers scheduled together on one node, sharing a network namespace (one IP address) and optionally volumes. On Linux it is anchored by a pod sandbox.",
+    "definition": "Kubernetes' smallest deployable workload unit: one or more containers scheduled together, sharing network context and optionally volumes. A pod can have IPv4 and IPv6 addresses, and host-network or alternative-runtime settings change its implementation.",
     "source": "https://kubernetes.io/docs/concepts/workloads/pods/"
   },
   {
@@ -4527,8 +4520,8 @@
     "aliases": [
       "Istio CNI"
     ],
-    "definition": "A service mesh that routes pod traffic through sidecar proxies (or, with Istio CNI, sets interception up outside the pod).",
-    "source": "https://istio.io/latest/docs/overview/what-is-istio/"
+    "definition": "A service mesh that manages service traffic and policy. It supports sidecar and ambient data planes; Istio CNI can configure traffic interception without granting that setup privilege to an application pod init container.",
+    "source": "https://istio.io/latest/docs/setup/additional-setup/cni/"
   },
   {
     "id": "init-container",
@@ -4537,7 +4530,7 @@
       "init-container",
       "init containers"
     ],
-    "definition": "A container in a pod that runs to completion before the app containers start.",
+    "definition": "A pod container configured in the initContainers list. Ordinary init containers finish before application containers start; restartable init containers provide native sidecars and can remain running alongside applications.",
     "source": "https://kubernetes.io/docs/concepts/workloads/pods/init-containers/"
   },
   {
@@ -4633,7 +4626,7 @@
       "resource limits",
       "container memory limit"
     ],
-    "definition": "A cap on how much of a resource something may use. In Kubernetes it is the most CPU or memory a container may use: a CPU limit becomes a cpu.max quota (throttling); a memory limit becomes memory.max (OOM kill).",
+    "definition": "A configured workload resource bound. In a conventional native Linux setup, CPU limits become aggregate time quotas and memory limits become accounted-memory bounds with reclaim, allocation-failure and OOM behaviour; exact enforcement depends on configuration.",
     "source": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
   },
   {
@@ -4649,18 +4642,18 @@
     "id": "oomkilled",
     "term": "OOMKilled",
     "aliases": [],
-    "definition": "The Kubernetes termination reason for a container whose process was killed for exceeding its memory limit, usually with exit code 137.",
+    "definition": "A container termination reason indicating that the runtime identified an out-of-memory kill. It commonly accompanies SIGKILL and exit 137, but exit 137 alone does not prove OOM or identify whether node-wide or cgroup pressure caused it.",
     "source": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
   },
   {
     "id": "exit-code",
-    "term": "Exit code",
+    "term": "Signal exit convention",
     "aliases": [
       "exit code 137",
       "exit 137"
     ],
-    "definition": "The number a process returns when it ends; 0 means success. 128 + n means it was killed by signal n, so 137 means SIGKILL.",
-    "source": "https://en.wikipedia.org/wiki/Exit_status"
+    "definition": "A shell convention for reporting signal termination as 128 plus the signal number, giving 137 for SIGKILL. A program may also explicitly return 137, so this number alone does not prove a signal or an out-of-memory kill.",
+    "source": "https://man7.org/linux/man-pages/man1/bash.1.html"
   },
   {
     "id": "emptydir",
@@ -4668,8 +4661,8 @@
     "aliases": [
       "medium: Memory"
     ],
-    "definition": "A Kubernetes volume that starts empty and lives as long as the pod. With medium: Memory it is a tmpfs in RAM, charged to the pod's memory.",
-    "source": "https://kubernetes.io/docs/concepts/storage/volumes/#emptydir"
+    "definition": "A Kubernetes volume with the lifetime of its pod. With medium Memory it uses tmpfs; pages are charged as memory to the container that writes them, and swap behaviour depends on host and Kubernetes configuration.",
+    "source": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
   },
   {
     "id": "swap",
@@ -4686,7 +4679,7 @@
     "id": "shmem",
     "term": "shmem",
     "aliases": [],
-    "definition": "The kernel's shared-memory page type, used by tmpfs and shared memory; it can only leave RAM by swapping.",
+    "definition": "Linux memory used for tmpfs and shared-memory objects. Retained data cannot be dropped like clean disk-backed cache; it may be swapped when permitted, or released when the object/data is removed.",
     "source": "https://docs.kernel.org/filesystems/tmpfs.html"
   },
   {
@@ -4715,7 +4708,7 @@
       "Guaranteed workload",
       "Guaranteed QoS"
     ],
-    "definition": "The QoS class for pods where every container sets CPU and memory requests equal to their limits. Their oom_score_adj is −997.",
+    "definition": "For ordinary container-level Linux resource specifications, the QoS class where every container has equal CPU and memory requests and limits. The normal Guaranteed oom_score_adj is −997; pod-level resource features and critical-pod exceptions need their own rules.",
     "source": "https://kubernetes.io/docs/concepts/workloads/pods/pod-qos/"
   },
   {
@@ -4733,7 +4726,7 @@
     "aliases": [
       "BestEffort"
     ],
-    "definition": "The QoS class for pods with no CPU or memory requests or limits at all; first to be killed under pressure (oom_score_adj 1000).",
+    "definition": "The ordinary container-level QoS class for pods with no CPU or memory requests or limits. Its OOM score adjustment is 1000, biasing node-wide victim selection, but actual usage, eligible scope and other factors mean it is not guaranteed to die first.",
     "source": "https://kubernetes.io/docs/concepts/workloads/pods/pod-qos/"
   },
   {
@@ -4761,7 +4754,7 @@
     "id": "memory-available",
     "term": "memory.available",
     "aliases": [],
-    "definition": "The kubelet's eviction signal for free node memory; the default hard threshold on Linux is 100Mi.",
+    "definition": "A kubelet memory-pressure eviction signal derived from node memory capacity and working-set accounting, rather than simply the free-page count. The standard hard-eviction default is 100Mi on Linux, subject to kubelet configuration.",
     "source": "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/"
   },
   {
@@ -4885,8 +4878,8 @@
     "aliases": [
       "node agents"
     ],
-    "definition": "A privileged program run on every node, such as a log collector or CNI daemon, that needs host access.",
-    "source": "https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/"
+    "definition": "A program running on a node to provide node services, such as networking or log collection. Required host access and privilege depend on its function and deployment, rather than every node agent needing universal root authority.",
+    "source": "https://kubernetes.io/docs/concepts/architecture/nodes/"
   },
   {
     "id": "runtime-class",
@@ -4937,8 +4930,8 @@
     "aliases": [
       "thread pools"
     ],
-    "definition": "A fixed set of worker threads that run queued tasks. Sizing it to the CPU limit avoids bursts that exhaust the quota.",
-    "source": "https://en.wikipedia.org/wiki/Thread_pool"
+    "definition": "A set of worker threads used to process queued work. Matching runnable parallelism to available CPU budgets can reduce burst-driven throttling, but pool sizing also depends on blocking, throughput and latency requirements.",
+    "source": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
   },
   {
     "id": "disk-image",
@@ -4966,5 +4959,16 @@
     ],
     "definition": "A Linux tool showing live CPU use, split into user (us), system (sy), I/O wait (wa), steal (st) and more.",
     "source": "https://man7.org/linux/man-pages/man1/top.1.html"
+  },
+  {
+    "id": "virt-build-cache-mount",
+    "term": "Build cache mount",
+    "aliases": [
+      "cache mount",
+      "cache mounts",
+      "--mount=type=cache"
+    ],
+    "definition": "A BuildKit mount retaining a writable build-tool cache between build steps or builds. The mounted cache is not automatically included in the exported image layer, but build commands can copy its contents into outputs.",
+    "source": "https://docs.docker.com/build/cache/optimize/"
   }
 ]

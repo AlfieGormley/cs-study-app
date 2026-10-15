@@ -1,0 +1,130 @@
+[
+  {
+    "id": "virt-hardware-assist-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can virtio-net reduce device-emulation overhead compared with an emulated e1000?",
+    "options": [
+      {
+        "text": "virtio uses a faster physical cable",
+        "explanation": "Both are virtual devices; the physical network is the same."
+      },
+      {
+        "text": "virtio skips the host kernel and writes directly to the wire",
+        "explanation": "Plain virtio still goes through a host back end (QEMU or vhost-net). Bypassing the host is what SR-IOV does."
+      },
+      {
+        "text": "virtio compresses packets",
+        "explanation": "virtio does not compress traffic."
+      },
+      {
+        "text": "It shares buffer descriptors and can batch or suppress notifications, reducing emulated register operations",
+        "explanation": "Correct. Virtqueues reduce the need to reproduce a physical register interface. Backend, batching and workload determine actual performance."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "An emulated hardware driver uses register operations that may need VMM/device-model handling. Virtio instead publishes descriptors in shared memory and notifies the backend when needed; the backend reports completion. Batching and notification suppression can reduce transitions without guaranteeing a fixed exits-per-packet count.",
+    "link": {
+      "title": "Virtio — libvirt wiki",
+      "url": "https://wiki.libvirt.org/Virtio.html"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For a conventional SR-IOV NIC assigned to untrusted VMs with correct DMA isolation, which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "One physical NIC exposes a physical function plus many virtual functions, each assignable to a different VM",
+        "explanation": "Correct. VFs are lightweight PCI functions with their own queues."
+      },
+      {
+        "text": "A VF can avoid software device-emulation transitions for normal packet data transfers",
+        "explanation": "Correct. Direct data transfer can avoid an emulated NIC backend, while host control and interrupt handling can remain."
+      },
+      {
+        "text": "It makes live migration easier, since the NIC holds the state",
+        "explanation": "Hardware state adds live-migration requirements. Some devices support state export/restore; others need a failover path."
+      },
+      {
+        "text": "A conventional safe assignment uses IOMMU DMA isolation as well as appropriate device/topology isolation",
+        "explanation": "Correct for the specified untrusted-guest assignment. Verify IOMMU groups, mappings and interrupt/device isolation, not merely that SR-IOV is enabled."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "PF/VFs provide separately assignable PCI functions. Direct packet transfers can bypass an emulated-device backend, but control/interrupt work remains. Live migration needs device support or failover. Untrusted guest assignment requires properly configured DMA and device isolation.",
+    "link": {
+      "title": "Single-root input/output virtualization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Single-root_input/output_virtualization"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A KVM guest's network-heavy workload is spending too much time in exits. Which changes are likely to reduce exit overhead? Select all that apply.",
+    "options": [
+      {
+        "text": "Switch the guest NIC from emulated e1000 to virtio-net",
+        "explanation": "Correct. Batched virtqueues replace per-register MMIO exits."
+      },
+      {
+        "text": "Enable vhost-net so virtio kicks are handled in the host kernel instead of QEMU",
+        "explanation": "Correct as a possible optimisation: an in-kernel backend can avoid userspace handling of suitable notifications. Measure the resulting cost; not every configuration has the same path."
+      },
+      {
+        "text": "Give the guest an SR-IOV virtual function",
+        "explanation": "Correct as a possible optimisation. A supported VF can reduce device-emulation work, while assignment and interrupt overhead remain."
+      },
+      {
+        "text": "Disable the IOMMU on the host",
+        "explanation": "The IOMMU does not cause exits on the virtio path, and disabling it makes device passthrough unsafe or impossible."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Virtio can reduce hardware-register emulation, vhost-net can move suitable backend work into the host kernel, and a VF can provide direct data transfer. These are potential optimisations, not a universal speed ranking. Disabling an IOMMU does not remove virtio notification exits and weakens conventional device-assignment isolation.",
+    "link": {
+      "title": "Virtio — libvirt wiki",
+      "url": "https://wiki.libvirt.org/Virtio.html"
+    }
+  },
+  {
+    "id": "virt-hardware-assist-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why is correctly configured IOMMU protection important for a conventional VFIO assignment of a DMA-capable PCI device to an untrusted guest?",
+    "options": [
+      {
+        "text": "It speeds up the device's interrupts",
+        "explanation": "Interrupt remapping is a related IOMMU feature, but the essential reason is DMA isolation."
+      },
+      {
+        "text": "Devices perform DMA using addresses the guest programs; without IOMMU translation and restriction, a guest could make the device read or write any host memory",
+        "explanation": "Correct. The guest thinks in guest-physical addresses; the IOMMU maps them to the right host pages and blocks everything else."
+      },
+      {
+        "text": "It lets several VMs share the same device at once",
+        "explanation": "Sharing one device between VMs is SR-IOV's job; the IOMMU protects each assignment."
+      },
+      {
+        "text": "It emulates the device's registers",
+        "explanation": "Passthrough avoids emulating normal data-path operations, but control/configuration access can still be mediated or virtualised."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Device DMA is a separate access path from CPU page-table translation. The host must constrain device-visible addresses to permitted mappings, using IOMMU protection for this assignment. Also verify group/topology and interrupt isolation: enabling an IOMMU alone does not prove complete isolation. Device addresses need not literally equal guest physical addresses in every configuration.",
+    "link": {
+      "title": "Single-root input/output virtualization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Single-root_input/output_virtualization"
+    }
+  }
+]

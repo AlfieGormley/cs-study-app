@@ -1,16 +1,16 @@
-# Short lessons and code comments: ACTIVE (2026-10-14)
+# Short lessons and code comments: ACTIVE (2026-10-15)
 
 Continue until the whole course is converted. The user chose actual short lessons with separate completion
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 19/76 modules; 139 originals → 707 short lessons with 1660 focused questions.
+- Independently verified: 21/76 modules; 154 originals → 795 short lessons with 1829 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `081ec27`, version `746a07f3b723`, 667 short lessons/1589 focused questions
-  across 18 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `38902db7ea33`, 19 modules/707 units/1660 questions.
+- Latest confirmed live release: `4c3d1d6`, version `38902db7ea33`, 707 short lessons/1660 focused questions
+  across 19 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `fa357c5339c6`, 21 modules/795 units/1829 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
   Complexity and Sound & Digital Audio are also published; Complexity’s formula follow-up is complete
@@ -18,9 +18,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- dsa/dsa-dp: authoring; /root/dp_short_author.
-- dsa/dsa-patterns: authoring; /root/patterns_short_author.
-- dsa/dsa-advanced: authoring; /root/advanced_short_author.
+- dsa/dsa-advanced: verifying; /root/advanced_short_verify.
+- os/os-processes: authoring; /root/processes_short_author.
+- os/os-threads: authoring; /root/scheduling_short_author.
 
 Verification and integration:
 
@@ -50,6 +50,12 @@ Working evidence and helpers:
 - `audit-archives.mjs` compares all 964 originals to Git blobs. Final whole-course migration audit is
   `scripts/audit-short-lessons.mjs` with the original snapshots; interim batches use `--partial`, but
   the final audit MUST omit it. Finish all 76 modules/all 482 mappings before calling the task done.
+- `check-module-dictionary.mjs <preview> <verifier-report> <subject>` checks identities, full definitions
+  and actual rendered links. `check-dsa-dictionary.mjs` retains earlier Linear/Hashing/Trees meaning probes.
+- `verify-live-release.py <full-commit-sha>` checks successful Pages deployment and byte equality of
+  app/manifest/progress/index against Git, writes a checksum proof and records exact snapshot counts.
+  Run only after recorded integration passes and push; exit 3 means deployment is pending. Its API
+  query includes a current timestamp to avoid cached queued statuses. It does not push or approve work.
 - `write-active-resume.mjs` regenerates this active section while preserving historical handoffs below.
 
 Terminal permissions are full access with approval policy never: omit `sandbox_permissions`,

@@ -1,0 +1,66 @@
+[
+  {
+    "id": "pat-heaps-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A log pipeline processes 2 billion search queries a day. You must report the 100 most frequent queries, but the distinct queries alone don't fit in one machine's memory. Which approach is most practical?",
+    "options": [
+      {
+        "text": "Load all queries into a list and sort by frequency",
+        "explanation": "The stated load-all-into-one-list approach exceeds memory. External sorting can aggregate counts without keeping all distinct keys in RAM, but that is a different implementation."
+      },
+      {
+        "text": "Keep a single size-100 heap of queries as they stream past, without counting",
+        "explanation": "A heap needs a priority. Without counts you cannot rank frequencies. Exact counts can be updated online, but a size-100 heap alone does not remember all relevant distinct keys."
+      },
+      {
+        "text": "Hash-partition queries by key across machines (or files), count each partition, take a top-100 heap per partition, then merge the partial top-100s",
+        "explanation": "Correct. Hashing sends every occurrence of a query to the same partition, so per-partition counts are exact; each partition's top 100 needs O(100) heap space, and a global top 100 can be chosen from the partial results; use a consistent total tie-break if specific tied keys must be preserved."
+      },
+      {
+        "text": "Quickselect over all queries on one machine",
+        "explanation": "Quickselect also needs the full dataset in memory, and it gives order statistics of values, not frequency counts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Hash partitioning:** use `stable_hash(query) % P`, where P is the common positive partition count and `%` is remainder. Every worker must use the same hash algorithm, seed and key encoding so every occurrence reaches the same partition. Python’s built-in string hash is salted by process, so do not assume it agrees across workers. Then check partition sizes. Hashing does not guarantee balance: repartition oversized groups, or use external aggregation, until each counter fits.\n2. **Count** per partition with a hash map.\n3. **Top-K** per partition: a size-100 min-heap over (count, query).\n4. **Merge** the P partial lists (P × 100 entries) and take the overall top 100.\n\nCorrectness: under a consistent total ranking (count plus tie-break), a globally top-100 key cannot have 100 better-ranked keys in its own partition. Therefore it appears in the union of local top-100 sets. Content gap: a turnkey Count-Min Sketch plus heap solution is omitted because no candidate-recovery algorithm, error parameters or heavy-hitter guarantees are specified; a frequency sketch alone does not enumerate keys.",
+    "link": {
+      "title": "Heap cheatsheet — Tech Interview Handbook",
+      "url": "https://www.techinterviewhandbook.org/algorithms/heap/"
+    }
+  },
+  {
+    "id": "pat-heaps-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "\"Return the k most frequent elements\" for n elements with `Counter` already built (u distinct values), k between 1 and u, and constant-cost comparable tie-breakers. Which approaches are correct, with the stated cost? Select all that apply.",
+    "options": [
+      {
+        "text": "Sort the (count, value) pairs descending and take k: O(u log u)",
+        "explanation": "Correct. Simple and fine when u is modest."
+      },
+      {
+        "text": "A size-k min-heap keyed on count: O(u log(k + 1))",
+        "explanation": "Correct. Remove the least frequent of your current k whenever a more frequent value arrives."
+      },
+      {
+        "text": "Bucket sort: `buckets[c]` lists values with count c, scan from c = n down: O(n)",
+        "explanation": "Correct. Counts are bounded by n, so an array of n + 1 buckets replaces comparison sorting."
+      },
+      {
+        "text": "A size-k **max**-heap keyed on count, popping when it exceeds k: O(u log(k + 1))",
+        "explanation": "Popping a max-heap removes the *most* frequent item, so this keeps the k least frequent. The heap direction is reversed."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "For the most frequent, you must be able to remove the *least* frequent of your current candidates, so a min-heap on count:\n\n```\nfor v, c in counts.items():\n    heappush(h, (c, v))\n    if len(h) > k:\n        heappop(h)  # least frequent\n```\n\nThe bucket approach exploits a bounded range of keys (1..n), like counting sort, to reach linear time.\n\nUsing a max-heap and popping the top when it grows past k discards the best candidate each time: the classic direction mix-up.",
+    "link": {
+      "title": "Heap cheatsheet — Tech Interview Handbook",
+      "url": "https://www.techinterviewhandbook.org/algorithms/heap/"
+    }
+  }
+]

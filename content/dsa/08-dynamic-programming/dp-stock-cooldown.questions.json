@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dp-method-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "For the stock problem with a one-day cooldown, a colleague defines `dp[i]` as best profit from day i onwards (days are numbered 0 to n − 1, where n is the number of days), and tries to model both holding and not-holding histories with constant-size daily-action transitions. What information is missing?",
+    "options": [
+      {
+        "text": "The problem lacks overlapping subproblems",
+        "explanation": "It has plenty of overlap: many buy/sell sequences reach the same day in the same position. The issue is that i alone doesn't identify a subproblem."
+      },
+      {
+        "text": "Prefix states would work, but suffix states can't",
+        "explanation": "A prefix `dp[i]` has the same flaw: the best profit up to day i depends on whether you end the day holding a share. Direction isn't the issue."
+      },
+      {
+        "text": "It needs O(n²) states, so `dp[i]` is too small",
+        "explanation": "The fix only doubles the states to 2n. It's about missing information, not size."
+      },
+      {
+        "text": "What you're allowed to do from day i depends on whether you currently hold a share (and whether you just sold), so i alone doesn't determine the best future",
+        "explanation": "Correct. Two histories that both reach day i, one holding and one not, face different options. The state must include `holding` (and the cooldown is handled by jumping to i + 2 after a sale)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The state test: \"given only the state, is the optimal future determined?\"\n2. On day 0 of [1, 2, 3, 0, 2], holding an already acquired share permits future cash flow 4 (sell at 2, then buy at 0 and sell at 2); starting without a share permits profit 3.\n3. So a shared `dp[0]` value cannot represent both boundary conditions. The state is under-specified.\n4. Fix: `f(i, holding)`. Transitions:\n\n```formula\nf(i, T) = max(f(i + 1, T),\n              p[i] + f(i + 2, F))\nf(i, F) = max(f(i + 1, F),\n              −p[i] + f(i + 1, T))\nf(i, F) = 0    for i ≥ n\nf(i, T) = −∞   for i ≥ n\nwhere\nf(i, h): the best profit from day i onwards, where h says whether you hold a share\ni: the nonnegative day number; action rules apply before the separate end-of-input base cases\nn: the number of days\np[i]: the share price on day i\nT: true, you are holding a share\nF: false, you are not holding a share\nmax: the larger of its arguments\n∞: infinity; −∞ marks an unfinished trade (a share never sold) as impossible\nIn words: holding, you keep or sell (and skip a day of cooldown); not holding, you wait or buy.\n```\n\n5. There are about 2n states with O(1) work each, so O(n) in total.",
+    "link": {
+      "title": "Bellman equation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bellman_equation"
+    }
+  },
+  {
+    "id": "dp-method-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Extend the stock problem: no cooldown, but at most **k** buy-sell transactions. With 1,000 days and a limit of 100 transactions, which state and complexity fit?",
+    "options": [
+      {
+        "text": "`f(i)`; O(n)",
+        "explanation": "Without the transaction count and holding flag, the state can't tell whether another buy is allowed or a sale is possible."
+      },
+      {
+        "text": "`f(i, holding)`; O(n)",
+        "explanation": "This is enough for unlimited transactions, but with a limit the future depends on how many transactions you have left."
+      },
+      {
+        "text": "`f(i, transactions_left, holding)`; about 2 × 1,000 × 101 ≈ 2 × 10⁵ states with O(1) work each",
+        "explanation": "Correct. Each extra fact the future depends on becomes a parameter. Counting the states:\n\n```formula\nS = (n + 1)(k + 1) × 2\nS ≈ 1,000 × 101 × 2 ≈ 2 × 10^5\nwhere\nS: the allocated state count, including the terminal day\nn: the number of days, 1,000\nk: the maximum number of buy-sell transactions, 100\n≈: approximately equal to\nIn words: one state per day, per number of transactions left (0 to k), per holding flag.\n```\n\nTransitions are O(1), so the work is O(n(k + 1)) unit-cost steps, conventionally O(nk) for positive k."
+      },
+      {
+        "text": "`f(i, set of days traded)`; O(2ⁿ)",
+        "explanation": "Over-specified: which days you traded doesn't matter for the future, only how many transactions remain and whether you're holding."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. What does the future depend on? The current day i, whether you hold a share, and how many transactions remain.\n2. State: `(i, t, h)`: day, transactions left, holding flag.\n3. Transitions (count a transaction when you buy; buying needs a positive remaining limit):\n\n```formula\nf(i, t, 1) = max(f(i + 1, t, 1),\n      p[i] + f(i + 1, t, 0))\nf(i, t, 0) = max(f(i + 1, t, 0),\n      −p[i] + f(i + 1, t − 1, 1))\nf(i, t, 0) = 0   for i ≥ n\nf(i, t, 1) = −∞   for i ≥ n\nwhere\nf(i, t, h): the best profit from day i onwards with t transactions left, holding a share when h = 1 and not when h = 0\ni: the day number, from zero through n; action rules apply only before n\nn: the number of days\nk: the transaction allowance\nt: transactions still allowed, from 0 to k; the buy option exists only when t > 0\nh: the holding flag, 1 or 0\np[i]: the share price on day i\nmax: the larger of its arguments\n−∞: an impossible unfinished trade\n≥: greater than or equal to\nIn words: holding, you keep or sell; not holding, you wait or spend a transaction to buy.\n```\n\n4. Count the states:\n\n```formula\nS = (n + 1) × (k + 1) × 2\nS = 1,001 × 101 × 2 = 202,202\nwhere\nS: the number of states\nn: the number of days, 1,000\nk: the maximum number of transactions, 100\nIn words: about 200,000 states, each with constant work.\n```\n\nThis is a state-count estimate, not a running-time benchmark.\n5. Bonus insight: if the transaction limit is at least half the number of days, it cannot bind (a transaction needs separate buy and sell days), so you can fall back to the unlimited O(n) version.",
+    "link": {
+      "title": "Bellman equation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bellman_equation"
+    }
+  }
+]

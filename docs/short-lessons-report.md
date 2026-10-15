@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 19/76. Updated 2026-10-14.
+Verified modules: 21/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -26,6 +26,8 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Sorting & Searching | 8 | 46 | 96 | 95 | 194 | 431 | 82 |
 | dsa/Graphs | 7 | 37 | 82 | 115 | 177 | 818 | 131 |
 | dsa/Recursion, Backtracking & Greedy | 6 | 40 | 71 | 106 | 142 | 575 | 104 |
+| dsa/Dynamic Programming | 7 | 46 | 80 | 154 | 155 | 473 | 42 |
+| dsa/Problem-Solving Patterns | 8 | 42 | 89 | 77 | 105 | 313 | 189 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -2379,6 +2381,112 @@ Low-confidence areas:
 - **medium** — tech-recursion-frames: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
 - **medium** — tech-recursion-iteration: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
 - **medium** — tech-recursion-tail-calls: Implementation/default-dependent facts in this unit. Current primary documentation or pinned CPython 3.14 sources corroborate the stated mechanisms. Runtime defaults, compiler optimisation and deployment/library choices can change; no universal timing or available-resource guarantee is asserted.
+
+## dsa: Dynamic Programming
+
+[Independent verification record](../content/dsa/08-dynamic-programming/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Removed the false literal one-step-per-state inequality for total basic work. The state-count upper bound is now separate from the O(n + 1) unit-cost Fibonacci bound.
+- Replaced rough exponent limits with floors and a 1,041-state rectangular upper bound including the shared zero state; the actual target has 438 distinct reachable values, independently enumerated.
+- Separated the no-valid-pair and valid-pair cases, so the final digit never relies on multiplying zero by an out-of-range state.
+- Restricted both recursive rules to non-singleton intervals. Added a concrete acbac/cabca counterexample showing that an arbitrary maximum LCS may not be palindromic.
+- Separated state counts with a started flag from digit-sum counts that need only tight; one symbol no longer changes dimension between formula lines.
+- The dictionary now says Python raises ValueError without an explicit default, distinguishing a mathematical infinity convention from API behaviour.
+- The dictionary no longer claims every request misses during a cold computation; only the first request per distinct key misses, and repeated recursive requests may already hit.
+- The glossary now retains the plus-one band-width term and handles empty inputs directly.
+- Qualified the minimum-duration statement by unlimited parallel resources and precedence-only constraints. Distinguished activities on nodes from activity durations on edges.
+- The glossary now preserves exact-arithmetic associativity while warning that floating-point rounding can depend on the order.
+- The glossary covers removing an endpoint or choosing a last action, rather than claiming every interval DP splits every interval and is necessarily cubic.
+- Dictionary entries now count work per transition and avoid a universal twenty-item bitmask cutoff or hardware-independent complexity feasibility guarantees.
+- The dictionary explicitly limits the shown table reductions to nonnegative integer inputs, includes parity/range checks and preserves distinct equal-valued positions.
+- Moved remaining genuine algebraic recurrences, substitutions, inequalities and table-header products into standalone defined formula cards. Floor division in mathematical cards now uses a defined floor function; clear scalar products use implicit notation and grouping.
+- Added local decode-state reasoning, word-break set/trie transitions, distance sanity bounds, interval application boundaries and last-project assignment state. Existing question ids, types, levels, answer keys and option counts remain unchanged.
+- Replaced eight references to retired long-lesson numbers with the appropriate short-unit title or topic.
+- All 37 originally tagged Python program ASTs are preserved. The previously unlabelled word-break Python fragment is explicitly tagged and fixture-executed. The tree traversal ellipsis is honestly labelled as a partial traversal rather than a completed DP.
+- Removed four glossary source links that return 403; preserved the self-contained exercises and inherited naming confidence for independent review rather than inventing supporting primary URLs.
+- Correct 19! from 120 quintillion to approximately 120 quadrillion; the numerical factorial itself was already correct.
+- Repair two closing formula fences that had following prose on the same line, keeping that prose visible outside the cards.
+- Validate every supplied coin denomination before equality-based deduplication. The prior order silently accepted [1, True] by merging the Boolean with integer one; three functions in two active fences are corrected and valid-domain results remain unchanged.
+- Replace copied empty-route comments in grid and matrix-chain code with the correct zero-column and empty-product meanings.
+- Make min/max function arguments and continuation-line grouping explicit in minimum-coins, matrix-chain, balloon and Held–Karp cards; use conventional unambiguous implicit scalar products.
+- Define recurrence domains so separate zero/singleton/terminal bases take priority; add complete terminal cases and n/k definitions to the capped-transaction question.
+- Replace inline symbolic assignments and inequalities with plain descriptions, genuine code or their already-defined formula cards; remove a fake uppercase-LCS program assignment.
+- Distinguish actual Python range expressions and saved-diagonal prose from compressed invalid nested-for and pseudo-assignment text.
+- Qualify word-break dictionary bounds for a nonempty dictionary and label slice/hash comparisons as growth proxies, since allocation and hashing change operation constants.
+- Add zero as an explicit LIS candidate when no earlier element is smaller, avoiding the empty maximum.
+- Include the zero-target column in the partition work bound, so an all-zero input does not appear to require zero work.
+- Count threshold-band cells exactly, including the empty-prefix row and shorter end rows: the displayed 100,000-character example has 4,099,621 cells rather than claiming every row has forty-one.
+- Use the full knapsack table in feedback for its introductory unit, before the later one-row backward-loop unit.
+- Add local shared-row aliasing, capped-transaction and repeated grid/LCS-state explanations so questions do not require later units.
+- Remove an unsupported universal speed ordering between memoisation and tabulation, and remove an unmeasured meet-in-the-middle timing comparison.
+- Use a plus-one Myers distance factor for identical inputs and distinguish API-dependent diff choices from minimum scripts.
+- Narrow the cache glossary: bare @lru_cache does not mean the unbounded @cache API; cold-cache body counts explicitly refer to the shown decorator, and instant execution claims are removed.
+- Remove generic fixed-point-method aliases from the particular value-iteration algorithm; avoid linking previously populated memoisation answers to system-design cache warming.
+- Qualify equivalent join reordering to legal inner joins and add the start-symbol restriction for Chomsky normal form with an empty-string production.
+- Label Held–Karp and cubic dictionary numbers as growth proxies rather than executed step counts.
+- Keep Bellman’s naming paragraph explicitly retrospective and add its quoted autobiographical provenance; retain medium historical confidence.
+- Prove the exact unlimited coin-system claim using Kozen–Zaks’ finite counterexample bound, checked against an independent breadth-first shortest-coin oracle for every amount below three hundred.
+- Remove two additional optional problem-site glossary source URLs that independently return 403, retaining self-contained exercise definitions and their medium provenance confidence.
+- Clarify the matrix-cost takeaway as multiplications of individual numbers; scalar product can instead mean a complete vector dot product.
+- Symbolic end-index arithmetic belongs in a formula card; consecutive zero-based numbering conveys the same precondition without an unnecessary formula.
+- Clarify the grid endpoints as empty/full prefixes without introducing undefined string-length symbols in this unit.
+
+Remaining gaps:
+
+- All seven long lessons and their eighty questions are preserved as fourteen byte-identical archival files; all active question IDs, types, levels, answer keys and option counts remain unchanged.
+- Full Hirschberg, CYK, Knuth-optimised BST, Manacher, Viterbi, RNA predictor, rerooting, FPTAS, assignment solver and branch-and-cut implementations remain conceptual or application context, matching the original scope rather than claiming new implementations.
+- No physical-phone run, production runtime benchmark, C++ payload allocation experiment, PostgreSQL extension integration or live NumPy benchmark was performed; work expressions are labelled accordingly.
+- Optional exercise-site naming provenance remains medium where access is blocked; required lesson/question links all load.
+- Full app compilation, mobile layout, progress migration, PWA and publication integration belong to the coordinator after this scoped verification.
+
+Low-confidence areas:
+
+- **medium** — dp-overlap-and-state: Bellman’s retrospective naming explanation. His autobiographical account is quoted in fetched CMU notes. It is presented as a later recollection, not an independently established chronology.
+- **medium** — dp-evaluation-strategies: CPython recursion limits and native-call behaviour. Current official CPython source and 3.11 documentation were read. The text says usually and distinguishes configuration, existing depth, implementation and call path; these facts can change by runtime/version.
+- **medium** — dp-lis-binary-search: Bazaar’s historical adoption of patience diff. Inherited medium-confidence historical provenance remains; Git’s current unique-line/LIS mechanism was independently read in its actual source, but Bazaar history is supported by the cited secondary account.
+- **medium** — dp-string-applications-and-band: Current Git diff choices and PostgreSQL fuzzystrmatch API. Official current documentation fetched and read; these product choices are version-sensitive. No product runtime benchmark or PostgreSQL integration execution is claimed.
+- **medium** — dp-matrix-chain-table: NumPy multi_dot and einsum optimisation defaults. Official documentation fetched and read. The text distinguishes optimal matrix-chain parenthesisation from True selecting greedy einsum search; API behaviour is version-sensitive.
+- **medium** — dp-tree-cover-and-applications: Summarised RNA folding application history. The original Nussinov paper and supporting literature were fetched; the inherited original-Zuker mirror did not return a normal readable primary paper. Keep this as noncrossing-model application context rather than a newly implemented biological predictor.
+- **medium** — dp-held-karp-resources: Concorde benchmark context. The solver’s official site confirms exact symmetric-TSP benchmark use. Instance success is explicitly distinguished from a worst-case guarantee; no benchmark was rerun.
+- **medium** — glossary: Problem-site names and definitions: Combination Sum IV, Target Sum, Last Stone Weight II, Ones and Zeroes, Burst Balloons and Decode Ways. The six definitions are self-contained and relevant recurrences/reductions were checked. Optional site URLs return 403 in this review; preserved inherited naming confidence is not promoted on the strength of mathematical fixtures alone.
+- **medium** — dp-recognition-checklist: Input-size signals for possible algorithms. Explicitly prompts to estimate transitions, storage and arithmetic cost, not a hardware-independent feasibility guarantee.
+
+## dsa: Problem-Solving Patterns
+
+[Independent verification record](../content/dsa/09-patterns/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Preserve eight archived lessons and 88 original question contracts while creating 42 coherent independently completable units and one focused tripled-bits question; add meaningful comments without changing any of the 44 inherited Python ASTs.
+- Correct difference-array old/new notation, product and denominator grouping, overlap predicate comparison count, padded 1,441-slot timeline, heap singleton bounds, Held–Karp rectangular allocation and hash-partition consistency caveats.
+- Growth expressions and logarithmic ratios are models rather than exact comparisons or speedups; remove remaining universal one-second/candidate-limit claims from standalone glossary examples.
+- Explain the intentionally buggy insert-before-check and count-less quiz code accurately; preserve all executable statements and answer keys.
+- Correct dictionary aliases for previous-smaller/greater and non-consecutive sequences. Replace remaining bare contiguous and half-open phrases that opened memory-layout or TCP-handshake definitions; use existing precise interval terms or explicit endpoint wording.
+- Add a precise Histogram flush sentinel term and use it in the histogram unit; clarify final cur=0 rather than an out-of-bounds h[n] comparison.
+- Heap tuple comparisons may use reflected greater-than; absence of __lt__ alone does not prove TypeError. Correct the standalone quiz wording.
+- Explain IPO capital as an eligibility threshold, and make the file-flag example valid Python os.open with namespaced flags and umask caveat.
+- Five inherited LeetCode identifiers now checked directly against official problem statements. Historical Kernighan/Wegner priority is explicitly reported indirectly and remains medium confidence.
+
+Remaining gaps:
+
+- No population-wide interview success/failure survey, generic runtime threshold, hardware throughput figure, physical-phone benchmark or production deployment measurement. Practical advice and numeric models are labelled accordingly.
+- This is a patterns catalogue. Three sum, circular next greater, daily temperatures, weighted scheduling, Held–Karp, exact external frequency aggregation and sliding median are described as adaptations or covered in earlier modules rather than each receiving a complete production implementation.
+- No turnkey approximate heavy-hitter/sketch recipe: candidate recovery and error/probability parameters are not specified.
+- Direct Crow 1984 and Wegner 1960 originals were not retrieved; exact arithmetic, prefix constructions and bit algorithms were verified independently, and indirect historical claims remain medium.
+- Whole-release generated dictionary, phone route rendering, offline update/migration and deployment checks are performed by the coordinating agent after this scoped verification.
+
+Low-confidence areas:
+
+- **medium** — pat-clarify-examples: Interview routine, suggested practice allocation, pattern hints and input-size table. Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- **medium** — pat-brute-to-lookup: Interview routine, suggested practice allocation, pattern hints and input-size table. Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- **medium** — pat-input-growth: Interview routine, suggested practice allocation, pattern hints and input-size table. Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- **medium** — pat-pattern-hypotheses: Interview routine, suggested practice allocation, pattern hints and input-size table. Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- **medium** — pat-test-costs: Interview routine, suggested practice allocation, pattern hints and input-size table. Practical guidance and illustrative growth models, not a universal interview scoring rule, runtime threshold or throughput measurement; explicit caveats are retained.
+- **medium** — pat-grid-prefix: Historical attribution of the summed-area table to Crow 1984. Read the original Viola–Jones 2001 paper, its four-reference construction and Crow 1984 bibliography. Direct Crow mirror retrieval was blocked; original Crow paper was not independently read in full.
+- **medium** — pat-lowest-bit: Kernighan/Wegner historical attribution. The glossary now explicitly attributes the 1960 priority report to Sean Anderson citing Knuth; original Wegner paper and K&R exercise were not retrieved. The algorithm itself is independently verified.
+- **medium** — glossary: Kernighan/Wegner historical attribution. Retained medium confidence in kernighan-method; source reports attribution indirectly, and wording now says so.
 
 ## synth: Sound & Digital Audio
 

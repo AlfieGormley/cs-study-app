@@ -1,0 +1,130 @@
+[
+  {
+    "id": "dp-intro-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your memoised recursive solution passes every test with input indices no larger than 500, but in production it crashes with `RecursionError` at index 5,000. The recurrence for input n only depends on smaller inputs. What is the most robust fix?",
+    "options": [
+      {
+        "text": "Switch from `@cache` to `@lru_cache(maxsize=128)`",
+        "explanation": "A bounded cache evicts entries and can make the function slower or exponential again; it does nothing to reduce recursion depth."
+      },
+      {
+        "text": "Rewrite it bottom-up: loop `i` from the base cases up to n, filling a table in dependency order",
+        "explanation": "Correct. Tabulation can evaluate the same recurrence but uses a loop, so there's no call stack to overflow. It can also avoid recursive calls and dictionary lookups; actual speed depends on the implementation and states visited."
+      },
+      {
+        "text": "Wrap the call in `try/except RecursionError` and retry",
+        "explanation": "Retrying hits the same depth and fails again. Swallowing the exception doesn't produce an answer."
+      },
+      {
+        "text": "Memoisation can't handle n this large; the problem needs a different algorithm",
+        "explanation": "The observed error concerns recursive evaluation depth. Iterative evaluation removes that limit; feasibility still depends on total states, transitions and value sizes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. CPython normally starts with a recursion limit of 1,000; inspect the actual setting with `sys.getrecursionlimit()`. Existing depth and wrappers affect the observed threshold.\n2. A top-down `f(n)` that calls `f(n-1)` is about n frames deep on the first call, so an initial index of 5,000 exceeds the usual configured limit.\n3. Options:\n   - `sys.setrecursionlimit(10_000)`: may help but is platform- and call-path-dependent; it does not reduce memory or work. Since CPython 3.11 most Python-to-Python calls avoid an additional C call, but native recursion can still matter.\n   - Bottom-up: `for i in range(2, n + 1): t[i] = ...`. Constant recursive depth; the same recurrence’s transition work must still be counted.\n4. Because the recurrence only depends on smaller indices, increasing i is a valid evaluation order, so tabulation is a mechanical rewrite.",
+    "link": {
+      "title": "sys.getrecursionlimit — Python docs",
+      "url": "https://docs.python.org/3/library/sys.html"
+    }
+  },
+  {
+    "id": "dp-intro-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef ways(n, steps, memo={}):\n    # A jump past the start cannot be a\n    # route.\n    if n < 0:\n        return 0\n    # The empty continuation is one\n    # route.\n    if n == 0:\n        return 1\n    # Compute a state only on a cache\n    # miss.\n    if n not in memo:\n        # WARNING: steps is missing from\n        # the key.\n        memo[n] = sum(\n            ways(n - s, steps)\n            for s in steps)\n    return memo[n]\n\nprint(ways(4, [1, 2]))\nprint(ways(4, [1, 2, 3]))\n```",
+    "options": [
+      {
+        "text": "`5` then `7`",
+        "explanation": "These are the correct answers to the two questions, but not what this code prints. The memo is shared between the calls and isn't keyed on `steps`."
+      },
+      {
+        "text": "`5` then `5`",
+        "explanation": "Correct. The default `memo={}` is created once and shared by every call. The second call finds `memo[4] = 5` from the first call and returns it, ignoring the new `steps`."
+      },
+      {
+        "text": "`4` then `7`",
+        "explanation": "With steps {1, 2} there are 5 ways to climb 4 (1111, 112, 121, 211, 22), not 4. And the second call can't compute fresh values because of the shared cache."
+      },
+      {
+        "text": "It raises `TypeError` because a dict can't be a default argument",
+        "explanation": "Any object can be a default argument. The problem is subtler: mutable defaults are evaluated once at definition time and shared."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Python evaluates `memo={}` once, when `def` runs. Every call that doesn't pass `memo` uses that same dict (and the inner calls don't pass it).\n2. First call, steps {1, 2}:\n\n```formula\nways(n) = ways(n − 1) + ways(n − 2)\nways(1) = 1 + 0 = 1\nways(2) = 1 + 1 = 2\nways(3) = 2 + 1 = 3\nways(4) = 3 + 2 = 5\nwhere\nways(n): the number of ways to climb n stairs with steps of 1 or 2; ways(0) = 1 and a negative n gives 0\nn: the stairs remaining; the recurrence applies only for positive values, with the stated bases taking priority\nIn words: each count is the sum of the two before it, giving 5 for four stairs.\n```\n\nThese are stored under keys 1..4.\n3. Second call, steps {1, 2, 3}: `4 in memo` is true, so it returns 5 immediately.\n4. The correct answer is 7 (1111, 112, 121, 211, 22, 13, 31):\n\n```formula\nw3(n) = w3(n − 1) + w3(n − 2)\n        + w3(n − 3)\nw3(3) = 2 + 1 + 1 = 4\nw3(4) = 4 + 2 + 1 = 7\nwhere\nw3(n): the number of ways to climb n stairs with steps of 1, 2 or 3; w3(0) = 1, w3(1) = 1, w3(2) = 2, and a negative n gives 0\nn: the stairs remaining; the recurrence applies only for positive values, with the stated bases taking priority\nIn words: with a 3-step allowed, each count adds the three before it, giving 7 for four stairs.\n```\n\n5. The deeper lesson: the cache key must include **everything** the answer depends on. Here `steps` changes the answer but isn't in the key. Fix: `memo=None` plus a fresh dict per top-level call passed explicitly to every recursive call, or `@cache` on an inner function that closes over `steps`.",
+    "link": {
+      "title": "Memoization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memoization"
+    }
+  },
+  {
+    "id": "dp-intro-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need f(10¹²) for this function:\n\n```formula\nf(0) = 0\nf(n) = 1 + f(floor(n / 2))\n  + f(floor(n / 3))\nwhere\nf(n): the value to compute; the recursive line applies only for positive integers n, and zero uses the separate base\nn: a nonnegative integer; the target is n = 10¹²\nfloor: round a quotient down to the nearest integer\nIn words: f of a number is one more than f of its half plus f of its third, both rounded down.\n```\n\nWhich approach is practical?",
+    "options": [
+      {
+        "text": "Tabulate an array `t[0..n]` from 0 upwards",
+        "explanation": "That needs 10¹² entries (terabytes of memory) and 10¹² iterations, even though almost none of those values are ever needed."
+      },
+      {
+        "text": "Plain recursion without a cache",
+        "explanation": "The two branches overlap heavily (for example n // 6 is reached both by halving then thirding and by thirding then halving), so without a cache the work grows polynomially in n, far too much at 10¹²."
+      },
+      {
+        "text": "Top-down memoisation with a dictionary",
+        "explanation": "Correct. Only the values you get by repeatedly halving and thirding n (rounding down) are ever reached: a few hundred distinct states for an initial input of one trillion. Memoisation computes only reachable states, and the recursion is only about 40 calls deep, because 10¹² can be halved only about 40 times before reaching 0."
+      },
+      {
+        "text": "It can't be done; the state space is 10¹²",
+        "explanation": "The nominal state space is 10¹², but the reachable state space is tiny. Confusing the two is exactly why top-down sometimes beats bottom-up."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Which arguments are reachable? Start at n and repeatedly apply `// 2` or `// 3`. Dividing twice in a row is the same as dividing once by the product, so every reachable value has a simple form:\n\n```formula\nfloor(floor(n / x) / y)\n  = floor(n / (xy))\nv = floor(n / (2^a 3^b))\na ≤ floor(log_2(10^12)) = 39\nb ≤ floor(log_3(10^12)) = 25\nP ≤ 40 × 26 + 1 = 1,041\nwhere\nn: the starting argument, 10¹²\nx: one positive whole-number divisor\ny: another positive whole-number divisor\nfloor: round a quotient down to the nearest integer\nv: any argument the recursion can reach\na: how many halvings lead to a positive reachable quotient; zero is counted separately\nb: how many divisions by three lead to a positive reachable quotient\nlog_2: the base-2 logarithm: how many times you can halve a number before it drops to 1\nlog_3: the base-3 logarithm: how many times you can divide by 3 before it drops to 1\n≈: approximately equal to\nP: an upper bound on distinct reachable values: forty possible a values, twenty-six b values, plus zero\nIn words: every reachable argument is n divided by some power of 2 times some power of 3, and there are at most 1,040 candidate positive-quotient exponent pairs, plus the shared zero state.\n```\n\n2. This is a safe rectangular upper bound; many pairs have a product exceeding the starting value and lead to zero. In practice there are 438 distinct values (several pairs give the same quotient).\n3. Memoisation computes each once: a few hundred additions.\n4. Naive dense tabulation would fill 10¹² + 1 entries; a separately constructed sparse bottom-up order could also restrict evaluation to reachable states.\n5. Rule of thumb: when the reachable states are a sparse subset of a huge range, prefer top-down.",
+    "link": {
+      "title": "Memoization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Memoization"
+    }
+  },
+  {
+    "id": "dp-intro-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about memoisation (top-down) versus tabulation (bottom-up) are true? Select all that apply.",
+    "options": [
+      {
+        "text": "With the same per-state cost model and no eviction, both have the same asymptotic work when every state is reachable",
+        "explanation": "Correct. Both evaluate each state once with the same work per state, so both are states × work. The differences are in constants, memory and ordering."
+      },
+      {
+        "text": "Tabulation makes rolling-array space optimisations easy because you control exactly when each row stops being needed",
+        "explanation": "Correct. With an explicit loop order you know that row i only needs row i − 1, so you can discard the rest. Memoised implementations can also release values with dependency tracking, but plain unbounded caching does not do so automatically."
+      },
+      {
+        "text": "Memoisation is always faster because it skips unneeded states",
+        "explanation": "Skipping unreachable states can save work, but actual speed also depends on recursion, hashing, representation and implementation. The same state set alone does not establish a universal speed ordering."
+      },
+      {
+        "text": "Tabulation requires you to choose an evaluation order in which every dependency is computed before it is used",
+        "explanation": "Correct. This is the main extra design step bottom-up demands. Get it wrong and you read uninitialised cells."
+      },
+      {
+        "text": "Memoisation computes subproblems in a different order, so it can give a different answer",
+        "explanation": "The recurrence defines the value of each state uniquely; order affects only when it's computed. A correct memoised and a correct tabulated solution always agree."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Both strategies evaluate the same function on the same states. A state's value depends only on the recurrence, so the answers are identical.\n2. Cost is states × work per state in both cases.\n3. Differences:\n   - Top-down: automatic order, skips unreachable states, but has call overhead and recursion depth limits.\n   - Bottom-up: you pick the order, no recursion, arrays not hashes, and you can keep only the last row or two.\n4. So \"always faster\" is false (it depends on reachability) and \"different answer\" is false (only the order differs).",
+    "link": {
+      "title": "Dynamic programming — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dynamic_programming"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "secf-access-control-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume an authenticated user object has writable name and role attributes, and db.save persists both with no other validation. This illustrative handler receives {\"name\":\"Eve\",\"role\":\"admin\"}. What happens?\n\n```python\n@app.put(\"/me\")\ndef update_me():\n    # Every supplied field gets\n    # assigned.\n    for k, v in request.json.items():\n        setattr(current_user, k, v)\n    # Persist even a caller-supplied\n    # role.\n    db.save(current_user)\n```",
+    "options": [
+      {
+        "text": "Only the name changes, because `role` isn't a form field",
+        "explanation": "The code doesn't look at the form; it copies every key in the JSON body onto the user object."
+      },
+      {
+        "text": "The request fails because users can't edit their own record",
+        "explanation": "There is no such check in the code; it updates `current_user` directly."
+      },
+      {
+        "text": "Both fields are saved and Eve becomes an admin: mass assignment, a vertical privilege escalation",
+        "explanation": "Correct under the stated assumptions. Allow only permitted fields and validate values. Changing a login or recovery email may also require reauthentication and address verification."
+      },
+      {
+        "text": "Nothing changes, because `setattr` doesn't persist",
+        "explanation": "`db.save(current_user)` persists the modified object, including the new role."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Loop: `setattr(user, \"name\", \"Eve\")`, then `setattr(user, \"role\", \"admin\")`.\n2. `db.save` writes both.\n3. Eve's next request is authorised as admin.\n4. Fix (fail-safe defaults again):\n\n```python\nEDITABLE = {\"name\", \"email\"}\nfor k, v in body.items():\n    # Ignore fields outside this\n    # allowlist.\n    if k in EDITABLE:\n        setattr(user, k, v)\n```",
+    "link": {
+      "title": "A01:2021 Broken Access Control — OWASP Top 10",
+      "url": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/"
+    }
+  },
+  {
+    "id": "secf-access-control-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A multi-tenant SaaS leaks data when queries omit a tenant filter. Which approaches can enforce isolation or help catch regressions before release? Select all that apply.",
+    "options": [
+      {
+        "text": "Postgres row-level security policies keyed on a per-session tenant setting",
+        "explanation": "Correct when configured correctly: enable RLS, use suitable policies and a non-bypass application role, and supply trustworthy tenant context. Superusers/BYPASSRLS bypass RLS; table owners normally do unless FORCE is used. Some operations, including TRUNCATE, are outside row filtering."
+      },
+      {
+        "text": "A data-access layer that requires a tenant context to construct any query, with direct DB access blocked in code review and lint",
+        "explanation": "Correct as an application control plus review tooling, provided all runtime paths use the layer. Code review and lint alone do not make bypass impossible."
+      },
+      {
+        "text": "A wiki page reminding developers to add the clause",
+        "explanation": "Documentation doesn't enforce anything; the failure mode (forgetting) is unchanged."
+      },
+      {
+        "text": "Integration tests that run every endpoint as tenant A against tenant B's data",
+        "explanation": "Correct. Not prevention by itself, but it catches regressions before release and pairs with the structural controls."
+      },
+      {
+        "text": "Using UUIDs for tenant IDs",
+        "explanation": "Unguessable IDs don't stop a query that omits the filter entirely; it returns everyone's rows regardless."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Enforced RLS or a consistently used data-access layer can prevent missing application filters from exposing other tenants. RLS needs correct roles, policies and trustworthy tenant context, including connection-pool reset behaviour. Cross-tenant tests can detect regressions but do not themselves enforce isolation. Reminders and UUIDs leave the missing-filter bug intact.",
+    "link": {
+      "title": "Authorization Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "secf-access-control-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does the fixed invoice handler in the lesson return **404** rather than **403** when a user requests someone else's invoice?",
+    "options": [
+      {
+        "text": "404 is faster to compute",
+        "explanation": "Both are equally cheap. The reason is what the response reveals."
+      },
+      {
+        "text": "403 is only for unauthenticated users",
+        "explanation": "403 is a refusal, not a status restricted to unauthenticated users. A 401 specifically requires an authentication challenge."
+      },
+      {
+        "text": "Browsers cache 404s so the attack can't be repeated",
+        "explanation": "Caching isn't the point, and an attacker can repeat requests regardless."
+      },
+      {
+        "text": "A uniform 404 avoids confirming existence through a 403-versus-404 distinction",
+        "explanation": "Correct. Returning 403 for real IDs and 404 for missing ones would let an attacker map which invoice numbers exist. Treating 'not yours' like 'doesn't exist' hides that."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Different statuses for existing-but-forbidden and missing IDs can disclose existence. Returning the same 404 removes that particular signal; it does not remove timing, body-size or other endpoint side channels. HTTP permits concealing a forbidden resource with 404.",
+    "link": {
+      "title": "Insecure Direct Object Reference Prevention — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
+    }
+  }
+]

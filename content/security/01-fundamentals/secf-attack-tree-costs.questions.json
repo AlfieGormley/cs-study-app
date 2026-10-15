@@ -1,0 +1,92 @@
+[
+  {
+    "id": "secf-threat-modelling-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Compute the cheapest attack cost for the root of this tree (OR takes the minimum of its children, AND the sum):\n\n```\nRoot (OR)\n+- A (AND)\n|  +- A1   4\n|  +- A2   3\n+- B (OR)\n|  +- B1   9\n|  +- B2 (AND)\n|     +- x  2\n|     +- y  4\n+- C       8\n```",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "2 is the cheapest single leaf, but x sits under an AND node; the attacker must also do y. Ignoring AND semantics is the mistake."
+      },
+      {
+        "text": "6",
+        "explanation": "Correct. B2 is an AND node, so it costs 2 plus 4, which is 6. B is an OR node, so it costs the cheaper of 9 and 6, which is 6. A costs 4 plus 3, which is 7. The root takes the cheapest of 7, 6 and 8, which is 6."
+      },
+      {
+        "text": "7",
+        "explanation": "7 is the cost of A. B is cheaper once you evaluate B2 correctly as 6."
+      },
+      {
+        "text": "30",
+        "explanation": "That sums every leaf, treating the whole tree as AND. An OR root lets the attacker choose one path."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Work from the leaves upwards. An AND node adds its children's costs; an OR node takes the smallest.\n\n```formula\nC_B2 = 2 + 4 = 6\nC_B = min(9, C_B2) = 6\nC_A = 4 + 3 = 7\nC_root = min(C_A, C_B, 8)\nC_root = min(7, 6, 8) = 6\nwhere\nC_B2: cost of the AND node B2: leaf x (2) plus leaf y (4), in the tree's cost units\nC_B: cost of the OR node B: the cheaper of leaf B1 (9) and B2\nC_A: cost of the AND node A: leaf A1 (4) plus leaf A2 (3)\nC_root: cost of the OR root: the cheapest of A, B and leaf C (8)\nmin: the minimum: the smallest of the values in the brackets\nIn words: the cheapest attack goes through B via B2 and costs 6 units.\n```\n\nIn this additive model B via B2 is cheapest. Hardening C alone does not change that minimum, though other risk considerations may still justify it.",
+    "link": {
+      "title": "Attack tree — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Attack_tree"
+    }
+  },
+  {
+    "id": "secf-threat-modelling-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In an additive toy model for reading another customer's invoice, root OR options cost 2 (IDOR), 3 (credential stuffing), and 14 (encrypted-backup theft). Assume each mitigation only affects its named path. Which option raises the minimum attack cost?",
+    "options": [
+      {
+        "text": "Upgrade backup encryption from AES-128 to AES-256",
+        "explanation": "That path already costs 14, far above the cheapest route. Hardening an expensive path leaves the root cost at 2."
+      },
+      {
+        "text": "Add an ownership check on invoice lookups",
+        "explanation": "Correct. Removing the IDOR moves the root cost from 2 to 3 (the next cheapest route). It is the only option that changes the root at all."
+      },
+      {
+        "text": "Require MFA for all logins",
+        "explanation": "MFA can raise the cost of the stuffing route, but the independent IDOR path still costs 2 under the question assumptions."
+      },
+      {
+        "text": "Add a WAF rule blocking known stuffing IPs",
+        "explanation": "That partly addresses the cost-3 path and leaves the cost-2 path untouched."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The root is an OR node, so its cost is the cheapest of its three options.\n\n```formula\nC_root = min(2, 3, 14) = 2\nC_new = min(3, 14) = 3\nwhere\nC_root: the root's cost now, in the toy model's invented cost units: the cheapest of IDOR (2), credential stuffing (3) and backup theft (14)\nC_new: the root's cost once the ownership check removes the IDOR path\nmin: the minimum: the smallest of the values in the brackets\nIn words: closing the cheapest route raises the attacker's cheapest cost from 2 to 3; hardening any other path leaves it at 2.\n```\n\nHardening either other path alone leaves the minimum at 2. These invented units illustrate aggregation; they do not establish actual attack or mitigation costs.",
+    "link": {
+      "title": "Attack Trees — Bruce Schneier (1999)",
+      "url": "https://www.schneier.com/academic/archives/1999/12/attack_trees.html"
+    }
+  },
+  {
+    "id": "secf-threat-modelling-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You annotate attack-tree leaves with a boolean `needs_insider`. What is the correct rule for a node that has children?\n\n```python\ndef insider(n):\n    kids = n.get(\"children\")\n    # Leaves state the requirement.\n    if not kids:\n        return n[\"needs_insider\"]\n    # Combine the child requirements.\n    vals = [insider(c) for c in kids]\n    # ???\n```",
+    "options": [
+      {
+        "text": "AND: `all(vals)`; OR: `any(vals)`",
+        "explanation": "This is backwards. An AND node needs every child, so one insider-only child makes the whole node insider-only."
+      },
+      {
+        "text": "AND: `any(vals)`; OR: `all(vals)`",
+        "explanation": "Correct. AND: the attacker must do every step, so if any step needs an insider, the node does. OR: the attacker picks a path, so the node needs an insider only if every option does."
+      },
+      {
+        "text": "Always `any(vals)`",
+        "explanation": "For OR nodes this overstates the requirement: an outsider can take an option that doesn't need an insider."
+      },
+      {
+        "text": "Always `all(vals)`",
+        "explanation": "For AND nodes this understates it: an outsider can't complete an AND node if even one step needs an insider."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Think about what the attacker controls.\n\n1. **OR**: the attacker chooses. They need an insider only if *every* option needs one: `all(vals)`.\n2. **AND**: the attacker must do every step. One insider-only step makes the node insider-only: `any(vals)`.\n3. Compare costs: OR takes the min (attacker chooses the best), AND takes the sum (attacker pays for all). The boolean rules mirror that.\n\nFor example, an OR node with one insider-only path and one outsider-feasible path does not require an insider: the attacker can take the latter.",
+    "link": {
+      "title": "Attack tree — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Attack_tree"
+    }
+  }
+]

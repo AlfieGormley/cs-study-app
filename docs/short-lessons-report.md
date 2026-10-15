@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 48/76. Updated 2026-10-15.
+Verified modules: 49/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -55,6 +55,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | languages/Functional Programming | 6 | 33 | 68 | 43 | 248 | 392 | 82 |
 | languages/Compilers & Interpreters | 7 | 37 | 86 | 36 | 293 | 452 | 53 |
 | languages/Concurrency Models in Languages | 6 | 25 | 67 | 16 | 264 | 372 | 39 |
+| security/Security Fundamentals | 6 | 27 | 66 | 13 | 408 | 501 | 54 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4025,6 +4026,58 @@ Low-confidence areas:
 - **medium** — conc-task-scopes: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
 - **medium** — conc-rust-locked-state: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
 - **medium** — conc-rust-concurrency-limits: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+
+## security: Security Fundamentals
+
+[Independent verification record](../content/security/01-fundamentals/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Clarified collision/tag forgery guarantees and shared-key attribution; MAC and MACs now resolve to the same earlier owned precise definition.
+- Removed SHA-2/Argon2/argon2-cffi/FIDO/SP800-63 family-versus-instance aliases; preserved each stable glossary ID.
+- Corrected mechanical mandatory-access-control/network-address distractor and residual uncarded entropy expression.
+- Qualified authenticated encryption versus encryption alone, private-key sync/backup, WebAuthn origin/RP checks, complete privilege drop, safe SQL construction, tenant/data-layer enforcement, presigned expiry and secrets-manager audit coverage.
+- Removed universal antivirus/backup-sequence claims; clarified formal model exceptions, Unix credentials and domain-controller variants.
+- Focused all27 Further reading lists on their short learning objective.
+
+Remaining gaps:
+
+- No production authentication/recovery provider, SIEM/EDR, AWS/Windows/SELinux policy, PostgreSQL RLS or ReBAC service was deployed; handler fixtures are local sketches.
+- Bell–LaPadula and strict Biba remain level-only teaching models without compartments, complete formal proofs, covert-channel treatment or trusted-subject policy.
+- Inherited encyclopedic/background dictionary terms and some historical/general explanations retain medium confidence where every detail has not been established by a primary source. The per-term ledger identifies all 408 reviewed records and their confidence.
+- The TOCTOU C fragment was compiled as an ordinary object only; no setuid binary or privilege-race exploit was deployed or executed.
+- Password-search rates and additive attack costs are explicit hypothetical models. Native assertions verify only finite cases; no attacker-performance benchmark, constant-time timing proof or intrusion exercise is supplied.
+- The Uber vendor disclosure was independently readable through the browser tool (redirecting to /de/en/); CLI returned 406. This is a transport distinction, not a successful curl claim.
+
+Low-confidence areas:
+
+- **medium** — secf-security-properties: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-security-tradeoffs: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-identity-permission: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-accounting-evidence: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-system-boundaries: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-stride-threats: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-attack-tree-costs: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-risk-responses: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-least-privilege-design: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-layers-defaults: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-mediation-open-design: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-shared-authority-usability: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-factors-password-failures: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-random-password-entropy: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-password-policy: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-password-storage: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-guessing-costs: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-phishing-resistant-login: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-permission-matrix: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-unix-dac: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-mandatory-labels: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-policy-models: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-object-authorisation: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-kill-chain-stages: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-attack-vocabulary: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-intrusion-defence: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+- **medium** — secf-detection-evidence: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
 
 ## synth: Sound & Digital Audio
 

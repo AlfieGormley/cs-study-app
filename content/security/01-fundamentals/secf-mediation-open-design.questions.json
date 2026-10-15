@@ -1,0 +1,92 @@
+[
+  {
+    "id": "secf-principles-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An admin panel has no authentication other than an unpublished, short fixed path, /x7q-admin. Its designers assume nobody will discover the path. Which principle does this violate?",
+    "options": [
+      {
+        "text": "Open design: security mustn't depend on the attacker not knowing how the system works",
+        "explanation": "Correct. Hiding a short fixed route is not a robust credential design; it can be discovered or disclosed. Open design asks whether the protection still works when the mechanism is known."
+      },
+      {
+        "text": "Least common mechanism",
+        "explanation": "That's about shared mechanisms between users. The flaw is reliance on secrecy."
+      },
+      {
+        "text": "Separation of privilege",
+        "explanation": "Requiring two conditions would help, but the core violation is depending on obscurity instead of authentication."
+      },
+      {
+        "text": "It doesn't violate any principle if the URL is long enough",
+        "explanation": "Purpose-built capability URLs can carry high-entropy bearer secrets, with careful scope, expiry and disclosure controls. This short fixed admin route is not such a design."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Ask: what stops an attacker who knows the URL? Nothing.\n2. URLs appear in proxy logs, browser history, analytics and screenshots, so assume it will leak.\n3. Fix: authentication plus authorisation (admin role), ideally MFA and network restriction as extra layers.\n4. Keeping the URL unpublished is fine as minor friction, never as the control.",
+    "link": {
+      "title": "Security through obscurity — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Security_through_obscurity"
+    }
+  },
+  {
+    "id": "secf-principles-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The UI hides the 'Delete user' button from non-admins, but `DELETE /api/users/{id}` only checks that the caller is logged in. Which principle is violated, and what is the fix?",
+    "options": [
+      {
+        "text": "Psychological acceptability; show the button to everyone with a warning",
+        "explanation": "Showing the button changes UX, not security. The API still lets anyone delete users."
+      },
+      {
+        "text": "Open design; obfuscate the API path",
+        "explanation": "Hiding the path is obscurity. Anyone with browser dev tools sees API calls."
+      },
+      {
+        "text": "Complete mediation; enforce the admin check on the API itself",
+        "explanation": "Correct. Every access must be checked at the point of access. UI hiding is a convenience, not a control; the server must authorise each request."
+      },
+      {
+        "text": "Defence in depth; add a WAF rule for DELETE requests",
+        "explanation": "A blanket rule that blocks an HTTP method cannot replace the application permission decision. A gateway could enforce trusted identity-aware policy, but that must actually be configured and complete."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The UI is client-side, under the attacker's control.\n2. A non-admin can send `DELETE /api/users/42` with curl and their own valid session.\n3. The server checks authentication only, so it complies.\n4. Complete mediation: the API handler (or central middleware) must check `role == admin` on every call. Add a test asserting non-admins get 403.",
+    "link": {
+      "title": "Authorization Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "secf-principles-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A setuid-root program does this:\n\n```c\n// The path can change after this check.\nif (access(path, W_OK) == 0) {\n    // This resolves the path again.\n    fd = open(path, O_WRONLY);\n    write(fd, data, n);\n}\n```\n\n`access` checks the *real* user's permission. What is the flaw?",
+    "options": [
+      {
+        "text": "`access` is deprecated, so the result is random",
+        "explanation": "`access` works as documented. The issue is what happens between the check and the use."
+      },
+      {
+        "text": "Time-of-check to time-of-use: between `access` and `open`, an attacker can swap `path` for a symlink to a file they can't write, and `open` runs as root",
+        "explanation": "Correct. An attacker-controlled pathname can resolve to a different object between calls. Open with appropriately reduced authority (user, group and Linux capabilities); retain and use that descriptor. Merely opening as root and keeping the descriptor does not establish the caller was authorised."
+      },
+      {
+        "text": "It writes `n` bytes, which may overflow the file",
+        "explanation": "Files grow as needed; there is no buffer overflow from writing to a file descriptor here."
+      },
+      {
+        "text": "Nothing; the check uses the real user's permissions, which is correct",
+        "explanation": "The check is right at the moment it runs. The flaw is that the object can change before the privileged `open`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Check: `access(path)` asks 'can the real user write this name?' -> yes, it's their own file.\n2. Gap: the attacker replaces `path` with a symlink to `/etc/passwd`.\n3. Use: `open(path)` runs with effective uid 0 and follows the symlink.\n4. Root writes attacker data to a protected file.\n5. This violates complete mediation: the check didn't cover the access actually made. Fix: open using the caller's appropriate authority, including user ID, groups and Linux capabilities, then use that descriptor. Dropping only the effective user ID is not a universal complete privilege-drop procedure.",
+    "link": {
+      "title": "Time-of-check to time-of-use — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use"
+    }
+  }
+]

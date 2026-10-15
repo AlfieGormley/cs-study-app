@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 38/76. Updated 2026-10-15.
+Verified modules: 39/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -45,6 +45,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | networks/Wireless, Mobile & Modern Networks | 6 | 37 | 74 | 73 | 531 | 715 | 28 |
 | architecture/Data Representation | 6 | 37 | 76 | 60 | 393 | 566 | 52 |
 | architecture/Digital Logic | 6 | 34 | 74 | 233 | 261 | 602 | 14 |
+| architecture/Instruction Sets & Assembly | 6 | 35 | 73 | 58 | 375 | 541 | 40 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3559,6 +3560,66 @@ Low-confidence areas:
 - **medium** — logic-sram-array: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
 - **medium** — logic-dram-refresh: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
 - **medium** — logic-verilog-fsm-scheduling: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+
+## architecture: Instruction Sets & Assembly
+
+[Independent verification record](../content/architecture/03-isa/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- RELRO protects the linker-defined GNU_RELRO range, not every relocated writable variable; eager binding protects applicable function slots.
+- Memory-model glossary now covers both hardware ordering and source-language data-race rules. Generic atomics aliases no longer incorrectly imply every atomic operation is a read-modify-write.
+- Register-class counting is ABI-specific: Windows shares positions while ordinary System V/AAPCS64 scalar classes are allocated separately; RDX upper-half return wording now specifically means 128-bit integers.
+- Fixed-width LEA/shift arithmetic is explicitly bounded; the toy sum card now handles zero as an empty sum.
+- Two question closing fences had swallowed important assumptions; they now render on their own lines and the actual mobile renderer checks their visibility.
+- Readelf headers and checksec show binary indicators, not proof that every runtime mitigation is enforced. Canary stack placement, ASLR load addresses and alignment faults now have correct conditional wording.
+- Row-major and column-major are both explicitly named/defined; full-build dictionary probes use the independently reviewed Data logical-shift and Logic non-volatile-memory definitions.
+- Demand paging includes anonymous memory; strace output depends on filters/attachment; AVX and AVX-512 register widths are distinct.
+
+Remaining gaps:
+
+- No original lesson, question or substantive example removed: all 12 archives and all 43 original code/diagram/trace bodies preserved.
+- Advanced SIMD/SVE/SME ABI variations, every linker/OS extension, physical x86 timing and concurrent self-modifying-code correctness remain outside this scalar introductory scope.
+- Partial jump-table, GOT/PLT and canary listings are explicitly illustrative schematics; no claim they are standalone complete executables or exploitation tests.
+
+Low-confidence areas:
+
+- **medium** — isa-machine-cycle: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-toy-interpreter: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-toy-sum-trace: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-memory-contract: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-generated-code: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-risc-cisc-traditions: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-a64-fields: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-a64-immediates: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-x86-byte-decoding: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-operand-addresses: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-relative-address-reach: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-instruction-count-runtime: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-register-widths: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-assembly-dialects: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-comparison-flags: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-positive-count-loop: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-compiler-idioms: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-call-return-state: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-argument-return-abi: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-register-preservation: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-recursive-stack-frames: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-stack-alignment-red-zone: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-abi-variants-tail-calls: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-lowering-conditionals: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-guarded-sum-loops: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-array-layout-addresses: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-struct-layout-offsets: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-switch-relative-tables: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-build-objects-relocations: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-static-link-segments: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-got-plt-binding: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-elf-process-startup: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-execute-permissions: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-aslr-guessing-leaks: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-stack-canaries-defences: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
+- **medium** — isa-machine-cycle: Module glossary has incidental product/history and implementation-dependent typical-system descriptions.. Definitions are scoped and core meanings reviewed; sources do not establish exhaustive vendor lineages, all cache hierarchies, every current tool version or physical-system performance.
 
 ## synth: Sound & Digital Audio
 

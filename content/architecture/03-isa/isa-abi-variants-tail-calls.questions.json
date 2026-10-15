@@ -1,0 +1,78 @@
+[
+  {
+    "id": "isa-calling-conventions-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A compiler turns `return g(x + 1);` at the end of `f` into a **tail call**. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`f` tears down its own frame and then jumps (`jmp`/`b`) to `g` instead of calling it",
+        "explanation": "Correct. The call becomes a jump after the epilogue, so `g` reuses `f`'s stack slot."
+      },
+      {
+        "text": "`g` returns directly to `f`'s caller",
+        "explanation": "Correct. The return address on the stack (x86) or in `x30` (ARM64) is still the one `f`'s caller set up."
+      },
+      {
+        "text": "f necessarily retains a physical stack frame that any debugger can walk while g is running",
+        "explanation": "False: a tail-call optimization removes that frame. Some debuggers can reconstruct a logical tail-call frame using suitable debug information, so absence from every backtrace is not guaranteed."
+      },
+      {
+        "text": "Tail calls let tail-recursive functions run in constant stack space",
+        "explanation": "Correct if the recursive calls are actually optimized and per-step stack requirements stay bounded. This avoids stack growth from the recursive call chain, not every possible source of stack exhaustion."
+      },
+      {
+        "text": "Tail calls are always possible, even if `f` passed `g` a pointer to one of its own locals",
+        "explanation": "If g needs f’s local object to remain alive, simply discarding its storage would be wrong. The optimizer must preserve the required lifetime; the mere presence of a pointer does not prove it will be used."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A valid tail call restores the outgoing function’s saved state and transfers control without adding a new return frame. The callee returns directly to the original caller. Applying this repeatedly to tail recursion avoids growth from that chain. A physical frame disappears, although debug metadata may let a debugger display a logical call. Required object lifetimes and ABI constraints can prevent the transformation.",
+    "link": {
+      "title": "Call stack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Call_stack"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are porting a hand-written assembly routine from Linux x86-64 to **Windows x64**. Which changes are required? Select all that apply.",
+    "options": [
+      {
+        "text": "Read the first four integer arguments from `rcx`, `rdx`, `r8`, `r9` instead of `rdi`, `rsi`, `rdx`, `rcx`",
+        "explanation": "Correct. Windows x64 uses a different, shorter argument register list."
+      },
+      {
+        "text": "Before calling another function, reserve 32 bytes of shadow space on the stack",
+        "explanation": "Correct. The Windows caller must leave 32 bytes above the return address for the callee to spill its four register arguments."
+      },
+      {
+        "text": "Save and restore `rsi` and `rdi` if the routine uses them",
+        "explanation": "Correct. They are callee-saved on Windows, unlike System V, so trashing them breaks the caller."
+      },
+      {
+        "text": "Return integer results in `rcx` instead of `rax`",
+        "explanation": "Both conventions return integers in `rax`. Only the argument registers changed."
+      },
+      {
+        "text": "Flip the stack to grow upwards",
+        "explanation": "The stack grows downwards on x86-64 under every mainstream OS. The direction is set by `push`, `call` and `ret`, not by the ABI."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Arguments: System V uses `rdi rsi rdx rcx r8 r9`; Windows uses `rcx rdx r8 r9` and then the stack.\n2. Shadow space: Windows callers always reserve 32 bytes, even for functions with fewer arguments.\n3. Callee-saved set: Windows adds `rsi`, `rdi` and `xmm6`–`xmm15` to the registers you must preserve.\n4. Unchanged: return values in `rax`/`xmm0`, 16-byte alignment at calls, downward-growing stack.\n\nGetting even one of these wrong produces crashes that only appear when called from real Windows code, which is why tools like Wine need translation thunks.",
+    "link": {
+      "title": "x64 calling convention — Microsoft Learn",
+      "url": "https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention"
+    }
+  }
+]

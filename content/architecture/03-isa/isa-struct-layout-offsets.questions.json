@@ -1,0 +1,92 @@
+[
+  {
+    "id": "isa-loops-arrays-structs-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On x86-64 Linux, what is `sizeof` this struct?\n\n```\nstruct T {\n    char c;\n    int  x;\n    char d;\n};\n```",
+    "options": [
+      {
+        "text": "6",
+        "explanation": "That is just the sum of the field sizes (1 + 4 + 1). It ignores the padding needed to align `x` and the end of the struct."
+      },
+      {
+        "text": "9",
+        "explanation": "This accounts for the padding before `x` (so `d` lands at offset 8), but forgets that the total must be rounded up to a multiple of 4."
+      },
+      {
+        "text": "12",
+        "explanation": "Correct. `c` at 0, 3 bytes of padding, `x` at 4, `d` at 8, then 3 bytes of tail padding so the size is a multiple of 4, the struct's alignment."
+      },
+      {
+        "text": "16",
+        "explanation": "16 would be the result if the struct's alignment were 8, but its largest member is a 4-byte `int`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `c`: offset 0, 1 byte.\n2. `x` needs 4-byte alignment: next multiple of 4 is 4. Padding bytes 1–3. `x` occupies 4–7.\n3. `d`: offset 8, 1 byte. Fields end at 9.\n4. The struct's alignment is its largest member alignment, 4 (from the `int`). Round the end up to a multiple of it:\n\n```formula\ns_T = ⌈e / A⌉ × A\ns_T = ⌈9 / 4⌉ × 4 = 3 × 4 = 12\nwhere\ns_T: sizeof(struct T), in bytes\ne: where the last field ends, in bytes: 9\nA: the struct's alignment: 4\n⌈ ⌉: ceiling: round up to the next whole number\nIn words: 9 bytes is not a whole number of 4-byte steps, so add 3 bytes of tail padding to reach **12**.\n```\n\n5. Reordering to `int x; char c; char d;` gives 4 + 1 + 1 = 6, rounded up to 8.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You are reverse engineering a binary and see:\n\n```\nlea   rax, [rsi + 4*rsi]\nmov   eax, [rdi + 8*rax + 4]\n```\n\n`rdi` is a pointer to an array of structs and `rsi` an index. What can you conclude? Assume rdi is the exact base and these instructions implement a direct p[i].field access with no further index transformation.",
+    "options": [
+      {
+        "text": "Each element is 20 bytes and the field read is at offset 8",
+        "explanation": "This multiplies only 4 × 5 and misreads the displacement. The scale 8 multiplies the `lea` result, and the `+ 4` is the field offset."
+      },
+      {
+        "text": "Each element is 8 bytes and the index is multiplied by 5 for alignment",
+        "explanation": "The scale alone is not the element size here; the compiler split the stride 40 into 5 × 8 because 40 is not a legal scale."
+      },
+      {
+        "text": "The array holds 5 pointers per element",
+        "explanation": "The address arithmetic alone does not establish member types. EAX receives four bytes; it does not reveal whether those bits came from an integer, float or another representation."
+      },
+      {
+        "text": "Each element is 40 bytes and a 4-byte field at offset 4 is read",
+        "explanation": "Correct. The `lea` makes five times the index, the scale 8 makes that 40 times the index, and `+ 4` is the field offset."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "LEA computes five times the index, and MOV loads four bytes from:\n\n```formula\naddr = rdi + 8 × (5 × i) + 4\naddr = rdi + 40 × i + 4\nwhere\naddr: the address of the field being read\nrdi: the base address of the array\ni: the index held in rsi\nIn words: each step of i moves 40 bytes, so elements are 40 bytes apart, and the field is 4 bytes into each one.\n```\n\nUnder the stated direct indexing assumption, the element stride is 40 and the field offset is 4. This does not reveal the member’s name, semantic type, declaration position or the other fields.",
+    "link": {
+      "title": "Computer Systems: A Programmer's Perspective",
+      "url": "https://csapp.cs.cmu.edu/"
+    }
+  },
+  {
+    "id": "isa-loops-arrays-structs-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On x86-64 Linux, how many bytes per element are saved by reordering this struct's fields to minimise padding?\n\n```\nstruct P {\n    char   a;\n    double b;\n    char   c;\n    int    d;\n};\n```",
+    "options": [
+      {
+        "text": "0: the compiler already reorders fields for you",
+        "explanation": "C compilers must keep fields in declaration order; the standard requires it. Reordering is the programmer's job."
+      },
+      {
+        "text": "4 bytes",
+        "explanation": "The original has 10 padding bytes (7 before b and 3 before d), and the reordered layout has 2. The saving is 8 bytes, not 4."
+      },
+      {
+        "text": "8 bytes",
+        "explanation": "Correct. As declared it is 24 bytes; ordered `double, int, char, char` it is 16 bytes."
+      },
+      {
+        "text": "10 bytes",
+        "explanation": "That compares against the raw field total of 14, but the reordered struct still needs 2 bytes of tail padding to reach a multiple of 8."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "As declared:\n```\na  @0   (1) + 7 pad\nb  @8   (8)\nc  @16  (1) + 3 pad\nd  @20  (4)\nend 24 -> already a multiple of 8\n```\nReordered largest-first:\n```\nb  @0   (8)\nd  @8   (4)\na  @12  (1)\nc  @13  (1)\nend 14 -> round up to 16\n```\nThe tail rounding for the reordered layout:\n\n```formula\ns_P = ⌈e / A⌉ × A\ns_P = ⌈14 / 8⌉ × 8 = 2 × 8 = 16\nwhere\ns_P: sizeof(struct P) after reordering, in bytes\ne: where the last field ends: 14\nA: the struct's alignment, 8 for the double\n⌈ ⌉: ceiling: round up to the next whole number\nIn words: 14 bytes rounds up to the next multiple of 8, which is 16.\n```\n\n24 − 16 = **8 bytes** per element. For 10 million elements that is 80 MB less memory for allocation. A complete streaming scan has roughly one-third fewer bytes; exact cache-line traffic depends on access patterns and alignment.",
+    "link": {
+      "title": "Data structure alignment — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    }
+  }
+]

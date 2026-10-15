@@ -1,0 +1,62 @@
+[
+  {
+    "id": "isa-compile-link-load-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the classic lazy-PLT scenario from the lesson, the first call resolves puts to libc and updates this GOT slot. With no auditing, rebinding or loader overrides, what happens on the second call through the same slot?",
+    "options": [
+      {
+        "text": "The resolver runs again, because PLT stubs always call the dynamic loader",
+        "explanation": "In this scenario the slot was resolved and updated on the first call. Other objects have their own slots, and unusual loader settings can change binding behaviour."
+      },
+      {
+        "text": "The program's `.text` was patched on the first call, so it now calls `puts` directly",
+        "explanation": "Code pages are read-only and shared. Only the writable GOT is patched, which is the whole point of the GOT."
+      },
+      {
+        "text": "`call puts@plt`, the stub jumps through the GOT slot, which now holds `puts`'s real address, straight into libc",
+        "explanation": "Correct. The first call's resolver patched the GOT slot; the second call costs just one extra indirect jump."
+      },
+      {
+        "text": "The kernel intercepts the call and forwards it to libc",
+        "explanation": "The ordinary user-space control transfer shown does not need the kernel to pass the call on. The function itself can make system calls."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "First call:\n1. `call puts@plt` → stub `jmp [puts@GOT]`.\n2. The GOT slot initially points back to the stub's `push`.\n3. Push the relocation index, jump to `.plt0`, enter the resolver.\n4. The resolver finds `puts` in libc, writes its address into the GOT slot, and jumps there.\n\nSecond call:\n1. `call puts@plt` → `jmp [puts@GOT]`, which is now `puts` itself.\n\nYou can watch this with `LD_DEBUG=bindings ./prog`.",
+    "link": {
+      "title": "All about Procedure Linkage Table — MaskRay",
+      "url": "https://maskray.me/blog/2021-09-19-all-about-procedure-linkage-table"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does making the GOT read-only after start-up (full RELRO) also require `-z now`?",
+    "options": [
+      {
+        "text": "`-z now` makes the binary position-independent, which RELRO needs",
+        "explanation": "Position independence comes from `-fPIE`/`-pie`. `-z now` controls when symbols are bound."
+      },
+      {
+        "text": "`-z now` disables ASLR, which would otherwise move the GOT",
+        "explanation": "`-z now` has nothing to do with ASLR; the two coexist on most hardened binaries."
+      },
+      {
+        "text": "Without `-z now` the GOT is in the `.text` section, which is already read-only",
+        "explanation": "The illustrated GOT is data, not instruction text. Initial and eventual protection depend on the segment layout and relocation policy."
+      },
+      {
+        "text": "With lazy binding, the resolver writes into the GOT during normal running, on each function's first call; the GOT can only be locked once all binding happens up front",
+        "explanation": "Correct for the conventional lazy-PLT design: resolve slots before making their region read-only. The flags are passed through a compiler driver as -Wl,-z,relro,-z,now."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Lazy PLT binding needs future writes to unresolved function slots; partial RELRO may still protect other GOT entries. Eager binding resolves these slots at load time, and an appropriate GNU_RELRO range can then protect them too. The conventional full-RELRO combination is -z relro -z now. This concerns relocation slots for loaded objects, not a promise to pre-resolve every possible future dynamic lookup.",
+    "link": {
+      "title": "All about Procedure Linkage Table — MaskRay",
+      "url": "https://maskray.me/blog/2021-09-19-all-about-procedure-linkage-table"
+    }
+  }
+]

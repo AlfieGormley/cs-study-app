@@ -1,0 +1,62 @@
+[
+  {
+    "id": "isa-calling-conventions-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On ARM64, where does `bl printf` put the return address?",
+    "options": [
+      {
+        "text": "It pushes it onto the stack, like x86 `call`",
+        "explanation": "`bl` writes the return address to X30 rather than pushing it to the stack. This does not promise that calling and executing an arbitrary function causes no memory traffic."
+      },
+      {
+        "text": "In `x29`, the frame pointer",
+        "explanation": "`x29` is the frame pointer by convention. The return address goes in the link register, which is a different register."
+      },
+      {
+        "text": "In `x30`, the link register",
+        "explanation": "Correct. `bl` (branch with link) writes the address of the next instruction into `x30` (also called `lr`) and branches. `ret` later branches to `x30`."
+      },
+      {
+        "text": "In `x0`, alongside the first argument",
+        "explanation": "`x0` passes the first argument and the return value. Putting the return address there would clobber the argument."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `bl` = **b**ranch with **l**ink. \"Link\" means: remember where to come back to.\n2. AAPCS64 names `x30` the link register (LR).\n3. So after `bl printf`, `x30` = address of the instruction after the `bl`.\n4. A consequence: a function that makes a nested call and later returns normally must preserve its original return address (usually with `stp x29, x30, [sp, #-16]!`).",
+    "link": {
+      "title": "Procedure Call Standard for the Arm 64-bit Architecture (AAPCS64)",
+      "url": "https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst"
+    }
+  },
+  {
+    "id": "isa-calling-conventions-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This ARM64 function was hand-written. What happens when it is called?\n\n```\nf:\n    // Nested call overwrites x30.\n    bl    g\n    add   x0, x0, #1\n    ret\n```\n\nAssume g returns normally with x30 still containing the address immediately after bl g, and ignore external interruption.",
+    "options": [
+      {
+        "text": "It works: `ret` returns to `f`'s caller",
+        "explanation": "`ret` branches to whatever is in `x30` *now*, and `bl g` replaced the original return address."
+      },
+      {
+        "text": "It crashes immediately at the `bl`",
+        "explanation": "The `bl` itself is fine: it calls `g` normally and `g` returns to the `add`."
+      },
+      {
+        "text": "After `g` returns, `ret` jumps back to the `add`, so it loops forever adding 1",
+        "explanation": "Correct. `bl g` set `x30` to the address of the `add`. Since `f` never saved its own return address, `ret` jumps to the `add` again, and again: an infinite loop."
+      },
+      {
+        "text": "`ret` pops a return address from the stack, which is garbage",
+        "explanation": "ARM64 `ret` does not use the stack at all; it reads `x30`. The stack pop behaviour belongs to x86 `ret`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. On entry, `x30` = return address into `f`'s caller.\n2. `bl g` overwrites `x30` with the address of `add x0, x0, #1`.\n3. `g` returns there. `x0` is incremented.\n4. `ret` branches to `x30`, which is still the `add`.\n5. So it adds 1 and returns to the `add` forever.\n\nThe fix is the standard non-leaf prologue and epilogue:\n```\nf:\n    stp   x29, x30, [sp, #-16]!\n    mov   x29, sp\n    // Nested call overwrites x30.\n    bl    g\n    add   x0, x0, #1\n    ldp   x29, x30, [sp], #16\n    ret\n```",
+    "link": {
+      "title": "Procedure Call Standard for the Arm 64-bit Architecture (AAPCS64)",
+      "url": "https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "isa-reading-assembly-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does `mystery(44)` return? (`rdi` holds the unsigned argument; the result is in `eax`.)\n\n```\nmystery:\n    # Count one bit per iteration.\n    xor   eax, eax\n.L1:\n    test  rdi, rdi\n    je    .L2\n    lea   rcx, [rdi - 1]\n    and   rdi, rcx\n    inc   eax\n    jmp   .L1\n.L2:\n    ret\n```",
+    "options": [
+      {
+        "text": "3, because it counts the 1 bits",
+        "explanation": "Correct. `x & (x - 1)` clears the lowest set bit, so the loop runs once per 1 bit. 44 = 0b101100 has three 1 bits."
+      },
+      {
+        "text": "44, because it returns its argument",
+        "explanation": "The return value is in eax, which counts loop iterations; rdi (the argument) is destroyed by the `and`."
+      },
+      {
+        "text": "6, because it counts the bits in the number",
+        "explanation": "44 is 6 bits long (0b101100), but the loop clears only *set* bits and stops at zero, so the zeros don't count."
+      },
+      {
+        "text": "2, because it finds the position of the lowest set bit",
+        "explanation": "The lowest set bit of 44 is indeed bit 2, but this loop doesn't stop at the first set bit; it keeps clearing bits until the value is 0."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "First write 44 in binary:\n\n```formula\n44 = 2^5 + 2^3 + 2^2 = 32 + 8 + 4\n44 = 0b101100\nwhere\n2^5, 2^3, 2^2: the place values of bits 5, 3 and 2\n0b: marks a binary number\nIn words: 44 is made of three powers of two, so its binary form has exactly three 1 bits.\n```\n\nThen trace the loop with x = 44:\n\n```\nx        x-1      x&(x-1)  eax\n101100   101011   101000   1\n101000   100111   100000   2\n100000   011111   000000   3\n000000   -> test sets ZF, je\n```\n\nReturns 3. This is Kernighan's population count: each iteration removes the lowest 1 bit. (A compiler targeting a modern CPU might just emit `popcnt` instead.)",
+    "link": {
+      "title": "x86 and amd64 instruction reference — Félix Cloutier",
+      "url": "https://www.felixcloutier.com/x86/"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague 'optimises' the compiler's signed `x / 2` to a plain arithmetic shift after copying the argument:\n\n```\nhalf:              # int half(int x)\n    mov   eax, edi\n    sar   eax, 1\n    ret\n```\n\nWhat does `half(-7)` now return, and is that what C's `-7 / 2` gives?",
+    "options": [
+      {
+        "text": "-3; same as C",
+        "explanation": "C's `-7 / 2` is -3, but an arithmetic right shift doesn't give -3. Shifting rounds towards minus infinity."
+      },
+      {
+        "text": "-4; C gives -3, so the 'optimisation' is wrong for negative odd numbers",
+        "explanation": "Correct. `sar` rounds −3.5 down to −4. C integer division truncates towards zero, giving -3. The compiler's `shr eax, 31; add eax, edi` adds 1 to negative inputs first so the shift rounds towards zero."
+      },
+      {
+        "text": "2147483644; `sar` is a logical shift that fills with zeros",
+        "explanation": "That's `shr` (logical). `sar` (arithmetic) copies the sign bit in, so negative numbers stay negative."
+      },
+      {
+        "text": "-3; and -4 only appears for even numbers",
+        "explanation": "Even numbers divide exactly, so both methods agree: -8 >> 1 = -4 = -8 / 2. The mismatch is for negative *odd* numbers."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. -7 in 32-bit two's complement is 0xfffffff9.\n2. `sar` by 1 shifts right and copies the sign bit: 0xfffffffc = -4. That is −3.5 rounded down.\n3. C (since C99) truncates towards zero: -7 / 2 = -3.\n4. The compiler's version adds a bias first:\n\n```formula\nq = ⌊(x + c) / 2⌋\nc = 1 if x < 0, otherwise 0\nq = ⌊(−7 + 1) / 2⌋ = −3\nwhere\nq: the result, matching C's x / 2\nx: the signed input, here −7\nc: the bias, the sign bit of x: `shr eax, 31` moves it to bit 0\n⌊ ⌋: floor: round down towards minus infinity, which is what `sar` by 1 does\n<: less than\nIn words: adding 1 to a negative input before the rounding-down shift turns it into rounding towards zero.\n```\n\n5. For positives the bias is 0, so nothing changes. (If x were `unsigned`, a plain `shr` would be right.) The shifts here describe x86 instructions; do not infer portable C17 semantics for right-shifting a negative signed integer.",
+    "link": {
+      "title": "x86 and amd64 instruction reference — Félix Cloutier",
+      "url": "https://www.felixcloutier.com/x86/"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A hand-written System V x86-64 function takes `(const int *table, unsigned idx)` and starts with:\n\n```\n    mov   eax, dword ptr [rdi + rsi*4]\n```\n\nIt passes every test, but crashes intermittently in production when called from a larger, optimised program. What is the most likely bug? Assume idx is within the array bounds and the table pointer is valid.",
+    "options": [
+      {
+        "text": "It should use `rdi*4` instead of `rsi*4`",
+        "explanation": "`rdi` holds the first argument (the pointer) and `rsi` the second (the index), so `rdi + rsi*4` is the right shape."
+      },
+      {
+        "text": "`dword ptr` should be `qword ptr` on a 64-bit machine",
+        "explanation": "The elements are `int` (4 bytes), so a dword load is correct. qword would read two elements."
+      },
+      {
+        "text": "The ABI only defines the low 32 bits of `rsi` for an `unsigned` argument; the upper 32 bits can contain garbage, so it must zero-extend first (for example `mov esi, esi`)",
+        "explanation": "Correct. For 32-bit arguments, the System V ABI leaves the upper half of the 64-bit register unspecified. In tests the caller happened to leave zeros there; in optimised code it may not, producing a wild address. Compilers emit `mov eax, esi` (or similar) before using such a value as a 64-bit index."
+      },
+      {
+        "text": "Using a scaled index is illegal with `unsigned` values",
+        "explanation": "Scaled addressing is purely arithmetic and doesn't know about C types. The issue is what's in the upper bits of the register."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The C prototype says `idx` is a 32-bit `unsigned`. The caller places it in `esi`.\n2. The ABI guarantees only bits 31–0. Bits 63–32 of `rsi` are whatever the caller last left there.\n3. `[rdi + rsi*4]` uses all 64 bits of `rsi`. If the top half is non-zero, the address is wildly wrong: a crash or a silent wrong read.\n4. Fix: `mov esi, esi` (a 32-bit write zero-extends) or `mov eax, esi` and index with `rax`.\n\nThe lesson's `mov eax, edi` idiom table entry ('zero-extend unsigned to 64 bits') is exactly this.",
+    "link": {
+      "title": "x86-64 psABI — GitLab",
+      "url": "https://gitlab.com/x86-psABIs/x86-64-ABI"
+    }
+  }
+]

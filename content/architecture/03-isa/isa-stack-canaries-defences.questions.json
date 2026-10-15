@@ -1,0 +1,70 @@
+[
+  {
+    "id": "isa-compile-link-load-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In the lesson’s protected stack layout, which scenarios either leave this guard unchanged or explicitly use a corrupted local function pointer before the guard check? Assume every overwrite that crosses the guard changes it, and ordinary return paths execute the guard check. Select all that apply.",
+    "options": [
+      {
+        "text": "A `strcpy` of a 200-byte string into `buf`, which runs contiguously over the canary and the return address",
+        "explanation": "This is exactly what canaries catch: the copy must overwrite the canary to reach the return address, and the check at return fails."
+      },
+      {
+        "text": "A bug that writes 8 bytes to an attacker-chosen index `buf[i]` that lands directly on the return address, skipping the canary",
+        "explanation": "Correct. A non-contiguous write never touches the canary, so the check passes."
+      },
+      {
+        "text": "A heap buffer overflow that corrupts another object on the heap",
+        "explanation": "Correct. Stack canaries guard only the stack frame's saved registers and return address; the heap needs other defences."
+      },
+      {
+        "text": "An overflow that changes a function pointer stored among the locals, which is called before the function returns",
+        "explanation": "Correct. A corrupted local pointer can be used before an epilogue guard check; corruption confined below the guard might not change it at all."
+      },
+      {
+        "text": "An overflow that reaches the saved `rbx` but stops short of the return address",
+        "explanation": "This is detected: the saved `rbx` sits above the canary, so reaching it means passing through the canary."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "A changed guard is detected if its check is reached. Under the stated layout and assumptions, contiguous writes reaching saved RBX or the return address cross and change it. A direct write to the return address skips it, heap corruption is outside this frame, and an indirect call through a corrupted local pointer can cause harm before the check. Canaries do not detect all memory corruption.",
+    "link": {
+      "title": "Buffer overflow protection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Buffer_overflow_protection"
+    }
+  },
+  {
+    "id": "isa-compile-link-load-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "glibc forces the lowest byte of the stack canary on little-endian x86-64 to zero. What is the defensive reason?",
+    "options": [
+      {
+        "text": "It makes the canary easier to compare in one instruction",
+        "explanation": "Any 64-bit value compares in one instruction; the zero byte has nothing to do with speed."
+      },
+      {
+        "text": "Zero bytes improve the randomness of the other 7 bytes",
+        "explanation": "It does the opposite: it gives up 8 bits of entropy. That cost is accepted for the benefit below."
+      },
+      {
+        "text": "A leading zero can stop NUL-terminated reads before the remaining guard bytes and obstruct one continuous string copy across it",
+        "explanation": "Correct, with limits. STRCPY reads the source terminator, not the old destination: it can copy a final zero onto the guard’s zero byte unchanged. Counted writes, targeted reads and other primitives can bypass this design."
+      },
+      {
+        "text": "It marks the canary's page as non-executable",
+        "explanation": "Page permissions are set per page in the page tables, not by data values on the stack."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "On little-endian x86-64, clearing the low byte puts a zero first in the stored guard. A string read reaching that intact byte stops before the remaining bytes. Reproducing the zero inside a single NUL-terminated source also stops that copy there, but a terminating-zero overwrite can leave the first guard byte unchanged. The remaining seven bytes provide at most 56 random bits if uniformly generated; this is not an unconditional unguessability guarantee.",
+    "link": {
+      "title": "GCC instrumentation options (-fstack-protector)",
+      "url": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+    }
+  }
+]

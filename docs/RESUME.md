@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 38/76 modules; 260 originals → 1414 short lessons with 3071 focused questions.
+- Independently verified: 39/76 modules; 266 originals → 1449 short lessons with 3144 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `df45782`, version `70e7edc49a8f`, 1380 short lessons/2997 focused questions
-  across 37 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `5818104afae2`, 38 modules/1414 units/3071 questions.
+- Latest confirmed live release: `a0c2192`, version `5818104afae2`, 1414 short lessons/3071 focused questions
+  across 38 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `7cabb62a5350`, 39 modules/1449 units/3144 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -21,9 +21,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- architecture/arch-isa: verifying; /root/architecture_isa_short_verify.
 - architecture/arch-pipeline: authoring; /root/architecture_pipeline_short_author.
 - architecture/arch-memory: authoring; /root/architecture_memory_short_author.
+- architecture/arch-parallel: authoring; /root/architecture_parallel_short_author.
 
 Verification and integration:
 

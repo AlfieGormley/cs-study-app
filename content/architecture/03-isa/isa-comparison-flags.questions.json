@@ -1,0 +1,92 @@
+[
+  {
+    "id": "isa-reading-assembly-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What C condition does this x86-64 pair implement?\n\n```\ntest  rdi, rdi\nje    .Lnull\n```",
+    "options": [
+      {
+        "text": "`if (rdi == rdi) goto Lnull;`, so it always jumps",
+        "explanation": "`test` is a bitwise AND, not a comparison of the two operands for equality. ZF is set only when the AND result is zero."
+      },
+      {
+        "text": "`if (rdi != 0) goto Lnull;`",
+        "explanation": "That would be `jne`. `je` jumps when ZF is set, which happens when rdi is zero."
+      },
+      {
+        "text": "`if (rdi < 0) goto Lnull;`",
+        "explanation": "A sign check would use `js` (jump if sign) or `jl` after the test. `je` tests the zero flag."
+      },
+      {
+        "text": "`if (rdi == 0) goto Lnull;`",
+        "explanation": "Correct. `test rdi, rdi` computes rdi AND rdi (which is just rdi) and sets ZF if it is zero; `je` (jump if equal, i.e. ZF set) branches. It is the standard null-pointer or zero check."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `test a, b` computes `a & b`, sets the flags, discards the result.\n2. `rdi & rdi = rdi`, so ZF = 1 exactly when rdi is 0.\n3. `je` is the same as `jz`: jump if ZF = 1.\n4. So: if rdi is zero (for example a NULL pointer), jump to `.Lnull`.\n\nCompilers prefer `test rdi, rdi` over `cmp rdi, 0` because it encodes shorter and does the same job.",
+    "link": {
+      "title": "FLAGS register — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/FLAGS_register"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`edi = -1` and `esi = 1`. Is the branch taken?\n\n```\ncmp   edi, esi\nja    .Lbig\n```",
+    "options": [
+      {
+        "text": "No, because -1 is less than 1",
+        "explanation": "That is the *signed* reading, which `jg` would use. `ja` is an unsigned condition."
+      },
+      {
+        "text": "Yes, because `ja` compares unsigned, and -1 is 0xffffffff, which is larger than 1",
+        "explanation": "Correct. The register bits are 0xffffffff. `ja` (jump if above) treats both as unsigned: 4,294,967,295 > 1, so it jumps. In C this is what happens with `if ((unsigned)a > (unsigned)b)`."
+      },
+      {
+        "text": "No, because `ja` only works on 64-bit registers",
+        "explanation": "`ja` reads flags; it doesn't care what width the preceding `cmp` used."
+      },
+      {
+        "text": "It depends on the upper 32 bits of rdi",
+        "explanation": "`cmp edi, esi` is a 32-bit comparison; the upper bits of rdi and rsi play no part."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `cmp edi, esi` computes 0xffffffff - 0x00000001 and sets flags.\n2. As unsigned numbers, the 32 bits of −1 mean the largest 32-bit number:\n\n```formula\nu = v + 2^32   for v < 0\nu = −1 + 4294967296 = 4294967295\nu − 1 = 4294967294\nwhere\nu: the unsigned number formed by the 32 bits in edi\nv: the signed value those bits represent, −1\n2^32: 4,294,967,296, the number of different 32-bit patterns\n<: less than\nIn words: read as unsigned, −1 is the largest 32-bit number, so subtracting 1 from it needs no borrow and leaves a non-zero result.\n```\n\nNo borrow, so CF is clear; the result is non-zero, so ZF is clear.\n3. `ja` jumps if CF is clear and ZF is clear: taken.\n4. A signed `jg` would test SF, OF and ZF and see -1 < 1: not taken.\n\nThis is how a C signed/unsigned mix-up (`if (len > limit)` with an unsigned limit) becomes a security bug: a negative length looks enormous, or vice versa.",
+    "link": {
+      "title": "FLAGS register — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/FLAGS_register"
+    }
+  },
+  {
+    "id": "isa-reading-assembly-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this ARM64 function compute? (`cneg Rd, Rn, cond` sets Rd = -Rn if the condition holds, else Rd = Rn.)\n\n```\n// int f(int x)\nf:\n    cmp   w0, #0\n    cneg  w0, w0, lt\n    ret\n```",
+    "options": [
+      {
+        "text": "`-x` for every input",
+        "explanation": "The negation is conditional: it happens only if the `lt` (signed less than) condition is true, that is, when x < 0."
+      },
+      {
+        "text": "`x < 0 ? 1 : 0`",
+        "explanation": "That would be `cset w0, lt`. `cneg` returns a negated copy of the register, not a 0/1 flag."
+      },
+      {
+        "text": "Absolute value for inputs other than INT_MIN; for INT_MIN the 32-bit result remains 0x80000000",
+        "explanation": "Correct. The instruction conditionally negates a 32-bit bit pattern. For ordinary inputs this gives the absolute value; INT_MIN has no positive counterpart representable as a signed 32-bit int."
+      },
+      {
+        "text": "`max(x, 0)`",
+        "explanation": "max(x, 0) would return 0 for negative x. Here negatives are negated to become positive, not clamped."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "CMP sets flags for x relative to zero; CNEG conditionally negates the 32-bit value. For −5, 5 and 0 the results are 5, 5 and 0. For INT_MIN the hardware result is 0x80000000, which still represents INT_MIN as signed 32-bit. This does not mean C abs(INT_MIN) is defined to wrap: that C expression has undefined behaviour when the result is unrepresentable.",
+    "link": {
+      "title": "AArch64 — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/AArch64"
+    }
+  }
+]

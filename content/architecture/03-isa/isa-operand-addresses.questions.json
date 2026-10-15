@@ -1,0 +1,92 @@
+[
+  {
+    "id": "isa-risc-cisc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "RBX holds address 0x2000 and RCX holds index 5. What is the effective address of this x86-64 operand?\n\n```\nqword ptr [rbx + rcx*8 + 16]\n```",
+    "options": [
+      {
+        "text": "0x2015",
+        "explanation": "This adds 5 and 16 without scaling the index. The index is multiplied by the scale (8) first."
+      },
+      {
+        "text": "0x2038",
+        "explanation": "Correct. 5 × 8 = 40 = 0x28, plus 16 = 0x10 gives 0x38; add the base 0x2000 to get 0x2038."
+      },
+      {
+        "text": "0x2050",
+        "explanation": "This treats 5 × 8 = 40 as if it were 0x40. It is 40 in *decimal*, which is 0x28; plus 0x10 gives 0x38, not 0x50."
+      },
+      {
+        "text": "The value stored at address 0x2000",
+        "explanation": "That would be `[rbx]` alone. And the question asks for the *address* the operand computes, not the value loaded from it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nEA = base + index × scale + disp\nEA = 0x2000 + 5 × 8 + 16\nEA = 0x2000 + 56 = 0x2038\nwhere\nEA: the effective address: the memory address the operand points at\nbase: the value in the base register, here rbx = 0x2000 (0x marks hexadecimal)\nindex: the value in the index register, here rcx = 5\nscale: the multiplier in the operand, here 8\ndisp: the displacement: a constant byte offset in the operand, here 16\nIn words: start at the base, step over 5 elements of 8 bytes, then add 16 more bytes; 40 + 16 = 56 in decimal is 0x38.\n```\n\nThe displacement is in bytes. This can describe a fixed header plus indexed 8-byte elements; a 16-byte field offset would not lie within an 8-byte struct element.",
+    "link": {
+      "title": "Addressing mode — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Addressing_mode"
+    }
+  },
+  {
+    "id": "isa-risc-cisc-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Memory holds the 32-bit values `7` at address 0x1000 and `9` at 0x1004. With `x0 = 0x1000`, this runs:\n\n```\nldr  w1, [x0], #4\nldr  w2, [x0]\n```\n\nWhat are `w1`, `w2` and `x0` afterwards?",
+    "options": [
+      {
+        "text": "w1 = 9, w2 = 9, x0 = 0x1004",
+        "explanation": "That is the **pre-index** behaviour (`[x0, #4]!`), which updates x0 before loading. The form `[x0], #4` is post-index: it loads first."
+      },
+      {
+        "text": "w1 = 7, w2 = 7, x0 = 0x1000",
+        "explanation": "This ignores the write-back. The `, #4` after the brackets adds 4 to x0 after the load."
+      },
+      {
+        "text": "w1 = 7, w2 = 9, x0 = 0x1004",
+        "explanation": "Correct. Post-index loads from the old x0 (0x1000, value 7), then sets x0 = 0x1004. The second load reads 0x1004, value 9."
+      },
+      {
+        "text": "w1 = 7, w2 = 9, x0 = 0x1008",
+        "explanation": "Only the first instruction writes back. `ldr w2, [x0]` has no index update, so x0 stays 0x1004."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nstart         x0 = 0x1000\nldr w1,[x0],#4\n  load [0x1000] -> w1 = 7\n  then x0 += 4  -> x0 = 0x1004\nldr w2,[x0]\n  load [0x1004] -> w2 = 9\n```\n\nPost-index (`[x0], #4`) = use then bump: a pointer walk like `*p++`. Pre-index (`[x0, #4]!`) = bump then use, like `*++p`; it is how `stp x29, x30, [sp, #-16]!` pushes onto the stack.",
+    "link": {
+      "title": "Addressing mode — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Addressing_mode"
+    }
+  },
+  {
+    "id": "isa-risc-cisc-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With RDI initially holding 7, what does this x86-64 instruction do?\n\n```\nlea  eax, [rdi + rdi*2]\n```",
+    "options": [
+      {
+        "text": "Loads the 32-bit value stored at address 21 into eax",
+        "explanation": "`lea` never accesses memory. It computes the address expression and stores the *address itself*. A `mov eax, [rdi + rdi*2]` would load from memory."
+      },
+      {
+        "text": "Sets EAX to 14, because the scale only applies to the base register",
+        "explanation": "The scale applies to the *index* (the second rdi), so it is 7 + 14 = 21."
+      },
+      {
+        "text": "Faults, because the same register cannot be both base and index",
+        "explanation": "Using the same register as base and index is perfectly legal; it is the standard trick for multiplying by 3, 5 or 9."
+      },
+      {
+        "text": "Sets EAX to 21, without touching memory or the flags",
+        "explanation": "Correct. lea computes 7 + 7 × 2 = 21. Compilers use it as a cheap multiply-and-add that doesn't disturb the flags."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `lea` = load effective address. It runs the address calculation and writes the result, with no memory access.\n2. Work out the address expression:\n\n```formula\nEA = base + index × scale\nEA = 7 + 7 × 2 = 21\nwhere\nEA: the effective address that lea computes and writes into eax\nbase: the base register, rdi = 7\nindex: the index register, also rdi = 7\nscale: the multiplier, 2\nIn words: 7 plus twice 7 is 21, written to eax without reading memory.\n```\n\n3. So eax = 21, three times the input.\n4. Using the same register as base and index gives a cheap multiply:\n\n```formula\nr = x + x × s = (1 + s) × x\nwhere\nr: the result lea writes\nx: the input value, used as both base and index\ns: the scale, 2, 4 or 8\nIn words: scales of 2, 4 and 8 multiply by 3, 5 and 9 in one instruction; an optional displacement adds a constant, so `lea rax, [rdi + rdi*4 + 7]` gives 5 × x + 7.\n```",
+    "link": {
+      "title": "x86 and amd64 instruction reference — Félix Cloutier",
+      "url": "https://www.felixcloutier.com/x86/"
+    }
+  }
+]

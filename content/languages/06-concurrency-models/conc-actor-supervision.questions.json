@@ -1,0 +1,92 @@
+[
+  {
+    "id": "conc-actors-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A supervisor has three independent worker children. Worker 2 crashes, is restart-eligible, and the restart intensity has not been exceeded. With the `one_for_one` strategy, what happens?",
+    "options": [
+      {
+        "text": "Only worker 2 is restarted",
+        "explanation": "Correct. `one_for_one` treats each child independently."
+      },
+      {
+        "text": "All three workers are restarted",
+        "explanation": "That is `one_for_all`, used when the children depend on each other."
+      },
+      {
+        "text": "Workers 2 and 3 are restarted",
+        "explanation": "That is `rest_for_one`: the crashed child and those started after it."
+      },
+      {
+        "text": "The supervisor crashes too, taking down all three",
+        "explanation": "Under the stated restart policy and available restart budget, it restarts that child; shutdown and initialization failure have other rules."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "| Strategy | Restarted |\n|---|---|\n| `one_for_one` | 2 |\n| `one_for_all` | 1, 2, 3 |\n| `rest_for_one` | 2, 3 |\n\nIndependent workers suit `one_for_one`: there is no reason to disturb 1 and 3.",
+    "link": {
+      "title": "Supervisor Behaviour — Erlang system documentation",
+      "url": "https://www.erlang.org/doc/system/sup_princ.html"
+    }
+  },
+  {
+    "id": "conc-actors-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A supervisor starts children in this order: `[Db, Cache, Api]`. `Cache` reads from `Db` and `Api` calls `Cache`; if `Db` restarts, the others hold stale connections. `Db` crashes. Which strategy restarts exactly the processes that need it? Assume restart-eligible children, successful replacement starts and available restart budget; choose a policy that follows that dependency order for any child failure.",
+    "options": [
+      {
+        "text": "`one_for_one`",
+        "explanation": "Only `Db` would restart, leaving `Cache` and `Api` holding stale connections to the old `Db`."
+      },
+      {
+        "text": "`one_for_all` is the only correct choice",
+        "explanation": "It works here, but for a crash of `Api` it would also restart `Db` and `Cache` needlessly. `rest_for_one` matches the dependency order exactly."
+      },
+      {
+        "text": "No strategy; the developer must restart the dependants by hand in a `try` block",
+        "explanation": "This is the defensive style \"let it crash\" avoids. Supervisors encode the dependency in the strategy."
+      },
+      {
+        "text": "`rest_for_one`",
+        "explanation": "Correct. Children started after the crashed one are restarted with it. `Db` crashing restarts all three; `Api` crashing restarts only `Api`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Dependencies follow start order: `Cache` needs `Db`, `Api` needs `Cache`.\n2. `rest_for_one` restarts the crashed child and every child started after it.\n\n| Crash | Restarted |\n|---|---|\n| `Db` | Db, Cache, Api |\n| `Cache` | Cache, Api |\n| `Api` | Api |\n\nThat is exactly the set with stale state each time.",
+    "link": {
+      "title": "Supervisor Behaviour — Erlang system documentation",
+      "url": "https://www.erlang.org/doc/system/sup_princ.html"
+    }
+  },
+  {
+    "id": "conc-actors-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An Erlang supervisor uses the default restart intensity (1 restart in 5 seconds). A permanent child has a bug that crashes it within 100 ms of every start. What happens?",
+    "options": [
+      {
+        "text": "The supervisor restarts it forever, once every 100 ms",
+        "explanation": "The intensity limit exists to stop exactly this restart loop."
+      },
+      {
+        "text": "The second crash within 5 seconds exceeds the limit, so the supervisor terminates its children and exits, escalating to its own supervisor",
+        "explanation": "Correct. More restarts than the allowed maximum (1) within the period (5 seconds) makes the supervisor give up and pass the failure upward."
+      },
+      {
+        "text": "The supervisor waits 5 seconds between restarts",
+        "explanation": "Erlang supervisors restart immediately. The period defines a window for counting restarts, not a delay."
+      },
+      {
+        "text": "The child is restarted with its last state, so the bug is avoided",
+        "explanation": "A restart begins from the child's initial state. That is why restarting cures transient faults but not deterministic bugs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Crash 1 at about 0.1 s: one restart in the window, which is allowed.\n2. Crash 2 at about 0.2 s: this would be the second restart within 5 s, more than the maximum (the check is below).\n3. The supervisor kills its remaining children and exits with reason `shutdown`.\n4. Its parent supervisor sees a child exit and applies *its* strategy and intensity.\n5. If the bug persists, the failure climbs the tree until the application stops: a loud, visible failure instead of a silent busy loop.\n\n```formula\nn_1 = 1 ≤ MaxR = 1\nn_2 = 2 > MaxR = 1\nwhere\nn_1: counted restart attempt at crash 1, within the 5-second period\nn_2: counted restart attempt at crash 2, rejected before a second restart occurs\nMaxR: the most restarts allowed per window: 1 by default in Erlang\n≤: is at most (still allowed)\n>: is greater than (limit exceeded)\nIn words: the first restart fits the budget of one per 5 seconds; the second exceeds it, so the supervisor gives up.\n```",
+    "link": {
+      "title": "supervisor — Erlang stdlib documentation",
+      "url": "https://www.erlang.org/doc/apps/stdlib/supervisor.html"
+    }
+  }
+]

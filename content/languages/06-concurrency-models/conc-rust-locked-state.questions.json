@@ -1,0 +1,65 @@
+[
+  {
+    "id": "conc-structured-rust-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This fails with E0499 (\"cannot borrow `count` as mutable more than once\"):\n\n```rust\n// Both closures request exclusive use.\nlet mut count = 0;\nthread::scope(|s| {\n    s.spawn(|| count += 1);\n    s.spawn(|| count += 1);\n});\nprintln!(\"{count}\");\n```\n\nWhich change makes it compile **and** print 2?",
+    "options": [
+      {
+        "text": "Change both closures to `move || count += 1`",
+        "explanation": "It compiles, because `i32` is `Copy`: each closure gets its own copy. But the original is never changed, so it prints 0."
+      },
+      {
+        "text": "Use `let count = Rc::new(Cell::new(0));` and `count.set(count.get() + 1)`",
+        "explanation": "`Cell` is not `Sync` (and `Rc` is not `Send` either), so the compiler rejects sharing it with the spawned threads."
+      },
+      {
+        "text": "Use `let count = AtomicI32::new(0);` and `count.fetch_add(1, Ordering::Relaxed)` in each closure, then print `count.into_inner()`",
+        "explanation": "Correct. Atomics are `Sync`, so both threads can share `&count`; each `fetch_add` is one indivisible step, so the total is 2."
+      },
+      {
+        "text": "Add `unsafe { }` around each `count += 1`",
+        "explanation": "`unsafe` does not switch off the borrow checker; the E0499 error remains. And a real unsynchronised write would be a data race."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Two closures each want `&mut count`: forbidden (aliasing XOR mutation).\n2. Fix by needing only `&count`, which is allowed many times, and doing the mutation through a `Sync` type:\n\n```rust\n// Atomic steps retain both increments.\nlet count = AtomicI32::new(0);\nthread::scope(|s| {\n  s.spawn(|| count.fetch_add(\n    1, Ordering::Relaxed));\n  s.spawn(|| count.fetch_add(\n    1, Ordering::Relaxed));\n});\nprintln!(\"{}\", count.into_inner());\n```\n\n3. The scope joins both threads first, so the result is 2. `Relaxed` is enough: only the counter itself matters, and the join provides the ordering. A `Mutex<i32>` also works.",
+    "link": {
+      "title": "std::thread::scope — Rust docs",
+      "url": "https://doc.rust-lang.org/std/thread/fn.scope.html"
+    }
+  },
+  {
+    "id": "conc-structured-rust-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these Rust snippets compile? Assume the usual imports. Select all that apply.",
+    "options": [
+      {
+        "text": "```rust\n// The guard controls shared mutation.\nlet c = Arc::new(Mutex::new(0));\nlet c2 = Arc::clone(&c);\nthread::spawn(move || {\n    *c2.lock().unwrap() += 1;\n});\n```",
+        "explanation": "Compiles. `Mutex<i32>` is `Send + Sync`, so `Arc<Mutex<i32>>` is `Send`."
+      },
+      {
+        "text": "```rust\n// Arc does not make RefCell shareable.\nlet c = Arc::new(RefCell::new(0));\nlet c2 = Arc::clone(&c);\nthread::spawn(move || {\n    *c2.borrow_mut() += 1;\n});\n```",
+        "explanation": "Does not compile. `Arc<T>` is `Send` only if `T: Sync`, and `RefCell` is never `Sync`."
+      },
+      {
+        "text": "```rust\n// Scope joins before borrowed data\n// ends.\nlet v = vec![1, 2, 3];\nthread::scope(|s| {\n    s.spawn(|| println!(\"{v:?}\"));\n    s.spawn(|| println!(\"{v:?}\"));\n});\n```",
+        "explanation": "Compiles. Scoped threads may borrow locals, and two shared borrows of `v` are allowed."
+      },
+      {
+        "text": "```rust\n// This closure borrows a local value.\nlet v = vec![1, 2, 3];\nthread::spawn(|| {\n    println!(\"{v:?}\");\n});\n```",
+        "explanation": "Does not compile (E0373). `thread::spawn` needs `'static`, but the closure borrows `v`, which the new thread could outlive. Add `move` or use a scope."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Check each against the two kinds of rule:\n\n1. **Types** (`Send`/`Sync`): `Arc<Mutex<i32>>` is `Send`; `Arc<RefCell<i32>>` is not, because `Arc` shares its contents and `RefCell` is not `Sync`.\n2. **Lifetimes**: `thread::spawn` demands `'static` captures; `thread::scope` joins its threads before returning, so borrows of `v` are fine.\n\nSo A and C compile; B fails on Sync, D fails on lifetime.",
+    "link": {
+      "title": "std::thread::scope — Rust docs",
+      "url": "https://doc.rust-lang.org/std/thread/fn.scope.html"
+    }
+  }
+]

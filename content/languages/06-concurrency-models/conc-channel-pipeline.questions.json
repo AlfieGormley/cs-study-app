@@ -1,0 +1,62 @@
+[
+  {
+    "id": "conc-csp-channels-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```go\n// Each stage owns its output channel.\nfunc gen(ns ...int) <-chan int {\n  out := make(chan int)\n  go func() {\n    for _, n := range ns {\n      out <- n\n    }\n    close(out)\n  }()\n  return out\n}\n\nfunc add1(in <-chan int) <-chan int {\n  out := make(chan int)\n  go func() {\n    for n := range in {\n      out <- n + 1\n    }\n    close(out)\n  }()\n  return out\n}\n\nfunc main() {\n  s := 0\n  c := add1(add1(gen(1, 2)))\n  for v := range c {\n    s += v\n  }\n  fmt.Println(s)\n}\n```",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That is the sum of the inputs with no stages applied. Each value passes through two `add1` stages."
+      },
+      {
+        "text": "5",
+        "explanation": "This applies only one `add1` (2 + 3). The pipeline has two."
+      },
+      {
+        "text": "It deadlocks, because `main` never closes any channel",
+        "explanation": "`main` does not need to close anything. Each stage closes its own output when its input is drained, so the final `range` ends."
+      },
+      {
+        "text": "7",
+        "explanation": "Correct. 1 becomes 3 and 2 becomes 4 after two stages, and 3 + 4 = 7."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `gen` emits 1, 2, then closes.\n2. First `add1` emits 2, 3, then closes when its input closes.\n3. Second `add1` emits 3, 4, then closes.\n4. `main` ranges over the last channel, adding each value to `s`, and the loop ends at the close.\n\n```formula\ns = (x_1 + 2 × a) + (x_2 + 2 × a)\ns = (1 + 2 × 1) + (2 + 2 × 1)\ns = 3 + 4 = 7\nwhere\ns: the total `main` prints\nx_1, x_2: the two values `gen` emits, 1 and 2\na: the amount one `add1` stage adds, 1\n2: the number of `add1` stages each value passes through\nIn words: each input gains 2 from two stages, so 1 and 2 become 3 and 4, which sum to 7.\n```\n\n```\ngen -1,2-> add1 -2,3-> add1 -3,4-> main\n```",
+    "link": {
+      "title": "Go Concurrency Patterns: Pipelines and cancellation — The Go Blog",
+      "url": "https://go.dev/blog/pipelines"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a worker pool, three worker goroutines all send results to one shared `results` channel. Who should close `results`, and when?",
+    "options": [
+      {
+        "text": "Each worker, when it finishes its last job",
+        "explanation": "The first worker to finish would close it while the others are still sending, and their sends would panic. A second close would panic too."
+      },
+      {
+        "text": "Nobody; channels are garbage-collected when unused",
+        "explanation": "An unclosed channel is collected eventually, but the consumer's `range results` would block forever waiting for a close."
+      },
+      {
+        "text": "A separate goroutine that waits on a `sync.WaitGroup` for all workers, then closes it",
+        "explanation": "Correct. Only after every sender has finished is it safe to close, and the WaitGroup tells you when that is."
+      },
+      {
+        "text": "The consumer, after it has read the expected number of results",
+        "explanation": "A receiver must not close without a protocol proving no further sends are possible; receiving a guessed count is insufficient. If the count is known you can skip closing, but then you are not using `range`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The rule: close a channel only when no sender can send again.\n2. With three senders, no single worker knows the others are done.\n3. Each worker calls `wg.Done()` on exit; a helper does:\n\n```go\n// Close only after all senders finish.\ngo func() {\n  wg.Wait()\n  close(results)\n}()\n```\n\n4. The consumer's `for r := range results` ends exactly after the last result.\n5. The helper must be its own goroutine: if `main` waited on `wg` before reading, the workers would block sending on unbuffered `results` and never finish.",
+    "link": {
+      "title": "Go Concurrency Patterns: Pipelines and cancellation — The Go Blog",
+      "url": "https://go.dev/blog/pipelines"
+    }
+  }
+]

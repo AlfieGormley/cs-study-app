@@ -1,0 +1,92 @@
+[
+  {
+    "id": "conc-coroutines-green-threads-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Go program starts 100,000 goroutines that each sleep for a second. Roughly how much memory do their initial stacks take, assuming each initially allocates exactly 2 KiB and ignoring other overhead?",
+    "options": [
+      {
+        "text": "About 200 MB",
+        "explanation": "Correct. 100,000 goroutines × 2 KiB = 200,000 KiB, about 205 MB (195 MiB)."
+      },
+      {
+        "text": "About 800 GB",
+        "explanation": "That is 100,000 × 8 MB, an illustrative OS-thread stack reservation; actual defaults depend on configuration. Goroutines start far smaller."
+      },
+      {
+        "text": "About 2 MB",
+        "explanation": "This is 100,000 × 20 bytes. A goroutine needs a real stack, starting at 2 KiB, not a few bytes."
+      },
+      {
+        "text": "Go cannot run that many goroutines; it will crash",
+        "explanation": "Large goroutine counts are possible when resources permit. That is the point of small growable stacks."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Assumed stack per goroutine: 2 KiB (actual initial allocations can vary).\n2. Multiply by the number of goroutines (first two lines below).\n3. Compare OS threads at an illustrative 8 MB stack reservation each (last two lines): that is virtual address space, not necessarily memory in use.\n4. This is only a stack subtotal. Timers, goroutine metadata, retained values, allocator overhead and actual starting sizes also consume memory.\n\n```formula\nM_g = N × S_g\nM_g = 100,000 × 2 KiB = 200,000 KiB\nM_g ≈ 205 MB ≈ 195 MiB\nM_t = N × S_t\nM_t = 100,000 × 8 MB\nM_t = 800,000 MB = 800 GB\nwhere\nM_g: total initial goroutine stack memory\nM_t: total stack reservation if each were an OS thread\nN: the number of goroutines (or threads), 100,000\nS_g: initial stack per goroutine, 2 KiB\nS_t: illustrative stack reservation per OS thread, 8 MB\n≈: approximately equal to\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,048,576 bytes\nMB: megabyte, 1,000,000 bytes\nGB: gigabyte, 1,000 MB\nIn words: 100,000 goroutines need about 200 MB of starting stack, while the same number of 8 MB thread stacks would reserve about 800 GB.\n```",
+    "link": {
+      "title": "Green thread — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Green_thread"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Go program has `GOMAXPROCS=4`. One goroutine makes a blocking system call (say, a read on a file that the netpoller cannot handle) that takes 2 seconds. What happens to the other goroutines?",
+    "options": [
+      {
+        "text": "They keep running: the runtime detaches the P from the blocked M and gives it to another OS thread",
+        "explanation": "Correct. The OS thread is stuck in the kernel with the goroutine, but `sysmon` hands its P (and run queue) to another M, starting a new thread if needed."
+      },
+      {
+        "text": "All goroutines freeze for 2 seconds, because Go is M:1",
+        "explanation": "Go is M:N, not M:1. A blocked M does not stop the others."
+      },
+      {
+        "text": "Only a quarter of the goroutines freeze, because one of four Ps is lost",
+        "explanation": "The P is not lost; it is handed to another M. Goroutines queued on it keep running."
+      },
+      {
+        "text": "The runtime pre-empts the system call after 10 ms and retries it later",
+        "explanation": "Some system calls can be interrupted, but Go does not solve this example by a fixed 10 ms interrupt-and-retry rule. It works around the blocked thread instead."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. G runs on M1, which holds P1.\n2. G enters a blocking syscall. M1 is now stuck in the kernel.\n3. The `sysmon` thread notices P1 has been in a syscall too long and hands P1 to another M (M5, created if necessary).\n4. M5 runs the goroutines on P1's queue. The other Ps are unaffected throughout.\n5. When the syscall returns, M1 tries to get a P back; if none is free, G goes onto a run queue and M1 parks.\n\nSocket I/O is cheaper still: it goes through the netpoller, so no thread blocks at all.",
+    "link": {
+      "title": "Green thread — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Green_thread"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On Go 1.13, this program sometimes hangs forever on a multicore machine, while Go 1.14+ with supported, enabled asynchronous pre-emption can finish:\n\n```go\n// A call-free loop needs pre-emption.\ngo func() {\n  for { } // spin, no calls\n}()\ntime.Sleep(time.Millisecond)\nruntime.GC()\nfmt.Println(\"done\")\n```\n\nWhy?",
+    "options": [
+      {
+        "text": "Go 1.13 used M:1 scheduling, so the spinning goroutine took the only thread",
+        "explanation": "Go has been M:N for a long time. Other Ps were available; the problem was that the spinning goroutine itself could not be stopped."
+      },
+      {
+        "text": "The empty loop is a data race, which Go 1.14 started rejecting",
+        "explanation": "An empty loop touches no shared memory. Nothing races here."
+      },
+      {
+        "text": "Garbage collection needs every goroutine to reach a safe point; before 1.14 ordinary pre-emption relied on cooperative checks such as function prologues, so a call-free loop never stopped",
+        "explanation": "Correct. Go 1.14 added asynchronous pre-emption: the runtime sends a signal to the thread and stops the goroutine at eligible asynchronous safe points on supported platforms."
+      },
+      {
+        "text": "`time.Sleep` blocks the OS thread, and Go 1.13 could not create another one",
+        "explanation": "Sleep parks the goroutine, not the thread. Go has always been able to start more threads."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `runtime.GC()` needs a *stop-the-world* phase: every running goroutine must pause at a safe point.\n2. In Go 1.13 the safe points were cooperative: checks inserted at function prologues.\n3. `for { }` makes no calls, so it never reaches a check. The GC waits forever, and with it `main`.\n4. Go 1.14 added asynchronous pre-emption: `sysmon` sends `SIGURG` to the thread, the handler stops the goroutine mid-loop.\n\nLesson: \"pre-emptive\" green threads are only as pre-emptive as the runtime's mechanism. Erlang avoids this by counting reductions, because every Erlang loop is a function call.",
+    "link": {
+      "title": "Go 1.14 Release Notes (asynchronous pre-emption)",
+      "url": "https://go.dev/doc/go1.14"
+    }
+  }
+]

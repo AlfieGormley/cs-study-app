@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 47/76. Updated 2026-10-15.
+Verified modules: 48/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -54,6 +54,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | languages/Memory Management & Garbage Collection | 6 | 26 | 66 | 29 | 277 | 398 | 80 |
 | languages/Functional Programming | 6 | 33 | 68 | 43 | 248 | 392 | 82 |
 | languages/Compilers & Interpreters | 7 | 37 | 86 | 36 | 293 | 452 | 53 |
+| languages/Concurrency Models in Languages | 6 | 25 | 67 | 16 | 264 | 372 | 39 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3985,6 +3986,45 @@ Low-confidence areas:
 - **medium** — comp-jit-profiles: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
 - **medium** — comp-jit-recovery: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
 - **medium** — comp-jit-tradeoffs: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+
+## languages: Concurrency Models in Languages
+
+[Independent verification record](../content/languages/06-concurrency-models/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Bounded concurrency is not bounded retained memory: semaphore waiters still occupy task state; the glossary now agrees with the lesson’s bounded-backlog warning.
+- Actor timeout observations alone do not prove a cyclic wait. The question now gives an explicit two-handler wait trace, and the asynchronous fix explicitly returns to the receive loop.
+- Erlang selective receive removes the first matching message in queue order, which OTP priority insertion can distinguish from chronological arrival. Priority links and monitors are included alongside explicit alias sends.
+- Parking an OS thread consumes that thread resource; parking a user-level task can free its carrier. M:1 blocking wording now distinguishes supported cooperative operations from unsupported native calls.
+- Java Future does not expose continuation callbacks; the glossary distinguishes it from CompletableFuture/CompletionStage and Scala Future.
+- Corrected comments on the locked counter and released Rust guard so they describe the fixed operation; replaced stale whole-lesson numbers with descriptive short-unit references.
+- Data races need not occur at the same physical instant. Rust borrowing text now uses conflicting accesses and required ordering.
+- JavaScript ordinary objects and all Promises are truthy; the legacy browser document.all exception prevents an inaccurate universal-object definition.
+- Removed exact duplicate Further reading URLs while retaining each distinct source and all substantive lesson material.
+- Historical async feature chronology is sourced; an unmeasured popularity claim was removed.
+
+Remaining gaps:
+
+- Historical Solaris native M:N, old Go 1.13 cooperative pre-emption, JDK 21 monitor pinning and OTP 28 priority insertion were checked against primary artifacts/docs, not emulated on all named releases.
+- Native tests use explicit drivers/imports/stubs for partial snippets and named runtimes. No production speed, all-schedule fairness, starvation freedom, arbitrary memory capacity or formal liveness proof is claimed.
+
+Low-confidence areas:
+
+- **medium** — conc-thread-updates: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-python-threading: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-python-awaits: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-loop-blocking: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-runtime-mappings: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-runtime-blocking: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-channel-leaks: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-actor-state: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-actor-supervision: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-distributed-actors: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-actor-overload: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-task-scopes: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-rust-locked-state: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
+- **medium** — conc-rust-concurrency-limits: Runtime scheduling, version-sensitive APIs or product behaviour in this unit. Core primary-source contracts and bounded native examples verified; implementation details and Java previews/Go/OTP/CPython defaults are version-dependent. Named execution coverage does not prove every schedule, platform or deployment.
 
 ## synth: Sound & Digital Audio
 

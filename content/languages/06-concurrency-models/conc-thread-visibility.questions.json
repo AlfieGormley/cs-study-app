@@ -1,0 +1,66 @@
+[
+  {
+    "id": "conc-threads-shared-memory-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This Java worker is stopped by another thread setting `stop = true`. In testing on a server JVM the loop sometimes never exits. Why, and what is the minimal fix?\n\n```java\n// Plain reads have no publication edge.\nclass Worker {\n  boolean stop = false;\n  void run() {\n    while (!stop) { }\n  }\n}\n```",
+    "options": [
+      {
+        "text": "The writing thread has not been scheduled yet; add `Thread.sleep` in the loop",
+        "explanation": "The write has happened. Sleeping might make the bug disappear by accident, but it does not create a happens-before edge, so the code is still incorrect."
+      },
+      {
+        "text": "Booleans are not atomic in Java; use an `int` instead",
+        "explanation": "Reads and writes of `boolean` and `int` are both atomic. The issue is visibility and compiler optimisation, not atomicity."
+      },
+      {
+        "text": "Nothing orders the write before the read, so the JIT may hoist the read out of the loop; declare `stop` as `volatile`",
+        "explanation": "Correct. With no happens-before relationship the compiler may read `stop` once. Volatile reads observe writes according to synchronization order and cannot be hoisted as an unchanging plain field."
+      },
+      {
+        "text": "The loop needs a `synchronized` method to be atomic",
+        "explanation": "Locking each read and each write with the same lock would also fix it; holding that lock around the entire spin loop would block the writer, but the problem is visibility, not atomicity of the loop, and `volatile` is the minimal fix."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The loop body never writes `stop`, and `stop` is a plain field.\n2. With no synchronisation, the Java memory model does not require the reading thread to ever see the other thread's write.\n3. So the JIT may legally rewrite the loop as:\n\n```java\n// Illustrative allowed transformation.\nif (!stop) {\n  while (true) { }\n}\n```\n\n4. `volatile boolean stop` makes the write happen-before any read that observes it, and forbids that hoisting. `AtomicBoolean` works too.",
+    "link": {
+      "title": "Chapter 17: Threads and Locks — Java Language Specification",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
+    }
+  },
+  {
+    "id": "conc-threads-shared-memory-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In Java, thread T1 runs first two lines and thread T2 runs the third. `data` is a plain `int` (initially 0) and `ready` is a `volatile boolean` (initially false).\n\n```java\n// A volatile flag publishes prior data.\ndata = 42;\nready = true;\n// T2\nif (ready) System.out.println(data);\n```\n\nWhat can T2 do?",
+    "options": [
+      {
+        "text": "Print 42, or print nothing",
+        "explanation": "Correct. If T2 sees `ready == true`, the volatile write happens-before that read, and `data = 42` comes before the volatile write in T1, so T2 must see 42."
+      },
+      {
+        "text": "Print 0 or 42, or nothing",
+        "explanation": "This would be true if `ready` were a plain field. Volatile gives release/acquire ordering, which carries `data` along with it."
+      },
+      {
+        "text": "Only print 42",
+        "explanation": "T2 may run before T1 sets `ready`, in which case it prints nothing."
+      },
+      {
+        "text": "Throw an exception because `data` is accessed without a lock",
+        "explanation": "Java has no such check. And this access is in fact correctly ordered by the volatile."
+      },
+      {
+        "text": "Print a torn value because `int` writes are not atomic",
+        "explanation": "Java guarantees `int` reads and writes are atomic. Tearing is only permitted for non-volatile `long` and `double`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Build the happens-before chain:\n\n1. Program order in T1: `data = 42` happens-before `ready = true`.\n2. Volatile rule: the write `ready = true` happens-before any read of `ready` that sees `true`.\n3. Program order in T2: reading `ready` happens-before reading `data`.\n4. Happens-before is transitive, so `data = 42` happens-before T2's read of `data`, which must see 42.\n\nIf T2 reads `ready` too early it sees `false` and prints nothing. Remove `volatile` and step 2 disappears: T2 could see `ready == true` but `data == 0`.",
+    "link": {
+      "title": "Chapter 17: Threads and Locks — Java Language Specification",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
+    }
+  }
+]

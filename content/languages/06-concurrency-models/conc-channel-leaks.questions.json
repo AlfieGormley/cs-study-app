@@ -1,0 +1,65 @@
+[
+  {
+    "id": "conc-csp-channels-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Go HTTP handler calls this for every request:\n\n```go\n// Returning abandons the other sends.\nfunc first(urls []string) string {\n  ch := make(chan string)\n  for _, u := range urls {\n    go func(u string) {\n      ch <- fetch(u)\n    }(u)\n  }\n  return <-ch\n}\n```\n\nEach call passes 4 URLs. Memory use rises steadily over days. Why?",
+    "options": [
+      {
+        "text": "`fetch` results are cached in the channel forever",
+        "explanation": "An unbuffered channel stores nothing. The memory is held by goroutines stuck trying to send."
+      },
+      {
+        "text": "Three goroutines per call block forever sending on a channel nobody reads, so they and their stacks are never freed",
+        "explanation": "Correct. `first` reads one value and returns. The other senders leak. Fix: `make(chan string, len(urls))`, or cancel a context after receiving the first result and let remaining senders select on cancellation."
+      },
+      {
+        "text": "Goroutines are never garbage-collected, even after they finish",
+        "explanation": "A goroutine that returns is cleaned up. The problem is these never return."
+      },
+      {
+        "text": "The Go runtime detects the deadlock and retries, using more memory each time",
+        "explanation": "The runtime only reports total deadlock. The server's other goroutines are alive, so nothing is reported and nothing is retried."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Four goroutines start; each will send once.\n2. `first` receives one value and returns. `ch` is now unreachable from `first`, but three goroutines still hold it.\n3. Each blocks on `ch <- ...` forever: there is no receiver and the channel is unbuffered.\n4. Three leaked goroutines per request, over millions of requests, is unbounded growth: stacks plus whatever `fetch` returned (estimate below).\n5. With `make(chan string, 4)` every send completes into the buffer, the goroutines exit, and the channel is collected.\n\n```formula\nL = (u − 1) × r\nL = (4 − 1) × 1,000,000\nL = 3,000,000\nM ≥ 3,000,000 × 2 KiB ≈ 6.1 GB\nwhere\nL: leaked goroutines after r calls\nu: URLs per call, 4\nr: calls to `first`, an illustrative 1,000,000\nM: memory the leaked goroutines hold\n≥: at least; their `fetch` results add more\nKiB: kibibyte, 1,024 bytes; 2 KiB is the minimum goroutine stack\nGB: gigabyte, 1,000,000,000 bytes\nIn words: each call strands three goroutines, so a million calls hold three million stacks, at least 6 GB.\n```",
+    "link": {
+      "title": "Go Concurrency Patterns: Pipelines and cancellation — The Go Blog",
+      "url": "https://go.dev/blog/pipelines"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Go service keeps a hit counter per URL path in a `map[string]int` updated by thousands of request goroutines, and also distributes resize jobs to a pool of image workers. Which design choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Protect the counter map with a `sync.Mutex`; it is shared state briefly updated by many goroutines",
+        "explanation": "Correct. This is the textbook mutex case: a short critical section around shared state. A channel-owning goroutine is another valid design; whether its queueing and ownership benefits justify the overhead depends on the workload."
+      },
+      {
+        "text": "Send resize jobs over a channel to the worker pool",
+        "explanation": "Correct. Distributing units of work is what channels are best at, and a buffered channel gives backpressure."
+      },
+      {
+        "text": "Send a pointer to the shared map over a channel to each request goroutine, so they can update it without locks",
+        "explanation": "Passing a pointer does not transfer exclusive ownership if everyone keeps using it. All goroutines would write the same map concurrently: a data race, and Go may detect concurrent map writes and terminate; detection is not a synchronization guarantee."
+      },
+      {
+        "text": "Rely on Go's runtime to detect that the map is updated concurrently and serialise the writes",
+        "explanation": "The runtime may detect concurrent map writes, but it reacts by crashing the program (`concurrent map writes`), not by serialising them."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Apply the guidance from the Go wiki: channels to pass ownership, distribute work and return results; mutexes for caches and state.\n\n1. Counter map: shared state, tiny updates. Mutex: sound.\n2. Resize jobs: units of work handed off. Channel: sound.\n3. Pointer over a channel: CSP only helps if the sender *stops* touching the data. Here everyone keeps writing: a race.\n4. Go's map access check is a crash, not a lock: `fatal error: concurrent map writes`.",
+    "link": {
+      "title": "Go Wiki: Use a sync.Mutex or a channel?",
+      "url": "https://go.dev/wiki/MutexOrChannel"
+    }
+  }
+]

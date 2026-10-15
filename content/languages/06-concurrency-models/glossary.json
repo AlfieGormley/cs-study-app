@@ -7,9 +7,9 @@
       "shared-memory",
       "shared-memory threads"
     ],
-    "definition": "A concurrency model in which several threads in one process read and write the same variables directly. It is fast because nothing is copied, but the programmer must coordinate access with locks or atomics.",
+    "definition": "A concurrency model in which threads can access the same process memory. It can avoid message copies, but synchronization, cache traffic and contention have costs; shared invariants need the ordering and exclusion required by the language.",
     "example": "Four threads incrementing one global counter is shared-memory concurrency.",
-    "source": "https://en.wikipedia.org/wiki/Shared_memory"
+    "source": "https://go.dev/ref/mem"
   },
   {
     "id": "read-modify-write",
@@ -41,9 +41,9 @@
     "aliases": [
       "interleavings"
     ],
-    "definition": "One possible order in which the individual steps of several concurrent threads or tasks are mixed together when they run. Concurrency bugs appear only in some interleavings, which is why they are timing-dependent.",
+    "definition": "One order in which steps of concurrent tasks are mixed while preserving each task’s required order. A sequentially consistent interleaving model is useful under its assumptions; it does not describe every weak-memory outcome or a C/C++ data race.",
     "example": "With two threads doing read then write, one interleaving is: T1 reads, T2 reads, T1 writes, T2 writes.",
-    "source": "https://en.wikipedia.org/wiki/Linearizability"
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "critical-section",
@@ -51,9 +51,9 @@
     "aliases": [
       "critical sections"
     ],
-    "definition": "A piece of code that accesses shared data and must not be run by more than one thread at a time. A lock is taken on entry and released on exit to enforce that.",
+    "definition": "Code whose shared-data invariant requires coordinated access, commonly by mutual exclusion. All competing accesses must follow the same synchronization protocol; merely putting one caller inside a lock does not protect other callers.",
     "example": "The three lines between `with lock:` and the end of its block form a critical section.",
-    "source": "https://en.wikipedia.org/wiki/Critical_section"
+    "source": "https://docs.python.org/3/library/threading.html"
   },
   {
     "id": "mutual-exclusion",
@@ -72,9 +72,9 @@
     "aliases": [
       "locks"
     ],
-    "definition": "A synchronisation object that only one thread can hold at a time: a thread acquires it before touching shared data and releases it afterwards, and any other thread trying to acquire it waits. A mutex is the common kind; locks also make the holder's writes visible to the next thread that takes the same lock.",
+    "definition": "A synchronization mechanism controlling entry to protected code; a mutex permits one holder at a time. Correctly using the same mutex also provides memory-ordering guarantees. Reader-writer locks and other lock types have different admission rules.",
     "example": "With `with lock: counter += 1` in Python, four threads each adding 1,000 always leave 4,000.",
-    "source": "https://en.wikipedia.org/wiki/Lock_(computer_science)"
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "atomic-types",
@@ -91,7 +91,7 @@
       "std::atomic<bool>",
       "sync/atomic"
     ],
-    "definition": "Library types whose reads, writes and read-modify-write operations are atomic and properly ordered between threads. Java has `AtomicInteger`, `AtomicBoolean` and `AtomicLong`; C++ has `std::atomic<T>`; Rust has `AtomicUsize`, `AtomicI32` and others; Go has the `sync/atomic` package.",
+    "definition": "Types exposing indivisible accesses and read-modify-write operations, with ordering defined by their language and selected memory order. Java AtomicInteger, C++ std::atomic and Rust atomic integers have different APIs; atomicity alone does not make a multi-operation invariant atomic or guarantee lock-freedom.",
     "example": "Two threads calling `fetch_add(1, ...)` on one `AtomicI32` always add 2 in total.",
     "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/atomic/package-summary.html"
   },
@@ -109,40 +109,37 @@
     "id": "volatile-java",
     "term": "volatile (Java)",
     "aliases": [
-      "volatile",
       "Java volatile",
       "volatile field",
       "volatile write",
       "volatile read",
       "volatile boolean"
     ],
-    "definition": "A Java field modifier: reads and writes of a volatile field are synchronisation actions, so a write happens-before every later read that sees it, and the compiler cannot cache the field in a register. It gives visibility and ordering, not atomic compound updates. C and C++ `volatile` means something different and does not provide thread synchronisation.",
-    "example": "`volatile boolean stop` lets one thread reliably stop another's `while (!stop)` loop.",
-    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-8.html#jls-8.3.1.4"
+    "definition": "A Java field modifier whose writes and reads are synchronization actions: a write synchronizes-with every subsequent read of that field in synchronization order. It orders publication of earlier writes, but does not make a compound increment atomic or guarantee prompt scheduling. C/C++ volatile is a different feature.",
+    "example": "A volatile stop flag removes the plain-field visibility bug, assuming the worker keeps running and checks it.",
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "hoisting",
     "term": "Hoisting (loop-invariant code motion)",
     "aliases": [
-      "hoist",
-      "hoisted",
-      "hoisting"
+      "loop-invariant code motion",
+      "loop-invariant hoisting",
+      "hoisted loop test"
     ],
-    "definition": "A compiler optimisation that moves a computation that gives the same answer on every iteration out of a loop, so it runs once. It is legal for a plain field the loop never writes, which is why an unsynchronised stop flag may never be re-read.",
+    "definition": "An optimization that moves a loop-invariant computation outside a loop when the language’s observable-behaviour rules allow it. For a racy plain Java stop field, a compiler may reuse a prior read; absence of writes in the loop alone does not justify moving arbitrary reads in correctly synchronized code.",
     "example": "`while (!stop) {}` can be hoisted into `if (!stop) while (true) {}`.",
-    "source": "https://en.wikipedia.org/wiki/Loop-invariant_code_motion"
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "cache-coherence",
     "term": "Cache coherence",
     "aliases": [
-      "cache coherency",
-      "CPU cache",
-      "CPU caches"
+      "cache coherency"
     ],
-    "definition": "The hardware protocol that keeps each CPU core's private cache consistent with the others when they hold copies of the same memory. It has a cost: cores writing the same data keep invalidating each other's copies, which slows shared-memory programs.",
-    "example": "Two cores incrementing one counter bounce its cache line back and forth on every write.",
-    "source": "https://en.wikipedia.org/wiki/Cache_coherence"
+    "definition": "Hardware rules keeping writes to the same memory location coherent across caches. Coherence does not itself supply every language-level synchronization or cross-location ordering guarantee; shared writable cache lines can create traffic and contention.",
+    "example": "Two writers contending for one cache line can generate coherence traffic; its exact frequency and cost depend on hardware and execution.",
+    "source": "https://go.dev/ref/mem"
   },
   {
     "id": "memory-model",
@@ -168,17 +165,17 @@
       "happens-before ordering",
       "happens-before chain"
     ],
-    "definition": "The ordering relation a memory model uses to say when one action's effects must be visible to another. If a write happens-before a read and no other write intervenes, the read sees that write. Program order within a thread, lock release then acquire, and volatile or channel communication all create happens-before edges; the relation is transitive.",
+    "definition": "A transitive language-defined ordering relation built from local execution order and specified synchronization edges. It constrains which writes a read may observe; it is not simply wall-clock order, and intervening writes and language-specific rules still matter.",
     "example": "Unlocking a mutex happens-before the next lock of that same mutex, so the next holder sees all the earlier writes.",
-    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html#jls-17.4.5"
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "program-order",
     "term": "Program order",
     "aliases": [],
-    "definition": "The order in which one thread's actions appear in its own source code. Within a single thread, an earlier action in program order happens-before a later one.",
+    "definition": "The language-defined order of a thread’s actions as reflected by its single-thread execution semantics. Java program order contributes to happens-before; it does not prohibit every machine-code reordering that preserves permitted behaviour.",
     "example": "In `data = 42; ready = true;`, the write to data comes first in program order.",
-    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html#jls-17.4.3"
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "acquire-release",
@@ -191,23 +188,20 @@
       "acquire/release",
       "release/acquire ordering"
     ],
-    "definition": "Paired memory-ordering rules: a release operation (such as unlocking, or a release store) publishes all the thread's earlier writes, and an acquire operation (such as locking, or an acquire load) that observes it is guaranteed to see them. Together they create a happens-before edge between two threads.",
+    "definition": "Memory-ordering rules in which a qualifying release and acquire pair can synchronize threads and publish earlier writes. A C++ acquire load must read from the release store or its qualifying release sequence; merely using both memory-order names does not connect unrelated operations.",
     "example": "A C++ `store(true, memory_order_release)` seen by a `load(memory_order_acquire)` makes the data written before the store visible.",
-    "source": "https://preshing.com/20120913/acquire-and-release-semantics/"
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "synchronizes-with",
     "term": "Synchronises-with",
     "aliases": [
       "synchronizes with",
-      "synchronises with",
-      "synchronization order",
-      "synchronisation order",
-      "synchronization-order"
+      "synchronises with"
     ],
-    "definition": "A memory-model relation between a release-type action in one thread and the acquire-type action in another that observes it, such as a volatile write and a later read that sees the value. It is one of the building blocks of happens-before.",
+    "definition": "A specification-defined relation between synchronization actions, used to construct happens-before. In Java an unlock synchronizes-with later locks of that monitor, and a volatile write with subsequent reads in synchronization order; that order is a distinct concept, not another name for synchronizes-with.",
     "example": "In Java, an unlock of a monitor synchronises-with every subsequent lock of that monitor.",
-    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html#jls-17.4.4"
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "sequential-consistency",
@@ -231,7 +225,7 @@
       "data-race-free",
       "DRF"
     ],
-    "definition": "Data-race-free implies sequentially consistent: a language guarantee that programs with no data races behave as if they were sequentially consistent. Java and Go give it; C++ gives it only to race-free programs that avoid weaker atomic orderings.",
+    "definition": "A guarantee that appropriately data-race-free programs have sequentially consistent behaviour. Java and Go state such guarantees; C++’s simple interleaving guarantee additionally excludes weaker atomic orderings, so race freedom alone is insufficient.",
     "example": "A Go program whose shared variables are all protected by mutexes can be reasoned about as a simple interleaving.",
     "source": "https://go.dev/ref/mem"
   },
@@ -247,9 +241,9 @@
       "Ordering::Relaxed",
       "memory_order_relaxed"
     ],
-    "definition": "Atomic operations with the weakest memory ordering: each operation is still indivisible and free of data races, but it does not order other memory accesses around it. They are fine for a simple counter but can produce outcomes no sequentially consistent interleaving allows.",
+    "definition": "Atomic operations with relaxed ordering: they remain indivisible and obey the atomic object’s modification-order rules, but do not provide inter-thread ordering of other accesses. They can suit a standalone counter, but are insufficient for arbitrary publication or compound invariants.",
     "example": "Two threads can each store to one relaxed atomic and load the other, and both loads can see the old values.",
-    "source": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "optimiser",
@@ -284,8 +278,7 @@
       "torn reads",
       "tearing",
       "torn long value",
-      "torn 64-bit value",
-      "word tearing"
+      "torn 64-bit value"
     ],
     "definition": "Reading a multi-part value while another thread is half-way through writing it, so the result mixes old and new parts and was never written by anyone. Java allows it for non-volatile `long` and `double`; Java uses \"word tearing\" for a separate problem, a write to one field clobbering an adjacent field, which it forbids.",
     "example": "A reader could see the new high 32 bits and the old low 32 bits of a 64-bit counter.",
@@ -298,9 +291,9 @@
       "CPU bound",
       "CPU-heavy"
     ],
-    "definition": "Describes work whose speed is limited by computation rather than by waiting, such as parsing, hashing or number crunching. Only real parallelism on several cores speeds it up.",
+    "definition": "Work whose limiting resource is computation rather than waiting for I/O. Faster algorithms, implementation improvements, vectorization or additional computing resources may help; several threads only help when the workload and runtime can exploit parallelism.",
     "example": "Computing a million SHA-256 hashes is CPU-bound.",
-    "source": "https://en.wikipedia.org/wiki/CPU-bound"
+    "source": "https://docs.python.org/3/library/threading.html"
   },
   {
     "id": "io-bound",
@@ -320,9 +313,9 @@
       "I/O event",
       "I/O events"
     ],
-    "definition": "Moving data between a program and the outside world: files, network sockets, terminals and devices. I/O is slow compared with computation, so programs spend much of their time waiting for it.",
+    "definition": "Input/output: moving data between a program and files, sockets, terminals or devices. Waiting for I/O can dominate some workloads, which makes overlapping waits useful; I/O is not universally slower than every computation.",
     "example": "Reading a 1 MB file or a reply from a database server are both I/O.",
-    "source": "https://en.wikipedia.org/wiki/Input/output"
+    "source": "https://docs.python.org/3/library/io.html"
   },
   {
     "id": "multiprocessing",
@@ -333,7 +326,7 @@
       "process pool",
       "process pools"
     ],
-    "definition": "Python's standard module for running work in separate operating-system processes, each with its own interpreter and GIL, so CPU-bound Python code can use several cores. `ProcessPoolExecutor` is the higher-level process pool interface.",
+    "definition": "Python’s module for running work in separate processes. Process isolation allows CPU-bound Python code to use several cores even with GIL-enabled interpreters; startup, communication and memory overhead still matter. ProcessPoolExecutor is a higher-level pool API.",
     "example": "A four-process pool can run four CPU-heavy pure-Python jobs in parallel.",
     "source": "https://docs.python.org/3/library/multiprocessing.html"
   },
@@ -354,9 +347,9 @@
     "id": "composability",
     "term": "Composability",
     "aliases": [],
-    "definition": "The ability to combine two correct components and get a correct whole. Lock-based code composes badly: two modules that each lock correctly can deadlock when used together.",
+    "definition": "The ability to combine components while preserving their required guarantees. Independently correct lock-using components can deadlock when their combined acquisition order forms a cycle; composition depends on compatible contracts.",
     "example": "Module A locks X then Y, module B locks Y then X: each fine alone, deadlock together.",
-    "source": "https://en.wikipedia.org/wiki/Composability"
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "lock-ordering",
@@ -367,9 +360,9 @@
       "lock hierarchies",
       "consistent lock order"
     ],
-    "definition": "A discipline for avoiding deadlock: every thread acquires multiple locks in the same agreed global order, so no waiting cycle can form.",
+    "definition": "Acquiring multiple locks in a consistent acyclic order can prevent circular wait among those locks. It does not by itself prevent every possible deadlock involving other resources, callbacks or blocking protocols.",
     "example": "If every thread always locks `a` before `b`, two threads cannot each hold one and wait for the other.",
-    "source": "https://en.wikipedia.org/wiki/Dining_philosophers_problem#Resource_hierarchy_solution"
+    "source": "https://docs.oracle.com/javase/tutorial/essential/concurrency/deadlock.html"
   },
   {
     "id": "threadsanitizer",
@@ -409,9 +402,9 @@
       "asyncio event loop",
       "asyncio loop"
     ],
-    "definition": "A scheduler, usually on one thread, that repeatedly runs ready tasks until they wait, asks the operating system which waits have finished, and makes those tasks ready again. It lets one thread handle thousands of mostly-idle connections.",
+    "definition": "A scheduler that runs ready callbacks or task steps and coordinates later execution when timers, readiness or completions permit it. One loop normally runs on one thread, but exact polling, batching and microtask rules depend on its runtime.",
     "example": "Node.js, Python's asyncio and browsers all run JavaScript or Python callbacks from an event loop.",
-    "source": "https://en.wikipedia.org/wiki/Event_loop"
+    "source": "https://html.spec.whatwg.org/multipage/webappapis.html#event-loops"
   },
   {
     "id": "async-task",
@@ -423,9 +416,9 @@
       "asyncio.Task",
       "Task object"
     ],
-    "definition": "A unit of concurrent work managed by an async runtime: a coroutine that the event loop or executor has been told to run. In asyncio, wrapping a coroutine in a Task schedules it so it runs without being awaited first.",
+    "definition": "Concurrent work managed by an async runtime. An asyncio Task drives a coroutine after scheduling it; with eager execution enabled it can start during creation. A task can finish, fail or be cancelled, and should have a clear owner.",
     "example": "`asyncio.create_task(job())` turns the coroutine `job()` into a running asyncio task.",
-    "source": "https://docs.python.org/3/library/asyncio-task.html#task-object"
+    "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
   {
     "id": "coroutine",
@@ -437,7 +430,7 @@
     ],
     "definition": "A function that can suspend part-way through, keeping its local variables and position, and later resume from exactly that point. Generators, async functions, Lua coroutines and goroutines are all built on the idea. Melvin Conway described coroutines in a 1963 paper.",
     "example": "A Python generator suspends at each `yield` and resumes at the next `next()` call.",
-    "source": "https://en.wikipedia.org/wiki/Coroutine"
+    "source": "https://peps.python.org/pep-0342/"
   },
   {
     "id": "coroutine-function",
@@ -457,9 +450,9 @@
       "cooperative scheduling",
       "cooperative switching"
     ],
-    "definition": "Scheduling in which a task keeps running until it voluntarily gives up control, for example at an `await` or `yield`. Switch points are predictable, but one task that never yields stalls all the others.",
+    "definition": "Scheduling in which a task must reach a runtime-recognized suspension or yield to let another ordinary task use the same execution thread. Awaiting an already-ready Python awaitable need not yield; re-entrancy and external threads remain separate concerns.",
     "example": "An asyncio task running a CPU loop with no `await` blocks every other task on the loop.",
-    "source": "https://en.wikipedia.org/wiki/Cooperative_multitasking"
+    "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
   {
     "id": "pre-emptive-scheduling",
@@ -474,9 +467,9 @@
       "pre-empted",
       "pre-empting"
     ],
-    "definition": "Scheduling in which the scheduler can interrupt a running thread or task at almost any point and switch to another, without the task's cooperation. OS threads are pre-emptive; Go and Erlang pre-empt their lightweight threads too.",
+    "definition": "Scheduling that can interrupt running work without an explicit yield in application source, subject to runtime safe points and implementation restrictions. Kernel threads, Go goroutines and BEAM processes have different pre-emption mechanisms; arbitrary native code is not universally interruptible.",
     "example": "The kernel may pre-empt a thread in the middle of `counter += 1`.",
-    "source": "https://en.wikipedia.org/wiki/Preemption_(computing)"
+    "source": "https://go.dev/doc/go1.14"
   },
   {
     "id": "ready-queue",
@@ -486,7 +479,7 @@
     ],
     "definition": "The queue of tasks that are able to run right now, waiting only for the scheduler to give them the thread. A task that is waiting for I/O or a timer is not on it.",
     "example": "After `await asyncio.sleep(0)` the task goes to the back of the ready queue.",
-    "source": "https://en.wikipedia.org/wiki/Scheduling_(computing)"
+    "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
   {
     "id": "run-queue",
@@ -529,11 +522,10 @@
     "id": "os-poller",
     "term": "OS poller",
     "aliases": [
-      "poller",
-      "pollers"
+      "OS I/O poller"
     ],
-    "definition": "The operating-system facility an event loop uses to wait for many sockets and timers at once and learn which became ready: epoll on Linux, kqueue on macOS and BSD, IOCP on Windows.",
-    "source": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
+    "definition": "An operating-system interface used to wait for many I/O events. Linux epoll and BSD kqueue report readiness or events; Windows completion ports report completion of submitted I/O. These mechanisms have different semantics.",
+    "source": "https://learn.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports"
   },
   {
     "id": "asyncio",
@@ -561,8 +553,8 @@
       "switch point"
     ],
     "definition": "A place where a coroutine can pause and let other tasks run, such as an `await` or `yield`. In async/await code they are visible in the source; with green threads they are hidden inside calls.",
-    "example": "Between two awaits, an asyncio task cannot be interrupted by another task on the same loop.",
-    "source": "https://en.wikipedia.org/wiki/Coroutine"
+    "example": "An ordinary asyncio task runs until it actually suspends; eager task creation can also introduce synchronous re-entrancy.",
+    "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
   {
     "id": "re-entrancy",
@@ -574,7 +566,7 @@
       "synchronous re-entrancy"
     ],
     "definition": "When a piece of code is entered again before an earlier run of it has finished, for example by a callback or a nested call. It can break assumptions that code runs one invocation at a time. In actor frameworks, a reentrant actor may interleave requests at its await points.",
-    "source": "https://en.wikipedia.org/wiki/Reentrancy_(computing)"
+    "source": "https://learn.microsoft.com/en-us/dotnet/orleans/grains/request-scheduling"
   },
   {
     "id": "eager-task-factory",
@@ -632,9 +624,9 @@
       "resolved promise",
       "promise continuations"
     ],
-    "definition": "A JavaScript object representing a value that will be available later: pending, then fulfilled with a value or rejected with an error. `.then` callbacks and the code after an `await` run as microtasks once it settles.",
+    "definition": "A JavaScript object representing an eventual completion, either fulfillment with a value or rejection with a reason. It can already be settled when returned; promise reactions and await continuations are scheduled as jobs, integrated as microtasks by browser hosts.",
     "example": "`Promise.resolve().then(f)` queues `f` as a microtask.",
-    "source": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise"
+    "source": "https://tc39.es/ecma262/#sec-promise-objects"
   },
   {
     "id": "macrotask",
@@ -642,18 +634,19 @@
     "aliases": [
       "macrotask",
       "macrotasks",
-      "JavaScript task"
+      "JavaScript task",
+      "JavaScript tasks"
     ],
-    "definition": "In JavaScript, a unit of work the event loop runs one at a time: the main script, a timer callback, an I/O callback or a UI event. Microtasks are drained between tasks.",
+    "definition": "An informal name for an HTML event-loop task, such as script execution, a timer callback or an input event. The host selects tasks and performs specified microtask checkpoints; Node has its own phases rather than one universal task queue.",
     "example": "A `setTimeout(f, 0)` callback is a task, so it runs after all pending microtasks.",
-    "source": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Execution_model"
+    "source": "https://html.spec.whatwg.org/multipage/webappapis.html#event-loops"
   },
   {
     "id": "settimeout",
     "term": "setTimeout",
     "aliases": [],
-    "definition": "A JavaScript function that schedules a callback to run as a task after at least the given delay in milliseconds. A delay of 0 still waits for the current task and all microtasks to finish.",
-    "source": "https://developer.mozilla.org/en-US/docs/Web/API/Window/setTimeout"
+    "definition": "A host API scheduling a callback after a requested delay in milliseconds, subject to host minimums, throttling and scheduling. Zero delay does not interrupt the current script or outrun its queued microtasks; it is not an exact deadline.",
+    "source": "https://html.spec.whatwg.org/multipage/timers-and-user-prompts.html#timers"
   },
   {
     "id": "queuemicrotask",
@@ -668,8 +661,8 @@
     "aliases": [
       "nextTick queue"
     ],
-    "definition": "A Node.js function that queues a callback on a special queue that runs before promise microtasks, after the current operation finishes.",
-    "source": "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
+    "definition": "A Node.js API queuing a callback for its next-tick queue. At the ordinary CommonJS operation boundary, Node processes that queue before promise microtasks; ES-module evaluation and nested scheduling can give different relative order.",
+    "source": "https://nodejs.org/api/process.html#processnexttickcallback-args"
   },
   {
     "id": "javascript-agent",
@@ -677,8 +670,8 @@
     "aliases": [
       "JavaScript agents"
     ],
-    "definition": "The specification's name for one independent JavaScript execution context with its own event loop, heap of objects and job queues. The main thread is one agent; each worker is another.",
-    "source": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Execution_model"
+    "definition": "ECMAScript’s abstraction for an independent execution thread with its own execution-context stack and agent state. Browser event loops are host concepts; workers can run distinct agents, and shared memory is possible through SharedArrayBuffer.",
+    "source": "https://tc39.es/ecma262/#sec-agents"
   },
   {
     "id": "worker-threads",
@@ -688,7 +681,7 @@
       "web workers",
       "Web Worker"
     ],
-    "definition": "Separate JavaScript agents running on their own OS threads, created with Node.js's `worker_threads` module or the browser's Web Workers API. They communicate by messages and are the usual way to run CPU-heavy JavaScript in parallel.",
+    "definition": "Browser workers and Node worker_threads run JavaScript in separate execution agents/threads. They communicate by messages and can also share explicitly shared memory; worker use does not itself prove race freedom.",
     "source": "https://nodejs.org/api/worker_threads.html"
   },
   {
@@ -703,12 +696,10 @@
   {
     "id": "truthy",
     "term": "Truthy",
-    "aliases": [
-      "falsy"
-    ],
-    "definition": "In JavaScript, a value that counts as true in a condition. Every object, including any Promise, is truthy; only a few values such as `false`, `0`, `\"\"`, `null` and `undefined` are falsy.",
+    "aliases": [],
+    "definition": "In JavaScript, a value converted to true in a condition. Ordinary objects, including every Promise, are truthy. Falsy values include false, numeric zero, the empty string, null, undefined and NaN; browsers also have the legacy document.all exception.",
     "example": "`if (isAllowed())` is always taken when `isAllowed` is async, because a Promise is truthy.",
-    "source": "https://developer.mozilla.org/en-US/docs/Glossary/Truthy"
+    "source": "https://tc39.es/ecma262/#sec-toboolean"
   },
   {
     "id": "typescript-eslint",
@@ -727,9 +718,9 @@
     "aliases": [
       "fire and forget"
     ],
-    "definition": "Starting a piece of work without keeping a handle to it or waiting for its result. It is convenient, but errors are lost and nothing guarantees the work finishes.",
+    "definition": "Starting work without awaiting its completion or retaining a result handle. Errors and shutdown behaviour then depend on a separate owner or runtime policy; the phrase does not itself guarantee completion or loss.",
     "example": "`asyncio.create_task(send_email())` with the result discarded is fire-and-forget.",
-    "source": "https://en.wikipedia.org/wiki/Fire-and-forget"
+    "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
   {
     "id": "function-colouring",
@@ -787,9 +778,9 @@
     "id": "p99-latency",
     "term": "p99 latency",
     "aliases": [],
-    "definition": "The 99th-percentile response time: 99 % of requests are faster than it and 1 % are slower. It shows the slow tail that an average hides.",
-    "example": "A p99 of 4 s means one request in a hundred takes 4 seconds or more.",
-    "source": "https://en.wikipedia.org/wiki/Percentile"
+    "definition": "A 99th-percentile latency summary: roughly 99% of observed request times are at or below it, with the exact sample-quantile definition and ties affecting that split. It describes a distribution’s tail, not a promise that exactly one in every hundred future requests will be slower.",
+    "example": "A reported p99 of 4 seconds describes the measured tail; it does not guarantee the next hundred requests contain one 4-second request.",
+    "source": "https://sre.google/sre-book/monitoring-distributed-systems/"
   },
   {
     "id": "thread-pool",
@@ -798,9 +789,9 @@
       "thread pools",
       "threadpool"
     ],
-    "definition": "A fixed or bounded set of reusable worker threads that take tasks from a queue, avoiding the cost of creating a thread per task.",
+    "definition": "A set of reusable worker threads executing submitted work. Pool bounds, queue limits and growth rules depend on the executor; thread pools are not universally fixed-size or bounded.",
     "example": "FastAPI runs plain `def` endpoints on a thread pool so they do not block the event loop.",
-    "source": "https://en.wikipedia.org/wiki/Thread_pool"
+    "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ThreadPoolExecutor.html"
   },
   {
     "id": "sha-256",
@@ -826,8 +817,8 @@
     "aliases": [
       "sockets"
     ],
-    "definition": "An operating-system endpoint for network communication. A program reads and writes a socket much like a file; a read blocks, or in async code suspends, until data arrives.",
-    "source": "https://en.wikipedia.org/wiki/Network_socket"
+    "definition": "An operating-system communication endpoint, commonly used for networking. A read may return data, end-of-stream or an error, block, or report that it would block; an async API arranges readiness/completion without necessarily blocking the loop thread.",
+    "source": "https://docs.python.org/3/library/socket.html"
   },
   {
     "id": "job-queue",
@@ -836,7 +827,7 @@
       "job queues",
       "task queue"
     ],
-    "definition": "A durable list of background work, often in a separate service, that worker processes take jobs from. Unlike an in-memory task it survives restarts and can retry failures.",
+    "definition": "A queue of background work consumed by workers. Durability, retry and acknowledgement guarantees depend on the broker and configuration; a queue can also be in-memory and disappear on restart.",
     "source": "https://docs.celeryq.dev/en/stable/getting-started/introduction.html"
   },
   {
@@ -855,8 +846,8 @@
       "bound concurrency",
       "in-flight requests"
     ],
-    "definition": "Limiting how many operations run at once, for example with a semaphore of 100 or a fixed pool of workers, so a burst of work cannot exhaust connections, memory or the remote service.",
-    "example": "With `asyncio.Semaphore(100)`, at most 100 of 20,000 fetches are in flight at once.",
+    "definition": "Limiting how many operations occupy a protected stage at once, for example with a semaphore or worker pool. This can bound active requests, but tasks waiting outside that stage and retained data can still exhaust memory; a bounded backlog needs its own admission policy.",
+    "example": "With an asyncio.Semaphore(100) around each fetch, at most 100 fetches are inside that stage; 19,900 other scheduled tasks may still retain memory while waiting.",
     "source": "https://docs.python.org/3/library/asyncio-sync.html#asyncio.Semaphore"
   },
   {
@@ -865,8 +856,8 @@
     "aliases": [
       "subroutines"
     ],
-    "definition": "An ordinary function or procedure: called, runs to the end (or throws), returns, and its stack frame is discarded. It has one entry point and cannot pause half-way and be resumed.",
-    "source": "https://en.wikipedia.org/wiki/Function_(computer_programming)"
+    "definition": "An ordinary function or procedure invocation that returns or exits exceptionally without exposing coroutine-style resumable suspension. It may still call blocking functions or be pre-empted by a scheduler.",
+    "source": "https://www.lua.org/manual/5.4/manual.html#2.6"
   },
   {
     "id": "scheduler",
@@ -877,7 +868,7 @@
     ],
     "definition": "The part of an operating system or language runtime that decides which ready thread or task runs next and on which CPU.",
     "example": "Go's scheduler places goroutines on a small number of OS threads.",
-    "source": "https://en.wikipedia.org/wiki/Scheduling_(computing)"
+    "source": "https://go.dev/src/runtime/proc.go"
   },
   {
     "id": "deque",
@@ -897,7 +888,7 @@
     ],
     "definition": "A scheduling policy that gives each ready task a turn in a fixed rotation, putting it at the back of the queue after its turn.",
     "example": "Tasks A and B alternate: A, B, A, B.",
-    "source": "https://en.wikipedia.org/wiki/Round-robin_scheduling"
+    "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
   {
     "id": "stackless-coroutine",
@@ -906,9 +897,9 @@
       "stackless",
       "stackless coroutines"
     ],
-    "definition": "A coroutine that saves only its own frame when it suspends, usually compiled into a state machine object of known size. A function it calls cannot suspend it, so every function on the path to a suspension point must itself be a coroutine: the cause of function colouring. Python, JavaScript, C#, Kotlin and Rust async functions and C++20 coroutines are stackless.",
+    "definition": "A coroutine preserving resumable state for its own frame rather than an arbitrary separate caller stack. Suspension through nested calls requires explicit coroutine composition; state representation and allocation depend on the language and implementation.",
     "example": "A Rust `async fn` compiles to a fixed-size future that can live inside a struct.",
-    "source": "https://en.cppreference.com/w/cpp/language/coroutines"
+    "source": "https://doc.rust-lang.org/reference/expressions/block-expr.html#async-blocks"
   },
   {
     "id": "stackful-coroutine",
@@ -917,7 +908,7 @@
       "stackful",
       "stackful coroutines"
     ],
-    "definition": "A coroutine with its own separate call stack, so a function nested several calls deep can suspend the whole coroutine. Lua coroutines, Ruby Fibers, Python's greenlet and goroutines are stackful.",
+    "definition": "A coroutine with a preserved call stack that can suspend through nested ordinary calls where the runtime permits it. Native boundaries and other runtime restrictions can still prevent yielding.",
     "example": "In Lua, a plain `helper()` call can run `coroutine.yield` and pause its caller's coroutine.",
     "source": "https://www.lua.org/manual/5.4/manual.html#2.6"
   },
@@ -929,7 +920,7 @@
       "compiler-generated future",
       "Future trait"
     ],
-    "definition": "In Rust, a value implementing the `Future` trait: a computation that may not have finished yet. An `async fn` returns one; it does nothing until an executor polls it, and its size is known at compile time.",
+    "definition": "A value implementing Rust’s Future trait, polled to make progress toward a result. A concrete compiler-generated async future has a statically known size, while boxed or dynamically dispatched futures add indirection; an unpolled async body does not run.",
     "example": "`tokio::spawn(fut)` hands a future to the Tokio executor to drive to completion.",
     "source": "https://doc.rust-lang.org/std/future/trait.Future.html"
   },
@@ -961,7 +952,7 @@
       "gevent hub",
       "hub thread"
     ],
-    "definition": "A Python library that provides green threads built from greenlets and an event loop (the hub). It monkey-patches the standard library so blocking calls switch greenlets instead of blocking the OS thread.",
+    "definition": "A Python concurrency library combining greenlets with an event-loop hub. Optional monkey-patching replaces selected standard-library blocking operations with cooperative equivalents; it cannot automatically intercept arbitrary blocking native code.",
     "example": "After `monkey.patch_all()`, ordinary `requests` calls in many greenlets run concurrently.",
     "source": "https://www.gevent.org/intro.html"
   },
@@ -975,9 +966,9 @@
       "user threads",
       "user thread"
     ],
-    "definition": "A thread scheduled by a language runtime or virtual machine instead of the operating-system kernel. Green threads are cheap to create and switch, and the runtime parks them when they would block.",
+    "definition": "A user-level thread scheduled by a runtime rather than directly by the kernel. Memory cost, parallelism, pre-emption and which blocking calls release a carrier depend on that runtime.",
     "example": "Goroutines, Erlang processes and Java virtual threads are green threads.",
-    "source": "https://en.wikipedia.org/wiki/Green_thread"
+    "source": "https://openjdk.org/jeps/444"
   },
   {
     "id": "threading-1-1",
@@ -988,7 +979,7 @@
     ],
     "definition": "A threading model in which each language-level thread is backed by its own OS thread. Simple and parallel, but each thread costs a kernel thread and a full stack.",
     "example": "Java platform threads and C++ `std::thread` are 1:1.",
-    "source": "https://en.wikipedia.org/wiki/Thread_(computing)#Threading_models"
+    "source": "https://openjdk.org/jeps/444"
   },
   {
     "id": "threading-m-1",
@@ -997,9 +988,9 @@
       "M:1",
       "many-to-one threading"
     ],
-    "definition": "A threading model in which many user threads (M of them) all run on a single OS thread. Switching is cheap, but it cannot use more than one core and one blocking system call stalls every thread.",
+    "definition": "A threading model in which many user threads run on one OS thread. Those user threads cannot execute on multiple cores simultaneously. An unsupported blocking call can occupy their shared thread; runtime-aware operations can instead park a user task. Other OS threads in the process are a separate matter.",
     "example": "gevent's greenlets on one hub thread are M:1.",
-    "source": "https://en.wikipedia.org/wiki/Thread_(computing)#Threading_models"
+    "source": "https://www.gevent.org/intro.html"
   },
   {
     "id": "threading-m-n",
@@ -1012,14 +1003,14 @@
     ],
     "definition": "A threading model in which M user threads are spread over N OS threads, with M usually much larger than N. It combines cheap threads with multicore parallelism, at the cost of a sophisticated runtime scheduler.",
     "example": "Go might run 100,000 goroutines on 8 OS threads.",
-    "source": "https://en.wikipedia.org/wiki/Thread_(computing)#Threading_models"
+    "source": "https://openjdk.org/jeps/444"
   },
   {
     "id": "solaris",
     "term": "Solaris",
     "aliases": [],
     "definition": "A Unix operating system originally from Sun Microsystems, where early JVMs used green threads before switching to native threads.",
-    "source": "https://en.wikipedia.org/wiki/Oracle_Solaris"
+    "source": "https://docs.oracle.com/cd/E19455-01/806-3461/6jck06gqe/index.html"
   },
   {
     "id": "gmp-scheduler",
@@ -1060,11 +1051,10 @@
     "id": "work-stealing",
     "term": "Work stealing",
     "aliases": [
-      "work-stealing",
-      "steals"
+      "work-stealing"
     ],
-    "definition": "A scheduling technique where an idle worker takes queued tasks from a busy worker's queue, keeping all cores busy without a central queue. Go's idle Ps steal half of another P's run queue.",
-    "source": "https://en.wikipedia.org/wiki/Work_stealing"
+    "definition": "A scheduling technique in which an idle worker takes runnable work from another worker’s queue. The fetched Go scheduler attempts to steal roughly half a local run queue, with rounding and other paths; that is an implementation detail, not a general definition.",
+    "source": "https://go.dev/src/runtime/proc.go"
   },
   {
     "id": "netpoller",
@@ -1072,18 +1062,18 @@
     "aliases": [
       "network poller"
     ],
-    "definition": "The part of the Go runtime that adds waiting network sockets to the OS poller (epoll or kqueue) and parks the goroutines, so no OS thread blocks waiting for socket data.",
+    "definition": "The Go runtime subsystem coordinating supported network I/O with platform readiness or completion interfaces. Waiting goroutines can be parked without dedicating an OS thread to each socket; unsupported file or native calls follow other paths.",
     "source": "https://go.dev/src/runtime/netpoll.go"
   },
   {
     "id": "park",
     "term": "Park (a thread or task)",
     "aliases": [
-      "park",
-      "parks",
-      "parking"
+      "goroutine parking",
+      "parks the G",
+      "parked goroutine"
     ],
-    "definition": "To set a thread or task aside, not runnable, until something it waits for happens, freeing the underlying OS thread for other work.",
+    "definition": "To make a task or thread temporarily non-runnable until a wakeup condition occurs. Parking a user-level task can free its carrier for other tasks; parking an OS thread frees CPU time but still retains that OS-thread resource.",
     "example": "When a goroutine reads an empty socket, the runtime parks it until data arrives.",
     "source": "https://go.dev/src/runtime/proc.go"
   },
@@ -1101,9 +1091,9 @@
       "safe points",
       "asynchronous safe points"
     ],
-    "definition": "A point in a running program where the runtime can safely stop a thread, for example for garbage collection, because it knows where all the pointers are.",
+    "definition": "A point or machine state where a runtime can safely perform an operation such as pre-emption or garbage collection. The required metadata and restrictions depend on the runtime; Go’s asynchronous pre-emption still recognizes unsafe points.",
     "example": "Before Go 1.14, a call-free loop contained no safe point, so the GC could wait for it forever.",
-    "source": "https://en.wikipedia.org/wiki/Garbage_collection_(computer_science)"
+    "source": "https://go.dev/src/runtime/preempt.go"
   },
   {
     "id": "asynchronous-pre-emption",
@@ -1111,7 +1101,7 @@
     "aliases": [
       "asynchronous preemption"
     ],
-    "definition": "Go 1.14's mechanism for stopping a goroutine that never reaches a cooperative check: the runtime sends the thread a signal (SIGURG on Unix) and the handler pauses the goroutine at the current instruction if it is safe.",
+    "definition": "Go’s mechanism, introduced on supported platforms in 1.14, for requesting pre-emption without waiting for ordinary function-call checks. Unix implementations use signals and recognized safe machine states; this is not a promise of interruption at every instruction.",
     "source": "https://go.dev/doc/go1.14"
   },
   {
@@ -1122,9 +1112,9 @@
       "SIGURG",
       "SIGPIPE"
     ],
-    "definition": "A small asynchronous notification the kernel delivers to a process or thread, interrupting what it is doing to run a handler. Each signal has a name and number, such as SIGURG.",
+    "definition": "An asynchronous notification delivered to a process or thread with a signal-specific default action or installed handling policy. Signals may be caught, ignored or terminate a process; delivery does not always run a user handler.",
     "example": "Go uses SIGURG to interrupt a spinning goroutine.",
-    "source": "https://en.wikipedia.org/wiki/Signal_(IPC)"
+    "source": "https://man7.org/linux/man-pages/man7/signal.7.html"
   },
   {
     "id": "erlang-process",
@@ -1134,7 +1124,7 @@
       "lightweight processes",
       "lightweight process"
     ],
-    "definition": "Erlang's unit of concurrency: a green thread with its own small heap and mailbox, scheduled by the BEAM virtual machine. It shares no memory with other processes and communicates only by messages, making it an actor. It is not an operating-system process.",
+    "definition": "Erlang’s independently scheduled process, with its own heap/stack state and message queue. Ordinary terms are isolated, but same-node reference-counted binaries/literals and external resources can be shared; it is not an OS process.",
     "example": "An Erlang node can run hundreds of thousands of processes.",
     "source": "https://www.erlang.org/doc/system/ref_man_processes.html"
   },
@@ -1146,9 +1136,9 @@
       "counting reductions",
       "Erlang reductions"
     ],
-    "definition": "The BEAM's unit of work for scheduling, roughly one function call. Each process may use a fixed budget of reductions (4,000 in current OTP releases, 2,000 before OTP 20) before the scheduler switches to another process.",
+    "definition": "BEAM scheduling work units charged for operations such as function calls. Processes consume a reduction budget before rescheduling; exact budgets and accounting are implementation details, and arbitrary long-running native code needs yielding or dirty scheduling.",
     "example": "A tight Erlang loop is still pre-empted, because every iteration is a function call that costs a reduction.",
-    "source": "https://blog.stenmans.org/theBeamBook/"
+    "source": "https://www.erlang.org/doc/apps/erts/erl_nif.html"
   },
   {
     "id": "nif",
@@ -1157,11 +1147,10 @@
       "NIF",
       "NIFs",
       "native implemented function",
-      "native functions",
-      "long-running native functions",
-      "native code"
+      "Erlang NIF",
+      "long-running NIFs"
     ],
-    "definition": "Code written in C or another native language and called directly from a managed runtime such as the BEAM or JVM. Because the runtime cannot pre-empt it, long-running native code can block a scheduler thread.",
+    "definition": "An Erlang Native Implemented Function loaded into the BEAM runtime. Ordinary NIFs must return or yield promptly; long-running work can be split or scheduled as dirty work. NIF is not a name for every native function in every language.",
     "source": "https://www.erlang.org/doc/apps/erts/erl_nif.html"
   },
   {
@@ -1191,21 +1180,21 @@
       "carrier thread",
       "carrier threads"
     ],
-    "definition": "A platform (OS) thread on which the JVM runs virtual threads. A virtual thread is mounted on a carrier while it runs and unmounted while it waits. By default there is roughly one carrier per CPU core, in a ForkJoinPool.",
+    "definition": "A platform thread on which the JVM runs virtual-thread code. The virtual-thread scheduler uses a distinct ForkJoinPool; parallelism and compensation are runtime settings, and not every blocking operation unmounts a virtual thread.",
     "source": "https://openjdk.org/jeps/444"
   },
   {
     "id": "mount-unmount",
     "term": "Mount and unmount (virtual threads)",
     "aliases": [
-      "unmount",
+      "virtual-thread mounting",
+      "virtual-thread unmounting",
       "unmounts",
       "unmounted",
-      "unmounting",
-      "mounted"
+      "unmounting"
     ],
-    "definition": "Attaching a virtual thread to a carrier thread to run it (mounting), and detaching it while it waits, saving its stack to the heap (unmounting). Unmounting is what lets a few carriers serve many blocked virtual threads.",
-    "example": "`Thread.sleep(1000)` in a virtual thread unmounts it for the second.",
+    "definition": "Mounting attaches a virtual thread’s execution to a carrier; unmounting detaches it while retaining resumable state. Supported blocking operations can unmount; pinned or otherwise unsupported operations may occupy a carrier.",
+    "example": "A supported Thread.sleep in a virtual thread normally unmounts it while it waits.",
     "source": "https://openjdk.org/jeps/444"
   },
   {
@@ -1224,14 +1213,14 @@
       "Java Database Connectivity",
       "JDBC"
     ],
-    "definition": "Java's standard API for talking to relational databases. Its calls block the calling thread while the database responds.",
+    "definition": "Java’s standard API for accessing relational databases and related tabular data sources. Its ordinary query/update APIs are synchronous and may block the calling thread while a driver communicates with the database; metadata or cached operations need not perform a network wait.",
     "source": "https://docs.oracle.com/javase/tutorial/jdbc/overview/index.html"
   },
   {
     "id": "inputstream",
     "term": "InputStream",
     "aliases": [],
-    "definition": "Java's basic abstract class for reading bytes from a file, socket or other source; its `read` methods block until data is available.",
+    "definition": "Java’s abstract byte-input API. A read can return data, report end-of-stream or throw an exception; a blocking implementation may wait until one of those results is available.",
     "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/InputStream.html"
   },
   {
@@ -1275,15 +1264,15 @@
     "aliases": [
       "java.util.concurrent.locks.ReentrantLock"
     ],
-    "definition": "A Java lock class that the same thread can acquire several times. Unlike `synchronized` in JDK 21, blocking while holding it does not pin a virtual thread.",
-    "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/locks/ReentrantLock.html"
+    "definition": "A reentrant Java mutex: its holder can acquire it again and must release each acquisition. In JDK 21, blocking through supported virtual-thread-aware operations while holding it avoids synchronized-monitor pinning; an unrelated native blocking call can still pin.",
+    "source": "https://openjdk.org/jeps/444"
   },
   {
     "id": "forkjoinpool",
     "term": "ForkJoinPool",
     "aliases": [],
-    "definition": "A Java thread pool designed for many small tasks, using work stealing. It is the default scheduler for virtual threads.",
-    "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ForkJoinPool.html"
+    "definition": "A Java executor designed for many tasks using work stealing. Virtual threads use a dedicated ForkJoinPool scheduler rather than the common pool; scheduling and compensation depend on the JDK.",
+    "source": "https://openjdk.org/jeps/444"
   },
   {
     "id": "thread-dump",
@@ -1291,8 +1280,8 @@
     "aliases": [
       "thread dumps"
     ],
-    "definition": "A snapshot listing every thread in a running program and the call stack each is in. It is the main tool for diagnosing stalls and deadlocks in JVM services.",
-    "source": "https://docs.oracle.com/en/java/javase/21/troubleshoot/diagnostic-tools.html"
+    "definition": "A diagnostic snapshot of selected threads and their stacks. Traditional JVM dumps and newer virtual-thread-aware dumps expose different sets and details; choose a tool appropriate to the thread model.",
+    "source": "https://openjdk.org/jeps/444"
   },
   {
     "id": "monkey-patching",
@@ -1314,7 +1303,7 @@
       "C extensions",
       "C extension module"
     ],
-    "definition": "A Python module written in C (or another compiled language) and loaded by the interpreter. It runs native code that monkey-patching cannot intercept and the GIL does not cover once released.",
+    "definition": "A Python extension module implemented in compiled native code. It may release the GIL under documented rules; native code and monkey-patched Python calls have different blocking and safety obligations.",
     "source": "https://docs.python.org/3/extending/extending.html"
   },
   {
@@ -1334,8 +1323,8 @@
       "calling C",
       "call C libraries"
     ],
-    "definition": "Calling functions written in C from another language, through a foreign function interface. It is easy when the caller uses ordinary OS-thread stacks and awkward for green-thread runtimes, whose small movable stacks C code does not expect.",
-    "source": "https://en.wikipedia.org/wiki/Foreign_function_interface"
+    "definition": "Calling C code through a foreign-function interface. Stack, calling-convention, lifetime and blocking rules must match the runtime; green-thread systems can support C through bridges rather than making C calls universally impossible.",
+    "source": "https://go.dev/doc/faq#csp"
   },
   {
     "id": "executor",
@@ -1344,7 +1333,7 @@
       "executors",
       "ExecutorService"
     ],
-    "definition": "A component that runs submitted tasks for you, managing the threads or event loop underneath. Java's `ExecutorService` runs tasks on a thread pool; in Rust an async executor such as Tokio polls futures until they finish.",
+    "definition": "A component that drives submitted work, using threads, an event loop or another execution policy. Java ExecutorService is an interface with multiple implementations; a Rust async executor polls futures. Queueing, ownership and shutdown guarantees vary.",
     "example": "A Rust future does nothing until an executor polls it.",
     "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ExecutorService.html"
   },
@@ -1352,11 +1341,10 @@
     "id": "tokio",
     "term": "Tokio",
     "aliases": [
-      "tokio::spawn",
-      "tokio::sync::Mutex"
+      "tokio::spawn"
     ],
-    "definition": "The most widely used async runtime (executor plus I/O and timers) for Rust. `tokio::spawn` runs a future as a task, possibly on several worker threads, so it requires the future to be `Send` and `'static`.",
-    "source": "https://docs.rs/tokio/latest/tokio/"
+    "definition": "An async runtime for Rust with task scheduling, I/O and timers. tokio::spawn requires Send and static task state and output, even on its current-thread runtime; spawn_local supports non-Send tasks in a suitable local context.",
+    "source": "https://docs.rs/tokio/latest/tokio/task/fn.spawn.html"
   },
   {
     "id": "embassy",
@@ -1378,15 +1366,13 @@
     "id": "system-call-blocking",
     "term": "Blocking call",
     "aliases": [
-      "blocking calls",
       "blocking system call",
       "blocking syscall",
-      "blocking I/O",
-      "blocking operations"
+      "blocking I/O"
     ],
-    "definition": "A call that does not return until its result is available, holding the calling thread the whole time, such as a synchronous socket read, file read or `time.sleep`.",
+    "definition": "A call that does not return until it completes or fails. It occupies its calling execution context, but runtime-aware lightweight threads may park or unmount rather than monopolize an OS thread; asyncio time.sleep directly blocks its loop thread.",
     "example": "`time.sleep(1)` inside an asyncio coroutine blocks the event loop for a second.",
-    "source": "https://en.wikipedia.org/wiki/Blocking_(computing)"
+    "source": "https://openjdk.org/jeps/444"
   },
   {
     "id": "csp",
@@ -1395,9 +1381,9 @@
       "Communicating Sequential Processes",
       "CSP"
     ],
-    "definition": "Tony Hoare's 1978 model of concurrency: a program is built from sequential processes that share no memory and interact only by sending messages over channels. Go's goroutines and channels are its best-known descendant.",
+    "definition": "Communicating Sequential Processes: Hoare’s approach to describing concurrent sequential processes interacting through communication. Go’s typed channels are CSP-inspired; the original and later formalisms differ, so named channels and a particular buffer rule are not universal definitions.",
     "example": "In CSP style, a worker receives a job on one channel and sends its result on another.",
-    "source": "https://en.wikipedia.org/wiki/Communicating_sequential_processes"
+    "source": "https://www.cs.cmu.edu/~crary/819-f09/Hoare78.pdf"
   },
   {
     "id": "sequential-process",
@@ -1405,8 +1391,8 @@
     "aliases": [
       "sequential processes"
     ],
-    "definition": "In CSP, an independent piece of a program that runs its own steps one after another and shares no state with the others; it interacts only through channels.",
-    "source": "https://en.wikipedia.org/wiki/Communicating_sequential_processes"
+    "definition": "A component whose own steps occur sequentially while other components may execute concurrently. CSP composes such processes with communication; Go uses goroutines and channels without forbidding other shared memory.",
+    "source": "https://www.cs.cmu.edu/~crary/819-f09/Hoare78.pdf"
   },
   {
     "id": "csp-channel",
@@ -1428,8 +1414,8 @@
     "aliases": [
       "exclusive ownership"
     ],
-    "definition": "Which part of a program is responsible for a value: allowed to use or change it, and responsible for freeing it. Passing ownership through a channel means the sender stops touching the value. In Rust ownership is checked by the compiler; in Go it is a convention.",
-    "example": "After sending a pointer to a buffer, a Go sender that respects ownership never writes to that buffer again.",
+    "definition": "Responsibility and permitted access to a value under a language or API’s rules. Rust checks moves and borrowing; Go channel hand-offs enforce no exclusive-ownership rule by themselves, so stopping sender access is a protocol convention.",
+    "example": "A Go protocol can transfer use of a buffer to a receiver, then explicitly hand it back before the sender reuses it.",
     "source": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
   },
   {
@@ -1439,7 +1425,7 @@
       "unbuffered",
       "unbuffered channels"
     ],
-    "definition": "A Go channel with capacity 0, made with `make(chan T)`. A send waits until a receiver takes the value and a receive waits for a sender, so every transfer is a rendezvous.",
+    "definition": "An open Go channel with capacity zero. A successful send and corresponding receive rendezvous; a nil channel blocks forever, and a send on a closed channel panics instead of waiting.",
     "source": "https://go.dev/ref/spec#Channel_types"
   },
   {
@@ -1449,7 +1435,7 @@
       "buffered",
       "buffered channels"
     ],
-    "definition": "A Go channel with a queue of fixed capacity, made with `make(chan T, n)`. Sends complete without a receiver while there is room; a send blocks only when the buffer is full and a receive only when it is empty.",
+    "definition": "A Go channel created with positive capacity. While open, it can hold values without a simultaneous receiver; sends wait when neither space nor a receiver is available, and receives wait when empty. Closed-channel and nil-channel rules are separate.",
     "example": "With `make(chan int, 2)`, two sends succeed immediately and the third blocks.",
     "source": "https://go.dev/ref/spec#Channel_types"
   },
@@ -1500,7 +1486,7 @@
       "nil channel",
       "nil channels"
     ],
-    "definition": "In Go, nil is the zero value of pointers, maps, slices and channels: \"no object\". Sending to or receiving from a nil channel blocks forever, which is used to switch off a case in a select statement.",
+    "definition": "A Go channel variable with the nil value. Sending to or receiving from it blocks forever, closing it panics, and its communication cases can never be ready in select. Assigning nil therefore disables a select case.",
     "example": "Setting `a = nil` once channel `a` is closed stops `select` choosing it.",
     "source": "https://go.dev/ref/spec#Send_statements"
   },
@@ -1519,8 +1505,8 @@
     "id": "broadcast",
     "term": "Broadcast",
     "aliases": [],
-    "definition": "Notifying every waiting party at once rather than one. Closing a Go channel is a broadcast: every goroutine blocked receiving on it becomes able to continue.",
-    "source": "https://go.dev/ref/spec#Receive_operator"
+    "definition": "Making multiple waiters eligible to proceed after one state change. Closing a Go channel wakes blocked receivers, but scheduler execution is not simultaneous; buffered values may still be delivered before zero/false receives.",
+    "source": "https://go.dev/ref/spec"
   },
   {
     "id": "go-context",
@@ -1530,7 +1516,7 @@
       "ctx.Done",
       "ctx.Done()"
     ],
-    "definition": "Go's standard way to carry cancellation and deadlines through a call tree. `ctx.Done()` returns a channel that is closed when the context is cancelled, waking every goroutine selecting on it.",
+    "definition": "Go’s standard cancellation/deadline context. Done returns a channel closed on cancellation, or nil when the context cannot be cancelled; a caller must observe it cooperatively, and closing it does not force arbitrary work to stop.",
     "source": "https://pkg.go.dev/context"
   },
   {
@@ -1542,7 +1528,7 @@
       "cancelling"
     ],
     "definition": "Asking running work to stop early because its result is no longer needed. It is cooperative in most languages: the task is told, and must reach a point where it notices and cleans up.",
-    "example": "When one child of an asyncio TaskGroup fails, the group cancels the others.",
+    "example": "When one asyncio TaskGroup child raises an ordinary non-cancellation error, the group requests cancellation of its unfinished siblings.",
     "source": "https://docs.python.org/3/library/asyncio-task.html#task-cancellation"
   },
   {
@@ -1563,8 +1549,8 @@
     "aliases": [
       "pseudorandom"
     ],
-    "definition": "Produced by a deterministic algorithm that gives results that look random and are evenly spread, rather than by a truly random physical process.",
-    "source": "https://en.wikipedia.org/wiki/Pseudorandomness"
+    "definition": "Produced algorithmically rather than by a directly random physical process. Uniformity and fairness are separate properties: Go select specifies uniform pseudo-random choice among ready communication cases, without a deterministic waiting bound.",
+    "source": "https://go.dev/ref/spec"
   },
   {
     "id": "receive-only-channel",
@@ -1582,9 +1568,9 @@
     "aliases": [
       "worker pools"
     ],
-    "definition": "A fixed number of workers that take jobs from a shared queue or channel and send back results, limiting how much runs at once.",
+    "definition": "A set of workers consuming jobs from a queue or channel. A configured worker bound limits how much work runs simultaneously; the queue needs its own capacity policy, and some pool implementations can vary their worker count.",
     "example": "Three goroutines reading a jobs channel form a worker pool.",
-    "source": "https://gobyexample.com/worker-pools"
+    "source": "https://go.dev/blog/pipelines"
   },
   {
     "id": "waitgroup",
@@ -1606,9 +1592,9 @@
       "leaked goroutine",
       "silent leak"
     ],
-    "definition": "A goroutine that never finishes, usually because it is blocked forever on a channel nobody will use again. It keeps its stack and everything it references, and the runtime does not report it unless every goroutine is stuck.",
+    "definition": "A goroutine that remains alive after its work is no longer useful, often blocked on a channel with no future partner. Retained stacks and live references consume resources; Go’s global deadlock detector is not a general leak detector.",
     "example": "A sender stuck on an unbuffered channel after the receiver returned is leaked.",
-    "source": "https://pkg.go.dev/go.uber.org/goleak"
+    "source": "https://go.dev/blog/pipelines"
   },
   {
     "id": "goleak",
@@ -1621,8 +1607,8 @@
     "id": "occam",
     "term": "occam",
     "aliases": [],
-    "definition": "A concurrent programming language from 1983, designed for the Inmos transputer, that implemented CSP almost directly.",
-    "source": "https://en.wikipedia.org/wiki/Occam_(programming_language)"
+    "definition": "An INMOS concurrent programming language from the 1980s using CSP-inspired communicating processes and channels. It was used with transputers; the language’s reference manuals define its parallel and communication constructs.",
+    "source": "https://www.wotug.org/occam/documentation/oc3refman.pdf"
   },
   {
     "id": "transputer",
@@ -1632,28 +1618,28 @@
       "Inmos"
     ],
     "definition": "A 1980s microprocessor from the British company Inmos, designed for parallel computing with built-in links for communicating with other transputers.",
-    "source": "https://en.wikipedia.org/wiki/Transputer"
+    "source": "https://www.wotug.org/occam/documentation/oc3refman.pdf"
   },
   {
     "id": "newsqueak",
     "term": "Newsqueak",
     "aliases": [],
-    "definition": "A concurrent language designed by Rob Pike in the late 1980s with first-class channels; an ancestor of Go's channels.",
-    "source": "https://en.wikipedia.org/wiki/Newsqueak"
+    "definition": "Rob Pike’s concurrent language with dynamic processes and first-class channels, described in his revised 1994 reference manual. Go’s FAQ identifies Newsqueak as part of its CSP-inspired concurrency lineage.",
+    "source": "https://swtch.com/~rsc/thread/newsqueak.pdf"
   },
   {
     "id": "alef",
     "term": "Alef",
     "aliases": [],
     "definition": "A concurrent language for the Plan 9 operating system, with channels and lightweight processes; an ancestor of Go.",
-    "source": "https://en.wikipedia.org/wiki/Alef_(programming_language)"
+    "source": "https://doc.cat-v.org/plan_9/2nd_edition/papers/alef/ref"
   },
   {
     "id": "limbo",
     "term": "Limbo",
     "aliases": [],
     "definition": "A concurrent language for the Inferno operating system with typed channels; an ancestor of Go.",
-    "source": "https://en.wikipedia.org/wiki/Limbo_(programming_language)"
+    "source": "https://www.vitanuova.com/inferno/papers/limbo.html"
   },
   {
     "id": "rust-crate",
@@ -1662,7 +1648,7 @@
       "crate",
       "crates"
     ],
-    "definition": "A Rust package or library, the unit the Rust compiler builds and the Cargo tool downloads.",
+    "definition": "A unit of Rust compilation that produces a binary or library. A Cargo package can contain several crates, so crate and package are related but not interchangeable.",
     "example": "`crossbeam` is a crate with concurrency tools.",
     "source": "https://doc.rust-lang.org/book/ch07-01-packages-and-crates.html"
   },
@@ -1681,7 +1667,7 @@
     "id": "crossbeam",
     "term": "crossbeam",
     "aliases": [],
-    "definition": "A popular Rust crate of concurrency tools, including fast multi-producer, multi-consumer channels and scoped threads.",
+    "definition": "A Rust library collection with concurrency tools including multi-producer/multi-consumer channels and scoped threads. Performance depends on operation and workload; no universal speed advantage is implied.",
     "source": "https://docs.rs/crossbeam/latest/crossbeam/"
   },
   {
@@ -1710,9 +1696,9 @@
     "aliases": [
       "condition variables"
     ],
-    "definition": "A synchronisation primitive that lets threads sleep until another thread signals that some condition, protected by a mutex, may have changed.",
+    "definition": "A primitive for waiting while releasing an associated mutex, then reacquiring it before returning. A wakeup does not prove the predicate is true; wait in a predicate loop because other threads and spurious wakeups can change the state.",
     "example": "A consumer waits on a condition variable until the producer signals that the job list is non-empty.",
-    "source": "https://en.wikipedia.org/wiki/Monitor_(synchronization)#Condition_variables"
+    "source": "https://docs.python.org/3/library/threading.html#condition-objects"
   },
   {
     "id": "busy-loop",
@@ -1723,9 +1709,9 @@
       "busy waiting",
       "spin loop"
     ],
-    "definition": "A loop that keeps checking for something without ever blocking, using a whole CPU core while doing no useful work.",
+    "definition": "Repeatedly checking a condition without blocking. It consumes CPU time while scheduled; actual core use depends on scheduling, pre-emption and loop behaviour rather than necessarily occupying a full core continuously.",
     "example": "`while (!stop) { }` is a busy loop.",
-    "source": "https://en.wikipedia.org/wiki/Busy_waiting"
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "actor-model",
@@ -1738,9 +1724,9 @@
       "actor",
       "actors"
     ],
-    "definition": "A model of concurrency proposed by Carl Hewitt, Peter Bishop and Richard Steiger in 1973. Everything is an actor: an entity with private state and a mailbox that handles one message at a time and, in response, can only send messages, create actors and decide how to handle its next message.",
+    "definition": "A concurrency model introduced by Hewitt, Bishop and Steiger in 1973. On receiving a message, an actor can send messages, create actors and determine its subsequent behaviour. Practical mailbox and handler-serialization rules depend on the implementation.",
     "example": "Erlang processes and Akka actors follow the actor model.",
-    "source": "https://en.wikipedia.org/wiki/Actor_model"
+    "source": "https://www.ijcai.org/Proceedings/73/Papers/027B.pdf"
   },
   {
     "id": "mailbox",
@@ -1761,18 +1747,17 @@
       "per-process GC",
       "garbage collection is per process"
     ],
-    "definition": "Erlang's approach of giving each process its own heap and collecting each heap separately, so one process's collection pauses only that process.",
+    "definition": "Erlang’s ordinary process heaps are collected separately, so collecting one process does not inherently require collecting every other process heap. Shared runtime resources, binary storage and native code still affect latency; no universal pause isolation is promised.",
     "source": "https://www.erlang.org/doc/apps/erts/garbagecollection.html"
   },
   {
     "id": "pid",
     "term": "Pid (process identifier)",
     "aliases": [
-      "pid",
-      "pids",
-      "process identifier"
+      "Erlang pid",
+      "Erlang pids"
     ],
-    "definition": "In Erlang, the identifier of a process, returned by `spawn`. Sending to it with `Pid ! Msg` delivers a message to that process's mailbox, whether it is local or on another node.",
+    "definition": "An Erlang process identifier, returned by spawn and usable as a message destination. Sending to a pid does not guarantee that the process is alive or that a message is processed; a pid can refer to a remote node.",
     "source": "https://www.erlang.org/doc/system/ref_man_processes.html"
   },
   {
@@ -1786,9 +1771,9 @@
       "one sender to one receiver",
       "per-sender arrival order"
     ],
-    "definition": "The guarantee, given by Erlang and Akka, that messages sent from one particular sender to one particular receiver arrive in the order they were sent. Messages from different senders have no order relative to each other.",
-    "example": "If A sends m1 then m2 to B, B handles m1 first; a message C sent meanwhile may land anywhere.",
-    "source": "https://doc.akka.io/libraries/akka-core/current/general/message-delivery-reliability.html"
+    "definition": "For Erlang ordinary signals and Akka ordinary direct messages, ordering is preserved from one sender to one receiver. It does not order different senders; selective receive and OTP priority messages can change processing or mailbox order without contradicting the ordinary signal-order guarantee.",
+    "example": "A’s two ordinary messages to B preserve their arrival order; B can selectively match the second before consuming the first.",
+    "source": "https://www.erlang.org/doc/system/ref_man_processes.html"
   },
   {
     "id": "refc-binaries",
@@ -1797,8 +1782,9 @@
       "refc binaries",
       "refc binary"
     ],
-    "definition": "Large Erlang binaries (byte strings over 64 bytes) stored once in a shared area and passed between local processes by reference, with a count of users, instead of being copied.",
-    "source": "https://www.erlang.org/doc/system/binaryhandling.html"
+    "definition": "Erlang reference-counted binary storage can be shared between processes on one node instead of copying all bytes. Exact representations and size thresholds are version-dependent; the documentation notes a binary implementation rewrite in OTP 27.",
+    "source": "https://www.erlang.org/doc/system/binaryhandling.html",
+    "example": "Sending a large immutable binary locally can share its data; sending to another node serializes it."
   },
   {
     "id": "selective-receive",
@@ -1806,7 +1792,7 @@
     "aliases": [
       "selective-receive"
     ],
-    "definition": "Erlang's `receive` behaviour: it scans the mailbox from the oldest message and takes the first one matching any of its patterns, leaving the others in place for later.",
+    "definition": "Erlang receive scans from the front of the message queue and removes the first matching message, leaving the rest. Ordinary messages retain per-sender arrival order, but OTP priority messages can be inserted ahead of ordinary traffic, so queue order is not always chronological arrival order.",
     "example": "With `[{log,a}, {reply,7}]` in the mailbox, `receive {reply, V}` takes `{reply,7}` and leaves `{log,a}`.",
     "source": "https://www.erlang.org/doc/system/expressions.html#receive"
   },
@@ -1856,8 +1842,8 @@
       "linked process",
       "linked processes"
     ],
-    "definition": "A two-way connection between Erlang processes created with `link` or `spawn_link`: if one dies abnormally, an exit signal is sent to the other, killing it too unless it traps exits.",
-    "source": "https://www.erlang.org/doc/system/ref_man_processes.html#links"
+    "definition": "A bidirectional Erlang process connection. A linked process’s termination sends an exit signal to its peer; normal reasons, trapping, direct kill signals and the peer’s state affect whether that peer terminates.",
+    "source": "https://www.erlang.org/doc/system/ref_man_processes.html"
   },
   {
     "id": "erlang-monitor",
@@ -1874,8 +1860,8 @@
     "aliases": [
       "exit signals"
     ],
-    "definition": "The notice an Erlang process sends to its linked processes when it terminates, carrying the reason. An abnormal reason kills the receiver unless it traps exits.",
-    "source": "https://www.erlang.org/doc/system/ref_man_processes.html#sending-signals"
+    "definition": "An Erlang signal requesting or reporting process termination. Its effect depends on reason, link state and trap_exit: ordinary abnormal linked exits normally terminate a non-trapping peer, while direct kill has special untrappable behaviour.",
+    "source": "https://www.erlang.org/doc/system/ref_man_processes.html"
   },
   {
     "id": "trap-exits",
@@ -1886,8 +1872,8 @@
       "trap_exit",
       "traps exits from its children"
     ],
-    "definition": "Setting an Erlang process flag (`trap_exit`) so that exit signals from linked processes arrive as ordinary `{'EXIT', Pid, Reason}` messages instead of killing the process. Supervisors do this.",
-    "source": "https://www.erlang.org/doc/system/ref_man_processes.html#receiving-exit-signals"
+    "definition": "An Erlang flag converting ordinary linked-process exit signals into EXIT messages instead of termination. The direct kill reason is untrappable; its propagated killed reason is distinct, so trapping exits is not immunity to every termination request.",
+    "source": "https://www.erlang.org/doc/system/ref_man_processes.html"
   },
   {
     "id": "supervisor",
@@ -1905,30 +1891,30 @@
     "aliases": [
       "restart strategies"
     ],
-    "definition": "A supervisor's rule for which children to restart when one dies: one_for_one, one_for_all or rest_for_one.",
-    "source": "https://www.erlang.org/doc/system/sup_princ.html#restart-strategy"
+    "definition": "An OTP supervisor policy selecting children affected when a restart-eligible child exits. The usual strategies are one_for_one, one_for_all and rest_for_one; each child’s restart type and the supervisor’s limits still apply.",
+    "source": "https://www.erlang.org/doc/apps/stdlib/supervisor.html"
   },
   {
     "id": "one-for-one",
     "term": "one_for_one",
     "aliases": [],
-    "definition": "A supervisor restart strategy: when a child dies, restart only that child. Suited to independent workers.",
-    "source": "https://www.erlang.org/doc/system/sup_princ.html#one_for_one"
+    "definition": "For a restart-eligible child, restart only that child, subject to the supervisor’s restart budget and successful startup. Other children continue.",
+    "source": "https://www.erlang.org/doc/apps/stdlib/supervisor.html"
   },
   {
     "id": "one-for-all",
     "term": "one_for_all",
     "aliases": [],
-    "definition": "A supervisor restart strategy: when any child dies, restart all the children. Suited to children that only make sense together.",
-    "source": "https://www.erlang.org/doc/system/sup_princ.html#one_for_all"
+    "definition": "When the strategy is triggered, terminate the other children and restart eligible children according to their child specifications. It suits children whose useful operation depends on the group.",
+    "source": "https://www.erlang.org/doc/apps/stdlib/supervisor.html"
   },
   {
     "id": "rest-for-one",
     "term": "rest_for_one",
     "aliases": [],
-    "definition": "A supervisor restart strategy: when a child dies, restart it and every child started after it. Suited to children that depend on earlier ones.",
+    "definition": "When the strategy is triggered, terminate later-started children, then restart the failed and later children according to their specifications. It suits a startup order that follows dependencies.",
     "example": "With children `[Db, Cache, Api]`, a `Cache` crash restarts `Cache` and `Api`.",
-    "source": "https://www.erlang.org/doc/system/sup_princ.html#rest_for_one"
+    "source": "https://www.erlang.org/doc/apps/stdlib/supervisor.html"
   },
   {
     "id": "restart-type",
@@ -1948,9 +1934,9 @@
       "MaxT",
       "intensity limit"
     ],
-    "definition": "A supervisor's limit on restarts: if more than MaxR restarts happen within MaxT seconds, it terminates its children and exits, passing the failure up to its own supervisor. Erlang's default is 1 restart in 5 seconds; Elixir's is 3 in 5.",
+    "definition": "An OTP supervisor limit on restart attempts during a configured period. Exceeding the budget terminates its children and the supervisor; the rejected attempt is not performed. Erlang defaults to intensity 1 and period 5 seconds, while Elixir Supervisor defaults to 3 and 5.",
     "example": "A child that crashes within 100 ms of every start trips Erlang's default on its second crash.",
-    "source": "https://www.erlang.org/doc/system/sup_princ.html#maximum-restart-intensity"
+    "source": "https://www.erlang.org/doc/apps/stdlib/supervisor.html"
   },
   {
     "id": "supervision-tree",
@@ -1965,8 +1951,7 @@
     "id": "transient-fault",
     "term": "Transient fault",
     "aliases": [
-      "transient faults",
-      "deterministic bug"
+      "transient faults"
     ],
     "definition": "A failure caused by temporary conditions, such as a timeout or an unlucky race, that usually does not recur when the operation is retried. A deterministic bug, by contrast, fails the same way every time.",
     "source": "https://en.wikipedia.org/wiki/Fault_tolerance"
@@ -1999,7 +1984,7 @@
       "gen_server:call",
       "gen_server:cast"
     ],
-    "definition": "The OTP behaviour for a client-server process. `gen_server:call` sends a request and waits for the reply (default timeout 5 seconds); `gen_server:cast` sends without waiting.",
+    "definition": "OTP’s generic server behaviour. call waits for a response with a default timeout of 5 seconds, raising an exit exception on failure/timeout; cast does not wait for a reply. A timeout does not cancel the already-sent request or undo effects.",
     "source": "https://www.erlang.org/doc/apps/stdlib/gen_server.html"
   },
   {
@@ -2040,7 +2025,7 @@
       "at-most-once",
       "at most once"
     ],
-    "definition": "A delivery guarantee in which each message arrives once or not at all: never duplicated, but possibly lost, with no automatic retries. Akka's default.",
+    "definition": "A delivery property allowing zero or one delivery of a particular message. It permits loss and excludes duplicate delivery within its stated scope; it does not forbid an application from sending a new retry as a distinct message.",
     "source": "https://doc.akka.io/libraries/akka-core/current/general/message-delivery-reliability.html"
   },
   {
@@ -2049,7 +2034,7 @@
     "aliases": [
       "at-least-once"
     ],
-    "definition": "A delivery guarantee in which each message is retried until acknowledged, so it is never lost but may arrive more than once; receivers must tolerate duplicates.",
+    "definition": "A delivery property allowing duplicate deliveries while requiring eventual delivery under the protocol’s stated availability, retention and retry assumptions. Retries alone cannot guarantee progress during a permanent partition or after data loss; receivers need duplicate handling.",
     "source": "https://doc.akka.io/libraries/akka-core/current/general/message-delivery-reliability.html"
   },
   {
@@ -2059,7 +2044,7 @@
       "exactly-once",
       "exactly-once delivery"
     ],
-    "definition": "The effect of each message being processed once and only once. Networks cannot guarantee exactly-once delivery, so systems approximate it with retries plus deduplication or transactions.",
+    "definition": "A scoped guarantee about delivery, processing or committed effects occurring once. Those meanings differ: retries plus durable deduplication or transactions can make effects occur once within a defined boundary, but do not establish universal network delivery.",
     "source": "https://doc.akka.io/libraries/akka-core/current/general/message-delivery-reliability.html"
   },
   {
@@ -2082,7 +2067,7 @@
     "id": "tell-akka",
     "term": "tell (Akka)",
     "aliases": [],
-    "definition": "Akka's fire-and-forget send: put a message in an actor's mailbox and continue immediately, with no reply expected.",
+    "definition": "Akka’s asynchronous message send with no reply expected by that operation. Delivery is not guaranteed and configuration may reject or drop a message; returning from the send does not mean the actor processed it.",
     "source": "https://doc.akka.io/libraries/akka-core/current/typed/interaction-patterns.html#fire-and-forget"
   },
   {
@@ -2093,7 +2078,7 @@
       "Akka Future",
       "Scala Future"
     ],
-    "definition": "An object standing for a result that will be available later, which can be waited on, polled or given callbacks. Java's `Future` and Scala's `Future` are examples; JavaScript calls the idea a Promise.",
+    "definition": "An object representing a result of work that may complete later. APIs differ: Java Future supports waiting, cancellation and status checks, while CompletionStage/CompletableFuture and Scala Future also support continuation callbacks. JavaScript calls its related abstraction a Promise.",
     "example": "`executor.submit(task)` returns a Java Future; calling `get()` waits for the result.",
     "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/Future.html"
   },
@@ -2106,7 +2091,7 @@
       "BSL",
       "BUSL"
     ],
-    "definition": "A source-available licence: anyone can read the code and use it for development and testing, but production use beyond what the licensor allows needs a paid licence, and each release converts to an open-source licence after a set period. Akka adopted it in 2022, with free production use for companies under US$25 million annual revenue and conversion to Apache 2.0 after 3 years.",
+    "definition": "A source-available licence template whose permitted uses, additional production grant, change date and future open-source licence are specified by each licensor/release. Akka’s 2022 announcement adopted BSL 1.1; check the exact release terms before making a current licensing decision.",
     "source": "https://akka.io/blog/why-we-are-changing-the-license-for-akka"
   },
   {
@@ -2167,11 +2152,9 @@
     "id": "bounded-mailbox",
     "term": "Bounded mailbox",
     "aliases": [
-      "bounded mailboxes",
-      "unbounded mailbox",
-      "unbounded mailboxes"
+      "bounded mailboxes"
     ],
-    "definition": "A mailbox with a capacity limit: when full, new messages are rejected, dropped or make the sender wait. Akka offers them as an option; Erlang mailboxes are unbounded.",
+    "definition": "A pending-message queue with a configured capacity limit. When full, the runtime’s policy may drop, reject or block; a bounded mailbox does not universally provide backpressure. Erlang’s ordinary mailbox has no fixed configured message-count capacity.",
     "source": "https://doc.akka.io/libraries/akka-core/current/typed/mailboxes.html"
   },
   {
@@ -2215,7 +2198,7 @@
       "loggers",
       "logging actor"
     ],
-    "definition": "A component that writes log records. In Erlang the standard `logger` application has overload protection that drops or samples events when it falls behind.",
+    "definition": "A component recording diagnostic events. Erlang’s standard logger includes configurable overload controls such as synchronous mode, dropping and flushing; exact behaviour depends on handler settings.",
     "source": "https://www.erlang.org/doc/apps/kernel/logger_chapter.html"
   },
   {
@@ -2245,7 +2228,7 @@
     "aliases": [
       "Trio's"
     ],
-    "definition": "A Python async library by Nathaniel J. Smith built around structured concurrency, where tasks are started only inside nurseries.",
+    "definition": "A Python async library organized around structured concurrency with nursery scopes for application tasks. Its runtime also exposes lower-level system-task facilities, so “tasks can only exist inside nurseries” is too absolute.",
     "source": "https://trio.readthedocs.io/"
   },
   {
@@ -2274,8 +2257,8 @@
     "aliases": [
       "asyncio.CancelledError"
     ],
-    "definition": "The exception asyncio raises inside a task to cancel it, at its next await. Code may catch it to clean up but should re-raise it.",
-    "source": "https://docs.python.org/3/library/asyncio-exceptions.html#asyncio.CancelledError"
+    "definition": "The BaseException-derived exception asyncio uses to request task cancellation at the next delivery opportunity. It does not interrupt arbitrary blocking code; cleanup should normally propagate it after releasing resources.",
+    "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
   {
     "id": "taskgroup",
@@ -2286,8 +2269,8 @@
       "task group",
       "task groups"
     ],
-    "definition": "Python 3.11's structured-concurrency API: `async with asyncio.TaskGroup() as tg:` waits for every task created with `tg.create_task`, cancels the rest if one fails, and raises the failures as an ExceptionGroup.",
-    "source": "https://docs.python.org/3/library/asyncio-task.html#task-groups"
+    "definition": "Python’s structured task-group context, introduced in 3.11. It waits for all child tasks; an ordinary child failure requests sibling cancellation and is propagated in an exception group after cleanup, while cancellation and KeyboardInterrupt/SystemExit have special rules.",
+    "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
   {
     "id": "exceptiongroup",
@@ -2334,7 +2317,7 @@
     "aliases": [
       "StructuredTaskScope.open"
     ],
-    "definition": "Java's structured-concurrency API, designed for virtual threads: subtasks are forked inside a try-with-resources block, `join()` waits for them, and no subtask outlives the block. A preview API since JDK 21.",
+    "definition": "Java’s structured-concurrency API: an owning scope manages child threads and waits for their termination before closing. It has been a preview API since JDK 21, with API changes including JDK 25’s open factory; JEP 543 proposed finalization for JDK 28 as checked on 2026-10-15.",
     "source": "https://openjdk.org/jeps/543"
   },
   {
@@ -2352,8 +2335,8 @@
     "aliases": [
       "borrow-checker"
     ],
-    "definition": "The part of the Rust compiler that enforces the borrowing rules: references never outlive their data, and shared and mutable borrows never overlap.",
-    "source": "https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html"
+    "definition": "Rust’s compiler analysis enforcing reference validity and borrowing rules, including exclusive mutable access versus shared references. Synchronized interior mutability uses separately checked APIs; borrowing alone is not the entire cross-thread safety story.",
+    "source": "https://doc.rust-lang.org/nomicon/send-and-sync.html"
   },
   {
     "id": "marker-trait",
@@ -2370,7 +2353,7 @@
     "aliases": [
       "auto traits"
     ],
-    "definition": "A Rust trait, such as Send or Sync, that the compiler implements automatically for a struct when all its fields implement it.",
+    "definition": "A trait such as Send or Sync that can be automatically implemented from a type’s components under Rust’s auto-trait rules. Explicit positive/negative implementations and unsafe contracts are separate mechanisms.",
     "example": "Adding an `Rc` field to a struct silently makes the struct not Send.",
     "source": "https://doc.rust-lang.org/reference/special-types-and-traits.html#auto-traits"
   },
@@ -2382,7 +2365,7 @@
       "poison error",
       "poisoned"
     ],
-    "definition": "Rust's mutex marks itself poisoned if a thread panics while holding the lock; later `lock()` calls return an error to warn that the data may be half-updated.",
+    "definition": "An advisory std::sync::Mutex indication that an unwinding panic may have left protected data inconsistent. Later locking normally returns a PoisonError until cleared; detection has documented exceptions, and poisoning must not be relied on for memory safety.",
     "source": "https://doc.rust-lang.org/std/sync/struct.Mutex.html#poisoning"
   },
   {
@@ -2392,7 +2375,7 @@
       "unwind",
       "unwinds"
     ],
-    "definition": "Running cleanup code frame by frame back up the call stack after a panic or exception, destroying or dropping each frame's local values as it goes. A Rust panic unwinds the panicking thread by default; a C++ exception unwinds until a handler catches it.",
+    "definition": "Running cleanup frame by frame while leaving call frames after an exception or unwinding panic. Rust targets/build profiles can instead abort on panic, in which case this cleanup is not performed.",
     "source": "https://doc.rust-lang.org/nomicon/unwinding.html"
   },
   {
@@ -2400,8 +2383,7 @@
     "term": "Scoped threads",
     "aliases": [
       "scoped thread",
-      "thread::scope",
-      "scoped spawn"
+      "thread::scope"
     ],
     "definition": "Threads spawned inside `std::thread::scope` (stable since Rust 1.63). All are joined before the scope returns, so they may borrow local variables.",
     "source": "https://doc.rust-lang.org/std/thread/fn.scope.html"
@@ -2412,18 +2394,18 @@
     "aliases": [
       "std::thread::spawn"
     ],
-    "definition": "Rust's function for starting an OS thread. Its closure must be `Send + 'static`, because the thread might outlive the caller.",
+    "definition": "Rust’s function for starting a thread that may outlive its caller. The closure and its returned value must satisfy Send and static bounds; owned values can satisfy static without living forever.",
     "source": "https://doc.rust-lang.org/std/thread/fn.spawn.html"
   },
   {
     "id": "thread-join",
     "term": "Join (a thread)",
     "aliases": [
-      "join()"
+      "thread joining"
     ],
-    "definition": "Waiting for a thread or task to finish. A thread's last action happens-before `join()` returns, so the joiner sees everything it wrote.",
+    "definition": "Waiting for a thread’s completion. Java, Go/Rust equivalents and other APIs define their own synchronization guarantees; Rust JoinHandle::join orders the joined thread’s operations before subsequent operations after successful completion.",
     "example": "`t.join()` blocks until thread `t` has finished.",
-    "source": "https://en.wikipedia.org/wiki/Fork%E2%80%93join_model"
+    "source": "https://doc.rust-lang.org/std/thread/struct.JoinHandle.html#method.join"
   },
   {
     "id": "joinset",
@@ -2439,7 +2421,7 @@
     "id": "spawn-blocking",
     "term": "spawn_blocking",
     "aliases": [],
-    "definition": "A Tokio function that runs blocking code on a separate thread pool so it does not stall the async worker threads.",
+    "definition": "Tokio’s facility for blocking work on a separate blocking-thread pool. A task that has begun running generally cannot be aborted through its handle; shutdown and application cancellation need explicit design.",
     "source": "https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html"
   },
   {
@@ -2482,16 +2464,16 @@
       "check-then-act race",
       "check and act"
     ],
-    "definition": "A race condition in which each step is synchronised but the sequence is not, such as checking a balance under one lock and writing under another. No data race is involved, so neither Rust nor race detectors catch it.",
+    "definition": "A concurrency logic bug such as splitting an invariant’s check and update across separate synchronized operations. Individual accesses can be data-race-free while the combined result is wrong; ordinary race detectors do not prove such invariants correct.",
     "example": "Two withdrawals both see 100 before either subtracts 80.",
-    "source": "https://en.wikipedia.org/wiki/Time-of-check_to_time-of-use"
+    "source": "https://doc.rust-lang.org/nomicon/races.html"
   },
   {
     "id": "orthogonal",
     "term": "Orthogonal",
     "aliases": [],
     "definition": "Independent: one design choice can be combined with any choice of the other.",
-    "source": "https://en.wikipedia.org/wiki/Orthogonality_(programming)"
+    "source": "https://vorpus.org/blog/notes-on-structured-concurrency-or-go-statement-considered-harmful/"
   },
   {
     "id": "backoff",
@@ -2500,7 +2482,7 @@
       "backoff"
     ],
     "definition": "Waiting, often for growing random intervals, before retrying, so competing parties stop colliding.",
-    "source": "https://en.wikipedia.org/wiki/Exponential_backoff"
+    "source": "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/locks/LockSupport.html"
   },
   {
     "id": "try-lock",
@@ -2527,8 +2509,8 @@
       "out-of-thin-air",
       "thin air"
     ],
-    "definition": "A value a read returns that no write ever produced. The Java memory model forbids them for most types.",
-    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html#jls-17.4.8"
+    "definition": "An outcome apparently justified only by circular speculation rather than a legitimate causal write. Java’s memory model includes causality rules intended to reject such executions; a torn long assembled from actual half-writes is a different phenomenon.",
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
   },
   {
     "id": "async-function",
@@ -2578,7 +2560,7 @@
       "Send + 'static",
       "'static + Send"
     ],
-    "definition": "Rust notation requiring a type to be thread-safe. `T: Send` means type `T` must implement Send (movable to another thread); `T: Sync` means it must implement Sync (shareable by reference); `!Send` marks a type that is not Send; `'static` additionally forbids borrowed references to short-lived data.",
+    "definition": "Rust bounds describing cross-thread use: T: Send permits moving values, while T: Sync permits sending shared references to them. A static bound rules out borrowed data with shorter lifetimes; it does not require the owned value itself to live forever. !Send commonly denotes a type lacking Send; actual negative-impl syntax has separate language restrictions.",
     "example": "`thread::spawn` requires its closure to be `Send + 'static`.",
     "source": "https://doc.rust-lang.org/nomicon/send-and-sync.html"
   },
@@ -2610,7 +2592,7 @@
       "microtask checkpoint",
       "microtask checkpoints"
     ],
-    "definition": "A point in the browser's event loop, such as the end of each task or callback, where it runs every queued microtask, including ones queued while draining, before continuing.",
+    "definition": "An HTML-host algorithm that drains queued microtasks, including newly queued ones, at specified checkpoints. It runs after tasks and at some callback boundaries when conditions apply; it is not an unconditional rule after every nested callback.",
     "source": "https://html.spec.whatwg.org/multipage/webappapis.html#perform-a-microtask-checkpoint"
   },
   {
@@ -2622,7 +2604,7 @@
       "Go pipeline",
       "Go pipelines"
     ],
-    "definition": "A chain of stages where each stage's output is the next stage's input. In Go each stage is a goroutine connected to the next by a channel, so stages run concurrently and closing a channel ripples down the chain.",
+    "definition": "Concurrent stages connected by channels or queues, with output from one feeding the next. In the demonstrated Go protocol each stage closes its output after production ends; cancellation and multiple producers require additional ownership rules.",
     "example": "`gen` → `sq` → `main` turns 2, 3, 4 into 4, 9, 16.",
     "source": "https://go.dev/blog/pipelines"
   },
@@ -2633,8 +2615,108 @@
       "task lifetime",
       "task lifetimes"
     ],
-    "definition": "How long a concurrent task exists, from being started to finishing or being cancelled. Unstructured spawns can outlive the code that started them; structured concurrency ties each task's lifetime to a block. (In Rust, lifetimes are also the compiler-checked spans for which references are valid.)",
+    "definition": "The interval from a concurrent task’s creation to its actual completion, including cancellation cleanup. A cancellation request does not itself end that interval. Unstructured spawns can outlive their caller; structured concurrency ties child completion to a scope. Rust reference lifetimes describe a different validity constraint.",
     "example": "An asyncio task created inside a TaskGroup cannot outlive the `async with` block.",
     "source": "https://vorpus.org/blog/notes-on-structured-concurrency-or-go-statement-considered-harmful/"
+  },
+  {
+    "id": "conc-falsy",
+    "term": "Falsy value (JavaScript)",
+    "aliases": [
+      "falsy"
+    ],
+    "definition": "A value converted to false by JavaScript’s ToBoolean operation, including false, zero, empty string, null, undefined and NaN. Ordinary objects, including every Promise, are truthy.",
+    "source": "https://tc39.es/ecma262/#sec-toboolean"
+  },
+  {
+    "id": "conc-unbounded-mailbox",
+    "term": "Unbounded actor mailbox",
+    "aliases": [
+      "unbounded mailbox",
+      "unbounded mailboxes"
+    ],
+    "definition": "A mailbox without a fixed configured message-count capacity. It still has finite available memory; if producers outrun processing and no overload policy intervenes, backlog and retained resources grow.",
+    "source": "https://www.erlang.org/doc/system/expressions.html#receive"
+  },
+  {
+    "id": "conc-deterministic-bug",
+    "term": "Deterministic bug",
+    "aliases": [
+      "deterministic bugs"
+    ],
+    "definition": "A defect that reproduces under the same relevant inputs and state. Restarting may temporarily reset state, but a bug on every startup will recur and can exhaust a supervisor’s restart budget.",
+    "source": "https://www.erlang.org/doc/apps/stdlib/supervisor.html"
+  },
+  {
+    "id": "conc-word-tearing",
+    "term": "Java word tearing",
+    "aliases": [
+      "word tearing"
+    ],
+    "definition": "Access to one field or array element interfering with another separate field or element. The Java Language Specification forbids this; it distinguishes it from the permitted split access to one non-volatile long or double.",
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html"
+  },
+  {
+    "id": "conc-synchronization-order",
+    "term": "Java synchronization order",
+    "aliases": [
+      "synchronization order",
+      "synchronisation order",
+      "synchronization-order"
+    ],
+    "definition": "The total order of Java synchronization actions, consistent with each thread’s program order. It is distinct from happens-before; the JLS specifies which pairs of actions synchronize-with and how those edges combine with program order.",
+    "source": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html#jls-17.4.4"
+  },
+  {
+    "id": "conc-native-code",
+    "term": "Native code",
+    "aliases": [
+      "native machine code",
+      "native functions"
+    ],
+    "definition": "Machine code executed directly by the processor, including compiled extension code. Whether a runtime can interrupt it, whether it releases an interpreter lock, and whether it blocks a carrier depend on that runtime and API; native code is not synonymous with an Erlang NIF.",
+    "source": "https://www.erlang.org/doc/apps/erts/erl_nif.html"
+  },
+  {
+    "id": "conc-priority-message",
+    "term": "Erlang priority message",
+    "aliases": [
+      "priority messages",
+      "priority-message"
+    ],
+    "definition": "OTP 28’s opt-in priority-message facility, including explicit sends using a priority-enabled process alias and priority signals configured through links or monitors. Accepted priority messages enter the queue’s priority portion ahead of ordinary messages, preserving order within each class; signal arrival ordering is a separate guarantee.",
+    "source": "https://www.erlang.org/doc/system/ref_man_processes.html#priority-messages"
+  },
+  {
+    "id": "conc-tokio-mutex",
+    "term": "tokio::sync::Mutex",
+    "aliases": [
+      "Tokio async mutex"
+    ],
+    "definition": "Tokio’s asynchronous mutex: acquiring it can suspend instead of blocking an executor thread, and its guard is designed to survive await points. Holding it across slow work still serializes access and can cause contention or deadlock.",
+    "source": "https://docs.rs/tokio/latest/tokio/sync/struct.Mutex.html"
+  },
+  {
+    "id": "conc-go-processor-slot",
+    "term": "Go processor slot",
+    "aliases": [
+      "processor slot",
+      "processor slots"
+    ],
+    "definition": "A Go runtime P: resources and scheduling state required by an OS thread to execute Go code. GOMAXPROCS controls how many Ps exist; this scheduling resource is different from a compiler’s numbered variable-storage slot.",
+    "source": "https://go.dev/src/runtime/proc.go"
+  },
+  {
+    "id": "conc-task-liveness",
+    "term": "Task liveness",
+    "aliases": [
+      "task progress",
+      "progress guarantees",
+      "makes progress",
+      "make progress",
+      "eventual progress"
+    ],
+    "definition": "Whether concurrent work eventually reaches useful steps or completion under stated scheduling, resource and protocol assumptions. Data-race freedom alone does not establish termination, bounded waiting or starvation freedom; this is distinct from the type-soundness progress theorem.",
+    "source": "https://eel.is/c++draft/intro.progress"
   }
 ]

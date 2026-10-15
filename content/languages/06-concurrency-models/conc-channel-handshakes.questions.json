@@ -1,0 +1,122 @@
+[
+  {
+    "id": "conc-csp-channels-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What happens when this Go program runs?\n\n```go\n// This send needs a receiving peer.\nfunc main() {\n  ch := make(chan int)\n  ch <- 1\n  fmt.Println(<-ch)\n}\n```",
+    "options": [
+      {
+        "text": "It prints 1",
+        "explanation": "That would need the send to complete without a receiver. On an unbuffered channel a send waits for a receiver, and the only receive comes after it."
+      },
+      {
+        "text": "It prints 0, the zero value",
+        "explanation": "Zero values come from receiving on a *closed* channel. This channel is never closed, and the receive is never reached."
+      },
+      {
+        "text": "It fails to compile: you cannot send and receive in the same goroutine",
+        "explanation": "The compiler allows it. The problem is only detected at run time."
+      },
+      {
+        "text": "It crashes with \"all goroutines are asleep - deadlock!\"",
+        "explanation": "Correct. `main` blocks on the send, no other goroutine exists to receive, so the runtime detects total deadlock."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `make(chan int)` is unbuffered: capacity 0.\n2. `ch <- 1` blocks until another goroutine is ready to receive.\n3. There is only `main`, and it is stuck on line 2, so the receive on line 3 never runs.\n4. Every goroutine is blocked, so the runtime aborts with the deadlock error.\n5. With `make(chan int, 1)` the send would fit in the buffer, and the program would print `1`.",
+    "link": {
+      "title": "Effective Go: Concurrency",
+      "url": "https://go.dev/doc/effective_go#concurrency"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Go, what does `ch := make(chan int, 3)` give you, compared with `make(chan int)`?",
+    "options": [
+      {
+        "text": "A channel that can be used by at most three goroutines",
+        "explanation": "Any number of goroutines can send to and receive from a channel. The 3 is a buffer capacity."
+      },
+      {
+        "text": "An open channel with capacity for three queued values; sends can complete without a receiver while capacity remains",
+        "explanation": "Correct. Buffered sends complete immediately while there is room; receives block only when the buffer is empty."
+      },
+      {
+        "text": "A channel that delivers values in batches of three",
+        "explanation": "Values are delivered one at a time in FIFO order. Capacity does not batch them."
+      },
+      {
+        "text": "A channel that closes automatically after three values",
+        "explanation": "Channels only close when someone calls `close`. Capacity has nothing to do with closing."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "| Channel | Send blocks when | Receive blocks when |\n|---|---|---|\n| `make(chan int)` | No receiver waiting | No sender waiting |\n| `make(chan int, 3)` | 3 items queued | 0 items queued |\n\nAn unbuffered channel is a rendezvous; a buffered one is a bounded queue that absorbs bursts and applies backpressure once full.",
+    "link": {
+      "title": "Effective Go: Concurrency",
+      "url": "https://go.dev/doc/effective_go#concurrency"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the core idea of Hoare's CSP, summed up in Go's proverb \"share memory by communicating\"?",
+    "options": [
+      {
+        "text": "Independent sequential processes interact only by passing messages over channels, rather than by reading and writing shared variables under locks",
+        "explanation": "Correct. Exclusive ownership is a programming discipline here; Go does not enforce it merely because a pointer passes through a channel."
+      },
+      {
+        "text": "All threads share one global memory, and channels make every access atomic",
+        "explanation": "This is shared-memory threading with a different name. CSP's point is that processes do not share mutable state."
+      },
+      {
+        "text": "Each process has a named mailbox that anyone can send to asynchronously",
+        "explanation": "That describes actors (next lesson). In the Go-style channel model, an unbuffered send targets a channel and rendezvous with a receiver; historical CSP notations vary."
+      },
+      {
+        "text": "Processes run one at a time in a fixed order to avoid races",
+        "explanation": "CSP processes run concurrently. Channels coordinate them; they do not serialise everything."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Contrast the two styles for handing work to another thread:\n\n1. **Shared memory**: put the job in a shared list, protect the list with a lock, signal a condition variable.\n2. **CSP**: `jobs <- job`. The channel does the queuing, synchronisation and visibility; after sending, the sender stops touching the job.\n\nThe synchronisation still exists, but it lives in one well-tested primitive instead of being scattered across your code.",
+    "link": {
+      "title": "Share Memory By Communicating — The Go Blog",
+      "url": "https://go.dev/blog/codelab-share"
+    }
+  },
+  {
+    "id": "conc-csp-channels-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Goroutine T1 runs `data = 42; done <- true` and goroutine T2 runs `<-done; fmt.Println(data)`, where `done` is an unbuffered channel and `data` is a plain `int`. What can T2 print, and why?",
+    "options": [
+      {
+        "text": "0 or 42, because `data` is not protected by a mutex",
+        "explanation": "The channel itself provides the ordering. A mutex would be redundant here."
+      },
+      {
+        "text": "Only 42, because the send on `done` happens-before the corresponding receive completes",
+        "explanation": "Correct. Program order puts `data = 42` before the send; the memory model links send to receive; program order puts the receive before the print."
+      },
+      {
+        "text": "Only 42, but only because Go uses sequential consistency for all memory accesses",
+        "explanation": "Go only promises sequential consistency to programs free of data races. Here it is the channel's happens-before edge that makes the program race-free."
+      },
+      {
+        "text": "A torn value, because `int` writes are not atomic in Go",
+        "explanation": "With the happens-before edge there is no concurrent access, so tearing cannot arise."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Build the chain, as for Java’s earlier volatile-publication example:\n\n1. T1: `data = 42` is before `done <- true` (program order).\n2. Go memory model: a send happens-before the corresponding receive completes.\n3. T2: `<-done` is before `Println(data)` (program order).\n4. Transitivity: the write happens-before the read, so T2 prints 42.\n\nThis is why channels can carry ownership of data without extra locking. Remove the channel and the access becomes a data race, which the race detector can flag when the relevant accesses execute.",
+    "link": {
+      "title": "The Go Memory Model",
+      "url": "https://go.dev/ref/mem"
+    }
+  }
+]

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "conc-coroutines-green-threads-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team moves a Java 21 service to virtual threads. Throughput improves at first, but under load the service stalls. Thread dumps show virtual threads blocked on JDBC calls made inside `synchronized` methods. What is going on?",
+    "options": [
+      {
+        "text": "Virtual threads cannot do blocking I/O; JDBC must be rewritten to be async",
+        "explanation": "The whole point of virtual threads is that blocking I/O unmounts them. JDBC works fine outside the pinning case."
+      },
+      {
+        "text": "Blocking inside `synchronized` pins the virtual thread to its carrier in JDK 21, so the few carrier threads are all stuck and no other virtual threads can run",
+        "explanation": "Correct. In JDK 21 to 23 a virtual thread could not unmount while holding a monitor. Switch to `ReentrantLock` there, or upgrade to JDK 24+ (JEP 491)."
+      },
+      {
+        "text": "The JVM limits each process to 256 virtual threads",
+        "explanation": "There is no such limit; the practical count depends on resources and per-thread state."
+      },
+      {
+        "text": "Virtual threads run on one carrier thread only, so they never use more than one core",
+        "explanation": "The default scheduler is a ForkJoinPool with roughly one carrier per core. Virtual threads are M:N, not M:1."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Carriers: by default about one per CPU core, say 8.\n2. A virtual thread blocked inside `synchronized` cannot unmount in JDK 21, so it holds its carrier for the whole JDBC wait.\n3. Eight such requests at once occupy all 8 carriers.\n4. Thousands of runnable virtual threads now have nowhere to run: the service stalls.\n5. Fixes: replace `synchronized` with `java.util.concurrent.locks.ReentrantLock` around blocking calls, or upgrade to JDK 24, where JEP 491 lets virtual threads unmount while holding a monitor. `-Djdk.tracePinnedThreads` helped diagnose this on JDK 21.",
+    "link": {
+      "title": "JEP 491: Synchronize Virtual Threads without Pinning — OpenJDK",
+      "url": "https://openjdk.org/jeps/491"
+    }
+  },
+  {
+    "id": "conc-coroutines-green-threads-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A Python team adopts gevent with `monkey.patch_all()` to make a `requests`-based crawler concurrent. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Ordinary blocking `requests.get` calls now switch to other greenlets while waiting, without rewriting code as `async`",
+        "explanation": "Correct. The patched `socket` module yields to the gevent hub instead of blocking the thread."
+      },
+      {
+        "text": "CPU-bound parsing in different greenlets now runs in parallel on several cores",
+        "explanation": "gevent is M:1: greenlets on a given hub share one OS thread. CPU work is still serial."
+      },
+      {
+        "text": "A C extension doing its own blocking network I/O can freeze every greenlet sharing that hub thread",
+        "explanation": "Correct. Monkey-patching only replaces Python-level modules; C code calling the OS directly bypasses it and blocks the one thread."
+      },
+      {
+        "text": "Greenlets can switch only at points where the code explicitly writes `await`",
+        "explanation": "greenlet is stackful and switching is hidden inside patched calls. That is why no `await` is needed, and also why switch points are invisible."
+      },
+      {
+        "text": "Shared mutable state can still be corrupted if a check and an update are separated by a patched I/O call",
+        "explanation": "Correct. Any patched call is a potential switch point, the same check-then-act hazard as across an `await`."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Classify gevent:\n\n1. **Stackful** coroutines (greenlet), so blocking-looking code can suspend from any depth: statement A true, D false.\n2. **M:1**: one OS thread, so no CPU parallelism: B false.\n3. **Cooperative via patching**: only calls through patched modules switch. Unpatched C code blocks that hub thread: C true.\n4. Switches can happen at every patched call, so `if x: (I/O); x -= 1` can interleave with another greenlet: E true.",
+    "link": {
+      "title": "Green thread — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Green_thread"
+    }
+  }
+]

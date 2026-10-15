@@ -1,0 +1,62 @@
+[
+  {
+    "id": "crypto-symmetric-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You encrypt messages with AES-CBC using a random IV each time, but no MAC. Which property are you still missing?",
+    "options": [
+      {
+        "text": "Confidentiality: CBC doesn't hide the content",
+        "explanation": "CBC with a random IV does provide confidentiality against passive attackers. What it lacks is protection against changes."
+      },
+      {
+        "text": "Availability: CBC messages can be lost",
+        "explanation": "Availability needs system-level measures. The possibility of losing messages is not the missing cryptographic authentication guarantee described here."
+      },
+      {
+        "text": "Integrity: an attacker can modify the ciphertext and you won't detect it",
+        "explanation": "Correct. Without a MAC, flipped bits decrypt to altered plaintext (or a padding error that becomes an oracle). An AEAD like AES-GCM adds the missing tag."
+      },
+      {
+        "text": "Key secrecy: CBC leaks the key through the IV",
+        "explanation": "The IV is public by design and reveals nothing about the key. The missing property is integrity."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "CBC decrypts each block, then XORs it with the previous ciphertext block:\n\n```formula\nP_2 = D_k(C_2) ⊕ C_1\nwhere\nP_2: the second plaintext block\nC_1, C_2: the first and second ciphertext blocks, which an attacker can alter in transit\nD_k: one AES block decryption under the secret key k\nk: the secret key\n⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match\nIn words: the second plaintext block is the decrypted second ciphertext block XORed with the first ciphertext block, so changing a bit of C_1 changes the same bit of P_2.\n```\n\n1. Encryption alone answers \"can an attacker read it?\" Properly used CBC with unpredictable IVs is intended to protect against passive observers.\n2. It does not answer \"can an attacker change it?\" Flipping any bit of C_1 flips the same bit of P_2 (and scrambles P_1, which passes through D_k).\n3. Worse, if your server reacts differently to bad padding, the attacker gets a padding oracle and may recover plaintext through repeated adaptive queries.\n4. The fix is authenticated encryption: AES-GCM or ChaCha20-Poly1305, whose safe API rejects failed authentication before returning plaintext.",
+    "link": {
+      "title": "Authenticated encryption (AEAD) — cryptography.io",
+      "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your API decrypts AES-CBC tokens. On a bad token it returns HTTP 400 with `invalid padding` or HTTP 401 with `invalid token`, depending on where decoding failed. A pentester says they can decrypt any token. What is the best fix?",
+    "options": [
+      {
+        "text": "Make both errors return the same message and status code",
+        "explanation": "That narrows the leak but timing differences can still reveal the padding result, as Lucky Thirteen showed. It treats the symptom of an unauthenticated design."
+      },
+      {
+        "text": "Switch to a random IV for every token",
+        "explanation": "A random IV is already needed for CBC confidentiality but does nothing against a padding oracle, which works on any IV."
+      },
+      {
+        "text": "Use AES-256 instead of AES-128",
+        "explanation": "Key length is irrelevant: the attack never touches the key. It exploits the server's padding feedback."
+      },
+      {
+        "text": "Replace the scheme with a vetted AEAD API such as AESGCM, and reject authentication failures without processing plaintext",
+        "explanation": "Correct. AESGCM needs no CBC padding, and its high-level decrypt API raises an error instead of returning unauthenticated plaintext."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Distinguishable padding outcomes can form an oracle.\n2. Adaptive ciphertext changes and repeated queries can reveal plaintext relationships.\n3. Query cost depends on the oracle, noise and handling of ambiguous padding; no measured request bound is supplied here.\n4. Uniform error messages alone can leave timing differences.\n5. Use a vetted authenticated scheme and consume plaintext only after verification. AEAD does not universally verify before performing internal decryption, and does not eliminate every side channel.",
+    "link": {
+      "title": "Padding oracle attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Padding_oracle_attack"
+    }
+  }
+]

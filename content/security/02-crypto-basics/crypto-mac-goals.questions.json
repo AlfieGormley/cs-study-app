@@ -1,0 +1,122 @@
+[
+  {
+    "id": "crypto-macs-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume a protected random key and correctly implemented HMAC-SHA256 verification. A message tag matches. What security property does this support?",
+    "options": [
+      {
+        "text": "The message is confidential: nobody else could read it",
+        "explanation": "A MAC provides no confidentiality. The message may have crossed the network in plain text."
+      },
+      {
+        "text": "The message wasn't altered and was produced by someone holding the key",
+        "explanation": "Correct under the stated cryptographic assumptions. The tag supports authenticity to a key holder and integrity of the covered bytes; it is not an absolute guarantee against forgery or replay."
+      },
+      {
+        "text": "The message is fresh and hasn't been seen before",
+        "explanation": "A captured message and tag can be replayed while the key and message interpretation remain accepted, unless the protocol enforces freshness."
+      },
+      {
+        "text": "A specific named person sent it, provably to a third party",
+        "explanation": "Both sides share the key, so either could have made the tag. Proving authorship to a third party needs a digital signature."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Under the stated assumptions, a matching tag supports integrity of the covered bytes and authenticity to some key holder. It is a computational assurance, not logical proof or freshness. Encryption adds confidentiality; enforced sequence/timestamp/nonce policy can address replay. Signatures separate signing and verification authority but attribution requires trustworthy key binding and custody.",
+    "link": {
+      "title": "Message authentication code — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Message_authentication_code"
+    }
+  },
+  {
+    "id": "crypto-macs-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bank and customer app share an HMAC key. Can the valid tag alone distinguish whether the app or the bank generated a payment instruction?",
+    "options": [
+      {
+        "text": "Yes, because the tag can't be forged without the key",
+        "explanation": "True against outsiders, but the bank also has the key. It could have produced the same tag itself."
+      },
+      {
+        "text": "Yes, if the tag uses SHA-256 rather than MD5",
+        "explanation": "The hash choice doesn't matter. The issue is that two parties share the key."
+      },
+      {
+        "text": "No, because MACs can be forged by anyone who sees one valid tag",
+        "explanation": "HMAC is not forgeable from seen tags. The problem is the symmetric key, not a forgery attack."
+      },
+      {
+        "text": "No: both hold the same key and can generate valid tags",
+        "explanation": "Correct. A signature can separate signing authority from verification authority, but does not by itself prove which human acted or determine a legal outcome."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Both app and bank can compute the same valid tag, so it cannot distinguish them. With an asymmetric signature, verifiers can check without gaining signing authority. Trust in key binding, key custody and other evidence is still needed for attribution. Legal conclusions are outside this lesson.",
+    "link": {
+      "title": "Message authentication code — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Message_authentication_code"
+    }
+  },
+  {
+    "id": "crypto-macs-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your webhook receiver checks an HMAC over the request body correctly. An attacker records yesterday's `refund issued` event and sends it again today. The tag is valid. What is the best defence?",
+    "options": [
+      {
+        "text": "Use a longer HMAC key",
+        "explanation": "The tag is genuine: the server signed exactly this body. A longer key doesn't stop the attacker resending it."
+      },
+      {
+        "text": "Encrypt the webhook body",
+        "explanation": "Encryption hides the content but the replayed ciphertext would still decrypt and verify."
+      },
+      {
+        "text": "Include a timestamp (and event ID) in the signed data, reject old timestamps, and ignore event IDs already processed",
+        "explanation": "Correct. Freshness must be inside the MAC, or the attacker can change it. Stripe signs `timestamp.body` and recommends a tolerance window; event IDs make handlers idempotent."
+      },
+      {
+        "text": "Switch from HMAC-SHA256 to HMAC-SHA512",
+        "explanation": "A stronger hash doesn't help against replay; the message was never forged."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A MAC proves \"a key holder produced these bytes\". It says nothing about *when*.\n2. Replay sends the exact same bytes and tag, so verification succeeds.\n3. Add freshness to the signed data, and check it on receipt:\n\n```formula\nt = HMAC(K, T ‖ \".\" ‖ b)\n|T_now − T| ≤ 300 s\nwhere\nt: the tag sent in the signature header\nHMAC: HMAC-SHA256, the keyed MAC\nK: the webhook secret shared by sender and receiver\nT: the sender timestamp in nominal Unix seconds; concatenation uses its specified decimal ASCII representation\nb: the raw request body\nT_now: the receiver's current time, in the same units\n|x|: the absolute value of x: its size ignoring the sign, so early and late both count\n≤: is at most\ns: seconds; 300 s is a 5-minute window\n‖: concatenation: joining byte strings end to end\nIn words: sign the timestamp together with the body, so it can't be changed, and accept only messages whose timestamp is within five minutes of now.\n```\n\n4. Rejecting timestamps outside the window means old captures die quickly.\n5. Within the window, atomically record/claim processed event IDs with the relevant effects and skip duplicates. This also handles legitimate retries.",
+    "link": {
+      "title": "Stripe: webhook signatures and replay handling",
+      "url": "https://docs.stripe.com/webhooks"
+    }
+  },
+  {
+    "id": "crypto-macs-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An API signs requests by hashing a secret followed by the request parameters:\n\n```formula\nt = SHA256(s ‖ m)\nwhere\nt: the tag sent with the request\nSHA256: the SHA-256 hash function\ns: the server's secret\nm: the request parameters\n‖: concatenation: joining byte strings end to end\nIn words: the tag is the SHA-256 hash of the secret with the parameters appended.\n```\n\nAn attacker sees one request and its tag but not the secret. To append `&admin=true` with a valid tag via length extension, which of these do they **not** need?",
+    "options": [
+      {
+        "text": "The original tag",
+        "explanation": "They do need it: it becomes the starting internal state for continued hashing."
+      },
+      {
+        "text": "The original params",
+        "explanation": "They need these to build the forged message (the params, then SHA-256's padding, then the extra text), which the server will recompute over."
+      },
+      {
+        "text": "The secret's length (or a few guesses at it)",
+        "explanation": "They need it to compute SHA-256's padding correctly. Trying each plausible length is cheap."
+      },
+      {
+        "text": "The secret itself",
+        "explanation": "Correct. That's what makes length extension devastating: the attacker never learns the secret, yet produces a valid tag."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "SHA-256 outputs its whole internal state, so the tag is a point the attacker can resume hashing from:\n\n```formula\nT = H(s ‖ m)\nT′ = H(s ‖ m ‖ p_1 ‖ x)\nL = L_s + L_m + L_p1 + L_x\nwhere\nT: the original tag, equal to SHA-256's internal state after processing s ‖ m ‖ p_1\nH: SHA-256\ns: the secret, never learned\nm: the original params\np_1: the padding SHA-256 added after s ‖ m; it depends only on their total length\nx: the extra text, `&admin=true`\nT′: the forged tag, computed by loading T as the state and hashing x plus its final padding\nL: the total length that x's final padding must encode, in bytes\nL_s, L_m, L_p1, L_x: the lengths in bytes of s, m, p_1 and x; only L_s is unknown, and it can be guessed\n‖: concatenation: joining byte strings end to end\nIn words: starting from the published tag, the attacker hashes on through the extra text and gets exactly what the server will compute for the longer message, without the secret.\n```\n\n1. The attacker sets their own SHA-256 state to T.\n2. They continue hashing x with final padding for total length L.\n3. Inputs needed: T, m and the length of s (guessable).\n4. They send m ‖ p_1 ‖ x with T′. The server hashes s followed by that and gets the same value.\n\nHMAC's outer hash stops this from giving a valid final tag.",
+    "link": {
+      "title": "Flickr API signature forgery (Duong and Rizzo, 2009)",
+      "url": "https://vnhacker.blogspot.com/2009/09/flickrs-api-signature-forgery.html"
+    }
+  }
+]

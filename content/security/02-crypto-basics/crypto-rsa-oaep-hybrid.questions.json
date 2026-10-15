@@ -1,0 +1,62 @@
+[
+  {
+    "id": "crypto-asymmetric-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does a typical hybrid public-key encryption design establish or protect a symmetric key, then use authenticated symmetric encryption for the bulk data?",
+    "options": [
+      {
+        "text": "Because RSA can only encrypt text, not binary files",
+        "explanation": "RSA encrypts numbers, and any bytes can be encoded as a number. Text versus binary isn't the issue."
+      },
+      {
+        "text": "Because AES is more secure than RSA",
+        "explanation": "Both can be secure at matching strengths (e.g. AES-128 and RSA-3072). The reason is performance and message size."
+      },
+      {
+        "text": "The design amortizes public-key work and avoids RSA-OAEP's small per-operation message limit",
+        "explanation": "Correct. RSA-OAEP-SHA256 with a 3,072-bit modulus fits at most 318 bytes. A symmetric cipher handles bulk data; other hybrid schemes encapsulate and derive a key instead of RSA wrapping."
+      },
+      {
+        "text": "Because RSA keys expire after one use",
+        "explanation": "RSA key pairs are long-lived. The per-message element is the random AES key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "For RSA-OAEP-SHA256 and a 3,072-bit modulus:\n\n```formula\nL_max = L_n − 2 × L_h − 2\nL_max = 384 − 2 × 32 − 2 = 318 bytes\nwhere\nL_max: the longest message one RSA-OAEP encryption can carry, in bytes\nL_n: the modulus length in bytes: 3,072 bits / 8 = 384\nL_h: the hash output length in bytes: 32 for SHA-256\n2: one 0x00 byte and one 0x01 separator byte in the OAEP encoding\nbytes: the unit of data, 8 bits each\nIn words: OAEP spends two hash lengths and two bytes on its own structure, leaving 318 bytes for the message.\n```\n\nA hybrid design can encrypt data with a fresh symmetric key and protect that key for the recipient. HPKE instead combines a KEM, KDF and AEAD. Key sizes, wrapping algorithms and speed vary; the lesson omits unrecorded throughput estimates.",
+    "link": {
+      "title": "NIST SP 800-57 Part 1 Rev. 5: Key management",
+      "url": "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final"
+    }
+  },
+  {
+    "id": "crypto-asymmetric-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print with overwhelming probability, assuming a working secure random source? (`pub` is a 2,048-bit RSA public key and `oaep` is OAEP with SHA-256.)\n\n```python\n# This scheme randomises encryption.\na = pub.encrypt(b\"hello\", oaep)\n# This scheme randomises encryption.\nb = pub.encrypt(b\"hello\", oaep)\n# OAEP seeds normally differ per call.\nprint(len(a), a == b)\n```",
+    "options": [
+      {
+        "text": "`5 True`",
+        "explanation": "RSA ciphertext length is set by the modulus, not the message. And OAEP is randomised."
+      },
+      {
+        "text": "`256 True`",
+        "explanation": "The length is right, but OAEP mixes fresh random bytes into every encryption, so the two ciphertexts differ."
+      },
+      {
+        "text": "`256 False`",
+        "explanation": "Correct. A 2,048-bit modulus gives 256-byte ciphertexts, and OAEP's randomness makes each encryption of the same message different."
+      },
+      {
+        "text": "`2048 False`",
+        "explanation": "2,048 is the key size in *bits*. Dividing the 2,048-bit modulus length by eight gives a 256-byte ciphertext."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. RSA ciphertext is a number below the modulus, encoded at the modulus length: 2,048 bits / 8 = 256 bytes, however short the plaintext.\n2. OAEP inserts a random seed on every call.\n3. So two encryptions of `hello` are different 256-byte strings, both decrypting to `hello`.\n4. Output: `256 False`.\n\nRandomisation is exactly what fixes textbook RSA's determinism.",
+    "link": {
+      "title": "RSA — cryptography.io",
+      "url": "https://cryptography.io/en/latest/hazmat/primitives/asymmetric/rsa/"
+    }
+  }
+]

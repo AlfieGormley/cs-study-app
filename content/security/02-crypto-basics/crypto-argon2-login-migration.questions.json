@@ -1,0 +1,62 @@
+[
+  {
+    "id": "crypto-passwords-kdfs-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nfrom argon2 import PasswordHasher\nold = PasswordHasher(time_cost=2)\nh = old.hash(\"pw\")\n\nph = PasswordHasher(time_cost=3)\n# Stored parameters verify the password.\nprint(ph.verify(h, \"pw\"))\n# New policy raises the time cost.\nprint(ph.check_needs_rehash(h))\n```",
+    "options": [
+      {
+        "text": "`True` then `False`",
+        "explanation": "Verification works, but `check_needs_rehash` compares the hash's stored parameters (two passes) with the hasher’s (three passes) and reports a mismatch."
+      },
+      {
+        "text": "`True` then `True`",
+        "explanation": "Correct. verify uses encoded parameters. check_needs_rehash detects a parameter mismatch; here t changes from 2 to 3. In general, a mismatch does not by itself prove every setting became stronger."
+      },
+      {
+        "text": "It raises `VerifyMismatchError`",
+        "explanation": "Verification doesn't use the new hasher's parameters; it reads `t=2` from the hash string itself."
+      },
+      {
+        "text": "`False` then `True`",
+        "explanation": "The password is correct and the parameters come from the encoded hash, so verification succeeds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. An Argon2 hash string is self-describing:\n\n```\n$argon2id$v=19$m=65536,t=2,p=4$\n<salt>$<hash>\n```\n\n2. `ph.verify` parses `m`, `t`, `p` and the salt from that string and recomputes. Correct password: `True`.\n3. `check_needs_rehash` compares those parameters with `ph`'s own (`t=3`). They differ: `True`.\n4. In a login handler, after a successful verify you'd call `ph.hash(\"pw\")` and store the new string. This is how you raise work factors over time without forcing resets.",
+    "link": {
+      "title": "argon2-cffi documentation",
+      "url": "https://argon2-cffi.readthedocs.io/en/stable/"
+    }
+  },
+  {
+    "id": "crypto-passwords-kdfs-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A migration must strengthen an existing unsalted SHA-1 table without immediately resetting every account. No prior leak is known. Which temporary approach adds a costly salted outer layer now and migrates to direct Argon2id at successful login?",
+    "options": [
+      {
+        "text": "Wait until each user logs in, then replace the SHA-1 hash with Argon2id",
+        "explanation": "Dormant accounts could keep weak hashes for years, exposed in any breach."
+      },
+      {
+        "text": "Force every user to reset their password today",
+        "explanation": "Resets can be appropriate, especially after suspected compromise, but this question explicitly asks for a migration without immediate mass resets. Neither resets nor wrapping retroactively remove old leaked copies."
+      },
+      {
+        "text": "Add a salt to each existing SHA-1 hash: `sha1(salt + old_hash)`",
+        "explanation": "Still a fast hash: GPUs crack this nearly as quickly. You need a slow, memory-hard function."
+      },
+      {
+        "text": "Wrap every hash now as `argon2id(sha1_hash)`, flag it as wrapped, and replace it with a plain Argon2id hash at each user's next login",
+        "explanation": "Correct. Every account gets a slow, salted outer hash immediately; logins then migrate to the clean form."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "You don't have plaintext passwords, only their SHA-1 hashes. But you can treat each SHA-1 hash as the input to a strong hash now, and replace it at the next login:\n\n```formula\nh_wrap = Argon2id(SHA1(P), S)\nh_new = Argon2id(P, S′)\nwhere\nh_wrap: the wrapped hash stored by tonight's batch job, flagged as wrapped\nh_new: the plain Argon2id hash stored after the user next logs in\nArgon2id: the slow, memory-hard password hash\nSHA1: the legacy SHA-1 hash already in the table\nP: the user's password\nS, S′: fresh random salts\nIn words: hash the existing SHA-1 values with salted Argon2id straight away; at each successful login, when the password is available, store a direct Argon2id hash instead.\n```\n\n1. On login for a wrapped account: SHA-1 the attempt, verify that against h_wrap, then store h_new and clear the flag.\n2. Immediately after the batch job, a stolen table needs Argon2id work per guess per user.\n3. Remember old backups still contain SHA-1 hashes: delete or protect them too.",
+    "link": {
+      "title": "Password Storage Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html"
+    }
+  }
+]

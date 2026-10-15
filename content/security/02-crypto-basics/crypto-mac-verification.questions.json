@@ -1,0 +1,130 @@
+[
+  {
+    "id": "crypto-macs-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which Python call should you use to check a received HMAC tag against the one you computed?",
+    "options": [
+      {
+        "text": "`received == expected`",
+        "explanation": "Ordinary string equality has no constant-time guarantee. Its exact comparison strategy and observable leakage depend on the implementation."
+      },
+      {
+        "text": "`hmac.compare_digest(expected, received)`",
+        "explanation": "Correct for valid same-type tags: this API avoids content-dependent short-circuit comparison. Other request processing and type/length differences can still affect timing."
+      },
+      {
+        "text": "`hashlib.sha256(received) == hashlib.sha256(expected)`",
+        "explanation": "With byte inputs this constructs two distinct hash objects instead of comparing their digests; string inputs raise a type error. Use the documented comparison directly on correctly encoded tags."
+      },
+      {
+        "text": "`received in expected`",
+        "explanation": "A substring check would accept a truncated or empty tag. It's both wrong and insecure."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ordinary equality has no constant-time guarantee. compare_digest avoids content-dependent short-circuiting for appropriate inputs; validate the tag format and length, then compare consistently. This is not proof that the complete login or webhook endpoint has no timing leakage.",
+    "link": {
+      "title": "hmac — Python documentation",
+      "url": "https://docs.python.org/3/library/hmac.html"
+    }
+  },
+  {
+    "id": "crypto-macs-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport hmac, hashlib\nk = b\"k\"\nf = hashlib.sha256\n# Same bytes and key give the same tag.\nt1 = hmac.new(k, b\"a\", f).hexdigest()\n# Same bytes and key give the same tag.\nt2 = hmac.new(k, b\"a\", f).hexdigest()\n# Use different key bytes for this tag.\nt3 = hmac.new(b\"K\", b\"a\",\n              f).hexdigest()\n# Compare repeatability and tag length.\nprint(t1 == t2, t1 == t3, len(t1))\n```",
+    "options": [
+      {
+        "text": "`True False 64`",
+        "explanation": "Correct for these inputs. The repeated key/message gives the same tag, while b\"K\" produces a different computed tag in this example. The hex output contains 64 characters."
+      },
+      {
+        "text": "`False False 64`",
+        "explanation": "HMAC has no randomness, so the same key and message always give the same tag."
+      },
+      {
+        "text": "`True True 64`",
+        "explanation": "Keys are case-sensitive bytes: `b\"k\"` and `b\"K\"` differ, so the tags are completely different."
+      },
+      {
+        "text": "`True False 32`",
+        "explanation": "32 is the digest length in bytes; `hexdigest` doubles it to 64 characters."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `t1` and `t2`: same key, same message, no randomness: equal. `True`.\n2. `t3` uses key `b\"K\"` (0x4B) instead of `b\"k\"` (0x6B). Different key, completely different tag. `False`.\n3. HMAC-SHA256 outputs 32 bytes; hex encoding gives 64 characters.\n\nOutput: `True False 64`.",
+    "link": {
+      "title": "hmac — Python documentation",
+      "url": "https://docs.python.org/3/library/hmac.html"
+    }
+  },
+  {
+    "id": "crypto-macs-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In an idealised timing oracle, each additional matching hex character is distinguishable and the secret 32-character tag remains fixed. Ignoring repetitions and noise, roughly how many candidate choices does a position-by-position search use, versus the full tag space?",
+    "options": [
+      {
+        "text": "About 340 undecillion, the same as brute force",
+        "explanation": "That's the brute-force figure. The early exit lets the attacker solve each character separately."
+      },
+      {
+        "text": "About 32, one per character",
+        "explanation": "Each position has 16 possible hex values, so the attacker must test up to 16 per position, not one."
+      },
+      {
+        "text": "At most 512 candidate characters, before repeated measurements",
+        "explanation": "Correct. Timing turns one huge search into 32 small ones of 16 values each."
+      },
+      {
+        "text": "About 256",
+        "explanation": "The attacker searches all 32 positions, testing up to 16 candidates at each; it is not just one pair of characters."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare a position-by-position search with a blind search of the whole tag space:\n\n```formula\nG_timing ≤ 32 × 16 = 512\nG_brute = 16^32 = 2^128\nwhere\nG_timing: candidate choices when the oracle confirms each character separately\nG_brute: the number of possible 32-character hex tags, searched blind\n16: the number of possible hex characters (0–9, a–f) at each position; each encodes 4 bits\n32: the number of characters in the tag\n≤: is at most\nIn words: confirming one character at a time turns a 2^128 search into at most 512 choices.\n```\n\nReal measurements can require many repetitions or may not expose this signal at all. This arithmetic is not a network timing-attack benchmark.",
+    "link": {
+      "title": "hmac — Python documentation",
+      "url": "https://docs.python.org/3/library/hmac.html"
+    }
+  },
+  {
+    "id": "crypto-macs-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're writing a GitHub webhook handler. Which practices are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Compute HMAC-SHA256 over the raw request body bytes, before parsing JSON",
+        "explanation": "Correct. The tag covers the exact bytes sent. Parsing first risks acting on unverified input and changing the bytes."
+      },
+      {
+        "text": "Parse the JSON, re-serialise it, then compute the HMAC over that",
+        "explanation": "Re-serialising can reorder keys or change whitespace and escapes, so the bytes no longer match the signature even for genuine events."
+      },
+      {
+        "text": "Compare the computed and received signatures with `hmac.compare_digest`",
+        "explanation": "Correct. compare_digest avoids content-dependent early termination in the comparison; it does not prove the complete endpoint has no timing side channel."
+      },
+      {
+        "text": "Store the webhook secret in a secrets manager, not in source code",
+        "explanation": "Correct. Anyone with the secret can forge webhooks, so treat it like a password or API key."
+      },
+      {
+        "text": "On failure, log the expected signature to help debugging",
+        "explanation": "Logging the expected tag hands a valid signature for that body to anyone with log access. Log that verification failed, not the secret material."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Check each item against two goals: verify exactly what was signed, and don't leak secrets.\n\n1. Raw bytes before parsing: matches what GitHub signed. **Correct.**\n2. Re-serialised JSON: different bytes, false failures, and you've parsed untrusted input. **Wrong.**\n3. `compare_digest`: avoids content-dependent early exit in that comparison. **Correct.**\n4. Secret in a secrets manager: limits who can forge. **Correct.**\n5. Logging the expected tag: leaks a valid signature. **Wrong.**",
+    "link": {
+      "title": "Validating webhook deliveries — GitHub Docs",
+      "url": "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
+    }
+  }
+]

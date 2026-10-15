@@ -1,0 +1,70 @@
+[
+  {
+    "id": "crypto-symmetric-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Python cryptography AESGCM with a 128-bit tag are true? Output means its encrypt() result, excluding separately stored nonce and AAD. Select all that apply.",
+    "options": [
+      {
+        "text": "The nonce must never repeat under the same key",
+        "explanation": "Correct. Repetition reuses the CTR keystream and can enable authentication-key attacks and forgeries."
+      },
+      {
+        "text": "Associated data (AAD) is encrypted along with the plaintext",
+        "explanation": "AAD is authenticated but not encrypted by this operation; it need not be transmitted if both parties already know it."
+      },
+      {
+        "text": "A failed authentication check raises an error and returns no plaintext",
+        "explanation": "Correct. AESGCM.decrypt raises InvalidTag when its tag verification fails. Protection has a bounded nonzero forgery probability, rather than a mathematical guarantee that every possible altered input is rejected."
+      },
+      {
+        "text": "The nonce must be kept secret like the key",
+        "explanation": "The nonce only has to be unique. It is usually stored or sent alongside the ciphertext in plain view."
+      },
+      {
+        "text": "The output is 16 bytes longer than the plaintext",
+        "explanation": "Correct. GCM adds no padding; the ciphertext is the same length as the plaintext plus a 16-byte tag."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Go through each claim against how GCM is built (CTR encryption plus a GHASH tag):\n\n1. Nonce uniqueness: CTR keystream depends on key and nonce, so repeating it repeats the keystream. **True.**\n2. AAD: it feeds into the tag only. **False**: it's authenticated, not secret.\n3. Tampering: decryption recomputes the tag; any mismatch raises `InvalidTag`. **True.**\n4. Nonce secrecy: not required, it travels with the message. **False.**\n5. Length: the output is the plaintext length plus the tag (formula below). **True.**\n\n```formula\nL_out = L_in + 16\nL_out = 10 + 16 = 26 bytes\nwhere\nL_out: the length of the encrypt() output (ciphertext plus tag), in bytes\nL_in: the plaintext length, in bytes; `pay Bob 10` is 10\n16: the tag length: 128 bits = 16 bytes\nbytes: the unit of data; one byte is 8 bits\nIn words: GCM adds no padding, so the output is exactly the plaintext length plus a 16-byte tag.\n```",
+    "link": {
+      "title": "NIST SP 800-38D: GCM and GMAC",
+      "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
+    }
+  },
+  {
+    "id": "crypto-symmetric-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport os\nfrom cryptography.hazmat.primitives\\\n  .ciphers.aead import AESGCM\n\nk = AESGCM.generate_key(\n    bit_length=128)\nn = os.urandom(12)\n# This scheme randomises encryption.\nct = AESGCM(k).encrypt(\n    n, b\"x\" * 100, None)\n# Count nonce, ciphertext and GCM tag.\nprint(len(n + ct))\n```",
+    "options": [
+      {
+        "text": "`100`",
+        "explanation": "This ignores both the 16-byte tag and the 12-byte nonce being concatenated in front."
+      },
+      {
+        "text": "`116`",
+        "explanation": "That's `len(ct)` alone (100 + 16-byte tag). The print also includes the 12-byte nonce."
+      },
+      {
+        "text": "`128`",
+        "explanation": "Correct. 12 bytes of nonce + 100 bytes of ciphertext + 16 bytes of tag = 128."
+      },
+      {
+        "text": "`144`",
+        "explanation": "144 is incorrect. Even an imagined padding to 112 bytes plus a 16-byte tag and 12-byte nonce totals 140, not 144. AESGCM does not pad."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `n` is 12 bytes (the standard 96-bit GCM nonce).\n2. GCM is a stream-style mode, so the ciphertext is exactly as long as the plaintext: 100 bytes.\n3. `encrypt` appends a 16-byte tag: `len(ct) = 116`.\n4. The key size (128 vs 256 bits) doesn't change the output length.\n5. The print adds the 12-byte nonce in front:\n\n```formula\nL_total = L_nonce + L_pt + L_tag\nL_total = 12 + 100 + 16 = 128 bytes\nwhere\nL_total: the printed length, len(n + ct), in bytes\nL_nonce: the nonce length: 12 bytes (96 bits)\nL_pt: the plaintext length, 100 bytes; GCM ciphertext is the same length\nL_tag: the authentication tag length: 16 bytes (128 bits)\nbytes: the unit of data; one byte is 8 bits\nIn words: nonce plus ciphertext plus tag gives 128 bytes; the key size plays no part.\n```\n\nPrepending the nonce is a common way to store it, since it only has to be unique, not secret.",
+    "link": {
+      "title": "Authenticated encryption (AEAD) — cryptography.io",
+      "url": "https://cryptography.io/en/latest/hazmat/primitives/aead/"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 49/76. Updated 2026-10-15.
+Verified modules: 51/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -56,6 +56,8 @@ The material is divided by concept while retaining substantive explanations, exa
 | languages/Compilers & Interpreters | 7 | 37 | 86 | 36 | 293 | 452 | 53 |
 | languages/Concurrency Models in Languages | 6 | 25 | 67 | 16 | 264 | 372 | 39 |
 | security/Security Fundamentals | 6 | 27 | 66 | 13 | 408 | 501 | 54 |
+| security/Cryptography Basics | 6 | 37 | 72 | 121 | 248 | 357 | 143 |
+| security/Web Application Security | 3 | 14 | 33 | 7 | 215 | 269 | 31 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4078,6 +4080,103 @@ Low-confidence areas:
 - **medium** — secf-attack-vocabulary: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
 - **medium** — secf-intrusion-defence: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
 - **medium** — secf-detection-evidence: Deployment-dependent controls, threat-model assumptions, historical taxonomy or inherited explanatory vocabulary.. Primary core checked and examples bounded; this unit does not establish complete production control effectiveness, formal security, human attribution or every inherited secondary detail.
+
+## security: Cryptography Basics
+
+[Independent verification record](../content/security/02-crypto-basics/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Repaired three closing formula fences that shared a line with following prose; all 121 cards now compile and phone rendering is clean.
+- Corrected a false equality between an unreduced Diffie–Hellman power and its remainder; independently checked all toy modular and curve values and both revised drawing directions/values.
+- Corrected Ed25519 private signing scalar versus per-message secret nonce derivation against RFC 8032; RFC native vector passes.
+- Removed the unsupported Pollard-rho constant range and retained a variant-dependent expected square-root work model. Qualified heuristic GNFS and idealised search/time estimates.
+- Replaced absolute AEAD, MAC and OAEP guarantees with the scheme’s assumptions, encoding checks and forgery bounds; clarified that OAEP does not authenticate a sender.
+- Separated non-coprime from coprime, NaCl from libsodium, OpenPGP from GnuPG, Kyber from ML-KEM, IoT from embedded devices, and Keccak from SHA-3 with six precise glossary entries.
+- Removed broad aliases for keying material, RSA padding, generic TLS handshakes and EdDSA JWT; compiled probes verify all 248 canonical terms and 690 alias senses, including earlier-owned definitions.
+- Corrected SHA-3/truncated state, ambiguous-input encoding, RSA two-prime versus multi-prime, subgroup, KDF, key separation, operating-system RNG and platform-specific password-library claims.
+- Qualified the historical Chrome 131 statement to the September 2024 announced transition, which the original Google source actually establishes.
+- Moved ECC-strength questions after scalar-security teaching, entropy questions to randomness, and direction-label derivation questions to HKDF. Replaced generic print comments with descriptions of actual results.
+
+Remaining gaps:
+
+- Formal HMAC security reductions and complete asymptotic attack proofs are not taught; constructions and assumptions are checked against standards and original-author cryptography references.
+- No hardware throughput benchmarks, resource-backed quantum attack estimate or proof that a toy implementation is secure is supplied. Hypothetical rates and generic work models are explicitly conditional.
+- Demonstrations omit complete production authentication, provisioning, replay protection, storage, rotation and operational error handling. Library boundaries and per-protocol requirements remain necessary.
+- Original 2004 MD5 collision paper endpoints returned HTTP 403 in this environment. The historical date is supported by later original research and retained at medium confidence; no direct access to that original paper is claimed.
+- Generic mathematical definitions use original-author Handbook of Applied Cryptography chapters as authoritative references, supplemented by native checks and standards; not every basic definition has a separate first-publication source.
+- This is a subdivision of existing material, not a complete course in modern cryptographic protocol proofs or post-quantum migration.
+
+Low-confidence areas:
+
+- **medium** — crypto-aes-keys: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-cbc-padding: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-aead-api: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-gcm-nonce-limits: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-hash-security-goals: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-hash-birthday: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-hash-constructions: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-hash-algorithm-choices: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-hash-uses-encoding: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-mac-goals: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-hmac-construction: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-mac-deployments: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-encryption-mac-order: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-rsa-public-keys: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-rsa-oaep-hybrid: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-ecc-scalar-security: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-public-key-transition: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-dh-groups-assumptions: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-dh-authentication: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-dh-parameter-validation: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-x25519-derived-keys: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-forward-secrecy: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-randomness-sources: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-hkdf-purpose-labels: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-password-salts-cost: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-password-algorithms: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-argon2-login-migration: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+- **medium** — crypto-password-peppers: Current library behaviour, policy guidance, historical observations and/or idealised attack bounds in this unit. Primary/official sources and local fixtures support the stated scope. Product defaults and policy change; idealised work estimates are not measured runtimes, and historical figures do not establish current prevalence.
+
+## security: Web Application Security
+
+[Independent verification record](../content/security/04-web-security/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Preflight caching does not require identical credentials modes: an include-enabled entry can cover non-include requests, while the reverse is excluded. Changed headers can reuse permissions already granted. Added network-partition matching and tested both directions/header grants in real local Chrome.
+- The grouped seconds-per-hour denominator now shows intended unit conversion explicitly; formula products use conventional algebra and preserve all values.
+- Corrected opposite non-ASCII→ASCII alias with a separate Non-ASCII term. Relative URL references may contain an authority while omitting the scheme.
+- Qualified textContent as a plain-text display sink: script/style elements have active text semantics. Character-reference interpretation depends on HTML context, and percent encoding represents bytes rather than universally one character.
+- Django format_html honors already-safe arguments; it conditionally escapes ordinary arguments. Question explanations now preserve that boundary.
+- Fixed blanket redirect→top-level-navigation wording and extra cookie eligibility assumptions. SameSite controls permitted contexts rather than always withholding cross-site cookies.
+- Nonce guessing and fixed-nonce impact avoid absolute guarantees; cached HTML/header pair reuse and hash-based static-content alternatives are stated. The independently checked CSP3 strict-dynamic algorithm does allow eligible non-parser-inserted inline text while eval/string timers/handlers remain separately blocked.
+- Corrected general CSPRNG/entropy guarantees, signed-cookie storage assumptions, CSP self matching, HTTP method/status semantics and paid-only penetration-tester definition.
+- Replaced stale lesson3 reference. Real dictionary owners are Fundamentals01 and Crypto02; author-provided03-auth/02-cryptography paths do not exist.
+
+Remaining gaps:
+
+- No complete browser/version compatibility matrix or long real preflight-retention measurement.
+- Recent-cookie 120-second default-mode behavior is checked against Chromium guidance/source and arithmetic; no two-minute cookie-aging browser experiment is claimed.
+- Partial Flask, CSP, message and Trusted Types examples need the stated setup and production integration; passing local fixtures do not prove full application security.
+- Samy and Google’s sampled CSP study are historical source-backed cases; their spread or coverage is not newly reproduced.
+
+Low-confidence areas:
+
+- **medium** — web-origin-boundaries: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-cors-preflight-permission: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-preflight-cache-lifetime: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-cors-credential-allowlists: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-window-message-isolation: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-xss-data-flows: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-xss-output-contexts: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-csp-script-trust: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-csp-nonce-entropy: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-trusted-dom-types: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-csrf-request-intent: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-csrf-session-tokens: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-csrf-samesite-context: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
+- **medium** — web-csrf-request-filters: Browser support, implementation defaults and framework behavior are version/configuration dependent.. Normative rules and the current local Chrome/native fixtures were checked. No complete cross-browser/version matrix or production deployment correctness is established.
 
 ## synth: Sound & Digital Audio
 

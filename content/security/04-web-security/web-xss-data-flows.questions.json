@@ -1,0 +1,92 @@
+[
+  {
+    "id": "web-xss-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A forum saves each post's body to the database and inserts it directly into server-rendered HTML without encoding. A user's post contains script that runs for every reader. What type of XSS is this?",
+    "options": [
+      {
+        "text": "Reflected XSS",
+        "explanation": "Reflected XSS echoes input from the *current request*. Here the payload was saved and served later to other users."
+      },
+      {
+        "text": "DOM-based XSS",
+        "explanation": "Client-side sink insertion would make it DOM-based too, but this question specifies direct server rendering. Stored versus reflected is a separate way of sorting XSS."
+      },
+      {
+        "text": "Stored XSS",
+        "explanation": "Correct. The payload is persisted on the server and delivered to every viewer, with no crafted link needed."
+      },
+      {
+        "text": "Not XSS, because the attacker didn't send anything to the victim",
+        "explanation": "XSS needs only that attacker-controlled data executes in the victim's browser in your origin. Stored XSS needs no direct contact with the victim."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The payload persists in the database and is delivered on later views, so it is stored XSS. Here the server inserts it into HTML. Persisted data inserted unsafely by client JavaScript could instead be both stored and DOM-based; URL data can also feed a DOM sink.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does `markupsafe.escape(\"<b>Tom & Jerry</b>\")` produce?",
+    "options": [
+      {
+        "text": "`<b>Tom & Jerry</b>` unchanged, as it contains no script",
+        "explanation": "Escaping does not look for scripts. It encodes every special HTML character regardless of whether the content looks dangerous."
+      },
+      {
+        "text": "`Tom & Jerry`, with the tags stripped",
+        "explanation": "Stripping tags is what an HTML sanitiser might do. Escaping keeps every character but makes it display as text."
+      },
+      {
+        "text": "`&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;`",
+        "explanation": "Correct. `<`, `>` and `&` become entities, so the browser shows the literal tags as text instead of making the text bold."
+      },
+      {
+        "text": "`%3Cb%3ETom%20%26%20Jerry%3C%2Fb%3E`",
+        "explanation": "That is URL percent-encoding, which is for query strings, not HTML output. Using the wrong encoding for the context is a classic mistake."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Go character by character:\n\n```\n<   -> &lt;\nb   -> b\n>   -> &gt;\nTom -> Tom\n&   -> &amp;\n...\n```\n\nResult: `&lt;b&gt;Tom &amp; Jerry&lt;/b&gt;`. The browser renders it as the visible text `<b>Tom & Jerry</b>`, not bold. That's the whole point: data stays data.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This SPA code is vulnerable to DOM XSS:\n\n```javascript\n// Decode data; unsafe sink parses HTML.\nconst t = decodeURIComponent(\n  location.hash.slice(1));\nbox.innerHTML = t;\n```\n\nThe team adds HTML escaping to every server response. Does that fix it?",
+    "options": [
+      {
+        "text": "Yes, because all output is now escaped",
+        "explanation": "The vulnerable output is produced by client JS, not the server. Server-side escaping never touches this value."
+      },
+      {
+        "text": "No: ordinary HTTP navigation omits the fragment, and this value reaches innerHTML in client code; use a text sink or suitable sanitisation",
+        "explanation": "Correct for this data flow. Escaping server-rendered values never transforms the fragment before this sink. Replace innerHTML with textContent for ordinary text; server-supplied CSP can provide additional defence."
+      },
+      {
+        "text": "Yes, if they also add a WAF rule blocking `<script>` in URLs",
+        "explanation": "A WAF never sees the fragment either, and `innerHTML` payloads don't need a `<script>` tag (event-handler attributes work)."
+      },
+      {
+        "text": "No, because `decodeURIComponent` itself executes code",
+        "explanation": "`decodeURIComponent` only decodes percent-escapes into a string. The sink, `innerHTML`, is the problem."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the data flow:\n\n```\nURL  /page#<payload>\n      |  fragment stays in browser\n      v\nlocation.hash (source)\n      |\n      v\nbox.innerHTML (sink) -> parsed as HTML\n```\n\nNo server-rendered value is on this source-to-sink path, so output escaping on the server misses it. Replace the sink:\n\n```javascript\n// Replace content without HTML parsing.\nbox.textContent = t;\n```\n\nOr, if HTML is genuinely needed, `box.innerHTML = DOMPurify.sanitize(t)`.",
+    "link": {
+      "title": "DOM based XSS Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"
+    }
+  }
+]

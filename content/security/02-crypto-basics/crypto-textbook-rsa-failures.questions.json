@@ -1,0 +1,92 @@
+[
+  {
+    "id": "crypto-asymmetric-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An online poll encrypts each vote (`yes` or `no`, encoded as numbers) with **textbook RSA** under the organiser's public key, then publishes the ciphertexts. How can an observer learn every vote without the private key?",
+    "options": [
+      {
+        "text": "They can't: RSA ciphertexts reveal nothing without the private key",
+        "explanation": "That's true only for randomised (padded) RSA. Textbook RSA is deterministic."
+      },
+      {
+        "text": "By factoring the organiser's 2,048-bit modulus",
+        "explanation": "Factoring the 2,048-bit modulus isn't feasible, and isn't needed here."
+      },
+      {
+        "text": "By encrypting `yes` and `no` themselves with the public key and matching the published ciphertexts",
+        "explanation": "Correct. Textbook RSA is deterministic: the same plaintext always gives the same ciphertext, so a tiny message space is fully exposed. OAEP adds randomness to prevent this."
+      },
+      {
+        "text": "By multiplying ciphertexts together to cancel the key",
+        "explanation": "Multiplying ciphertexts is the malleability property, which lets you change plaintexts, not read them in this setting."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Textbook RSA has no randomness, so anyone with the public key can reproduce any ciphertext:\n\n```formula\nc = m^e mod n\nc_yes = m_yes^e mod n\nc_no = m_no^e mod n\nwhere\nc: a published ciphertext\nm: a vote encoded as a number\nm_yes, m_no: the numbers encoding `yes` and `no`\nc_yes, c_no: their encryptions, which the observer computes\ne: the public exponent\nn: the public modulus\nmod: \"modulo\": x mod n is the remainder left after dividing x by n\nIn words: there are only two possible votes, so the observer encrypts both and every published ciphertext must equal one of the two results.\n```\n\n1. Every published ciphertext equals c_yes or c_no.\n2. Match and count. Every vote is revealed.\n\nWith our toy key, 65 always encrypts to 2790; 66 always to 524. OAEP mixes in random bytes, so the same message encrypts differently each time.",
+    "link": {
+      "title": "RFC 8017: PKCS #1 v2.2 (RSA, OAEP)",
+      "url": "https://www.rfc-editor.org/rfc/rfc8017"
+    }
+  },
+  {
+    "id": "crypto-asymmetric-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With the toy RSA key below, the ciphertext 2790 decrypts to 65. An attacker who doesn't know d sends the server a modified ciphertext c′ instead. What does c′ decrypt to?\n\n```formula\nn = 3233, e = 17, d = 2753\nc′ = 2790 × 3^17 mod 3233\nwhere\nn: the modulus\ne: the public exponent\nd: the private exponent, secret\nc′: the attacker's modified ciphertext\n3^17: 17 copies of 3 multiplied together\nmod: \"modulo\": x mod n is the remainder left after dividing x by n\nIn words: the attacker multiplies the ciphertext by 3 raised to the public exponent, keeping the remainder after dividing by 3233.\n```",
+    "options": [
+      {
+        "text": "`65`",
+        "explanation": "Multiplying the ciphertext changes the plaintext; it doesn't leave it unchanged."
+      },
+      {
+        "text": "`68`",
+        "explanation": "Malleability is multiplicative, not additive: the plaintext is multiplied by 3, not increased by 3."
+      },
+      {
+        "text": "Random garbage",
+        "explanation": "In textbook RSA the change is precise and predictable. That's what makes malleability dangerous."
+      },
+      {
+        "text": "`195`",
+        "explanation": "Correct:\n\n```formula\nc′^d ≡ 2790^d × 3^(e × d) (mod n)\nc′^d ≡ 65 × 3 = 195 (mod n)\nwhere\nc′: the modified ciphertext\nd, e: the private and public exponents\nn: the modulus, 3233\n≡: \"is congruent to\": both sides leave the same remainder after dividing by n\nmod: \"modulo\": the remainder after dividing by n\nIn words: 2790 decrypts to 65 and 3 to the power e decrypts to 3, so the product decrypts to 65 × 3. Textbook RSA is multiplicatively malleable.\n```"
+      }
+    ],
+    "answer": 3,
+    "workedExample": "RSA preserves multiplication:\n\n```formula\nE(x) = x^e mod n\nE(a) × E(b) ≡ a^e × b^e (mod n)\nE(a) × E(b) ≡ (a × b)^e (mod n)\nE(a) × E(b) ≡ E((a × b) mod n) (mod n)\nc′ ≡ E(65) × E(3) ≡ E(195) (mod n)\nwhere\nE: textbook RSA encryption with the public key\nx, a, b: messages, as whole numbers below n\ne: the public exponent, 17\nn: the modulus, 3233\nc′: the attacker's ciphertext, 2790 × 3^17 mod 3233\n≡: \"is congruent to\": both sides leave the same remainder after dividing by n\nmod: \"modulo\": the remainder after dividing by n\nIn words: the attacker's factor 3^17 mod 3233 is just the encryption of 3, computable with the public key, and multiplying two ciphertexts gives the encryption of the product, 195.\n```\n\nDecryption gives 195.\n\n```python\nn, e, d = 3233, 17, 2753\nc2 = 2790 * pow(3, e, n) % n\n# Modified ciphertext decrypts to 3m.\nprint(pow(c2, d, n))   # 195\n```\n\nRSA-OAEP is designed to resist this textbook multiplicative attack under its assumptions. Invalid encodings are rejected; encryption does not authenticate who created a fresh valid ciphertext.",
+    "link": {
+      "title": "RSA (cryptosystem) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/RSA_(cryptosystem)"
+    }
+  },
+  {
+    "id": "crypto-asymmetric-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A system uses textbook RSA with public exponent 3 and a 2,048-bit modulus to encrypt short numeric PINs. An attacker intercepts the ciphertext 125. What is the PIN, and why did this happen?",
+    "options": [
+      {
+        "text": "It can't be found without factoring the modulus",
+        "explanation": "Factoring isn't needed: the PIN cubed was smaller than the modulus, so no modular reduction happened."
+      },
+      {
+        "text": "`5`, because 5 cubed is 125, smaller than the modulus, so the ciphertext is just the ordinary cube of the PIN and an integer cube root reverses it",
+        "explanation": "Correct. With a small public exponent and no padding, short messages never wrap around the modulus. OAEP pads the message to nearly the size of the modulus, preventing this."
+      },
+      {
+        "text": "`41`, because 125 leaves remainder 41 after dividing by 84",
+        "explanation": "There's no reason to reduce modulo 84. Encryption here is just cubing, since the cube is smaller than the modulus."
+      },
+      {
+        "text": "`375`, because decryption multiplies by the public exponent",
+        "explanation": "RSA decryption is exponentiation by the private exponent, not multiplication by the public exponent."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "With public exponent 3, encryption is cubing modulo n:\n\n```formula\nc = m^3 mod n\nn ≈ 2^2048\nm^3 < n when m < 2^682\nc = m^3 so m = ∛(c) = ∛(125) = 5\nwhere\nc: the ciphertext, 125\nm: the PIN as a whole number\nn: the 2,048-bit modulus, about 2^2048\nm^3: three copies of m multiplied together\n∛: the ordinary cube root: ∛(c) is the number whose cube is c\nmod: \"modulo\": x mod n is the remainder left after dividing x by n\n<: is less than\n≈: approximately equal to\nIn words: any message below about 2^682 cubes to less than the modulus, so the remainder step never happens and an ordinary cube root recovers it.\n```\n\nLessons: textbook RSA leaks small messages, and a public exponent of 3 makes it worse. Use OAEP (and the standard exponent 65537) via a library.",
+    "link": {
+      "title": "RSA (cryptosystem) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/RSA_(cryptosystem)"
+    }
+  }
+]

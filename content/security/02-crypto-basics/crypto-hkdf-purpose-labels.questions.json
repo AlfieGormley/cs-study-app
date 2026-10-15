@@ -1,0 +1,32 @@
+[
+  {
+    "id": "crypto-key-exchange-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After an X25519 exchange, a developer uses the 32-byte shared secret directly as the AES-GCM key for **both** directions, each side starting its nonce counter at 0. What's the most serious problem?",
+    "options": [
+      {
+        "text": "32 bytes is too long for an AES key",
+        "explanation": "AES-256 takes exactly 32 bytes; the length isn't the issue."
+      },
+      {
+        "text": "X25519 secrets are only valid for one message",
+        "explanation": "The secret can key a whole session. The issues are how it's used and shared across directions."
+      },
+      {
+        "text": "Both sides encrypt with the same key and the same nonces (0, 1, 2, ...), so nonces collide and GCM breaks",
+        "explanation": "Correct. Matching key/nonce pairs expose the overlapping plaintext XOR and can enable GCM forgeries. Derive distinct direction keys with HKDF and distinct labels, within an authenticated protocol."
+      },
+      {
+        "text": "AES-GCM can't be used after a key exchange",
+        "explanation": "AES-GCM after (EC)DHE is exactly what TLS 1.3 does. It needs properly derived keys."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The same key K is used by client and server.\n2. Each starts its nonce counter at 0. The client's first message uses (K, nonce 0); so does the server's.\n3. GCM nonce reuse reveals the XOR of the two plaintexts (below), and repeated-nonce tag equations can constrain GHASH-key candidates and enable forgeries, depending on observations.\n\n```formula\nC_1 ⊕ C_2 = P_1 ⊕ P_2\nwhere\nC_1, C_2: the two ciphertexts encrypted under the same key and nonce\nP_1, P_2: their plaintexts\n⊕: XOR (exclusive or): each output bit is 1 where the two inputs differ and 0 where they match\nIn words: the shared keystream cancels, so an eavesdropper gets the XOR of the client's and server's messages.\n```\n\n4. Also, raw DH output isn't uniformly random, so it shouldn't be used as a key directly.\n5. Fix: derive one key per direction with HKDF and distinct labels:\n\n```formula\nK_c2s = HKDF(s, \"c2s key\")\nK_s2c = HKDF(s, \"s2c key\")\nwhere\ns: the raw X25519 shared secret\nHKDF: HKDF-SHA256 producing 32 output bytes with the protocol-specified salt and the quoted context label as info; suitable input and security assumptions yield pseudorandom derived keys\nK_c2s: the key for client-to-server messages\nK_s2c: the key for server-to-client messages\nIn words: distinct direction labels provide key separation under HKDF’s assumptions. Each direction must still keep nonces unique for its own key; this is not a mathematical promise that derived keys can never coincide.\n```\n\nTLS 1.3's key schedule derives separate client and server traffic keys this way.",
+    "link": {
+      "title": "RFC 5869: HKDF",
+      "url": "https://www.rfc-editor.org/rfc/rfc5869"
+    }
+  }
+]

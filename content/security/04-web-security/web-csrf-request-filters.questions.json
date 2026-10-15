@@ -1,0 +1,92 @@
+[
+  {
+    "id": "web-csrf-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A state-changing request arrives with `Sec-Fetch-Site: same-site`. Your app is `https://app.example.com`. Using the Fetch Metadata policy from the lesson (allow only `same-origin` and `none` for unsafe methods), what should happen, and why does it matter?",
+    "options": [
+      {
+        "text": "Allow it: same-site means it came from your own site",
+        "explanation": "Same-*site* includes every subdomain of `example.com`, such as a forgotten marketing subdomain. That's exactly the gap SameSite cookies leave."
+      },
+      {
+        "text": "Reject it under the stated policy: same-site is not the allowed same-origin or none value",
+        "explanation": "Correct. A sibling subdomain can be same-site while being a different origin. The header is a browser request-context indicator, not proof of authentication or user intent; non-browser clients can fake it."
+      },
+      {
+        "text": "Reject it: `same-site` is only sent by old browsers",
+        "explanation": "Supporting browsers can report same-site for cross-origin same-site contexts. Missing headers can reflect client or context differences, not just age; redirect history can also affect which value is reported."
+      },
+      {
+        "text": "Allow it, but only if the method is POST",
+        "explanation": "POST is the dangerous case. The method doesn't change whether the initiator is trusted."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `Sec-Fetch-Site` values: `same-origin` (exact origin), `same-site` (e.g. `blog.example.com` → `app.example.com`), `cross-site`, `none` (typed URL/bookmark).\n2. The policy accepts only `same-origin` and `none`.\n3. `same-site` → 403.\n4. Why it matters: if `blog.example.com` is taken over, SameSite cookies still flow (same site). Fetch Metadata can tell the difference; SameSite can't.\n\nIf you genuinely have cross-origin callers on your own domain, allowlist them explicitly.",
+    "link": {
+      "title": "Protect your resources with Fetch Metadata — web.dev",
+      "url": "https://web.dev/articles/fetch-metadata"
+    }
+  },
+  {
+    "id": "web-csrf-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A cookie-authenticated API endpoint does `data = json.loads(request.get_data())` without checking `Content-Type`. CORS is locked down. Assume cookies are eligible, there is no independent CSRF check, and the accepted schema can be encoded by the crafted form. How could an attacker still mount CSRF?",
+    "options": [
+      {
+        "text": "They can't: JSON requests are always preflighted",
+        "explanation": "The body being JSON does not itself trigger preflight. application/json is not a CORS-safelisted request content type; other method/header conditions can also require permission."
+      },
+      {
+        "text": "Submit a cross-site form with `enctype=\"text/plain\"` whose body happens to parse as JSON; it's a simple request, sent with cookies",
+        "explanation": "Correct. `text/plain` is a safelisted type, so no preflight; the lenient server parses the body as JSON anyway."
+      },
+      {
+        "text": "Use `fetch` with `mode: \"no-cors\"` and `Content-Type: application/json`",
+        "explanation": "`no-cors` mode only allows safelisted content types; the browser won't send `application/json` in that mode."
+      },
+      {
+        "text": "Read the CORS policy and copy an allowed origin into the `Origin` header",
+        "explanation": "Pages can't set the `Origin` header; the browser sets it. That's why it is useful for defence."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Preflight is triggered by a non-safelisted `Content-Type`, not by the body's shape.\n2. A form with `enctype=\"text/plain\"` sends `name=value` pairs joined in a way an attacker can arrange to look like a JSON object.\n3. The request is simple → no preflight → cookies attached (subject to SameSite).\n4. The server ignores `Content-Type` and parses JSON successfully.\n\nDefences:\n- Reject anything not `application/json`.\n- Require a custom header with a restrictive CORS policy (requires preflight permission, which may be cached).\n- Check `Origin` / `Sec-Fetch-Site`, and use SameSite.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-csrf-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The authenticated delete-account page loads in a cross-site iframe because browser cookie policies permit it. It contains a valid CSRF token. An attacker overlays its transparent iframe on a decoy prize button so a click hits the real delete control. In a browser enforcing the response policies below, which defence prevents this framing attack?",
+    "options": [
+      {
+        "text": "Rotating the CSRF token on every request",
+        "explanation": "The click happens on your genuine page, which includes a valid token. Rotating the token doesn't matter."
+      },
+      {
+        "text": "`Content-Security-Policy: frame-ancestors 'none'` (and `X-Frame-Options: DENY`)",
+        "explanation": "Correct. These response headers prevent the page being embedded in the described frame; they do not eliminate every form of deceptive UI."
+      },
+      {
+        "text": "Nothing extra: the CSRF token already prevents it",
+        "explanation": "The genuine framed page submits its valid token. Possession of that token does not prove the user understood or intended the action."
+      },
+      {
+        "text": "A strict `script-src` CSP",
+        "explanation": "No attacker script runs on your page; `script-src` is irrelevant. `frame-ancestors` is the CSP directive that matters."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Clickjacking isn't a faked request: the user really clicks your real button inside a hidden frame.\n2. The framed page was rendered by your server, so its CSRF token is valid.\n3. Under the question’s assumptions, browser policies permit the session cookie in this iframe. SameSite=None alone does not guarantee this; third-party-cookie restrictions can still block it. (With `Lax` or `Strict` the frame would load logged out, which is one reason those are safer defaults.)\n4. The real control: tell the browser never to render your page in someone else's frame.\n\n```\nframe-ancestors 'none'\n```\n\nOr `'self'` if you frame yourself, or list the partner origins for the widget pages only.",
+    "link": {
+      "title": "Clickjacking Defense Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Clickjacking_Defense_Cheat_Sheet.html"
+    }
+  }
+]

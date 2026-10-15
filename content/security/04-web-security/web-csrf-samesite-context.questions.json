@@ -1,0 +1,99 @@
+[
+  {
+    "id": "web-csrf-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A user follows a top-level link from a cross-site HTTPS webmail page to https://shop.example/orders. Authentication relies solely on a SameSite=Strict session cookie. What happens on that initial request?",
+    "options": [
+      {
+        "text": "The cookie is sent, because clicking a link is a user action",
+        "explanation": "That's `Lax` behaviour. `Strict` withholds the cookie on *every* cross-site request, including top-level link clicks."
+      },
+      {
+        "text": "The browser blocks the navigation",
+        "explanation": "SameSite never blocks requests; it only controls whether the cookie is attached."
+      },
+      {
+        "text": "The request arrives without the cookie, so the user appears logged out on landing",
+        "explanation": "Correct. The initial cross-site navigation omits the Strict cookie. Do not assume that a browser reload necessarily changes whether SameSite treats it as cross-site."
+      },
+      {
+        "text": "The cookie is sent only if the link uses HTTPS",
+        "explanation": "`Secure` controls HTTPS-only sending; `SameSite` is about the request's initiating site."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Initiator: webmail site (cross-site). Target: `shop.example`.\n2. `Strict` → cookie omitted on any cross-site request.\n3. Server sees an anonymous request → login page or logged-out view.\n4. This UX cost is why many sites use `Lax` for the main session cookie, sometimes plus a separate `Strict` cookie checked only for sensitive actions.",
+    "link": {
+      "title": "Set-Cookie: SameSite — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie"
+    }
+  },
+  {
+    "id": "web-csrf-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "The session cookie is set with `SameSite=Lax`. Which cross-site requests from `evil.example` to `app.example` will include it? Assume all other cookie conditions permit sending, the link and location examples navigate the top-level window, and no redirects intervene. Select all that apply.",
+    "options": [
+      {
+        "text": "An auto-submitted hidden `<form method=\"POST\">`",
+        "explanation": "Lax withholds cookies on cross-site POSTs. (The Lax+POST exception applies only to cookies with *no* SameSite attribute.)"
+      },
+      {
+        "text": "The user clicking `<a href=\"https://app.example/x\">`",
+        "explanation": "Correct. A top-level navigation with a safe method gets `Lax` cookies."
+      },
+      {
+        "text": "`<img src=\"https://app.example/avatar\">`",
+        "explanation": "Images are subresource requests, not top-level navigations, so Lax cookies aren't sent."
+      },
+      {
+        "text": "`fetch(\"https://app.example/api\", {credentials: \"include\"})`",
+        "explanation": "A cross-site fetch is not a top-level navigation; Lax cookies are withheld even with `credentials: \"include\"`."
+      },
+      {
+        "text": "`window.location = \"https://app.example/y\"` (GET)",
+        "explanation": "Correct. Script-initiated top-level GET navigation is still a top-level safe navigation, so Lax cookies go."
+      }
+    ],
+    "answer": [
+      1,
+      4
+    ],
+    "workedExample": "Lax rule: send on cross-site requests **only** if top-level navigation **and** safe method.\n\n| Request | Top-level? | Safe? | Sent |\n|---|---|---|---|\n| form POST | yes | no | no |\n| link click | yes | yes | yes |\n| img | no | yes | no |\n| fetch | no | yes | no |\n| location= | yes | yes | yes |\n\nSo Lax stops the classic POST CSRF but not unsafe GET endpoints.",
+    "link": {
+      "title": "SameSite cookies explained — web.dev",
+      "url": "https://web.dev/articles/samesite-cookies-explained"
+    }
+  },
+  {
+    "id": "web-csrf-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume a Chromium configuration with Lax-by-default and the 120-second Lax-allowing-unsafe exception. A session cookie with no SameSite attribute was newly created 60 seconds ago. A malicious page now submits a top-level cross-site POST; all other cookie conditions permit sending. Is the cookie sent?",
+    "options": [
+      {
+        "text": "No: Chrome treats missing SameSite as Lax, which never sends cookies on cross-site POSTs",
+        "explanation": "Lax-by-default has a temporary exception for fresh cookies. Missing it is a common misunderstanding."
+      },
+      {
+        "text": "Yes: Chrome's Lax+POST exception sends cookies under two minutes old (without an explicit SameSite) on top-level cross-site POSTs",
+        "explanation": "Correct. The cookie is 60 s old, under the 2-minute window, so it's sent. Setting `SameSite=Lax` explicitly removes the exception."
+      },
+      {
+        "text": "Yes: cookies without SameSite are always treated as `None`",
+        "explanation": "Not under the stated configuration: missing SameSite uses a default mode with a limited recent-cookie exception, rather than unrestricted None behavior."
+      },
+      {
+        "text": "No: Chrome blocks all cross-site POST form submissions",
+        "explanation": "Chrome doesn't block form submissions; SameSite only controls cookies."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare the cookie's age with the exception window:\n\n```formula\nt_age < t_window\n60 s < 120 s\nwhere\nt_age: how long ago the cookie was created, in seconds (s); here 60 s\nt_window: Chromium's Lax+POST window for cookies with no SameSite attribute, in seconds (s); here 120 s (two minutes)\n<: is less than\ns: seconds\nIn words: the cookie is younger than two minutes, so the exception still applies.\n```\n\nUnder the stated configuration the request is also a top-level navigation, so the cookie is sent. Explicit SameSite=Lax does not get this default-mode exception. Cookie creation time matters; a later replacement does not necessarily reset it. Maintain independent CSRF protection and check supported-client behavior.",
+    "link": {
+      "title": "SameSite cookies explained — web.dev",
+      "url": "https://web.dev/articles/samesite-cookies-explained"
+    }
+  }
+]

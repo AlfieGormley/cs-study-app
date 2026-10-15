@@ -1,0 +1,69 @@
+[
+  {
+    "id": "crypto-asymmetric-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Scanning the internet, you collect two RSA public moduli from cheap routers: 3233 and 4087. Their firmware had poor randomness at boot. What can you do?",
+    "options": [
+      {
+        "text": "Compute the greatest common divisor of 3233 and 4087, which is 61; it factors both moduli (61 × 53 and 61 × 67), giving both private keys",
+        "explanation": "Correct. The 2012 \"Mining your Ps and Qs\" study did this at scale, factoring tens of thousands of real keys whose devices generated a shared prime."
+      },
+      {
+        "text": "Nothing: each modulus is secure unless it can be factored individually",
+        "explanation": "Factoring each alone would be hard at real sizes, but two moduli sharing a prime fall to a single GCD."
+      },
+      {
+        "text": "Multiply the moduli to get a shared secret",
+        "explanation": "Multiplying public moduli gives nothing useful. The GCD is what reveals a shared factor."
+      },
+      {
+        "text": "Recover the keys only if both routers used a public exponent of 3",
+        "explanation": "The attack is independent of the public exponent: once you know both primes, you compute the private exponent for any public exponent."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. If two keys share a prime, that prime divides both moduli.\n2. Euclid's GCD algorithm is fast even for 2,048-bit numbers: it repeatedly replaces the larger number by its remainder.\n\n```formula\ngcd(a, b) = gcd(b, a mod b)\ngcd(4087, 3233) = gcd(3233, 854)\n= gcd(854, 671) = gcd(671, 183)\n= gcd(183, 122) = gcd(122, 61)\n= 61\n3233 = 61 × 53, 4087 = 61 × 67\nwhere\ngcd: greatest common divisor: the largest whole number that divides both inputs exactly\na, b: positive whole numbers with a at least b; apply this relation only while b is nonzero\nmod: \"modulo\": a mod b is the remainder after dividing a by b\n≥: is greater than or equal to\nIn words: each step swaps in a remainder until it divides exactly; the last non-zero value, 61, is the shared prime, and dividing it out gives each key's other prime.\n```\n\n3. With both primes of each key, compute the totient and private exponent for each.\n\nThe lesson: key generation needs a properly seeded CSPRNG. Your library uses the OS generator; don't replace it.",
+    "link": {
+      "title": "Mining Your Ps and Qs — original research",
+      "url": "https://factorable.net/paper.html"
+    }
+  },
+  {
+    "id": "crypto-asymmetric-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're reviewing a service that encrypts small secrets to a customer's RSA public key. Which practices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "RSA-OAEP with SHA-256 via a vetted library",
+        "explanation": "Correct. OAEP is the randomised, non-malleable padding for RSA encryption."
+      },
+      {
+        "text": "PKCS #1 v1.5 encryption padding, because it's the most widely supported",
+        "explanation": "v1.5 encryption padding invites Bleichenbacher padding-oracle attacks, which kept resurfacing (ROBOT, 2017)."
+      },
+      {
+        "text": "A 3,072-bit key with public exponent 65537",
+        "explanation": "Correct. 3,072 bits gives about 128-bit security; 65537 is the standard public exponent."
+      },
+      {
+        "text": "Implementing modular exponentiation yourself to avoid a dependency",
+        "explanation": "Hand-written RSA code is likely to leak timing, skip blinding or mishandle padding. Use the library."
+      },
+      {
+        "text": "Using the same RSA key pair for both encryption and signatures",
+        "explanation": "Keys should have one purpose. Sharing a key across operations has enabled cross-protocol attacks and complicates rotation."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Check each against the lesson's rules: proper padding, adequate size, vetted code, one key per purpose.\n\n1. OAEP-SHA256 via a library: **sound.**\n2. PKCS #1 v1.5 encryption: padding-oracle risk: **unsound.**\n3. 3,072-bit, public exponent 65537: **sound.**\n4. Custom modexp: timing leaks, no blinding: **unsound.**\n5. Dual-use key: violates key separation: **unsound.**\n\nOften the better answer is not RSA at all: HPKE or X25519-based encryption from a library such as libsodium or Tink.",
+    "link": {
+      "title": "The ROBOT attack",
+      "url": "https://robotattack.org/"
+    }
+  }
+]

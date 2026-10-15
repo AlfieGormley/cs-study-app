@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 49/76 modules; 327 originals → 1747 short lessons with 3842 focused questions.
+- Independently verified: 51/76 modules; 336 originals → 1798 short lessons with 3947 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `3163159`, version `34d5de791c74`, 1720 short lessons/3776 focused questions
-  across 48 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
-- Current generated candidate: `33d5c55117b5`, 49 modules/1747 units/3842 questions.
+- Latest confirmed live release: `ee6482b`, version `33d5c55117b5`, 1747 short lessons/3842 focused questions
+  across 49 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Current generated candidate: `5ad6da3e1d9a`, 51 modules/1798 units/3947 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -23,9 +23,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- security/sec-crypto: authoring; /root/security_crypto_short_author.
-- security/sec-applied: authoring; /root/security_applied_short_author.
-- security/sec-web: authoring; /root/languages_concurrency_short_verify.
+- security/sec-applied: verifying; /root/hashing_short_verify.
+- security/sec-systems: authoring; /root/security_systems_short_author.
+- security/sec-practice: authoring; /root/security_practice_short_author.
 
 Verification and integration:
 

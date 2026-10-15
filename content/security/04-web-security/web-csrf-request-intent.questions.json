@@ -1,0 +1,92 @@
+[
+  {
+    "id": "web-csrf-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume the browser permits the bank's session cookie on a cross-site form POST, and the transfer endpoint accepts predictable parameters without CSRF checks or additional confirmation. Why can evil.example trigger a transfer?",
+    "options": [
+      {
+        "text": "Because the attacker has stolen the user's session cookie",
+        "explanation": "CSRF doesn't need the cookie value. The browser attaches it by itself; the attacker never sees it."
+      },
+      {
+        "text": "The browser attaches an eligible session cookie to the cross-site form submission, and SOP does not prevent that submission",
+        "explanation": "Correct. Possession of the ambient session credential does not establish user intent."
+      },
+      {
+        "text": "Because the bank's CORS policy allows `evil.example`",
+        "explanation": "CORS controls reading responses. A form POST is a simple request that goes out without any CORS permission."
+      },
+      {
+        "text": "Because the bank's site has an XSS vulnerability",
+        "explanation": "XSS is a different bug (script in the bank's origin). CSRF works from the attacker's own site with no bug in the bank's HTML."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The user logged in earlier, so the browser holds `sid` for `bank.example`.\n2. `evil.example` serves an auto-submitting form targeting `bank.example/transfer`.\n3. Form submissions to other origins are allowed (they're writes).\n4. With all applicable cookie policies permitting it, the browser includes `Cookie: sid=...`.\n5. The bank sees an authenticated, valid request and acts.\n\nThe attacker never reads anything, which is why CSRF is called blind.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-csrf-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An app deletes a user's account with `GET /account/delete`. Why is this especially bad for CSRF?",
+    "options": [
+      {
+        "text": "A single click on an attacker's link (or a redirect) triggers it, because `SameSite=Lax` still sends cookies on top-level GET navigations",
+        "explanation": "Correct. GET is supposed to be safe; making it state-changing means ordinary links and redirects trigger it, and Lax cookies are sent on those. With `SameSite=None`, an image can also trigger the GET when all other cookie policies permit attachment."
+      },
+      {
+        "text": "GET requests are always sent without cookies",
+        "explanation": "GETs carry cookies like any other request (subject to SameSite). That's why this is dangerous."
+      },
+      {
+        "text": "GET requests can't carry CSRF tokens",
+        "explanation": "Tokens can appear in query strings but risk exposure in logs and, depending on referrer policy, Referer headers. Use an unsafe method for the operation and retain CSRF protection."
+      },
+      {
+        "text": "GET is fine as long as the response is JSON",
+        "explanation": "The response format is irrelevant: CSRF doesn't need to read the response; the deletion has already happened."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. HTTP defines GET as safe: no requested state-changing operation (incidental logging is allowed).\n2. Browsers issue GET requests everywhere: images, prefetches, links, previews.\n3. `<img src=...>` cross-site is a subresource, so `Lax` cookies aren't sent; but a link click or redirect continuing a top-level navigation remains top-level, and `Lax` *does* send cookies then.\n4. So a single click on an attacker link deletes the account.\n\nFix: `POST /account/delete` (or `DELETE`) with a CSRF token.",
+    "link": {
+      "title": "SameSite cookies explained — web.dev",
+      "url": "https://web.dev/articles/samesite-cookies-explained"
+    }
+  },
+  {
+    "id": "web-csrf-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An SPA's API accepts only a bearer token in the Authorization header, held in JS memory, with no alternative ambient authentication. Assume no XSS, token leak or client-side confused-deputy behavior. Can a hostile site's direct cross-site request perform classic authenticated CSRF?",
+    "options": [
+      {
+        "text": "Yes: any API that changes state needs a CSRF token",
+        "explanation": "CSRF tokens defend against *ambient* credentials. Here the credential isn't ambient, so there's nothing for the attacker's page to ride on."
+      },
+      {
+        "text": "No: the browser never adds the bearer token automatically, so a faked cross-site request arrives unauthenticated",
+        "explanation": "Correct. The attacker's page can't read the token (different origin) and the browser won't attach it, so faked requests fail authentication."
+      },
+      {
+        "text": "No, but only because the API uses JSON",
+        "explanation": "JSON alone doesn't protect a cookie-based API (text/plain tricks). Here the reason is the non-ambient credential."
+      },
+      {
+        "text": "Yes, if the user has another tab open on the SPA",
+        "explanation": "Other tabs don't share the in-memory token with the attacker's page; the SOP prevents that."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The browser does not automatically attach the token to a request made by the hostile page, so that request fails authentication. This does not prove the SPA immune to client-side CSRF: attacker-controlled input could cause the legitimate app to send an authenticated request. XSS and token theft remain separate risks.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  }
+]

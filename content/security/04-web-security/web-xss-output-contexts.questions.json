@@ -1,0 +1,101 @@
+[
+  {
+    "id": "web-xss-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A profile page renders a user-supplied website in a Jinja2 template with autoescaping on:\n\n```\n<a href=\"{{ user.website }}\">site</a>\n```\n\nWhat is still a risk?",
+    "options": [
+      {
+        "text": "None: autoescaping covers attributes",
+        "explanation": "Escaping stops breaking *out of* the attribute, but the value itself can be a dangerous URL. Escaping doesn't change `javascript:`."
+      },
+      {
+        "text": "A javascript: URL can remain dangerous on activation even though HTML escaping prevents breaking out of the attribute",
+        "explanation": "Correct. URL attributes need scheme validation. Parse the URL and allow only `https:` (and perhaps `http:`/`mailto:`)."
+      },
+      {
+        "text": "The double quotes in the template are unsafe; it should be unquoted",
+        "explanation": "The opposite: quoted attributes are safer. Unquoted ones can be broken with a space."
+      },
+      {
+        "text": "Jinja2 doesn't escape inside tags",
+        "explanation": "Jinja2's autoescape applies to every `{{ }}` expression, including inside attribute values; it escapes quotes so you can't break out."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Autoescaping prevents ordinary strings from breaking out of this quoted attribute, but does not validate URL semantics. A javascript: URL can still request script execution on activation, subject to browser/CSP checks. Use the platform’s URL parser and an application-specific scheme/destination policy, then still escape HTML output. Python urlparse only parses; it is not a complete browser-compatible URL security validator.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You are reviewing a pull request in a React + Django codebase for XSS. Which of these deserve close scrutiny? Select all that apply.",
+    "options": [
+      {
+        "text": "`<div dangerouslySetInnerHTML={{__html: bio}} />`",
+        "explanation": "Correct. This bypasses JSX's automatic escaping; `bio` must be sanitised or provably trusted."
+      },
+      {
+        "text": "`<p>{bio}</p>` in JSX",
+        "explanation": "JSX escapes interpolated strings, so this renders as text. It's the safe default."
+      },
+      {
+        "text": "`{{ bio|safe }}` in a Django template",
+        "explanation": "Correct. `|safe` tells Django the value is already safe HTML and disables autoescaping for it."
+      },
+      {
+        "text": "`mark_safe(f\"<b>{name}</b>\")` in a Django view",
+        "explanation": "Correct. `name` is interpolated without escaping and then marked safe, so any HTML in it is rendered. Use `format_html` instead, which conditionally escapes ordinary arguments; already-safe values retain their trust."
+      },
+      {
+        "text": "`<a href={url}>` in JSX where `url` comes from the user",
+        "explanation": "Correct as a URL-policy review point. React 19 blocks javascript: URLs in src/href by replacing them with a URL that only throws an error, unlike the older blanket claim. Framework protections do not replace application-specific allowed destinations/schemes or cover every version and custom component."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3,
+      4
+    ],
+    "workedExample": "Look for places where escaping is switched off, or where escaping is the wrong tool:\n\n| Code | Why |\n|---|---|\n| dangerouslySetInnerHTML | escape hatch |\n| `{bio}` | auto-escaped, safe |\n| `\\|safe` | escape hatch |\n| mark_safe(f-string) | unescaped input |\n| href={url} | URL context |\n\nDjango's `format_html(\"<b>{}</b>\", name)` is the safe way to build small HTML fragments: it conditionally escapes ordinary arguments before marking the result safe; already-safe arguments keep that trust, so review them and the format string.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-xss-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to embed a server-side dictionary in a page for client JS. Which is the safest approach in Jinja2?",
+    "options": [
+      {
+        "text": "`<script>var cfg = {{ cfg }};</script>` relying on autoescape",
+        "explanation": "Autoescape applies *HTML* encoding, which is wrong inside a script: it may corrupt the data and doesn't produce valid, safe JS."
+      },
+      {
+        "text": "`<script>var cfg = {{ cfg|safe }};</script>`",
+        "explanation": "This inserts raw Python repr into JS with no encoding at all. A value containing `</script>` would end the block."
+      },
+      {
+        "text": "`<script>var cfg = {{ cfg|tojson }};</script>`",
+        "explanation": "Correct. `tojson` produces valid JSON and escapes `<`, `>`, `&` and `'` so the value can't close the script tag."
+      },
+      {
+        "text": "`<script>var cfg = \"{{ cfg }}\";</script>` with quotes added",
+        "explanation": "Wrapping in quotes doesn't make HTML escaping correct for JS, and you'd get a string rather than an object."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "In an ordinary script element, raw data containing an HTML script-end sequence can terminate the element before JavaScript parsing. Jinja tojson serialises to JSON and escapes HTML-sensitive characters, including less-than, preventing that breakout. It is appropriate for the displayed object assignment. Its documentation also permits single-quoted attributes, but double-quoted attributes need additional handling. An enforced CSP still requires permission for the script that reads the data.",
+    "link": {
+      "title": "Cross Site Scripting Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+    }
+  }
+]

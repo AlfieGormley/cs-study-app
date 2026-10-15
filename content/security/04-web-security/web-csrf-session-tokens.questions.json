@@ -1,0 +1,70 @@
+[
+  {
+    "id": "web-csrf-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Trace this CSRF check when the session has **no** `csrf` key yet and the attacker's form sends no token:\n\n```python\n# BAD: two absent tokens compare equal.\nsent = request.form.get(\"csrf\", \"\")\nif not hmac.compare_digest(\n        sent,\n        session.get(\"csrf\", \"\")):\n    abort(403)\n```",
+    "options": [
+      {
+        "text": "403: a missing token is always rejected",
+        "explanation": "Trace it: both sides default to the empty string, and `compare_digest(\"\", \"\")` is True, so `abort` is never reached."
+      },
+      {
+        "text": "The request passes: both values are `\"\"`, which compare equal",
+        "explanation": "Correct. Defaults on both sides collapse to the same value. The check must reject when the expected token is missing."
+      },
+      {
+        "text": "`compare_digest` raises a TypeError on empty strings",
+        "explanation": "It accepts empty strings fine and returns True when both are empty."
+      },
+      {
+        "text": "The request passes only if the user is logged in",
+        "explanation": "This snippet has no login check at all; the result is the same either way."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Both missing values default to the empty string; compare_digest(\"\", \"\") is True, so the vulnerable check passes. Reject missing expected values and non-ASCII strings before comparison:\n\n```python\n# Reject missing or malformed tokens.\nwant = session.get(\"csrf\")\nif (not isinstance(want, str)\n        or not want\n        or not want.isascii()\n        or not sent.isascii()):\n    abort(403)\nif not hmac.compare_digest(sent, want):\n    abort(403)\n```\n\nHere sent is the form string from the question. The ASCII guard also prevents a TypeError on hostile Unicode input.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "web-csrf-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A naive double-submit scheme checks equality between a cookie and a submitted value. Its normal JS client reads the cookie into a header; the server also accepts the value in a form field. Which changes strengthen it against cookie injection or network attackers? Select all that apply.",
+    "options": [
+      {
+        "text": "Authenticate a random token together with session-specific binding data using an HMAC with a server secret, and verify it",
+        "explanation": "Correct. A session-bound signed double-submit token prevents an attacker choosing a valid value for another session."
+      },
+      {
+        "text": "Name the cookie with the `__Host-` prefix",
+        "explanation": "Correct. `__Host-` cookies must be `Secure`, have `Path=/` and no `Domain`, so a sibling subdomain can't set or overwrite them."
+      },
+      {
+        "text": "Make the CSRF cookie `HttpOnly`",
+        "explanation": "The app's own JS needs to read the cookie to copy it into the header, so `HttpOnly` breaks the pattern. And it doesn't stop cookie *injection*."
+      },
+      {
+        "text": "Serve the whole site over HTTPS with HSTS",
+        "explanation": "Correct. HTTPS prevents HTTP response injection on protected connections. HSTS helps when its policy is already known or preloaded; an unprotected first visit and uncovered subdomains remain deployment concerns."
+      },
+      {
+        "text": "Make the token longer (256 bits instead of 128)",
+        "explanation": "The weakness is the attacker *setting* both values, not working them out. Length doesn't help."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Cookie injection alone does not let a hostile page set a custom request header through restrictive CORS. Here the server additionally accepts a form token, letting an attacker submit the planted value. Bind the signed double-submit token to the authenticated session and random nonce. A browser-enforced __Host- prefix prevents sibling-domain injection of that named cookie. HTTPS plus known/preloaded HSTS addresses network injection, subject to which hosts it covers. HttpOnly would break the stated JS cookie-reading client; making an already-unpredictable token longer does not address injection.",
+    "link": {
+      "title": "Cross-Site Request Forgery Prevention Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+    }
+  }
+]

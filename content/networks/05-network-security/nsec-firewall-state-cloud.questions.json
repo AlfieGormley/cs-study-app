@@ -1,0 +1,160 @@
+[
+  {
+    "id": "nsec-firewalls-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does a stateful firewall track that a stateless packet filter does not?",
+    "options": [
+      {
+        "text": "The application data inside each packet",
+        "explanation": "Inspecting content is what application-layer firewalls and WAFs do. Stateful tracking is about connections, not payloads."
+      },
+      {
+        "text": "The user who sent each packet",
+        "explanation": "User identity is a feature of NGFWs and identity-aware proxies, not of basic stateful filtering."
+      },
+      {
+        "text": "Which flows are in progress, allowing rules to match connection state",
+        "explanation": "Correct. State provides context for policy. An established/related accept rule can permit return traffic without a separate port-range rule, but tracking alone does not bypass filtering."
+      },
+      {
+        "text": "The physical port each packet arrived on",
+        "explanation": "Even stateless filters can match on the interface; that is not what state means."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Stateless: each packet is judged in isolation against the rules.\n2. Stateful: on the first allowed packet (say an outbound SYN), the firewall records the flow: protocol, addresses, ports, state.\n3. Later packets may match established or related state. Whether they are accepted depends on the applicable rules; not every recorded packet is established.\n4. That is why the nftables ruleset starts with `ct state established,related accept`.",
+    "link": {
+      "title": "Simple ruleset for a workstation — nftables wiki",
+      "url": "https://wiki.nftables.org/wiki-nftables/index.php/Simple_ruleset_for_a_workstation"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An EC2 web server's security group allows inbound TCP 443 from anywhere. Its subnet's custom network ACL allows inbound TCP 443 and outbound TCP 443, and nothing else (the final rule denies everything). Clients cannot load the site. Why?",
+    "options": [
+      {
+        "text": "Security groups are stateless, so replies need their own rule",
+        "explanation": "Security groups are stateful; replies to allowed inbound traffic are automatic at that layer."
+      },
+      {
+        "text": "The NACL is stateless, and replies go to clients' ephemeral ports, not to 443, so they are denied outbound",
+        "explanation": "Correct. The server replies from 443 to ports such as 51,812. The NACL has no outbound rule for those ports. Add an outbound allow for TCP 1024–65535."
+      },
+      {
+        "text": "NACL rules are ignored when a security group exists",
+        "explanation": "Both apply: traffic must pass the subnet's NACL and the interface's security group."
+      },
+      {
+        "text": "The NACL must also allow inbound ephemeral ports for the requests to arrive",
+        "explanation": "The requests arrive on port 443, which is allowed. It is the outbound replies to ephemeral ports that fail."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace one connection from client port 51812:\n\n```\nin : client:51812 -> srv:443\n     NACL in 443   allow\n     SG   in 443   allow\nout: srv:443 -> client:51812\n     SG   stateful, allow\n     NACL out 51812? no rule\n     -> DENY\n```\n\nThe NACL judges the reply as a fresh packet with destination port 51,812. Fix: outbound NACL rule allowing TCP 1024–65535 to 0.0.0.0/0.",
+    "link": {
+      "title": "Control subnet traffic with network ACLs — AWS",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about AWS security groups and network ACLs are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Security groups support only allow rules",
+        "explanation": "Correct. Security groups have no explicit deny rules. For traffic they filter, unmatched new traffic is denied; documented exceptions such as Amazon-provided DNS are not blocked by security groups."
+      },
+      {
+        "text": "Network ACL rules are evaluated in number order, and the first match applies",
+        "explanation": "Correct. That is why rule numbering (100, 200, ...) leaves gaps for inserting rules later."
+      },
+      {
+        "text": "Security group rules are evaluated in the order they were created",
+        "explanation": "Incorrect. All security group rules are evaluated together; since they are all allows, order cannot matter."
+      },
+      {
+        "text": "A security group rule can allow traffic from members of another security group",
+        "explanation": "Correct within supported AWS arrangements. A source-group reference permits traffic from associated interfaces' private addresses; middlebox routing and connectivity restrictions matter."
+      },
+      {
+        "text": "Network ACLs apply to individual network interfaces",
+        "explanation": "Incorrect. NACLs apply at the subnet boundary; security groups apply to interfaces."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "| | SG | NACL |\n|---|---|---|\n| Scope | Interface | Subnet |\n| State | Stateful | Stateless |\n| Deny rules | No | Yes |\n| Order | All together | Lowest number first |\n\nA practical pattern: use security groups for almost everything (with group references for app-to-database paths), and NACLs for coarse subnet-wide denies such as blocking a known-bad range.",
+    "link": {
+      "title": "Control traffic to resources using security groups — AWS",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "During an attack, a stateful firewall in front of a busy service starts dropping new legitimate connections even though its CPU and links are fine. Its logs show the connection table at its maximum size. What attack is most likely, and what is a sensible mitigation?",
+    "options": [
+      {
+        "text": "A Slowloris attack; add more worker threads to the firewall",
+        "explanation": "Slowloris targets application workers on the server. And firewalls do not have HTTP worker threads to add."
+      },
+      {
+        "text": "A volumetric attack; buy more bandwidth",
+        "explanation": "The links are fine, so bandwidth is not the exhausted resource."
+      },
+      {
+        "text": "A state-exhaustion flood; use protocol-appropriate admission controls, such as correctly configured SYN proxying for TCP, and review tracking limits/timeouts",
+        "explanation": "Correct. SYN proxying must avoid allocating normal tracked state for unverified SYNs. Host TCP cookies alone may leave a separate firewall table exposed; UDP floods need different controls."
+      },
+      {
+        "text": "DNS spoofing; enable DNSSEC",
+        "explanation": "DNS spoofing redirects clients; it does not fill a firewall's table."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A full connection table can reject new flows despite spare link capacity.\n2. Identify which protocol and state entries are consuming it.\n3. For SYN floods, a correctly configured SYN proxy can validate clients before normal tracked-state allocation; nftables examples combine notrack and synproxy.\n4. Tune limits/timeouts within memory and service requirements; a larger table alone is not prevention.\n5. Selective tracking bypass may suit some traffic only with an explicit stateless policy and no required stateful NAT/dependent rules. It is not a blanket DNS fix.",
+    "link": {
+      "title": "Firewall (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Firewall_(computing)"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A long-lived database connection through a cloud NAT gateway sits idle for 10 minutes, then the next query hangs and eventually fails. The database never closed the connection. What is the most likely explanation and fix?",
+    "options": [
+      {
+        "text": "The database ran out of connections; raise `max_connections`",
+        "explanation": "The database still considers the connection open; it was not refused."
+      },
+      {
+        "text": "The TCP initial sequence number expired; reconnect every 5 minutes",
+        "explanation": "ISNs do not expire. This invents a mechanism."
+      },
+      {
+        "text": "TLS session keys expire after 10 minutes",
+        "explanation": "TLS sessions do not silently die after idle periods like this; the symptom is a dropped flow, not a crypto error."
+      },
+      {
+        "text": "The NAT or firewall dropped the idle flow from its state table; enable TCP keepalives with an interval shorter than the idle timeout",
+        "explanation": "Correct as a likely class of cause. Devices vary: AWS NAT Gateway times out after 350 idle seconds and returns RST when an internal client continues. Keepalive timing must refresh the relevant state before expiry."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Middleboxes with connection tables must eventually forget idle flows, or the table fills.\n2. Each has an idle timeout. AWS NAT Gateway: 350 s. Linux conntrack: 5 days by default. Different devices, very different numbers.\n3. After 10 idle minutes the NAT's entry is gone.\n4. The next query's packets match no entry and are dropped (or answered with a RST), so failure can be immediate on RST or delayed after silent dropping, depending on the device.\n5. Fix: TCP keepalives (or application pings) every, say, 60 s, and connection pools that validate connections before use.",
+    "link": {
+      "title": "Firewall (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Firewall_(computing)"
+    }
+  }
+]

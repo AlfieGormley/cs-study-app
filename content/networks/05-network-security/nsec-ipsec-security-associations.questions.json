@@ -1,0 +1,92 @@
+[
+  {
+    "id": "nsec-vpns-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In IPsec, what does IKEv2 do, as opposed to ESP?",
+    "options": [
+      {
+        "text": "IKEv2 encrypts the data packets; ESP authenticates the peers",
+        "explanation": "These are the wrong way round."
+      },
+      {
+        "text": "IKEv2 is the older version and ESP replaced it",
+        "explanation": "They are two halves of the same system, not successive versions."
+      },
+      {
+        "text": "IKEv2 handles NAT; ESP handles routing",
+        "explanation": "NAT detection is one IKE feature, but neither is a routing protocol."
+      },
+      {
+        "text": "IKEv2 authenticates the peers and negotiates keys and Security Associations; ESP uses those keys to protect each data packet",
+        "explanation": "Correct. IKEv2 (UDP 500/4500) is the control plane; ESP (IP protocol 50) is the data plane."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Before protecting traffic, the VPN gateways need to agree who they are and which keys to use: **IKEv2** does this, establishing an IKE SA and negotiating an ESP Child-SA pair.\n2. Each SA has an SPI, keys and algorithms.\n3. In the confidentiality-and-integrity configuration illustrated here, **ESP** protects each selected data packet, putting the SPI and a sequence number in its header so the receiver finds the right SA.\n4. IKE re-runs periodically to rekey.",
+    "link": {
+      "title": "RFC 4301: Security Architecture for IP",
+      "url": "https://www.rfc-editor.org/rfc/rfc4301"
+    }
+  },
+  {
+    "id": "nsec-vpns-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A branch office's IPsec tunnel to AWS receives an initial IKE_SA_INIT response on UDP 500, but subsequent negotiation and data traffic fail. The branch sits behind its ISP's NAT. Which is most likely missing from the branch firewall rules?",
+    "options": [
+      {
+        "text": "TCP 443 outbound",
+        "explanation": "IPsec does not use TCP 443 (some SSL VPNs do, but this is IPsec)."
+      },
+      {
+        "text": "IP protocol 47 (GRE)",
+        "explanation": "GRE is a separate tunnel protocol; this tunnel uses ESP."
+      },
+      {
+        "text": "UDP 4500 outbound and its replies, used by NAT-T to carry ESP once a NAT is detected",
+        "explanation": "Correct. IKE starts on UDP 500, detects the NAT and moves to 4500, and ESP is then wrapped in UDP 4500. If 4500 is blocked, IKE may partly work but data does not."
+      },
+      {
+        "text": "ICMP echo",
+        "explanation": "Ping is useful for testing but IPsec does not depend on it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. IKE begins on UDP 500 and both sides send NAT-detection payloads.\n2. A NAT is found (the branch's private address is rewritten).\n3. Both sides switch to **UDP 4500** for the rest of IKE and for ESP-in-UDP (RFC 3948).\n4. Raw ESP lacks ports for ordinary port-based multiplexing; some NATs have passthrough support, while NAT-T provides UDP encapsulation.\n5. Checklist: UDP 500, UDP 4500 and, without NAT, protocol 50.",
+    "link": {
+      "title": "RFC 3948: UDP Encapsulation of IPsec ESP Packets",
+      "url": "https://www.rfc-editor.org/rfc/rfc3948"
+    }
+  },
+  {
+    "id": "nsec-vpns-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Using AES-GCM in ESP tunnel mode over IPv4 (20-byte outer IP, 8-byte ESP header, 8-byte IV, 2 bytes of pad length and next header, 16-byte ICV, padding to a 4-byte boundary), with NAT-T adding 8 bytes of UDP, what is the largest inner packet that fits a 1,500-byte link?",
+    "options": [
+      {
+        "text": "1,480",
+        "explanation": "This subtracts only the outer IP header and ignores ESP, the IV, the trailer, the ICV and NAT-T."
+      },
+      {
+        "text": "1,446",
+        "explanation": "This forgets the 8-byte NAT-T UDP header, which is present whenever a NAT is on the path."
+      },
+      {
+        "text": "1,438",
+        "explanation": "Correct. Overhead is 20 + 8 + 8 + 8 + 2 + 16 = 62 bytes, leaving 1,438, and 1,438 + 2 is already a multiple of 4, so no padding is needed."
+      },
+      {
+        "text": "1,454",
+        "explanation": "This forgets the 16-byte ICV (integrity tag). This question specifies a 16-byte tag; RFC 4106 also permits negotiated 8- or 12-byte tags."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Add the fixed overhead:\n\n```\nouter IPv4        20\nUDP (NAT-T)        8\nESP SPI + seq      8\nIV                 8\npad len + next hdr 2\nICV (GCM tag)     16\ntotal             62\n```\n\n2. Subtract it from the link MTU, then check ESP's 4-byte alignment rule:\n\n```formula\nL_max = M_link − O\nL_max = 1500 B − 62 B = 1438 B\n(L_in + P + 2) mod 4 = 0\n1438 + 0 + 2 = 1440 = 4 × 360\nwhere\nL_max: the space left for inner packet plus padding, in bytes\nM_link: the link MTU, here 1,500 bytes\nO: the fixed overhead above, 62 bytes\nL_in: the inner packet length, in bytes\nP: ESP padding, 0 to 3 bytes\nmod: remainder after division; x mod 4 = 0 means x is a multiple of 4\nB: bytes\nIn words: 62 bytes of overhead leave 1,438 bytes, and 1,438 plus the 2 trailer bytes is already a multiple of 4, so no padding is needed.\n```\n\nSo padding is 0 and the inner packet can be 1,438 bytes. A 1,437-byte packet would also fit (with 1 byte of padding). Without NAT-T the figure rises to 1,446.",
+    "link": {
+      "title": "RFC 4303: IP Encapsulating Security Payload",
+      "url": "https://www.rfc-editor.org/rfc/rfc4303"
+    }
+  }
+]

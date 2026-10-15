@@ -1,0 +1,62 @@
+[
+  {
+    "id": "nsec-detection-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume captured packet bytes average 2 decimal Gbps continuously. Ignoring capture-file overhead, compression and replication, roughly how much storage is needed for 30 days?",
+    "options": [
+      {
+        "text": "About 650 TB",
+        "explanation": "Correct. 2 Gbps = 250 MB/s; × 86,400 s ≈ 21.6 TB a day; × 30 ≈ 648 TB."
+      },
+      {
+        "text": "About 21.6 TB",
+        "explanation": "That is one day, not thirty."
+      },
+      {
+        "text": "About 5.2 PB",
+        "explanation": "This forgets to divide bits by 8 when converting Gbps to bytes."
+      },
+      {
+        "text": "About 65 TB",
+        "explanation": "This is out by a factor of 10; check the per-second figure: 250 MB, not 25 MB."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Convert bits to bytes, then multiply by the seconds in 30 days:\n\n```formula\nV = (R / 8) × T\nR / 8 = 2000 Mbit/s / 8 = 250 MB/s\nV_day = 250 MB/s × 86400 s\nV_day = 21600000 MB ≈ 21.6 TB\nV = 21.6 TB × 30 ≈ 648 TB\nwhere\nV: total storage for the retention period\nR: the captured data rate, 2 Gbps = 2,000 Mbit/s; dividing by 8 converts bits to bytes, since a byte is 8 bits\nT: the recording time, in seconds (s); one day is 86,400 s\nV_day: storage for one day\nMbit: megabit, 10^6 bits\nMB: megabyte, 10^6 bytes (decimal)\nTB: terabyte, 10^12 bytes (decimal); 1 TB = 1,000,000 MB\ns: seconds\n≈: approximately equal to (rounded)\nIn words: 2 Gbps is 250 megabytes a second, about 21.6 terabytes a day, so about 650 terabytes for 30 days.\n```\n\nThis is a packet-byte-rate model, not an exact conversion from physical link utilisation: link-layer framing and gaps consume link capacity but are not all stored. File metadata and replication can add storage, while sampling, truncation or compression can reduce it. Retention must be budgeted for the actual system.",
+    "link": {
+      "title": "tcpdump and libpcap",
+      "url": "https://www.tcpdump.org/"
+    }
+  },
+  {
+    "id": "nsec-detection-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux host capture shows outbound TCP buffers carrying 28,960 payload bytes with apparent bad checksums on a link with a 1,500-byte IP MTU. What is a likely explanation to investigate first?",
+    "options": [
+      {
+        "text": "The server is sending jumbo frames that the network will drop",
+        "explanation": "With segmentation offload, the captured buffer can exceed the IP MTU while resulting wire IP packets respect it. Ethernet frames additionally include link-layer headers and trailers."
+      },
+      {
+        "text": "Segmentation and checksum offload: the kernel hands large segments to the NIC, which splits them and fills in checksums after the capture point",
+        "explanation": "Correct as a likely offload artefact. Compare a suitable external capture and the offload configuration before concluding that malformed packets went onto the wire."
+      },
+      {
+        "text": "An attacker is corrupting packets",
+        "explanation": "This pattern is consistent with offload artefacts; it does not by itself establish tampering or exclude every other cause."
+      },
+      {
+        "text": "The capture file is corrupt",
+        "explanation": "A capture-file problem is possible in general, but large transmit buffers and incomplete checksums specifically suggest offload effects."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Assume 20-byte IPv4 and 32-byte TCP headers (20 bytes plus 12 bytes of options such as timestamps):\n\n```formula\nL_seg = MTU − (H_IP + H_TCP)\nL_seg = 1500 B − (20 B + 32 B)\nL_seg = 1448 B\nn = (28960 B) / (1448 B) = 20\nwhere\nL_seg: the TCP payload bytes in each full-size segment on the wire (the 1,460-byte maximum segment size minus 12 bytes of TCP options)\nMTU: the link's IP maximum transmission unit, 1,500 bytes\nH_IP: the IPv4 header, 20 bytes\nH_TCP: the TCP header with timestamp options, 32 bytes\nn: the number of wire packets the captured buffer is split into\nB: bytes\nIn words: each wire packet can carry 1,448 payload bytes, so the 28,960-byte captured buffer is exactly 20 full-size segments glued together.\n```\n\nThat exact multiple is a strong hint that the buffer was captured before the NIC split it. A capture before transmit offload completes can show the large buffer and unfinished checksums. Receive coalescing can cause large apparent packets at some capture hooks too. Actual visibility depends on the operating system, driver, offloads and capture point.",
+    "link": {
+      "title": "Wireshark display filters — Wireshark wiki",
+      "url": "https://wiki.wireshark.org/DisplayFilters"
+    }
+  }
+]

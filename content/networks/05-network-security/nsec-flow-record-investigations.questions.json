@@ -1,0 +1,70 @@
+[
+  {
+    "id": "nsec-detection-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An incident responder is using AWS VPC Flow Logs to investigate a compromised instance. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The action field reports acceptance or rejection, but does not uniquely identify the rejecting rule",
+        "explanation": "Correct. REJECT may reflect security-group or NACL rules, or packets arriving after a connection has closed."
+      },
+      {
+        "text": "Flow logs record the DNS queries the instance made to the Amazon-provided resolver",
+        "explanation": "Incorrect. Traffic to the Amazon DNS resolver is not logged; use Route 53 Resolver query logs for that."
+      },
+      {
+        "text": "Records are aggregated over a capture window, so they are not real-time",
+        "explanation": "Correct. The default maximum is 10 minutes with a 1-minute option; Nitro interfaces always use at most 1 minute. Publication adds further delay."
+      },
+      {
+        "text": "Flow logs contain the payload of each connection",
+        "explanation": "Incorrect. They are metadata only: addresses, ports, protocol, counts, times, action."
+      },
+      {
+        "text": "Flow logs can show which external addresses the instance sent large byte counts to",
+        "explanation": "Correct. Summing bytes by destination is a standard way to look for exfiltration."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "| Claim | Verdict |\n|---|---|\n| Accept/reject visible | Yes, `action` |\n| DNS to Amazon resolver | Not logged |\n| Real-time | No, aggregated |\n| Payload | No |\n| Volume by destination | Yes, `bytes` |\n\nFor one observation point and appropriate outbound-traffic records, group by destination and compare byte totals with a baseline. Account for translated addresses, duplicate observations and missing records. Large volume alone does not establish exfiltration; SKIPDATA and documented exclusions limit completeness.",
+    "link": {
+      "title": "Logging IP traffic using VPC Flow Logs — AWS",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html"
+    }
+  },
+  {
+    "id": "nsec-detection-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "This scan detector counts distinct `(destination, port)` pairs per source and flags sources with 4 or more:\n\n```\nsrc         dst      port action\n203.0.113.9 10.0.1.5 22   REJECT\n203.0.113.9 10.0.1.5 23   REJECT\n203.0.113.9 10.0.1.5 80   ACCEPT\n203.0.113.9 10.0.1.5 3389 REJECT\n203.0.113.9 10.0.1.6 22   REJECT\n10.0.2.7    10.0.1.5 5432 ACCEPT\n10.0.2.7    10.0.1.5 5432 ACCEPT\n```\n\nWhat does it output for each source?",
+    "options": [
+      {
+        "text": "203.0.113.9: 4 pairs, flagged; 10.0.2.7: 2 pairs",
+        "explanation": "203.0.113.9 hits 5 pairs (port 22 on two different hosts counts twice), and 10.0.2.7's two flows are the same pair."
+      },
+      {
+        "text": "203.0.113.9: 5 pairs, 4 rejects, flagged; 10.0.2.7: 1 pair, 0 rejects",
+        "explanation": "Correct. Distinct pairs: (.5,22), (.5,23), (.5,80), (.5,3389), (.6,22) = 5. The app server repeats one pair."
+      },
+      {
+        "text": "203.0.113.9: 3 pairs; neither is flagged",
+        "explanation": "Counting distinct ports only gives 4 (22, 23, 80, 3389), and the detector counts host-port pairs anyway, giving 5."
+      },
+      {
+        "text": "Both flagged, because both made multiple connections",
+        "explanation": "The threshold is on distinct targets, not number of connections; 10.0.2.7 has one target."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Build the sets:\n\n```\n203.0.113.9:\n  (10.0.1.5, 22)\n  (10.0.1.5, 23)\n  (10.0.1.5, 80)\n  (10.0.1.5, 3389)\n  (10.0.1.6, 22)\n  -> 5 pairs, 4 REJECTs\n10.0.2.7:\n  (10.0.1.5, 5432)  x2\n  -> 1 pair, 0 REJECTs\n```\n\n5 ≥ 4, so 203.0.113.9 is flagged. Distinct target pairs can flag both vertical probing (many ports, one host) and horizontal probing (one port, many hosts). Thresholding can miss slow or distributed scans and can flag legitimate activity.",
+    "link": {
+      "title": "Logging IP traffic using VPC Flow Logs — AWS",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html"
+    }
+  }
+]

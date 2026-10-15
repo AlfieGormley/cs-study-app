@@ -1,0 +1,101 @@
+[
+  {
+    "id": "nsec-threats-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reflector answers a 36-byte UDP request payload with a 1,200-byte payload. Counting 28 bytes of IPv4 and UDP headers per packet, what are the payload BAF and the IP-packet-byte BAF, excluding link-layer framing?",
+    "options": [
+      {
+        "text": "Payload 33.3, IP-packet about 19.2",
+        "explanation": "Correct. 1,200 / 36 = 33.3. At the IP-packet level: (1,200 + 28) / (36 + 28) = 1,228 / 64 ≈ 19.2."
+      },
+      {
+        "text": "Payload 33.3, IP-packet 33.3",
+        "explanation": "Headers are added to both packets but are a much bigger share of the small request, so they lower the factor."
+      },
+      {
+        "text": "Payload 19.2, IP-packet 33.3",
+        "explanation": "These are swapped: adding headers can only shrink the ratio here, not grow it."
+      },
+      {
+        "text": "Payload 33.3, IP-packet about 146",
+        "explanation": "This subtracts the headers instead of adding them: (1,200 − 28) / (36 − 28) ≈ 146. Headers are extra bytes on every packet, so they are added."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Payload BAF is the response payload divided by the request payload:\n\n```formula\nBAF = B_resp / B_req\nBAF = 1200 / 36 ≈ 33.3\nwhere\nBAF: bandwidth amplification factor, a plain ratio with no unit\nB_resp: the response payload, in bytes; here 1,200\nB_req: the request payload, in bytes; here 36\n≈: approximately equal to (rounded)\nIn words: each payload byte the attacker sends brings back about 33 payload bytes.\n```\n\n2. At the IP-packet level, each packet also carries 20 bytes of IPv4 header and 8 of UDP header:\n\n```formula\nBAF_IP = (B_resp + H) / (B_req + H)\nBAF_IP = (1200 + 28) / (36 + 28)\nBAF_IP = 1228 / 64 ≈ 19.2\nwhere\nBAF_IP: the amplification factor counting IP and UDP headers, a plain ratio\nB_resp: the response payload, 1,200 bytes\nB_req: the request payload, 36 bytes\nH: IPv4 header (20 bytes) plus UDP header (8 bytes) = 28 bytes per packet\n≈: approximately equal to (rounded)\nIn words: adding 28 header bytes to each side nearly doubles the small request but barely changes the big response, so the ratio drops from 33.3 to about 19.2.\n```\n\n3. The 28 bytes nearly double the small request but barely change the large response, so the real multiplier drops a lot. Rossow's cited measurements use UDP payload bytes. These computed sizes exclude link-layer overhead and assume one unfragmented packet in each direction.",
+    "link": {
+      "title": "UDP-Based Amplification Attacks — CISA",
+      "url": "https://www.cisa.gov/news-events/alerts/2014/01/17/udp-based-amplification-attacks"
+    }
+  },
+  {
+    "id": "nsec-threats-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these reduce the internet's exposure to UDP amplification attacks in general, rather than just protecting one victim? Select all that apply.",
+    "options": [
+      {
+        "text": "ISPs applying BCP 38 ingress filtering",
+        "explanation": "Correct. Filtering permitted source prefixes blocks external-prefix spoofing. Finer validation is needed to prevent impersonation within an allowed prefix."
+      },
+      {
+        "text": "Operators closing open DNS resolvers and disabling NTP `monlist`",
+        "explanation": "Correct. Fewer reflectors means less capacity for attackers to borrow."
+      },
+      {
+        "text": "The victim adding a rate limit on its own firewall",
+        "explanation": "Incorrect. This protects (at best) one victim from smaller attacks and does nothing about reflectors or spoofing; against a volumetric flood the link is full first."
+      },
+      {
+        "text": "Protocols such as QUIC limiting what a server sends before the client's address is validated",
+        "explanation": "Correct. QUIC bounds pre-validation amplification at 3× received bytes. It reduces the amplification available to an attacker; it does not remove all reflection."
+      },
+      {
+        "text": "Memcached disabling its UDP listener by default",
+        "explanation": "Correct. The 1.5.6 release disables UDP by default, reducing exposure unless operators enable it. Danger also depends on reachable capacity and configuration, not BAF alone."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Reflection amplification needs a response directed to the victim and an amplifying service.\n\n1. Source-prefix filtering limits who can be impersonated; within-prefix spoofing can remain.\n2. Closing unintended reflectors removes those endpoints from the available pool.\n3. QUIC bounds pre-validation amplification at 3×, rather than reducing it to zero.\n\nThese measures reduce systemic exposure. A victim-only firewall rate limit does not remove the reflectors or the upstream bandwidth bottleneck.",
+    "link": {
+      "title": "RFC 2827 (BCP 38): Network Ingress Filtering",
+      "url": "https://www.rfc-editor.org/rfc/rfc2827"
+    }
+  },
+  {
+    "id": "nsec-threats-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A QUIC client's first Initial datagram has a UDP payload padded to 1,200 bytes, as the protocol requires. Before the server has validated the client's address, what is the most it may send in response to that one datagram?",
+    "options": [
+      {
+        "text": "1,200 bytes",
+        "explanation": "The limit is a multiple of what was received, not equal to it."
+      },
+      {
+        "text": "Unlimited, because QUIC is encrypted",
+        "explanation": "Encryption does not prove the source address; anyone can send an Initial with a spoofed source."
+      },
+      {
+        "text": "3,600 bytes",
+        "explanation": "Correct. RFC 9000 caps the server at three times the bytes received until the address is validated: 3 × 1,200 = 3,600."
+      },
+      {
+        "text": "14,600 bytes, one initial congestion window",
+        "explanation": "The congestion window is a separate limit; the anti-amplification limit applies first and is far smaller here."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. QUIC runs over UDP, so a spoofed Initial is possible.\n2. The server's handshake (certificate chain and all) can be several kilobytes, which would let a small spoofed packet trigger a much larger reply.\n3. RFC 9000 §8: before address validation the server must not send more than **3×** the bytes received.\n4. Clients must pad Initials to at least 1,200 bytes, which raises the cost of each probe:\n\n```formula\nL_max = 3 × B_recv\nL_max = 3 × 1200 B = 3600 B\nwhere\nL_max: the most the server may send before the client's address is validated, in bytes\nB_recv: the bytes the server has received from that address, here one 1,200-byte datagram\nB: bytes; one byte is 8 bits\nIn words: until it validates the address, a QUIC server may send at most three times what it has received, so 1,200 bytes in allows 3,600 bytes out.\n```\n\n5. If the handshake needs more, the server waits for more client packets or sends a Retry packet. Only receiving and validating the returned token establishes that the client could receive it; merely sending a Retry proves nothing.",
+    "link": {
+      "title": "RFC 9000: QUIC, section 8 (address validation)",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000#section-8"
+    }
+  }
+]

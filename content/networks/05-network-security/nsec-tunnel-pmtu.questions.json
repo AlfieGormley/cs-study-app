@@ -1,0 +1,32 @@
+[
+  {
+    "id": "nsec-vpns-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A WireGuard tunnel is up. SSH sessions and small web pages work, but `git clone` and large downloads hang. A firewall on the path drops all ICMP. What is the most likely cause and the best fix?",
+    "options": [
+      {
+        "text": "WireGuard's encryption is too slow for bulk transfers; switch to IPsec",
+        "explanation": "The size-dependent failure pattern with blocked ICMP points more directly to PMTU discovery. Crypto resource exhaustion is another possible failure mode, so the symptom alone is not proof."
+      },
+      {
+        "text": "A PMTU black hole: large packets exceed the tunnel MTU and the ICMP \"packet too big\" messages are dropped; set the tunnel MTU correctly and clamp TCP MSS (and allow that ICMP type)",
+        "explanation": "Correct. Small packets fit, so handshakes and short exchanges work; full-size segments are silently dropped."
+      },
+      {
+        "text": "The AllowedIPs list is missing the Git server",
+        "explanation": "Then nothing to the Git server would work, including the initial connection."
+      },
+      {
+        "text": "The NAT mapping expired; set PersistentKeepalive",
+        "explanation": "An idle NAT mapping timeout is not inherently packet-size dependent, and outbound traffic can create a new mapping. Keepalives do not fix a PMTU black hole."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Pattern: small works, large hangs. That points to size.\n2. Hosts send 1,500-byte packets; the tunnel path can carry only, say, 1,420 inside.\n3. With DF set, a router drops the packet and sends ICMP \"packet too big\".\n4. The firewall drops that ICMP, so the sender never learns, and may repeatedly retransmit until recovery or a connection timeout; packetisation-layer PMTU discovery can sometimes recover without ICMP.\n5. Fix:\n   - interface MTU matching the path (1,420 in this example),\n   - IPv4 minimum-header MSS: 1,420 bytes minus 40 bytes of IPv4 and TCP headers = 1,380 bytes,\n   - allow ICMPv4 3/4 and ICMPv6 type 2.",
+    "link": {
+      "title": "RFC 4459: MTU and Fragmentation Issues with Tunneling",
+      "url": "https://www.rfc-editor.org/rfc/rfc4459"
+    }
+  }
+]

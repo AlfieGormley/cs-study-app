@@ -1,0 +1,62 @@
+[
+  {
+    "id": "nsec-firewalls-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A first-match firewall has these rules, then a default policy of deny:\n\n```\n1 allow tcp 443 from any\n2 deny  tcp any from 198.51.100.0/24\n3 allow tcp 22  from any\n```\n\nWhat happens to SSH (TCP 22) from 198.51.100.7, and to HTTPS from the same address?",
+    "options": [
+      {
+        "text": "SSH denied, HTTPS allowed",
+        "explanation": "Correct. HTTPS matches rule 1 first and is allowed before rule 2 is reached. SSH skips rule 1, matches rule 2 and is denied."
+      },
+      {
+        "text": "Both denied",
+        "explanation": "This assumes the deny for that subnet applies to everything, but rule 1 matches HTTPS first and first match wins."
+      },
+      {
+        "text": "Both allowed",
+        "explanation": "SSH does not match rule 1 (wrong port), so rule 2 is reached and denies it before rule 3."
+      },
+      {
+        "text": "SSH allowed, HTTPS denied",
+        "explanation": "This reads the rules from last to first. First-match evaluation goes top to bottom."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Walk each packet down the list and stop at the first match.\n\n**HTTPS from 198.51.100.7:**\n1. Rule 1: tcp 443 from any. Match. **Allow.** Stop.\n\n**SSH from 198.51.100.7:**\n1. Rule 1: port 443? No.\n2. Rule 2: tcp any from 198.51.100.0/24? Yes. **Deny.** Stop.\n3. Rule 3 is never reached.\n\nIf the intent was to block that subnet entirely, rule 2 must move above rule 1.",
+    "link": {
+      "title": "Firewall (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Firewall_(computing)"
+    }
+  },
+  {
+    "id": "nsec-firewalls-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your firewall review tool flags rule 3 below as **shadowed**. Why?\n\n```\n1 allow tcp 80,443 from any\n2 deny  tcp any    from 0.0.0.0/0\n3 allow tcp 8443   from 10.0.0.0/8\n```",
+    "options": [
+      {
+        "text": "Rule 3 is too narrow to ever be useful",
+        "explanation": "Narrow rules are good. The issue is that it can never be reached."
+      },
+      {
+        "text": "Rule 3 is redundant because rule 1 already allows port 8443",
+        "explanation": "Rule 1 covers only 80 and 443, not 8443."
+      },
+      {
+        "text": "Every packet rule 3 would match has already matched rule 2, so rule 3 can never take effect",
+        "explanation": "Correct. TCP to 8443 from 10.0.0.0/8 is a subset of \"TCP to any port from anywhere\", which rule 2 denies first. The intended internal access is silently blocked."
+      },
+      {
+        "text": "Rule 3 conflicts with the default policy",
+        "explanation": "The default policy only applies when no rule matches; here rule 2 matches first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A rule is **shadowed** when an earlier rule matches every packet it could match.\n2. Rule 3 matches: TCP, port 8443, source in 10.0.0.0/8.\n3. Rule 2 matches: TCP, any port, any source. That is a superset.\n4. So any packet that could reach rule 3 is denied by rule 2 first.\n5. Fix: move rule 3 above rule 2. With first-match semantics, put specific rules above broad ones.",
+    "link": {
+      "title": "Firewall (computing) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Firewall_(computing)"
+    }
+  }
+]

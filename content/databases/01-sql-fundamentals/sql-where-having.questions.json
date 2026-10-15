@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sql-group-by-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Orders have statuses shipped ×3, pending ×2 and cancelled ×1. What does this return?\n\n```sql\nSELECT status, COUNT(*)\nFROM orders\nGROUP BY status\nHAVING COUNT(*) >= 2;\n```",
+    "options": [
+      {
+        "text": "One row: shipped, 3",
+        "explanation": "`>= 2` includes groups with exactly 2, so pending is kept too."
+      },
+      {
+        "text": "Two rows: pending 2 and shipped 3",
+        "explanation": "Correct. `GROUP BY` makes three groups, and `HAVING` keeps the ones with at least two rows."
+      },
+      {
+        "text": "Three rows, one per status",
+        "explanation": "`HAVING` removes the cancelled group, which has only one row."
+      },
+      {
+        "text": "An error: COUNT can't be used in HAVING",
+        "explanation": "Aggregates are exactly what `HAVING` is for. It is `WHERE` that can't contain them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Group by status: cancelled (1), pending (2), shipped (3).\n2. `HAVING COUNT(*) >= 2` tests each group: cancelled fails, pending and shipped pass.\n3. Output: pending 2, shipped 3. Without `ORDER BY` the row order isn't guaranteed.",
+    "link": {
+      "title": "GROUP BY and HAVING — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You want the number of orders per status, counting only orders placed in March 2026. Where does the date condition belong?",
+    "options": [
+      {
+        "text": "In HAVING, because the query uses GROUP BY",
+        "explanation": "`HAVING` filters whole groups by their aggregates. The date is a property of each row, and `ordered_on` isn't even a grouped column."
+      },
+      {
+        "text": "In GROUP BY, alongside status",
+        "explanation": "Grouping by date would give one row per (status, date) pair, not filter anything out."
+      },
+      {
+        "text": "In WHERE, so rows are filtered before they are grouped",
+        "explanation": "Correct. `WHERE ordered_on >= '2026-03-01' AND ordered_on < '2026-04-01'` removes the other months before `GROUP BY` runs."
+      },
+      {
+        "text": "In ORDER BY",
+        "explanation": "`ORDER BY` only sorts. It never removes rows."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask: is the condition about a single row or about a group's total? \"Placed in March\" is about each row.\n2. Row conditions go in `WHERE`, which runs before grouping:\n\n```sql\n-- Apply the date filter before\n-- grouping.\nSELECT status, COUNT(*)\nFROM orders\nWHERE ordered_on >= '2026-03-01'\n  AND ordered_on <  '2026-04-01'\nGROUP BY status;\n```\n\n3. Result: shipped 1 (104), cancelled 1 (105), pending 1 (106).\n4. Use HAVING for group-level conditions such as COUNT(*) > 1. It can also filter grouped columns, but a row-date filter belongs in WHERE here.",
+    "link": {
+      "title": "GROUP BY and HAVING — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Trace this query (shipped orders: 101 and 102 for customer 1, 104 for customer 3):\n\n```sql\nSELECT customer_id, COUNT(*)\nFROM orders\nWHERE status = 'shipped'\nGROUP BY customer_id\nHAVING COUNT(*) = 1;\n```",
+    "options": [
+      {
+        "text": "customer 3 only",
+        "explanation": "Correct. WHERE keeps 101, 102 and 104. Grouping gives customer 1 → 2 and customer 3 → 1. HAVING keeps only the group with exactly one row."
+      },
+      {
+        "text": "customers 2, 3 and 4",
+        "explanation": "That would be \"customers with exactly one order of any status\" (the guest order aside). WHERE removed the non-shipped orders before grouping."
+      },
+      {
+        "text": "customers 1 and 3",
+        "explanation": "Customer 1 has two shipped orders, so the group's count is 2 and HAVING drops it."
+      },
+      {
+        "text": "No rows, because HAVING runs before WHERE",
+        "explanation": "WHERE always runs first, then GROUP BY, then HAVING."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FROM orders: 6 rows.\n2. WHERE status = 'shipped': 101 (c1), 102 (c1), 104 (c3).\n3. GROUP BY customer_id: {1: 2 rows}, {3: 1 row}.\n4. HAVING COUNT(*) = 1: only customer 3.\n5. SELECT: (3, 1).\n\nNote what the query means: \"customers with exactly one *shipped* order\", which isn't the same as \"customers with exactly one order\".",
+    "link": {
+      "title": "GROUP BY and HAVING — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  }
+]

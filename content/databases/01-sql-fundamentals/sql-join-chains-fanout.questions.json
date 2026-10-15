@@ -1,0 +1,95 @@
+[
+  {
+    "id": "sql-joins-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Asha has two orders: 101 (Kettle and Mug) and 102 (Lamp). What does this return for Asha?\n\n```sql\nSELECT c.name, COUNT(o.id)\nFROM customers c\nJOIN orders o\n  ON o.customer_id = c.id\nJOIN order_items i\n  ON i.order_id = o.id\nGROUP BY c.name;\n```",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "Two is her real number of orders, but the join to `order_items` repeats order 101 once per item before counting."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. The join yields one row per order item: 101-Kettle, 101-Mug, 102-Lamp. `COUNT(o.id)` counts those 3 rows, since 101 appears twice."
+      },
+      {
+        "text": "1",
+        "explanation": "`COUNT` counts rows in the group, rather than counting each customer once. There is one customer but three rows."
+      },
+      {
+        "text": "7",
+        "explanation": "Seven is her total quantity (1 + 4 + 2). `COUNT` counts rows, not the values in `qty`; you would need `SUM(i.qty)` for that."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Write out Asha's rows after both joins:\n\n```\nname order item\nAsha 101   Kettle\nAsha 101   Mug\nAsha 102   Lamp\n```\n\n2. `COUNT(o.id)` counts non-NULL values: 3.\n3. This is **fan-out**: the parent (order) is repeated once per child (item).\n4. `COUNT(DISTINCT o.id)` gives the intended 2. Better still, don't join tables you don't need for the question.",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-joins-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For a dashboard you want each customer's number of orders and number of people they referred. Asha has 2 orders and referred 2 people.\n\n```sql\nSELECT r.name,\n  COUNT(o.id) AS orders_n,\n  COUNT(c.id) AS refs\nFROM customers r\nLEFT JOIN orders o\n  ON o.customer_id = r.id\nLEFT JOIN customers c\n  ON c.referred_by = r.id\nGROUP BY r.name;\n```\n\nWhat does Asha's row show, and what is the most robust fix?",
+    "options": [
+      {
+        "text": "2 and 2; the query is correct",
+        "explanation": "Each LEFT JOIN multiplies Asha's rows. After the second one she has 2 × 2 rows, so the counts are inflated."
+      },
+      {
+        "text": "4 and 4; switch both LEFT JOINs to INNER JOINs",
+        "explanation": "Inner joins would still pair every order with every referral (4 rows) and would also drop customers with no orders or referrals."
+      },
+      {
+        "text": "2 and 4; add `DISTINCT` after `SELECT`",
+        "explanation": "`SELECT DISTINCT` removes duplicate *output* rows. After grouping there is one row per name, so it changes nothing."
+      },
+      {
+        "text": "4 and 4; aggregate orders and referrals in separate subqueries, then join those one-row-per-customer results",
+        "explanation": "Correct. Two independent child tables cross-multiply: 2 orders × 2 referrals = 4 rows. Pre-aggregating each child removes the fan-out. `COUNT(DISTINCT ...)` also works for counts, but not for sums."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. First join: Asha × her orders = 2 rows (101, 102).\n2. Second join: each of those rows × her referrals (Ben, Chloe) = 4 rows:\n\n```\n101 Ben    101 Chloe\n102 Ben    102 Chloe\n```\n\n3. The two child tables multiply:\n\n```formula\nr = c_1 c_2\nr = 2 × 2 = 4\nwhere\nr: joined rows for one customer (Asha)\nc_1: her matching orders (2)\nc_2: her matching referrals (2)\nIn words: every order is paired with every referral, so each count sees 4 rows.\n```\n\n`COUNT(o.id)` = 4 and `COUNT(c.id)` = 4. SQLite confirms `Asha | 4 | 4`.\n4. Fix: count each child table on its own, grouped by customer, then LEFT JOIN both results onto `customers`. Each subquery has at most one row per customer, so nothing multiplies.\n5. `COUNT(DISTINCT o.id)` would rescue counts, but `SUM` of order values would still be doubled, so pre-aggregation is the general fix.",
+    "link": {
+      "title": "Join (SQL) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Join_(SQL)"
+    }
+  },
+  {
+    "id": "sql-joins-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "This query is meant to list every customer with their order items, keeping Erin (no orders), but Erin is missing:\n\n```sql\nSELECT c.name, o.id, i.product_id\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.id\nJOIN order_items i\n  ON i.order_id = o.id;\n```\n\nWhich changes bring Erin back as a row with NULLs? Select all that apply.",
+    "options": [
+      {
+        "text": "Change the second join to `LEFT JOIN order_items i`",
+        "explanation": "Correct. Erin's padded row has `o.id` NULL. An inner join to `order_items` finds no match and drops her; a LEFT JOIN keeps her."
+      },
+      {
+        "text": "Nest the inner join: `LEFT JOIN (orders o JOIN order_items i ON i.order_id = o.id) ON o.customer_id = c.id`",
+        "explanation": "Correct. The orders-with-items join is built first, then LEFT JOINed as a unit, so customers without a match are preserved."
+      },
+      {
+        "text": "Move `i.order_id = o.id` into the `WHERE` clause",
+        "explanation": "That still requires a real item row and compares `NULL = NULL` for Erin, which is not true. She stays missing."
+      },
+      {
+        "text": "Swap the order to `customers c JOIN order_items i ... LEFT JOIN orders o`",
+        "explanation": "`order_items` has no customer column to join on directly, and an inner join to items would still drop customers without items."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. After the LEFT JOIN, Erin's row is `Erin | NULL`.\n2. The next inner join needs `i.order_id = NULL`, which is never true, so the row is dropped. One inner join downstream of an optional table undoes the LEFT JOIN.\n3. Option A makes the second join optional too: 9 rows, Erin with NULLs.\n4. Option B joins orders to items first (9 pairs, including the guest order; 8 match customers), then LEFT JOINs that block to customers: also 9 rows, Erin preserved. Both produce the stated results on this fixture.\n5. Note the semantic difference: with B, an order with no items would vanish entirely, while A keeps it with a NULL item.",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  }
+]

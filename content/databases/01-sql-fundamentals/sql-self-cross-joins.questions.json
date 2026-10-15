@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sql-joins-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How many rows does `SELECT * FROM customers, orders;` return for the shop schema (5 customers, 6 orders)?",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "That is the inner join count. Without a `WHERE` condition linking the tables, the comma does not match anything."
+      },
+      {
+        "text": "11",
+        "explanation": "Adding row counts describes stacking tables (`UNION ALL`), not joining them."
+      },
+      {
+        "text": "6",
+        "explanation": "No column is compared, so the result is not limited to one row per order."
+      },
+      {
+        "text": "30",
+        "explanation": "Correct. A comma between tables with no join condition is a CROSS JOIN: every customer paired with every order, 5 × 6 = 30."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `FROM a, b` is old-style join syntax. On its own, it is a Cartesian product.\n2. Each of 5 customers pairs with each of 6 orders.\n3. Multiply the row counts:\n\n```formula\nn = |A| × |B|\nn = 5 × 6 = 30\nwhere\nn: rows in the result\nA: the left table, customers\nB: the right table, orders\n|A|: the number of rows in A (5)\n|B|: the number of rows in B (6)\nIn words: every customer is paired with every order, so the counts multiply.\n```\n\nThat gives **30** rows.\n4. Adding `WHERE o.customer_id = c.id` filters this down to the 5 matching pairs, which is why forgetting that line on large tables is so expensive.",
+    "link": {
+      "title": "Join (SQL) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Join_(SQL)"
+    }
+  },
+  {
+    "id": "sql-joins-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "How many rows does this self join return?\n\n```sql\nSELECT c.name, r.name\nFROM customers c\nJOIN customers r\n  ON r.id = c.referred_by;\n```\n\n(Ben and Chloe were referred by Asha, Dev by Ben; Asha and Erin have `referred_by` NULL.)",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "Five would need a LEFT JOIN, which keeps Asha and Erin with a NULL referrer. This is an inner join."
+      },
+      {
+        "text": "2",
+        "explanation": "Two is the number of distinct referrers (Asha, Ben). The join returns one row per *referred* customer, not per referrer."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. Ben–Asha, Chloe–Asha and Dev–Ben. Asha and Erin have `referred_by` NULL, which matches no `r.id`, so the inner join drops them."
+      },
+      {
+        "text": "25",
+        "explanation": "That would be a cross join of the table with itself. The `ON` condition keeps only pairs where `r` is `c`'s referrer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Treat `c` and `r` as two separate copies of `customers`.\n2. For each `c`, look up the `r` whose `id` equals `c.referred_by`:\n\n```\nAsha  NULL -> none\nBen   1    -> Asha\nChloe 1    -> Asha\nDev   2    -> Ben\nErin  NULL -> none\n```\n\n3. Inner join keeps the 3 matches. With `LEFT JOIN` you would get 5 rows, two with a NULL referrer.",
+    "link": {
+      "title": "Joins between tables — PostgreSQL tutorial",
+      "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
+    }
+  },
+  {
+    "id": "sql-joins-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Code that runs fine against SQLite contains `SELECT c.name, p.name FROM customers c JOIN products p;` (no `ON`). What happens when it is pointed at PostgreSQL?",
+    "options": [
+      {
+        "text": "It returns the same 25-row cross join",
+        "explanation": "SQLite and MySQL accept a bare `JOIN` as a cross join, but PostgreSQL does not."
+      },
+      {
+        "text": "It returns 0 rows because no condition is true",
+        "explanation": "Without any condition there is nothing to evaluate; the question is whether the syntax is accepted at all."
+      },
+      {
+        "text": "It raises a syntax error; PostgreSQL requires `ON`, `USING` or `NATURAL` for `JOIN`, so write `CROSS JOIN` if a product is intended",
+        "explanation": "Correct. In PostgreSQL only `CROSS JOIN` may omit the condition. Writing `CROSS JOIN` explicitly also makes the intent clear to reviewers."
+      },
+      {
+        "text": "It joins on the shared column `name`",
+        "explanation": "That would be NATURAL JOIN behaviour, and only if you wrote `NATURAL`. A plain `JOIN` never infers a condition."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In SQLite: `SELECT COUNT(*) FROM customers JOIN products;` returns 25, so SQLite treats it as a cross join.\n2. PostgreSQL's grammar requires a join condition for `[INNER] JOIN` and the outer joins. Without it you get a syntax error near the end of the statement.\n3. If you really want every combination, say so:\n\n```sql\n-- Make every combination explicit.\nFROM customers c\nCROSS JOIN products p\n```\n\n4. Portable SQL avoids engine leniency, so queries behave the same in tests (often SQLite) and production (often PostgreSQL).",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  }
+]

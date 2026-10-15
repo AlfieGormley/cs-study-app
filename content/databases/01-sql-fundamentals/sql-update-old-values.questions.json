@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sql-dml-constraints-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API endpoint runs `UPDATE products SET price = 0 WHERE id = 42;` and returns \"200 OK, price updated\". There is no product 42. What did the database do?",
+    "options": [
+      {
+        "text": "Raised a \"no rows found\" error, which the API ignored",
+        "explanation": "UPDATE doesn't raise an error when nothing matches. Matching zero rows is a normal outcome."
+      },
+      {
+        "text": "Succeeded and reported 0 rows affected; the API should check the row count and return 404",
+        "explanation": "Correct. The statement is valid and simply matched nothing. Drivers expose the count (Python's `cursor.rowcount`), and `RETURNING` makes it explicit."
+      },
+      {
+        "text": "Inserted a new product with id 42",
+        "explanation": "UPDATE never inserts. Inserting when missing is an upsert, `INSERT ... ON CONFLICT`."
+      },
+      {
+        "text": "Updated the product with the nearest id",
+        "explanation": "SQL matches the WHERE exactly; there's no \"nearest\" fallback."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `WHERE id = 42` matches no rows.\n2. UPDATE succeeds and changes 0 rows. That's not an error.\n3. The database reports the count: SQLite's Python driver gives `rowcount == 0`; psql prints `UPDATE 0`.\n4. Robust pattern:\n\n```sql\n-- No matching product means no result\n-- row.\nUPDATE products SET price = 0\nWHERE id = 42\nRETURNING id;\n```\n\nNo row returned means \"not found\", so the API should return 404.",
+    "link": {
+      "title": "Data manipulation — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/dml.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Table `s` holds one row, a = 1, b = 2. What does it hold after this statement, in PostgreSQL or SQLite?\n\n```sql\nUPDATE s SET a = b, b = a;\n```",
+    "options": [
+      {
+        "text": "a = 2, b = 2",
+        "explanation": "That assumes the assignments run left to right, with `b = a` seeing the new a. In PostgreSQL and SQLite these SET expressions reads the row as it was before the update."
+      },
+      {
+        "text": "a = 1, b = 1",
+        "explanation": "This assumes `b = a` runs first. Order doesn't matter: both read the old values."
+      },
+      {
+        "text": "It fails because a column is both read and written",
+        "explanation": "Reading and writing the same column in one UPDATE is normal, as in `SET price = price + 5`."
+      },
+      {
+        "text": "a = 2, b = 1",
+        "explanation": "Correct. Both right-hand sides use the old row (a = 1, b = 2), so the values swap."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The old row is (a = 1, b = 2).\n2. Evaluate every SET expression against the old row:\n   - new a = old b = 2\n   - new b = old a = 1\n3. Write the new row: (a = 2, b = 1).\n\nMySQL is a notable exception: it applies single-table assignments left to right, so the same statement there gives (2, 2).",
+    "link": {
+      "title": "The UPDATE statement — SQLite documentation",
+      "url": "https://www.sqlite.org/lang_update.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Prices are Kettle 30, Toaster 25, Lamp 40, Rug 90, Mug 8 (average 38.6). Which products are changed by this statement?\n\n```sql\nUPDATE products\nSET price = price * 2\nWHERE price > (SELECT AVG(price)\n               FROM products);\n```",
+    "options": [
+      {
+        "text": "Lamp and Rug",
+        "explanation": "Correct. This uncorrelated average subquery keeps the threshold at 38.6, so only Lamp (40) and Rug (90) exceed it."
+      },
+      {
+        "text": "Rug only",
+        "explanation": "This assumes the threshold rises after Lamp doubles. For this query SQLite evaluates the uncorrelated subquery once, while PostgreSQL uses the statement's snapshot; the threshold remains 38.6."
+      },
+      {
+        "text": "Every product, repeatedly, until the average stops changing",
+        "explanation": "An UPDATE visits each row no more than once and doesn't loop."
+      },
+      {
+        "text": "It depends on the order in which the target rows are visited",
+        "explanation": "For this uncorrelated average subquery, the threshold stays at 38.6 in PostgreSQL and SQLite. Correlated subqueries reading SQLite's target table can behave differently."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The subquery computes the mean price:\n\n```formula\nmean = (x_1 + x_2 + … + x_n) / n\nmean = (30 + 25 + 40 + 90 + 8) / 5\nmean = 193 / 5 = £38.6\nwhere\nmean: what AVG(price) returns, in £\nx_1, x_2, x_n: the prices, in pounds (£)\n…: \"and so on\", the prices in between\nn: how many prices there are (5)\nIn words: add the five prices and share the total equally between them.\n```\n2. The average subquery is uncorrelated. SQLite computes it once and reuses it; PostgreSQL reads a statement snapshot. Its 38.6 threshold stays fixed here.\n3. Rows with price > 38.6: Lamp (40) and Rug (90).\n4. New prices: Lamp 80, Rug 180, confirmed by `RETURNING name, price`.\n5. This result does not justify assuming every SQLite subquery sees pre-statement data. A correlated subquery reading the table being updated can see earlier changes from that same statement.",
+    "link": {
+      "title": "Data manipulation — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/dml.html"
+    }
+  }
+]

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "sql-group-by-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "No product costs over £1,000. What do these two queries return?\n\n```sql\n-- A\nSELECT SUM(price) FROM products\nWHERE price > 1000;\n-- B\nSELECT category, SUM(price)\nFROM products\nWHERE price > 1000\nGROUP BY category;\n```",
+    "options": [
+      {
+        "text": "A: one row containing 0. B: no rows",
+        "explanation": "`SUM` over zero rows is NULL, not 0. Only `COUNT` returns 0 for empty input."
+      },
+      {
+        "text": "A: one row containing NULL. B: no rows",
+        "explanation": "Correct. Without `GROUP BY` there is always exactly one group, so A returns one row whose sum is NULL. With `GROUP BY`, no input rows means no groups, so B returns nothing."
+      },
+      {
+        "text": "A: no rows. B: no rows",
+        "explanation": "Query A has no HAVING filter, so its ungrouped aggregate produces one row even over empty input. A HAVING condition could remove that summary row in a different query."
+      },
+      {
+        "text": "A: one row containing NULL. B: one row of NULLs",
+        "explanation": "`GROUP BY` creates groups from the rows that exist. With no rows, there are no groups to output."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Query A has no `GROUP BY`, so the whole (empty) input is a single group. One output row. `SUM` of no values is NULL.\n2. Query B groups by category. The filtered input is empty, so there are zero groups and zero output rows.\n3. Practical consequences:\n   - Write `COALESCE(SUM(price), 0)` when a report needs 0.\n   - Code that expects \"one row per category\" from B must cope with categories that have no rows at all.",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "sql-group-by-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about GROUP BY in SQLite and PostgreSQL are true? Select all that apply.",
+    "options": [
+      {
+        "text": "PostgreSQL allows `SELECT c.id, c.name, COUNT(*) ... GROUP BY c.id` when `c.id` is the primary key of `c`",
+        "explanation": "Correct. PostgreSQL recognises that the primary key functionally determines the other columns of that table, so `c.name` has one value per group."
+      },
+      {
+        "text": "`HAVING spent > 50`, where `spent` is a select-list alias, works in both",
+        "explanation": "Only SQLite accepts it. HAVING is evaluated before SELECT, and PostgreSQL raises `column \"spent\" does not exist`. Repeat the aggregate expression instead."
+      },
+      {
+        "text": "In SQLite, `SELECT category, MAX(price), name ... GROUP BY category` returns the name of the most expensive product in each category",
+        "explanation": "Correct. SQLite documents that with a single `min()` or `max()`, bare columns take their values from the row holding the extreme. PostgreSQL rejects the query."
+      },
+      {
+        "text": "All NULL values in a grouping column fall into a single group",
+        "explanation": "Correct. Although `NULL = NULL` isn't true in a WHERE clause, GROUP BY (like DISTINCT) treats NULLs as one group. The Mug forms a single NULL-category group."
+      },
+      {
+        "text": "`COUNT(*) FILTER (WHERE price >= 30)` is PostgreSQL-only",
+        "explanation": "SQLite has supported the FILTER clause on aggregates since 3.30. It is standard SQL."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Check each claim:\n\n1. Grouping by a primary key: allowed in PostgreSQL (since 9.1), because id determines name. True.\n2. Alias in HAVING: PostgreSQL rejects it, SQLite tolerates it. False.\n3. SQLite's min/max bare-column rule: documented, returns Rug for home and Kettle for kitchen. True (but not portable).\n4. NULLs group together: the products query gives one NULL row with count 1. True.\n5. FILTER: standard, in PostgreSQL since 9.4 and SQLite since 3.30. False.",
+    "link": {
+      "title": "Bare columns in aggregate queries — SQLite documentation",
+      "url": "https://www.sqlite.org/lang_select.html#bare_columns_in_an_aggregate_query"
+    }
+  }
+]

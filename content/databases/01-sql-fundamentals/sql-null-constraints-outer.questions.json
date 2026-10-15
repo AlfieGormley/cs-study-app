@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sql-null-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A table is defined as:\n\n```sql\nCREATE TABLE t (\n  email TEXT UNIQUE,\n  age INTEGER CHECK (age >= 18));\n```\n\nWhich insert fails (in SQLite and in PostgreSQL by default)?",
+    "options": [
+      {
+        "text": "Inserting `(NULL, NULL)` twice",
+        "explanation": "Both succeed. UNIQUE allows many NULLs (no NULL is known to equal another), and the CHECK is UNKNOWN for a NULL age, which passes."
+      },
+      {
+        "text": "Inserting `('a@x', NULL)`",
+        "explanation": "This succeeds: a CHECK fails only when its condition is FALSE, and `NULL >= 18` is UNKNOWN."
+      },
+      {
+        "text": "Inserting `('a@x', 10)`",
+        "explanation": "Correct. `10 >= 18` is FALSE, so the CHECK constraint rejects the row."
+      },
+      {
+        "text": "Inserting `(NULL, 30)`",
+        "explanation": "A NULL email is allowed (the column isn't NOT NULL) and 30 passes the CHECK."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. UNIQUE: two NULLs aren't considered duplicates. PostgreSQL 15+ lets you change this with `UNIQUE NULLS NOT DISTINCT`.\n2. CHECK: the row is rejected only if the condition is FALSE.\n   - `NULL >= 18` → UNKNOWN → accepted.\n   - `10 >= 18` → FALSE → rejected.\n3. So only `('a@x', 10)` fails. SQLite reports `CHECK constraint failed: age >= 18`.\n4. If age is required, declare `age INTEGER NOT NULL CHECK (age >= 18)`.",
+    "link": {
+      "title": "Constraints — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "sql-null-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You want every customer listed, with their referrer's name shown only when the referrer is not from Leeds. This returns only Ben and Chloe:\n\n```sql\nSELECT c.name, r.name AS ref\nFROM customers c\nLEFT JOIN customers r\n  ON r.id = c.referred_by\nWHERE r.city <> 'Leeds';\n```\n\nWhat is the best fix?",
+    "options": [
+      {
+        "text": "Change LEFT JOIN to FULL JOIN",
+        "explanation": "A FULL JOIN adds unmatched referrer rows; it doesn't stop WHERE from discarding rows where `r.city` is NULL or Leeds."
+      },
+      {
+        "text": "Move the condition into the join: `ON r.id = c.referred_by AND r.city <> 'Leeds'`",
+        "explanation": "Correct. In ON, the condition only decides which referrer matches. Every customer is still kept, and those without a qualifying referrer get NULL in `ref`."
+      },
+      {
+        "text": "Use `WHERE r.city IS DISTINCT FROM 'Leeds'`",
+        "explanation": "This brings back Asha and Erin (whose `r.city` is NULL) but still drops Dev, whose referrer Ben *is* from Leeds. You wanted Dev listed with no referrer shown."
+      },
+      {
+        "text": "Add DISTINCT",
+        "explanation": "No rows are duplicated; rows are missing. DISTINCT can't bring them back."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. After the LEFT JOIN, every customer has a row. Asha and Erin have `r.*` all NULL; Dev's `r` is Ben (Leeds).\n2. `WHERE r.city <> 'Leeds'`:\n   - Asha, Erin: NULL <> 'Leeds' → UNKNOWN → dropped.\n   - Dev: 'Leeds' <> 'Leeds' → FALSE → dropped.\n3. A WHERE test on the right-hand table cancels the outer join.\n4. In ON, the test only filters candidate matches:\n\n```sql\n-- Leave ineligible referrers unmatched.\nLEFT JOIN customers r\n  ON r.id = c.referred_by\n AND r.city <> 'Leeds'\n```\n\nResult: Asha NULL, Ben Asha, Chloe Asha, Dev NULL, Erin NULL.",
+    "link": {
+      "title": "Table expressions and joins — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  }
+]

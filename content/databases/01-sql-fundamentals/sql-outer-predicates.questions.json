@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sql-joins-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want every customer, with their shipped orders if they have any. A colleague writes:\n\n```sql\nSELECT c.name, o.id\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.id\nWHERE o.status = 'shipped';\n```\n\nOnly Asha (101, 102) and Chloe (104) come back. Why?",
+    "options": [
+      {
+        "text": "The `WHERE` filter runs after the join and rejects the NULL-padded rows, turning the LEFT JOIN into an inner join",
+        "explanation": "Correct. The join produces Ben's pending order, Dev's cancelled order and Erin's NULL-padded row. The WHERE predicate rejects all three; only shipped matches survive."
+      },
+      {
+        "text": "LEFT JOIN only keeps unmatched rows when the right table is smaller",
+        "explanation": "Table size has nothing to do with it. A LEFT JOIN always keeps every left row; the later `WHERE` is what removes them."
+      },
+      {
+        "text": "SQLite does not support LEFT JOIN with string comparisons",
+        "explanation": "SQLite handles this fine, and PostgreSQL gives the same three rows. This is standard SQL behaviour, not an engine limitation."
+      },
+      {
+        "text": "Ben, Dev and Erin have no orders at all",
+        "explanation": "Ben has order 103 (pending) and Dev has 105 (cancelled). They have orders, just not shipped ones."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Logical order: `FROM`/`JOIN ... ON` first, then `WHERE`.\n\n1. The LEFT JOIN on `customer_id` alone produces 6 rows, including `Ben | 103 | pending`, `Dev | 105 | cancelled` and `Erin | NULL | NULL`.\n2. `WHERE o.status = 'shipped'` keeps only rows where that is true. Pending, cancelled and NULL all fail.\n3. Three rows remain.\n\nThe fix is to move the filter into the join:\n\n```sql\n-- Only shipped rows count as matches.\nLEFT JOIN orders o\n  ON o.customer_id = c.id\n AND o.status = 'shipped'\n```\n\nNow non-shipped orders simply don't match, and Ben, Dev and Erin come back with NULLs (6 rows).",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "sql-joins-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this return?\n\n```sql\nSELECT c.name, o.id\nFROM customers c\nLEFT JOIN orders o\n  ON o.customer_id = c.id\n AND c.city = 'London';\n```\n\n(London customers: Asha with 101 and 102, Dev with 105.)",
+    "options": [
+      {
+        "text": "3 rows: only the London customers and their orders",
+        "explanation": "That is what `WHERE c.city = 'London'` would do. A condition in a LEFT JOIN's `ON` never removes left rows."
+      },
+      {
+        "text": "An error: `ON` can only reference the right-hand table",
+        "explanation": "`ON` can reference columns from both sides, and any boolean expression is allowed."
+      },
+      {
+        "text": "8 rows: every customer's real orders plus three NULL rows",
+        "explanation": "Ben and Chloe's real orders fail the city test, so they never match. Each of them gets a single padded row instead."
+      },
+      {
+        "text": "6 rows: all five customers; non-London customers have NULL order ids",
+        "explanation": "Correct. The city test only limits which pairs count as matches. Ben, Chloe and Erin fail it, so they are kept with NULLs."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A LEFT JOIN keeps **every** left row whatever happens in `ON`.\n2. A pair matches only if `o.customer_id = c.id` **and** `c.city = 'London'`.\n3. Asha (London) matches 101, 102. Dev (London) matches 105.\n4. Ben (Leeds), Chloe (NULL city) and Erin (Bristol) match nothing and each get one padded row.\n\n```\nAsha  101\nAsha  102\nBen   NULL\nChloe NULL\nDev   105\nErin  NULL\n```\n\n6 rows. Filters meant to remove left rows belong in `WHERE`.",
+    "link": {
+      "title": "Table expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-table-expressions.html"
+    }
+  }
+]

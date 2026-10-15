@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sql-schema-ddl-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In SQLite, with an ordinary (non-STRICT) table:\n\n```sql\nCREATE TABLE loose (n INTEGER);\nINSERT INTO loose VALUES ('abc');\nSELECT n, typeof(n) FROM loose;\n```\n\nWhat happens?",
+    "options": [
+      {
+        "text": "The insert fails with a type error",
+        "explanation": "That's PostgreSQL's behaviour, and that of SQLite STRICT tables. Ordinary SQLite tables use type affinity, which is only a preference."
+      },
+      {
+        "text": "It stores 0, with type integer",
+        "explanation": "SQLite doesn't invent a number. It converts only text that looks like a number."
+      },
+      {
+        "text": "It stores NULL",
+        "explanation": "The value isn't discarded; it is stored as given."
+      },
+      {
+        "text": "It returns `abc` with type `text`",
+        "explanation": "Correct. INTEGER affinity converts text only when it looks like a number. `'abc'` doesn't, so it is stored as text in an INTEGER column."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. SQLite columns have an *affinity*, not a strict type.\n2. On insert, SQLite tries to convert `'abc'` to an integer. It can't do so losslessly.\n3. It stores the text unchanged: `typeof(n)` is `text`.\n4. By contrast, `'42'` would become the integer 42.\n5. Declare the table `STRICT` (SQLite 3.37+) to get `cannot store TEXT value in INTEGER column`.",
+    "link": {
+      "title": "Datatypes in SQLite",
+      "url": "https://www.sqlite.org/datatype3.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team proposes making `email` the primary key of `customers`, since emails are unique. Orders and five other tables would reference it. What's the main problem?",
+    "options": [
+      {
+        "text": "Text primary keys aren't allowed in PostgreSQL",
+        "explanation": "PostgreSQL supports text primary keys, so the type of email does not prevent this design. The practical problem is changing an identifier copied into many referencing rows."
+      },
+      {
+        "text": "Emails are too long to index",
+        "explanation": "Emails index fine. Size is a minor cost compared with the real issue."
+      },
+      {
+        "text": "Customers change their email, and every referencing row in six tables must then be updated too; use a surrogate id with `email UNIQUE`",
+        "explanation": "Correct. A primary key is copied into every foreign key. Natural identifiers change, so a stable surrogate primary key plus a UNIQUE constraint gives you both identity and the business rule."
+      },
+      {
+        "text": "Emails can't be NULL",
+        "explanation": "That's a point in email's favour as a key. The trouble is that it changes, not that it's missing."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A primary key's job is to identify a row stably for its whole life.\n2. Emails change (new job, new provider), and sometimes need merging or correcting.\n3. With email as the PK, a change means updating orders and every other referencing table, or relying on `ON UPDATE CASCADE` across large tables.\n4. Pattern:\n\n```sql\n-- Columns inside CREATE TABLE\n-- customers.\nid bigint GENERATED ALWAYS\n   AS IDENTITY PRIMARY KEY,\nemail text NOT NULL UNIQUE\n```\n\n5. Also consider case: a unique index on `lower(email)` stops 'Asha@x.com' and 'asha@x.com' both registering.",
+    "link": {
+      "title": "Data definition — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl.html"
+    }
+  }
+]

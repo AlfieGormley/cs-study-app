@@ -1,0 +1,100 @@
+[
+  {
+    "id": "sql-dml-constraints-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With foreign keys enforced, this fails with `FOREIGN KEY constraint failed`:\n\n```sql\nDELETE FROM orders\nWHERE status = 'cancelled';\n```\n\nOrder 105 is the only cancelled order. Why does it fail?",
+    "options": [
+      {
+        "text": "Order 105's customer, Dev, still exists",
+        "explanation": "The foreign key runs from orders to customers. Deleting an order never breaks that link. Deleting a *customer* would."
+      },
+      {
+        "text": "You can't delete rows using a WHERE on status instead of the primary key",
+        "explanation": "DELETE accepts any WHERE condition."
+      },
+      {
+        "text": "`order_items` still has a row referencing order 105, and the default ON DELETE NO ACTION forbids orphaning it",
+        "explanation": "Correct. order_items.order_id references orders(id). Delete the items first, in the same transaction, or declare the FK with ON DELETE CASCADE."
+      },
+      {
+        "text": "Cancelled orders are protected by a CHECK constraint",
+        "explanation": "There is no such CHECK in the schema, and the error names a foreign key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Find who references orders: `order_items.order_id REFERENCES orders(id)`.\n2. Order 105 has one item (Toaster).\n3. No ON DELETE action is declared, so the default NO ACTION applies: the parent can't be deleted while children exist.\n4. Fix, in one transaction:\n\n```sql\n-- Remove dependent lines before orders.\nBEGIN;\nDELETE FROM order_items\nWHERE order_id IN (SELECT id\n  FROM orders\n  WHERE status = 'cancelled');\nDELETE FROM orders\nWHERE status = 'cancelled';\nCOMMIT;\n```\n\nOr, since order lines are meaningless without their order, declare that FK `ON DELETE CASCADE`.",
+    "link": {
+      "title": "SQLite foreign key support",
+      "url": "https://www.sqlite.org/foreignkeys.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which pairings of foreign key and `ON DELETE` action are sensible for the shop? Select all that apply.",
+    "options": [
+      {
+        "text": "`reviews.product_id` → products: `ON DELETE CASCADE`",
+        "explanation": "Correct. A review has no meaning without its product, so deleting the product should remove its reviews."
+      },
+      {
+        "text": "`orders.customer_id` → customers: `ON DELETE CASCADE`",
+        "explanation": "Dangerous. Deleting one customer would silently delete their entire order history, which finance and tax records usually need. Prefer RESTRICT or NO ACTION, plus a soft delete or anonymisation."
+      },
+      {
+        "text": "`customers.referred_by` → customers: `ON DELETE SET NULL`",
+        "explanation": "Correct. The referral link is optional. If the referrer is deleted, the customer should stay, just without a referrer."
+      },
+      {
+        "text": "`order_items.order_id` → orders: `ON DELETE SET NULL`",
+        "explanation": "An order line with no order is meaningless. In this shop schema order_id is explicitly NOT NULL as well as part of the composite primary key, so SET NULL would violate that constraint. CASCADE fits better."
+      },
+      {
+        "text": "`orders.customer_id` → customers: `ON DELETE RESTRICT`",
+        "explanation": "Correct. It stops a customer with orders from being deleted by accident, which protects history."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Ask two questions for each FK:\n\n1. Does the child make sense without the parent?\n2. Must the child be kept for records?\n\n| child | sensible action |\n|---|---|\n| review | CASCADE |\n| order line | CASCADE |\n| order | RESTRICT |\n| referral link | SET NULL |\n\nOrders must survive (records), so RESTRICT. Reviews and order lines are part of their parent, so CASCADE. A referral is an optional link, so SET NULL.",
+    "link": {
+      "title": "Constraints — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A small app uses SQLite. Its schema declares `orders.customer_id REFERENCES customers(id)`, yet the database contains orders for customer ids that don't exist. What's the most likely cause?",
+    "options": [
+      {
+        "text": "SQLite doesn't support foreign keys",
+        "explanation": "It does, but enforcement has to be switched on for each connection."
+      },
+      {
+        "text": "The application never ran `PRAGMA foreign_keys = ON` on its connections, so SQLite ignored the constraint",
+        "explanation": "Correct. For backwards compatibility, SQLite parses REFERENCES but doesn't enforce it unless the pragma is on for that connection."
+      },
+      {
+        "text": "The customers were deleted with ON DELETE CASCADE",
+        "explanation": "CASCADE would have deleted the orders too, leaving no orphans."
+      },
+      {
+        "text": "The foreign key only checks inserts, not deletes",
+        "explanation": "When enforced, foreign keys are checked on deletes and updates of the parent as well."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. With `foreign_keys = OFF` (SQLite's default), both of these succeed:\n\n```sql\n-- Demonstrate FK enforcement turned\n-- off.\nINSERT INTO orders (customer_id,\n  ordered_on, status)\nVALUES (99, '2026-04-01',\n  'pending');\nDELETE FROM customers\nWHERE id = 1;\n```\n\n2. Both leave orders pointing at customers that don't exist.\n3. With the pragma ON, both fail with `FOREIGN KEY constraint failed`.\n4. Fix: run `PRAGMA foreign_keys = ON;` every time a connection opens, then find existing orphans with `PRAGMA foreign_key_check;`. PostgreSQL enforces declared foreign keys on ordinary writes.",
+    "link": {
+      "title": "SQLite foreign key support",
+      "url": "https://www.sqlite.org/foreignkeys.html"
+    }
+  }
+]

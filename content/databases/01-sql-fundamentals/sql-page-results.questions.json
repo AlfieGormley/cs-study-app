@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sql-select-basics-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this return in SQLite, and in PostgreSQL? (Categories: kitchen, kitchen, home, home, NULL.)\n\n```sql\nSELECT DISTINCT category\nFROM products\nORDER BY category\nLIMIT 2;\n```",
+    "options": [
+      {
+        "text": "SQLite: NULL, home. PostgreSQL: home, kitchen",
+        "explanation": "Correct. DISTINCT leaves three values (home, kitchen, NULL). SQLite sorts NULL first, so the top two are NULL and home; PostgreSQL sorts NULL last, giving home and kitchen."
+      },
+      {
+        "text": "Both: home, kitchen",
+        "explanation": "That holds for PostgreSQL. SQLite puts NULL first in ascending order, so NULL takes one of the two slots."
+      },
+      {
+        "text": "Both: NULL, home",
+        "explanation": "That holds for SQLite. PostgreSQL places NULLs last in ascending order by default."
+      },
+      {
+        "text": "Both: home, kitchen, because DISTINCT discards NULL",
+        "explanation": "DISTINCT keeps one NULL row. It treats NULLs as equal to each other for this purpose, so they collapse to one but don't disappear."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. FROM: five rows. SELECT category: kitchen, kitchen, home, NULL, home.\n2. DISTINCT: home, kitchen, NULL (one of each; NULLs collapse together).\n3. ORDER BY category:\n   - SQLite: NULL, home, kitchen.\n   - PostgreSQL: home, kitchen, NULL.\n4. LIMIT 2 cuts after sorting.\n\nA \"top N\" query over a nullable column is a classic portability bug. Write `NULLS LAST`, or filter with `WHERE category IS NOT NULL` if NULL shouldn't count.",
+    "link": {
+      "title": "Sorting rows (ORDER BY) — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-order.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An admin screen lists orders 20 per page with `ORDER BY ordered_on LIMIT 20 OFFSET :n`. Assume the data is unchanged between page requests. Many orders share the same date. Users report an order appearing on both page 3 and page 4, and another never appearing. What is the cause and fix?",
+    "options": [
+      {
+        "text": "OFFSET is off by one; use `OFFSET :n + 1`",
+        "explanation": "The offset arithmetic is not the problem. Shifting it by one would skip a row on every page."
+      },
+      {
+        "text": "Ties on `ordered_on` have no defined order, so each page query may order them differently; add a unique tiebreaker, `ORDER BY ordered_on, id`",
+        "explanation": "Correct. Rows with equal sort keys can come back in any order, and each page is a separate query. A unique final sort column makes the order total and the pages consistent."
+      },
+      {
+        "text": "The database is caching old pages",
+        "explanation": "The query itself leaves tied dates without a fixed order. That is sufficient to explain these page boundaries without a caching problem."
+      },
+      {
+        "text": "LIMIT should come before ORDER BY",
+        "explanation": "Syntax requires `ORDER BY` before `LIMIT`, and logically the sort must happen before the cut anyway."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Suppose 30 orders share `2026-03-01`, straddling the page boundary.\n2. `ORDER BY ordered_on` says nothing about the order *within* that date. The database may return those 30 in a different order each time, for example when a different execution plan orders tied rows differently.\n3. Page 3 and page 4 are separate queries. If the tied rows shuffle between them, one row can land in both slices and another in neither.\n4. Page 4 is `OFFSET 60`, because each page skips the rows of all earlier pages:\n\n```formula\noffset = (p − 1)s\noffset = (4 − 1) × 20 = 60\nwhere\noffset: rows skipped, the OFFSET value\np: the page number, counting from 1\ns: rows per page, the LIMIT value (20)\nIn words: page 4 starts after the 3 × 20 rows of pages 1 to 3.\n```\n\nThe arithmetic is right; it is the order of tied rows that varies between the two queries.\n\n5. Fix: make the ordering total with a unique column:\n\n```sql\n-- Page 4 follows the first 60 rows.\nORDER BY ordered_on, id\nLIMIT 20 OFFSET 60\n```",
+    "link": {
+      "title": "Sorting rows (ORDER BY) — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/queries-order.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume id is an indexed primary key and increases with the desired ordering. An API pages through a 50-million-row `events` table, newest first, with `ORDER BY id DESC LIMIT 50 OFFSET :n`. Page 1 takes 2 ms; page 20,000 takes several seconds. What is the best fix?",
+    "options": [
+      {
+        "text": "Add an index on `id`",
+        "explanation": "`id` is the primary key and already indexed. The index lets the database read in order, but it still has to step over every skipped row."
+      },
+      {
+        "text": "Remember the last id the client saw and query `WHERE id < :last_id ORDER BY id DESC LIMIT 50`",
+        "explanation": "Correct. This is keyset (seek) pagination. The index lets the database jump straight to `:last_id` and read 50 rows, so every page costs about the same."
+      },
+      {
+        "text": "Raise LIMIT to 500 so fewer pages are needed",
+        "explanation": "Bigger pages reduce the number of requests but the deep pages are still slow, because OFFSET still walks past all the earlier rows."
+      },
+      {
+        "text": "Use `FETCH FIRST 50 ROWS ONLY` instead of LIMIT",
+        "explanation": "That is just the SQL-standard spelling of LIMIT. The plan, and the cost of the offset, are the same."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Work out the offset for page 20,000:\n\n```formula\noffset = (p − 1)s\noffset = (20000 − 1) × 50 = 999950\nrows_read = offset + s = 1000000\nwhere\noffset: rows skipped, the OFFSET value\np: the page number, counting from 1\ns: rows per page, the LIMIT value (50)\nrows_read: rows the database must produce in order to answer\nIn words: the query skips every row on the 19,999 earlier pages, but still has to walk past each one, so it handles a million rows to return 50.\n```\n\nSo `OFFSET 999950` means: produce the first 999,950 rows in order, throw them away, then return 50.\n2. Even with the primary-key index, that is about a million index entries walked per request, so cost grows linearly with page number.\n3. Keyset pagination asks for \"the 50 rows after the last one I saw\":\n\n```sql\n-- Bind last_id to the previous page\n-- end.\nSELECT id, kind FROM events\nWHERE id < :last_id\nORDER BY id DESC\nLIMIT 50;\n```\n\n4. The database seeks to `:last_id` in the index and reads 50 entries: about the same cost for page 1 and page 20,000.\n5. Trade-off: you can't jump to an arbitrary page number, which is fine for infinite scroll and APIs.",
+    "link": {
+      "title": "Paging through results without OFFSET — Use The Index, Luke",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  }
+]

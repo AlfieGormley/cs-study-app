@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sql-dml-constraints-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The products table has 5 rows and `price` is NOT NULL. After running this, how many rows does it have?\n\n```sql\nINSERT INTO products (name, price)\nVALUES ('Jug', 12),\n       ('Tray', NULL);\n```",
+    "options": [
+      {
+        "text": "7",
+        "explanation": "Tray violates NOT NULL, so it can't be inserted. And the error affects the whole statement."
+      },
+      {
+        "text": "6, because Jug is inserted and Tray is rejected",
+        "explanation": "Under the ordinary INSERT behaviour here, a NOT NULL failure undoes every row inserted by this statement, including Jug. SQLite's explicit alternative conflict policies can behave differently."
+      },
+      {
+        "text": "5",
+        "explanation": "Correct. Tray's NULL price makes this ordinary INSERT fail and undo its row changes, including Jug. PostgreSQL's consumed sequence values are a separate effect and need not be restored."
+      },
+      {
+        "text": "6, because Tray gets a default price of 0",
+        "explanation": "There's no DEFAULT on price, and an explicit NULL is not \"omitted\": it is a NULL, which NOT NULL rejects."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The statement tries to insert two rows.\n2. Tray's price is NULL, so `NOT NULL constraint failed: products.price`.\n3. A statement is all-or-nothing, so Jug's insert is undone too.\n4. `SELECT COUNT(*) FROM products` still returns 5.\n5. Note that an explicit `NULL` doesn't bring in a column's DEFAULT; leaving the column out requests the default. PostgreSQL also permits DEFAULT in individual VALUES positions; SQLite instead supports DEFAULT VALUES for a whole default row.",
+    "link": {
+      "title": "Data manipulation — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/dml.html"
+    }
+  },
+  {
+    "id": "sql-dml-constraints-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In PostgreSQL, a signup handler runs in one transaction:\n\n```\nBEGIN\nINSERT user (email = dup)  -> error\n  (caught: \"email taken\")\nINSERT audit_log (...)\nCOMMIT\n```\n\nThe audit insert fails with `current transaction is aborted`. The same code worked on SQLite. Why, and what's a fix?",
+    "options": [
+      {
+        "text": "The audit table has a foreign key to users",
+        "explanation": "The audit insert isn't rejected for its own content. Every statement fails in an aborted transaction."
+      },
+      {
+        "text": "PostgreSQL rolls back only the failed statement, just like SQLite",
+        "explanation": "That's SQLite's behaviour. PostgreSQL marks the whole transaction failed after any error."
+      },
+      {
+        "text": "PostgreSQL needs COMMIT before each INSERT",
+        "explanation": "You can run many inserts in one transaction. The error state is what blocks them."
+      },
+      {
+        "text": "After an error, PostgreSQL rejects ordinary work until a full rollback or rollback to a savepoint; wrap the risky insert in a SAVEPOINT and roll back to it on error",
+        "explanation": "Correct. `SAVEPOINT s; INSERT ...; ROLLBACK TO SAVEPOINT s;` undoes only the failed insert and leaves the transaction usable. `INSERT ... ON CONFLICT DO NOTHING` avoids the error altogether."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. SQLite: a failed statement is undone, but the transaction continues, so the audit insert and COMMIT work.\n2. PostgreSQL: any error puts the transaction into an aborted state. Every following statement fails until ROLLBACK, and COMMIT acts as ROLLBACK.\n3. Fix with a savepoint:\n\n```sql\n-- Recover before inserting the audit\n-- row.\nBEGIN;\nSAVEPOINT try_user;\nINSERT INTO users ...;\n-- on error:\nROLLBACK TO SAVEPOINT try_user;\nINSERT INTO audit_log ...;\nCOMMIT;\n```\n\n4. Or avoid the error: `INSERT ... ON CONFLICT (email) DO NOTHING RETURNING id` and check whether a row came back.",
+    "link": {
+      "title": "SAVEPOINT — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-savepoint.html"
+    }
+  }
+]

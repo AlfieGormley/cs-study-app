@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sql-schema-ddl-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An order can contain many products and a product can appear in many orders. How should this be modelled?",
+    "options": [
+      {
+        "text": "Add a `product_ids` text column to orders holding '1,3,5'",
+        "explanation": "A comma-separated list cannot give each member its own ordinary foreign key or quantity. Reading individual ids needs splitting the text. Use separate rows so each order/product association is one value at the intended modelling granularity."
+      },
+      {
+        "text": "Add an `order_id` column to products",
+        "explanation": "That allows each product to belong to only one order, which is one-to-many in the wrong direction."
+      },
+      {
+        "text": "A junction table such as `order_items(order_id, product_id, qty)` with foreign keys to both tables",
+        "explanation": "Correct. Each row links one order to one product and can carry facts about that pairing, such as quantity and price paid."
+      },
+      {
+        "text": "Add `product_id_1`, `product_id_2` and `product_id_3` columns to orders",
+        "explanation": "Repeating columns impose an arbitrary limit, waste space and make \"which orders contain a Lamp?\" check every column."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Many-to-many can't be stored with a single foreign key on either side.\n2. Introduce a table whose rows are the pairings:\n\n```sql\n-- One row per order and product pair.\nCREATE TABLE order_items (\n  order_id INTEGER NOT NULL\n    REFERENCES orders(id),\n  product_id INTEGER NOT NULL\n    REFERENCES products(id),\n  qty INTEGER NOT NULL,\n  PRIMARY KEY (order_id,\n               product_id));\n```\n\n3. The composite primary key stops the same product appearing twice in one order.",
+    "link": {
+      "title": "Data definition — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the module's schema, an order's total is computed as `SUM(order_items.qty * products.price)`. The Kettle's price rises from £30 to £35. What happens to order 101 (one Kettle, four Mugs), placed in January?",
+    "options": [
+      {
+        "text": "Nothing; past orders are protected by the foreign key",
+        "explanation": "A foreign key only checks that the product exists. It doesn't freeze the product's price."
+      },
+      {
+        "text": "Its total changes from £62 to £67, so historical invoices are now wrong; fix it by storing the unit price on each order line",
+        "explanation": "Correct. The total depends on today's price. Copying the price at the time of sale into `order_items` records what the customer actually paid."
+      },
+      {
+        "text": "The update fails because orders reference the product",
+        "explanation": "This foreign key references the product ID, so changing price does not violate it. Other constraints or triggers could still reject a price update."
+      },
+      {
+        "text": "Its total changes, and that's correct because prices are normalised",
+        "explanation": "Normalisation avoids storing the same fact twice. \"Price paid in January\" and \"current price\" are different facts, so storing both isn't duplication."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Total the order's lines at today's prices:\n\n```formula\nT = Σ (q_i p_i)\nT_before = 1 × 30 + 4 × 8 = £62\nT_after = 1 × 35 + 4 × 8 = £67\nwhere\nT: the order total, in pounds (£)\nΣ: the sum over every line i of the order\ni: one order line\nq_i: the quantity on line i\np_i: line i's current product price (£)\nT_before: order 101 before the change\nT_after: order 101 after the change\nIn words: the total is recomputed from today's prices, so a price rise changes old orders.\n```\n\n2. The January invoice has changed from £62 to £67.\n3. The schema confuses two facts: what a product costs now, and what a customer paid then.\n4. Fix: add `unit_pence` to `order_items`, filled from `products` at checkout, and compute totals from it.\n5. Many \"duplicates\" in good schemas are snapshots like this: shipping addresses, tax rates, exchange rates.",
+    "link": {
+      "title": "Data definition — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/ddl.html"
+    }
+  }
+]

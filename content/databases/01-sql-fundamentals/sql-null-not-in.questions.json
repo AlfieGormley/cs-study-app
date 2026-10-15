@@ -1,0 +1,70 @@
+[
+  {
+    "id": "sql-null-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A marketing query is meant to find customers who have never ordered, but it returns no rows, even though Erin has never ordered:\n\n```sql\nSELECT name FROM customers\nWHERE id NOT IN (\n  SELECT customer_id\n  FROM orders);\n```\n\nWhat's going on?",
+    "options": [
+      {
+        "text": "The subquery needs DISTINCT",
+        "explanation": "Duplicates in the list don't change the result of `NOT IN`. The problem is a NULL in the list."
+      },
+      {
+        "text": "`NOT IN` can't be used with a subquery",
+        "explanation": "It can. It works correctly as long as the subquery returns no NULLs."
+      },
+      {
+        "text": "Erin's id must be NULL",
+        "explanation": "Erin's id is 5. It's the *subquery* that contains a NULL, from guest order 106."
+      },
+      {
+        "text": "Guest order 106 has a NULL `customer_id`, so for Erin `5 <> NULL` is UNKNOWN and the whole NOT IN is UNKNOWN; rewrite with NOT EXISTS",
+        "explanation": "Correct. `NOT IN` is a chain of `<>` joined by AND. One UNKNOWN makes the chain UNKNOWN for every row that isn't already FALSE."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The subquery returns (1, 1, 2, 3, 4, NULL).\n2. For Erin, `5 NOT IN (...)` means:\n\n```\n5<>1 AND 5<>1 AND 5<>2\nAND 5<>3 AND 5<>4 AND 5<>NULL\n```\n\n3. That is TRUE AND ... AND UNKNOWN = UNKNOWN. WHERE drops her.\n4. Every other customer has a FALSE term, so they're dropped too: 0 rows.\n5. Fix:\n\n```sql\n-- A NULL order key supplies no match.\nSELECT name FROM customers c\nWHERE NOT EXISTS (\n  SELECT 1 FROM orders o\n  WHERE o.customer_id = c.id);\n```\n\nThis returns Erin and stays correct when NULLs appear.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  },
+  {
+    "id": "sql-null-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about `IN` and `NOT IN` are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`1 IN (1, NULL)` is TRUE",
+        "explanation": "Correct. IN is a chain of `=` joined by OR, and `TRUE OR UNKNOWN` is TRUE. Positive matches survive a NULL in the list."
+      },
+      {
+        "text": "`3 NOT IN (1, 2, NULL)` is TRUE",
+        "explanation": "It's UNKNOWN: `3<>1 AND 3<>2 AND 3<>NULL` is `TRUE AND TRUE AND UNKNOWN`."
+      },
+      {
+        "text": "`x NOT IN (subquery)` returns every row when the subquery returns no rows",
+        "explanation": "Correct. `NOT IN` of an empty set is TRUE for every x, even if x is NULL. A filter that accidentally empties the subquery makes NOT IN keep everything."
+      },
+      {
+        "text": "In the simple correlated NOT EXISTS anti-join on o.customer_id = c.id, adding an order whose customer_id is NULL does not suppress unmatched customers",
+        "explanation": "Correct. The NULL customer id cannot make the equality TRUE, so the added row supplies no match. EXISTS itself returns TRUE or FALSE even when its inner comparison evaluates to UNKNOWN."
+      },
+      {
+        "text": "If the list contains a NULL, `x NOT IN (list)` can still be TRUE for some x",
+        "explanation": "It can't. The `x <> NULL` term is always UNKNOWN, so the AND chain is at best UNKNOWN."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Expand each operator:\n\n- `x IN (a, b)` = `x = a OR x = b`. One TRUE term makes it TRUE.\n- `x NOT IN (a, b)` = `x <> a AND x <> b`. One UNKNOWN term caps it at UNKNOWN.\n\nSo:\n1. `1 IN (1, NULL)` = TRUE OR UNKNOWN = TRUE.\n2. `3 NOT IN (1, 2, NULL)` = UNKNOWN.\n3. Empty list: an AND of zero terms is TRUE, so all rows pass.\n4. NOT EXISTS returns TRUE or FALSE only.\n5. With a NULL present, NOT IN is never TRUE.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-subquery.html"
+    }
+  }
+]

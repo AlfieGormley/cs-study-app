@@ -1,0 +1,101 @@
+[
+  {
+    "id": "sql-schema-ddl-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your PostgreSQL 16 `orders` table has 500 million rows. Which change is a quick metadata-only operation, with no table rewrite or full scan?",
+    "options": [
+      {
+        "text": "`ALTER COLUMN id TYPE bigint` (from integer)",
+        "explanation": "Changing a column's type to one with a different storage format rewrites the whole table, holding an ACCESS EXCLUSIVE lock throughout."
+      },
+      {
+        "text": "`ADD COLUMN channel text NOT NULL DEFAULT 'web'`",
+        "explanation": "Correct. Since PostgreSQL 11, a non-volatile default is stored in the catalogue and returned for old rows, so no rewrite is needed."
+      },
+      {
+        "text": "`ADD COLUMN seen_at timestamptz DEFAULT clock_timestamp()`",
+        "explanation": "`clock_timestamp()` is volatile: each row needs its own value, so PostgreSQL must rewrite the table."
+      },
+      {
+        "text": "`ADD CONSTRAINT positive_id CHECK (id > 0)`",
+        "explanation": "Adding a validated CHECK normally scans the existing rows to prove the rule. It does not rewrite the table, but it is not a scan-free metadata-only addition."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Classify each change:\n\n| change | cost |\n|---|---|\n| int → bigint | rewrite |\n| add, constant default | metadata |\n| add, volatile default | rewrite |\n| SET NOT NULL | full scan |\n\n1. A constant like `'web'` is evaluated once and stored as the \"missing value\" for existing rows.\n2. `clock_timestamp()` differs per row, so every row must be physically written.\n3. Even the fast one takes an ACCESS EXCLUSIVE lock briefly, so run it with a `lock_timeout`.",
+    "link": {
+      "title": "ALTER TABLE — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-altertable.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A migration runs `ALTER TABLE orders ADD COLUMN note text;`, normally an instant change. This time the site goes down for 4 minutes. A reporting query had been reading `orders` for 4 minutes. What happened, and what prevents it?",
+    "options": [
+      {
+        "text": "The ALTER rewrote the table; use a default value",
+        "explanation": "Adding a nullable column with no default is metadata-only. No rewrite happened."
+      },
+      {
+        "text": "The report held a lock, so the ALTER queued for its ACCESS EXCLUSIVE lock, and every new query on orders queued behind the ALTER; set `lock_timeout` so the migration gives up and retries",
+        "explanation": "Correct. Lock requests queue in order. The waiting ALTER blocks even plain SELECTs that arrive after it. A short `lock_timeout` makes the ALTER fail fast instead of stalling everything."
+      },
+      {
+        "text": "ALTER TABLE always blocks for as long as the table is large",
+        "explanation": "The duration depends on the operation and on lock waits, not on table size, for metadata-only changes."
+      },
+      {
+        "text": "The report query was blocked by the new column",
+        "explanation": "The report started first and already held its lock. It was everything *after* the ALTER that was blocked."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The report holds an ACCESS SHARE lock on `orders` for 4 minutes.\n2. The ALTER needs ACCESS EXCLUSIVE, which conflicts, so it waits.\n3. New queries need ACCESS SHARE. That doesn't conflict with the report, but it does conflict with the *queued* ALTER, so they wait behind it.\n4. Result: every query on `orders` stalls until the report finishes.\n5. Prevention:\n\n```sql\n-- Give up promptly if a lock blocks us.\nSET lock_timeout = '2s';\nALTER TABLE orders\n  ADD COLUMN note text;\n-- retry on failure\n```\n\nAlso cap long queries with `statement_timeout`.",
+    "link": {
+      "title": "ALTER TABLE — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-altertable.html"
+    }
+  },
+  {
+    "id": "sql-schema-ddl-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You must rename `customers.city` to `town` in PostgreSQL with no downtime, while old and new application versions run side by side during the deploy. Which steps belong in a safe expand-and-contract plan? Select all that apply.",
+    "options": [
+      {
+        "text": "Add a new nullable `town` column",
+        "explanation": "Correct. Adding a nullable column is metadata-only and breaks nothing."
+      },
+      {
+        "text": "Deploy code that writes to both columns and reads from `city`",
+        "explanation": "Correct. Both old and new versions keep working, and new writes populate `town`."
+      },
+      {
+        "text": "Run `ALTER TABLE customers RENAME COLUMN city TO town` in the first deploy",
+        "explanation": "The rename is instant, but every running instance of the old code that still says `city` fails immediately. That's the outage you were trying to avoid."
+      },
+      {
+        "text": "Backfill `town` from `city` in small batches, then switch reads to `town`",
+        "explanation": "Correct. Small batches keep row locks and WAL bursts short, and reads switch only once the data is complete."
+      },
+      {
+        "text": "Drop `city` in a later release, once no running code uses it",
+        "explanation": "Correct. Contract last, when nothing depends on the old column."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Expand and contract, in order:\n\n1. **Expand**: add nullable `town` (metadata-only, but still lock-sensitive).\n2. Deploy code that writes both columns and continues reading `city`. Wait until all writers use it, or use a carefully designed synchronisation trigger for older writers.\n3. Backfill in batches while dual writes keep both columns current. Verify that values agree before switching reads.\n4. Switch reads to `town` but keep dual writes until every reader has migrated; then stop writing `city`.\n5. **Contract**: drop `city` only once no running code uses it.\n\nSwitching reads while old writers still update only `city` can expose stale values in `town`. Small batches and lock timeouts control operational impact.",
+    "link": {
+      "title": "ALTER TABLE — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-altertable.html"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 66/76. Updated 2026-10-15.
+Verified modules: 67/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -73,6 +73,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | theory/Automata & Regular Languages | 6 | 32 | 73 | 92 | 170 | 367 | 48 |
 | theory/Context-Free Languages & Computability | 6 | 32 | 67 | 87 | 175 | 361 | 34 |
 | theory/Complexity Theory | 6 | 47 | 77 | 174 | 254 | 378 | 12 |
+| databases/SQL Fundamentals | 6 | 40 | 74 | 31 | 269 | 414 | 43 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4860,6 +4861,30 @@ Remaining gaps:
 - Generalised games are stated for the cited growing-board rule families; no claim about all commercial rulesets.
 - Quantum resource costs are dated theoretical estimates under explicit assumptions, not current available hardware; real query/oracle implementation cost is separate.
 - The module remains introductory in full gadget construction for 3-colouring/Subsetsum and in full PCP/UGC/quantum proofs; all archived depth is retained.
+
+Low-confidence areas:
+
+None newly recorded. Inherited glossary qualifications remain in the verification record.
+
+## databases: SQL Fundamentals
+
+[Independent verification record](../content/databases/01-sql-fundamentals/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- SQLite IS and long IS NOT DISTINCT FROM spellings share boolean-literal truth-testing; PostgreSQL rejects incompatible int/boolean operands.
+- SQLite UPDATE cached uncorrelated scalar subquery distinguished from correlated self-reading behaviour; integer arithmetic overflow qualified.
+- Money conversion starts with exact decimal input, rather than claiming multiplication repairs already-rounded binary floating values.
+- FK/FKs reference eligible UNIQUE keys as well as primary keys; SQLite required eligible index collation and per-connection enabling checked.
+- Constraint, default, generated-ID reuse, aborted-state/savepoint and lock-queue definitions accurately scoped by engine.
+- Wrong-sense donor captures removed in original indexed options without changing correct indices, option counts/order or tested concepts.
+- Broad SQL surrogate-key alias rejected for CDN tags; PostgreSQL aborted-sentence alias rejected for Kafka fencing. Generic metadata-only and bound concepts explicitly supported across existing contexts.
+
+Remaining gaps:
+
+- Advanced SQL subqueries, CTEs, windows, upserts and recursive queries receive brief previews and remain assigned to the following module; this preserves the original module boundary.
+- Normalisation theory and physical query processing are signposted to their dedicated modules.
+- Native fixtures substantiate semantics and observed plans, not universal production throughput or latency guarantees.
 
 Low-confidence areas:
 

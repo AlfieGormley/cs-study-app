@@ -1,0 +1,70 @@
+[
+  {
+    "id": "sql-select-basics-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This query runs in SQLite but PostgreSQL rejects it:\n\n```sql\nSELECT name, price * 2 AS dbl\nFROM products\nWHERE dbl > 60\nORDER BY dbl;\n```\n\nWhich explanation is right?",
+    "options": [
+      {
+        "text": "PostgreSQL does not allow aliases in ORDER BY",
+        "explanation": "It does. `ORDER BY` is evaluated after `SELECT`, so it can see `dbl`. That part of the query is fine."
+      },
+      {
+        "text": "Arithmetic is not allowed in a SELECT list in PostgreSQL",
+        "explanation": "Expressions such as `price * 2` are allowed in any SQL database."
+      },
+      {
+        "text": "WHERE is evaluated before SELECT, so the alias does not exist yet; repeat the expression as `WHERE price * 2 > 60`",
+        "explanation": "Correct. Logically, FROM and WHERE run before SELECT computes aliases. SQLite is lenient and resolves the alias anyway; PostgreSQL follows the standard."
+      },
+      {
+        "text": "`dbl` is a reserved word",
+        "explanation": "It isn't. Renaming the alias would give the same error, because no alias is visible to WHERE."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Recall the logical order: FROM, WHERE, GROUP BY, HAVING, SELECT, DISTINCT, ORDER BY, LIMIT.\n2. `WHERE` runs at step 2, but `dbl` is only defined at step 5. PostgreSQL raises `column \"dbl\" does not exist`.\n3. `ORDER BY dbl` is fine, because step 7 comes after step 5.\n4. Fix:\n\n```sql\n-- Compute dbl again before aliases\n-- exist.\nSELECT name, price * 2 AS dbl\nFROM products\nWHERE price * 2 > 60\nORDER BY dbl;\n```\n\nThis returns Lamp (80) and Rug (180) in both databases.",
+    "link": {
+      "title": "SELECT — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/sql-select.html"
+    }
+  },
+  {
+    "id": "sql-select-basics-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your tests run on SQLite but production is PostgreSQL. Which of these queries can return **different results or errors** on the two databases, using the shop data? Assume legacy double-quoted strings are enabled in SQLite, its default ASCII-insensitive LIKE is used, and PostgreSQL uses a deterministic collation using case-sensitive text rules. Select all that apply.",
+    "options": [
+      {
+        "text": "`SELECT name FROM products WHERE name LIKE 'k%'`",
+        "explanation": "Correct. SQLite's `LIKE` ignores ASCII case and finds Kettle; PostgreSQL's is case-sensitive and finds nothing. Use `ILIKE` or `lower(name)` in PostgreSQL."
+      },
+      {
+        "text": "`SELECT name FROM customers ORDER BY city LIMIT 1`",
+        "explanation": "Correct. SQLite sorts NULL first and returns Chloe; PostgreSQL sorts NULL last and returns Erin (Bristol)."
+      },
+      {
+        "text": "`SELECT 7/2`",
+        "explanation": "Both return 3. Integer division truncates in SQLite and PostgreSQL alike."
+      },
+      {
+        "text": "`SELECT name FROM products WHERE price >= 30 AND category <> 'home'`",
+        "explanation": "Both return Kettle only. The NULL-category Mug fails the price test anyway, and `<>` with NULL is treated the same way in both."
+      },
+      {
+        "text": "`SELECT name FROM customers WHERE city = \"Leeds\"`",
+        "explanation": "Correct. SQLite falls back to the string 'Leeds' and returns Ben; PostgreSQL raises an error because there is no column called Leeds."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Work through each one:\n\n1. `LIKE 'k%'`: SQLite matches Kettle (case-insensitive for ASCII). PostgreSQL matches nothing. Different.\n2. `ORDER BY city LIMIT 1`: SQLite gives Chloe (NULL first). PostgreSQL gives Erin (Bristol; NULL last). Different.\n3. `7/2`: 3 in both.\n4. Kettle in both.\n5. `\"Leeds\"`: Ben in SQLite; an error in PostgreSQL. Different.\n\nThe lesson: test against the database you deploy to, for example with PostgreSQL in a container in CI.",
+    "link": {
+      "title": "Pattern matching — PostgreSQL documentation",
+      "url": "https://www.postgresql.org/docs/current/functions-matching.html"
+    }
+  }
+]

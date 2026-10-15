@@ -1,0 +1,100 @@
+[
+  {
+    "id": "sync-memory-ordering-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Worker threads increment `atomic_long bytes_sent` after every write. The main thread reads it only after joining all workers, to print a total. Which memory order is sufficient for the increments?",
+    "options": [
+      {
+        "text": "`memory_order_seq_cst`, because anything weaker can lose increments",
+        "explanation": "All memory orders, including relaxed, keep the read-modify-write atomic. Ordering is about *other* memory operations, not about losing updates."
+      },
+      {
+        "text": "`memory_order_acquire`, so the main thread sees the latest value",
+        "explanation": "Acquire is a valid RMW order, but it is stronger than necessary here. The joins supply the required final-observation ordering; no producer publication is needed from the increments."
+      },
+      {
+        "text": "`memory_order_relaxed`",
+        "explanation": "Correct. Each increment must be atomic, but nothing else is published with it. `pthread_join` already makes every worker's operations happen-before the main thread's read."
+      },
+      {
+        "text": "None; a plain `long` is fine because the main thread reads after join",
+        "explanation": "The workers race with *each other* during the run, so a plain `long` loses updates and is undefined behaviour."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Requirement 1: no lost increments. Any atomic RMW gives that, even relaxed.\n2. Requirement 2: does any other data depend on seeing this counter? No; it is a statistic.\n3. Requirement 3: does the main thread see the final value? Thread termination synchronises-with `pthread_join` returning, so yes.\n4. So `atomic_fetch_add_explicit(&bytes_sent, n, memory_order_relaxed)` is enough.\n\nSupported scalar x86 RMW mappings often use the same locked instruction for these orders. AArch64 code generation varies with target features, primitive and compiler; inspect it before drawing a performance conclusion.",
+    "link": {
+      "title": "memory_order — cppreference (C)",
+      "url": "https://en.cppreference.com/w/c/atomic/memory_order"
+    }
+  },
+  {
+    "id": "sync-memory-ordering-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these create a **happens-before** edge from an operation in thread A to an operation in thread B? Select all that apply.",
+    "options": [
+      {
+        "text": "A unlocks mutex `m`; later B locks `m`",
+        "explanation": "Correct. An unlock synchronises-with the next lock of the same mutex, so everything A did before unlocking is visible to B after locking."
+      },
+      {
+        "text": "A does a release store to `flag`; B does an acquire load of `flag` that reads A's value",
+        "explanation": "Correct. This is the defining synchronises-with pair."
+      },
+      {
+        "text": "A does a relaxed store to `flag`; B does a relaxed load that reads it",
+        "explanation": "Relaxed operations are atomic but create no ordering. B sees `flag` but has no guarantee about A's other writes."
+      },
+      {
+        "text": "A calls `pthread_create` to start thread B",
+        "explanation": "Correct. Everything A did before `pthread_create` happens-before the start of B."
+      },
+      {
+        "text": "A writes `x` and B reads `x` a second later in wall-clock time",
+        "explanation": "Wall-clock time is not a happens-before relation. Without synchronisation, this is a data race regardless of how much time passes."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Happens-before = sequenced-before within a thread, plus synchronises-with between threads, closed under transitivity.\n\nSynchronises-with sources:\n\n1. Mutex unlock → subsequent lock of the same mutex (A).\n2. Release store → acquire load that reads it (B).\n3. Thread creation → thread start (D); thread end → join return.\n\nRelaxed atomics (C) give atomicity only. Time (E) gives nothing: the formal model has no clock, which is why \"it ran much later, so it must see the write\" is not a valid argument.",
+    "link": {
+      "title": "The happens-before relation — Jeff Preshing",
+      "url": "https://preshing.com/20130702/the-happens-before-relation/"
+    }
+  },
+  {
+    "id": "sync-memory-ordering-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "To fix the store-buffering test, a developer makes `x` and `y` atomic and uses **release stores** and **acquire loads**:\n\n```\nT1: store(x, 1, release)\n    r1 = load(y, acquire)\nT2: store(y, 1, release)\n    r2 = load(x, acquire)\n```\n\nIs `r1 == 0 && r2 == 0` now impossible?",
+    "options": [
+      {
+        "text": "Yes: acquire and release forbid all reordering",
+        "explanation": "A release stops *earlier* operations moving after the store; an acquire stops *later* operations moving before the load. Neither stops a later acquire load moving ahead of an earlier release store."
+      },
+      {
+        "text": "Yes, but only on x86",
+        "explanation": "On x86 these compile to plain `mov`s, and plain `mov`s are exactly what produced (0, 0) in the first place."
+      },
+      {
+        "text": "No, and it can never be prevented on x86",
+        "explanation": "It can: seq_cst stores compile to `xchg` (or `mov` + `mfence`), which drains the store buffer first."
+      },
+      {
+        "text": "No: both-zero remains allowed; use all seq_cst operations or a correctly placed seq_cst fence between store and load in each thread",
+        "explanation": "Correct. If both acquire loads read the initial zero, neither reads the other release, so no such synchronizes-with edge connects them. All-seq_cst operations forbid that cycle; properly placed fences can also do so."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Each release store precedes an acquire load in its own thread.\n2. If both loads read their initial zero, neither observes the other thread’s release, so those operations establish no cross-thread synchronises-with edge.\n3. The language model therefore permits both-zero; acquire/release alone does not forbid the store-buffering outcome.\n4. Making all four operations sequentially consistent forbids that cycle. Properly placed sequentially consistent fences can also do so.\n5. For supported ordinary scalar x86 atomics, compilers commonly use xchg or a suitable fenced store sequence; inspect the actual target rather than assuming one universal instruction.",
+    "link": {
+      "title": "memory_order — cppreference (C)",
+      "url": "https://en.cppreference.com/w/c/atomic/memory_order"
+    }
+  }
+]

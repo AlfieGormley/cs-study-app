@@ -1,0 +1,100 @@
+[
+  {
+    "id": "sync-lock-free-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A stack data structure is protected by a spinlock built from compare-and-swap. The thread holding the spinlock is preempted for 50 ms in the middle of a push. Which progress guarantee does this design provide?",
+    "options": [
+      {
+        "text": "Wait-free",
+        "explanation": "Wait-free means every thread finishes in a bounded number of its own steps. Here every waiter spins for the full 50 ms making no progress at all, so it is nowhere near wait-free."
+      },
+      {
+        "text": "Lock-free, because it is built from CAS rather than a mutex",
+        "explanation": "This confuses the instruction with the guarantee. Lock-free means *some* thread always progresses; while the holder is suspended, no thread can complete an operation, whatever instruction the lock uses."
+      },
+      {
+        "text": "Blocking: a stalled holder stops every other thread",
+        "explanation": "Correct. Any algorithm in which one suspended thread can prevent all others from completing is blocking. A spinlock is a lock, even when it is written with CAS."
+      },
+      {
+        "text": "Obstruction-free",
+        "explanation": "Obstruction-free requires that a thread running alone can finish. A waiter running alone still cannot finish, because the suspended holder owns the lock."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Ask the defining question for each guarantee: *if some threads stop, can the others still finish?*\n\n1. Holder suspended mid-push.\n2. Every other thread spins on the lock word. None can enter, so none completes a push or pop.\n3. That rules out obstruction-free (a lone thread cannot finish), lock-free (no thread progresses) and wait-free.\n4. So it is a **blocking algorithm**.\n\nThe lesson: \"lock-free\" is about what happens when threads are delayed, not about which instructions appear in the code. A Treiber stack is lock-free because nobody ever holds anything others must wait for.",
+    "link": {
+      "title": "Non-blocking algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
+    }
+  },
+  {
+    "id": "sync-lock-free-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`max_seen` starts at 5 and uses the lesson's CAS loop:\n\n```c\nlong cur = atomic_load(&max_seen);\nwhile (v > cur &&\n       !atomic_compare_exchange_weak(\n           &max_seen, &cur, v))\n    ;\n```\n\nT1 calls `record(9)` and T2 calls `record(7)`. Both load `cur = 5`. T2's CAS runs first and succeeds; then T1's CAS runs. What is the final value of `max_seen`? Assume both calls complete, no other writes occur, and the stated first CAS succeeds.",
+    "options": [
+      {
+        "text": "7",
+        "explanation": "This assumes T1's failed CAS ends its call. In fact the failure refreshes `cur` to 7, T1 re-tests `9 > 7` and tries again."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct if both calls complete. T1’s comparison failure refreshes cur to 7; it retries while 9 is larger, and eventual successful completion leaves 9. Weak CAS may require extra attempts."
+      },
+      {
+        "text": "5",
+        "explanation": "Both CAS operations compare against a real value of `max_seen`, and T2's succeeded, so the value cannot still be 5."
+      },
+      {
+        "text": "Either 7 or 9, depending on timing",
+        "explanation": "With the stated completed calls and no other writes, the final maximum is 9 in every interleaving. A losing operation retries only while its proposed maximum is larger; this is not a bounded elapsed-time guarantee."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace it:\n\n```\nmax_seen = 5\nT1: cur = 5      T2: cur = 5\nT2: CAS(5 -> 7)  ok,  max_seen = 7\nT1: CAS(5 -> 9)  fails, cur = 7\nT1: 9 > 7, CAS(7 -> 9) ok\nmax_seen = 9\n```\n\nThe key C11 detail is that a failed `compare_exchange` writes the value it actually found into `cur`, so the loop condition re-tests with fresh data. If T2 had been recording 12 instead, T1 would see `9 > 12` is false and stop without writing, which is also correct.",
+    "link": {
+      "title": "Non-blocking algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
+    }
+  },
+  {
+    "id": "sync-lock-free-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For algorithmic claims, assume suitable lock-free primitive progress and sound node-publication, lifetime and reuse protocols; separate allocator costs are outside this model. Which statements about progress guarantees are true? Select all that apply.",
+    "options": [
+      {
+        "text": "A Treiber stack is lock-free: if one thread is suspended between reading `top` and its CAS, others can still push and pop",
+        "explanation": "Correct. The suspended thread holds nothing. Others' CAS operations succeed; when it resumes, its CAS fails (or, with ABA protection, behaves correctly) and it retries."
+      },
+      {
+        "text": "A stack data structure protected by a glibc futex-based mutex is lock-free, because the fast path never enters the kernel",
+        "explanation": "The fast path is about speed, not progress. If the mutex holder is suspended, every other thread waits, which is blocking."
+      },
+      {
+        "text": "In a CAS update loop, a non-spurious comparison failure can show that another thread changed the expected value",
+        "explanation": "Correct (ignoring the spurious failures `_weak` permits). The value only changes because another thread wrote it, which is exactly why the loop is lock-free."
+      },
+      {
+        "text": "Assuming native fetch-add completes, a counter increment implemented by one x86 fetch-add has a bounded number of algorithmic steps",
+        "explanation": "Correct under the stated primitive-progress assumption: there is no software retry loop. This does not guarantee bounded elapsed time under arbitrary scheduling or hardware contention."
+      },
+      {
+        "text": "A CAS-loop counter is wait-free, because CAS is a single atomic instruction",
+        "explanation": "Each CAS is bounded, but the loop is not: an unlucky thread can keep losing the race forever. That makes it lock-free, not wait-free."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Use the definitions:\n\n- **Lock-free**: continuing system execution guarantees operation completion under the algorithm’s primitive and scheduling assumptions.\n- **Wait-free**: every thread finishes in bounded steps.\n\n1. Treiber stack: a stalled thread blocks no one. Lock-free. True.\n2. Futex mutex: a stalled holder blocks everyone. Blocking. False.\n3. A non-spurious CAS comparison failure shows interference; weak CAS may also fail spuriously.\n4. Under the stated native-instruction completion assumption, the fetch-add increment has bounded algorithmic steps. True.\n5. CAS loop: one thread can fail indefinitely. Only lock-free. False.",
+    "link": {
+      "title": "Non-blocking algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
+    }
+  }
+]

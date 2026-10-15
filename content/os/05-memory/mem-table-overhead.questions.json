@@ -1,0 +1,62 @@
+[
+  {
+    "id": "mem-paging-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A process using four-level x86-64 paging maps and touches exactly **1 GiB** of contiguous, 1 GiB-aligned virtual memory using 4 KiB pages. Approximately how much memory do its page tables need for that region?",
+    "options": [
+      {
+        "text": "About 4 KiB",
+        "explanation": "That is a single PT, which maps only 2 MiB."
+      },
+      {
+        "text": "About 2 MiB",
+        "explanation": "Correct. 1 GiB / 2 MiB = 512 PTs at 4 KiB each = 2 MiB, plus one PD, one PDPT and the PML4 (12 KiB): about 2 MiB."
+      },
+      {
+        "text": "About 512 MiB",
+        "explanation": "This seems to compute one 4 KiB table per 8 KiB of memory. Each PT holds 512 entries and maps 2 MiB."
+      },
+      {
+        "text": "About 2 GiB",
+        "explanation": "Page tables are about 0.2% of the memory mapped with 4 KiB pages, not twice as large."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each PTE maps 4 KiB. One PT has 512 entries, so it maps 512 × 4 KiB = **2 MiB**.\n2. Count the tables and their size:\n\n```formula\nN = M / C_PT = 1,024 MiB / 2 MiB = 512\nS = N × 4 KiB = 512 × 4 KiB = 2 MiB\nwhere\nN: the number of leaf page tables (PTs) needed\nM: the mapped region, 1 GiB = 1,024 MiB\nC_PT: the memory one full PT maps, 2 MiB\nS: the memory used by those PTs\nKiB: kibibyte, 1,024 bytes; each PT is one 4 KiB page\nMiB: mebibyte, 1,024 KiB\nIn words: 512 leaf tables of 4 KiB each, 2 MiB in all, about 0.2 % of the 1 GiB they map.\n```\n\n3. Upper levels: one PD (its 512 entries point to those 512 PTs), one PDPT entry, one PML4 entry. About 3 more pages = 12 KiB.\n4. Total ≈ **2 MiB**, about 0.2% overhead.\n\nWith 2 MiB pages, the leaf PTs vanish and one 4 KiB PD covers the region, plus the required upper tables. With a 1 GiB page, one PDPT entry covers it, still within allocated upper tables. Existing tables may be reused.",
+    "link": {
+      "title": "OSTEP: Paging: Smaller Tables (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-smalltables.pdf"
+    }
+  },
+  {
+    "id": "mem-paging-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a four-level x86-64 model, 50 PostgreSQL backends fully populate an aligned 64 GiB shared region. Assume each backend has independent page-table pages, no HugeTLB PMD sharing, and ignore upper-table overhead. How much leaf-table memory is needed with 4 KiB pages versus 2 MiB pages?",
+    "options": [
+      {
+        "text": "About 128 MiB with 4 KiB pages; about 256 KiB with huge pages",
+        "explanation": "These are the figures for one process. Each process has its own page tables, even for a shared region, so multiply by 50."
+      },
+      {
+        "text": "About 6.25 GiB with 4 KiB pages; about 12.5 MiB with 2 MiB pages",
+        "explanation": "Correct. With base pages, each process needs 128 MiB of leaf tables, giving 6,400 MiB across fifty processes. Huge pages reduce that to 256 KiB per process, or 12.5 MiB overall, under the stated independent-table model. Upper tables are excluded."
+      },
+      {
+        "text": "Nothing extra: shared memory shares its page tables too",
+        "explanation": "The ordinary data pages are shared, while page-table sharing depends on mapping type and implementation. This question explicitly assumes independent tables; eligible Linux HugeTLB mappings may share PMD tables."
+      },
+      {
+        "text": "About 64 GiB, the same as the data",
+        "explanation": "Page tables cost about 0.2% of mapped memory with 4 KiB pages, not 100%."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Each backend has its own tables, so compute one backend and multiply by 50:\n\n```formula\nN = 64 GiB / 2 MiB = 32,768\nS_s = N × 4 KiB = 128 MiB\nT_s = 50 × S_s = 6,400 MiB = 6.25 GiB\nS_h = 64 × 4 KiB = 256 KiB\nT_h = 50 × S_h = 12,800 KiB = 12.5 MiB\nwhere\nN: leaf page tables (PTs) per backend with 4 KiB pages; each PT maps 2 MiB\nS_s: one backend's leaf-table memory with 4 KiB pages\nT_s: the total for 50 backends with 4 KiB pages\nS_h: one backend's leaf-table memory with 2 MiB pages: 64 PDs, since each PD maps 1 GiB\nT_h: the total for 50 backends with 2 MiB pages\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\nGiB: gibibyte, 1,024 MiB\nIn words: small pages cost 128 MiB of tables per backend (6.25 GiB in all); huge pages cut that 512-fold to 256 KiB each (12.5 MiB in all).\n```\n\nThese are leaf-table estimates under the stated no-sharing assumption. Linux HugeTLB may share PMD tables for eligible mappings, and actual memory also depends on population, alignment and upper levels. PostgreSQL documents reduced table overhead as a benefit of huge_pages.",
+    "link": {
+      "title": "HugeTLB pages — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/mm/hugetlbpage.html"
+    }
+  }
+]

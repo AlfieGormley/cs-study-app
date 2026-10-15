@@ -1,0 +1,70 @@
+[
+  {
+    "id": "sync-lock-free-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Assume every node removed from a C Treiber stack is retired and never explicitly reinserted while stale readers can retain it. Which techniques can address address-reuse ABA when implemented correctly? Assume a version tag cannot wrap while an observation is outstanding.",
+    "options": [
+      {
+        "text": "Declare `top` as `volatile`",
+        "explanation": "`volatile` only forces real memory accesses. It neither makes the CAS see history nor stops a node's memory being reused, so ABA is untouched."
+      },
+      {
+        "text": "Pair `top` with a version counter and update both with a 16-byte CAS (`cmpxchg16b`)",
+        "explanation": "Correct. Every successful update bumps the counter, so \"A at version 7\" no longer matches \"A at version 9\" and T1's stale CAS fails."
+      },
+      {
+        "text": "Use `atomic_compare_exchange_strong` instead of `_weak`",
+        "explanation": "The strong form only removes spurious failures. It still compares the pointer value and still succeeds when A has come back."
+      },
+      {
+        "text": "Hazard pointers with publish-then-revalidate before dereference, and retirement that forbids reclamation/reuse while protected",
+        "explanation": "Correct. A node that T1 is examining cannot be freed and reused, so it cannot reappear at `top` as a different incarnation while T1 holds it."
+      },
+      {
+        "text": "Epoch-based reclamation, so a popped node's memory is not reused while any thread that might have read it is still active",
+        "explanation": "Correct. Like hazard pointers, it stops addresses being recycled while a stale reference may exist, which removes the reuse that makes ABA possible."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "ABA needs two ingredients: (1) CAS compares only the current value, and (2) the same value (address) reappears while someone holds a stale copy.\n\n| Option | Breaks which ingredient? |\n|---|---|\n| volatile | neither |\n| tagged pointer | 1: value now includes a version |\n| strong CAS | neither |\n| hazard pointers | 2: no reuse while held |\n| epochs | 2: no reuse while held |\n\nIn practice reclamation schemes are preferred, because they also fix the use-after-free on `old->next`, which tags alone do not.",
+    "link": {
+      "title": "ABA problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/ABA_problem"
+    }
+  },
+  {
+    "id": "sync-lock-free-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A developer adds a 64-bit version tag to `top` and uses a 16-byte CAS, so the Treiber stack is now safe from ABA. Popped nodes are released with `free()`. Under load the program still occasionally crashes inside `pop`. Why?",
+    "options": [
+      {
+        "text": "`cmpxchg16b` is not truly atomic on multicore x86",
+        "explanation": "For a supported, correctly aligned operand and target, locked cmpxchg16b provides an atomic 16-byte comparison and exchange. That protects the comparison, not the earlier dereference or the node’s lifetime."
+      },
+      {
+        "text": "The 64-bit tag wraps around and lets ABA through",
+        "explanation": "A 64-bit tag takes a very long time to wrap:\n\n```formula\nt_wrap = 2^64 / r\nt_wrap = 2^64 / (10^9 /s)\nt_wrap ≈ 1.84 × 10^10 s\nt_wrap ≈ 584.5 years\nwhere\nt_wrap: the time until the tag returns to a value it held before\n2^64: 2 to the power 64, the number of distinct 64-bit tag values, about 1.84 × 10^19\nr: the update rate: 10^9 updates per second\n10^9: 10 to the power 9, one billion\ns: second\nyears: years of 365.25 days (31,557,600 s)\n≈: approximately equal to (rounded)\nIn words: at a billion updates a second, a 64-bit tag takes over five centuries to repeat.\n```\n\nThis illustrates a very long cycle, but finite tags are not a mathematical no-wrap guarantee. The immediate dereference-after-free bug needs no wraparound."
+      },
+      {
+        "text": "The CAS ignores the tag on some cores",
+        "explanation": "A 16-byte CAS compares all 16 bytes; there is no core that compares only the pointer half."
+      },
+      {
+        "text": "Between loading `old` and reading `old->next`, another thread can pop and `free()` that node; the tag makes the later CAS fail, but the read of the freed node has already happened",
+        "explanation": "Correct. The unsafe dereference precedes the tag comparison. A finite tag also needs a wraparound argument; even a non-wrapping tag cannot keep a removed node alive. A valid hazard, epoch or other reclamation protocol must delay freeing it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Look at the order of operations in `pop`:\n\n```\n1  old  = top        (ptr, tag)\n2  next = old->next  <- reads node\n3  CAS(top, old, next)\n```\n\n1. T1 does step 1 and is preempted.\n2. T2 pops the same node and calls `free()`. The allocator may unmap the page or hand the memory to another caller.\n3. T1 does step 2: it dereferences memory that was already freed. Crash, or garbage in `next`.\n4. Step 3 would fail thanks to the tag, but the damage happened at step 2.\n\nSo the Treiber stack needs **safe memory reclamation**: do not free a node until no thread can still be between steps 1 and 3 with a pointer to it.",
+    "link": {
+      "title": "Hazard pointer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hazard_pointer"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "mem-paging-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On x86-64 with 4-level paging, which table indices does the MMU use to translate virtual address **0x0000004020123456**?",
+    "options": [
+      {
+        "text": "PML4 0, PDPT 256, PD 256, PT 291, offset 0x456",
+        "explanation": "Correct. Shift and mask 9 bits at a time: bits 47–39 = 0, 38–30 = 256, 29–21 = 256, 20–12 = 291 (0x123), and the low 12 bits are 0x456."
+      },
+      {
+        "text": "PML4 0, PDPT 1, PD 1, PT 0x123, offset 0x456",
+        "explanation": "This reads the hex digits as if each level were a 4-bit or 8-bit field. Each level is 9 bits, which does not line up with hex digits."
+      },
+      {
+        "text": "PML4 1, PDPT 0, PD 256, PT 291, offset 0x456",
+        "explanation": "This assigns bit 38 to the PML4 field. The PML4 index is bits 47 to 39, all of which are 0 here."
+      },
+      {
+        "text": "PML4 0, PDPT 256, PD 256, PT 291, offset 0x3456",
+        "explanation": "The offset is only 12 bits (three hex digits); the 0x3 belongs to the PT index."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Each index is a 9-bit field: divide by 2 to the power of the field's starting bit, then keep the remainder after dividing by 512:\n\n```formula\ni = ⌊VA / 2^s⌋ mod 512\ni_PML4 = ⌊VA / 2^39⌋ mod 512 = 0\ni_PDPT = ⌊VA / 2^30⌋ mod 512 = 256\ni_PD = ⌊VA / 2^21⌋ mod 512 = 256\ni_PT = ⌊VA / 2^12⌋ mod 512 = 291\noff = VA mod 2^12 = 0x456\nwhere\ni: one level's table index, from 0 to 511\nVA: the virtual address, 0x4020123456\ns: the bit where that level's field starts: 39, 30, 21 or 12\n⌊ ⌋: floor: round down to a whole number\nmod: the remainder after division; mod 512 keeps 9 bits\ni_PML4: the PML4 index (bits 47 to 39)\ni_PDPT: the PDPT index (bits 38 to 30)\ni_PD: the PD index (bits 29 to 21)\ni_PT: the PT index (bits 20 to 12); 291 is 0x123\noff: the 12-bit page offset\nIn words: shift the address down past each field and keep 9 bits to get the four indices; the low 12 bits are the offset.\n```\n\nIn code this is `(va >> s) & 0x1FF`: the shift discards the selected low bits, and masking keeps the next nine.\n\nCheck one: divide the address by 1,073,741,824 and round down. The result is 256, already below the 512-entry table size, so the PDPT index is 256.\n\nIn binary, the set bit at position 38 becomes bit eight of the PDPT index; the bit at position 29 becomes bit eight of the PD index. Each contributes 256.",
+    "link": {
+      "title": "Page tables — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/mm/page_tables.html"
+    }
+  },
+  {
+    "id": "mem-paging-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A single load stays within a present 4 KiB page on x86-64 with four-level paging. It misses all translation and page-walk caches. Count one read per paging level plus the data read, ignoring accessed-bit updates, nested virtualization and data-cache effects. How many reads does this model require?",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "That would only be true on a TLB hit, when the translation is already cached."
+      },
+      {
+        "text": "4",
+        "explanation": "Four accesses are needed for the walk, but the load itself still has to read the data afterwards."
+      },
+      {
+        "text": "5",
+        "explanation": "Correct. One read from each of the PML4, PDPT, PD and PT tables, then the actual data access."
+      },
+      {
+        "text": "2",
+        "explanation": "That is the cost with a single-level page table: one PTE read plus the data."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Read PML4, PDPT, PD and PT entries, then the requested data: five reads in this simplified model. It is not a prediction of 5× wall-clock latency: cache hits, overlapping work and other hardware behavior matter. A five-level full walk adds one entry read.",
+    "link": {
+      "title": "OSTEP: TLBs (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-tlbs.pdf"
+    }
+  }
+]

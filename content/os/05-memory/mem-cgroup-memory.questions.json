@@ -1,0 +1,101 @@
+[
+  {
+    "id": "mem-in-practice-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about the cgroup v2 memory controller are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Exceeding `memory.high` throttles the group and forces reclaim, but does not by itself trigger the OOM killer",
+        "explanation": "Correct. Exceeding high does not itself invoke the kernel OOM killer, although global/ancestor OOM or a user-space pressure policy may independently kill tasks."
+      },
+      {
+        "text": "When an eligible allocation triggers a cgroup OOM, victim selection is confined to the constrained subtree",
+        "explanation": "Correct. Local scope can include descendant cgroups and can run out of budget even with free host RAM. Some allocation failures do not invoke OOM."
+      },
+      {
+        "text": "New page-cache pages allocated on behalf of a group can be charged to its memory.current",
+        "explanation": "Correct. Shared cache normally has one owning charge; merely reading an already-charged shared page does not charge its full size again to every reader."
+      },
+      {
+        "text": "`memory.min` caps how much memory the group can use",
+        "explanation": "Incorrect. memory.min provides hard reclaim protection within the effective hierarchical boundary; overcommitted protection is apportioned, not an unlimited absolute guarantee."
+      },
+      {
+        "text": "`memory.events` records how many OOM kills the group has had",
+        "explanation": "Correct. Its `oom_kill` counter (alongside `high`, `max` and `oom`) is the first thing to check after an unexplained container death."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "memory.max bounds charged usage with reclaim and possible local OOM; memory.high applies reclaim/throttling without itself invoking OOM; min/low provide hard/best-effort protection within effective hierarchical budgets. memory.current includes charged file cache and kernel memory. memory.events counters have specific semantics and are hierarchical by default; they are not simply one count per threshold crossing. Inspect memory.events.local when appropriate and correlate oom/oom_kill with logs.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A log-shipping container has a 1 GiB limit. Its `memory.current` sits at 1,020 MiB all day, but it has never been OOM-killed. `memory.stat` shows `anon 140 MiB` and `file 860 MiB`. What is going on? Further inspection confirms the file usage is mostly clean disk-backed cache that is not pinned in place and current pressure is low.",
+    "options": [
+      {
+        "text": "It is about to be OOM-killed; raise the limit urgently",
+        "explanation": "The additional evidence makes immediately raising the limit unjustified; near-limit usage alone does not establish imminent OOM. Reclaim can still have workload costs."
+      },
+      {
+        "text": "Mostly clean disk-backed cache is charged to the group and can be reclaimed; this can be normal, but monitor reclaim pressure and other users of memory",
+        "explanation": "Correct under the added cache-state evidence. No single counter proves ongoing safety, and anonymous pages are not the only possible unreclaimable usage."
+      },
+      {
+        "text": "The application has an 860 MiB memory leak",
+        "explanation": "The file counter alone does not prove an application leak, but application bugs can grow tmpfs, mappings or dirty files. The additional clean-cache evidence supports ordinary caching here."
+      },
+      {
+        "text": "cgroup accounting is broken; page cache should never be charged to a container",
+        "explanation": "Charging page cache to the cgroup that caused it is deliberate, so one container's I/O cannot silently consume the host's memory."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "140 MiB anon + 860 MiB file leaves about 20 MiB of other charged usage in the stated 1020 MiB total. The added evidence identifies mostly clean disk-backed cache, which can be reclaimed. File also includes categories such as tmpfs and dirty/writeback pages, so file usage is not automatically safe. OOM can result from several charged categories and reclaim restrictions, not only anon approaching the limit. Watch pressure, reclaim, events and workload latency alongside usage.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
+    }
+  },
+  {
+    "id": "mem-in-practice-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A pod has one container with a **2 GiB** memory limit and no swap. Its heap stays at about 800 MiB. It writes 1.5 GiB of temporary files. In case (a) they go to an `emptyDir` on the node's disk; in case (b) to an `emptyDir` with `medium: Memory` (tmpfs). Assume all pages hold live data, charges belong to this cgroup, no earlier volume size limit fails, and disk writeback can make progress. What is the key memory-budget difference?",
+    "options": [
+      {
+        "text": "Both are fine: file data is page cache and is always reclaimable",
+        "explanation": "tmpfs files live only in memory. Their pages have no disk copy, so they cannot be dropped; they could only be swapped, and there is no swap."
+      },
+      {
+        "text": "Both are OOM-killed, since 800 MiB + 1.5 GiB > 2 GiB",
+        "explanation": "In case (a) the file pages are written back to disk and become clean cache, which the kernel reclaims inside the cgroup before resorting to an OOM kill."
+      },
+      {
+        "text": "Disk-backed pages can be written back and reclaimed; 800 MiB of live anonymous data plus 1.5 GiB of live unswapped tmpfs exceeds the 2 GiB budget",
+        "explanation": "Correct. 800 + 1,536 = 2,336 MiB, or 2.28125 GiB, before other charges. This cannot all remain charged within a 2048 MiB cap; allocation failure or OOM handling is possible."
+      },
+      {
+        "text": "(b) is fine because tmpfs memory is charged to the node, not the container",
+        "explanation": "tmpfs pages are charged to the cgroup of the process that wrote them, so they count against the container's limit."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Disk-backed dirty pages can become clean through successful writeback and then be reclaimed. Live tmpfs contents cannot be discarded without losing file data; with no swap they consume memory while retained. The stated payload is 800 + 1,536 = 2,336 MiB = 2.28125 GiB, above 2048 MiB before other charges. Depending on allocation path and limits, failure can appear as OOM handling or an error; disk-backed case also needs room for overhead and functioning reclaim/writeback. Budget memory-backed volumes explicitly.",
+    "link": {
+      "title": "Control Group v2 — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
+    }
+  }
+]

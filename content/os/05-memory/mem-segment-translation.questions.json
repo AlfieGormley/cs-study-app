@@ -1,0 +1,92 @@
+[
+  {
+    "id": "mem-address-spaces-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A toy machine uses 14-bit virtual addresses. The top 2 bits select the segment; the low 12 bits are the offset.\n\n| Seg | Base | Size |\n|---|---|---|\n| 00 code | 0x4000 | 0x800 |\n| 01 heap | 0x9000 | 0xC00 |\n\nWhat does virtual address **0x1A40** translate to?",
+    "options": [
+      {
+        "text": "0x9A40",
+        "explanation": "Correct. 0x1A40 is `01 1010 0100 0000`: segment 01 (heap), offset 0xA40. 0xA40 < 0xC00, so the physical address is 0x9000 + 0xA40 = 0x9A40."
+      },
+      {
+        "text": "0xAA40",
+        "explanation": "This adds the whole virtual address (0x1A40) to the base. The segment bits must be stripped off first; only the 12-bit offset is added."
+      },
+      {
+        "text": "0x5A40",
+        "explanation": "This uses the code segment's base. The top two bits are 01, which selects the heap."
+      },
+      {
+        "text": "Segmentation fault, offset out of range",
+        "explanation": "The offset 0xA40 (2,624) is below the heap size 0xC00 (3,072), so the access is legal."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Write 0x1A40 in binary: `0001 1010 0100 0000`.\n2. Keep the low 14 bits: `01 1010 0100 0000`.\n3. Top two bits `01` select the **heap**.\n4. Low 12 bits `1010 0100 0000` = **0xA40** = 2,624.\n5. Bounds check, then add the base:\n\n```formula\nseg = ⌊0x1A40 / 2^12⌋ = 1\noff = 0x1A40 mod 2^12 = 0xA40\noff = 2,624 < 3,072 = size_1\nPA = base_1 + off\nPA = 0x9000 + 0xA40 = 0x9A40\nwhere\nseg: the segment number, the top 2 bits of the 14-bit address; 1 (binary 01) is the heap\noff: the offset inside the segment, the low 12 bits\n2^12: 4,096 (0x1000); dividing by it removes the 12 offset bits\n⌊ ⌋: floor: round down to a whole number\nmod: the remainder after division\nsize_1: the heap segment's size, 0xC00 = 3,072 bytes\nbase_1: the heap segment's base, 0x9000\nPA: the physical address\nIn words: 0x1A40 is 0xA40 bytes into the heap, which fits inside its 0xC00 bytes, so it lands at 0x9000 + 0xA40.\n```\n\nNotice the hex trick: with a 12-bit offset, the last three hex digits *are* the offset, and the leading digit 1 here means segment 01.",
+    "link": {
+      "title": "OSTEP: Segmentation (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-segmentation.pdf"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A segmentation-based system has 512 MiB of RAM. After hours of running, free memory consists of holes of 30 MiB, 25 MiB and 40 MiB (95 MiB in total). A new process needs a single 60 MiB segment. What is the problem, and what would solve it?",
+    "options": [
+      {
+        "text": "Internal fragmentation; use smaller segments",
+        "explanation": "Internal fragmentation is wasted space *inside* an allocated block. Here the waste is between allocations, which is external fragmentation."
+      },
+      {
+        "text": "Thrashing; add swap space",
+        "explanation": "Thrashing is about constant paging when the working set doesn't fit. This is a placement problem: the total is enough, but not contiguous."
+      },
+      {
+        "text": "External fragmentation; compact memory by moving segments together, or switch to fixed-size paging",
+        "explanation": "Correct. 95 MiB is free, but no hole is 60 MiB. Compaction can merge the holes (slowly, by copying), and paging avoids the problem since any free frame can hold any page."
+      },
+      {
+        "text": "The process is simply too big; there is not enough free memory",
+        "explanation": "There *is* enough in total (95 MiB > 60 MiB). The issue is that it is split into pieces too small to hold a contiguous segment."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Total free: 30 + 25 + 40 = 95 MiB, which exceeds the 60 MiB needed.\n2. A segment must be contiguous in physical memory. The largest hole is 40 MiB, so the request fails.\n3. Free space split into unusable pieces *between* allocations is **external fragmentation**.\n4. Fixes:\n   - **Compaction**: stop processes, copy their segments together, update base registers. This leaves one 95 MiB hole but costs a lot of copying.\n   - **Paging**: split memory into fixed-size frames. A 60 MiB region becomes 15,360 pages of 4 KiB (60 × 1,024 KiB divided by 4 KiB) that can go in any free frames.",
+    "link": {
+      "title": "OSTEP: Segmentation (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-segmentation.pdf"
+    }
+  },
+  {
+    "id": "mem-address-spaces-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "200 processes run the same program, whose code is 10 MiB. Under **base and bounds**, each process's code must sit inside its own contiguous region. Under **segmentation** with a shared, read-only code segment, all 200 can map the same physical copy. Roughly how much RAM does the code use in each case?",
+    "options": [
+      {
+        "text": "10 MiB with base and bounds; 2,000 MiB with segmentation",
+        "explanation": "This has the cases reversed. Sharing is what segmentation adds; base and bounds forces one copy per process."
+      },
+      {
+        "text": "2,000 MiB in both, because each process needs its own copy",
+        "explanation": "Read-only code never changes, so there is no reason for separate copies once the hardware can map one segment into many address spaces."
+      },
+      {
+        "text": "About 2,000 MiB with base and bounds; about 10 MiB with segmentation",
+        "explanation": "Correct. Separate copies need 2,000 MiB in total, whereas the shared-code scheme needs one 10 MiB code copy plus per-process segment-table metadata."
+      },
+      {
+        "text": "10 MiB in both, because the OS deduplicates pages automatically",
+        "explanation": "Base and bounds has no way to point part of one address space at another region; its single base register covers the whole process."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. **Base and bounds**: one base register per process covers its *entire* address space, code included. So each process holds its own 10 MiB copy: 200 × 10 = **2,000 MiB**.\n2. **Segmentation**: each segment has its own base. Every process's code-segment entry can point at the *same* physical base, with protection bits set to read and execute only so no process can modify it.\n3. Cost: one 10 MiB copy plus a few bytes of segment-table entry per process, about **10 MiB**.\n4. Paging does the same at page granularity, which is how Linux shares libc and executables today.",
+    "link": {
+      "title": "OSTEP: Segmentation (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-segmentation.pdf"
+    }
+  }
+]

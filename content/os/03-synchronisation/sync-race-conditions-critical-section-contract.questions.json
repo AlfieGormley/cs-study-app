@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sync-race-conditions-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Treat the code as pseudocode with sequentially consistent atomic access to turn. Two threads use **strict alternation** to guard a critical section:\n\n```c\n// thread i (0 or 1)\nwhile (turn != i) ;  // spin\n/* critical section */\nturn = 1 - i;\n```\n\nThread 0 leaves the critical section, sets `turn = 1`, and then spends an hour in its remainder section. Thread 1 enters, exits (setting `turn = 0`) and immediately wants to enter again. Which requirement is violated?",
+    "options": [
+      {
+        "text": "Mutual exclusion",
+        "explanation": "Mutual exclusion holds: only the thread whose turn it is can be inside. The problem is that a thread is kept out when nobody is inside."
+      },
+      {
+        "text": "Progress",
+        "explanation": "Correct. The critical section is empty and thread 1 wants in, yet it must wait for thread 0, which is not even trying to enter. A thread in its remainder section is blocking the decision."
+      },
+      {
+        "text": "Bounded waiting",
+        "explanation": "Strict alternation actually bounds waiting tightly: the other thread can enter only one time ahead of you. The failure here is that entry depends on a thread that does not want in."
+      },
+      {
+        "text": "None; the scheme is correct",
+        "explanation": "It is safe but not live: thread 1 is stuck for an hour with the critical section free, which a correct solution must never allow."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Check each requirement against the scenario:\n\n1. **Mutual exclusion**: entry requires `turn == i`, and `turn` has one value, so at most one thread is inside. Holds.\n2. **Critical-section progress**: after thread 1 exits, `turn == 0`. The section is empty, thread 1 wants in, but only thread 0 can flip `turn` back, and it is busy elsewhere. Only threads *trying to enter* should take part in the decision. Violated.\n3. **Bounded waiting**: each thread enters no more than one time before the other gets a turn. Holds.\n\nPeterson's algorithm fixes this by adding per-thread `flag`s, so a thread that is not interested does not block the other.",
+    "link": {
+      "title": "Critical section — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Critical_section"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You implement Peterson's algorithm exactly as in the lesson, with plain `int` variables, and run it on a modern x86 machine. Occasionally both threads are inside the critical section at once. Why?",
+    "options": [
+      {
+        "text": "Peterson's algorithm is only proven correct for a single CPU core",
+        "explanation": "Its proof assumes sequential consistency, not a single core. On an idealised sequentially consistent multiprocessor it is correct."
+      },
+      {
+        "text": "The `turn` variable overflows",
+        "explanation": "`turn` only ever holds 0 or 1, so there is nothing to overflow. This guesses at an arithmetic bug when the real failure is about the order in which memory operations become visible."
+      },
+      {
+        "text": "The CPU (and compiler) may let a thread's load of `flag[other]` happen before its own store to `flag[me]` becomes visible, so both threads read 0",
+        "explanation": "Correct as a hardware explanation, but the plain C variables also create undefined behaviour. Use suitable C atomics (for example sequentially consistent atomics for this teaching algorithm) or a real mutex; adding a fence alone does not make non-atomic racing accesses valid C."
+      },
+      {
+        "text": "Two threads cannot both spin on the same variable",
+        "explanation": "They can; spinning on a shared variable is fine. The issue is the order in which the stores and loads become visible."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The plain C implementation already has undefined behavior. In a separate literal machine-code model, stores can remain buffered while each core reads the other flag as zero; both may then enter. Sequentially consistent C atomics provide a valid teaching implementation. A hardware fence by itself does not repair non-atomic C data races.",
+    "link": {
+      "title": "Peterson's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Peterson%27s_algorithm"
+    }
+  }
+]

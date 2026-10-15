@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 25/76 modules; 179 originals → 936 short lessons with 2114 focused questions.
+- Independently verified: 27/76 modules; 192 originals → 1011 short lessons with 2267 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `224e706`, version `a3671687cb63`, 904 short lessons/2048 focused questions
-  across 24 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `174fa08ae42c`, 25 modules/936 units/2114 questions.
+- Latest confirmed live release: `204bb54`, version `174fa08ae42c`, 936 short lessons/2114 focused questions
+  across 25 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `e4141d42cb6d`, 27 modules/1011 units/2267 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -19,9 +19,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- os/os-sync: verifying; /root/sync_short_verify.
-- os/os-memory: verifying; /root/memory_short_verify.
 - os/os-filesystems: authoring; /root/filesystems_short_author.
+- os/os-io: authoring; /root/io_short_author.
+- os/os-virtualisation: authoring; /root/virtualisation_short_author.
 
 Verification and integration:
 
@@ -53,6 +53,11 @@ Working evidence and helpers:
   the final audit MUST omit it. Finish all 76 modules/all 482 mappings before calling the task done.
 - `check-module-dictionary.mjs <preview> <verifier-report> <subject>` checks identities, full definitions
   and actual rendered links. `check-dsa-dictionary.mjs` retains earlier Linear/Hashing/Trees meaning probes.
+- `qa-preview.mjs <preview>` runs the compiled dictionary probes, all short mobile renders/routes,
+  question audit, generated-file copy, 61 Node tests, installed update, age/offline and archive audit.
+  It saves logs under qa-<version>, records candidate evidence and refreshes reports. It never stages
+  or publishes. Do not mutate queue.json while it runs. Stage only reviewed module paths afterward,
+  run check-staged-release.mjs, then commit/push and verify the public release.
 - `verify-live-release.py <full-commit-sha>` checks successful Pages deployment and byte equality of
   app/manifest/progress/index against Git, writes a checksum proof and records exact snapshot counts.
   Run only after recorded integration passes and push; exit 3 means deployment is pending. Its API

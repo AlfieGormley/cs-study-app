@@ -1,0 +1,70 @@
+[
+  {
+    "id": "mem-tlb-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Consider a hypothetical Redis workload with THP enabled that shows increased memory use and write latency while an RDB snapshot child is active. Which mechanism can make huge pages contribute to this behavior?",
+    "options": [
+      {
+        "text": "THP stops copy-on-write from working, so fork copies the whole 20 GiB immediately",
+        "explanation": "Fork still uses copy-on-write with THP. The copying happens lazily, but in bigger pieces."
+      },
+      {
+        "text": "A write fault may copy or split huge-page backing, adding work and potentially duplicating a larger unit than a base-page fault",
+        "explanation": "Correct. The result depends on kernel version, mapping state and policy; some kernel paths split mappings or reuse exclusive backing rather than copying a whole huge page."
+      },
+      {
+        "text": "Huge pages can't be written to after a fork",
+        "explanation": "They can; the first write triggers a copy-on-write fault, just as with small pages."
+      },
+      {
+        "text": "THP doubles the size of the page tables",
+        "explanation": "Huge pages make page tables smaller, since a PD entry replaces a whole PT."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Fork can share private anonymous backing using copy-on-write. Subsequent writes require the kernel to preserve the child's view, potentially adding copying, splitting and allocation work. Huge-page behavior varies, so 512× is a size ratio, not a guaranteed cost multiplier. Redis documents THP-related latency concerns and offers version/platform-specific configuration guidance, including a process disable-thp option. Measure the actual workload before attributing every spike to THP.",
+    "link": {
+      "title": "Diagnosing latency issues — Redis docs",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/latency/"
+    }
+  },
+  {
+    "id": "mem-tlb-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which are genuine risks of setting transparent huge pages to `always` on a general-purpose server? Select all that apply.",
+    "options": [
+      {
+        "text": "Allocation latency spikes when the kernel compacts memory to find a free 2 MiB block",
+        "explanation": "Correct. Direct compaction can delay a faulting allocation; the size of the delay depends on fragmentation and policy."
+      },
+      {
+        "text": "Higher RSS for programs that sparsely touch large regions",
+        "explanation": "Correct. One touched byte can bring in 2 MiB instead of 4 KiB."
+      },
+      {
+        "text": "More expensive copy-on-write after fork",
+        "explanation": "Correct. Each copy-on-write fault may copy 2 MiB."
+      },
+      {
+        "text": "More TLB misses for large sequential scans",
+        "explanation": "Wrong. Huge pages reduce TLB misses; that is their purpose."
+      },
+      {
+        "text": "THP memory can never be reclaimed or swapped",
+        "explanation": "Wrong. THP pages can be split and reclaimed, and Linux can swap them. It is hugetlbfs memory that is pinned and unswappable."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Weigh the benefits against the costs.\n\n**Benefits**: 512× TLB reach per entry and one fewer level per walk.\n\n**Costs**:\n- *Compaction*: 2 MiB of physically contiguous, aligned memory may not be free, so the kernel moves pages around, sometimes synchronously in the faulting thread.\n- *Bloat*: memory is handed out in 2 MiB pieces, so sparse use wastes RAM. Allocators that free memory in 4 KiB pieces with `madvise(MADV_DONTNEED)` may also fight with khugepaged.\n- *COW amplification*: see the Redis case.\n\nA THP madvise policy can limit automatic THP to advised ranges, but modern kernels also have per-size controls and MADV_COLLAPSE exceptions. Choose a policy from application requirements and measurements.",
+    "link": {
+      "title": "Transparent Hugepage Support — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html"
+    }
+  }
+]

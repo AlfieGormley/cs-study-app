@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sync-memory-ordering-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume one producer, one consumer, initialized globals, no other accesses, and that the consumer reaches printf. What value does it print?\n\n```c\nint data = 0;\natomic_int ready = 0;\n\n// producer\ndata = 42;\natomic_store_explicit(&ready, 1,\n    memory_order_release);\n// consumer\nwhile (!atomic_load_explicit(&ready,\n        memory_order_acquire)) ;\nprintf(\"%d\", data);\n```",
+    "options": [
+      {
+        "text": "Always 42",
+        "explanation": "Correct. The acquire load reads the value written by the release store, so they synchronise: the write `data = 42` happens-before the read of `data`."
+      },
+      {
+        "text": "0 or 42, depending on timing",
+        "explanation": "The release/acquire pair orders the plain data accesses. Replacing it with relaxed access would introduce a C data race, not a defined two-value outcome."
+      },
+      {
+        "text": "Always 0, because `data` is not atomic",
+        "explanation": "A plain variable is fine when its accesses are ordered by happens-before. The release/acquire pair provides that ordering."
+      },
+      {
+        "text": "42 on x86, but possibly 0 on ARM",
+        "explanation": "Correct C release/acquire synchronization provides the result on conforming targets. The relaxed plain-data version is undefined behavior on either architecture."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Producer: `data = 42` is sequenced-before the release store.\n2. Release: no earlier access may be moved after it.\n3. Consumer: the acquire load eventually reads 1, the value written by the release. Release + acquire-that-reads-it = synchronises-with.\n4. Acquire: no later access may be moved before it, so the read of `data` stays after.\n5. By transitivity, `data = 42` happens-before `printf` reads `data`:\n\n```formula\nW_d → S_rel → L_acq → R_d\ngives W_d → R_d\nwhere\nW_d: the producer's write data = 42\nS_rel: the release store of 1 to ready\nL_acq: the consumer's acquire load that reads that 1\nR_d: the consumer's read of data inside printf\n→: happens-before (here each link is sequenced-before or synchronises-with)\nIn words: three ordered links chain into one, so the write of 42 is ordered before, and visible to, the read.\n```\n\n6. It prints 42, and there is no data race.",
+    "link": {
+      "title": "Acquire and release semantics — Jeff Preshing",
+      "url": "https://preshing.com/20120913/acquire-and-release-semantics/"
+    }
+  },
+  {
+    "id": "sync-memory-ordering-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A developer publishes data with a **release store** but has the consumer spin with a **relaxed load**:\n\n```c\n// producer\ndata = 42;\natomic_store_explicit(&ready, 1,\n    memory_order_release);\n// consumer\nwhile (!atomic_load_explicit(&ready,\n        memory_order_relaxed)) ;\nuse(data);\n```\n\nIs `use(data)` guaranteed to see 42?",
+    "options": [
+      {
+        "text": "Yes; the release on the producer side is sufficient",
+        "explanation": "Release only constrains the producer. Synchronises-with needs an acquire on the reading side; without it, the consumer's read of `data` may be ordered before its read of `ready`."
+      },
+      {
+        "text": "Yes, but only on ARM",
+        "explanation": "C’s missing synchronisation is a language-level defect on every target. A weak hardware model can expose stale-read symptoms, but does not restrict undefined C behaviour to one result."
+      },
+      {
+        "text": "No: without an acquire, the consumer's load of `data` can be performed before its load of `ready`, and in C it is also a data race",
+        "explanation": "Correct. Both halves are needed. Add `memory_order_acquire` to the load, or put `atomic_thread_fence(memory_order_acquire)` after the loop."
+      },
+      {
+        "text": "No, because release stores are not visible to relaxed loads",
+        "explanation": "A relaxed load can read the flag’s stored value. What it lacks here is the synchronisation edge ordering the separate plain payload; do not infer an unconditional wall-clock deadline for observing the flag."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Happens-before from producer to consumer requires synchronises-with.\n2. Synchronises-with requires a release store **and** an acquire operation that reads it.\n3. Here the read is relaxed: no edge, so `data = 42` does not happen-before `use(data)`.\n4. The read of `data` is then an unordered conflicting access to a non-atomic: data race, UB.\n5. In practice, on a weakly ordered CPU, the load of `data` can be satisfied early (even speculatively) and return 0.\n\nA fence-based fix:\n\n```c\nwhile (!atomic_load_explicit(\n    &ready, memory_order_relaxed)) ;\natomic_thread_fence(\n    memory_order_acquire);\nuse(data);\n```",
+    "link": {
+      "title": "memory_order — cppreference (C)",
+      "url": "https://en.cppreference.com/w/c/atomic/memory_order"
+    }
+  }
+]

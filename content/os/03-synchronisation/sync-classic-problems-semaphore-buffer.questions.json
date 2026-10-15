@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sync-classic-problems-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A five-slot semaphore-based bounded buffer starts with five `empty` permits and zero `full` permits. Producers complete 3 `put`s and then a consumer completes 1 `get`. What are `empty` and `full` now?",
+    "options": [
+      {
+        "text": "empty = 2, full = 3",
+        "explanation": "This counts the puts but forgets the get, which frees a slot (`empty` +1) and removes an item (`full` -1)."
+      },
+      {
+        "text": "empty = 4, full = 1",
+        "explanation": "This treats the get as undoing more than one put. Each operation moves exactly one unit between the two counts."
+      },
+      {
+        "text": "empty = 3, full = 2",
+        "explanation": "Correct. Each put moves one unit from `empty` to `full`; each get moves one back. 5-3+1 = 3 and 0+3-1 = 2."
+      },
+      {
+        "text": "empty = 5, full = 0",
+        "explanation": "The semaphores are not reset after each operation; they count the buffer's occupancy continuously."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nstart     empty=5 full=0\nput       empty=4 full=1\nput       empty=3 full=2\nput       empty=2 full=3\nget       empty=3 full=2\n```\n\nEach put moves one unit from `empty` to `full`, and each get moves one back:\n\n```formula\nempty = 5 − 3 + 1 = 3\nfull = 0 + 3 − 1 = 2\nempty + full = 3 + 2 = 5 = N\nwhere\nempty: the free-slot semaphore's value\nfull: the filled-slot semaphore's value\nN: the buffer's capacity in slots: 5\nIn words: three puts and one get leave 3 free slots and 2 items, and the two counts still add up to the capacity.\n```\n\nThe sum stays equal to N whenever no thread is mid-operation. Two items are in the buffer and three slots are free.",
+    "link": {
+      "title": "Producer–consumer problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Producer%E2%80%93consumer_problem"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer reorders the producer to take the mutex first:\n\n```c\nsem_wait(&mutex);\nsem_wait(&empty);\nbuf[in] = x; in = (in+1) % N;\nsem_post(&mutex);\nsem_post(&full);\n```\n\nThe consumer is unchanged (`wait(full)` then `wait(mutex)`). What happens when the buffer is full and a producer runs?",
+    "options": [
+      {
+        "text": "The producer holds `mutex` and sleeps on `empty`; the consumer that would free a slot blocks on `mutex`; nothing progresses",
+        "explanation": "Correct. The producer waits for a slot while holding the lock the consumer needs to create one. Classic hold-and-wait deadlock."
+      },
+      {
+        "text": "The producer overwrites the oldest item",
+        "explanation": "`wait(empty)` blocks when the buffer is full, so the write is never reached."
+      },
+      {
+        "text": "It works, just more slowly",
+        "explanation": "It is not slower; it hangs. When the buffer is non-full it behaves normally, which is why this bug can survive testing."
+      },
+      {
+        "text": "The consumer reads garbage because the mutex is held",
+        "explanation": "The consumer cannot read anything: it is blocked on the mutex."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Here N is the buffer's capacity in slots, so a full buffer has `empty` at 0 and `full` at N:\n\n```\nempty=0 full=N mutex=1\nP: wait(mutex) -> mutex=0\nP: wait(empty) -> blocks (0)\nC: wait(full)  -> one item reserved\nC: wait(mutex) -> blocks (0)\n```\n\nP waits for C to post `empty`; C waits for P to post `mutex`. Rule of thumb: **wait on the counting semaphore first, take the mutex last, and hold it only around the buffer access.**",
+    "link": {
+      "title": "OSTEP: Semaphores (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf"
+    }
+  },
+  {
+    "id": "sync-classic-problems-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Treat the trace as an illustrative interleaving; a literal plain-C implementation has a data race and undefined behavior. A bounded buffer with 10 slots (`N = 10` in the code) has **two producers** and one consumer. The developer argues: \"`empty` already stops producers overfilling the buffer, so the `mutex` is unnecessary.\" With the buffer empty, both producers call `put` at once. What can fail without the mutex?",
+    "options": [
+      {
+        "text": "Nothing; `empty` admits both, and they write to different slots",
+        "explanation": "They only write to different slots if each sees a different value of `in`. Without the mutex both can read the same `in`."
+      },
+      {
+        "text": "Both block, because `empty` only admits one at a time",
+        "explanation": "`empty` is 10, so it admits up to ten producers at once. It counts free slots; it does not provide mutual exclusion."
+      },
+      {
+        "text": "The consumer reads a slot before it is written",
+        "explanation": "The consumer waits on `full`, which is only posted after a write. The problem is between the two producers."
+      },
+      {
+        "text": "Both read the same value of `in`, write to the same slot (one item is lost), and `full` is posted twice, so the consumer later reads a stale or empty slot",
+        "explanation": "Correct. The counting semaphores count how many slots are free; they do not make `buf[in] = x; in++` atomic. That needs the mutex."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "An illustrative failure has both producers read `in` as 0, both overwrite `buf[0]`, both set `in` to 1 and both post `full`. The count advertises two items but only one slot was filled. Plain C racing accesses are undefined behavior, not limited to this trace. This implementation needs serialized index/slot updates; other carefully designed multi-producer algorithms can use atomics instead of a mutex.",
+    "link": {
+      "title": "OSTEP: Semaphores (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-sema.pdf"
+    }
+  }
+]

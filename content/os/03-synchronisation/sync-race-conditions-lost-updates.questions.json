@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sync-race-conditions-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Use a sequentially consistent toy model with indivisible loads/stores and preserved per-thread order, not the semantics of data-racing C. `counter` starts at 10. Two threads each run `counter++` once, compiled to load / add / store. The scheduler produces this interleaving:\n\n```\nA: load  (rA = 10)\nA: add   (rA = 11)\nB: load  (rB = 10)\nA: store (counter = 11)\nB: add   (rB = 11)\nB: store\n```\n\nWhat is the final value of `counter`?",
+    "options": [
+      {
+        "text": "12",
+        "explanation": "12 is what you get when the increments do not overlap. Here B loaded before A stored, so B never saw A's update."
+      },
+      {
+        "text": "11",
+        "explanation": "Correct. B read 10 before A's store landed, computed 11 from that stale value and overwrote A's 11 with its own 11. One update is lost."
+      },
+      {
+        "text": "10",
+        "explanation": "Both threads did store a value of 11; the counter cannot return to 10. The bug loses an increment, it does not undo both."
+      },
+      {
+        "text": "It is undefined, so no value can be predicted",
+        "explanation": "The stipulated toy trace has a determined result. A plain C implementation with unsynchronized conflicting accesses instead has undefined behavior, so this trace is not a language-level output guarantee."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Follow the shared value and each private register:\n\n```\nstep        rA  rB  counter\nA load      10   -   10\nA add       11   -   10\nB load      11  10   10\nA store     11  10   11\nB add       11  11   11\nB store     11  11   11\n```\n\nThe key step is B's load: it happened before A's store, so B worked from 10. Its store of 11 overwrites A's 11. Final value 11, one lost update.",
+    "link": {
+      "title": "OSTEP: Concurrency, an introduction (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-intro.pdf"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the sequentially consistent load/add/store model used in the lesson, why can a shared increment lose an update? A literal unsynchronised plain-C counter instead has undefined behaviour.",
+    "options": [
+      {
+        "text": "Because `int` is too small and overflows under concurrent access",
+        "explanation": "Overflow has nothing to do with it; the bug appears with small counts. The problem is the gap between reading and writing the value."
+      },
+      {
+        "text": "Because each thread has its own copy of global variables",
+        "explanation": "Threads share globals; that sharing is exactly why they can interfere. Thread-local copies would never lose each other's updates, they would just never see them."
+      },
+      {
+        "text": "Because it is a read-modify-write: another thread can run between the load and the store and its update gets overwritten",
+        "explanation": "Correct. The load, add and store are separate steps. If two threads both load the same old value, the second store overwrites the first."
+      },
+      {
+        "text": "Because the C compiler reorders the increment to after the loop",
+        "explanation": "Compilers can transform loops, but the lost-update bug exists even at -O0 with no reordering. The root cause is non-atomic read-modify-write."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Write out what the CPU does: `load counter → reg`, `reg + 1`, `store reg → counter`.\n2. Ask: can another thread run between those steps? Yes: it can be on another core, or the scheduler can preempt in between.\n3. If two threads both load 5, both compute 6 and both store 6, one increment vanished.\n4. So the fix must make load-add-store indivisible: a lock around it, or an atomic instruction like `lock xadd` (C11 `atomic_fetch_add`).",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "At -O2, a compiler turns `counter++` into a single x86 instruction: `incl counter(%rip)`. Is the increment now safe across threads on a multicore machine?",
+    "options": [
+      {
+        "text": "Yes: a single instruction cannot be interrupted, so it is atomic",
+        "explanation": "An ordinary scalar increment can finish as one instruction on one core, yet that does not establish cross-core atomicity or valid C thread semantics. The question concerns a shared plain C object on a multicore machine."
+      },
+      {
+        "text": "No: without the `lock` prefix the read-modify-write is not atomic across cores, and in C it is still a data race",
+        "explanation": "Correct. A suitable locked x86 read-modify-write can be atomic across cores for supported operands; portable C requests atomicity through its atomic API or a mutex. The compiler’s incidental choice of one ordinary instruction does not repair the data race."
+      },
+      {
+        "text": "Yes, because x86 has a strong memory model",
+        "explanation": "x86's relatively strong ordering (TSO) is about the order stores become visible, not about making read-modify-write sequences atomic. Lost updates still happen."
+      },
+      {
+        "text": "Only if `counter` is declared `volatile`",
+        "explanation": "C volatile constrains accesses according to implementation-defined rules, but supplies neither atomic read-modify-write nor the inter-thread synchronisation required here."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A literal ordinary x86 increment may execute as one instruction on one core, but another core can interfere with its memory read-modify-write.\n2. A suitable locked memory instruction supplies cross-core atomicity for supported operands; the implementation may use cache locking or a bus-lock mechanism according to the operand and memory type.\n3. A plain C shared object still has a data race even if today’s compiler happens to choose one ordinary instruction.\n4. Request atomicity through a valid language API, such as an atomic type and operation, or coordinate every access with a mutex.",
+    "link": {
+      "title": "Mutual exclusion — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Mutual_exclusion"
+    }
+  }
+]

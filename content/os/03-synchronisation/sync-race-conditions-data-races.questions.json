@@ -1,0 +1,102 @@
+[
+  {
+    "id": "sync-race-conditions-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume withdraw subtracts unconditionally and performs no balance validation. A bank account class takes an internal lock in every method. Balance is 150. Two threads each run:\n\n```python\nif acct.balance() >= 100:\n    # The check and withdrawal are\n    # separate.\n    acct.withdraw(100)\n```\n\nWhat is the worst final balance, and what kind of bug is this?",
+    "options": [
+      {
+        "text": "50; the locks prevent anything worse",
+        "explanation": "The locks protect each call separately. Nothing stops both threads from passing the check before either withdraws."
+      },
+      {
+        "text": "-50; it is a data race on the balance field",
+        "explanation": "The amount is right but the label is wrong: every access to the field is under the lock, so there is no data race. The bug is in the logic spanning two calls."
+      },
+      {
+        "text": "-50; it is a check-then-act race condition with no data race",
+        "explanation": "Correct. Both threads can read 150, both pass the check, and both withdraw, leaving -50. Each method is thread-safe; the sequence is not."
+      },
+      {
+        "text": "The program deadlocks because both threads hold the lock",
+        "explanation": "Each method takes and releases the lock before returning, so no thread holds it while waiting for another. There is no deadlock, just a wrong answer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A calls `balance()` → 150 (lock taken, released).\n2. B calls `balance()` → 150.\n3. A: 150 >= 100, calls `withdraw(100)` → 50.\n4. B: its check already passed, calls `withdraw(100)` → -50.\n\nEvery read and write of the field was locked, so by the C/C++ definition there is no data race. The bug is that the decision (check) and the action are not one atomic unit. Fix: hold the lock across both, or provide `withdraw_if_at_least(100)` that does the check inside the lock.",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are **data races** under the C11/C++11 definition? Select all that apply.",
+    "options": [
+      {
+        "text": "Two threads both call `counter++` on a plain `int` with no lock",
+        "explanation": "Correct. Conflicting accesses (both write), same location, not atomic, not ordered. Textbook data race, and undefined behaviour."
+      },
+      {
+        "text": "Two threads both read a plain `int` config value that nobody writes after startup",
+        "explanation": "Not a race. A data race needs at least one write. Concurrent reads of unchanging data are safe (as long as the write happened before the threads were started)."
+      },
+      {
+        "text": "One thread sets a plain `bool done = true`; another loops `while (!done)` with no lock",
+        "explanation": "Correct. One write and one read of the same location, neither atomic, nothing ordering them. It looks harmless but it is undefined behaviour, and in practice the compiler may hoist the load out of the loop so it spins forever."
+      },
+      {
+        "text": "Two threads call `atomic_fetch_add(&c, 1)` on an `atomic_int`",
+        "explanation": "Both accesses are atomic, so this operation has no data race. Whether the overall application is correct still depends on its protocol and numeric requirements."
+      },
+      {
+        "text": "Two threads each lock the same mutex, then write the same plain variable, then unlock",
+        "explanation": "Not a data race: the mutex orders the two writes (one unlock happens before the other's lock)."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Apply the four-part test to each option: same location? at least one write? not both atomic? not ordered by synchronisation?\n\n| Option | Write? | Atomic? | Ordered? | Race? |\n|---|---|---|---|---|\n| A | yes | no | no | yes |\n| B | no | no | n/a | no |\n| C | yes | no | no | yes |\n| D | yes | yes | n/a | no |\n| E | yes | no | mutex | no |\n\nOption C is the one people get wrong: a 'benign' flag is still a data race. Make it `atomic_bool`.",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  },
+  {
+    "id": "sync-race-conditions-q11",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You build your C service with ThreadSanitizer (`-fsanitize=thread`) and run the test suite. Which bugs could it report? Select all that apply.",
+    "options": [
+      {
+        "text": "Two threads incrementing a plain global without a lock, when the tests exercise that code",
+        "explanation": "Correct. Unsynchronised conflicting accesses are exactly what TSan detects, as long as the racing code actually runs during the test."
+      },
+      {
+        "text": "A check-then-act bug where `balance()` and `withdraw()` each take the lock correctly",
+        "explanation": "Not detectable by TSan: every access is synchronised, so there is no data race. It is a logic-level race condition."
+      },
+      {
+        "text": "A data race in code the tests never execute",
+        "explanation": "TSan is a dynamic tool; it only sees accesses that happen at run time. Unexecuted code cannot be reported."
+      },
+      {
+        "text": "A flag written by one thread and polled by another as a plain `bool`",
+        "explanation": "This is a data race and may be reported when the conflicting code is executed and instrumented. A detector run does not guarantee every possible race is found."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "1. TSan instruments memory accesses and records happens-before between threads (locks, atomics, thread create and join).\n2. It reports when two accesses conflict and are not ordered: options A and D.\n3. It cannot reason about intent, so a sequence of individually locked calls (B) looks fine.\n4. It only checks what runs (C). Coverage matters: race detectors are a complement to review and design, not a proof of correctness.",
+    "link": {
+      "title": "Race condition — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Race_condition"
+    }
+  }
+]

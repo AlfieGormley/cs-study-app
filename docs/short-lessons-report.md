@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 25/76. Updated 2026-10-15.
+Verified modules: 27/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -31,7 +31,9 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Advanced Structures & Algorithms | 7 | 49 | 84 | 124 | 144 | 476 | 70 |
 | os/OS Basics & Processes | 6 | 29 | 68 | 25 | 467 | 611 | 171 |
 | os/Threads & Scheduling | 6 | 31 | 67 | 55 | 232 | 411 | 48 |
+| os/Concurrency & Synchronisation | 6 | 33 | 68 | 26 | 325 | 508 | 56 |
 | os/Deadlock & Liveness | 6 | 32 | 66 | 32 | 167 | 514 | 47 |
+| os/Memory Management | 7 | 42 | 85 | 80 | 253 | 474 | 39 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -2950,6 +2952,91 @@ Low-confidence areas:
 - **medium** — sched-container-throttle-latency: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
 - **medium** — sched-container-runtime-cpu-count: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
 
+## os: Concurrency & Synchronisation
+
+[Independent verification record](../content/os/03-synchronisation/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- sync-lock-free-rcu-grace-period.md: RCU grace-period contracts include ordering and lifetime guarantees; later wall-clock start alone does not promise the newest pointer.
+- sync-memory-ordering-acquire-release-publication.md: Explain acquire/release using observable language guarantees rather than an absolute instruction-motion prohibition.
+- sync-memory-ordering-acquire-release-publication.md: Match acquire language to its observing-release condition.
+- sync-memory-ordering-lazy-publication.md: Avoid claiming every conceivable old-model variation was impossible or that once/static mechanisms are literally one acquire/release pair.
+- sync-lock-free-safe-reclamation.md: Remove a universal unmeasured performance comparison; specify stalled active/pinned participant.
+- sync-locks-lock-granularity.md: Original historical map summary omitted special paths and sounded like a complete current implementation.
+- sync-race-conditions-q2: State the toy-model scope before asking for one lost-update symptom.
+- sync-race-conditions-q9: Distinguish machine instruction and C validity; avoid unqualified single-core safety and universal cache-line implementation claims.
+- sync-race-conditions-q9: Do not define volatile solely as forbidding register caching.
+- sync-locks-q2: Question worked answer contradicted corrected lesson/kernel PREEMPT_RT contract.
+- sync-locks-q4: Weak CAS success is possible, not necessarily immediate.
+- sync-locks-q4: Account for permitted weak-CAS spurious failures consistently with the answer.
+- sync-locks-q5: Time slice alone does not establish a maximum scheduler delay.
+- sync-locks-q8: Do not advise arbitrary user-space or embedded code to disable interrupts.
+- sync-semaphores-condvars-q2: Exclude EINTR/error and unrelated waiters when promising immediate completion.
+- sync-semaphores-condvars-q6: POSIX permits spurious wakeups; an observed hang is not a theorem that wakeup is impossible.
+- sync-semaphores-condvars-q6: Avoid unconditional forever claim where spurious returns are allowed.
+- sync-classic-problems-q9: Preserve progress assumptions alongside writer-preference advice.
+- sync-classic-problems-q9: Mean concurrency and more threads do not prove a probability of reaching zero.
+- sync-memory-ordering-q2: Replace universal volatile load/store/instruction promises with language contract.
+- sync-memory-ordering-q2: Volatile can imply target-specific instructions; avoid universal no-fence assertion.
+- sync-memory-ordering-q11: Use language-model evidence and qualify code generation.
+- sync-lock-free-q2: Final maximum requires completed operations; weak CAS may fail spuriously before later success.
+- sync-lock-free-q2: Avoid promising that the very next weak-CAS attempt succeeds.
+- sync-lock-free-q2: Separate returned maximum from arbitrary-progress deadline.
+- sync-lock-free-q9: Use invocation rather than publication as the timeline cutoff.
+- os-atomicity: Independent definition/alias contract correction
+- os-x86: Independent definition/alias contract correction
+- os-tso: Independent definition/alias contract correction
+- os-sequential-consistency: Independent definition/alias contract correction
+- os-queued-spinlock: Independent definition/alias contract correction
+- os-time-slice: Independent definition/alias contract correction
+- os-unbounded-queue: Independent definition/alias contract correction
+- os-routing-table: Independent definition/alias contract correction
+- os-mfence: Independent definition/alias contract correction
+- os-ebr: Independent definition/alias contract correction
+- os-rcu-grace-period: Independent definition/alias contract correction
+- os-rcu-read-side: Independent definition/alias contract correction
+- os-synchronize-rcu: Independent definition/alias contract correction
+- os-mov: Independent definition/alias contract correction
+- os-srwlock: Independent definition/alias contract correction
+- os-byte: Independent definition/alias contract correction
+- os-mesa-semantics: Independent definition/alias contract correction
+- os-lock-prefix: Independent glossary boundary or alias correction
+- os-uniprocessor: Independent glossary boundary or alias correction
+- os-bool: Independent glossary boundary or alias correction
+- os-kernel-mode: Independent glossary boundary or alias correction
+- os-futex: Independent glossary boundary or alias correction
+- os-unfair-lock: Independent glossary boundary or alias correction
+- os-permit: Independent glossary boundary or alias correction
+- os-ageing: Independent glossary boundary or alias correction
+- os-thread-pool: Independent glossary boundary or alias correction
+- os-p2530: Independent glossary boundary or alias correction
+- os-p2545: Independent glossary boundary or alias correction
+- sync-lock-free-progress-and-cas.md: State the zero-floor input/result semantics of the maximum example.
+- sync-lock-free-q10: State Treiber/atomic progress prerequisites in the standalone question.
+
+Remaining gaps:
+
+- No lock/syscall/cache-transfer/RCU performance benchmark or physical-phone run; numerical timings are clearly hypothetical or omitted.
+- No physical x86 weak-memory stress test, live kernel seqlock/RCU execution, complete hazard/epoch implementation, arbitrary-scheduler fairness proof or complete reclamation theorem.
+- The teaching fragments retain explicit initialization, lifetime, error-handling and cancellation assumptions; production completeness is not claimed.
+- Root coordinator performs the whole build, staged-source preservation, phone rendering, app progress/PWA checks and publication after a different verifier finishes.
+- No direct separately obtained original Treiber 1986 report or full historical attribution audit beyond primary-paper bibliography and retained records. Pathfinder account is a contemporaneous report of the vendor talk, not an independently rerun spacecraft event.
+- Source transport limits: four nonexistent exploratory primary URLs and one ARM 403 retained in extra-source log; valid accessible alternatives were used. Every current lesson/question/glossary URL is HTTP 200.
+
+Low-confidence areas:
+
+- **medium** — sync-race-conditions-python-increments: CPython implementation and switching details. Actual Python 3.14.7 bytecode and examples run; free-threaded behaviour and future interpreter internals are version-dependent, with no promised race count.
+- **medium** — sync-locks-tickets-and-spinning: Scheduling, fairness and interrupt-context generalisation. Primary contracts and finite/native fixtures checked, but no bounded test proves fairness for arbitrary schedulers or all kernel configurations.
+- **medium** — sync-locks-lock-granularity: Implementation history and performance choices. JDK 7/8 descriptions are explicitly historical; crossover points, false-sharing gains and contention costs require measurement on the real workload.
+- **medium** — sync-memory-ordering-cpu-store-buffers: Target hardware reordering and instruction mappings. Fetched primary/formal model sources and SC/TSO models; no physical x86 weak-memory hardware stress test was run. Native C execution here is aarch64.
+- **medium** — sync-lock-free-progress-and-cas: Non-blocking/wait-free algorithm progress. Guarantees are conditional on atomic primitive and execution assumptions. Bounded execution and finite models do not establish an arbitrary-system progress theorem.
+- **medium** — sync-lock-free-safe-reclamation: Complete production memory reclamation and C++ library availability. No full hazard-pointer/epoch implementation or C++26 library conformance suite is supplied; historic WG21 adoption is checked, current implementation support must be checked separately.
+- **medium** — sync-lock-free-seqlock-retries: Kernel seqlock implementation and counter-wrap safety. Primary kernel documentation and finite snapshot models checked; no live kernel seqlock execution or arbitrary weak-memory proof is claimed.
+- **medium** — sync-lock-free-rcu-grace-period: RCU flavour/configuration and reclamation costs. Real liburcu 0.15.2 default-flavour fixture runs, but this is not a kernel RCU test, a universal grace-period bound or a production lifetime proof.
+- **medium** — glossary: Hoare/Mesa historical terminology and qspinlock implementation details. Core distinctions are retained and unsupported prevalence/default assertions removed. These remain priority topics for the independent verifier; earlier module definitions may win compiled lookup.
+- **medium** — glossary: Inherited glossary confidence and historical/implementation scope. The four pre-existing medium records retain their confidence. Runtime/platform generalisations remain qualified. HTTP availability alone is not evidence for a definition, and earlier dictionary owners can take precedence.
+
 ## os: Deadlock & Liveness
 
 [Independent verification record](../content/os/04-deadlock/verification.json)
@@ -3034,6 +3121,72 @@ Low-confidence areas:
 - **medium** — dl-prevention-hierarchy: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
 - **medium** — dl-prevention-ordering: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
 - **medium** — glossary: Version-sensitive Go mutex thresholds, database defaults, kernel diagnostics, Apple donation and Abseil build-mode behaviour. Fetched official documentation/source supports current and named-version behaviour. Deployment version and configuration must still be checked; prior valid medium confidence retained.
+
+## os: Memory Management
+
+[Independent verification record](../content/os/05-memory/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Remove long-lesson scope claim after splitting.
+- Match Intel address-tag masking qualification already present in the question and glossary.
+- Standalone original 8086 card must express twenty-bit truncation even when addition carries.
+- Define modulo in corrected standalone card.
+- Keep card prose consistent with corrected wrap formula.
+- Page-table allocation count must round up; fractional final leaf tables cannot be allocated.
+- State alignment and round-up assumptions explicitly.
+- Intel permits extra invalidation; no guaranteed retention or universal speedup magnitude.
+- Attach rseq specifically to per-CPU mode rather than implying it is used by legacy per-thread caches.
+- Keep lesson consistent with platform/build/option qualifications in its verified question.
+- Symbolic cardinality relation belongs in a formula card, not unmarked prompt prose.
+- Use ordinary prose rather than a standalone inline function expression.
+- Avoid uncarded symbolic ranges and preserve the necessary OPT tie-handling qualification.
+- Standalone card must not contradict surrounding explanation that a program may explicitly exit 137.
+- Remove obsolete long-lesson numbering and guaranteed cache retention.
+- Remove obsolete long-lesson reference.
+- Oracle NMT tracks internal VM memory, not exclusively non-heap usage.
+- Remove generic lazy-population aliases that capture file-backed mappings, which are not demand-zero faults.
+- The mmap call and memory-mapping alias also cover anonymous mappings; a file-only definition is misleading.
+- Retain explicit file forms while defining the general operation correctly.
+- Support anonymous mmap uses instead of incorrectly promising file backing.
+- RDB is not exclusively written by a child; Redis documents SAVE and BGSAVE.
+- A radix tree is a broader data structure, not necessarily a page table.
+- Avoid stating that x86-64 universally uses four levels.
+- Keep glossary consistent with independently checked OPT tie caveat and avoid uncarded algebra.
+- Avoid equating an exact fraction with its rounded decimal inside floor notation.
+- Keep exact level count without substituting a rounded decimal as though exact.
+- Keep exact buddy order without equating logarithm with its rounded decimal.
+- Using a library does not ensure every one of its pages remains resident.
+- Qualify the actual resident cache evidence.
+- Nothing read since boot does not exclude cache population through writes or readahead.
+- Use actual cache and backing assumptions rather than an invalid inference from read history.
+- Do not make process count a universal replacement for page-map accounting when one process maps backing repeatedly.
+- Precise cross-subject in-process-cache phrase prevents bare cache opening the CPU-cache definition.
+- Precise cross-subject in-process-cache phrase prevents bare cache opening the CPU-cache definition.
+- Precise cross-subject in-process-cache phrase prevents bare cache opening the CPU-cache definition.
+- Precise cross-subject in-process-cache phrase prevents bare cache opening the CPU-cache definition.
+- Use precise in-process cache alias for the reachable software cache.
+- Independent x86-64/glibc2.39 emulated run reported 543 minor faults, not the serial base-page model count. Distinguish validated arithmetic assumptions from actual runtime counters; THP always does not guarantee every allocation size.
+
+Remaining gaps:
+
+- All seven original topics, fourteen archival files and eighty-four original question contracts are retained. No substantive topic was intentionally removed.
+- No privileged CR2/CR3/page-table manipulation, real CPU TLB/PMU benchmark, live OOM/cgroup-pressure, swap, production Kubernetes, Redis or alternative-allocator stress experiment was performed.
+- Native checks use Linux x86-64 userspace under emulation on an ARM64 Docker host, glibc2.39,512MiB/oneCPU bounds and20-second program timeouts. These verify selected behaviour, not physical-hardware latency or a universal minor-fault count.
+- perf, dmesg, proc counters and logs shown in lessons are explicitly illustrative. Capacity, weighted-cost, page and allocation arithmetic use stated assumptions rather than undocumented measurements.
+- The independent verifier reviewed all active text/questions/definitions and fetched every active source URL. Evidence is bounded source/model/fixture checking, not external proof of every possible implementation or workload.
+- Phone rendering, whole-course compilation, saved-date migration and publication remain the coordinating agent’s integration work; this verifier does not claim to have completed them.
+
+Low-confidence areas:
+
+- **medium** — mem-large-page-mappings: Common macOS Apple-silicon page granule. Apple instructs querying the running page size. This host reports 16384; that is one configuration, not proof of every Apple deployment.
+- **medium** — mem-first-touch: Observed first-touch minor-fault count. The separately executed emulated Linux x86-64/glibc2.39 example reported 543, while 16384 and32 are explicit one-fault-per-base/huge-page arithmetic models. No claim that this runtime reproduced those exact model counters.
+- **medium** — mem-tlb-coherence: PCID retention, shootdowns and kernel-entry overhead. Intel invalidation rules and Linux documentation checked; implementations may discard additional entries. No privileged hardware experiment or workload speedup benchmark was run.
+- **medium** — mem-huge-page-policy: THP allocation, compaction, COW and application performance. Version/configuration-specific primary documentation checked; no host policy changes, Redis load or actual large-page latency benchmark.
+- **medium** — mem-linux-reclaim: Reclaim admission, promotion and generation behaviour. Primary Linux source/docs checked with version and path exceptions; no live memory-pressure, swap or MGLRU stress experiment.
+- **medium** — mem-glibc-retention: Allocator retention and alternative allocator comparisons. glibc2.39 source and native chunk fixture checked; RSS, contention, allocation lifetimes and alternative allocator performance remain workload-dependent without comparative benchmarks.
+- **medium** — mem-container-budgets: Kubernetes/runtime/container policy. Primary documentation checked; exact behaviour depends on deployed runtime, cgroup mode, Kubernetes features and flags. No production OOM, JVM/Go/Node memory-pressure deployment was exercised.
+- **medium** — glossary: Inherited medium-confidence generic and product/configuration definitions. Existing medium ratings retained except Denning, whose original paper is now fetched. Additional time-sensitive platform/allocator entries remain medium; no low-confidence entries remain.
 
 ## synth: Sound & Digital Audio
 

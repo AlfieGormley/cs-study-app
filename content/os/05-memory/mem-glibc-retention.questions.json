@@ -1,0 +1,130 @@
+[
+  {
+    "id": "mem-allocators-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A C service using glibc malloc builds a 2 GiB cache of small objects during a traffic spike, then frees 95% of them. A random 5% stay alive for hours. RSS stays near 2 GiB. What is the most likely explanation?",
+    "options": [
+      {
+        "text": "A memory leak: freed memory should always return to the OS",
+        "explanation": "free() returns memory to the allocator, not necessarily to the OS. Nothing is lost; it is reusable by later mallocs."
+      },
+      {
+        "text": "The kernel caches freed pages in RSS until swap is needed",
+        "explanation": "RSS counts resident mapped pages, not all mapped pages. The allocator can retain reusable resident memory without informing the kernel via unmap or discard."
+      },
+      {
+        "text": "The survivors are scattered across almost every page, so the allocator cannot release those pages, and brk can only shrink the heap from the top",
+        "explanation": "Scattered survivors prevent discarding those pages as wholly unused. They need not remain resident forever: ordinary pageable memory can be swapped. The amount retained depends on object layout."
+      },
+      {
+        "text": "glibc never returns memory to the OS under any circumstances",
+        "explanation": "It does: it trims the top of the heap past `M_TRIM_THRESHOLD`, unmaps mmapped chunks on free, and `malloc_trim` can release whole free pages in the middle."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "For an illustrative pool of 64-byte slots, there are 64 slots per 4 KiB page. If each object survives independently with probability 5%, a page is wholly empty only if all 64 of its objects were freed:\n\n```formula\nq = (1 − s)^m = 0.95^64 ≈ 0.0375\n1 − q ≈ 0.9625\nwhere\nq: the probability that a page holds no survivors and can be released\ns: the probability that any one object survives, 0.05\nm: the objects per page, 4,096 / 64 = 64\n≈: approximately equal to\nIn words: with 64 objects per page, even a 5 % survival rate leaves about 96 % of pages holding at least one live object.\n```\n\nAbout 3.75% of pages are empty and about 96.25% retain a survivor. This is not the exact glibc malloc(64) layout: those requests normally occupy 80-byte chunks in the stated model. Surviving data prevents discarding the whole page, but does not pin it in RAM. Allocator statistics and native/runtime profiles are needed to distinguish retention from leaks. Lifetime-segregated pools, trimming and allocator changes can be evaluated; trimming cannot discard a page containing live data.",
+    "link": {
+      "title": "MallocInternals — glibc wiki",
+      "url": "https://sourceware.org/glibc/wiki/MallocInternals"
+    }
+  },
+  {
+    "id": "mem-allocators-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements are true for the lesson's glibc 2.39 x86-64 model with its default tcache enabled? Select all that apply.",
+    "options": [
+      {
+        "text": "A 1 MiB request can receive a dedicated mmap when existing arena space cannot satisfy it and default mapping limits permit",
+        "explanation": "Correct. This exceeds the initial threshold, but eligible existing free space, mapping limits and settings still affect the code path."
+      },
+      {
+        "text": "The per-thread tcache lets most small `malloc`/`free` pairs avoid taking any lock",
+        "explanation": "Correct. The tcache (since glibc 2.26) holds a few chunks per small size class for each thread, so the fast path is lock-free."
+      },
+      {
+        "text": "All threads share one arena protected by a single lock",
+        "explanation": "Incorrect. glibc creates additional arenas (up to 8 × cores by default) so threads contend less."
+      },
+      {
+        "text": "A pointer from `malloc` is preceded by an 8-byte size field that a heap overflow from the previous chunk can overwrite",
+        "explanation": "Correct. That in-band header is what many heap exploitation techniques target, and why glibc added integrity checks."
+      },
+      {
+        "text": "`free` on any chunk immediately returns its pages to the kernel",
+        "explanation": "Incorrect. Dedicated mapped chunks are normally unmapped; ordinary free can cache/coalesce a chunk and may also trigger heap trimming."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "In glibc 2.39, a tcache hit avoids arena locking. Other requests use arena machinery, including fastbins, small/large bins, the unsorted bin and the top chunk. Large requests may use dedicated mappings if existing space and mapping policy lead there. Arenas can be shared across threads. An ordinary chunk carries in-band size/status metadata. Free can cache/coalesce an arena chunk, trigger trimming, or unmap a dedicated mapped chunk.",
+    "link": {
+      "title": "mallopt(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html"
+    }
+  },
+  {
+    "id": "mem-allocators-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Ruby service using the lesson's glibc 2.39 x86-64 model has 64 threads and 32 online CPUs. RSS is much larger than profiled live objects, and maps show many 64 MiB anonymous reservations. Which is a plausible allocator explanation and mitigation to test?",
+    "options": [
+      {
+        "text": "A leak in Ruby's GC; upgrading Ruby is the only fix",
+        "explanation": "A profiler may omit native or other allocations. Stable profiled objects do not exclude every leak, and upgrading alone is not a justified fix."
+      },
+      {
+        "text": "Per-thread arena fragmentation: threads spread across many glibc arenas, each retaining its own free memory; set `MALLOC_ARENA_MAX=2` or switch to jemalloc",
+        "explanation": "Arenas retain separate heap structures and can amplify fragmentation. They are not strictly one per thread, and one arena can own multiple heaps. Lowering the arena cap or testing another allocator can help or hurt depending on contention and retention."
+      },
+      {
+        "text": "The kernel is using transparent huge pages for the thread stacks",
+        "explanation": "Stack sizes depend on limits and attributes. THP alone does not uniquely explain the observed reservations or RSS gap; inspect mapping types and allocator statistics."
+      },
+      {
+        "text": "Each thread's tcache holds 64 MiB",
+        "explanation": "In the stated release/defaults, tcache holds at most seven chunks in each of 64 small bins (usable sizes 24 to 1,032 bytes), about 231 KiB (236,544 bytes) of usable space per thread, not 64 MiB. Other releases and tunables differ."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The mappings are consistent with this glibc configuration, not proof of arena retention. The default arena cap is 8 × 32 = 256, but actual arena count is demand dependent. Threads can share arenas; chunks keep their arena ownership, although cross-thread frees can make chunks reusable through another thread's tcache. RSS also includes stacks, mappings and runtime/native allocations. Measure allocator statistics and memory pressure, then test an arena cap or a compatible alternative allocator against both memory and throughput.",
+    "link": {
+      "title": "mallopt(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html"
+    }
+  },
+  {
+    "id": "mem-allocators-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hypothetical 48-thread image service, tracing confirms each 64 MiB scratch allocation receives a new mapping and freeing it unmaps that mapping. Page-fault and TLB-invalidation work dominate the profile. Which change directly reduces this allocation churn?",
+    "options": [
+      {
+        "text": "Reuse a bounded scratch-buffer pool so buffers and their populated mappings can survive between requests",
+        "explanation": "Correct. Reuse can avoid repeated mapping, population and invalidation, at the cost of retained memory. Size the pool to concurrency and memory limits; it is not an unlimited per-thread allocation mandate."
+      },
+      {
+        "text": "The heap is fragmented; call `malloc_trim` after each request",
+        "explanation": "The stipulated trace shows dedicated mappings. Trimming per request does not address their churn and may add work."
+      },
+      {
+        "text": "Transparent huge pages are disabled; enabling them fixes the problem completely",
+        "explanation": "Huge pages can change fault and translation costs but do not guarantee availability or eliminate mapping lifecycle costs."
+      },
+      {
+        "text": "Swap is too small",
+        "explanation": "The described trace identifies allocation churn; increasing swap does not directly remove it. Inspect actual fault types rather than assuming every recorded fault is demand-zero."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "With an ideal page-aligned 64 MiB range and exactly one minor fault per 4 KiB page:\n\n```formula\nF = 64 MiB / 4 KiB = 16,384\nR_F = 200 × F = 3,276,800\nP_M = 48 × 64 MiB = 3,072 MiB = 3 GiB\nwhere\nF: faults to populate one fresh 64 MiB mapping\nR_F: faults per second at 200 requests per second\nP_M: the payload a pool of 48 buffers keeps resident\nMiB: mebibyte, 1,024 KiB\nKiB: kibibyte, 1,024 bytes\nGiB: gibibyte, 1,024 MiB\nIn words: each fresh buffer costs 16,384 faults, over three million a second at this request rate, while a pool trades that for 3 GiB of retained memory.\n```\n\nActual malloc alignment, prior touches, huge pages and fault batching change counts; TLB invalidations need not send an IPI to every core. A 48-buffer pool retains 3 GiB of payload, so a bounded shared pool may be preferable. Reuse reduces churn but does not guarantee zero future faults or system calls.",
+    "link": {
+      "title": "mallopt(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/mallopt.3.html"
+    }
+  }
+]

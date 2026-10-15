@@ -1,0 +1,70 @@
+[
+  {
+    "id": "mem-allocators-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A kernel slab cache holds **700-byte** objects, and each slab is an order-1 block (2 pages, 8 KiB = 8,192 bytes). In a simplified model ignoring metadata and alignment padding, how many objects fit per slab, and how many bytes are left over?",
+    "options": [
+      {
+        "text": "11 objects, 492 bytes left over",
+        "explanation": "Correct. 8,192 / 700 = 11.7, so 11 objects use 7,700 bytes, leaving 492."
+      },
+      {
+        "text": "12 objects, 0 bytes left over",
+        "explanation": "12 × 700 = 8,400, which exceeds 8,192. Objects cannot span slabs."
+      },
+      {
+        "text": "5 objects per page, so 10 objects, 1,192 bytes left over",
+        "explanation": "This packs each 4 KiB page separately. A multi-page slab is contiguous, so objects can straddle the page boundary inside it."
+      },
+      {
+        "text": "8 objects, rounding 700 up to 1,024",
+        "explanation": "Slab caches use the object's own size (plus alignment), not the next power of two. Avoiding that waste is the point of a dedicated cache."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "With exactly 700-byte slots and no padding:\n\n```formula\nN = ⌊S_slab / s⌋ = ⌊8,192 / 700⌋ = 11\nW = 8,192 B − 11 × 700 B = 492 B\nN_1 = ⌊4,096 / 700⌋ = 5\nW_1 = 4,096 B − 5 × 700 B = 596 B\nwhere\nN: objects per 8 KiB slab\nS_slab: the slab size in bytes, 8,192\ns: the object size, 700 bytes\n⌊ ⌋: floor: round down to a whole number\nW: leftover bytes in the 8 KiB slab, about 6 %\nN_1: objects per single 4 KiB page slab\nW_1: leftover bytes in the 4 KiB slab, about 15 %\nB: bytes\nIn words: 11 objects fit in two pages with 492 bytes spare, while one page fits only 5 and wastes 596.\n```\n\nLarger slabs improve packing in this example; that is not monotonic for every object size, and higher-order allocation has fragmentation and allocation-failure tradeoffs.",
+    "link": {
+      "title": "Slab allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Slab_allocation"
+    }
+  },
+  {
+    "id": "mem-allocators-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For Linux 6.8 with 4 KiB base pages, which statements about buddy and slab allocation are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Many free small blocks but scarce order-9 blocks can make a 2 MiB allocation require compaction, fallback or failure",
+        "explanation": "Correct. External fragmentation of physical memory is the classic buddy weakness; compaction moves movable pages to rebuild large blocks."
+      },
+      {
+        "text": "SLUB is currently the only slab implementation in mainline Linux",
+        "explanation": "Correct. SLOB was removed in 6.4 and SLAB in 6.8, leaving SLUB."
+      },
+      {
+        "text": "A slab cache stores each object with a size header, like glibc chunks",
+        "explanation": "Incorrect. Every object in a cache is the same size, so no per-object size header is needed. That is one of the design's main wins."
+      },
+      {
+        "text": "Merging buddies requires searching the free list for any adjacent block",
+        "explanation": "Incorrect. The buddy's address is computed directly with one XOR of the block's offset and size; only that block can merge."
+      },
+      {
+        "text": "Memory used by kernel slab caches, such as millions of dentries, does not appear in any process's RSS",
+        "explanation": "Correct. It is kernel memory, visible in `/proc/meminfo` (Slab, SReclaimable) and `slabtop`, not in user RSS."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Buddy columns report free blocks by order within each node/zone. Lack of large blocks can reflect fragmentation or low free capacity; compaction is not always permitted or successful. Linux 6.8 uses SLUB. Fixed-size cache slots avoid a malloc-style live-object size header, but metadata and debugging overhead still exist. The buddy offset is computed by XOR in the aligned model. Slab usage appears in kernel memory accounting rather than process RSS; it may nevertheless be charged to a memory cgroup. Inspect Slab, SReclaimable and SUnreclaim to understand it.",
+    "link": {
+      "title": "Slab Allocator — Understanding the Linux VMM",
+      "url": "https://www.kernel.org/doc/gorman/html/understand/understand011.html"
+    }
+  }
+]

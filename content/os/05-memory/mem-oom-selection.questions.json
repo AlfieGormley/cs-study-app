@@ -1,0 +1,32 @@
+[
+  {
+    "id": "mem-in-practice-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A host with 16 GiB of total memory (RAM plus swap) runs out of memory. Process A has 6 GiB RSS and `oom_score_adj = 0`. Process B has 2 GiB RSS and `oom_score_adj = 500`. Ignoring swap and page tables, which does the OOM killer kill? Assume only A and B are eligible, the applicable allowance is 16 GiB, and ordinary highest-badness selection is used.",
+    "options": [
+      {
+        "text": "A, because it uses three times as much memory",
+        "explanation": "Size is only part of the score. B's adjustment adds the equivalent of 8 GiB (500/1000 of 16 GiB), outweighing A's larger RSS."
+      },
+      {
+        "text": "Neither: processes with a non-zero `oom_score_adj` are skipped",
+        "explanation": "Only −1000 exempts a process. Any other value just shifts its score."
+      },
+      {
+        "text": "Both, in order of RSS",
+        "explanation": "The ordinary code path selects a victim; related threads or tasks sharing its address space can also be killed, and cgroup group-kill policy adds cases. It does not simply kill both listed processes in RSS order."
+      },
+      {
+        "text": "B, because its adjusted score is higher",
+        "explanation": "Correct. The simplified scores are about 375 for A and 625 for B. B’s positive adjustment outweighs its smaller resident footprint in the stated scope."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Badness is, roughly, memory as thousandths of the allowance, plus the adjustment:\n\n```formula\nS ≈ 1000M / T + a\nS_A ≈ 1000 × 6 / 16 + 0 = 375\nS_B ≈ 1000 × 2 / 16 + 500 = 625\nwhere\nS: the badness score; the highest is killed\nM: the process's memory in GiB (RSS here, ignoring swap and page tables)\nT: the allowance, 16 GiB\na: oom_score_adj; each unit is 1/1000 of the allowance\nS_A: process A's score (6 GiB, adjustment 0)\nS_B: process B's score (2 GiB, adjustment +500)\n≈: approximately equal to (the kernel works in pages)\nIn words: A's larger size earns 375, but B's +500 adjustment, worth 8 GiB, lifts it to 625.\n```\n\nB has the highest badness, so B gets SIGKILL.\n\nThis is how you mark disposable work (batch jobs, caches) as preferred victims and protect critical daemons with negative values.",
+    "link": {
+      "title": "proc(5) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    }
+  }
+]

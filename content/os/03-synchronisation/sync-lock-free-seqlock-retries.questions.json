@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sync-lock-free-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A seqlock reader reads the sequence counter and gets 10, copies the protected data, then reads the counter again and gets 12. What should it do?",
+    "options": [
+      {
+        "text": "Accept the copy, because both counter values are even",
+        "explanation": "Even values only show that no write was in progress at the two instants checked. A whole write (10 → 11 → 12) happened in between, so the copy may be torn."
+      },
+      {
+        "text": "Discard the copy and retry, because a write happened while it was copying and the data may mix old and new fields",
+        "explanation": "Correct. The counter changed, so the reader cannot trust what it copied. It loops and tries again; readers never block the writer, they just redo their work."
+      },
+      {
+        "text": "Block until the writer releases its lock, then use the copy",
+        "explanation": "Seqlock readers do not wait on the writer's lock, and waiting would not make the stale copy valid. They simply retry the read."
+      },
+      {
+        "text": "Use the copy, since 12 is newer than 10",
+        "explanation": "The value of the counter does not validate data copied before it changed. The copy could contain half of the old record and half of the new one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The reader's rule is: *the copy is valid only if the counter was even and unchanged across the whole copy.*\n\n```\nread seq   -> 10  (even: no write now)\ncopy data  ...    writer: 10->11,\n                  updates, 11->12\nread seq   -> 12  (changed!)\n```\n\n1. 10 is even, so it was safe to start.\n2. 12 is not equal to 10, so a write completed during the copy.\n3. The copy might be torn (for example new seconds with old nanoseconds), so discard it and loop.\n\nThis is why seqlock readers must never follow pointers in the data: a torn copy could contain a pointer to memory that was already freed.",
+    "link": {
+      "title": "Sequence counters and sequential locks — Linux kernel documentation",
+      "url": "https://www.kernel.org/doc/html/latest/locking/seqlock.html"
+    }
+  },
+  {
+    "id": "sync-lock-free-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A hypothetical 32-bit kernel reads a split 64-bit timestamp frequently and updates it in a short timer-interrupt section. Assume a proven kernel memory-model implementation, serialized non-preempted writers and retry-safe reads. Which listed technique is a good fit without allocating a new object per update?",
+    "options": [
+      {
+        "text": "A read-write lock, so readers can share it",
+        "explanation": "A read-write lock can provide safety, but shared reader-metadata traffic can reduce its benefit for a very brief snapshot. The prompt does not establish an exact read rate or measured bottleneck."
+      },
+      {
+        "text": "A seqlock: the writer bumps a sequence counter around each update, and readers retry if it was odd or changed",
+        "explanation": "Correct under the prompt’s proven kernel protocol and retry-safe data assumptions. Readers validate an even unchanged sequence counter without taking the writer’s exclusion lock; retry and coherence costs still exist."
+      },
+      {
+        "text": "RCU: allocate a new timestamp object for each update and publish it with an atomic pointer swap",
+        "explanation": "An allocated immutable snapshot with valid RCU publication and reclamation could be safe, but violates the requested approach of avoiding a new allocation per update. No particular update frequency is established by the prompt."
+      },
+      {
+        "text": "No synchronisation: writes are rare, so readers almost always see a correct value",
+        "explanation": "On a 32-bit CPU the value is read in two halves. A reader that runs between the writer's two stores combines halves from different times, which can be wildly wrong when the low half carries into the high half."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Match the data to the tool:\n\n1. **Small, plain data** (8 bytes, no pointers): a torn copy is harmless if it is detected and thrown away.\n2. **Read constantly, written often but briefly**: readers must never write shared state.\n3. That is exactly a seqlock's niche.\n\nWhy torn reads matter here:\n\n```\nold = 0x00000001_FFFFFFFF\nnew = 0x00000002_00000000\nreader: high = 1 (old)\nwriter: stores both halves\nreader: low  = 0 (new)\nresult  0x00000001_00000000\n```\n\nHow far off is that?\n\n```formula\nv_new − v_torn = 2^33 − 2^32\nv_new − v_torn = 2^32 ≈ 4.3 × 10^9 ticks\nwhere\nv_new: the new timestamp 0x00000002_00000000, which equals 2^33 ticks (high half 2, low half 0)\nv_torn: the value the reader assembled, 0x00000001_00000000, which equals 2^32 ticks\n2^32: 2 to the power 32, the weight of 1 in the high half: 4,294,967,296\n2^33: 2 to the power 33, twice 2^32\nticks: timer ticks, the counting unit of the timestamp\n≈: approximately equal to\n10^9: 10 to the power 9, one billion\nIn words: the torn read lands about 4.3 billion ticks below the true value.\n```\n\nThe seqlock reader sees the counter changed and retries.",
+    "link": {
+      "title": "Sequence counters and sequential locks — Linux kernel documentation",
+      "url": "https://www.kernel.org/doc/html/latest/locking/seqlock.html"
+    }
+  }
+]

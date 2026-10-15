@@ -3,7 +3,7 @@
     "id": "virtual-address",
     "term": "VA",
     "aliases": [],
-    "definition": "An address as a program sees it: every pointer, instruction fetch and stack push. It is only meaningful inside one address space; the MMU translates it to a physical address on every access.",
+    "definition": "An address used by a program within an address-space context. Ordinary memory accesses are translated by the MMU; the same numeric virtual address can name different backing in different processes.",
     "example": "Two processes can both use virtual address 0x4000 and reach different physical memory.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
   },
@@ -27,9 +27,9 @@
       "lower canonical half",
       "lower canonical limit"
     ],
-    "definition": "On x86-64, an address whose unused top bits are all copies of the highest translated bit (bit 47 with 4-level paging). Non-canonical addresses fault before any page table is consulted, leaving a large hole between the user and kernel halves.",
+    "definition": "An ordinary x86-64 linear address whose high bits match the sign extension of the highest implemented linear-address bit: bit 47 with four-level paging or bit 56 with five levels. Address-tag masking features add rules; an invalid ordinary canonical form faults rather than selecting a page-table entry.",
     "example": "0x00007fffffffffff is canonical; 0x0000800000000000 is not.",
-    "source": "https://en.wikipedia.org/wiki/X86-64#Virtual_address_space_details"
+    "source": "https://cdrdv2-public.intel.com/874249/253668-090-sdm-vol-3a.pdf"
   },
   {
     "id": "side-channel",
@@ -76,14 +76,14 @@
       "segment descriptors",
       "segment number"
     ],
-    "definition": "The per-process table of segments' bases, sizes and permissions; on x86, segment registers (CS, DS, ES, SS, FS, GS) select entries. The top bits of an address, or the segment register used, pick the segment.",
+    "definition": "A table recording segment bases, sizes and permissions in a segmented memory model. Protected-mode x86 segment selectors identify descriptors; original 8086 segment registers instead contribute directly to real-mode address arithmetic.",
     "source": "https://en.wikipedia.org/wiki/Memory_segmentation"
   },
   {
     "id": "sigbus",
     "term": "SIGBUS",
     "aliases": [],
-    "definition": "The Unix signal for a bus error. For memory-mapped files Linux sends it when a mapped page has no file data behind it, for example after the file was truncated or a read failed.",
+    "definition": "The Unix bus-error signal. Linux can deliver SIGBUS for an access to a mapped whole page beyond a file’s end, or for an unresolvable backing-object error; not every file-tail access or storage error has identical behaviour.",
     "example": "Touching a mapped page beyond the end of a file that was truncated to 0 bytes delivers SIGBUS.",
     "source": "https://man7.org/linux/man-pages/man2/mmap.2.html"
   },
@@ -120,7 +120,7 @@
       "compact memory",
       "compacts memory"
     ],
-    "definition": "Moving allocated memory together so that free space forms larger contiguous blocks. Linux compacts physical memory to create 2 MiB blocks for huge pages, which can stall allocations.",
+    "definition": "Moving suitable allocations or physical pages to make larger contiguous free ranges. Linux memory compaction can help satisfy high-order and huge-page allocations, but its success and latency depend on movable pages, fragmentation and policy.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/sysctl/vm.html"
   },
   {
@@ -129,7 +129,7 @@
     "aliases": [
       "Intel 8086"
     ],
-    "definition": "Intel's 1978 16-bit processor. It formed 20-bit physical addresses as segment × 16 + offset, reaching 1 MiB of memory with 16-bit registers.",
+    "definition": "Intel’s 1978 16-bit processor, which combines a segment value shifted left four bits with an offset. The original twenty physical address bits cover 1 MiB and discard carry beyond that range.",
     "source": "https://en.wikipedia.org/wiki/Intel_8086"
   },
   {
@@ -159,7 +159,7 @@
     "aliases": [
       "real-mode"
     ],
-    "definition": "The original 8086 operating mode: no memory protection, 20-bit addresses formed from segment and offset. x86 CPUs still start in it at reset, before firmware switches mode.",
+    "definition": "The legacy x86 mode using segment-and-offset addressing rather than protected-mode segment descriptors. The original 8086 exposed twenty address bits; later processors can enable an additional address bit and change wrapping behaviour, so real mode is not universally a twenty-bit physical-address limit.",
     "source": "https://en.wikipedia.org/wiki/Real_mode"
   },
   {
@@ -179,7 +179,7 @@
       "compatibility mode",
       "compatibility submode"
     ],
-    "definition": "The x86-64 operating mode for 64-bit code. It requires paging and treats most segment bases as 0; its compatibility submode runs 32-bit programs with older segment rules.",
+    "definition": "The x86-64 mode containing a native 64-bit submode and a compatibility submode for older code. Paging is required; ordinary segment bases and limits are mostly ignored in native 64-bit execution, while compatibility execution retains different segmentation rules.",
     "source": "https://en.wikipedia.org/wiki/Long_mode"
   },
   {
@@ -211,13 +211,14 @@
   },
   {
     "id": "mem-mmap",
-    "term": "Memory-mapped file",
+    "term": "Memory mapping (mmap)",
     "aliases": [
       "mmap()",
+      "memory-mapped file",
       "memory-mapped files",
       "memory mapping"
     ],
-    "definition": "A file whose contents appear directly in a process's address space through mmap, loaded lazily on first touch through the page cache.",
+    "definition": "Mapping a virtual-address range, either backed by a file or anonymous zero-filled memory. Ordinary file mappings generally use page-cache backing; private modifications do not update the file, while shared mappings have different visibility and synchronization rules.",
     "source": "https://man7.org/linux/man-pages/man2/mmap.2.html"
   },
   {
@@ -240,7 +241,7 @@
       "DONTFORK",
       "WIPEONFORK"
     ],
-    "definition": "A system call giving the kernel hints about a memory range: for example MADV_DONTNEED drops its pages, MADV_COLLAPSE asks for huge pages, and MADV_DONTFORK keeps it out of fork children.",
+    "definition": "Memory-advice operations include MADV_DONTNEED to discard eligible mapping backing, MADV_COLLAPSE to request synchronous huge-page collapse, and MADV_DONTFORK or MADV_WIPEONFORK to change child inheritance. These operations have distinct rules and support requirements.",
     "source": "https://man7.org/linux/man-pages/man2/madvise.2.html"
   },
   {
@@ -252,7 +253,7 @@
       "MLOCK_ONFAULT",
       "locked memory"
     ],
-    "definition": "A system call that locks pages into RAM so they are not swapped out; mlock2 with MLOCK_ONFAULT locks them only as they are touched.",
+    "definition": "Linux calls for keeping eligible mapped pages resident, subject to limits and successful completion. mlock2 with MLOCK_ONFAULT delays locking until pages are touched; locking does not prevent every later protection or copy-on-write fault.",
     "source": "https://man7.org/linux/man-pages/man2/mlock.2.html"
   },
   {
@@ -271,7 +272,7 @@
     "aliases": [
       "fsync()"
     ],
-    "definition": "A system call that waits until a file's changed data and metadata reach the storage device.",
+    "definition": "A call requesting that a file’s modified data and required metadata reach the storage device, and waiting for completion. Durability still depends on successful error handling, filesystem and hardware guarantees; creating or renaming a file can also require syncing its directory.",
     "source": "https://man7.org/linux/man-pages/man2/fsync.2.html"
   },
   {
@@ -287,7 +288,7 @@
     "id": "map-populate",
     "term": "MAP_POPULATE",
     "aliases": [],
-    "definition": "An mmap flag asking the kernel to fill the page tables up front (prefault) instead of on first touch.",
+    "definition": "An mmap flag requesting prefaulting and, for file mappings, read-ahead. mmap can still succeed without fully populating the range, and future eviction or copy-on-write can cause more faults.",
     "source": "https://man7.org/linux/man-pages/man2/mmap.2.html"
   },
   {
@@ -304,11 +305,10 @@
     "term": "General-protection fault",
     "aliases": [
       "general protection fault",
-      "#GP",
-      "stack-segment fault"
+      "#GP"
     ],
     "definition": "The x86 exception for many protection violations, including using a non-canonical address. Stack accesses to a non-canonical address raise a stack-segment fault instead.",
-    "source": "https://en.wikipedia.org/wiki/General_protection_fault"
+    "source": "https://cdrdv2-public.intel.com/874249/253668-090-sdm-vol-3a.pdf"
   },
   {
     "id": "sign-extension",
@@ -334,7 +334,7 @@
     "id": "paging",
     "term": "Paging",
     "aliases": [],
-    "definition": "Dividing virtual memory into fixed-size pages and physical memory into frames of the same size, with page tables recording which frame holds each page. Any free frame can hold any page.",
+    "definition": "Dividing virtual addresses into fixed-size pages and managing suitable physical backing in corresponding frames. Ordinary virtual pages need not occupy one contiguous physical range; page size, permissions, hardware and allocation constraints still apply.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-paging.pdf"
   },
   {
@@ -386,7 +386,7 @@
       "P bit",
       "present and permission bits"
     ],
-    "definition": "The PTE flag (bit 0 on x86) saying the mapping is valid. If it is clear, any access raises a page fault, and the OS may use the rest of the entry for its own information, such as a swap location.",
+    "definition": "The x86 page-table flag indicating a present mapping or next-level table. A clear flag normally makes an access fault; the OS can encode software state such as swap information while respecting architectural and security constraints.",
     "source": "https://en.wikipedia.org/wiki/Page_table"
   },
   {
@@ -397,7 +397,7 @@
       "reference bit",
       "reference bits"
     ],
-    "definition": "A PTE flag the CPU sets when a page is used. The OS clears and later re-checks it to estimate which pages are in use, for example in the clock algorithm.",
+    "definition": "A hardware-maintained page-table access flag used as evidence of translation use. Software that clears it must follow the required invalidation protocol; a cached translation does not guarantee a fresh memory update on every later access.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-beyondphys-policy.pdf"
   },
   {
@@ -407,7 +407,7 @@
       "D bit",
       "dirty bits"
     ],
-    "definition": "A PTE flag the CPU sets when a page is written. A dirty page must be written back to its file or swap before its frame can be reused.",
+    "definition": "A hardware-maintained page-table flag indicating a write through the mapping. Whether backing must be written before reclaim depends on its kind and whether the contents must be preserved; discarding unneeded data differs from preserving dirty file or anonymous contents.",
     "source": "https://en.wikipedia.org/wiki/Dirty_bit"
   },
   {
@@ -417,7 +417,7 @@
       "dirty pages",
       "dirty file page"
     ],
-    "definition": "A page written since it was last read from storage or saved. A dirty file page must be written back before it can be dropped, and live migration must copy again any page dirtied since its previous copy.",
+    "definition": "A page with modified contents relevant to its backing or tracking context. Preserving dirty file contents normally requires writeback before dropping the frame; live migration must account for pages changed since an earlier copy. Explicitly discarding unneeded contents is a different operation.",
     "source": "https://en.wikipedia.org/wiki/Dirty_bit"
   },
   {
@@ -448,7 +448,7 @@
     "aliases": [
       "R/W"
     ],
-    "definition": "The x86 PTE flag (bit 1) that allows writes. With it clear, a write faults; copy-on-write relies on this.",
+    "definition": "The x86 page-table write-permission flag. Ordinary user-mode writes require effective write permission at all relevant levels; supervisor write protection also depends on control state, and changed permissions need appropriate translation invalidation.",
     "source": "https://en.wikipedia.org/wiki/Page_table"
   },
   {
@@ -468,7 +468,7 @@
       "global mappings",
       "global translations"
     ],
-    "definition": "A page whose PTE has the G bit set; when enabled, its TLB entry survives a CR3 write. It was used for kernel mappings, which are identical in every process.",
+    "definition": "An x86 translation marked global when global-page support is enabled. It can survive ordinary CR3 changes, unlike translations subject to that change’s invalidation rules; explicit invalidation and architectural exceptions still apply.",
     "source": "https://en.wikipedia.org/wiki/Translation_lookaside_buffer"
   },
   {
@@ -493,12 +493,10 @@
     "term": "Multi-level page table",
     "aliases": [
       "multi-level page tables",
-      "hierarchical page table",
-      "radix tree",
-      "radix trees"
+      "hierarchical page table"
     ],
     "definition": "A page table stored as a tree: the top table points to lower tables, which are allocated only for regions in use. It saves a great deal of memory for sparse address spaces at the cost of more reads per walk.",
-    "example": "x86-64 uses four levels of 512-entry tables, each indexed by 9 address bits.",
+    "example": "Four-level x86-64 paging uses four levels of 512-entry tables, each indexed by nine address bits. Five-level mode adds another level.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-smalltables.pdf"
   },
   {
@@ -511,7 +509,7 @@
       "single-level (flat)",
       "single-level"
     ],
-    "definition": "A page table that is one array with an entry for every virtual page. Simple, but 512 GiB per process for a 48-bit space.",
+    "definition": "One array containing an entry for every possible virtual page. In the lesson’s 48-bit address, 4 KiB page and eight-byte entry model, the full table occupies 512 GiB, including unused pages.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-smalltables.pdf"
   },
   {
@@ -639,7 +637,7 @@
     "aliases": [
       "inverted page tables"
     ],
-    "definition": "A page-table design with one entry per physical frame rather than per virtual page, looked up with a hash of the address space and virtual page number.",
+    "definition": "A translation structure with entries associated with physical frames rather than every possible virtual page. Lookup may use a hash over address-space identity and virtual page number; a hashed forward mapping table is not automatically an inverted table.",
     "source": "https://en.wikipedia.org/wiki/Page_table#Inverted_page_tables"
   },
   {
@@ -649,7 +647,7 @@
       "granule",
       "granules"
     ],
-    "definition": "On ARM64, the base page size the page tables use: 4 KiB, 16 KiB or 64 KiB. Larger granules give bigger pages and shallower trees.",
+    "definition": "The base-page granule selected for ARM64 translation: supported configurations can use 4 KiB, 16 KiB or 64 KiB. Address width, granule size and table-entry layout together determine the required hierarchy.",
     "source": "https://en.wikipedia.org/wiki/AArch64"
   },
   {
@@ -658,8 +656,8 @@
     "aliases": [
       "M-series"
     ],
-    "definition": "Apple's ARM64 processors for Macs (M1 onwards), which use 16 KiB pages.",
-    "source": "https://en.wikipedia.org/wiki/Apple_silicon"
+    "definition": "Apple’s ARM-based M-series system-on-chip family. macOS on Apple silicon commonly uses 16 KiB pages; the operating-system mapping configuration, rather than the family name alone, determines the granule in a particular environment.",
+    "source": "https://developer.apple.com/documentation/apple-silicon/addressing-architectural-differences-in-your-macos-code"
   },
   {
     "id": "iommu",
@@ -719,7 +717,7 @@
       "madvise mode",
       "madvise policy"
     ],
-    "definition": "The transparent huge page setting (written to /sys/kernel/mm/transparent_hugepage/enabled) under which the kernel automatically uses huge pages only in memory ranges a program has marked with madvise(MADV_HUGEPAGE).",
+    "definition": "A transparent-huge-page policy limiting ordinary automatic allocation to advised eligible mappings for sizes inheriting that policy. Per-size and process controls also matter; MADV_COLLAPSE has separate rules and can bypass the global automatic-policy setting.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html"
   },
   {
@@ -741,7 +739,7 @@
       "hit ratio",
       "TLB hit rate"
     ],
-    "definition": "The fraction of accesses that find what they need in a cache, between 0 and 1 (often written as a percentage). The miss rate is 1 minus the hit rate.",
+    "definition": "The fraction of a specified set of cache or TLB lookups that hit. The complementary miss rate describes those that miss; entry count alone does not establish either rate.",
     "example": "1,023 hits in 1,024 accesses is a hit rate of about 99.9%.",
     "source": "https://en.wikipedia.org/wiki/Cache_(computing)#Cache_performance"
   },
@@ -764,7 +762,7 @@
       "spatial locality",
       "temporal locality"
     ],
-    "definition": "The tendency of programs to reuse recently used data (temporal) and to use data near recently used data (spatial). It is why caches and TLBs hit most of the time.",
+    "definition": "The tendency for an access pattern to reuse recent data or touch nearby data. Such temporal or spatial locality can help caches and translation caches, but capacity, conflicts and the actual pattern determine hit rates.",
     "source": "https://en.wikipedia.org/wiki/Locality_of_reference"
   },
   {
@@ -811,14 +809,14 @@
       "hot data",
       "hot pages"
     ],
-    "definition": "The data a program is actively using right now. Performance suffers when it exceeds what a cache or the TLB can hold.",
+    "definition": "The part of a workload’s data actively accessed over a relevant interval. Exceeding a cache or TLB’s effective capacity can increase misses, with cost depending on locality, replacement and other hierarchy levels.",
     "source": "https://en.wikipedia.org/wiki/Working_set"
   },
   {
     "id": "invlpg",
     "term": "INVLPG",
     "aliases": [],
-    "definition": "The x86 instruction that invalidates the TLB entry for one page.",
+    "definition": "An x86 instruction used to invalidate translation information for a page on the executing logical processor, under architectural scope rules. It is not by itself a broadcast invalidation of every other CPU’s TLB.",
     "source": "https://www.felixcloutier.com/x86/invlpg"
   },
   {
@@ -829,7 +827,7 @@
       "per-CPU state",
       "per-CPU caches"
     ],
-    "definition": "Kept separately for each CPU core, so cores rarely contend for it.",
+    "definition": "State maintained separately for logical CPUs, often to reduce shared-state contention. Migration, cross-CPU access and the particular synchronisation protocol still matter.",
     "source": "https://www.kernel.org/doc/html/latest/core-api/this_cpu_ops.html"
   },
   {
@@ -861,7 +859,7 @@
       "VIPT",
       "virtually indexed physically tagged"
     ],
-    "definition": "A cache design that picks the set using address bits inside the page offset (identical in virtual and physical addresses) while the TLB translates the rest in parallel, then checks the physical tag.",
+    "definition": "A cache using a virtual-address-derived set index and a physical tag. Common L1 designs choose index bits within the page offset so translation and indexing can overlap; other VIPT organisations need additional alias handling.",
     "source": "https://en.wikipedia.org/wiki/CPU_cache#Address_translation"
   },
   {
@@ -871,8 +869,8 @@
       "Denning",
       "Denning's"
     ],
-    "definition": "The computer scientist who introduced the working-set model of program behaviour in 1968.",
-    "source": "https://en.wikipedia.org/wiki/Peter_J._Denning"
+    "definition": "The computer scientist whose 1968 paper formalised the working-set model of program behaviour, relating a process’s recently used information to its memory needs.",
+    "source": "https://denninginstitute.com/pjd/PUBS/WSModel_1968.pdf"
   },
   {
     "id": "page-fault-x86",
@@ -899,7 +897,7 @@
     "aliases": [
       "restartable"
     ],
-    "definition": "An instruction the CPU can run again from the start after the kernel fixes the cause of a fault, so the program never notices the fault happened.",
+    "definition": "An instruction whose faulting access can resume or retry after the kernel resolves the fault. The program can still observe latency, counters or a failure signal; restartability does not make faults unobservable.",
     "source": "https://en.wikipedia.org/wiki/Page_fault"
   },
   {
@@ -932,11 +930,9 @@
     "term": "Demand-zero fault",
     "aliases": [
       "demand-zero",
-      "demand-zero allocation",
-      "lazily allocating",
-      "populated lazily"
+      "demand-zero allocation"
     ],
-    "definition": "A page fault on a never-touched anonymous page, resolved by giving the process a fresh zero-filled frame; a minor fault with no I/O.",
+    "definition": "A fault arising when an eligible anonymous mapping first needs zero-filled backing. A write commonly obtains private zero-filled backing, while a read can use shared zero backing; accounting and costs depend on the actual path.",
     "source": "https://en.wikipedia.org/wiki/Demand_paging"
   },
   {
@@ -949,8 +945,8 @@
       "min_flt",
       "ru_minflt"
     ],
-    "definition": "A page fault the kernel resolves without reading from storage, for example by allocating a zeroed frame or mapping a page already in the page cache.",
-    "source": "https://en.wikipedia.org/wiki/Page_fault#Minor"
+    "definition": "A fault accounted as not requiring the page-in I/O associated with a major fault, such as mapping resident backing or first-touch anonymous backing. Allocation, reclaim or contention can still make its handler expensive.",
+    "source": "https://man7.org/linux/man-pages/man2/getrusage.2.html"
   },
   {
     "id": "major-fault",
@@ -962,8 +958,8 @@
       "maj_flt",
       "major-faults"
     ],
-    "definition": "A page fault that needs to read the page in from storage (a file or swap). It can take microseconds to milliseconds, thousands of times longer than a memory access.",
-    "source": "https://en.wikipedia.org/wiki/Page_fault#Major"
+    "definition": "A fault accounted as requiring page-in I/O, for example to obtain missing file or swap backing. Its duration depends on the backing, cache, storage and contention; the label does not promise a fixed delay.",
+    "source": "https://man7.org/linux/man-pages/man2/getrusage.2.html"
   },
   {
     "id": "page-fault-rate",
@@ -973,7 +969,7 @@
       "fault rate",
       "fault rates"
     ],
-    "definition": "The fraction of memory accesses that cause a page fault. Because faults are so expensive, even rates of one in a million matter.",
+    "definition": "The fraction of accesses causing a specified kind of page fault. Its performance effect depends jointly on that rate and the complete costs of faulting and ordinary accesses.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-beyondphys.pdf"
   },
   {
@@ -991,7 +987,7 @@
     "aliases": [
       "fault around"
     ],
-    "definition": "On a read fault in a file mapping, Linux also maps nearby pages that are already in the page cache (by default up to 64 KiB around the fault), saving later faults.",
+    "definition": "A Linux optimisation that can install nearby already-resident file-page mappings during a fault. Its window and applicability depend on kernel settings and mapping state, so it need not map a fixed surrounding range.",
     "source": "https://raw.githubusercontent.com/torvalds/linux/master/mm/memory.c"
   },
   {
@@ -1010,17 +1006,16 @@
     "term": "Resident memory",
     "aliases": [
       "resident pages",
-      "residency",
-      "nonresident"
+      "residency"
     ],
-    "definition": "Currently held in RAM. A page can be mapped without being resident, for example if it was never touched or was swapped out.",
+    "definition": "Currently backed by resident physical memory. A mapping can exist without resident backing, for example before population or while swapped; resident mapping counts and shared zero-page accounting have additional details.",
     "source": "https://en.wikipedia.org/wiki/Resident_set_size"
   },
   {
     "id": "eio",
     "term": "EIO",
     "aliases": [],
-    "definition": "The Unix error code for an input/output error, returned by calls such as read when storage fails. Memory accesses have no return value, so mapped files report the same problem as SIGBUS.",
+    "definition": "The Unix error code for an input/output error, returned by interfaces such as read when applicable. A mapped load has no ordinary error return; unresolved backing errors may instead deliver SIGBUS.",
     "source": "https://man7.org/linux/man-pages/man3/errno.3.html"
   },
   {
@@ -1052,7 +1047,7 @@
     "id": "durability",
     "term": "Durability",
     "aliases": [],
-    "definition": "The guarantee that data, once acknowledged as written, survives a crash or power loss. For mapped files it requires msync or fsync.",
+    "definition": "The persistence guarantee that acknowledged data survives the failures covered by a storage protocol. File mapping use may require successful msync or fsync and, for namespace changes, directory synchronisation, with filesystem and hardware guarantees still relevant.",
     "source": "https://en.wikipedia.org/wiki/Durability_(database_systems)"
   },
   {
@@ -1103,14 +1098,14 @@
     "id": "swapoff",
     "term": "swapoff",
     "aliases": [],
-    "definition": "The command that disables a swap device, moving its pages back into RAM.",
+    "definition": "The operation that disables a swap area and attempts to remove its live entries, obtaining suitable backing elsewhere. It can fail under memory pressure and does not promise that the whole area always fits immediately in free RAM.",
     "source": "https://man7.org/linux/man-pages/man8/swapon.8.html"
   },
   {
     "id": "zswap",
     "term": "zswap",
     "aliases": [],
-    "definition": "A Linux feature that compresses pages on their way to swap and keeps them in a RAM pool, writing to the swap device only when the pool is full.",
+    "definition": "A compressed-memory cache for swap-backed pages, in front of a swap device. Compression, pool limits, eviction, writeback and fault handling follow configured policy; it does not replace all backing-device requirements.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/mm/zswap.html"
   },
   {
@@ -1169,7 +1164,7 @@
     "aliases": [
       "RDB snapshot"
     ],
-    "definition": "Redis Database: Redis's point-in-time snapshot file format, written by a forked child.",
+    "definition": "Redis’s RDB snapshot file format, representing a dataset at a point in time. BGSAVE normally writes it in a forked child; SAVE is a blocking foreground alternative.",
     "source": "https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/"
   },
   {
@@ -1272,7 +1267,7 @@
       "compulsory faults",
       "cold miss"
     ],
-    "definition": "A fault or cache miss on the very first use of a page, which no policy can avoid when memory starts empty.",
+    "definition": "A first-use miss in a model starting with empty memory and no prefetching. A replacement policy cannot turn that initial absent reference into a hit under those assumptions.",
     "source": "https://en.wikipedia.org/wiki/Cache_performance_measurement_and_metric#Compulsory_misses"
   },
   {
@@ -1305,7 +1300,7 @@
       "stack algorithms",
       "stack property"
     ],
-    "definition": "A replacement policy whose resident pages with n frames are always a subset of those with n + 1 frames, so adding memory never adds faults. LRU and OPT are stack algorithms; FIFO is not.",
+    "definition": "A replacement policy whose resident set at one frame budget remains a subset of the set at a larger budget, so adding frames cannot add faults. LRU has this property; the standard OPT stack formulation uses consistent tie handling, while FIFO does not.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-beyondphys-policy.pdf"
   },
   {
@@ -1349,7 +1344,7 @@
       "inactive lists",
       "active/inactive LRU"
     ],
-    "definition": "Linux's classic reclaim design: per page type, an active list of pages in use and an inactive list of candidates for eviction. New pages enter inactive and are promoted only if used again, which resists one-pass scans.",
+    "definition": "Linux’s classic reclaim organisation separating active and inactive lists for anonymous and file backing. Observed reuse, refault feedback and access-path exceptions influence admission and promotion; inactive lists are candidates rather than guaranteed immediate victims.",
     "source": "https://www.kernel.org/doc/gorman/html/understand/understand013.html"
   },
   {
@@ -1372,7 +1367,7 @@
       "refault history",
       "shadow entry"
     ],
-    "definition": "A page faulting back in soon after it was evicted. When Linux evicts a page it leaves a shadow entry behind, so a refault can measure how long the page was gone and spot thrashing.",
+    "definition": "A later reference to backing after eviction. Linux refault tracking can retain shadow information and compare eviction-distance history to working-set size; this is not simply elapsed wall-clock time.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/mm/multigen_lru.html"
   },
   {
@@ -1406,7 +1401,7 @@
       "high watermark",
       "min watermark"
     ],
-    "definition": "Free-memory thresholds per zone (min, low, high). Below low, kswapd starts reclaiming in the background until free memory reaches high; near min, allocations may reclaim themselves.",
+    "definition": "Zone free-memory thresholds used in allocation and reclaim decisions. Falling below low can wake kswapd towards high; allocation flags, order, fragmentation, memory-cgroup limits and other rules affect direct reclaim.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/sysctl/vm.html"
   },
   {
@@ -1433,7 +1428,7 @@
     "id": "direct-reclaim",
     "term": "Direct reclaim",
     "aliases": [],
-    "definition": "Reclaim performed by the allocating task itself because background reclaim did not keep up. The task stalls until memory is freed, a common cause of latency spikes.",
+    "definition": "Reclaim work performed in an allocating task’s context on a permitted allocation path. It can add latency, but may fail to free enough memory; not every allocation or low-watermark condition enters it.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/sysctl/vm.html"
   },
   {
@@ -1444,7 +1439,7 @@
       "vm.watermark_scale_factor",
       "watermark_scale_factor"
     ],
-    "definition": "Linux settings that set the memory watermarks: min_free_kbytes the minimum kept free, watermark_scale_factor the gap that wakes kswapd. Raising them starts reclaim earlier at the cost of idle RAM.",
+    "definition": "Linux tunables influencing free-memory watermarks and their spacing. They can change when background reclaim wakes and how much reserve is maintained; effects depend on memory zones, workload and configuration.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/sysctl/vm.html"
   },
   {
@@ -1490,7 +1485,7 @@
     "aliases": [
       "Meta's oomd"
     ],
-    "definition": "A user-space out-of-memory daemon from Meta that kills workloads based on pressure (PSI) before the kernel OOM killer acts.",
+    "definition": "Meta’s user-space workload-killing daemon using configurable policies and pressure signals such as PSI. It can act before kernel OOM, but earlier action is not guaranteed for every policy or workload.",
     "source": "https://github.com/facebookincubator/oomd"
   },
   {
@@ -1498,7 +1493,7 @@
     "term": "systemd-oomd",
     "aliases": [],
     "definition": "The systemd service that kills cgroups under sustained memory pressure or swap use, according to configured policy.",
-    "source": "https://man7.org/linux/man-pages/man8/systemd-oomd.service.8.html"
+    "source": "https://raw.githubusercontent.com/systemd/systemd/main/man/systemd-oomd.service.xml"
   },
   {
     "id": "earlyoom",
@@ -1522,7 +1517,7 @@
     "id": "commitlimit",
     "term": "CommitLimit",
     "aliases": [],
-    "definition": "The most memory Linux will promise in strict overcommit mode: swap plus a ratio of usable RAM. Shown in /proc/meminfo.",
+    "definition": "The strict-overcommit accounting limit shown in /proc/meminfo, combining swap with either a configured usable-RAM ratio or an absolute RAM contribution. HugeTLB reservation and admission reserves affect the complete accounting rules.",
     "example": "64 GiB of RAM, 8 GiB of swap and ratio 50 give 8 + 32 = 40 GiB.",
     "source": "https://www.kernel.org/doc/html/latest/mm/overcommit-accounting.html"
   },
@@ -1530,7 +1525,7 @@
     "id": "committed-as",
     "term": "Committed_AS",
     "aliases": [],
-    "definition": "The total memory Linux has currently promised to processes, shown in /proc/meminfo. In strict mode an allocation fails if it would push this past CommitLimit.",
+    "definition": "The system-wide accounted commitment shown in /proc/meminfo. Strict admission uses this accounting together with CommitLimit and applicable reserves; it is not a measurement of resident memory.",
     "source": "https://www.kernel.org/doc/html/latest/mm/overcommit-accounting.html"
   },
   {
@@ -1595,7 +1590,7 @@
       "proportional set size",
       "Pss"
     ],
-    "definition": "Proportional set size: resident memory with each shared page divided equally among the processes sharing it, so PSS sums across processes to the real total.",
+    "definition": "Resident mapped memory apportioned by each backing page’s sharing count. Summing across all relevant sharers approximates the represented resident mappings, with rounding and accounting caveats; it excludes unrelated kernel memory and unmapped cache.",
     "example": "40 MiB private plus a quarter of 100 MiB shared is a PSS of 65 MiB.",
     "source": "https://man7.org/linux/man-pages/man5/proc_pid_smaps.5.html"
   },
@@ -1681,7 +1676,7 @@
     "id": "memory-high",
     "term": "memory.high",
     "aliases": [],
-    "definition": "The cgroup v2 throttle point: above it the group's tasks are forced to reclaim and slowed down, but the OOM killer is not invoked.",
+    "definition": "The cgroup v2 boundary above which eligible tasks are throttled and perform reclaim. Crossing it does not itself invoke kernel OOM; independent pressure, ancestor limits or a user-space killer can still terminate tasks.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
   },
   {
@@ -1691,7 +1686,7 @@
       "memory.low",
       ".low"
     ],
-    "definition": "cgroup v2 reclaim protection: memory.min is a hard guarantee and memory.low a best-effort one, both within the parent's budget.",
+    "definition": "Cgroup v2 reclaim protection settings: memory.min supplies hard protection within the effective ancestor budget, while memory.low is best effort. Protection overcommitment and ancestor limits affect what a child actually receives.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
   },
   {
@@ -1714,7 +1709,7 @@
     "id": "memory-oom-group",
     "term": "memory.oom.group",
     "aliases": [],
-    "definition": "A cgroup v2 setting that makes the OOM killer kill the whole group together rather than one task.",
+    "definition": "A cgroup v2 setting requesting that OOM handling treat a workload as a group for killing. Scope rules and exemptions such as oom_score_adj at minus one thousand still apply.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html"
   },
   {
@@ -1740,7 +1735,7 @@
       "resources.limits.memory",
       "requests.memory"
     ],
-    "definition": "Kubernetes container settings: the memory limit becomes the cgroup's memory.max, while the request is what the scheduler reserves when placing the pod.",
+    "definition": "Kubernetes container requests guide scheduling, while memory limits normally configure the runtime’s cgroup memory constraint. On cgroup v2 that limit is represented by memory.max; optional protections and ancestor limits add policy.",
     "source": "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/"
   },
   {
@@ -1749,7 +1744,7 @@
     "aliases": [
       "Memory QoS"
     ],
-    "definition": "An optional, alpha Kubernetes feature (behind the MemoryQoS feature gate) that sets cgroup v2 memory.min from a container's memory request and memory.high below its limit, to protect memory and throttle before an OOM kill.",
+    "definition": "A Kubernetes feature using cgroup v2 memory controls for additional protection or throttling derived from requests and limits. Availability, feature-gate status and exact controller behaviour are version-dependent; inspect the deployed cluster.",
     "source": "https://kubernetes.io/blog/2023/05/05/qos-memory-resources/"
   },
   {
@@ -1785,7 +1780,7 @@
     "aliases": [
       "NMT"
     ],
-    "definition": "A HotSpot JVM feature that reports the JVM's own non-heap memory use by category.",
+    "definition": "A HotSpot JVM feature that reports tracked internal VM memory by category, including Java heap reservations and native categories. It does not account for every third-party native allocation, JDK class-library allocation or cgroup charge.",
     "source": "https://docs.oracle.com/en/java/javase/21/vm/native-memory-tracking.html"
   },
   {
@@ -1822,7 +1817,7 @@
     "aliases": [
       "LeakSanitizer"
     ],
-    "definition": "LeakSanitizer: reports heap blocks that are no longer reachable when the program exits, with their allocation stacks; built into ASan on Linux.",
+    "definition": "LeakSanitizer reports detected unreachable heap allocations, commonly at process exit on supported platforms. It integrates with AddressSanitizer in supported Linux configurations and can be disabled or configured, so every build need not emit the same report.",
     "source": "https://clang.llvm.org/docs/LeakSanitizer.html"
   },
   {
@@ -1867,7 +1862,7 @@
     "aliases": [
       "malloc_usable_size()"
     ],
-    "definition": "A glibc function reporting how many bytes the block behind a malloc pointer can actually hold, which can exceed what was requested.",
+    "definition": "A glibc diagnostic reporting usable capacity associated with an allocation, which can exceed its requested size. This does not permit an application to write beyond the original requested allocation.",
     "example": "malloc(100) in the lesson's glibc model reports 104 usable bytes.",
     "source": "https://man7.org/linux/man-pages/man3/malloc_usable_size.3.html"
   },
@@ -1926,7 +1921,7 @@
       "32-byte chunk",
       "48-byte chunk"
     ],
-    "definition": "glibc malloc's unit of allocation: the user's bytes plus an in-band size/status header. On x86-64 chunks are multiples of 16 bytes, minimum 32.",
+    "definition": "glibc malloc’s allocation unit, with size/status metadata and user storage. In the lesson’s ordinary glibc 2.39 x86-64 model chunks are sixteen-byte multiples with a thirty-two-byte minimum; separately mapped chunks and other configurations differ.",
     "source": "https://sourceware.org/glibc/wiki/MallocInternals"
   },
   {
@@ -1969,7 +1964,7 @@
       "large bins",
       "bins"
     ],
-    "definition": "glibc's free-chunk lists: freed and merged chunks first go to the unsorted bin; small bins hold exact sizes and large bins hold size-ordered ranges.",
+    "definition": "glibc free-chunk structures include an unsorted staging bin, exact-size small bins and size-ordered large bins. Some freed chunks instead enter tcache or fastbins, so freeing does not imply immediate unsorted-bin insertion or coalescing.",
     "source": "https://sourceware.org/glibc/wiki/MallocInternals"
   },
   {
@@ -1987,7 +1982,7 @@
       "non-main arena",
       "glibc arenas"
     ],
-    "definition": "A separate heap with its own lock and bins, so threads using different arenas do not contend. glibc caps the count at 8 per online CPU by default on 64-bit; jemalloc uses 4 per CPU.",
+    "definition": "Allocator state with its own chunk-management structures and synchronisation. In the stated glibc 2.39 64-bit model the ordinary default arena cap is eight times online CPUs; jemalloc’s documented defaults and tunables differ.",
     "source": "https://sourceware.org/glibc/wiki/MallocInternals"
   },
   {
@@ -1996,7 +1991,7 @@
     "aliases": [
       "malloc_trim(0)"
     ],
-    "definition": "glibc settings for giving memory back: when free space at the top of the heap exceeds M_TRIM_THRESHOLD (128 KiB by default) the heap is shrunk; malloc_trim can also release whole free pages in the middle.",
+    "definition": "glibc’s M_TRIM_THRESHOLD controls when eligible top free space can trigger automatic trimming, subject to allocator state and settings. malloc_trim is a separate explicit call that can release suitable whole free pages, including some internal free regions.",
     "source": "https://man7.org/linux/man-pages/man3/malloc_trim.3.html"
   },
   {
@@ -2021,7 +2016,7 @@
     "id": "jemalloc",
     "term": "jemalloc",
     "aliases": [],
-    "definition": "A general-purpose malloc replacement with fine-grained size classes, headerless slabs, per-thread caches over multiple arenas, gradual return of memory and built-in heap profiling.",
+    "definition": "A malloc implementation grouping small objects by size class in slabs, with thread caching, arenas and configurable page decay. Statistics and heap profiling depend on the build and runtime configuration.",
     "source": "https://jemalloc.net/"
   },
   {
@@ -2089,7 +2084,7 @@
     "id": "pymalloc",
     "term": "pymalloc",
     "aliases": [],
-    "definition": "CPython's allocator for small objects (up to 512 bytes), which groups them in pools within larger arenas.",
+    "definition": "An optional CPython allocator using pools within arenas for small requests up to 512 bytes in standard GIL-enabled configurations. Free-threaded builds require mimalloc, and settings or extension code can use other allocation paths.",
     "source": "https://docs.python.org/3/c-api/memory.html#the-pymalloc-allocator"
   },
   {
@@ -2159,7 +2154,7 @@
       "slabs",
       "slab"
     ],
-    "definition": "A kernel allocator (Bonwick, Solaris, 1994) that keeps a cache per object type; each slab is one or more pages cut into equal slots, so objects need no per-object size header.",
+    "definition": "An object-cache allocation design described by Jeff Bonwick for Solaris in 1994. Slabs divide backing pages into fixed-size slots; metadata, alignment, hardening and debugging can add overhead even without a malloc-style size header on every live object.",
     "source": "https://en.wikipedia.org/wiki/Slab_allocation"
   },
   {
@@ -2271,7 +2266,7 @@
       "log_2",
       "base-2 logarithm"
     ],
-    "definition": "The power a base must be raised to in order to get a number. log_2(n) asks how many times 2 is multiplied to reach n, so it counts the bits needed to pick one of n things.",
+    "definition": "A logarithm asks which exponent produces a positive value from a chosen base. For example, the base-two logarithm of eight is three. Choosing among a non-power-of-two number of items requires rounding up to a whole bit count.",
     "example": "log_2(512) = 9, because 2^9 = 512.",
     "source": "https://en.wikipedia.org/wiki/Logarithm"
   },
@@ -2287,7 +2282,7 @@
       "bitwise OR",
       "bitwise AND"
     ],
-    "definition": "Moving a number's bits left or right (<< and >> in C and Python); shifting right by k divides by 2^k, and AND with a mask such as 0xFFF keeps only the low bits.",
+    "definition": "Moving an integer’s bits left or right, using operators such as << and >>. For nonnegative values, shifting right discards low bits and rounds division by the corresponding power of two down; signed and overflow rules depend on the language. Bit masks retain selected positions, while AND and OR combine bits under different rules.",
     "source": "https://en.wikipedia.org/wiki/Bitwise_operation"
   },
   {
@@ -2296,8 +2291,7 @@
     "aliases": [
       "sysctls",
       "kernel tunable",
-      "kernel tunables",
-      "/sys/kernel/mm"
+      "kernel tunables"
     ],
     "definition": "Linux kernel settings that can be read and changed at run time, such as vm.swappiness (in /proc/sys); sysfs (/sys) exposes further settings such as the THP policy.",
     "source": "https://www.kernel.org/doc/html/latest/admin-guide/sysctl/vm.html"
@@ -2335,7 +2329,7 @@
     "aliases": [
       "nested virtualization"
     ],
-    "definition": "Running a hypervisor inside a virtual machine, so guests run inside a guest. It adds further layers of address translation and hypervisor exits, so TLB misses and page walks cost more than in an ordinary virtual machine.",
+    "definition": "Running a hypervisor inside a virtual machine so another guest can execute within it. Additional translation and exit machinery can add overhead, but its size depends on hardware support, caching, configuration and workload.",
     "source": "https://en.wikipedia.org/wiki/Virtualization#Nested_virtualization"
   },
   {
@@ -2446,7 +2440,31 @@
     "aliases": [
       "flush the TLB"
     ],
-    "definition": "Invalidating the TLB's cached translations so none can be used again; traditionally done on every CR3 write without PCIDs, after which the new process starts with a cold TLB.",
+    "definition": "Invalidating some or all cached translations according to the chosen operation and architecture. Ordinary CR3 writes without PCIDs invalidate relevant non-global entries; enabled global mappings and other scope rules prevent treating every such write as an unconditional whole-TLB flush.",
     "source": "https://en.wikipedia.org/wiki/Translation_lookaside_buffer#Address-space_switch"
+  },
+  {
+    "id": "mem-transparency",
+    "term": "Virtual-memory transparency",
+    "aliases": [
+      "virtual memory transparency"
+    ],
+    "definition": "The goal that ordinary programs use their own virtual addresses without managing physical placement themselves. The OS and hardware provide translation, although faults, limits and performance remain observable.",
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
+  },
+  {
+    "id": "mem-translation-efficiency",
+    "term": "Translation efficiency",
+    "definition": "The goal of keeping virtual-memory translation fast and its metadata reasonably small. TLBs reduce translation work while sparse page tables avoid storing entries for unused regions.",
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
+  },
+  {
+    "id": "mem-protection-isolation",
+    "term": "Memory protection and isolation",
+    "aliases": [
+      "memory protection"
+    ],
+    "definition": "Restricting which mapped memory a process can access and which operations it may perform. The OS establishes mappings and permissions; ordinary user-mode access instructions cannot bypass the applicable hardware checks.",
+    "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/vm-intro.pdf"
   }
 ]

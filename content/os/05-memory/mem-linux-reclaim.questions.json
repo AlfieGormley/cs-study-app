@@ -1,0 +1,71 @@
+[
+  {
+    "id": "mem-page-replacement-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux database server keeps 40 GiB of hot table files in the page cache. Every night a backup job reads 500 GiB of other files once, sequentially. With the classic active/inactive LRU design, which design feature can help protect hot pages against a one-pass scan?",
+    "options": [
+      {
+        "text": "The backup bypasses the page cache automatically because it reads sequentially",
+        "explanation": "Normal buffered reads go through the page cache regardless of pattern. Only `O_DIRECT` or `posix_fadvise` hints change that."
+      },
+      {
+        "text": "Inactive admission and promotion based on observed reuse can reduce one-pass scan pollution. Hot active pages can be better protected, though refault handling and memory pressure add exceptions",
+        "explanation": "Correct as a simplified description of scan-resistant admission. Exact promotion depends on observed references, refault history and the kernel; active pages can still be reclaimed under pressure."
+      },
+      {
+        "text": "The kernel uses OPT for file pages because it can predict sequential reads",
+        "explanation": "Readahead predicts what to load next, not when pages will be reused. OPT remains unimplementable."
+      },
+      {
+        "text": "kswapd never reclaims page-cache pages that belong to a database",
+        "explanation": "The kernel does not know or care which program owns a page-cache page. Hot pages survive because of how they are ranked, not who owns them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Inactive admission and reuse-based promotion reduce pollution compared with pure LRU, but do not guarantee that 40 GiB of hot data survives a 500 GiB scan. Reclaim scope, capacity and kernel policy matter. POSIX_FADV_DONTNEED can advise dropping already-cached file data; it does not bypass the cache in the way suitable O_DIRECT I/O can. Hints and direct-I/O alignment/support requirements must be checked.",
+    "link": {
+      "title": "Page Frame Reclamation — Understanding the Linux VMM",
+      "url": "https://www.kernel.org/doc/gorman/html/understand/understand013.html"
+    }
+  },
+  {
+    "id": "mem-page-replacement-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A latency-sensitive service on Linux shows occasional 50 ms stalls inside `malloc` and page faults, at times when `free` shows little free memory but lots of cache. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "An allocation that cannot obtain suitable pages may enter direct reclaim when its allocation flags allow it, stalling the allocating task",
+        "explanation": "Correct. Direct reclaim executes in the allocating context, but flags, cgroup pressure, order and fragmentation determine whether it runs."
+      },
+      {
+        "text": "kswapd starts reclaiming when free memory drops below the low watermark and stops when it reaches the high watermark",
+        "explanation": "Correct. kswapd is the background reclaimer. Raising the gap between watermarks gives it more room to stay ahead."
+      },
+      {
+        "text": "Raising `vm.min_free_kbytes` or `vm.watermark_scale_factor` can make kswapd start earlier and reduce direct reclaim",
+        "explanation": "Correct. Higher watermarks wake kswapd sooner, at the cost of keeping more RAM idle."
+      },
+      {
+        "text": "Low 'free' memory with lots of cache proves the machine is thrashing",
+        "explanation": "Incorrect. Linux deliberately fills RAM with cache. Thrashing shows up as high fault and swap rates or high memory PSI, not low free memory alone."
+      },
+      {
+        "text": "`/proc/pressure/memory` can show whether tasks are actually stalling on memory",
+        "explanation": "Correct. PSI's `some` and `full` lines report the share of time tasks were blocked on memory reclaim or refaults."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Watermarks influence background reclaim and allocation reserves, while cgroup limits and allocation constraints can also cause direct reclaim. Correlate stalls with reclaim/compaction tracing and memory PSI; a 50 ms duration alone does not establish the cause. Watermark tuning may help at a capacity cost but is not a universal fix. Free memory alone is insufficient; inspect MemAvailable, cgroup usage and pressure.",
+    "link": {
+      "title": "Documentation for /proc/sys/vm — Linux kernel docs",
+      "url": "https://www.kernel.org/doc/html/latest/admin-guide/sysctl/vm.html"
+    }
+  }
+]

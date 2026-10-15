@@ -1,0 +1,62 @@
+[
+  {
+    "id": "proc-syscalls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Linux x86-64, a raw `syscall` returns `-9` in `rax` for a `write`. What does the program see if it called glibc's `write()` wrapper instead?",
+    "options": [
+      {
+        "text": "The program receives `SIGSEGV`",
+        "explanation": "A bad file descriptor is an ordinary error return, not a fault."
+      },
+      {
+        "text": "`write` returns -9",
+        "explanation": "The raw kernel convention returns a negated errno; glibc doesn't pass it through unchanged."
+      },
+      {
+        "text": "`write` returns -1 and `errno` is set to 9 (`EBADF`, bad file descriptor)",
+        "explanation": "Correct. glibc sees a value in the range -4095 to -1, stores its negation in `errno`, and returns -1, the POSIX convention."
+      },
+      {
+        "text": "`write` returns 0 and `errno` is 9",
+        "explanation": "0 means zero bytes written, which isn't an error. glibc signals errors with -1."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The kernel's ABI: success returns a non-negative result; failure returns `-errno`.\n2. `-9` therefore means errno 9.\n3. Errno 9 on Linux is `EBADF`: the fd isn't open (or not open for writing).\n4. glibc's wrapper converts: `errno = 9; return -1;`.\n\nSo `perror(\"write\")` would print `write: Bad file descriptor`. This is why you must check the return value *before* reading `errno`.",
+    "link": {
+      "title": "syscall(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/syscall.2.html"
+    }
+  },
+  {
+    "id": "proc-syscalls-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On x86-64 Linux, syscall arguments go in `rdi, rsi, rdx, r10, r8, r9`, whereas the normal C function-calling convention uses `rcx` for the fourth argument instead of `r10`. Why?",
+    "options": [
+      {
+        "text": "`rcx` is reserved for the syscall number",
+        "explanation": "The syscall number goes in `rax`."
+      },
+      {
+        "text": "The `syscall` instruction overwrites `rcx` with the user return address (and `r11` with RFLAGS), so the fourth argument can't live there",
+        "explanation": "Correct. The hardware uses `rcx` to remember where to return to, so glibc's wrapper moves the fourth argument from `rcx` to `r10` before executing `syscall`."
+      },
+      {
+        "text": "`r10` is faster to read in kernel mode",
+        "explanation": "Register access speed doesn't depend on privilege level or register number."
+      },
+      {
+        "text": "It's a historical bug that has never been fixed",
+        "explanation": "It's a deliberate consequence of how the instruction is defined, not a bug."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "On x86-64, SYSCALL stores the return instruction pointer in rcx and flags in r11, so Linux uses r10 for argument four. A named four-argument wrapper can move rcx to r10. The generic glibc syscall(number, ...) wrapper has an extra leading argument: it moves r8 to r10 while shifting the other arguments. SYSRET uses rcx/r11 on a suitable return path; Linux can also use IRET.",
+    "link": {
+      "title": "Anatomy of a system call, part 1 — LWN",
+      "url": "https://lwn.net/Articles/604287/"
+    }
+  }
+]

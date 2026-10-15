@@ -1,0 +1,78 @@
+[
+  {
+    "id": "proc-fork-exec-wait-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A process has a file descriptor 3 open (without `O_CLOEXEC`), a `SIGINT` handler installed, and `SIGPIPE` set to `SIG_IGN`. It calls `execve` on a new program. Which statements are true afterwards? Select all that apply.",
+    "options": [
+      {
+        "text": "The PID is unchanged",
+        "explanation": "Correct. `exec` replaces the program in the same process; it doesn't create a new one."
+      },
+      {
+        "text": "fd 3 is still open in the new program",
+        "explanation": "Correct. Descriptors survive `exec` unless marked close-on-exec. This is how shells pass redirected stdin/stdout, and also how fds leak into children by accident."
+      },
+      {
+        "text": "`SIGINT` still runs the old handler",
+        "explanation": "Wrong. The handler's code was in the old program's memory, which is gone. Caught signals reset to their default action."
+      },
+      {
+        "text": "`SIGPIPE` is still ignored",
+        "explanation": "Correct. An *ignored* disposition carries over, since it doesn't refer to any code. This is why programs started from some environments mysteriously ignore SIGPIPE."
+      },
+      {
+        "text": "Heap memory allocated by the old program is still accessible",
+        "explanation": "Wrong. The entire old address space is replaced."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Sort by whether the item refers to the old program's memory:\n\n| Item | Survives exec? | Why |\n|---|---|---|\n| PID | yes | same process |\n| fd 3 | yes | kernel object, no CLOEXEC |\n| SIGINT handler | no | handler code is gone |\n| SIGPIPE ignore | yes | no code needed |\n| heap | no | address space replaced |\n\nBest practice: open fds with `O_CLOEXEC` unless you mean to pass them on, to avoid leaking sockets or files into child programs.",
+    "link": {
+      "title": "execve(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/execve.2.html"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A 30 GB Java service needs to launch a small helper binary many times per second. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Plain fork followed by exec can duplicate substantial populated page-table state before the child replaces its address space",
+        "explanation": "COW avoids eagerly copying private page contents, but fork still has page-table and task-creation work. Its cost depends on mappings and page sizes; a measurement is needed."
+      },
+      {
+        "text": "`posix_spawn` avoids most of that cost, because glibc implements it with a `clone` that shares memory with the parent until the exec",
+        "explanation": "Correct. Like `vfork`, the child borrows the parent's address space briefly, so there's no page-table copy."
+      },
+      {
+        "text": "Forking a multithreaded process copies all of its threads into the child",
+        "explanation": "Wrong. Only the calling thread exists in the child. Other threads simply vanish, which is why locks they held stay locked."
+      },
+      {
+        "text": "In the forked child, calling only async-signal-safe functions before `exec` avoids deadlocks on locks held by other threads",
+        "explanation": "Correct. After forking a multithreaded program, functions like `malloc` might wait on a lock held by a thread that no longer exists. POSIX permits only async-signal-safe calls until `exec`."
+      },
+      {
+        "text": "`exec` is the slow part, so switching to `posix_spawn` doesn't help",
+        "explanation": "There is no universal dominant step. Avoiding fork page-table work can help a large parent, but exec loading and other overhead must be measured."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "For an illustrative densely populated 30 GiB mapping using 4 KiB pages, count the leaf page-table entries (PTEs) that fork must copy:\n\n```formula\nN_PTE = M / p\nN_PTE = 30 GiB / 4 KiB = 7,864,320\nS_PTE = (8 B)N_PTE\nS_PTE = 62,914,560 B = 60 MiB\nwhere\nN_PTE: the number of leaf page-table entries, one per mapped page\nM: the mapped, populated memory, here 30 GiB\np: the page size, here 4 KiB\nS_PTE: the memory those entries occupy, in bytes (B)\nB: byte; each x86-64 page-table entry is 8 B\nGiB: gibibyte, 2 to the power 30 bytes\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,048,576 bytes\nIn words: 30 GiB of 4 KiB pages needs almost 8 million entries, about 60 MiB of page tables to duplicate on every fork.\n```\n\nUpper levels, huge pages and sparse mappings change the total and copying cost. glibc posix_spawn since 2.24 uses a shared-address-space CLONE_VM|CLONE_VFORK code path, avoiding that ordinary fork duplication. After a multithreaded fork, only the calling thread exists in the child; use async-signal-safe operations until exec. No universal milliseconds-per-GB benchmark is supplied.",
+    "link": {
+      "title": "posix_spawn(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/posix_spawn.3.html"
+    }
+  }
+]

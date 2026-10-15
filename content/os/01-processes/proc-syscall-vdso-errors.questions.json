@@ -1,0 +1,100 @@
+[
+  {
+    "id": "proc-syscalls-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a Linux x86-64 glibc system with a supported clock/vDSO fast path, `strace -c` on a busy logging service shows almost no `clock_gettime` syscalls, yet the code calls `clock_gettime` about 2 million times a second. What's the explanation?",
+    "options": [
+      {
+        "text": "The kernel batches the calls and handles them all at once",
+        "explanation": "Syscalls aren't batched like this. Each would be a separate entry if it reached the kernel."
+      },
+      {
+        "text": "strace can't trace time-related syscalls",
+        "explanation": "strace can trace any real syscall. The calls aren't showing because they never reach the kernel."
+      },
+      {
+        "text": "glibc caches the time and only refreshes it once a second",
+        "explanation": "glibc doesn't cache the clock: that would return stale times. The fresh value comes from the vDSO."
+      },
+      {
+        "text": "The calls go through the vDSO, which reads kernel-maintained time data in user mode without entering the kernel",
+        "explanation": "Correct. The vDSO page is mapped into each process; `clock_gettime` runs there, reading a shared data page and the CPU timestamp counter, so no syscall happens."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "strace observes kernel entries, so calls completed by a supported vDSO fast path are absent. On x86-64 the vDSO exposes time-related functions and getcpu; exact support depends on the requested clock and clocksource. A fallback can occur for unsupported clock IDs or clocksources, so trace and inspect the actual environment rather than assuming a particular nanosecond cost.",
+    "link": {
+      "title": "vdso(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/vdso.7.html"
+    }
+  },
+  {
+    "id": "proc-syscalls-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A program reads a framed TCP byte stream with `n = read(fd, buf, 65536);`. It returns 1,200. The code assumes it has the whole 65,536-byte frame. What is wrong?",
+    "options": [
+      {
+        "text": "1,200 means an error code; check `errno`",
+        "explanation": "Errors are reported by returning -1. A positive return is the number of bytes actually read."
+      },
+      {
+        "text": "Nothing: `read` always waits for the full count on sockets",
+        "explanation": "This is the misconception. On pipes and sockets, `read` returns as soon as *some* data is available."
+      },
+      {
+        "text": "`read` can return fewer bytes than requested (a short read); the code must loop until it has the full message",
+        "explanation": "Correct. A short read is normal, not an error. Robust code loops, tracking how many bytes remain, or uses a framing protocol."
+      },
+      {
+        "text": "The kernel truncated the message, so the rest is lost",
+        "explanation": "A short TCP read does not itself discard the remaining stream. Continue reading, while handling EOF or errors if the peer never completes the frame."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `read(fd, buf, 65536)` means *up to* 65,536 bytes.\n2. A successful read can return the 1,200 bytes available or transferred so far; a read boundary is not a TCP-segment boundary.\n3. Continue until the frame is complete, or handle premature EOF/error. The missing bytes are not guaranteed to arrive.\n4. Correct pattern:\n\n```c\nsize_t got = 0;\n/* A read may deliver only part. */\nwhile (got < len) {\n  ssize_t n = read(fd, buf + got,\n                   len - got);\n  if (n == 0) break;   /* EOF */\n  if (n < 0) {\n    if (errno == EINTR) continue;\n    return -1;\n  }\n  /* Next read starts after these */\n  /* bytes. */\n  got += n;\n}\n```\n\nThe `EINTR` check handles a signal interrupting the call.",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  },
+  {
+    "id": "proc-syscalls-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A blocking `read()` on an empty pipe is interrupted when the process receives a signal whose handler was installed with `sigaction` **without** `SA_RESTART`. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The handler runs before `read` returns to the caller",
+        "explanation": "Correct. The kernel delivers the signal on the way back to user mode, running the handler first."
+      },
+      {
+        "text": "`read` returns -1 with `errno` set to `EINTR`",
+        "explanation": "Correct. Without `SA_RESTART`, an interrupted blocking call on a pipe fails with `EINTR` so the program can react."
+      },
+      {
+        "text": "Any data already in the pipe is discarded",
+        "explanation": "Wrong. The pipe was empty, and even if not, no data is lost: an `EINTR` return means nothing was transferred."
+      },
+      {
+        "text": "With `SA_RESTART`, the kernel would automatically restart the `read` after the handler",
+        "explanation": "Correct. `SA_RESTART` makes many blocking calls, including `read` on pipes, resume transparently."
+      },
+      {
+        "text": "The process is terminated, because signals always kill processes",
+        "explanation": "Wrong. The process installed a handler, so the signal is caught; only the default action of many signals is termination."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Walk through the timeline:\n\n1. `read` blocks in the kernel waiting for data.\n2. A signal arrives. The kernel wakes the task and abandons the wait.\n3. On the way out to user mode it runs the handler.\n4. Now the choice: with `SA_RESTART`, the kernel re-issues `read` and the caller never notices. Without it, `read` returns -1, `errno = EINTR`.\n\nThat's why robust loops check `if (errno == EINTR) continue;`. The full rules are in `signal(7)`, section 'Interruption of system calls'.",
+    "link": {
+      "title": "signal(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/signal.7.html"
+    }
+  }
+]

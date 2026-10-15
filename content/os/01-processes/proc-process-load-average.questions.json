@@ -1,0 +1,32 @@
+[
+  {
+    "id": "proc-process-abstraction-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An 8-core server shows a load average of 45, but `top` shows CPUs about 90% idle. Most `nginx` workers are in state `D`. What's the most likely cause?",
+    "options": [
+      {
+        "text": "Workers are in uninterruptible sleep waiting on I/O (for example a hung NFS mount or a saturated disk), and Linux counts `D` tasks in load average",
+        "explanation": "Correct. `D` tasks use no CPU but inflate the load average. The bottleneck is whatever they're waiting on."
+      },
+      {
+        "text": "The workers are zombies and need reaping",
+        "explanation": "Zombies show as `Z`, not `D`, and aren't counted in load average."
+      },
+      {
+        "text": "The workers are stopped by `SIGSTOP`",
+        "explanation": "Stopped tasks show as `T` and aren't counted in load average."
+      },
+      {
+        "text": "The CPUs are overloaded; add more cores",
+        "explanation": "90% idle CPUs means they aren't the bottleneck. Adding cores wouldn't help."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Start from what Linux's load average counts:\n\n```formula\nn = N_R + N_D\nwhere\nn: the number of tasks counted at each sample; the load average is a moving average of n over 1, 5 or 15 minutes\nN_R: tasks running or runnable (state R)\nN_D: tasks in uninterruptible sleep (state D)\nIn words: Linux counts runnable tasks and tasks stuck in uninterruptible sleep together, then averages that count over time.\n```\n\n1. Idle CPUs mean few `R` tasks. So most of the 45 must be `D`.\n2. `D` usually means waiting inside the kernel for I/O that can't be abandoned: disk, NFS, some device drivers.\n3. Next steps: `cat /proc/<pid>/stack` (as root) or `cat /proc/<pid>/wchan` to see where they're stuck; `iostat -x` for disk saturation; check NFS servers.\n\nThis catches people out because most other Unix systems count only runnable tasks.",
+    "link": {
+      "title": "proc(5) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    }
+  }
+]

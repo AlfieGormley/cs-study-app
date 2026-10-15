@@ -1,0 +1,62 @@
+[
+  {
+    "id": "proc-fork-exec-wait-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A web server forks a child per request but never calls `wait`. After a week, `fork` starts failing with `EAGAIN`, though memory is plentiful. `ps` shows thousands of `<defunct>` entries. What's going on, and what's the fix?",
+    "options": [
+      {
+        "text": "The children are zombies holding PIDs and process-table entries; reap them with `waitpid(-1, &st, WNOHANG)` in a loop (e.g. on `SIGCHLD`), or set `SIGCHLD` to `SIG_IGN`",
+        "explanation": "Correct. Each unreaped child keeps a PID until its parent collects it. Eventually the PID or process limit is reached and `fork` fails."
+      },
+      {
+        "text": "Kill the zombies with `kill -9`",
+        "explanation": "Zombies are already dead; signals do nothing to them. Only reaping (or the parent exiting) removes them."
+      },
+      {
+        "text": "Increase `ulimit -s`",
+        "explanation": "The stack size limit has nothing to do with the number of processes."
+      },
+      {
+        "text": "Memory leak in the children; restart nightly",
+        "explanation": "Zombies hold no memory beyond a small kernel record. The resource running out is PIDs/process slots."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `<defunct>` = zombie: exited, but the parent hasn't called `wait`.\n2. Each zombie holds a PID and counts towards the user's process limit (`RLIMIT_NPROC`) and `pid_max`.\n3. When those run out, `fork` returns -1 with `EAGAIN`.\n4. Fix in the parent:\n\n```c\nvoid on_chld(int s) {\n  /* Preserve interrupted code errno. */\n  int e = errno;\n  while (waitpid(-1, NULL,\n                 WNOHANG) > 0)\n    ;\n  errno = e;\n}\n```\n\nLoop because several children may exit while one `SIGCHLD` is pending (standard signals don't queue). Save `errno` because the handler could interrupt code that's checking it.\n\nThis compact handler illustrates draining and preserving errno. Production code must also retry waitpid on EINTR and distinguish ECHILD from other errors.",
+    "link": {
+      "title": "Zombie process — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Zombie_process"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Python app runs as PID 1 in a Linux Docker container without a SIGTERM handler. Assume Docker uses SIGTERM and a 10-second stop timeout. Stop reaches the timeout and the app never runs graceful shutdown code. Which explanation and remedy fit?",
+    "options": [
+      {
+        "text": "Python can't handle signals",
+        "explanation": "Python's `signal` module handles `SIGTERM` fine. The issue is the default action not applying to PID 1."
+      },
+      {
+        "text": "The container's stop timeout is set too low",
+        "explanation": "The timeout is why it takes 10 seconds, not why shutdown code doesn't run. Raising it would just make stop take longer."
+      },
+      {
+        "text": "Docker sends `SIGKILL` immediately; nothing can be done",
+        "explanation": "Docker sends `SIGTERM` first and waits (10 seconds by default) before `SIGKILL`. The problem is that the app ignores the `SIGTERM`."
+      },
+      {
+        "text": "As PID 1, the kernel won't deliver `SIGTERM` unless the process installed a handler, so the default 'terminate' action doesn't apply; Docker then kills it after the timeout. Install a `SIGTERM` handler, or run a minimal init like `docker run --init` (tini) that forwards signals",
+        "explanation": "Correct. PID 1 in a namespace is protected from signals it doesn't handle. A tiny init forwards signals to the app and also reaps orphaned zombies."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Under the supplied stop policy, Docker sends SIGTERM and later SIGKILL. Namespace init ignores ordinary default-action SIGTERM; an application handler is needed for graceful cleanup. A tiny init can forward signals and reap orphaned descendants, but moving the app behind an init does not by itself create application cleanup logic: install the appropriate handler too. Ancestor namespaces can send SIGKILL to nested init.",
+    "link": {
+      "title": "docker container run (--init) — Docker docs",
+      "url": "https://docs.docker.com/reference/cli/docker/container/run/"
+    }
+  }
+]

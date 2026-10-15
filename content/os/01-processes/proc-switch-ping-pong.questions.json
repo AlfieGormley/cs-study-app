@@ -1,0 +1,62 @@
+[
+  {
+    "id": "proc-context-switching-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run the pipe ping-pong benchmark from the lesson pinned to one core. 100,000 round trips take 0.5 s. Under the alternating hand-off model, what upper estimate does this give for the average scheduler-switch contribution per hand-off?",
+    "options": [
+      {
+        "text": "5 µs",
+        "explanation": "That is the time per *round trip*. Each round trip contains two switches."
+      },
+      {
+        "text": "2.5 µs",
+        "explanation": "Correct. 0.5 s / 100,000 = 5 µs per round trip, and with 2 switches per round trip that's 2.5 µs each, including the syscall overhead."
+      },
+      {
+        "text": "1.25 µs",
+        "explanation": "This divides by four, treating the four syscalls as four switches. There are four syscalls but only two switches."
+      },
+      {
+        "text": "50 µs",
+        "explanation": "This is out by a factor of 10: 0.5 s / 100,000 is 5 µs, not 50 µs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Turn the total time into a time per round trip, then split it between the two switches each round trip contains:\n\n```formula\nt_trip = T / N\nt_trip = 500,000,000 ns / 100,000\nt_trip = 5,000 ns\nt_switch = t_trip / 2\nt_switch = 5,000 ns / 2 = 2,500 ns\nwhere\nT: the total measured time, 0.5 s = 500,000,000 ns\nN: the number of round trips, 100,000\nt_trip: the time for one round trip, in nanoseconds (ns)\nt_switch: an upper estimate of average scheduler-switch contribution per hand-off, in nanoseconds (ns), assuming at least two hand-off switches per round trip\nns: nanosecond, one billionth of a second; 1,000 ns = 1 µs\ns: second\nµs: microsecond, one millionth of a second\nIn words: a 5 µs round trip contains two hand-offs, so the average scheduler-switch contribution per hand-off is no more than the measured 2.5 µs half-trip under this model.\n```\n\nIt is a model-based upper estimate of the average contribution because those 2.5 µs also cover IPC and syscall work; it does not bound every individual switch. Pinning to one core (`taskset -c 0`) makes sure you measure switches, not cross-core wake-ups.",
+    "link": {
+      "title": "Mechanism: Limited Direct Execution — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-mechanisms.pdf"
+    }
+  },
+  {
+    "id": "proc-context-switching-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run the ping-pong benchmark without pinning, and the two processes land on different cores. What are you now mostly measuring?",
+    "options": [
+      {
+        "text": "The same context-switch cost, just less precisely",
+        "explanation": "On separate cores each process can sleep and wake on its own core, so the timing is dominated by something else."
+      },
+      {
+        "text": "Cross-core wake-up latency: signalling the other core and waking its sleeping task",
+        "explanation": "Separate-core placement can add remote wake-up communication and idle-state exit work. An IPI is not required on every hop; measure the actual placement and wait behaviour."
+      },
+      {
+        "text": "Only the syscall cost, since no switches occur",
+        "explanation": "Switches still happen on each core (to and from idle), but the main cost is the cross-core signalling."
+      },
+      {
+        "text": "TLB shootdown cost",
+        "explanation": "TLB shootdowns happen when shared mappings change. A pipe write doesn't change any mappings."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Separate cores add inter-core communication, possible remote wake-ups and idle-state exit costs. A wake-up need not always require a new IPI if the receiving CPU is already running suitable work or polling. Pinning both tasks to one logical CPU removes cross-core placement from the experiment, but the timing still includes IPC, syscalls and other scheduling interference.",
+    "link": {
+      "title": "Mechanism: Limited Direct Execution — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-mechanisms.pdf"
+    }
+  }
+]

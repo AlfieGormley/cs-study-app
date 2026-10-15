@@ -1,0 +1,92 @@
+[
+  {
+    "id": "proc-context-switching-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A process calls `getpid()`, which enters the kernel and returns straight away. Which kind of switch has happened?",
+    "options": [
+      {
+        "text": "A full process context switch",
+        "explanation": "A context switch means a *different* task runs next. Here the same task comes back, so no task state was exchanged."
+      },
+      {
+        "text": "A mode switch only: user to kernel and back, same task",
+        "explanation": "Correct. The CPU changed privilege level, but the scheduler never chose another task, so no context switch took place."
+      },
+      {
+        "text": "A thread switch within the process",
+        "explanation": "No other thread was chosen to run. Entering the kernel doesn't by itself involve another thread."
+      },
+      {
+        "text": "No switch at all, because `getpid` runs in user space",
+        "explanation": "`getpid` is a real syscall on Linux (it isn't served by the vDSO), so the CPU does enter kernel mode."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask two questions:\n\n1. Did the CPU change privilege level? Yes: `syscall` moves it into kernel mode, and `sysret` moves it back.\n2. Did a *different* task run afterwards? No: the kernel returned to the caller.\n\nPrivilege change without a change of task is a **mode switch**. A context switch needs the scheduler to pick another task, which happens only if the task blocks or is preempted.",
+    "link": {
+      "title": "Context switch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Context_switch"
+    }
+  },
+  {
+    "id": "proc-context-switching-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A web server thread calls `read` on a socket that has no data yet, and the kernel runs another task. How does Linux classify this switch?",
+    "options": [
+      {
+        "text": "Involuntary, because the kernel made the decision",
+        "explanation": "The kernel always picks the next task, so that can't be the test. What matters is whether the task *could* have carried on."
+      },
+      {
+        "text": "Involuntary, because a timer interrupt fired",
+        "explanation": "No timer was involved. The thread stopped because it had nothing to do until data arrived."
+      },
+      {
+        "text": "Voluntary, because the thread blocked waiting for data",
+        "explanation": "Correct. The thread couldn't continue, so it gave up the CPU. It shows up in `voluntary_ctxt_switches`."
+      },
+      {
+        "text": "Not a context switch, because the thread is still in a syscall",
+        "explanation": "The thread is asleep inside the kernel and another task is now on the CPU. That is a context switch."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The test is: *could the task have kept running?*\n\n- It's waiting for socket data, so no. It enters a **blocked state**, which is a **voluntary** switch.\n- If it had been computing and its time slice ran out, the switch would be **involuntary** (preemption).\n\nOn Linux you can see the count in `/proc/<pid>/status` as `voluntary_ctxt_switches`.",
+    "link": {
+      "title": "proc(5) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    }
+  },
+  {
+    "id": "proc-context-switching-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why is switching between two threads of the *same* process usually cheaper than switching between two processes?",
+    "options": [
+      {
+        "text": "Threads don't have their own registers, so there is nothing to save",
+        "explanation": "Each thread has its own registers, stack pointer and instruction pointer, and the kernel saves and restores them on every switch."
+      },
+      {
+        "text": "They share an address space, so the scheduler can avoid changing to a different memory map; useful TLB entries may remain",
+        "explanation": "Sharing a memory map avoids changing to another process's translations. Validity does not guarantee cache residency, and KPTI entry/exit switches are separate. Total cost depends on task state and workload."
+      },
+      {
+        "text": "Thread switches happen entirely in user space",
+        "explanation": "Linux pthreads are 1:1 kernel tasks, so the kernel does the switch. Only user-level (M:N) threads switch without the kernel."
+      },
+      {
+        "text": "The kernel never preempts threads of the same process",
+        "explanation": "Threads are scheduled independently and preempted like any other task."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Both switches save and restore thread execution state. Threads sharing one memory map avoid a scheduler change to a different address space, while a process switch may require it. PCID can preserve process translations too. Different threads can still have disjoint working sets; cache warmth and total latency are not guaranteed.",
+    "link": {
+      "title": "Context switch — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Context_switch"
+    }
+  }
+]

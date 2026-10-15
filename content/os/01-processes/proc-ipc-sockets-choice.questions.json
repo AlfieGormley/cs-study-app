@@ -1,0 +1,32 @@
+[
+  {
+    "id": "proc-ipc-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A privileged daemon accepts TCP connections and wants to hand each connected socket to a long-running sandboxed worker process. What should it use?",
+    "options": [
+      {
+        "text": "Write the fd number into shared memory",
+        "explanation": "File descriptor numbers are indexes into each process's own fd table. Number 7 in the daemon means nothing in the worker."
+      },
+      {
+        "text": "Send the fd over a Unix domain socket with `sendmsg` and `SCM_RIGHTS`",
+        "explanation": "Correct. The kernel installs a new descriptor in the receiver that refers to the same open socket."
+      },
+      {
+        "text": "Send the fd through a pipe with `write`",
+        "explanation": "That would only send the integer, which, as with shared memory, means nothing in another process."
+      },
+      {
+        "text": "Signal the worker with `SIGUSR1` so it opens the connection itself",
+        "explanation": "A signal can carry a small value, but it does not install a reference to the accepted socket in the worker's descriptor table."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. An fd is a per-process index into a table of open files. Copying the integer doesn't copy the access.\n2. Only the kernel can add an entry to another process's fd table.\n3. Unix domain sockets offer exactly that: attach the fd to a message as `SCM_RIGHTS` ancillary data.\n4. The worker's `recvmsg` returns a new fd (perhaps a different number) for the same connection.\n\nThe other ways to share an fd are inheriting it across `fork`, or `pidfd_getfd` on newer kernels, but neither suits an already-running, unrelated worker as cleanly.",
+    "link": {
+      "title": "unix(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/unix.7.html"
+    }
+  }
+]

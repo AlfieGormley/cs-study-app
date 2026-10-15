@@ -4,23 +4,24 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 22/76 modules; 161 originals → 844 short lessons with 1913 focused questions.
+- Independently verified: 23/76 modules; 167 originals → 873 short lessons with 1981 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `9d6ebd0`, version `fa357c5339c6`, 795 short lessons/1829 focused questions
-  across 21 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `8b977959ee5e`, 22 modules/844 units/1913 questions.
+- Latest confirmed live release: `31d0c9b`, version `8b977959ee5e`, 844 short lessons/1913 focused questions
+  across 22 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `ccafb2dedf40`, 23 modules/873 units/1981 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
-  Complexity and Sound & Digital Audio are also published; Complexity’s formula follow-up is complete
+- All ten DSA modules are converted and published: 399 short units/803 questions.
+  Sound & Digital Audio is also published. Complexity’s formula follow-up is complete
   (290 cards, 208 independent maths checks, no unresolved active format issues).
 
 Current allocations:
 
-- os/os-processes: verifying; /root/processes_short_verify.
 - os/os-threads: verifying; /root/scheduling_short_verify.
 - os/os-sync: authoring; /root/sync_short_author.
+- os/os-deadlock: authoring; /root/deadlock_short_author.
 
 Verification and integration:
 

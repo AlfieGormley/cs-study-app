@@ -1,0 +1,131 @@
+[
+  {
+    "id": "proc-syscalls-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A glibc C program calls `printf(\"x\\n\")` 1,000 times with stdout redirected to a regular file. Assume default full buffering with a buffer of at least 2,000 bytes, successful complete writes and normal exit. Roughly how many `write` syscalls carry that output?",
+    "options": [
+      {
+        "text": "Zero: `printf` writes directly to the file without the kernel",
+        "explanation": "Writing to a file always needs the kernel. Buffering reduces syscalls; it can't remove the final one."
+      },
+      {
+        "text": "Exactly 1,000: one per `printf`",
+        "explanation": "That would be the case for an unbuffered stream. When stdout is a file, glibc fully buffers it, so many calls share one `write`."
+      },
+      {
+        "text": "2,000: one for the `x` and one for the newline",
+        "explanation": "An unbuffered stream can cause much smaller writes, including single-character writes; there is no universal prohibition. The stated fully buffered setup combines output."
+      },
+      {
+        "text": "About 1: 2,000 bytes fit in the stdio buffer, which is flushed once at exit",
+        "explanation": "Correct. When stdout isn't a terminal it's fully buffered (typically 4 KiB or more). 2,000 bytes fit, so the buffer is written once when the program exits."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Each `printf` writes 2 bytes (`x` and `\\n`) into glibc's stdout buffer.\n2. Is stdout a terminal? No, it's a file, so it is **fully buffered**: newlines don't trigger a flush.\n3. Add up the bytes that land in the buffer:\n\n```formula\nB_out = n b_each\nB_out = 1,000 × 2 B = 2,000 B\nwhere\nB_out: the total output held in the stdio buffer, in bytes (B)\nn: the number of printf calls, here 1,000\nb_each: the bytes each call adds, here 2 B (the letter x and a newline)\nB: byte, 8 bits\nIn words: a thousand two-byte lines make 2,000 bytes of output in total.\n```\n\n4. The prompt says the buffer holds at least 2,000 bytes (glibc's default is typically 4 KiB or more), so it never fills and never forces an early flush.\n5. At `exit`, glibc flushes once: one `write(1, ..., 2000)`.\n\nRun on a terminal instead and you'd see about 1,000 writes, because terminals are line-buffered. You can check both with `strace -e trace=write`.",
+    "link": {
+      "title": "stdio buffering: setbuf(3) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man3/setbuf.3.html"
+    }
+  },
+  {
+    "id": "proc-syscalls-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You copy a 1 GiB file using `read`/`write` with a 4 KiB buffer, then with a 1 MiB buffer. Assume each syscall costs about 500 ns of overhead. Roughly how much syscall overhead does the larger buffer save?",
+    "options": [
+      {
+        "text": "About 0.5 ms",
+        "explanation": "The 1 MiB case alone is about 1.024 ms for 2,048 calls, not 0.5 ms; the saving is about 261 ms."
+      },
+      {
+        "text": "About 261 ms",
+        "explanation": "Correct. With 4 KiB chunks the copy makes 524,288 calls, about 262 ms of overhead. With 1 MiB chunks it makes 2,048 calls, about 1 ms. The saving is about 261 ms."
+      },
+      {
+        "text": "About 2.6 s",
+        "explanation": "This is ten times too large. Recheck: a 1 GiB file in 4 KiB chunks needs 262,144 reads, not 2.6 million."
+      },
+      {
+        "text": "Nothing: the same bytes are copied either way",
+        "explanation": "The bytes copied are the same, but the number of kernel entries isn't. Per-call overhead is paid per call, not per byte."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count the syscalls (one `read` plus one `write` per chunk), then multiply by the assumed cost of each:\n\n```formula\nN = 2(S / b)\nT = N t_call\nN_4K = 2 × (1 GiB / 4 KiB)\nN_4K = 2 × 262,144 = 524,288\nT_4K = 524,288 × 500 ns ≈ 262 ms\nN_1M = 2 × (1 GiB / 1 MiB)\nN_1M = 2 × 1,024 = 2,048\nT_1M = 2,048 × 500 ns ≈ 1 ms\nΔT = 262.144 ms − 1.024 ms\nΔT ≈ 261 ms\nwhere\nN: the number of syscalls: one read plus one write per chunk\nS: the file size, here 1 GiB\nb: the buffer size, the bytes moved per call\nT: the total per-call overhead, ignoring the time spent copying the bytes themselves\nt_call: the overhead of one syscall, in nanoseconds (ns); 500 ns is the figure the question supplies\nN_4K, T_4K: the call count and overhead with a 4 KiB buffer\nN_1M, T_1M: the call count and overhead with a 1 MiB buffer\nΔT: the difference between the two overheads: the saving, in milliseconds (ms)\nGiB: gibibyte, 1,073,741,824 bytes (2 to the power 30)\nMiB: mebibyte, 1,048,576 bytes (2 to the power 20)\nKiB: kibibyte, 1,024 bytes\nns: nanosecond, one billionth of a second\nms: millisecond, one thousandth of a second (1,000,000 ns)\n≈: approximately equal to (rounded)\nIn words: the bigger buffer makes 256 times fewer calls, so it saves almost all of the 262 ms of per-call overhead.\n```\n\nThe exact saving is 261.12 ms under the supplied per-call assumption, ignoring an extra EOF check and short transfers. Copying and storage costs may dominate at larger sizes; a particular optimal buffer size requires measurement.",
+    "link": {
+      "title": "Anatomy of a system call, part 1 — LWN",
+      "url": "https://lwn.net/Articles/604287/"
+    }
+  },
+  {
+    "id": "proc-syscalls-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which can contribute to syscall overhead compared with a plain function call? Select all that apply.",
+    "options": [
+      {
+        "text": "Switching CPU mode and saving/restoring user registers",
+        "explanation": "Correct. The `syscall`/`sysret` pair and the register save on the kernel stack are direct costs a function call doesn't have."
+      },
+      {
+        "text": "KPTI on Meltdown-affected CPUs switches page tables on entry and exit",
+        "explanation": "Correct. Changing the page-table root costs time and (without PCID) flushes TLB entries."
+      },
+      {
+        "text": "Kernel code and data displace the program's cache lines and TLB entries",
+        "explanation": "Correct. This *indirect* cost shows up as slower user code just after the syscall returns."
+      },
+      {
+        "text": "Every syscall forces a context switch to another process",
+        "explanation": "Wrong. A syscall is a *mode switch* within the same process. A context switch only happens if the call blocks or the scheduler decides to preempt."
+      },
+      {
+        "text": "The kernel validates arguments and copies data across the boundary",
+        "explanation": "Correct. The kernel can't trust user pointers, so it checks them and copies with `copy_from_user`/`copy_to_user`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Break the cost into parts:\n\n1. **Mode switch + register save** (A): direct.\n2. **Security mitigations** (B): KPTI page-table switch, Spectre barriers.\n3. **Validation and copying** (E): the kernel treats user memory as hostile.\n4. **Cache/TLB pollution** (C): the kernel's footprint evicts yours.\n\nD is the common confusion. `getpid` does not inherently require another process to run. Blocking, preemption or other scheduling decisions can cause a context switch, including during a nonblocking syscall.",
+    "link": {
+      "title": "Anatomy of a system call, part 1 — LWN",
+      "url": "https://lwn.net/Articles/604287/"
+    }
+  },
+  {
+    "id": "proc-syscalls-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After a kernel upgrade enabling KPTI, a service making about 400,000 tiny syscalls per second per core loses about 20% throughput. Which change is most likely to recover it?",
+    "options": [
+      {
+        "text": "Reduce the number of kernel crossings: batch I/O with `writev`/`sendmmsg` or `io_uring`, and buffer in user space",
+        "explanation": "Correct. KPTI adds a fixed cost per entry and exit. Fewer crossings means less of that cost, without weakening security."
+      },
+      {
+        "text": "Run the service as root so syscalls skip permission checks",
+        "explanation": "Root changes permission checks, not the entry and exit path; KPTI applies to every user-mode process."
+      },
+      {
+        "text": "Rewrite the service in a faster language",
+        "explanation": "The overhead is in the kernel boundary, not in the user code. A faster language makes the same number of syscalls."
+      },
+      {
+        "text": "Disable the timer interrupt",
+        "explanation": "The timer is how the kernel schedules; removing it isn't an option, and it isn't the source of this overhead."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Use a simple model: one saturated core, every operation costing the same time, and the KPTI change adding a fixed time to each operation.\n\n```formula\nt_op = 1 / R\nt_op = 1 / (400,000 per s) = 2.5 µs\nt_new = 2.5 µs + 0.5 µs = 3.0 µs\nR_new = 1 / t_new\nR_new = 1 / (3.0 µs) ≈ 333,333 per s\nD = 1 − R_new / R\nD = 1 − 333,333 / 400,000 ≈ 16.7 %\nt_20 = t_op / (1 − 0.20)\nt_20 = 2.5 µs / 0.8 = 3.125 µs\nwhere\nR: the throughput before the upgrade, 400,000 operations per second on one core\nt_op: the time one operation takes, in microseconds (µs)\nt_new: the time per operation after adding an assumed 0.5 µs of extra entry and exit cost\nR_new: the throughput after the change, in operations per second\nD: the fractional throughput drop, shown as a percentage\nt_20: the time per operation that would produce exactly a 20 % drop\n%: per cent, parts per hundred\nµs: microsecond, one millionth of a second\ns: second\n≈: approximately equal to (rounded)\nIn words: on a saturated core throughput is one divided by the time per operation, so 0.5 µs extra per call cuts throughput by about 17 %; a 20 % drop needs about 0.625 µs extra.\n```\n\nSo the reported 20 % loss fits a per-operation cost increase of roughly 0.6 µs in this simple model. Because the cost is per crossing, batch calls or buffer output, then measure; the prompt alone does not isolate every cost.",
+    "link": {
+      "title": "Kernel page-table isolation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Kernel_page-table_isolation"
+    }
+  }
+]

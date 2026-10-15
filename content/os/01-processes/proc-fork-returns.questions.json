@@ -1,0 +1,122 @@
+[
+  {
+    "id": "proc-fork-exec-wait-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume successful process creation and normal exits. How many times does this print `x`?\n\n```c\nint main(void) {\n  /* Every surviving process forks */\n  /* again. */\n  fork();\n  fork();\n  printf(\"x\\n\");\n  return 0;\n}\n```",
+    "options": [
+      {
+        "text": "8",
+        "explanation": "That would be three forks (2 × 2 × 2 = 8 processes). Here there are two."
+      },
+      {
+        "text": "2",
+        "explanation": "This counts the forks, not the processes. Each fork is executed by every process alive at that point."
+      },
+      {
+        "text": "3",
+        "explanation": "This assumes the second fork runs only in the parent. The child from the first fork also runs it."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. After the first fork there are 2 processes; both run the second fork, giving 4; all 4 print."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace the processes:\n\n```\nstart:          P\nafter fork 1:   P, C1\nafter fork 2:   P, C2   (from P)\n                C1, C3  (from C1)\nprintf:         4 processes print\n```\n\nEach fork doubles the count: 1 → 2 → 4. In general:\n\n```formula\nP = 2^n\nP = 2^2 = 2 × 2 = 4\nwhere\nP: the number of processes after the forks, including the original\nn: the number of fork calls every process executes one after another, here 2\n2^n: n copies of 2 multiplied together\nIn words: n forks in a straight line give 2 to the power n processes, so two forks give four.\n```\n\nThe rule only holds when every process runs every fork; a fork inside an `if` changes the count.",
+    "link": {
+      "title": "Interlude: Process API — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-api.pdf"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Assume successful process creation and normal exits. What does this print?\n\n```c\nint x = 10;\npid_t p = fork();\nif (p == 0) {\n  /* Only child private memory */\n  /* changes. */\n  x = x * 2;\n  printf(\"c %d\\n\", x);\n  exit(0);\n}\n/* Wait makes the output order */\n/* predictable. */\nwait(NULL);\nprintf(\"p %d\\n\", x);\n```",
+    "options": [
+      {
+        "text": "`c 10` then `p 10`",
+        "explanation": "The child does change its own `x` to 20 before printing."
+      },
+      {
+        "text": "`c 20` then `p 20`",
+        "explanation": "This assumes parent and child share `x`. After fork each has its own copy of memory."
+      },
+      {
+        "text": "`c 20` then `p 10`",
+        "explanation": "Correct. The child doubles its own copy. The parent waits for the child, then prints its unchanged copy."
+      },
+      {
+        "text": "`p 10` then `c 20`",
+        "explanation": "The parent calls `wait` first, so it can't print until the child has exited."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `fork` gives the child a copy of the parent's memory, so both have `x = 10`.\n2. The child (`p == 0`) sets its `x` to 20, prints `c 20`, exits.\n3. The parent blocks in `wait(NULL)` until then.\n4. The parent's `x` was never touched: it prints `p 10`.\n\nCopy-on-write means the page holding `x` is physically shared until the child writes, then the child gets a private copy. Either way, the *semantics* are separate memory.",
+    "link": {
+      "title": "fork(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/fork.2.html"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume successful fork, normal exit, conventional terminal line buffering or pipe full buffering, and one complete write per flush. What does this print when run on a terminal, and when piped into `cat`?\n\n```c\nprintf(\"a\\n\");\n/* An unflushed buffer is copied too. */\nfork();\nprintf(\"b\\n\");\n```",
+    "options": [
+      {
+        "text": "Terminal: `a b b`; piped: `a b a b`",
+        "explanation": "Correct. On a terminal stdout is line-buffered, so `a\\n` is written before `fork`. Piped, it's fully buffered, so `a\\n` is still in the buffer when it's copied, and both processes flush it."
+      },
+      {
+        "text": "`a b b` in both cases",
+        "explanation": "This ignores that buffering depends on what stdout is connected to. Through a pipe, `a\\n` hasn't been written yet at fork time."
+      },
+      {
+        "text": "`a b a b` in both cases",
+        "explanation": "On a terminal the newline flushes `a` before the fork, so only one copy exists."
+      },
+      {
+        "text": "Terminal: `a b a b`; piped: `a b b`",
+        "explanation": "This has the buffering modes reversed: terminals are line-buffered, pipes and files fully buffered."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Follow the stdio buffer, which lives in user memory and is copied by `fork`:\n\n```\nterminal (line-buffered):\nprintf a\\n -> flushed now: a\nfork        -> buffers empty\neach: b\\n   -> b, b\n=> a b b\n\npipe (fully buffered):\nprintf a\\n -> buffer: \"a\\n\"\nfork        -> both have \"a\\n\"\neach: b\\n   -> \"a\\nb\\n\"\nexit flush  -> a b a b\n```\n\nUnder the stated conventional buffering and one-write flush, each four-byte block is below PIPE_BUF and the two pipe writes do not interleave. Output assumptions include successful fork and normal exit. Fix: `fflush(stdout)` before `fork`.",
+    "link": {
+      "title": "Interlude: Process API — OSTEP",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/cpu-api.pdf"
+    }
+  },
+  {
+    "id": "proc-fork-exec-wait-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume successful process creation and normal exits. How many lines contain `A`, and how many `B`?\n\n```c\n/* A zero left operand skips the */\n/* right. */\nif (fork() && fork())\n  printf(\"A\\n\");\nelse\n  printf(\"B\\n\");\n```",
+    "options": [
+      {
+        "text": "2 A, 2 B",
+        "explanation": "That would need four processes. `&&` short-circuits, so the first child never calls the second fork: only three processes exist."
+      },
+      {
+        "text": "1 A, 1 B",
+        "explanation": "This forgets that the second fork creates another process, which also prints."
+      },
+      {
+        "text": "1 A, 2 B",
+        "explanation": "Correct. The original runs both forks, sees two non-zero returns and prints A. The first child sees 0 from the first fork, short-circuits and prints B. The second child sees 0 from the second fork and prints B."
+      },
+      {
+        "text": "2 A, 1 B",
+        "explanation": "Only the process for which *both* forks returned non-zero takes the A branch, and that's just the original."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Evaluate `fork() && fork()` in each process:\n\n```\nP: fork#1 -> C1's pid (true)\n   fork#2 -> C2's pid (true)\n   => A\nC1: fork#1 returned 0 (false)\n   && short-circuits, no fork#2\n   => B\nC2: born at fork#2 in P\n   fork#1 was true (inherited)\n   fork#2 returned 0 (false)\n   => B\n```\n\nThree processes: 1 A, 2 B.",
+    "link": {
+      "title": "fork(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/fork.2.html"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 22/76. Updated 2026-10-15.
+Verified modules: 23/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -29,6 +29,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Dynamic Programming | 7 | 46 | 80 | 154 | 155 | 473 | 42 |
 | dsa/Problem-Solving Patterns | 8 | 42 | 89 | 77 | 105 | 313 | 189 |
 | dsa/Advanced Structures & Algorithms | 7 | 49 | 84 | 124 | 144 | 476 | 70 |
+| os/OS Basics & Processes | 6 | 29 | 68 | 25 | 467 | 611 | 171 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -2597,6 +2598,255 @@ Low-confidence areas:
 - **medium** — glossary:adv-clojure: Clojure. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
 - **medium** — glossary:adv-xi-editor: Xi editor. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
 - **medium** — glossary:adv-vs-code: VS Code. Product/API/implementation example checked against fetched documentation or source; version and workload can differ.
+
+## os: OS Basics & Processes
+
+[Independent verification record](../content/os/01-processes/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Explain loop termination without pretending this minimal copy handles all failures.
+- Explain why n, rather than buffer capacity, is written.
+- Interrupts and exceptions also enter the kernel; requests are the precise distinction.
+- Kernel size or classification alone does not prove speed or safety.
+- Explain the raw service request and output length.
+- Distinguish generic libc syscall entry from raw assembly.
+- Clarify address outputs without promising fixed values.
+- Explain lifetime of observed heap storage.
+- Randomisation depends on configuration and can repeat; not a guarantee of distinct addresses.
+- Label environment-dependent procfs output honestly.
+- Label vDSO address output as illustrative.
+- Explain private-memory mutation.
+- Explain why deterministic output ordering needs successful wait.
+- Avoid treating PID namespace init or kernel boot tasks as identical to the user-process family model.
+- Shared file description does not guarantee arbitrary message interleaving or atomic record writes.
+- Explain non-returning success path.
+- Explain the purpose of descriptor rebinding.
+- Explain why conditional close preserves redirected stdout.
+- Scope classic exec family rather than asserting every modern exec interface uses execve.
+- Linux has distinct syscalls and newer clone3; containers are not only a clone flag.
+- Clarify wait-status guard without moving statements.
+- Distinguish concurrency from simultaneous execution.
+- Label nondeterministic procfs counters.
+- Explain the child half of each round trip.
+- Explain the timer boundaries.
+- Explain the seconds/nanoseconds conversion.
+- No unmeasured universal dominance of indirect cost.
+- KPTI is conditional and includes interrupts/exceptions, not only syscalls.
+- Oversubscription harms are workload-dependent; one worker per core is not a universal server fix.
+- No fixed per-message switch count across multicore configurations.
+- Explain pipe lifetime ownership.
+- Explain parent descriptor ownership.
+- Explain signal-safe flag communication.
+- Container shutdown defaults are configurable and Kubernetes grace period includes more than signal wait.
+- Explain sizing versus mapping.
+- Clarify message size and priority, independently execute receive ordering.
+- Avoid implying Unix-specific socket features travel across a network.
+- No unconditional fastest IPC ranking.
+- ASLR can randomise supported stack, heap, shared-library and PIE executable mappings at launch, subject to configuration
+- They share an address space, so the scheduler can avoid changing to a different memory map; useful TLB entries may remain
+- When enabled, KPTI switches page tables at user/kernel transitions; PCID can avoid full TLB flushing on those switches
+- It has been preempted far more often than it blocked voluntarily; CPU competition is one plausible cause
+- The counters show many more preemptions than blocking switches over this task's lifetime, consistent with runnable CPU work. They do not reveal wait durations or prove a current bottleneck. Measure counter deltas, CPU utilisation, runnable queues, affinity and workload latency before deciding to add CPU resources.
+
+These are cumulative event counts, not elapsed times. They suggest preemption but do not alone establish CPU saturation, the reason for preemption, or a current throughput problem; compare interval deltas and CPU/latency measurements.
+- For many I/O-waiting connections, use an event-driven design with a measured, bounded worker pool
+- Heavy runnable-thread oversubscription can harm locality and scheduling; measure a bounded worker pool and non-blocking I/O
+- Spread the threads evenly over the cores:
+
+```formula
+r = N_threads / N_cores
+r = 10,000 / 16 = 625
+where
+r: runnable threads per core
+N_threads: busy threads, here 10,000
+N_cores: CPU cores, here 16
+In words: each core has about 625 threads taking turns on it.
+```
+
+That is under the simplified even-distribution assumption. This can cause scheduling contention and disrupt locality, but does not prove every cache is empty on every turn. Compare bounded worker pools, nonblocking I/O, CPU profiles and cache/scheduler counters. The appropriate worker count depends on blocking, CPU work and the service's shared data.
+
+The ratio describes this deliberately busy workload; it is not a universal optimal thread count. CPU-heavy work, blocking operations, NUMA placement, priorities and runtime worker pools all affect the useful design.
+- Make runtime/output assumptions explicit.
+- Make runtime/output assumptions explicit.
+- Make runtime/output assumptions explicit.
+- Make runtime/output assumptions explicit.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Qualify inherited overstatement against the documented contract or implementation.
+- Precise names and documented API semantics.
+- Precise names and documented API semantics.
+- Precise names and documented API semantics.
+- Precise names and documented API semantics.
+- Precise names and documented API semantics.
+- The Go runtime uses startingStackSize and adaptive stack sizing; 2 KiB is not a universal current initial size.
+- Do not imply fexecve and every modern exec-family interface must use the execve syscall.
+- Remove universal copy count inconsistent with zero-copy alternatives taught later.
+- Describe architecture rather than universal deployment assurance.
+- Boundary avoidance alone does not prove a faster workload.
+- Not every file read reaches disk or follows a fixed crossing count.
+- Real-time signals do queue; SIGCHLD is standard.
+- Do not extend standard-signal coalescing to real-time signals.
+- Signals can carry an application value, not just the signal number.
+- Match Linux credential-snapshot semantics.
+- Plain XSAVE and optimised XSAVE variants have different skip semantics.
+- Average elapsed half-trip does not bound every individual switch.
+- Equation with a named symbolic quantity belongs in the immediately following formula card.
+- Avoid unsupported blanket speed ranking.
+- Use supplied stack assumption rather than universal default.
+- ASLR and W^X are independent mechanisms.
+- Group the full dimensional denominator.
+- Read count is not a segment boundary or promise of future peer data.
+- Peer may close before full application frame.
+- Do not smuggle universal scheduler latency into hypothetical cache model.
+- Use exercise assumption rather than hardware latency claim.
+- Measurement bounds modelled average contribution, not individual switch durations.
+- Explicit modelling assumption and average meaning.
+- Average bound only.
+- Prevent contradictory individual bound in surrounding prose.
+- Match polling/already-running receiver caveat.
+- Message boundaries do not guarantee untruncated socket receives.
+- Atomicity concerns writers, not read message boundaries.
+- sigqueue payload exception.
+- Signals can carry values but not SCM_RIGHTS-style descriptor authority.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Align inherited dictionary meaning with qualified active lesson/API/architecture contract.
+- Use precise signal/message terms to prevent allocator coalescing, disk swap and file-truncate dictionary meanings.
+- Use precise signal/message terms to prevent allocator coalescing, disk swap and file-truncate dictionary meanings.
+- Use precise signal/message terms to prevent allocator coalescing, disk swap and file-truncate dictionary meanings.
+- Use precise signal/message terms to prevent allocator coalescing, disk swap and file-truncate dictionary meanings.
+- Use precise signal/message terms to prevent allocator coalescing, disk swap and file-truncate dictionary meanings.
+- Use precise signal/message terms to prevent allocator coalescing, disk swap and file-truncate dictionary meanings.
+- Add precise glossary entries and XSAVE variants after actual compiled-context audit.
+- SYSCALL and SYSENTER use configured MSRs; IDT applies to interrupts/exceptions.
+- Standalone question explicitly assumes Linux x86-64/glibc supported fast path.
+- Signal count exercise states counter/handler/single-thread assumptions.
+- Dataset-only memory model.
+- Two-copy dataset model is not an upper bound on all host memory.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+- Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
+
+Remaining gaps:
+
+- No substantive source topic, native program or diagram/output fence was removed. Six archived lesson/question pairs remain byte-identical to the fixed baseline; all original 67 question IDs, types, difficulty levels, answer keys and option counts are preserved.
+- Naturally compact topics retain honest two-minute estimates rather than padding: addresses, COW, diagnosis, user-level threads, atomic pipes/FIFOs and message priorities. Other units are three to five minutes; each has one to five focused questions.
+- All 22 native C fences ran through 29 bounded Linux aarch64 fixtures with explicit headers, setup and cleanup. Twelve diagram/output bodies are retained byte-for-byte, with one pedagogical reordering of the process-state and memory-layout displays.
+- The verifier independently added 71 Linux boundary checks, including status wrapping, positive-length pipe EOF ownership, short reads, EPIPE, datagram-tail loss and standard-signal pending behaviour. These are deterministic mechanism checks, not throughput benchmarks.
+- No x86-64 machine was available for native instruction execution. Register ABI, page-table/PTI, kernel-stack and extended-state details were checked against fetched Linux/glibc implementation and docs. The undefined literal-write fault is an observation, not a C guarantee.
+- Snippets remain illustrative where they omit error checks, EINTR/short-write loops, complete application state, child cleanup or shared-memory synchronisation. They are not production implementations.
+- No universal syscall, context-switch, IPC, cache refill, fork or goroutine timing is established. Arithmetic models use supplied hypothetical values and stated scheduling/memory assumptions.
+- No deployed device safety case, DMA configuration or certification decision is verified. seL4 and kernel-design assurance descriptions are bounded by configuration and documented assumptions.
+- Primary-source checks cover API contracts, disputed architecture mechanisms and scoped product defaults; inherited correct glossary evidence/confidence is retained. Not every background historical sentence is newly independently externally proven.
+- Whole-app mobile rendering, completion/practice migration, PWA caching and publication remain parent integration checks; dictionary probes execute actual compiler normalization plus glossary.js in an isolated scratch build.
+
+Low-confidence areas:
+
+- **medium** — proc-os-abstractions: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-os-protection: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-os-kernel-designs: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-os-policy-hybrids: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-syscall-entry-events: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-syscall-linux-abi: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-syscall-buffering-cost: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-syscall-vdso-errors: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-process-identity: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-process-memory-layout: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-process-address-example: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-process-states: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-process-load-average: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-fork-returns: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-fork-copy-on-write: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-exec-redirection: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-wait-exit-status: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-process-reaping-init: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-switch-saved-state: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-switch-ping-pong: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-switch-cache-tlb: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-switch-diagnosis: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-switch-user-threads: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-ipc-pipe-protocol: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-ipc-atomic-fifos: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-ipc-safe-signals: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-ipc-shared-pages: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-ipc-message-priorities: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — proc-ipc-sockets-choice: Implementation/configuration and illustrative-model scope. Core mechanisms, mathematics and native fixtures verified; architecture, kernel/libc/runtime settings and workload-dependent performance require the assumptions stated in the unit.
+- **medium** — glossary: os-ssd. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+- **medium** — glossary: os-formal-verification. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+- **medium** — glossary: os-driverkit. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+- **medium** — glossary: os-trap. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+- **medium** — glossary: os-cache-levels. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+- **medium** — glossary: os-sse-avx. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+- **medium** — glossary: os-idle-state. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+- **medium** — glossary: os-nanosecond. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+- **medium** — glossary: os-cpu-cache. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
+- **medium** — glossary: os-kernel-extension. Inherited confidence retained after semantic review; applicable implementation, hardware, terminology or vendor/configuration scope remains qualified. Removed historical timing/size examples are not retained as claims.
 
 ## synth: Sound & Digital Audio
 

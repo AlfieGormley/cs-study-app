@@ -1,0 +1,108 @@
+[
+  {
+    "id": "type-subtyping-variance-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Dog is a subtype of Animal. A generic type `F<T>` is **contravariant** in `T`. Which relationship holds?",
+    "options": [
+      {
+        "text": "F<Dog> is a subtype of F<Animal>",
+        "explanation": "That's covariance: the relationship goes in the same direction as Dog is a subtype of Animal."
+      },
+      {
+        "text": "Neither is a subtype of the other",
+        "explanation": "That is invariance. It is commonly used for freely aliased collections permitting reads and writes."
+      },
+      {
+        "text": "Both are subtypes of each other",
+        "explanation": "That's bivariance, which is unsound for most types."
+      },
+      {
+        "text": "F<Animal> is a subtype of F<Dog>",
+        "explanation": "Correct. A consumer of any Animal can consume Dogs. In Java Comparator<Animal> is usable via Comparator<? super Dog>, not as a subtype of the invariant Comparator<Dog>."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Variance describes how the subtype relation between `Dog` and `Animal` carries over to `F<Dog>` and `F<Animal>`. For a contravariant `F` the direction flips:\n\n```formula\nDog <: Animal  ⇒  F<Animal> <: F<Dog>\nwhere\nDog, Animal: the example types, with every Dog an Animal\nF<Dog>: the generic type F with Dog filled in\nF<Animal>: the generic type F with Animal filled in\n<:: \"is a subtype of\": a value of the left-hand type can be used wherever the right-hand type is expected\n⇒: \"guarantees\": if the left side holds, so does the right\nIn words: when F only consumes values, an F that can handle any Animal can stand in for an F that only has to handle Dogs.\n```\n\nThe three common cases side by side:\n\n| Variance | Result |\n|---|---|\n| Covariant | the relationship from F<Dog> to F<Animal> |\n| Contravariant | the relationship from F<Animal> to F<Dog> |\n| Invariant | no relation |\n\nIntuition: if `F<T>` only *consumes* `T`s, something that can consume any `Animal` can certainly consume a `Dog`. So `F<Animal>` can stand in for `F<Dog>`: the arrow flips.",
+    "link": {
+      "title": "Rustonomicon: Subtyping and variance",
+      "url": "https://doc.rust-lang.org/nomicon/subtyping.html"
+    }
+  },
+  {
+    "id": "type-subtyping-variance-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Dog is a subtype of Animal, and Cat is a subtype of Animal. Code expects a function of type `(Dog) -> Animal`. Which of these can safely be passed in its place? Select all that apply.",
+    "options": [
+      {
+        "text": "`(Animal) -> Dog`",
+        "explanation": "Safe. It accepts any animal, so it handles the `Dog`s it will be given, and its `Dog` result is an `Animal`."
+      },
+      {
+        "text": "`(Dog) -> Dog`",
+        "explanation": "Safe. Same parameter, and a subtype as the result is fine because results are covariant."
+      },
+      {
+        "text": "`(Animal) -> Animal`",
+        "explanation": "Safe. A wider parameter is fine because parameters are contravariant."
+      },
+      {
+        "text": "`(Cat) -> Animal`",
+        "explanation": "Unsafe. The caller will pass a `Dog`, which this function isn't written to handle. `Cat` isn't a supertype of `Dog`."
+      },
+      {
+        "text": "`(Dog) -> Object`",
+        "explanation": "Unsafe. The caller expects an `Animal` back and may call animal methods on it; an arbitrary `Object` may not have them."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "The rule for function types:\n\n```formula\nP1 <: P2  and  R2 <: R1\n⇒  (P2 → R2) <: (P1 → R1)\nwhere\nP1 → R1: the expected type: parameter P1 = Dog, result R1 = Animal\nP2 → R2: a candidate function's type, with parameter P2 and result R2\n<:: \"is a subtype of\": a value of the left-hand type can be used wherever the right-hand type is expected\n→: the function-type arrow: P → R takes a P and returns an R\n⇒: \"guarantees\"\nIn words: a candidate is safe if it accepts at least every Dog (parameters flip direction) and returns something that is an Animal (results keep direction).\n```\n\nCheck each candidate against both conditions:\n\n| Candidate | Accepts every Dog? | Returns an Animal? |\n|---|---|---|\n| `(Animal) -> Dog` | yes | yes |\n| `(Dog) -> Dog` | yes | yes |\n| `(Animal) -> Animal` | yes | yes |\n| `(Cat) -> Animal` | no | yes |\n| `(Dog) -> Object` | yes | no |\n\nThe first three are safe.",
+    "link": {
+      "title": "Rustonomicon: Subtyping and variance",
+      "url": "https://doc.rust-lang.org/nomicon/subtyping.html"
+    }
+  },
+  {
+    "id": "type-subtyping-variance-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You're declaring variance for some generic types. Which of them can **safely** be covariant in `T` (so that `F<Dog>` is usable as `F<Animal>`)? Select all that apply.",
+    "options": [
+      {
+        "text": "A read-only iterator with `next(): T`",
+        "explanation": "Safe. `T` only comes out. Every `Dog` you get from a dog iterator is an `Animal`."
+      },
+      {
+        "text": "A comparator with `compare(a: T, b: T): number`",
+        "explanation": "Unsafe. `T` only goes in. A dog comparator may call `bark()` on a `Cat` it's handed. Comparators are contravariant."
+      },
+      {
+        "text": "A mutable cell with `get(): T` and `set(x: T)`",
+        "explanation": "Unsafe. `T` goes in and out, so it must be invariant: through an `F<Animal>` view you could `set` a `Cat` that the dog side later `get`s."
+      },
+      {
+        "text": "A zero-argument factory of type `() -> T`",
+        "explanation": "Safe. Function results are covariant: a factory that makes dogs makes animals."
+      },
+      {
+        "text": "An immutable list with `get(i): T` and `size()`",
+        "explanation": "Safe. Without mutation it's a pure producer. Kotlin's read-only `List<out E>` and Python's `Sequence` are covariant for this reason."
+      }
+    ],
+    "answer": [
+      0,
+      3,
+      4
+    ],
+    "workedExample": "Classify where `T` appears in each type's methods:\n\n| Type | `T` appears | Variance |\n|---|---|---|\n| Iterator | out | covariant |\n| Comparator | in | contravariant |\n| Mutable cell | in and out | invariant |\n| `() -> T` | out | covariant |\n| Immutable list | out | covariant |\n\nOnly the pure producers can be covariant: the iterator, the factory and the immutable list. This is Kotlin's `out`, and the \"producer extends\" half of PECS.",
+    "link": {
+      "title": "Kotlin: Generics and variance",
+      "url": "https://kotlinlang.org/docs/generics.html"
+    }
+  }
+]

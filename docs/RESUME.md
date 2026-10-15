@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 43/76 modules; 290 originals → 1573 short lessons with 3420 focused questions.
+- Independently verified: 44/76 modules; 296 originals → 1599 short lessons with 3489 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `b2a423a`, version `16fd8ee84cc5`, 1542 short lessons/3352 focused questions
-  across 42 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
-- Current generated candidate: `26773e82aeae`, 43 modules/1573 units/3420 questions.
+- Latest confirmed live release: `8430b24`, version `26773e82aeae`, 1573 short lessons/3420 focused questions
+  across 43 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Current generated candidate: `ec1b8fa124d4`, 44 modules/1599 units/3489 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -22,9 +22,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- languages/lang-types: verifying; /root/languages_types_short_verify.
-- languages/lang-memory: authoring; /root/languages_memory_short_author.
+- languages/lang-memory: verifying; /root/languages_memory_short_verify.
 - languages/lang-functional: authoring; /root/languages_functional_short_author.
+- languages/lang-compilers: authoring; /root/languages_compilers_short_author.
 
 Verification and integration:
 

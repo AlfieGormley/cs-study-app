@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 43/76. Updated 2026-10-15.
+Verified modules: 44/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -50,6 +50,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | architecture/Caches & the Memory Hierarchy | 6 | 31 | 69 | 92 | 185 | 377 | 39 |
 | architecture/Parallel Hardware | 6 | 33 | 73 | 74 | 213 | 393 | 42 |
 | languages/Programming Paradigms | 6 | 31 | 68 | 20 | 449 | 568 | 52 |
+| languages/Type Systems | 6 | 26 | 69 | 28 | 264 | 387 | 38 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3800,6 +3801,41 @@ Low-confidence areas:
 - **medium** — para-nonstrict-arguments: ALGOL call-by-name and CLU argument-sharing attribution. ALGOL original report section 4.7.3.2 extracted from the Computer History Museum preservation scan. CLU TR190 primary indexed excerpt independently retrieved, but local scan is image-only. Native ALGOL/CLU execution was not available; abstract demand models and Python mutation/rebinding checked.
 - **medium** — para-pure-functions: Inherited historical dates and influence labels in glossary. Prioritised primary project announcements, designer histories and institutional pages; corrected Elixir/F#/Kotlin/Erlang date distinctions. Some biographical minutiae and broad influence language have only institutional/authoritative overview corroboration, not original archival evidence. All flagged entries have medium confidence.
 - **medium** — para-desired-state: Infrastructure reconciliation and serial ORM latency examples. Primary Kubernetes/Terraform/Django docs checked and real Django/SQLite 501-versus-1 queries executed. No live cloud deployment or network-latency measurements; stable-input assumptions and hypothetical timings stated.
+
+## languages: Type Systems
+
+[Independent verification record](../content/languages/02-types/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Replaced a mislabelled Mairson PDF under the rank-2 inference citation with the actual fetched Kfoury/Wells rank-2 paper; the real ML complexity primary paper remains correctly attached to ML typability.
+- Separated Rust never-expression coercion from lifetime/higher-rank subtyping, including the bottom-type dictionary entry.
+- Corrected the claim that Object[] operations can take any Java array: primitive int[] is an Object but not an Object[]. Independently compiled both sides and checked runtime behaviour.
+- Removed opposite-sense aliases: float literals no longer open integer-literal; property syntax no longer opens method syntax; a type constructor no longer opens higher-kinded polymorphism; ungeneralised no longer opens generalisation. Added three precise glossary entries and checked actual compiler identities/definitions.
+- Scoped soundness summaries to excluded errors in a specified semantics. Strengthened standalone free-theorem cards with universal parametricity, totality and finite fully defined input assumptions.
+- Removed a duplicated coercion paragraph prefix and entire repeated operator section while preserving the single substantive explanation.
+- Corrected invariance/generalisation/let-polymorphism definitions, Python SyntaxError timing, .NET emitted-code example, mutable-alias readonly limits, and per-call Java generic cast claims.
+- Qualified pointer/smart-pointer definitions so ownership is not a universal no-leak guarantee, and distinguished managed object references from fixed exposed machine addresses.
+
+Remaining gaps:
+
+- The original six-topic scope is preserved. Full dependent typing, full Algorithm W implementation, proof assistants and a complete mechanised soundness proof remain outside it.
+- Native displayed fragments are run with supplied imports, surrounding declarations or drivers. Intentional ellipses/signature fragments are completed with an explicit fixture; they are not claimed standalone programs.
+- No .NET, Eiffel, Dart or Typed Racket executable fence appears. Those implementation/model comparisons are primary-source checked; historical benchmark/exploit configurations and all possible runtimes were not reproduced.
+- The educational Python unifier assumes finite well-formed terms and acyclic incoming substitutions. Bounded tests do not establish production inference completeness or all-program correctness.
+- Numeric conversions and explicit absence/layout are naturally smaller objectives; both retain focused original questions and their own completion status.
+
+Low-confidence areas:
+
+- **medium** — type-checking-guarantees: The 2017 bug sample and versions were checked against the original study; its historical experiment was not reproduced and is not a current/project-wide forecast.. The 2017 bug sample and versions were checked against the original study; its historical experiment was not reproduced and is not a current/project-wide forecast.
+- **medium** — type-local-inference: Native versions and current official inference documentation checked; checker diagnostic wording/defaults are version-dependent.. Native versions and current official inference documentation checked; checker diagnostic wording/defaults are version-dependent.
+- **medium** — type-generic-bounds: Primary rules and native displayed examples checked; C++ dependent-name/concept implementations and future language/checker extensions can differ.. Primary rules and native displayed examples checked; C++ dependent-name/concept implementations and future language/checker extensions can differ.
+- **medium** — type-generic-implementation: Primary Java/Rust/GHC/.NET documentation checked; .NET JIT sharing is a qualified usual model, not measured here or promised across runtime modes.. Primary Java/Rust/GHC/.NET documentation checked; .NET JIT sharing is a qualified usual model, not measured here or promised across runtime modes.
+- **medium** — type-language-variance: Native Kotlin/Rust/Python/TypeScript fixtures checked; Eiffel type-validity implementation and future checker versions were source-reviewed rather than exhaustively reproduced.. Native Kotlin/Rust/Python/TypeScript fixtures checked; Eiffel type-validity implementation and future checker versions were source-reviewed rather than exhaustively reproduced.
+- **medium** — type-soundness-model: The formal proofs and historical Java/Scala unsoundness paper were fetched; historical compiler exploit configurations were not recreated and do not assert current compiler acceptance.. The formal proofs and historical Java/Scala unsoundness paper were fetched; historical compiler exploit configurations were not recreated and do not assert current compiler acceptance.
+- **medium** — type-optional-checking: Current official docs plus recorded native TypeScript/mypy/Python versions checked; tool defaults and diagnostics remain version-dependent.. Current official docs plus recorded native TypeScript/mypy/Python versions checked; tool defaults and diagnostics remain version-dependent.
+- **medium** — type-checked-boundaries: Original gradual-typing benchmarks, developer migration account and official mode docs checked; benchmark workload results and historical migration were not independently reproduced.. Original gradual-typing benchmarks, developer migration account and official mode docs checked; benchmark workload results and historical migration were not independently reproduced.
+- **medium** — type-checking-guarantees: Rice theorem glossary source. Formal semantic statement checked against Cornell course proof; original publisher access was unavailable to author. Runtime type-error undecidability is separately justified by a direct halting reduction.
 
 ## synth: Sound & Digital Audio
 

@@ -1,0 +1,95 @@
+[
+  {
+    "id": "type-adts-pattern-matching-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about this TypeScript are true? Select all that apply.\n\n```ts\ntype Shape =\n  | { kind: \"circle\"; r: number }\n  | { kind: \"rect\"; w: number;\n      h: number };\n\nfunction area(s: Shape): number {\n  switch (s.kind) {\n    case \"circle\":\n      return Math.PI * s.r ** 2;\n    case \"rect\":\n      return s.w * s.h;\n    default: {\n      const gone: never = s;\n      return gone;\n    }\n  }\n}\n```",
+    "options": [
+      {
+        "text": "Inside `case \"circle\"`, `s` has type `{ kind: \"circle\"; r: number }`",
+        "explanation": "True. Checking the literal tag **narrows** the union to the matching member, which is why `s.r` is allowed."
+      },
+      {
+        "text": "If a `\"tri\"` member is added to `Shape`, the `const gone: never = s` line fails to compile",
+        "explanation": "True. `s` would then have type `{ kind: \"tri\" ... }` in `default`, which isn't assignable to `never`. That's the exhaustiveness check."
+      },
+      {
+        "text": "At run time, JavaScript checks that `s` is a valid `Shape`",
+        "explanation": "False. Types are erased. An unknown tag reaches default; a known tag with missing payload can produce NaN or throw, and null fails when its kind is read."
+      },
+      {
+        "text": "Narrowing on `s.kind` works only because `kind` is the first property in each member",
+        "explanation": "False. Property order is irrelevant. Any property whose literal type differs between the members can act as the discriminant."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Go through each claim.\n\n1. **Narrowing**: `switch (s.kind)` with `case \"circle\"` leaves only the member whose `kind` is `\"circle\"`. True.\n2. **Exhaustiveness via `never`**: in `default`, every handled member has been removed. With two handled members, `s` is `never` and the assignment compiles. Add a third member and `s` is that member, so the assignment fails. True.\n3. **Run time**: TypeScript emits plain JavaScript with no type checks. False.\n4. **Property order**: TypeScript finds the discriminant by its literal types, not its position. False.",
+    "link": {
+      "title": "TypeScript Handbook: Narrowing",
+      "url": "https://www.typescriptlang.org/docs/handbook/2/narrowing.html"
+    }
+  },
+  {
+    "id": "type-adts-pattern-matching-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this Python 3.10+ code print?\n\n```python\nRED = \"red\"\n\ndef describe(colour):\n    match colour:\n        # Bind any value to RED.\n        case RED:\n            return \"is red\"\n\nprint(describe(\"blue\"))\n```",
+    "options": [
+      {
+        "text": "`is red`",
+        "explanation": "Correct. A bare name in a `case` is a **capture pattern**: it matches anything and binds it to a new local `RED`. It doesn't compare with the global."
+      },
+      {
+        "text": "`None`",
+        "explanation": "This assumes `case RED:` compares `colour == RED`, so nothing matches. Python only compares for dotted names such as `Color.RED`, or literals."
+      },
+      {
+        "text": "A `SyntaxError`",
+        "explanation": "An unguarded irrefutable capture pattern is allowed as the last case. Putting another case after that unguarded arm is a SyntaxError; a guarded capture can allow later cases."
+      },
+      {
+        "text": "A `NameError`",
+        "explanation": "Nothing here looks up an undefined name; the capture pattern creates a binding."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In `match`, a plain name like `RED` is a **capture pattern**. It always matches and assigns the subject to that name.\n2. So `case RED:` matches `\"blue\"` and binds the local `RED = \"blue\"`.\n3. The function returns `\"is red\"`.\n\nTo compare against a constant, use a dotted name (`case Colour.RED:` with an `Enum`) or a literal (`case \"red\":`). This is a well-known trap from PEP 636.",
+    "link": {
+      "title": "PEP 636: Pattern matching tutorial",
+      "url": "https://peps.python.org/pep-0636/"
+    }
+  },
+  {
+    "id": "type-adts-pattern-matching-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Java 21. Why does this `switch` compile without a `default`, and what happens if someone adds `record Tri(double b, double h) implements Shape` and lists it in `permits`?\n\n```java\nsealed interface Shape\n    permits Circle, Rect {}\nrecord Circle(double r)\n    implements Shape {}\nrecord Rect(double w, double h)\n    implements Shape {}\n\ndouble area(Shape s) {\n  return switch (s) {\n    case Circle c ->\n        3.14 * c.r() * c.r();\n    case Rect(double w, double h) ->\n        w * h;\n  };\n}\n```",
+    "options": [
+      {
+        "text": "Java switches never need a `default`; the new type makes `area` throw at run time",
+        "explanation": "A `switch` *expression* must be exhaustive. It compiles here only because `Shape` is sealed and both permitted types are covered."
+      },
+      {
+        "text": "`sealed` tells the compiler `Circle` and `Rect` are the only implementations; after adding `Tri`, `area` fails to compile until it handles `Tri`",
+        "explanation": "Correct. The compiler checks exhaustiveness against the `permits` list. Recompiling with `Tri` added reports that the switch doesn't cover all possible input values."
+      },
+      {
+        "text": "Records can't implement interfaces, so the code doesn't compile at all",
+        "explanation": "Records can implement interfaces and implicitly extend java.lang.Record; they cannot choose another superclass."
+      },
+      {
+        "text": "It compiles because of the record pattern on `Rect`; adding `Tri` is caught only by a linter",
+        "explanation": "The record pattern only destructures `Rect`. Exhaustiveness comes from the sealed hierarchy, and it's enforced by `javac` itself."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `sealed ... permits Circle, Rect` closes the hierarchy: no other class may implement `Shape`.\n2. A `switch` **expression** must produce a value for every input, so it must be exhaustive.\n3. The compiler checks the cases against the permitted subtypes. `Circle` and `Rect` are both covered, so no `default` is needed.\n4. Adding `Tri` to `permits` changes the set. `area` no longer covers every case and **fails to compile**.\n5. (If a stale class file meets a new subtype at run time, Java throws `MatchException` rather than misbehaving.)\n\nThis is a member-method excerpt placed inside a class. Passing null still throws NullPointerException without a case null arm.",
+    "link": {
+      "title": "JEP 441: Pattern matching for switch",
+      "url": "https://openjdk.org/jeps/441"
+    }
+  }
+]

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "type-subtyping-variance-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What happens when this Java runs?\n\n```java\nObject[] objs = new String[2];\nobjs[0] = \"fine\";\nobjs[1] = 42;\n```",
+    "options": [
+      {
+        "text": "It doesn't compile: `String[]` isn't an `Object[]`",
+        "explanation": "Java arrays are covariant, so a `String[]` is a subtype of `Object[]` and the first line compiles."
+      },
+      {
+        "text": "It runs, and `objs[1]` holds the `Integer` 42",
+        "explanation": "The array object is really a `String[]`, and the JVM won't let a non-`String` be stored in it."
+      },
+      {
+        "text": "It throws `ArrayStoreException` on the third line",
+        "explanation": "Correct. Because arrays are covariant, the JVM checks every store into a reference array at run time. Storing an `Integer` into a `String[]` fails."
+      },
+      {
+        "text": "It throws `ClassCastException` on the first line",
+        "explanation": "Assigning a `String[]` to an `Object[]` variable is an upcast, which always succeeds."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Line 1: arrays in Java are **covariant**, so a `String[]` can be referred to as an `Object[]`. Compiles and runs.\n2. Line 2: storing a `String` into the real `String[]`. Fine.\n3. Line 3: statically, `objs` is `Object[]`, and `42` (boxed to `Integer`) is an `Object`, so it compiles.\n4. At run time the JVM checks the array's actual element type, `String`. An `Integer` isn't a `String`: **`ArrayStoreException`**.\n\nThis run-time check is the price Java pays for covariant mutable arrays.",
+    "link": {
+      "title": "Java Language Specification: Arrays",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-10.html"
+    }
+  },
+  {
+    "id": "type-subtyping-variance-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With `strict` on, what does this TypeScript do?\n\n```ts\nconst dogs: Dog[] = [new Dog()];\nconst animals: Animal[] = dogs;\n// This also changes the dogs array.\nanimals.push(new Cat());\ndogs[1].bark();\n```\n\n(`Dog` has `bark()`, `Cat` doesn't.)",
+    "options": [
+      {
+        "text": "Compile error on line 2, because arrays are invariant",
+        "explanation": "That would be the sound choice, and it's what Java generics and Python's `list` do. TypeScript deliberately makes arrays covariant."
+      },
+      {
+        "text": "Compile error on the push operation, because a Cat is not a Dog",
+        "explanation": "Statically, `animals` is `Animal[]`, so pushing a `Cat` is allowed. The checker doesn't track that it's really the dogs array."
+      },
+      {
+        "text": "It compiles, then throws TypeError on the final bark() call",
+        "explanation": "Correct. Arrays are covariant in TypeScript, an intentional unsoundness. Both names alias one array, so a `Cat` ends up where `Dog`s are expected."
+      },
+      {
+        "text": "It compiles and prints nothing, because TypeScript converts the `Cat` into a `Dog`",
+        "explanation": "TypeScript erases types; nothing converts values at run time. `dogs[1]` is still the `Cat` object."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Line 2: TypeScript treats `Dog[]` as a subtype of `Animal[]` (covariant arrays). Allowed, even under `strict`.\n2. `animals` and `dogs` now name the **same** array.\n3. At the push: through `animals`, pushing a `Cat` is fine: it's an `Animal`.\n4. At the final call: `dogs[1]` is statically a `Dog`, but really the `Cat`. Calling `bark` gives `TypeError: dogs[1].bark is not a function`.\n\nA sound rule would make mutable arrays invariant. TypeScript chose convenience; `readonly Animal[]` parameters prevent that function from pushing through its parameter; they do not freeze the array or prevent writes through another alias.",
+    "link": {
+      "title": "TypeScript Handbook: Compatibility and soundness",
+      "url": "https://www.typescriptlang.org/docs/handbook/type-compatibility.html"
+    }
+  },
+  {
+    "id": "type-subtyping-variance-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which line does the Java compiler reject?\n\n```java\nList<Dog> dogs = new ArrayList<>();\nList<? extends Animal> src = dogs; // 1\nAnimal a = src.get(0);             // 2\nsrc.add(new Dog());                // 3\nList<? super Dog> dst =\n    new ArrayList<Animal>();       // 4\n```",
+    "options": [
+      {
+        "text": "Line 1",
+        "explanation": "`List<Dog>` is a `List<? extends Animal>`: that's what the covariant wildcard is for."
+      },
+      {
+        "text": "Line 2",
+        "explanation": "Reading from a `? extends Animal` list is always safe: whatever the real element type is, it's some subtype of `Animal`."
+      },
+      {
+        "text": "Line 4",
+        "explanation": "`ArrayList<Animal>` is a valid `List<? super Dog>`, because `Animal` is a supertype of `Dog`."
+      },
+      {
+        "text": "Line 3",
+        "explanation": "Correct. `src` might be a `List<Cat>` for all the compiler knows, so it can't let you add anything but `null`, even a `Dog`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "`List<? extends Animal>` means \"a list of *some* unknown subtype of `Animal`\".\n\n1. Line 1: `Dog` is a subtype of `Animal`, so `List<Dog>` fits. OK.\n2. Line 2: whatever the unknown type is, its elements are `Animal`s. Reading is safe. OK.\n3. Line 3: the unknown type could be `Cat`, `Dog` or anything else. The compiler can't prove a `Dog` belongs, so it rejects **every** add (except `null`). Error.\n4. Line 4: `? super Dog` accepts lists of `Dog` or any supertype. `ArrayList<Animal>` fits. OK.\n\nPECS: `extends` for producers you read from, `super` for consumers you write to.\n\nThe question asks only about compilation. If the rejected add is removed, get(0) on the shown empty list still throws IndexOutOfBoundsException. Upper-bounded wildcards also allow some mutation, such as clear or adding null.",
+    "link": {
+      "title": "Java generics: Wildcard guidelines",
+      "url": "https://docs.oracle.com/javase/tutorial/java/generics/wildcardGuidelines.html"
+    }
+  },
+  {
+    "id": "type-subtyping-variance-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The JDK declares:\n\n```java\nstatic <T> void copy(\n    List<? super T> dest,\n    List<? extends T> src)\n```\n\nYou call `copy(dest, src)` with `dest` a `List<Object>` and `src` a `List<Integer>`. What happens? Assume dest is an ordinary mutable ArrayList<Object> with at least src.size() existing elements, and no raw types or heap pollution.",
+    "options": [
+      {
+        "text": "Compile error: `T` must equal both `Object` and `Integer`",
+        "explanation": "The wildcards exist precisely so `T` doesn't have to match both lists exactly."
+      },
+      {
+        "text": "It compiles, with `T` inferred as `Integer` (or `Number`, or `Object`)",
+        "explanation": "Correct. Any `T` with a type argument between Integer and Object in the subtype hierarchy satisfies both bounds, and Java picks one. Reading integers and writing them into an `Object` list is safe."
+      },
+      {
+        "text": "It compiles, but throws `ArrayStoreException` at run time",
+        "explanation": "Under the stated ArrayList assumptions there is no incompatible array backing store. Other List implementations and an undersized or unmodifiable destination can fail at runtime."
+      },
+      {
+        "text": "Compile error: `dest` must be a `List<Integer>`",
+        "explanation": "That would be true with `List<T> dest`. `? super T` allows any list that can *hold* a `T`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Find a `T` satisfying both bounds.\n\n`src: List<? extends T>` with a `List<Integer>` needs `Integer` to be a subtype of `T`. `dest: List<? super T>` with a `List<Object>` needs `T` to be a subtype of `Object`:\n\n```formula\nInteger <: T  and  T <: Object\nInteger <: T <: Object\nwhere\nT: the type parameter of copy, which the compiler must choose\nInteger: the element type of src\nObject: the element type of dest, the top of Java's class hierarchy\n<:: \"is a subtype of\": a value of the left-hand type can be used wherever the right-hand type is expected\nIn words: T must lie between Integer and Object in the class hierarchy, so Integer, Number or Object all work.\n```\n\n1. Inference chooses one of those (here `Integer`).\n2. Safety: `copy` only **reads** from `src` (producer, `extends`) and only **writes** to `dest` (consumer, `super`). Integers are always valid `Object`s.\n\nWithout wildcards (`List<T>` twice), this call would fail: invariance would force both lists to have the same element type.",
+    "link": {
+      "title": "Java generics: Wildcard guidelines",
+      "url": "https://docs.oracle.com/javase/tutorial/java/generics/wildcardGuidelines.html"
+    }
+  }
+]

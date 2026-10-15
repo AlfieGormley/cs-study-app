@@ -1,0 +1,92 @@
+[
+  {
+    "id": "type-adts-pattern-matching-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A teammate adds a `Triangle` variant to this Rust enum but doesn't update `area`. What happens?\n\n```rust\nenum Shape {\n    Circle { r: f64 },\n    Rect { w: f64, h: f64 },\n    Triangle { b: f64, h: f64 },\n}\nfn area(s: &Shape) -> f64 {\n    match s {\n        Shape::Circle { r } =>\n            3.14 * r * r,\n        Shape::Rect { w, h } => w * h,\n    }\n}\n```",
+    "options": [
+      {
+        "text": "It compiles; calling `area` on a triangle panics",
+        "explanation": "That's roughly what happens in languages without exhaustiveness checking. Rust refuses to compile a non-exhaustive `match`."
+      },
+      {
+        "text": "It fails to compile: the `match` is not exhaustive",
+        "explanation": "Correct. Rust reports error E0004, \"non-exhaustive patterns: `&Shape::Triangle { .. }` not covered\", pointing at the exact match to fix."
+      },
+      {
+        "text": "It compiles; `area` returns 0.0 for triangles",
+        "explanation": "Rust never invents a default result for unmatched cases."
+      },
+      {
+        "text": "It compiles with a warning, like an unused variable",
+        "explanation": "Some languages (OCaml, Haskell) only warn. In Rust a non-exhaustive match is a hard error."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The compiler knows `Shape` has exactly three variants.\n2. It checks that the arms of `match s` cover all of them.\n3. `Triangle` isn't covered, so compilation fails with E0004 and names the missing pattern.\n4. Fix: add a `Shape::Triangle { b, h } => 0.5 * b * h` arm.\n\nThis is the main practical benefit of sum types: adding a variant turns every place that needs updating into a compile error.",
+    "link": {
+      "title": "The Rust Book: Pattern syntax",
+      "url": "https://doc.rust-lang.org/book/ch19-03-pattern-syntax.html"
+    }
+  },
+  {
+    "id": "type-adts-pattern-matching-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this Haskell evaluate to?\n\n```haskell\ndata Expr = Num Int\n          | Add Expr Expr\n          | Mul Expr Expr\n          | Neg Expr\n\neval :: Expr -> Int\neval (Num n)   = n\n-- Recurse into both child expressions.\neval (Add a b) = eval a + eval b\neval (Mul a b) = eval a * eval b\neval (Neg e)   = negate (eval e)\n\neval (Mul (Add (Num 2) (Num 3))\n          (Neg (Num 4)))\n```",
+    "options": [
+      {
+        "text": "-20",
+        "explanation": "Correct. `Add (Num 2) (Num 3)` is 5, `Neg (Num 4)` is -4, and `Mul` multiplies them: 5 × -4 = -20."
+      },
+      {
+        "text": "-10",
+        "explanation": "This computes 2 + 3 × -4, as if precedence applied. The tree's structure already fixes the order: the `Add` is a child of the `Mul`."
+      },
+      {
+        "text": "20",
+        "explanation": "This drops the `Neg`. `negate 4` is -4."
+      },
+      {
+        "text": "It doesn't type-check: `Neg` needs an `Int`",
+        "explanation": "`Neg` takes an `Expr`, and `Num 4` is an `Expr`. Everything fits."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Evaluate the tree bottom-up, one constructor at a time.\n\n```\nMul\n├─ Add\n│  ├─ Num 2   -> 2\n│  └─ Num 3   -> 3\n│            -> 2 + 3 = 5\n└─ Neg\n   └─ Num 4   -> 4\n             -> negate 4 = -4\n-> 5 * (-4) = -20\n```\n\nEach `eval` equation handles one constructor and recurses into its children. No precedence rules are needed: the tree's shape *is* the grouping.",
+    "link": {
+      "title": "Haskell 2010: Declarations and types",
+      "url": "https://www.haskell.org/onlinereport/haskell2010/haskellch4.html"
+    }
+  },
+  {
+    "id": "type-adts-pattern-matching-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which arm of this Rust `match` can never run?\n\n```rust\nenum Cmd { Quit, Buy(u32) }\n\nmatch (cmd, logged_in) {\n    (_, false) => login(),     // A\n    (Cmd::Buy(_), _) => buy(), // B\n    (Cmd::Buy(0), true) => {}, // C\n    (Cmd::Quit, _) => quit(),  // D\n}\n```",
+    "options": [
+      {
+        "text": "A",
+        "explanation": "A is first, so it runs whenever `logged_in` is false."
+      },
+      {
+        "text": "B",
+        "explanation": "B runs for any `Buy` when logged in, since A has already taken the logged-out cases."
+      },
+      {
+        "text": "C",
+        "explanation": "Correct. Every value C matches, `(Buy(0), true)`, is already matched by B, which comes first. Rust warns that the pattern is unreachable."
+      },
+      {
+        "text": "D",
+        "explanation": "D handles `Quit` when logged in, which no earlier arm covers."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Arms are tried top to bottom; the first match wins.\n\n1. A takes every `(_, false)`.\n2. Left: `(Quit, true)` and `(Buy(n), true)`.\n3. B takes every `Buy`. Left: `(Quit, true)`.\n4. C wants `(Buy(0), true)`, but B already took all `Buy` values. **The pattern is unreachable.**\n5. D takes `(Quit, true)`. All cases covered.\n\nFix: move the specific arm C above the general arm B.",
+    "link": {
+      "title": "The Rust Book: Pattern syntax",
+      "url": "https://doc.rust-lang.org/book/ch19-03-pattern-syntax.html"
+    }
+  }
+]

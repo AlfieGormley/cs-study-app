@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 35/76. Updated 2026-10-15.
+Verified modules: 36/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -42,6 +42,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | networks/Transport Layer: TCP & UDP in Depth | 7 | 43 | 81 | 89 | 319 | 532 | 48 |
 | networks/Application-Layer Protocols | 6 | 42 | 69 | 65 | 623 | 734 | 49 |
 | networks/Network Security | 6 | 36 | 67 | 40 | 371 | 514 | 46 |
+| networks/Wireless, Mobile & Modern Networks | 6 | 37 | 74 | 73 | 531 | 715 | 28 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3421,6 +3422,56 @@ Low-confidence areas:
 - **medium** — nsec-capture-offloads-storage: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details. Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
 - **medium** — nsec-encrypted-traffic-evidence: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details. Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
 - **medium** — nsec-flow-record-investigations: Operational examples, security-model assumptions, historical reports and/or time-sensitive deployment details. Protocol core verified against fetched primary standards; examples are bounded models, platform/policy facts can change, and no arbitrary security proof or live radio/VPN/kernel-policy deployment is claimed.
+
+## networks: Wireless, Mobile & Modern Networks
+
+[Independent verification record](../content/networks/06-wireless-modern/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- The radio-state diagram still equated connected with fast/high power and idle with no radio resources. It now shows RRC context and DRX on an explicitly simplified setup/release path, consistent with the prose.
+- CTS duration now explicitly means the remaining protected exchange rather than an unchanged RTS duration.
+- The modulo-remapping explanation now states removal of the last-labelled member before using an equal-remainder proof; the question and physical-label model agree.
+- Scheduling-request aliases incorrectly resolved to the grant assigning resources. A separate sourced Scheduling request entry now distinguishes asking from receiving permission.
+- Multi-Link Operation no longer requires links in different bands; modes and hardware constrain concurrency.
+- SIFS was called the shortest gap in all Wi-Fi. It is now defined by immediate-reply use and its relation to DIFS under the supplied PHY example.
+- MPDU omitted its frame check sequence. Its definition now includes header, any body and FCS.
+- Combined OFDMA/MU-MIMO, eNodeB/gNodeB and S-GW+P-GW aliases no longer collapse different mechanisms or components into one definition; PDU no longer aliases an entire PDU session.
+- Virtualisation is defined as resource abstraction with NFV as an example; NSA wording is scoped to common option 3 rather than all non-standalone architectures.
+- Tail time no longer aliases tail energy: a duration is not an energy measurement.
+- Leaf-spine definitions now state the fully connected different-leaf model and distinguish equal topology from configured equal routing cost.
+- Non-blocking now distinguishes strict circuit non-blocking from rearrangeable and packet-fabric claims.
+- Switch buffers and microbursts no longer guarantee that every shallow buffer overflows or every deep buffer creates delay.
+- A VLAN identifier is 12 bits within the tag; the whole IEEE 802.1Q tag is not a 12-bit tag.
+- Generic P4 match-action processing no longer resolves as an OpenFlow-specific highest-priority table; a distinct generic entry covers the abstraction.
+- OpenFlow fast failover selects the first live action bucket, whose watch can involve ports or groups, rather than simply the first live port.
+- ICMPv6 Packet Too Big and MTU black-hole definitions now distinguish classic error-based discovery from possible packetization-layer recovery.
+- VPN no longer universally means an encrypted tunnel; private logical connectivity and cryptographic confidentiality are distinct.
+- RACK-TLP now says a tail-loss probe may send new data or retransmit the highest-sequence segment, rather than always retransmitting the last segment.
+- TLS round-trip claims now describe ordinary full handshakes and account for resumption, early data and retries.
+- Hosts-file resolution order is configurable; DNSSEC authenticates validated data and denial rather than encrypting or making all data correct.
+- BGP hijack wording now concerns authorisation rather than mere ownership of a prefix.
+- Unrepeatered no longer aliases an optical amplifier; generic DC no longer aliases submarine high-voltage shore feeding.
+- Fibre signal-envelope delay now explicitly uses effective group index rather than generic phase refractive index; the unchanged 1.47 numerical model is supported by Corning’s dated 1.4682 characterisation.
+- An isotropic antenna is now a separate ideal reference concept rather than an alias for antenna gain.
+- Ground-station and bent-pipe definitions no longer require large antennas, public Internet service or a geographically nearby user gateway.
+- Renumbering now allows staged old/new addresses instead of claiming every device and dependency must change simultaneously.
+- Local formula indices are defined explicitly, inline modulo pseudocode is natural-language wording, and acronym capitalisation is repaired in short-unit introductions.
+
+Remaining gaps:
+
+- No content topic deliberately removed; naturally small coherent units are below400 words and retain 3-minute estimates for diagrams, calculations and careful examples rather than added filler.
+- No RF, cellular core, physical fabric, live cloud, orbital-link or production-incident benchmark.
+- No complete release-specific channel/band table, advanced inactive-state procedure, arbitrary traffic-matrix proof or exhaustive network-update theorem implementation.
+- No RF, modem, physical switch, cloud account or orbital link was deployed during independent review. Primary specifications/implementations and bounded models support the mechanisms; native execution covers the five Python examples and trusted loopback TLS only.
+- Peripheral glossary descriptions and some historical/commercial shorthand retain medium confidence where fetched primary source families corroborate the core concept but do not establish every optional implementation detail or commercial classification. No low-confidence core teaching claim remains.
+
+Low-confidence areas:
+
+- **medium** — wm-wifi-generations: Generation capabilities, regulatory spectrum and equipment behaviour. Primary Alliance/Ofcom/ns-3 evidence checked; capabilities and permissions remain release, device and location dependent, and no RF or interoperability conformance experiment was performed.
+- **medium** — wm-cellular-performance-edge: Radio energy, mobility, slicing and edge deployment outcomes. 3GPP Release17, ITU and platform guidance support the mechanisms; no operator/modem measurements or end-to-end guarantees are claimed.
+- **medium** — wm-fabric-queues-dctcp: Fabric queues, recovery defaults and current cloud/network operational behaviour. Current primary implementation/vendor documents checked; hardware policies, defaults and product features are time-sensitive. All numerical capacity and queue examples are conditional models.
+- **medium** — wm-internet-commercial-routing: Commercial tiers, routing incidents and policy models. Original Gao/Rexford, RFCs and operator incident reports checked. Commercial classification and the simplified export policy are not universal protocol requirements.
 
 ## synth: Sound & Digital Audio
 

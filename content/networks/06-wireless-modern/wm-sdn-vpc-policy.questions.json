@@ -1,0 +1,126 @@
+[
+  {
+    "id": "wm-sdn-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An EC2 interface’s only security group allows inbound TCP 443 and has no outbound rules. For a tracked client connection, assume valid tracking state, a listening service and all routing/NACL/host controls permit traffic. Does the missing outbound rule alone block its replies?",
+    "options": [
+      {
+        "text": "The handshake fails because the instance's SYN-ACK is blocked by the missing outbound rule",
+        "explanation": "Security groups are stateful: return traffic for an allowed inbound connection is permitted automatically, whatever the outbound rules say."
+      },
+      {
+        "text": "The connection works; security groups track connections, so replies to allowed inbound traffic are permitted",
+        "explanation": "Correct under the stated tracking and other-control assumptions. Allowed response traffic does not need a separate outbound security-group rule."
+      },
+      {
+        "text": "The connection works only if the subnet's NACL allows it, because security groups only filter inbound",
+        "explanation": "Security groups filter both directions. The NACL may also need to allow the traffic, but that is a separate layer."
+      },
+      {
+        "text": "It is impossible: AWS requires at least one outbound rule",
+        "explanation": "You can remove all outbound rules; the default group simply comes with an allow-all outbound rule."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The inbound SYN is allowed and tracked. Responses associated with that tracked connection are permitted by security-group state despite the lack of an outbound allow rule. Unrelated initiated outbound traffic is a separate case, and response allowance does not bypass NACLs, routing or other filters.",
+    "link": {
+      "title": "Control traffic with security groups — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "For an HTTPS server on TCP 443, a custom subnet NACL allows inbound destination port 443 and outbound destination port 443, denying everything else. A client uses source port 51234. Routing and other filters are correct. Why does this connection fail?",
+    "options": [
+      {
+        "text": "NACLs need rule 100 to be rule 1",
+        "explanation": "Rule numbers only matter relative to each other; with one rule each way, numbering is not the problem."
+      },
+      {
+        "text": "The NACL is stateless, and the server's replies go to the client's ephemeral port (e.g. 51234), not 443, so the outbound rule does not match them",
+        "explanation": "Correct. Allow the required client return-port range in the outbound NACL, scoped appropriately. Ephemeral-port ranges depend on the clients and NAT path."
+      },
+      {
+        "text": "Security groups and NACLs cannot both be used on the same traffic",
+        "explanation": "They are designed to be layered: traffic must pass both."
+      },
+      {
+        "text": "TLS needs UDP 443 as well",
+        "explanation": "This question specifies HTTPS over TCP. HTTP/3 uses QUIC over UDP, but applications do not all guarantee a TCP fallback."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Client → server: source `198.51.100.7:51234`, destination `server:443`. Inbound rule allows destination port 443. ✓\n2. Server → client: source `server:443`, destination `198.51.100.7:51234`.\n3. The outbound rule allows destination port **443**. The reply's destination port is **51234**. No match → denied by the final rule.\n4. A NACL has no connection tracking, so it cannot know this is a reply.\n5. Fix: an outbound allow covering the required client return ports and destinations; 1024–65535 is a broad commonly used range, not every system’s exact ephemeral range. The security group, being stateful, never needed this.",
+    "link": {
+      "title": "Network ACLs — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "VPC A (10.1.0.0/16) is peered with VPC B (10.2.0.0/16), and B is peered with VPC C (10.3.0.0/16). Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Instances in A cannot reach C through B, because VPC peering is not transitive",
+        "explanation": "Correct. Traffic over a peering must start or end in one of the two peered VPCs."
+      },
+      {
+        "text": "To connect A and C, add an A–C peering or attach all three to a Transit Gateway",
+        "explanation": "Correct as a connectivity design, with the necessary routes, attachments and filters. Creating a peering or Transit Gateway attachment alone does not guarantee connectivity."
+      },
+      {
+        "text": "Creating a peering automatically adds the routes, so no route-table changes are needed",
+        "explanation": "You must add routes to each side's route tables pointing the peer's CIDR at the peering connection, and allow the traffic in security groups."
+      },
+      {
+        "text": "If C had used 10.1.0.0/16, an A–C peering would be impossible",
+        "explanation": "Correct. Peering requires non-overlapping CIDR blocks, because routes could not tell the two ranges apart."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Peering is a point-to-point relationship. B will not forward A's packets on to C.\n2. Options for A ↔ C: a third peering (fine for a few VPCs), or an appropriately routed Transit Gateway hub. Costs, limits and topology determine the choice. A full mesh of peerings grows quickly:\n\n```formula\nP = (n(n − 1)) / 2\nP_3 = 3 × 2 / 2 = 3\nP_20 = 20 × 19 / 2 = 190\nwhere\nP: the number of peerings needed to connect every pair of n VPCs directly\nn: the number of VPCs\nP_3: the peerings for 3 VPCs\nP_20: the peerings for 20 VPCs\nIn words: each VPC needs a link to every other one, and dividing by 2 avoids counting each link twice; a hub needs only n attachments.\n```\n\n3. Peering needs explicit routes on both sides plus security-group rules.\n4. Overlapping CIDRs block peering entirely, which is why central IP allocation matters from day one.",
+    "link": {
+      "title": "VPC peering — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-peering.html"
+    }
+  },
+  {
+    "id": "wm-sdn-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A subnet NACL has these inbound rules:\n\n```\nrule  proto port src             action\n100   tcp   22   0.0.0.0/0       ALLOW\n110   tcp   22   203.0.113.0/24  DENY\n*     all   all  0.0.0.0/0       DENY\n```\n\nFor an inbound TCP SYN from 203.0.113.9 to destination port 22, what verdict does this NACL alone produce?",
+    "options": [
+      {
+        "text": "Denied, because rule 110 is more specific",
+        "explanation": "NACLs do not use specificity: they evaluate rules in ascending number order and stop at the first match."
+      },
+      {
+        "text": "Allowed, because rule 100 matches first and evaluation stops there",
+        "explanation": "Correct. To block that range, give the DENY a lower number than the ALLOW (e.g. 90)."
+      },
+      {
+        "text": "Denied, because DENY rules always override ALLOW rules",
+        "explanation": "That is how some firewalls behave, but not NACLs; order alone decides."
+      },
+      {
+        "text": "Allowed only if the security group also has a DENY rule",
+        "explanation": "Security groups have no DENY rules at all; they are allow-only."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. NACL evaluation: sort rules by number, test each, apply the **first** that matches, stop.\n2. Rule 100: TCP, port 22, source in 0.0.0.0/0 → matches 203.0.113.9 → **ALLOW**.\n3. Rule 110 is never reached.\n4. Fix:\n\n```\n90   tcp 22 203.0.113.0/24 DENY\n100  tcp 22 0.0.0.0/0      ALLOW\n```\n\n5. Better still, do not expose SSH to 0.0.0.0/0 at all: use a security group allowing only a bastion or use Session Manager.\n\nAn ALLOW verdict from this one NACL does not establish that the end-to-end connection succeeds; routes, security groups, the host and return traffic still matter.",
+    "link": {
+      "title": "Network ACLs — AWS documentation",
+      "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html"
+    }
+  }
+]

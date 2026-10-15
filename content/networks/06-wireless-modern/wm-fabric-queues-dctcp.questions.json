@@ -1,0 +1,62 @@
+[
+  {
+    "id": "wm-datacentre-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A query fans out to 200 shards, each replying with 20,000 bytes. A capture shows a concentrated reply burst, destination egress queue drops, and recovery of some replies only after an approximately 200 ms RTO. Which mechanism explains this measured trace?",
+    "options": [
+      {
+        "text": "The spines are oversubscribed",
+        "explanation": "Upstream oversubscription can matter in other cases, but the supplied trace identifies drops at the destination egress queue."
+      },
+      {
+        "text": "Incast overwhelms the destination egress queue, and the affected flows in this trace recover through retransmission timeout",
+        "explanation": "Correct. The trace supplies the queue-drop and RTO evidence. Not every incast episode drops packets or waits for a fixed Linux 200 ms timer."
+      },
+      {
+        "text": "DNS lookups for each shard",
+        "explanation": "The supplied evidence identifies post-query reply drops and retransmission recovery; no DNS delay is needed to explain this trace."
+      },
+      {
+        "text": "ECMP reordering across spines",
+        "explanation": "ECMP reordering is possible under some conditions, but the given evidence directly establishes queue drops and timeout recovery."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Size the burst and the time the destination port needs to send it:\n\n```formula\nD = 200 × 20,000 B = 4,000,000 B\nt = (8D) / R\nt = 32,000,000 bit / 25 Gbit/s\nt = 0.00128 s = 1.28 ms\nwhere\nD: the total reply data, in bytes (B)\nB: byte, 8 bits\nt: the serialisation time: how long the port takes to put all the bits on the wire, ignoring overhead, in seconds (s)\nR: the destination port's rate, 25 Gbit/s = 25 × 10^9 bits per second\nbit: one binary digit\nGbit/s: gigabits per second\nms: millisecond, one thousandth of a second\ns: second\nIn words: if all 200 replies arrive within much less than 1.28 ms, most of 4 MB has to wait in the switch buffer.\n```\n\nWhether a particular burst overflows depends on arrival timing and available buffer; here the capture establishes that it did. RACK/TLP or fast recovery could avoid an RTO in other traces. Consider concurrency control, pacing and suitable ECN/AQM configuration; do not blindly lower retransmission timers.",
+    "link": {
+      "title": "RFC 3168: The Addition of ECN to IP",
+      "url": "https://www.rfc-editor.org/rfc/rfc3168"
+    }
+  },
+  {
+    "id": "wm-datacentre-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An uplink averages 25% utilisation over five minutes and records egress queue drops. Fine-grained telemetry shows short periods when aggregate arrivals exceed the port’s service rate. What explains the coexistence of low average use and drops?",
+    "options": [
+      {
+        "text": "The graph must be wrong: drops cannot happen at 25% utilisation",
+        "explanation": "Averages over minutes hide millisecond-scale behaviour. Drops at low average utilisation are a classic data-centre symptom."
+      },
+      {
+        "text": "Bursts of excess arrivals fill the available queue even though quieter periods keep the long-term average low",
+        "explanation": "Correct. Queue growth depends on arrivals minus service during the burst, not the five-minute mean. Buffer allocation and competing traffic also matter."
+      },
+      {
+        "text": "A faulty optic causing CRC errors",
+        "explanation": "Physical errors appear as input/CRC error counters on the receiving side, not as output (queue) drops."
+      },
+      {
+        "text": "Spanning Tree is blocking the port",
+        "explanation": "STP blocking does not explain the measured excess-arrival queue growth. Non-forwarding STP ports can still exchange control traffic, so “no traffic at all” would be inaccurate."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Queue growth depends on how much faster traffic arrives than the port can send it, for how long:\n\n```formula\nQ = ((R_in − R_out)t) / 8\nQ = 20 Gbit/s × 0.001 s / 8\nQ = 2,500,000 B = 2.5 MB\nwhere\nQ: the backlog that builds up, in bytes (B)\nR_in: the total arrival rate during the burst, in gigabits per second (Gbit/s)\nR_out: the port's service (sending) rate; here arrivals exceed it by 20 Gbit/s\nt: the length of the burst, 1 ms = 0.001 seconds (s)\nB: byte, 8 bits; dividing by 8 turns bits into bytes\nMB: megabyte, 10^6 bytes\nGbit/s: gigabits per second\ns: second\nIn words: a 1 ms burst 20 Gbit/s over the line rate needs 2.5 MB of buffer, invisible in a five-minute average.\n```\n\nA smaller available queue can overflow despite low long-term utilisation. The supplied fine-grained evidence supports the burst explanation; a generic output-drop counter alone could also include other platform-specific causes. Investigate queue allocation, shaping, pacing and congestion feedback.",
+    "link": {
+      "title": "Introducing data center fabric — Engineering at Meta",
+      "url": "https://engineering.fb.com/2014/11/14/production-engineering/introducing-data-center-fabric-the-next-generation-facebook-data-center-network/"
+    }
+  }
+]

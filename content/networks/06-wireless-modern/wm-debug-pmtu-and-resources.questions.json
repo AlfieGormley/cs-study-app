@@ -1,0 +1,65 @@
+[
+  {
+    "id": "wm-debugging-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After the office moved to a new site-to-site VPN, SSH to a remote server logs in fine, but `cat` of a large log file freezes. Web pages with small responses work; large downloads stall. Which listed test directly probes the suspected size-dependent path behaviour?",
+    "options": [
+      {
+        "text": "`dig` the server's hostname from the office",
+        "explanation": "A DNS query tests name resolution, not the specified packet-size behaviour. A successful login does not prove every DNS answer or address-family path is correct."
+      },
+      {
+        "text": "On Linux, compare ping -4 -M do -s 1472 server with smaller sizes, alongside captures and ICMP-policy checks",
+        "explanation": "Correct. This gathers PMTU-related evidence. Failure alone can also reflect ICMP filtering or local PMTU state; it does not prove blocked fragmentation-needed messages."
+      },
+      {
+        "text": "`traceroute server` to look for a slow hop",
+        "explanation": "Default small traceroute probes may miss a size-dependent issue. Configurable packet sizes and PMTU-oriented tools can offer additional evidence."
+      },
+      {
+        "text": "Restart the SSH server",
+        "explanation": "Restarting is not a direct measurement of size-dependent path behaviour and may destroy useful diagnostic state. First test the path hypothesis."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Small-success/large-failure after adding encapsulation supports an MTU hypothesis. Under IPv4 without options, the ping payload plus headers gives the packet size:\n\n```formula\nL_IP = L_data + H_ICMP + H_IP\nL_IP = 1,472 B + 8 B + 20 B = 1,500 B\nL_IP = 1,372 B + 8 B + 20 B = 1,400 B\nwhere\nL_IP: the IPv4 packet size, in bytes (B)\nL_data: the ICMP echo payload size set with ping's -s option\nH_ICMP: the ICMP echo header, 8 B\nH_IP: the IPv4 header without options, 20 B\nB: byte\nIn words: a 1,472-byte payload makes a 1,500-byte IPv4 packet, while 1,372 makes 1,400 bytes. Different outcomes support further size-dependent tests, without proving the path MTU by themselves.\n```\n\nEstablish the effective MTU, direction and missing error feedback with captures. Correct ICMP/MTU handling or a justified TCP MSS setting can help; a fixed MSS value is not a universal VPN repair.",
+    "link": {
+      "title": "RFC 2923: TCP Problems with Path MTU Discovery",
+      "url": "https://www.rfc-editor.org/rfc/rfc2923"
+    }
+  },
+  {
+    "id": "wm-debugging-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An API gateway fails to allocate resources for new outbound TCP connections while established traffic continues. OS diagnostics point to new-flow resource pressure rather than a path-wide outage. Which are direct resource-exhaustion candidates? Select all that apply.",
+    "options": [
+      {
+        "text": "The connection-tracking (conntrack) or NAT table on the host or a NAT gateway is full",
+        "explanation": "Correct as a candidate. New tracked flows require capacity. Linux conntrack may emit a rate-limited table-full message; a remote NAT gateway has its own telemetry, and logging is not guaranteed for every failure."
+      },
+      {
+        "text": "Ephemeral port exhaustion: many short connections to the same backend address leave sockets in TIME_WAIT, so no source ports are free",
+        "explanation": "Correct as a candidate. Automatic source-port allocation and reusable tuples are finite; TIME_WAIT and active connections can consume them. Pooling or reuse may reduce pressure, while actual remedies depend on the measured allocation policy and limit."
+      },
+      {
+        "text": "An MTU black hole on the path to the backends",
+        "explanation": "A PMTU problem is a path/packet-size issue, not direct exhaustion of the new-flow allocation resources specified here. It can affect setup or later protocol data in other circumstances."
+      },
+      {
+        "text": "Long RTT to the backends",
+        "explanation": "RTT alone is not an exhausted allocation resource, though long connection lifetimes and short application deadlines can contribute to pressure or failures."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Inspect conntrack/NAT capacity, socket/descriptor limits and usable source tuples. A simplified single-destination model, with no reuse and negligible active lifetime, holds each used port for the TIME_WAIT period:\n\n```formula\nr_max = N_ports / T_wait\nr_max = 28,232 / 60 s ≈ 470.5 /s\nwhere\nr_max: the sustainable rate of new connections to one destination, in connections per second\nN_ports: the number of ephemeral (temporary source) ports available, 28,232 here\nT_wait: how long each closed connection holds its port in TIME_WAIT, 60 seconds (s)\ns: second; /s means per second\n≈: approximately equal to\nIn words: if each port is locked for 60 s after use, 28,232 ports allow only about 470 new connections every second.\n```\n\nThis is not a universal Linux limit: configuration, tuple reuse, source addresses and active connection lifetime alter it. Use errors and counters to establish the actual limit.",
+    "link": {
+      "title": "The USE Method — Brendan Gregg",
+      "url": "https://www.brendangregg.com/usemethod.html"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "wm-sdn-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "VXLAN carries untagged inner Ethernet with no inner FCS over IPv4 without options. UDP and VXLAN headers are 8 bytes each. The underlay IP MTU is fixed at 1,500 bytes, with no other encapsulation. What is the largest inner IP packet that fits without fragmentation?",
+    "options": [
+      {
+        "text": "1,500 bytes",
+        "explanation": "The inner IP packet plus 50 bytes of headers must fit the underlay IP MTU. A 1,500-byte inner IP packet needs 1,550 outer IP bytes; the outer Ethernet header is additional."
+      },
+      {
+        "text": "1,450 bytes",
+        "explanation": "Correct. The physical MTU limits the outer IP packet, which contains outer IPv4 (20) + UDP (8) + VXLAN (8) + the inner Ethernet header (14) + the inner IP packet. 50 bytes of headers plus the inner packet must fit in 1,500 bytes, so the inner packet can be at most 1,450 bytes."
+      },
+      {
+        "text": "1,472 bytes",
+        "explanation": "1,472 is the largest ICMP echo payload in a 1,500-byte packet (1,500 − 20 − 8). It is unrelated to VXLAN overhead."
+      },
+      {
+        "text": "1,492 bytes",
+        "explanation": "1,492 is the usual PPPoE MTU (8 bytes of PPPoE overhead), not VXLAN."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The physical MTU limits the **outer IP packet**, which must hold every header plus the inner IP packet:\n\n```formula\nH = 20 + 8 + 8 + 14 = 50 B\nH + X ≤ MTU_u\n50 + X ≤ 1,500, so X ≤ 1,450 B\nwhere\nH: the overhead inside the outer IP packet, in bytes (B): outer IPv4 (20), outer UDP (8), VXLAN (8) and inner Ethernet (14) headers\nX: the size of the inner IP packet, in bytes\nMTU_u: the underlay IP MTU, 1,500 B\n≤: less than or equal to\nB: byte\nIn words: 50 bytes of encapsulation leave at most 1,450 bytes for the tenant's IP packet.\n```\n\n(The 14-byte outer Ethernet header is not counted in the MTU, but the inner Ethernet header is, which is why the total overhead still comes to 50.)\n\nFor this fixed underlay use an inner MTU no larger than 1,450. In a different deployment an underlay IP MTU of at least 1,550 would accommodate 1,500 inner bytes under these assumptions; 9,000 is not required. Do not infer a cloud provider’s own encapsulation from its advertised instance MTU.",
+    "link": {
+      "title": "RFC 7348: VXLAN",
+      "url": "https://www.rfc-editor.org/rfc/rfc7348"
+    }
+  },
+  {
+    "id": "wm-sdn-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "VXLAN encapsulates every tenant packet in an outer UDP header. RFC 7348 recommends setting the outer UDP **source port** from a hash of the inner packet's headers. Why?",
+    "options": [
+      {
+        "text": "To let the receiving host decrypt the inner packet",
+        "explanation": "VXLAN provides no encryption; the source port carries no key material."
+      },
+      {
+        "text": "So the physical fabric's ECMP, which hashes outer headers, spreads different tenant flows across different paths",
+        "explanation": "Correct. A flow-stable source-port hash gives an outer-header ECMP selector useful variation. Hash collisions and mapping changes still occur; perfect balance or ordering is not guaranteed."
+      },
+      {
+        "text": "Because UDP requires a unique source port per packet",
+        "explanation": "UDP has no such requirement; a fixed source port would be legal, just bad for load balancing."
+      },
+      {
+        "text": "To carry the 24-bit VNI",
+        "explanation": "The VNI is carried in the 8-byte VXLAN header, not the UDP port."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For an ECMP implementation hashing only the outer five-tuple, fixed tunnel IPs and UDP ports give the same key for all enclosed flows. A source port derived consistently from inner headers adds variation while retaining flow affinity under a stable mapping. Some hardware can inspect inner headers directly. VXLAN itself supplies no encryption, and the VNI is a separate 24-bit field.",
+    "link": {
+      "title": "RFC 7348: VXLAN",
+      "url": "https://www.rfc-editor.org/rfc/rfc7348"
+    }
+  }
+]

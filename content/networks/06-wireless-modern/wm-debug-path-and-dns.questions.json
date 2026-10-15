@@ -1,0 +1,62 @@
+[
+  {
+    "id": "wm-debugging-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How does `traceroute` discover the routers on a path?",
+    "options": [
+      {
+        "text": "It asks each router for its routing table",
+        "explanation": "Routers do not hand out routing tables to arbitrary hosts; traceroute uses an ICMP side effect."
+      },
+      {
+        "text": "It sends probes with TTL 1, 2, 3, ...; each router that decrements a probe's TTL to zero drops it and replies with ICMP Time Exceeded, revealing its address",
+        "explanation": "Correct as the basic technique. Reply suppression, filtering, tunnels and different probe paths can leave missing or ambiguous hops."
+      },
+      {
+        "text": "It records the route in an IP option that every router fills in",
+        "explanation": "IPv4 Record Route is a space-limited header option, distinct from traceroute’s increasing-TTL probes. A usual option can hold at most nine IPv4 addresses; traceroute does not depend on routers filling it."
+      },
+      {
+        "text": "It reads the path from DNS",
+        "explanation": "DNS maps names to addresses; it knows nothing about the routers between you and a host. Traceroute may *reverse-resolve* hop addresses for display, nothing more."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. TTL 1: the first router decrements to 0, drops the probe, and sends ICMP Time Exceeded. Now you know hop 1 and its RTT.\n2. TTL 2: the first router forwards; the second drops and replies. Hop 2.\n3. Continue until the destination answers (ICMP port unreachable for UDP probes, an echo reply for ICMP, or a SYN-ACK/RST for TCP).\n4. Usually three probes per hop, which is why you see three times per line, or `* * *` when a router does not reply.\n\nThe discovered interfaces need not form one immutable forward path, and displayed RTT includes the path each probe’s reply takes back. Routers need not respond to every probe.",
+    "link": {
+      "title": "Traceroute — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Traceroute"
+    }
+  },
+  {
+    "id": "wm-debugging-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`mtr` to a server shows:\n\n```\nhop  host          loss   avg\n 3   isp-agg-1     0.0%   9 ms\n 4   isp-core-7   38.0%  41 ms\n 5   ix-peer-2     0.0%  12 ms\n 6   dc-edge-1     0.0%  13 ms\n 7   server        0.0%  14 ms\n```\n\nWhat should you conclude about hop 4?",
+    "options": [
+      {
+        "text": "Hop 4 is dropping 38% of your traffic; complain to the ISP",
+        "explanation": "Missing intermediate replies do not directly measure the loss rate of traffic forwarded to the destination. Separate probes may also take different paths."
+      },
+      {
+        "text": "Intermediate reply handling is a plausible explanation; these samples do not establish 38% end-to-end forwarding loss",
+        "explanation": "Correct. Rate limits, reply processing and return paths can explain the pattern. Further measurements are needed before claiming the whole forwarding path is fault-free."
+      },
+      {
+        "text": "The path is asymmetric, so the server's 0% is unreliable",
+        "explanation": "The final samples show no observed loss for those probes, but finite sampling and differing probe/application paths limit the conclusion. Asymmetry alone does not invalidate every measurement."
+      },
+      {
+        "text": "Hop 4 is the bottleneck, as shown by its 41 ms latency",
+        "explanation": "These are different probe and reply-path samples. Hop 4’s reply RTT alone does not establish an equivalent forwarding delay or a bottleneck for application traffic."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Hop 4’s probes receive fewer/slower replies, while the displayed destination probes succeeded. That often points to intermediate response behaviour rather than persistent 38% forwarding loss. It is not proof of one cause: routing, timing and return paths can differ. Compare sustained end-to-end application tests and captures rather than declaring that only loss repeated at every later hop is real.",
+    "link": {
+      "title": "mtr on GitHub",
+      "url": "https://github.com/traviscross/mtr"
+    }
+  }
+]

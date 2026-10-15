@@ -1,0 +1,70 @@
+[
+  {
+    "id": "wm-debugging-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`curl -w` reports (in seconds, cumulative from start):\n\n```\ndns     0.010\nconnect 0.050\ntls     0.130\nttfb    0.180\ntotal   0.200\n```\n\nAssume one fresh direct TCP connection, no retries, proxies, address-racing delays or reuse, and negligible local overhead. What approximate RTT does the connect-minus-DNS interval suggest?",
+    "options": [
+      {
+        "text": "50 ms",
+        "explanation": "0.050 is the cumulative time at which the connection completed, including the 10 ms DNS lookup."
+      },
+      {
+        "text": "40 ms",
+        "explanation": "Correct. The TCP handshake takes about one RTT: 0.050 − 0.010 = 40 ms."
+      },
+      {
+        "text": "80 ms",
+        "explanation": "80 ms is the TLS phase (0.130 − 0.050), which here is about two round trips."
+      },
+      {
+        "text": "200 ms",
+        "explanation": "200 ms is the total request time, including DNS, TLS, server time and download."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "curl's timers are cumulative, so subtract the end of DNS from the end of the TCP connect:\n\n```formula\nT_tcp = t_connect − t_dns\nT_tcp = 0.050 s − 0.010 s = 0.040 s\nT_tcp = 40 ms ≈ RTT\nwhere\nT_tcp: the time spent on the TCP handshake, in seconds (s)\nt_connect: the cumulative time when the connection completed, 0.050 s\nt_dns: the cumulative time when the DNS lookup finished, 0.010 s\nRTT: round-trip time, which the handshake approximates under the stated idealisation\ns: second\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: the handshake took the 40 ms between the two timers, about one round trip.\n```\n\nUnder the supplied idealisation that approximates handshake RTT. The TLS phase is 80 ms, but timing alone does not establish TLS version. The subsequent 50 ms to first byte includes request/network/server effects; it does not measure server CPU time. Body reception lasts another 20 ms.",
+    "link": {
+      "title": "Write out (curl -w) — Everything curl",
+      "url": "https://everything.curl.dev/usingcurl/verbose/writeout.html"
+    }
+  },
+  {
+    "id": "wm-debugging-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "`curl -w` to a download endpoint reports (cumulative seconds):\n\n```\ndns     0.002\nconnect 0.150\ntls     0.452\nttfb    0.610\ntotal   3.610\n```\n\nAssume one new direct TCP/TLS connection, negligible local connect overhead and no proxy/retry/reuse. Which statements are justified? Select all that apply.",
+    "options": [
+      {
+        "text": "The RTT is about 148 ms",
+        "explanation": "Correct. The TCP connect takes about one RTT: 0.150 s − 0.002 s = 148 ms."
+      },
+      {
+        "text": "The measured TLS phase is 302 ms, roughly twice the ideal 148 ms connect-RTT estimate, but this does not identify TLS version",
+        "explanation": "Correct. Several protocol, processing and network effects can affect handshake duration."
+      },
+      {
+        "text": "The server is slow: it spent over 600 ms generating the response",
+        "explanation": "TTFB is cumulative and includes earlier setup. The 158 ms after TLS still contains network/request/server effects, so it does not isolate server execution time."
+      },
+      {
+        "text": "Most of the time is spent transferring the body (3 s), so look at response size and throughput",
+        "explanation": "Correct. The interval after first byte is 3 seconds. Check payload size, streaming/server pauses, path throughput and endpoint limits."
+      },
+      {
+        "text": "DNS is the bottleneck",
+        "explanation": "DNS took 2 ms."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "curl's timers are cumulative, so each phase is the difference between neighbouring timers:\n\n```formula\nT_phase = t_end − t_start\nT_tcp = 0.150 − 0.002 = 0.148 s\nT_tls = 0.452 − 0.150 = 0.302 s\nT_wait = 0.610 − 0.452 = 0.158 s\nT_body = 3.610 − 0.610 = 3.000 s\nwhere\nT_phase: the duration of one phase, in seconds (s)\nt_end: the cumulative time when the phase ended\nt_start: the cumulative time when it began\nT_tcp: the TCP handshake, about one RTT\nT_tls: the TLS handshake\nT_wait: from the end of TLS to the first response byte\nT_body: from the first byte to the last, the body transfer\nRTT: round-trip time\ns: second\nIn words: DNS took 2 ms, connect 148 ms, TLS 302 ms, waiting 158 ms and the body a full 3 seconds.\n```\n\nUnder the supplied assumptions connect approximates RTT. Neither TLS version, geographic distance nor server processing time follows uniquely from these numbers. The body interval dominates this sample, but server streaming delays can contribute as well as network throughput.",
+    "link": {
+      "title": "Write out (curl -w) — Everything curl",
+      "url": "https://everything.curl.dev/usingcurl/verbose/writeout.html"
+    }
+  }
+]

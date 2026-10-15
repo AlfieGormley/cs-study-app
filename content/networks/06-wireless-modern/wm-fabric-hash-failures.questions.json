@@ -1,0 +1,95 @@
+[
+  {
+    "id": "wm-datacentre-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two large backup flows leave the same leaf, which has 4 equal-cost uplinks and chooses by hashing. Assuming the hash spreads flows uniformly and independently, what is the chance both flows land on the same uplink?",
+    "options": [
+      {
+        "text": "0%: ECMP never puts two flows on one path while others are free",
+        "explanation": "The stipulated uniform independent hash does not account for current link load. Two flows can choose the same path."
+      },
+      {
+        "text": "1/16",
+        "explanation": "1/16 is the chance that both land on one *specific* uplink. Any of the four will do for a collision."
+      },
+      {
+        "text": "1/4",
+        "explanation": "Correct. Whatever uplink the first flow picks, the second picks the same one with probability 1/4."
+      },
+      {
+        "text": "1/2",
+        "explanation": "With 4 uplinks, the second flow has 4 equally likely choices, only one of which collides."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Flow 1 lands somewhere; call it uplink X.\n2. Flow 2 independently picks one of 4 uplinks, each equally likely.\n\n```formula\nP_same = 1 / N = 1 / 4\nP_same = 4 / (4 × 4) = 4 / 16 = 1 / 4\nwhere\nP_same: the probability that both flows choose the same uplink\nN: the number of equal-cost uplinks, 4\nIn words: whatever uplink flow 1 takes, flow 2 matches it one time in four; equivalently, 4 of the 16 equally likely pairs of choices put both flows together.\n```\n\nWhen they collide, both compete for one link, potentially sharing it unevenly, while three of the four links carry neither backup flow. With many elephants the chance of perfect balance collapses:\n\n```formula\nP_even = n! / n^n\nP_even = 40,320 / 16,777,216 ≈ 0.24%\nwhere\nP_even: the probability that n flows on n paths land exactly one per path\nn: the number of flows and of paths, 8 here\nn!: n factorial, 1 × 2 × … × n; 8! = 40,320\nn^n: n to the power n; 8^8 = 16,777,216 possible combinations of choices\n≈: approximately equal to\nIn words: eight flows spread perfectly over eight paths only about once in 400 tries.\n```",
+    "link": {
+      "title": "Equal-cost multi-path routing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing"
+    }
+  },
+  {
+    "id": "wm-datacentre-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Uniform hash values select next-hop labels [0,1,2,3] by taking each hash's remainder after dividing by 4. Link 3 fails; the surviving ordered labels [0,1,2] then use the remainder after dividing by 3. What fraction of flows previously on healthy links change physical uplink?",
+    "options": [
+      {
+        "text": "None; only flows on the failed link move",
+        "explanation": "An appropriately configured resilient-hashing implementation can preserve healthy assignments on removal. Simple modulo hashing does not; resilient implementations also have bucket and rebalancing policies."
+      },
+      {
+        "text": "About two-thirds of them",
+        "explanation": "Correct. Only about 25% of all flows keep their uplink. The flows that were on the healthy links are 75% of the total, so about two-thirds of those move."
+      },
+      {
+        "text": "About one-quarter of them",
+        "explanation": "A quarter is the share of all flows that *keep* their uplink, not the share of healthy-link flows that move."
+      },
+      {
+        "text": "All of them",
+        "explanation": "Some flows happen to get the same index from division by four and division by three, so not all move."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Before the failure a flow's uplink is its hash's remainder after dividing by 4; afterwards, the remainder after dividing by 3. Check one full cycle of hash values (12 is the lowest common multiple of 4 and 3, so the pattern repeats every 12):\n\n```formula\ni_old = h mod 4\ni_new = h mod 3\nf_keep = 3 / 12 = 1/4\nf_move = (9 − 3) / 9 = 6/9 = 2/3\nwhere\ni_old: the uplink index before the failure (0 to 3)\ni_new: the uplink index after the failure (0 to 2)\nh: the flow's hash value, a whole number\nmod: modulo, the remainder after whole-number division; 7 mod 4 = 3\nf_keep: the fraction of all flows that keep the same uplink\nf_move: the fraction of healthy-link flows that move: 9 of every 12 flows were on healthy links, and only 3 of those stay\nIn words: only hash values 0, 1 and 2 in each block of 12 give the same index both ways, so two thirds of the flows that were on healthy links get moved.\n```\n\n```\nh     0 1 2 3 4 5 6 7 8 9 10 11\nold   0 1 2 3 0 1 2 3 0 1 2  3\nnew   0 1 2 0 1 2 0 1 2 0 1  2\nsame  y y y . . . . . . . .  .\n```\n\n1. Only the first three hash values (zero through two) keep the same uplink: 3 out of 12 = 25% of flows.\n2. Flows on the failed uplink (old index 3) are 3 of the 12 and must move.\n3. Healthy-link flows: 9 of 12. Of those, 3 stay and 6 move: two-thirds.\n4. Moved flows can see reordering, and stateful middleboxes may lose connection state unless it is shared or reconstructable. Resilient hashing can minimise movement, with exact behaviour depending on bucket and rebalancing policy.",
+    "link": {
+      "title": "RFC 2992: Analysis of an Equal-Cost Multi-Path Algorithm",
+      "url": "https://www.rfc-editor.org/rfc/rfc2992"
+    }
+  },
+  {
+    "id": "wm-datacentre-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Eight stateful L4 load balancers advertise one VIP behind simple modulo ECMP. A member failure remaps many healthy flows to members lacking their state. Which changes can address this mechanism? Select all that apply.",
+    "options": [
+      {
+        "text": "Enable resilient hashing on the switches, so only flows that were on the failed next hop are remapped",
+        "explanation": "Correct as a potential mitigation: an appropriate resilient-hash policy preserves healthy assignments on member removal. Check the actual implementation and rebalancing behaviour."
+      },
+      {
+        "text": "Use a design with consistent backend selection plus the shared or reconstructable connection/NAT state needed to handle a flow on another member",
+        "explanation": "Correct. Consistent hashing alone is insufficient for arbitrary stateful proxies, SNAT allocations or changing backend sets. All members need compatible configuration and state handling."
+      },
+      {
+        "text": "Switch the leaf to per-packet round-robin across the load balancers",
+        "explanation": "Spraying packets across members that lack compatible connection state can disrupt handling, rather than preserve flow affinity. The outcome depends on which members receive packets and what state is available."
+      },
+      {
+        "text": "Reduce to two larger load balancers",
+        "explanation": "With two equal members, one failure removes half the nominal capacity and forces its flows elsewhere. The remaining member still lacks the state held by the failed member; reducing member count does not solve that issue."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "With uniform hashes and stable member ordering, simple modulo remapping from 8 members to 7 keeps very few assignments:\n\n```formula\nf_keep = 1 / N = 1 / 8\nf_healthy = 1 − 1/8 = 7/8\nf_move = (7/8 − 1/8) / (7/8) = 6/7\nwhere\nf_keep: the fraction of all flows whose member is unchanged when each flow's hash mod 8 becomes hash mod 7 (mod: the remainder after whole-number division)\nN: the number of members before the failure, 8\nf_healthy: the fraction of flows that were on surviving members\nf_move: the fraction of those healthy-member flows that are moved anyway\nIn words: only 1 flow in 8 keeps its member, so about 6 of every 7 flows on healthy members land on a member without their state.\n```\n\nResilient network hashing reduces unnecessary movement. A load-balancer design can also make moved traffic recoverable through consistent backend selection and the required state mechanism. Maglev combines hashing and connection tracking; it is not proof that hashing alone fixes every stateful load balancer.",
+    "link": {
+      "title": "Equal-cost multi-path routing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Equal-cost_multi-path_routing"
+    }
+  }
+]

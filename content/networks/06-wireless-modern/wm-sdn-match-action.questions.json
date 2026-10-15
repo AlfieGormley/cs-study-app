@@ -1,0 +1,62 @@
+[
+  {
+    "id": "wm-sdn-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A switch has this OpenFlow table:\n\n```\nprio match               action\n50   ip dst=10.1.0.0/16  out:1\n40   tcp dp=80           out:4\n10   ip dst=10.1.2.3     out:2\n0    (anything)          drop\n```\n\nA TCP packet to 10.1.2.3 port 80 arrives. Where does it go?",
+    "options": [
+      {
+        "text": "Port 2, because 10.1.2.3 is the most specific match",
+        "explanation": "OpenFlow does not use longest-prefix match automatically: it uses **priority**. The /32 entry has priority 10, the lowest that matches apart from the catch-all."
+      },
+      {
+        "text": "Port 4, because it is HTTP traffic",
+        "explanation": "The port-80 entry matches, but at priority 40, which is below the /16 entry at 50."
+      },
+      {
+        "text": "Port 1",
+        "explanation": "Correct. Entries at 50, 40, 10 and 0 all match, and the highest priority (50) wins."
+      },
+      {
+        "text": "Dropped by the table-miss entry",
+        "explanation": "The table-miss entry only applies if nothing of higher priority matches."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Check every entry against the packet (TCP, dst 10.1.2.3, port 80):\n   - 50: 10.1.2.3 is inside 10.1.0.0/16 → match\n   - 40: TCP port 80 → match\n   - 10: dst 10.1.2.3 → match\n   - 0: matches everything\n2. Pick the highest priority: 50.\n3. Action: output to port 1.\n\nIn this single priority table, a controller can implement longest-prefix behaviour by giving more-specific prefixes higher priorities. The supplied priorities instead let the /16 shadow the lower-priority host rule; the question does not establish whether that policy was intentional.",
+    "link": {
+      "title": "OpenFlow — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/OpenFlow"
+    }
+  },
+  {
+    "id": "wm-sdn-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reactive OpenFlow deployment sends new-flow misses to its controller. During a traffic surge, measured packet-in queues fill and flow-installation delay rises, while packets covered by existing rules continue. What explains the new-flow delay?",
+    "options": [
+      {
+        "text": "The switches' data planes are too slow for the extra traffic",
+        "explanation": "Existing-rule forwarding continues while telemetry identifies packet-in queuing and flow-installation delay. This points to the reactive control path; it does not certify all forwarding hardware capacity."
+      },
+      {
+        "text": "New-flow forwarding depends on the overloaded controller path, so first packets can queue or be dropped and may need retransmission",
+        "explanation": "Correct. The measured controller path is overloaded. Preinstalled aggregate rules can remove this dependency for covered traffic, subject to policy and table capacity."
+      },
+      {
+        "text": "OpenFlow does not support TCP",
+        "explanation": "OpenFlow supports TCP-related match fields, with exact field availability depending on version and extensions; TCP flags are not universally available in every base version."
+      },
+      {
+        "text": "The flow entries' hard timeout expired for all users at once",
+        "explanation": "Expired entries would affect existing flows too, and these are fine."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A miss notification, controller decision, flow modification and forwarding of the first packet create a control-path dependency. Here telemetry establishes saturation. Dropped setup packets may require retransmission, whose timers are implementation/configuration-dependent. Preinstalling suitable rules can reduce misses, while overload protection and capacity planning remain necessary.",
+    "link": {
+      "title": "OpenFlow — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/OpenFlow"
+    }
+  }
+]

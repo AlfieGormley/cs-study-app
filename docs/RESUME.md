@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 61/76 modules; 390 originals → 2063 short lessons with 4565 focused questions.
+- Independently verified: 62/76 modules; 396 originals → 2103 short lessons with 4640 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `1d776e3`, version `4b14630cd7bd`, 2026 short lessons/4491 focused questions
-  across 60 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
-- Current generated candidate: `65eb759681aa`, 61 modules/2063 units/4565 questions.
+- Latest confirmed live release: `025f8e5`, version `65eb759681aa`, 2063 short lessons/4565 focused questions
+  across 61 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Current generated candidate: `9cbf5b012831`, 62 modules/2103 units/4640 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -25,9 +25,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- theory/th-discrete: verifying; /root/theory_discrete_short_verify.
-- theory/th-probability: authoring; /root/theory_probability_short_author.
-- theory/th-automata: authoring; /root/theory_automata_short_author.
+- theory/th-probability: verifying; /root/theory_probability_short_verify.
+- theory/th-automata: verifying; /root/theory_automata_short_verify.
+- theory/th-computability: authoring; /root/theory_computability_short_author.
 
 Verification and integration:
 

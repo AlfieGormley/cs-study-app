@@ -87,6 +87,13 @@ full expected `definition` and actual `rendered` HTML. Keep summary counts and p
 in a separate field. The integration checker rejects malformed or empty probe arrays; it must not
 silently skip a module because its report uses a different schema.
 
+By default, `id` is the exact lookup for the whole `phrase`. A contextual phrase can contain a linked
+word without being a dictionary alias itself, or contain several linked terms. Mark those probes
+`lookup: "rendered-context"`; record one row per target with its unchanged full `definition` and
+complete `rendered` HTML. Integration then checks that exact target ID occurs in the actual rendered
+context, that its full compiled definition matches, and that the entire HTML matches. Exact alias
+probes retain their whole-phrase lookup checks; never replace one with a context probe to hide drift.
+
 Formula lint is a heuristic, so also inspect the prose, tables and diagrams. Symbolic indexing ranges
 such as “vertices 0 to n − 1” need a card or equivalent natural-language wording. Define coordinates
 and other variables locally in each short unit. Inline code formatting is an exception only for real

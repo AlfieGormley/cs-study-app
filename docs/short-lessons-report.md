@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 61/76. Updated 2026-10-15.
+Verified modules: 62/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -68,6 +68,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | software-engineering/Software Architecture at the Code Level | 6 | 25 | 67 | 10 | 171 | 1143 | 24 |
 | software-engineering/Engineering Practices | 6 | 24 | 66 | 26 | 235 | 483 | 62 |
 | theory/Logic & Proofs | 6 | 37 | 74 | 171 | 277 | 388 | 31 |
+| theory/Discrete Structures | 6 | 40 | 75 | 229 | 342 | 686 | 64 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4685,6 +4686,27 @@ Remaining gaps:
 Low-confidence areas:
 
 - **medium** — logp-invariants-hoare: Collatz termination for every positive integer remains an open problem; this status is time-sensitive.. Checked against freshly fetched Terence Tao primary exposition and a current literature search. No accepted full proof located; future mathematical developments require rechecking the status.
+
+## theory: Discrete Structures
+
+[Independent verification record](../content/theory/02-discrete-structures/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Corrected inherited directed Euler-circuit hypotheses, randomised-algorithm definition, unsigned narrow-integer promotion, public-key encryption guess-testing scope, Catalan tree count and precise empty/domain cases.
+- Defined all standalone card quantities, including loop degree, RSA modulus/exponent, Euclid stopping case and coefficient-count domains; stated three-peg Hanoi rules.
+- Qualified historical/format claims using independently fetched primary evidence; replaced the universal JPEG visual-quality implication with an image/encoder-dependent example.
+- Removed incorrect real dictionary senses for graph degree sum, mathematical domain/codomain, intermediate generated states and order-theory lower bounds. Reviewed every complete glossary popup context and corrected additional parity, waveform, neighbour, Java/C int, negative-edge and key-wrapping captures.
+- Preserved all original keys and option order; repaired wording at existing answer indices. No artificial prompt carveouts.
+
+Remaining gaps:
+
+- Full proofs of Cayley, Dirac, Kuratowski, the four colour theorem and the master theorem remain referenced rather than developed, matching the inherited scope.
+- No reproducible RSA latency benchmark or universal attack-time estimate is asserted. Gidney2025 is explicitly a modelled resource estimate under specified assumptions.
+
+Low-confidence areas:
+
+None newly recorded. Inherited glossary qualifications remain in the verification record.
 
 ## synth: Sound & Digital Audio
 

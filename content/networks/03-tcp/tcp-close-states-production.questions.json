@@ -1,0 +1,92 @@
+[
+  {
+    "id": "tcp-connections-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Python service approaches its descriptor limit. Process-level inspection confirms thousands of its sockets remain in CLOSE_WAIT long after their handlers have finished, with no intended half-close work. What should be investigated first?",
+    "options": [
+      {
+        "text": "TIME_WAIT is lasting too long; lower the TIME_WAIT timeout",
+        "explanation": "The evidence concerns descriptors retained by this process in CLOSE_WAIT. Normal TIME_WAIT state after final descriptor closure does not retain those application descriptors."
+      },
+      {
+        "text": "The service doesn't close sockets after the peer closes, for example on an error path",
+        "explanation": "Correct. Completed handlers retaining these sockets suggest a lifecycle/ownership leak. CLOSE_WAIT alone can also be legitimate while an application finishes sending, but the prompt excludes that case."
+      },
+      {
+        "text": "A SYN flood is filling the SYN queue",
+        "explanation": "A SYN flood targets establishment resources; the observed sockets have progressed to peer-FIN processing and are retained by completed handlers."
+      },
+      {
+        "text": "The network is dropping the final ACKs of the handshake",
+        "explanation": "Missing establishment ACKs do not explain these already retained CLOSE_WAIT sockets. TCP has additional simultaneous-open paths, so the full state machine is richer than one ESTABLISHED-only rule."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A processed peer FIN leaves the local sending direction open in CLOSE_WAIT.\n2. This prompt confirms handlers have finished but their descriptors remain open. Audit ownership and cleanup paths.\n3. For example, this deliberately incomplete handler leaves an explicitly retained connection open:\n\n```python\ndef handle(pool):\n    conn = pool.get()\n    data = conn.recv(4096)\n    if not data:\n        # BUG: no close on this path.\n        return  # cleanup missing\n```\n\n4. Under the exercise contract, pool.get transfers cleanup responsibility while the pool retains a reference, so garbage collection does not close it. Actual pools may require return-to-pool instead of close: follow their API. Test cleanup on normal return and exceptions.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-connections-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A model proxy starts with all 28,232 ports in range 32768–60999 free on one source IP. It attempts 600 short connections/s to 10.0.0.5:8080 and performs each sequential active close. Assume negligible active duration, exactly 60 seconds of TIME_WAIT tuple occupancy, no early reuse, and no other limits. What happens?",
+    "options": [
+      {
+        "text": "Nothing; TIME_WAIT sockets don't use ports",
+        "explanation": "A TIME_WAIT entry still reserves its 5-tuple. With the destination fixed, that means it reserves the source port too."
+      },
+      {
+        "text": "The desired rate needs 36,000 occupied tuples, exceeding the 28,232 available; attempts eventually fail for lack of tuples",
+        "explanation": "Correct. Supporting 600 successful closes/s with 60 seconds of occupancy would require 36,000 tuples. They cannot all exist within this restricted port pool, so that rate cannot be sustained."
+      },
+      {
+        "text": "It runs out of file descriptors at 1,024 connections",
+        "explanation": "TIME_WAIT sockets have already been closed by the application and don't hold file descriptors. The limit hit here is ports."
+      },
+      {
+        "text": "The backend runs out of ports, because all connections arrive on 8080",
+        "explanation": "The backend uses one port for all of them; its connections differ by client port. And here the proxy closes first, so TIME_WAIT is on the proxy."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Four tuple fields are fixed; only source port varies.\n2. The restricted range contains 60999 − 32768 + 1 = 28,232 ports.\n3. The desired steady state would need more tuples than exist, and the pool runs out before any port is freed:\n\n```formula\nN = 60,999 − 32,768 + 1 = 28,232\nN_need = RT = 600 /s × 60 s = 36,000\nT_full = N / R = 28,232 / (600 /s)\nT_full ≈ 47.05 s\nwhere\nN: the number of source ports in the range\nN_need: the ports occupied at once in steady state\nR: the attempted connection rate, 600 per second (/s)\nT: how long each closed connection holds its tuple, 60 seconds (s)\nT_full: how long until every port is in TIME_WAIT\ns: seconds\n≈: approximately equal to\nIn words: 600 a second, each held for a minute, needs 36,000 ports but only 28,232 exist, so the pool is empty after about 47 seconds.\n```\n\n4. Starting empty, the model reaches capacity after about 47 seconds, before any 60-second occupancy expires.\n5. Connection reuse or more usable endpoint tuples can help. Actual Linux results depend on allocation, binds, reserved ports and safe-reuse rules; this model deliberately excludes them.",
+    "link": {
+      "title": "Coping with the TCP TIME-WAIT state on busy Linux servers",
+      "url": "https://vincent.bernat.ch/en/blog/2014-tcp-time-wait-state-linux"
+    }
+  },
+  {
+    "id": "tcp-connections-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Both peers initiate graceful close. Each processes the other’s FIN before receiving any acknowledgement of its own FIN; the crossing FINs do not acknowledge those new FINs. All prior data has been processed and the later ACKs are valid. Which state sequence does each follow?",
+    "options": [
+      {
+        "text": "FIN_WAIT_1 → FIN_WAIT_2 → TIME_WAIT → CLOSED",
+        "explanation": "FIN_WAIT_2 requires receiving an ACK of your FIN before the peer's FIN. Here the peer's FIN arrives first, while still in FIN_WAIT_1."
+      },
+      {
+        "text": "CLOSE_WAIT → LAST_ACK → CLOSED",
+        "explanation": "That is the passive closer's path, which starts by receiving a FIN while ESTABLISHED. Both sides here sent a FIN first."
+      },
+      {
+        "text": "FIN_WAIT_1 → CLOSING → TIME_WAIT → CLOSED",
+        "explanation": "Correct. Each side is in FIN_WAIT_1 when the other's FIN arrives, ACKs it and moves to CLOSING; when its own FIN is ACKed it enters TIME_WAIT. Both sides wait twice the MSL."
+      },
+      {
+        "text": "FIN_WAIT_1 → CLOSED, skipping TIME_WAIT because neither side was the active closer",
+        "explanation": "In a simultaneous close both are active closers, so both must guard against stray segments; both end in TIME_WAIT."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Follow side A (B is symmetric):\n\n1. A calls `close()`, sends FIN: **FIN_WAIT_1**.\n2. Before A's FIN is acknowledged, B's FIN arrives. A ACKs it. The lesson’s state-transition table says FIN_WAIT_1 + recv FIN goes to **CLOSING**.\n3. B's ACK of A's FIN arrives: CLOSING + recv ACK goes to **TIME_WAIT**.\n4. After 2×MSL: **CLOSED**.\n\n```\nFIN_WAIT_1 -FIN-> CLOSING\nCLOSING    -ACK-> TIME_WAIT\nTIME_WAIT  -2MSL-> CLOSED\n```\n\nBoth sides end up in TIME_WAIT.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  }
+]

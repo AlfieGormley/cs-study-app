@@ -1,0 +1,62 @@
+[
+  {
+    "id": "tcp-reliability-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A segment times out and is retransmitted. 50 ms after the retransmission, an ACK covering it arrives. The original was sent 350 ms before that ACK. Without timestamps, why does Karn's algorithm say not to use this as an RTT sample?",
+    "options": [
+      {
+        "text": "Because the sample is too large and would push the RTO above its 60-second cap",
+        "explanation": "Both candidate samples are below one second. Their size is not the ambiguity, and RFC 6298 does not mandate a 60-second cap: a chosen cap must be at least 60 seconds."
+      },
+      {
+        "text": "Because retransmitted segments travel on a slower priority queue",
+        "explanation": "There is no TCP rule requiring retransmissions to use a slower network queue. That does not explain which transmission the cumulative ACK covers."
+      },
+      {
+        "text": "Because the ACK could be for the original (RTT 350 ms) or the retransmission (RTT 50 ms), and there's no way to tell",
+        "explanation": "Correct. The cumulative ACK number alone cannot distinguish the copies. Timestamp-based measurement can remove the ambiguity under its specified echo rules."
+      },
+      {
+        "text": "Because RTT samples are only taken during the handshake",
+        "explanation": "TCP samples the RTT throughout the connection; that is how it adapts to changing paths."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Two copies of the same bytes are in flight: the original (sent at the start) and the retransmission (sent 300 ms later).\n2. The ACK arrives 350 ms after the original send. It carries only an ACK number, which is identical for either copy.\n3. Candidate RTTs:\n\n```formula\nR_orig = t_ACK − t_orig\nR_orig = 350 ms − 0 ms = 350 ms\nR_copy = t_ACK − t_copy\nR_copy = 350 ms − 300 ms = 50 ms\nwhere\nR_orig: the RTT if the ACK was for the original\nR_copy: the RTT if the ACK was for the retransmission\nt_ACK: when the ACK arrived, 350 ms\nt_orig: when the original was sent, 0 ms\nt_copy: when the retransmission was sent, 300 ms\nms: milliseconds\nIn words: the same ACK implies either a 350 ms or a 50 ms round trip, and nothing in it says which.\n```\n\n4. Picking 50 ms when the truth is 350 ms makes the RTO too short, causing more timeouts; the reverse makes it too long.\n5. Karn: **discard samples from retransmitted data**, and keep the backed-off RTO until a clean sample arrives. The timestamp option permits RTT sampling when its echo rules disambiguate the measurement; it is not simply a universal echo of the latest arrival.",
+    "link": {
+      "title": "RFC 6298: Computing TCP's Retransmission Timer",
+      "url": "https://www.rfc-editor.org/rfc/rfc6298"
+    }
+  },
+  {
+    "id": "tcp-reliability-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A connection has an RTO of 300 ms when the peer's network cable is pulled. The sender keeps retransmitting the same segment with exponential RTO backoff. How long after the **original** transmission is the 4th retransmission sent? Assume the RTO timer starts with that original transmission, no ACK restarts it, no probe or early retry intervenes, and no floor/cap or application timeout changes the stated waits.",
+    "options": [
+      {
+        "text": "1.2 s",
+        "explanation": "This is 4 × 300 ms, a linear increase, not a doubling. TCP doubles the timeout each time."
+      },
+      {
+        "text": "2.4 s",
+        "explanation": "2.4 s is the length of the fourth wait on its own, not the total elapsed time."
+      },
+      {
+        "text": "4.8 s",
+        "explanation": "4.8 s is the next doubled timeout interval after the fourth expiry, not the elapsed time to retransmission four. The elapsed time is 0.3 + 0.6 + 1.2 + 2.4."
+      },
+      {
+        "text": "4.5 s",
+        "explanation": "Correct. The waits are 0.3, 0.6, 1.2 and 2.4 s, which sum to 4.5 s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Each expiry doubles the RTO for the next attempt.\n\n| Event | Wait | Elapsed |\n|---|---|---|\n| Original | – | 0 s |\n| Retx 1 | 0.3 s | 0.3 s |\n| Retx 2 | 0.6 s | 0.9 s |\n| Retx 3 | 1.2 s | 2.1 s |\n| Retx 4 | 2.4 s | 4.5 s |\n\nAs a formula, the waits form a doubling series:\n\n```formula\nT_k = RTO_0 × (2^k − 1)\nT_4 = 0.3 s × (16 − 1) = 4.5 s\nwhere\nT_k: the time from the original send to the k-th retransmission, in seconds (s)\nRTO_0: the starting timeout, 0.3 s\nk: which retransmission, 4 here\nT_4: the time to the fourth retransmission\ns: seconds\nIn words: 0.3 + 0.6 + 1.2 + 2.4 is 0.3 times 15, which is 4.5 seconds.\n```\n\nLinux’s actual abort timing depends on its configured limits and retry policy. An entirely idle connection with no outstanding data has no retransmission waiting to fail; use suitable keepalives, application heartbeats or operation deadlines when detection is required.",
+    "link": {
+      "title": "RFC 6298: Computing TCP's Retransmission Timer",
+      "url": "https://www.rfc-editor.org/rfc/rfc6298"
+    }
+  }
+]

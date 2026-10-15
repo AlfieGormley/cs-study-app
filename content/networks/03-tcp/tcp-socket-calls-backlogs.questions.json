@@ -1,0 +1,62 @@
+[
+  {
+    "id": "tcp-sockets-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An ordinary Linux TCP listener has room in its pending queues, the path is working, and no Fast Open is in use. Its process is stopped in a debugger after listen(128), before accept(). Can a client’s blocking connect() succeed?",
+    "options": [
+      {
+        "text": "connect() succeeds: the kernel completes the handshake and queues the connection for accept()",
+        "explanation": "Correct. Handshakes are handled by the kernel. The connection sits in the accept queue, and the client can even send data, which waits in the server's receive buffer."
+      },
+      {
+        "text": "connect() blocks until the server calls accept()",
+        "explanation": "The kernel can perform the ordinary TCP handshake without the application accepting. The peer may even half-close before the server eventually accepts."
+      },
+      {
+        "text": "connect() fails with ConnectionRefusedError",
+        "explanation": "Refusal (RST) happens when nothing is listening. A socket in LISTEN accepts handshakes even when its process is stuck."
+      },
+      {
+        "text": "connect() times out after about two minutes",
+        "explanation": "The supplied conditions do not require waiting for acceptance or a timeout. Timeout durations are configuration-dependent."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The kernel listener can process SYN and ACK traffic while the application is paused. The client can complete its local handshake and queue data before the server calls accept(). The requested backlog is subject to platform limits and does not establish an exact universal 128-connection failure threshold.",
+    "link": {
+      "title": "SYN packet handling in the wild — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/syn-packet-handling-in-the-wild/"
+    }
+  },
+  {
+    "id": "tcp-sockets-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux service shows rising TcpExtListenOverflows and occasional delayed connection setup or first requests. With tcp_abort_on_overflow = 0, which explanation is consistent with these observations and should be investigated using captures and queue measurements?",
+    "options": [
+      {
+        "text": "The accept queue is overloaded; some handshakes may be deferred or dropped while the listener catches up",
+        "explanation": "Correct. One overflow path ignores the final ACK and can recover after SYN+ACK retransmission. Other paths and causes exist; this counter alone does not prove that exact trace."
+      },
+      {
+        "text": "A SYN flood is filling the SYN queue",
+        "explanation": "A SYN-queue problem alone is not established by this accept-overflow counter. Attack traffic can still contribute to several types of overload, so do not exclude it solely from one counter."
+      },
+      {
+        "text": "Nagle's algorithm is delaying the first request",
+        "explanation": "Nagle is not the mechanism counted by a listen-queue overflow counter. Its delay is not universally bounded to a fixed millisecond range."
+      },
+      {
+        "text": "TIME_WAIT sockets are blocking new connections",
+        "explanation": "TIME_WAIT on the server's port doesn't block new connections from different client tuples, and isn't counted by ListenOverflows."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Inspect backlog limits, arrival bursts, acceptance rate, blocked workers and resource limits. Linux can ignore a final ACK on an overflow path when abort-on-overflow is disabled, while the client already believes setup succeeded. Retries can then add delay, but exact timing and behaviour require capture/configuration evidence. A larger backlog absorbs some bursts; it does not fix sustained service-capacity shortfalls.",
+    "link": {
+      "title": "SYN packet handling in the wild — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/syn-packet-handling-in-the-wild/"
+    }
+  }
+]

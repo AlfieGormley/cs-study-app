@@ -1,0 +1,100 @@
+[
+  {
+    "id": "tcp-sockets-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A thread-per-connection Python server handles 50 clients well. You need to hold 50,000 mostly idle WebSocket-style connections. Why is the threaded design likely to struggle, and what's the standard alternative?",
+    "options": [
+      {
+        "text": "Python threads can't call recv(); use processes instead",
+        "explanation": "Threads can call recv(); in CPython’s usual GIL-enabled build, blocking socket I/O releases the GIL. Replacing each native thread with a process adds separate process-management costs and does not remove the need to measure resource limits."
+      },
+      {
+        "text": "TCP limits a server to 65,535 connections per port",
+        "explanation": "A listener can serve more than 65,535 connections when peer endpoint tuples differ sufficiently. Resource and tuple limits still apply."
+      },
+      {
+        "text": "Each thread needs its own listening port",
+        "explanation": "All connections are accepted from one listening socket; each thread only uses its accepted socket."
+      },
+      {
+        "text": "Native threads have stack and scheduling costs; a multiplexed runtime can serve many idle sockets with fewer threads",
+        "explanation": "Correct. Backend and runtime details vary; a benchmark and resource limits determine actual capacity."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "One native thread per connection adds stack reservations, task limits and scheduling overhead. A readiness or completion-based runtime can multiplex many waiting operations onto fewer threads. Connections still consume kernel buffers, application state, descriptors and runtime tasks. No fixed 50,000-connection capacity follows from choosing an event loop.",
+    "link": {
+      "title": "The C10K problem — Dan Kegel",
+      "url": "http://www.kegel.com/c10k.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Consider the lesson's `selectors` echo server, which calls `s.send(data)` once on a non-blocking socket. A client sends a lot of data quickly but reads its replies very slowly. Which problems can occur? Select all that apply.",
+    "options": [
+      {
+        "text": "send() may accept only part of `data`, and the rest is silently lost from the echo",
+        "explanation": "Correct. send() on a non-blocking socket returns how many bytes it took; the code ignores the return value, so any remainder is never sent."
+      },
+      {
+        "text": "send() may raise BlockingIOError when the socket's send buffer is completely full",
+        "explanation": "Correct. Once the slow client's receive window and our send buffer are full, a send on a non-blocking socket can't accept anything, and the code doesn't catch it, so the loop crashes."
+      },
+      {
+        "text": "The send call on the non-blocking socket itself waits for the slow client to read",
+        "explanation": "False. It returns a count or an error rather than waiting for writability. However, an unhandled exception can terminate this toy loop and interrupt service for every client."
+      },
+      {
+        "text": "Correct handling needs retained unsent output and write readiness, plus queue bounds, read backpressure and error handling",
+        "explanation": "Correct. Account for partial writes and handle would-block, disconnection and cleanup; an unbounded output buffer merely moves the resource problem."
+      },
+      {
+        "text": "Switching to sendall() on the non-blocking socket fully solves it",
+        "explanation": "On a non-blocking socket, sendall() can still raise BlockingIOError partway through, leaving an unknown amount sent. It doesn't replace proper output buffering."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "The deliberately faulty loop ignores send()’s partial count and does not handle would-block. It can lose bytes or terminate. A call on a non-blocking socket does not wait for the slow peer, but loop termination affects all clients. Retain pending output, ask for write-readiness notifications only while needed, bound queues and stop reading when output pressure is high. Handle stale readiness for accept/read/write and flush pending output on input half-close. sendall() alone does not solve buffering for non-blocking sockets.",
+    "link": {
+      "title": "Python selectors module documentation",
+      "url": "https://docs.python.org/3/library/selectors.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In the asyncio echo example, suppose the peer keeps uploading but never reads responses. With no output-size policy or total deadline added, what risk is introduced by deleting await writer.drain()?",
+    "options": [
+      {
+        "text": "Nothing; asyncio writes everything immediately",
+        "explanation": "write() may send immediately or buffer unsent data. It does not wait for the receiving application to consume it."
+      },
+      {
+        "text": "The server crashes with BrokenPipeError immediately",
+        "explanation": "Not reading replies does not itself require an immediate BrokenPipeError. Queued output can grow while the connection remains usable; unrelated failures or later endpoint closure are still possible."
+      },
+      {
+        "text": "TCP drops the responses, and the client receives them later via retransmission",
+        "explanation": "Retransmission does not replace application backpressure. Data can accumulate in the asyncio transport’s output buffer."
+      },
+      {
+        "text": "Unsent output can grow excessively because the coroutine no longer waits for the transport’s backpressure",
+        "explanation": "Correct. drain() waits when writing is paused at the high watermark until the buffer drains to the low watermark. Other failures or limits may stop growth; unlimited growth is a risk, not an inevitable trace."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "If incoming data continues while output cannot drain, write() can accumulate unsent output in user space. drain() makes the coroutine cooperate with transport flow control, indirectly slowing further reads. Its watermarks concern the transport buffer, not a direct test for a zero TCP receive window. Removing it risks memory exhaustion; exact growth and termination depend on the runtime, peer and other limits.",
+    "link": {
+      "title": "asyncio Streams — Python docs",
+      "url": "https://docs.python.org/3/library/asyncio-stream.html"
+    }
+  }
+]

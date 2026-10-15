@@ -1,0 +1,122 @@
+[
+  {
+    "id": "tcp-sockets-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On a POSIX system, diagnostics show that retained TIME_WAIT connections prevent a new listener binding the port immediately, with no competing listener. Which option should a restartable server configure before bind(), subject to that platform’s old/new socket reuse rules?",
+    "options": [
+      {
+        "text": "The old process is still running; kill it with kill -9",
+        "explanation": "The question says nothing is listening. The port is held by connection state, not by a process."
+      },
+      {
+        "text": "Port 8080 is reserved for root; run the server as root",
+        "explanation": "This is an address-reuse problem, not a permission error. Privileged-port thresholds are platform/configuration-dependent."
+      },
+      {
+        "text": "SO_REUSEADDR; Python socket.create_server enables it on POSIX",
+        "explanation": "Correct. Configure appropriate reuse before binding. On Linux the relevant reuse case generally requires it on both the old and new sockets; exact rules differ across systems."
+      },
+      {
+        "text": "The ephemeral port range has been exhausted",
+        "explanation": "Exhaustion of automatically selected local ports is a different failure mode. Here the supplied diagnostics identify retained TIME_WAIT state affecting an explicit bind; an existing conflicting allocation can also matter when a chosen fixed port overlaps the automatic range."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "TIME_WAIT retains TCP state after orderly closure and can stop the port being bound again. SO_REUSEADDR relaxes relevant address-reuse checks, subject to platform rules; it does not permit arbitrary sharing with an active listener. Set it before bind(), and configure the original listener appropriately too.\n\n```python\ns = socket.socket()\n# Configure before binding the port.\ns.setsockopt(socket.SOL_SOCKET,\n             socket.SO_REUSEADDR, 1)\ns.bind((\"127.0.0.1\", 8080))\n```\n\nThe caller must close s when finished. Port reuse does not mean new connections necessarily have different tuples; TCP’s retained state and sequence rules still matter.",
+    "link": {
+      "title": "Python socket module documentation",
+      "url": "https://docs.python.org/3/library/socket.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `recv_msg`, a peer sends these 10 bytes in one segment:\n\n```\n00 00 00 03 61 62 63 64 65 66\n```\n\n(0x61 to 0x66 are `a` to `f`.) What does the first `recv_msg(sock)` call return?",
+    "options": [
+      {
+        "text": "`b\"abcdef\"`",
+        "explanation": "The header says the body is 3 bytes. recv_exact asks for exactly 3, so the last three stay in the buffer for the next call."
+      },
+      {
+        "text": "`b\"abc\"`",
+        "explanation": "Correct. The header 00 00 00 03 decodes as 3, so recv_exact(sock, 3) returns b\"abc\". The bytes def remain unread."
+      },
+      {
+        "text": "`b\"\\x00\\x00\\x00\\x03abcdef\"`",
+        "explanation": "recv_msg strips the 4-byte header and uses it as a length; it doesn't return it."
+      },
+      {
+        "text": "It raises EOFError because the message is incomplete",
+        "explanation": "The 3-byte body is complete. EOFError only occurs if the peer closes before enough bytes arrive."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `recv_exact(sock, 4)` reads `00 00 00 03`.\n2. `struct.unpack(\"!I\", ...)` reads a big-endian 32-bit unsigned integer: 3.\n\n```formula\nn = b_0 × 2^24 + b_1 × 2^16\n  + b_2 × 2^8 + b_3\nn = 0 + 0 + 0 + 3 = 3\nwhere\nn: the decoded length, in bytes\nb_0: the first byte, most significant\nb_1: the second byte\nb_2: the third byte\nb_3: the fourth byte, least significant\nIn words: big-endian puts the most significant byte first, so 00 00 00 03 is 3.\n```\n\n3. `recv_exact(sock, 3)` reads `61 62 63` = `b\"abc\"`.\n4. `64 65 66` (`def`) remains in the socket buffer. The **next** `recv_msg` would take those three bytes plus one more as its header: an incomplete next header. It could be malformed input or part of a later message; the three bytes alone do not prove the peer uses another protocol. The lesson’s size limit rejects an oversized decoded next length.",
+    "link": {
+      "title": "Python struct module documentation",
+      "url": "https://docs.python.org/3/library/struct.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An Nginx-style server runs 8 worker processes. In design A they all accept from one shared listening socket. In design B each worker opens its own listening socket on port 443 with `SO_REUSEPORT`. What is the main effect of design B on Linux?",
+    "options": [
+      {
+        "text": "The kernel selects among separate eligible listening sockets, each with its own accept queue, which can reduce shared-listener contention",
+        "explanation": "Correct. Linux’s default selection uses flow-related hashing, but optional BPF policies and implementation details vary. Neither perfect balancing nor removal of all locking is guaranteed."
+      },
+      {
+        "text": "It lets the server bind port 443 while old connections are in TIME_WAIT",
+        "explanation": "That's what SO_REUSEADDR does. SO_REUSEPORT is about multiple simultaneous listeners."
+      },
+      {
+        "text": "Each worker receives a copy of every incoming connection",
+        "explanation": "A connection is delivered to exactly one of the listening sockets; copying would make no sense for TCP."
+      },
+      {
+        "text": "It allows more than 65,535 connections to port 443",
+        "explanation": "One listening socket can already have far more connections than that; connections are told apart by the client's address and port."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "With one shared listener, workers take connections from one accept queue. An eligible SO_REUSEPORT group has separate listeners and queues; set the option before bind() and satisfy Linux’s effective-UID and binding requirements. Selection can distribute new connections without every worker sharing one accept queue. A stalled worker can still accumulate work, and measured workload balance is not guaranteed.",
+    "link": {
+      "title": "Python socket module documentation",
+      "url": "https://docs.python.org/3/library/socket.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This code works in local tests but occasionally raises `struct.error: unpack requires a buffer of 4 bytes` in production. Why?\n\n```python\n# BUG: one read may return <4 bytes.\nhdr = sock.recv(4)\n(n,) = struct.unpack(\"!I\", hdr)\nbody = sock.recv(n)\n```",
+    "options": [
+      {
+        "text": "Network byte order is little-endian, so `!I` is wrong",
+        "explanation": "Network byte order is big-endian, which is exactly what `!` means. The format is fine."
+      },
+      {
+        "text": "recv(4) can return fewer than 4 bytes, for example when the header is split across segments",
+        "explanation": "Correct. recv(n) returns up to n bytes, whatever is available. The fix is a recv_exact loop. The same bug also affects `sock.recv(n)` for the body."
+      },
+      {
+        "text": "The sender's Nagle algorithm drops the header",
+        "explanation": "Nagle may delay or coalesce data, but it never drops bytes."
+      },
+      {
+        "text": "recv() must always be called with a buffer of at least 4,096 bytes",
+        "explanation": "A positive receive size smaller than 4,096 is valid. The bug is assuming the result always fills the requested length."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `recv(4)` means 'give me **at most** 4 bytes'.\n2. A local test may happen to return the complete header, but short reads are possible even on localhost.\n3. Over a real network, the 4-byte header may straddle two segments, or the peer may write it in pieces. Then `recv(4)` returns, say, 2 bytes, and `unpack` fails.\n4. `recv(n)` for the body has the same flaw, but fails silently by returning a short body.\n5. Fix: use the lesson’s recv_exact and MAX_MSG, handling EOF/errors and bounding the decoded size before reading the body.\n\n```python\n# Assemble the entire length prefix.\nhdr = recv_exact(sock, 4)\n(n,) = struct.unpack(\"!I\", hdr)\n# Bound allocation/read work first.\nif n > MAX_MSG:\n    raise ValueError(\"too large\")\nbody = recv_exact(sock, n)\n```",
+    "link": {
+      "title": "Socket Programming HOWTO — Python docs",
+      "url": "https://docs.python.org/3/howto/sockets.html"
+    }
+  }
+]

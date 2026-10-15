@@ -1,0 +1,69 @@
+[
+  {
+    "id": "tcp-connections-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A web server sends a FIN after its response. The browser receives and acknowledges that FIN before sending its own. Assume a successful sequential graceful close, no resets and no unread-data abort. Which endpoint enters TIME_WAIT?",
+    "options": [
+      {
+        "text": "The browser, because it sent the last FIN",
+        "explanation": "The browser is the passive closer here. It goes CLOSE_WAIT, then LAST_ACK, then CLOSED when its FIN is acknowledged."
+      },
+      {
+        "text": "Both sides, for twice the MSL each",
+        "explanation": "Both can enter TIME_WAIT on a simultaneous close. The question instead specifies a sequential close with the server active first."
+      },
+      {
+        "text": "Neither; TIME_WAIT only happens after an RST",
+        "explanation": "TIME_WAIT belongs to normal graceful closure; an accepted abort normally discards connection state without that FIN-close sequence."
+      },
+      {
+        "text": "The server, because it sent the first FIN",
+        "explanation": "Correct. The active closer (whoever sends the first FIN) goes FIN_WAIT_1, FIN_WAIT_2, then TIME_WAIT after acknowledging the peer's FIN."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The server calls `close()` and sends FIN. It is the **active closer**: ESTABLISHED to FIN_WAIT_1.\n2. The browser ACKs (server moves to FIN_WAIT_2) and enters CLOSE_WAIT.\n3. The browser closes and sends its FIN (LAST_ACK).\n4. The server ACKs that FIN and enters **TIME_WAIT** for twice the maximum segment lifetime (MSL); Linux uses a fixed 60 s.\n5. The browser receives the ACK and goes straight to CLOSED.\n\nIn this specified sequential close, the server enters TIME_WAIT. A simultaneous close can put both peers there.",
+    "link": {
+      "title": "Coping with the TCP TIME-WAIT state on busy Linux servers",
+      "url": "https://vincent.bernat.ch/en/blog/2014-tcp-time-wait-state-linux"
+    }
+  },
+  {
+    "id": "tcp-connections-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Why does the active closer wait in TIME_WAIT for twice the maximum segment lifetime (MSL) instead of going straight to CLOSED? Select all that apply.",
+    "options": [
+      {
+        "text": "If its final ACK is lost, the peer will retransmit its FIN, and someone must be there to ACK it again",
+        "explanation": "Correct. Retained state allows another ACK of a repeated FIN. MSL is not a retransmission timer, and exact reset/error outcomes after state deletion depend on processing."
+      },
+      {
+        "text": "To let delayed segments from this connection expire before a new connection reuses the same 5-tuple",
+        "explanation": "Correct. A stray old segment with the same 5-tuple could otherwise fall inside the new connection's window and be accepted as data."
+      },
+      {
+        "text": "To give the application time to read any data still in the receive buffer",
+        "explanation": "TIME_WAIT is not an application read-grace mechanism. An application can initiate a half-close with shutdown while retaining a descriptor, so it need not already have discarded every socket reference."
+      },
+      {
+        "text": "To wait for the congestion window to drain before the port is reused",
+        "explanation": "The congestion window limits outstanding transmitted data; TIME_WAIT is not a wait for that numeric limit to “drain”."
+      },
+      {
+        "text": "Because the passive closer is still sending data and needs it acknowledged",
+        "explanation": "By the time the active closer is in TIME_WAIT, the passive closer has sent its FIN, so it has no more data to send."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. If the peer missed the final ACK, retained state can acknowledge a retransmitted FIN; receiving the FIN can restart the TIME_WAIT timer.\n2. The waiting interval is:\n\n```formula\nT_TW = 2 × MSL\nT_TW = 2 × 120 s = 240 s\nwhere\nT_TW: the TIME_WAIT duration, in seconds (s)\nMSL: maximum segment lifetime, the longest a segment is assumed to survive in the network; RFC 793 suggested 120 s\ns: seconds\nIn words: two of RFC 793's two-minute lifetimes make four minutes; Linux instead uses a fixed 60 s.\n```\n\nThe specified waiting interval also protects later connection incarnations from old duplicates under the assumed maximum segment lifetime.\n3. The peer’s retransmission timeout is separate from MSL, so “one MSL until an ACK vanishes plus one for the FIN” is not a valid timer derivation.\n4. Standards and implementations define constrained reuse cases; this is not an unconditional prohibition on any earlier tuple reuse.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  }
+]

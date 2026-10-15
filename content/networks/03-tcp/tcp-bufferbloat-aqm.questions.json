@@ -1,0 +1,92 @@
+[
+  {
+    "id": "tcp-performance-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Whenever someone in a house uploads a large video, everyone's video calls stutter and web pages load slowly, even though download bandwidth is plentiful. Ping times jump from 20 ms to over a second. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The upload is using UDP, which has no congestion control",
+        "explanation": "UDP itself has no congestion-control algorithm, but protocols running over it can provide one. The observed delay does not identify the transport protocol."
+      },
+      {
+        "text": "The ISP is throttling the household",
+        "explanation": "A rate limit can contribute to queueing, depending on its implementation. The leading explanation for this load-correlated delay is an excessive standing queue; confirm it by measurement."
+      },
+      {
+        "text": "Bufferbloat: a persistent queue at a shared uplink delays other traffic using that queue",
+        "explanation": "Correct as the leading hypothesis. For a FIFO packet, delay is approximately the queued work ahead divided by service rate; not every packet or priority class necessarily sees the same backlog."
+      },
+      {
+        "text": "TCP's receive window on the video-call server is too small",
+        "explanation": "A small receive window can limit that connection’s sending allowance, but it does not by itself explain the observed load-correlated ping delay. A shared uplink queue is the leading hypothesis; queue classes and traffic paths determine which packets are affected."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A large increase in RTT during upload is consistent with a shared standing queue. Identify the bottleneck and queue discipline before concluding. If traffic shares a FIFO, a packet waits for the backlog ahead of it to drain:\n\n```formula\nT_q ≈ 8 × Q / R\nT_q ≈ 8 × 250,000 / 2,000,000 = 1 s\nwhere\nT_q: queueing delay, in seconds (s)\nQ: bytes queued ahead of the packet, e.g. 250,000\nR: link rate, bits per second, e.g. 2,000,000\ns: seconds\n≈: approximately equal to\nIn words: 2 million queued bits on a 2 Mbit/s uplink add a second of delay.\n```\n\nAQM and appropriate shaping at a controlled router can reduce queueing, with configuration and throughput trade-offs.",
+    "link": {
+      "title": "Introduction to bufferbloat — bufferbloat.net",
+      "url": "https://www.bufferbloat.net/projects/bloat/wiki/Introduction/"
+    }
+  },
+  {
+    "id": "tcp-performance-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A FIFO has 500,000 queued bytes ahead of a newly admitted packet, served at a constant 10 Mbit/s. Ignore overhead, priorities and the new packet’s own transmission. How long does it wait?",
+    "options": [
+      {
+        "text": "About 50 ms",
+        "explanation": "This treats 500 KB as 500 kilobits. Convert bytes to bits first: 500 KB is 4 Mbit."
+      },
+      {
+        "text": "About 4 ms",
+        "explanation": "This is off by a factor of 100. 4 Mbit at 10 Mbit/s takes 0.4 s to drain."
+      },
+      {
+        "text": "About 0.4 s",
+        "explanation": "Correct. 500,000 B × 8 = 4,000,000 bits; ÷ 10,000,000 bit/s = 0.4 s."
+      },
+      {
+        "text": "None, because CUBIC avoids filling buffers",
+        "explanation": "The question supplies a backlog. Neither CUBIC nor BBR guarantees that queues remain empty."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nT_q = Q × 8 / R\nT_q = 500,000 × 8 bit / (10^7 bit/s)\nT_q = 0.4 s\nwhere\nT_q: how long the packet waits, in seconds (s)\nQ: queued bytes ahead, 500,000\nR: service rate, 10 Mbit/s = 10^7 bit/s\nbit: binary digit; × 8 converts bytes\ns: seconds\nIn words: 4 million bits at 10 million bits a second take 0.4 s.\n```\n\nThis is the wait behind the specified backlog. CoDel’s 5 ms default target is not a hard guarantee for every packet.",
+    "link": {
+      "title": "Introduction to bufferbloat — bufferbloat.net",
+      "url": "https://www.bufferbloat.net/projects/bloat/wiki/Introduction/"
+    }
+  },
+  {
+    "id": "tcp-performance-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A previously idle CoDel queue uses target 5 ms and interval 100 ms. No hard buffer limit is reached. Case A spikes to 40 ms but empties within 20 ms. Case B remains at 30–40 ms for seconds with sufficient backlog to satisfy CoDel’s remaining-byte check. Which behaviour is expected?",
+    "options": [
+      {
+        "text": "It drops packets in both cases, because delay exceeded 5 ms",
+        "explanation": "Exceeding the target briefly does not alone trigger CoDel’s persistent-delay response. A burst could still encounter a finite-buffer limit, which this question excludes."
+      },
+      {
+        "text": "It drops in case A only, because sudden spikes are the problem",
+        "explanation": "Bursts are what buffers exist for. The harmful case is the standing queue in B, which adds delay without adding throughput."
+      },
+      {
+        "text": "It doesn't drop in either case; CoDel only drops when the buffer is full",
+        "explanation": "CoDel can signal persistent queueing before the buffer fills. It also retains checks intended to avoid starving the link."
+      },
+      {
+        "text": "It leaves case A alone, and in case B starts dropping (or ECN-marking), at increasing frequency while the delay stays above target",
+        "explanation": "Correct. In B, the minimum delay over every 100 ms interval stays above 5 ms, which signals a standing queue. Responsive senders can reduce their offered load; the response depends on the protocol, congestion-control algorithm and delivered feedback."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Case A clears before a full interval of excessive delay, so it does not trigger the persistent-delay response under these assumptions. Case B satisfies both the persistent-delay and backlog conditions and enters dropping/marking behaviour. The control law schedules increasingly frequent signals:\n\n```formula\nt_next = t + I / √n\nt_next = t + 100 ms / √4 = t + 50 ms\nwhere\nt_next: when CoDel drops or marks next\nt: when it last dropped or marked\nI: the interval, 100 ms\nn: drops or marks so far in this episode\n√: square root\nms: milliseconds\nIn words: the gap shrinks with each signal: 100 ms, then 71, 58, 50 ms…\n```\n\nActual delay still depends on traffic response; 5 ms is a target, not a per-packet guarantee.",
+    "link": {
+      "title": "RFC 8289: Controlled Delay Active Queue Management",
+      "url": "https://www.rfc-editor.org/rfc/rfc8289"
+    }
+  }
+]

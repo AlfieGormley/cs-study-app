@@ -1,0 +1,62 @@
+[
+  {
+    "id": "tcp-reliability-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A receiver sends `ACK 3001` without any SACK option. What exactly does that tell the sender? Interpret this as a current cumulative ACK within one unwrapped sequence interval, not an old duplicate ACK or a SYN/FIN boundary.",
+    "options": [
+      {
+        "text": "The receiver got the segment whose sequence number is 3001",
+        "explanation": "The ACK number is the next byte wanted, not the last one received. Byte 3001 has not arrived yet."
+      },
+      {
+        "text": "The receiver has bytes up to 3001 but may be missing some earlier ones",
+        "explanation": "A cumulative ACK can't have gaps below it. It promises everything before the number."
+      },
+      {
+        "text": "The receiver has received exactly 3,001 bytes in total since the handshake",
+        "explanation": "Sequence numbers start at a random ISN, not at zero, so the ACK number doesn't count bytes received."
+      },
+      {
+        "text": "The receiver has every byte before 3001, and 3001 is the next byte it expects",
+        "explanation": "Correct. TCP ACKs are cumulative. It may also hold later out-of-order bytes, but without SACK it can't say so."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "In the stated sequence interval, ACK 3001 identifies the next expected position. Preceding data in this connection has been accepted contiguously by TCP; later ranges may also be buffered. This says neither how many total bytes have ever arrived nor whether the application consumed or stored them. Sequence wrap and old ACKs require the connection’s serial-number context.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-reliability-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's toy receiver, what does this print?\n\n```python\nrx([(1, 500), (1001, 500),\n    (501, 500), (1501, 500)])\n```",
+    "options": [
+      {
+        "text": "ACKs 501, 1501, 1501, 2001; nothing ever held",
+        "explanation": "This assumes the segment at 1001 is accepted in order. It arrives while the receiver is still waiting for 501, so it is held, and the ACK stays at 501."
+      },
+      {
+        "text": "ACKs 501, 501, 1001, 2001; 1001 still held after the third line",
+        "explanation": "When 501–1000 fills the gap, it joins the held 1001–1500 interval and the cumulative point advances to 1501. That held range no longer remains outstanding."
+      },
+      {
+        "text": "ACKs 501, 501, 1501, 2001; 1001 held only on the second line",
+        "explanation": "Correct. The model merges adjacent received ranges and advances across their combined coverage once the gap fills."
+      },
+      {
+        "text": "ACKs 501, 1501, 1501, 2001; 1001 held on the second line",
+        "explanation": "A cumulative ACK can't move past a hole. With 501–1000 missing, the ACK must stay at 501."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Start with `nxt = 1` and no held intervals.\n\n1. (1, 500) covers [1,501), so print `ACK 501 held []`.\n2. (1001, 500) covers [1001,1501), beyond the gap; print `ACK 501 held [1001]`.\n3. (501, 500) joins it into [501,1501), so print `ACK 1501 held []`.\n4. (1501, 500) extends coverage to 2001; print `ACK 2001 held []`.\n\nThe printed held list contains starts of merged ranges, not one entry per original packet.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  }
+]

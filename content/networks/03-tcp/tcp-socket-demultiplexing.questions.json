@@ -1,0 +1,62 @@
+[
+  {
+    "id": "tcp-udp-ports-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On localhost, a UDP client runs:\n\n```python\n# Each send is one datagram.\ns.sendto(b\"a\" * 100, srv)\ns.sendto(b\"b\" * 200, srv)\ns.sendto(b\"c\" * 300, srv)\n```\n\nThe server loops on `data, _ = s.recvfrom(2048)` and prints `len(data)`. Assuming ordinary datagram socket calls, no loss, duplication or reordering, what does it print?",
+    "options": [
+      {
+        "text": "`600`",
+        "explanation": "That is what a TCP receiver might see, since TCP is a byte stream and can merge writes. UDP never merges datagrams."
+      },
+      {
+        "text": "`100`, `200`, `300` on separate lines",
+        "explanation": "Correct. UDP preserves message boundaries: three `sendto()` calls produce three datagrams, and each `recvfrom()` returns exactly one."
+      },
+      {
+        "text": "`2048` three times",
+        "explanation": "The 2048 is the buffer size, the maximum the call will return. `recvfrom` returns the actual datagram length."
+      },
+      {
+        "text": "It depends on how the kernel chooses to split the data",
+        "explanation": "Ordinary UDP sockets preserve datagram boundaries. Here the buffer is large enough; smaller receive buffers can truncate a message rather than return it whole."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Each `sendto()` builds one UDP datagram with its own length field: 100, 200, 300 bytes of payload.\n2. The receiver's kernel queues each datagram as a separate unit.\n3. Each `recvfrom(2048)` dequeues one datagram. The buffer is big enough, so nothing is truncated.\n4. Output:\n\n```\n100\n200\n300\n```\n\nTwo caveats: over a real network the order could change or one could vanish; and if the buffer were smaller than a datagram (say `recvfrom(50)`), the excess would be **discarded**, not saved for the next call.",
+    "link": {
+      "title": "RFC 768: UDP",
+      "url": "https://www.rfc-editor.org/rfc/rfc768"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An HTTPS service accepts 100,000 simultaneous TCP connections on one server IP and local port 443. How many distinct local TCP port numbers do those accepted sockets use?",
+    "options": [
+      {
+        "text": "100,000, one per client",
+        "explanation": "The server does not allocate a new port per client. Each accepted connection gets a new socket, but it shares the listening port."
+      },
+      {
+        "text": "At most 65,535, so it cannot have 100,000 clients",
+        "explanation": "This confuses the port space with the connection space. Connections are identified by 5-tuples, of which there are vastly more than 65,535."
+      },
+      {
+        "text": "About 28,000, the size of the ephemeral range",
+        "explanation": "These accepted sockets retain the listener’s local port. The initiating endpoint may choose an ephemeral source port or explicitly bind one."
+      },
+      {
+        "text": "One: port 443, with connections told apart by the client's IP and port",
+        "explanation": "Correct. All connections have destination port 443; the kernel demultiplexes them by the full 5-tuple, in which the client's address and port differ."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Every client connects to `server_ip:443`.\n2. On the server, `accept()` returns a new socket for each connection, but that socket's local address is still `server_ip:443`.\n3. The kernel tells them apart by the 5-tuple:\n\n```\n(TCP, c1_ip, c1_port, srv, 443)\n(TCP, c2_ip, c2_port, srv, 443)\n...\n```\n\n4. So the server uses one port. Practical limits include memory, file descriptors, CPU and connection-tuple availability; this question specifies a service using just one local port.",
+    "link": {
+      "title": "Transmission Control Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Transmission_Control_Protocol"
+    }
+  }
+]

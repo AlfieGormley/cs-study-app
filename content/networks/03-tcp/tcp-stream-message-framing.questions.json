@@ -1,0 +1,70 @@
+[
+  {
+    "id": "tcp-sockets-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does a TCP application that needs to distinguish messages need a framing rule, such as a length prefix, delimiter or a defined EOF boundary?",
+    "options": [
+      {
+        "text": "Because TCP may reorder bytes, and framing puts them back in order",
+        "explanation": "TCP already guarantees in-order delivery. Framing is about where messages begin and end, not order."
+      },
+      {
+        "text": "Because TCP limits each send() to one MSS",
+        "explanation": "send() is not restricted to one MSS; it can accept more, or only part of the supplied buffer. Segmentation is separate from application framing."
+      },
+      {
+        "text": "Because TCP is a byte stream and doesn't preserve the boundaries of send() calls",
+        "explanation": "Correct. The receiver may get two messages in one recv() or half a message, so it needs a rule for finding message boundaries."
+      },
+      {
+        "text": "Because framing is needed to compute TCP's checksum",
+        "explanation": "TCP checksums cover segments, independently of application message framing. They may be computed by the protocol stack or hardware offload; a kernel implementation is not required."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "TCP preserves byte order but not write boundaries. A receiver may obtain part of a message or several messages in one read. A protocol must define how to recognise its boundaries, which may include EOF. Ordinary UDP preserves the boundary of each delivered datagram, but datagrams can be lost, duplicated or truncated by an undersized receive buffer.",
+    "link": {
+      "title": "Socket Programming HOWTO — Python docs",
+      "url": "https://docs.python.org/3/howto/sockets.html"
+    }
+  },
+  {
+    "id": "tcp-sockets-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "On a fresh TCP stream with no other reader, a client successfully sends b\"hello\" then b\"world\". No local receive shutdown or connection failure occurs. Which results could the server’s first recv(1024) return? Select all that apply.",
+    "options": [
+      {
+        "text": "`b\"helloworld\"`",
+        "explanation": "Possible. Both writes may arrive (or be coalesced into one segment) before the server reads."
+      },
+      {
+        "text": "`b\"hel\"`",
+        "explanation": "Possible. recv() returns whatever has arrived so far, which may be a fragment of the first write."
+      },
+      {
+        "text": "`b\"hello\"`",
+        "explanation": "Possible, and common in testing, which is why the bug of assuming it is easy to miss."
+      },
+      {
+        "text": "`b\"world\"`",
+        "explanation": "Impossible. TCP delivers bytes in order, so the first bytes returned must start with \"h\"."
+      },
+      {
+        "text": "`b\"worldhello\"`",
+        "explanation": "Impossible. Reordering is never visible through a TCP socket."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "TCP delivers received stream bytes in order; it does not preserve write boundaries or promise that a connection can never fail.\n\n1. The byte stream is `helloworld`.\n2. The first `recv()` returns some non-empty **prefix** of the bytes that have arrived: `h`, `hel`, `hello`, `hellowor`, `helloworld`...\n3. Anything that doesn't start at the first byte (`world`, `worldhello`) is impossible.\n\nSo A, B and C are possible.",
+    "link": {
+      "title": "Python socket module documentation",
+      "url": "https://docs.python.org/3/library/socket.html"
+    }
+  }
+]

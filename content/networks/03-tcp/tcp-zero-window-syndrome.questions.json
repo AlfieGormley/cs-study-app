@@ -1,0 +1,62 @@
+[
+  {
+    "id": "tcp-flow-control-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A capture shows repeated zero receive windows during an upload. Server instrumentation also shows a full receive queue and its receiving thread blocked on disk I/O instead of reading. Which explanation matches both observations?",
+    "options": [
+      {
+        "text": "The application on the server is not reading from its socket fast enough",
+        "explanation": "Correct. Here the capture and server instrumentation together establish that the blocked reader is not draining the queue. A zero window alone would not identify this unique cause."
+      },
+      {
+        "text": "The network is congested and dropping packets",
+        "explanation": "Network congestion may coexist, but it does not explain the independently observed blocked receiving thread and full queue. Zero windows specifically advertise receiver-side flow-control restriction."
+      },
+      {
+        "text": "The client's congestion window is too small",
+        "explanation": "A small cwnd can coexist with a zero receive window, but it does not explain the independently observed blocked receiving thread and full receive queue."
+      },
+      {
+        "text": "Nagle's algorithm on the client is batching writes",
+        "explanation": "Nagle affects how small writes are packaged, not whether the receiver has buffer space."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The capture establishes receiver-side flow-control restriction.\n2. Server instrumentation supplies the cause in this scenario: the thread is blocked and the receive queue is full.\n3. Persist probes can obtain later window updates, but do not fix the blocked application.\n4. Investigate the disk/reader pipeline; do not infer this diagnosis from a zero window alone in every deployment.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A receiver advertises a zero window. Its application then reads the buffer, and the receiver sends a window update (a pure ACK with a window of 64 KB), but that ACK is lost. What stops the connection from hanging forever? Assume queued data still needs sending and a later probe/reply exchange is successfully delivered.",
+    "options": [
+      {
+        "text": "The receiver retransmits the window update after an RTO",
+        "explanation": "TCP does not retransmit pure ACKs; they carry no sequence space to acknowledge. That's precisely why the deadlock is possible."
+      },
+      {
+        "text": "The sender's persist timer fires and sends a window probe; the receiver's reply carries the current window",
+        "explanation": "Correct under those delivery assumptions. A zero-window probe elicits a current-window acknowledgement; probes cannot guarantee progress through permanent loss or endpoint failure."
+      },
+      {
+        "text": "The keepalive timer sends a probe after 2 seconds",
+        "explanation": "Keepalive is a separate mechanism with configurable policy and timing. It is not a universal two-second replacement for zero-window probing."
+      },
+      {
+        "text": "Nothing; the application must detect the stall and reconnect",
+        "explanation": "TCP includes zero-window probing to recover a lost window update. Applications can still observe blocking/timeouts if the window remains closed or probes cannot complete."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A zero advertised window prevents ordinary new-data sending while data remains queued.\n2. The pure window-update ACK is not tracked for ordinary data retransmission.\n3. Persist/zero-window probing solicits a fresh advertisement.\n4. Under the question’s successful delivery assumption, the reply reveals the reopened window and permits progress.\n5. Probe scheduling, timer backoff and failure policy depend on the TCP implementation; zero-window probing is distinct from idle keepalive.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  }
+]

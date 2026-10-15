@@ -1,0 +1,62 @@
+[
+  {
+    "id": "tcp-reliability-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A sender sent six contiguous 1,000-byte segments beginning at 1001 through 6001. It receives `ACK 1001 SACK 2001-4001, 5001-7001`, with exclusive right edges. Assume this report completely describes received later ranges, no reneging, and a separate loss detector has declared all uncovered sent ranges lost. Which segment ranges require retransmission?",
+    "options": [
+      {
+        "text": "Only 1001",
+        "explanation": "The SACK blocks have a second gap: 4001–5000 is not covered by either block, so segment 4001 is missing too."
+      },
+      {
+        "text": "Everything from 1001 to 7000",
+        "explanation": "That is Go-Back-N behaviour, which SACK exists to avoid. Blocks 2001–4000 and 5001–7000 have arrived."
+      },
+      {
+        "text": "1001 and 4001",
+        "explanation": "Correct. The cumulative ACK says 1001 is missing; the SACK blocks cover 2001–4000 and 5001–7000, leaving a hole at 4001–5000."
+      },
+      {
+        "text": "2001 and 5001, the left edges of the SACK blocks",
+        "explanation": "SACK blocks list data the receiver **has**. Their left edges are received segments; the gaps between blocks are what's missing."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Lay out the six segments and mark what the receiver says it holds:\n\n```\n1001 2001 3001 4001 5001 6001\n  ?   ok   ok   ?    ok   ok\n```\n\n1. `ACK 1001`: everything before 1001 received; 1001 is the next byte needed. **Missing.**\n2. `SACK 2001-4001`: segments 2001 and 3001 held.\n3. `SACK 5001-7001`: segments 5001 and 6001 held.\n4. Uncovered: 4001–5000. **Missing.**\n\nGiven the explicit loss-detection and complete-report assumptions, retransmit 1001 and 4001. A SACK report alone does not prove every omitted range is lost or must be retransmitted immediately.",
+    "link": {
+      "title": "RFC 2018: TCP Selective Acknowledgment Options",
+      "url": "https://www.rfc-editor.org/rfc/rfc2018"
+    }
+  },
+  {
+    "id": "tcp-reliability-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After a retransmission of bytes 8001–9000, the first SACK block in an ACK is `8001-9001`, entirely below the cumulative ACK. What does this D-SACK report establish, and how might a sender use it?",
+    "options": [
+      {
+        "text": "The receiver is buggy; the sender should reset the connection",
+        "explanation": "A SACK block below the cumulative ACK is a deliberate signal defined by D-SACK (RFC 2883), not an error."
+      },
+      {
+        "text": "Those bytes were received more than once; the sender may use this evidence to assess spurious retransmission and adjust recovery or reordering tolerance",
+        "explanation": "Correct. D-SACK reports duplicate receipt. It does not alone distinguish delayed originals from network duplication, or require unconditional congestion-window undo."
+      },
+      {
+        "text": "Segment 8001 is still missing and must be sent again",
+        "explanation": "The cumulative ACK is already past 9001, so 8001 has definitely arrived. The block reports a duplicate, not a hole."
+      },
+      {
+        "text": "The receiver's window is full and it is asking the sender to pause",
+        "explanation": "Flow control is signalled by the window field, not by SACK blocks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The first SACK block below the cumulative point is the D-SACK duplicate report defined by RFC 2883.\n2. It says the indicated data was received more than once.\n3. A delayed original plus retransmission is one cause; duplication elsewhere is another.\n4. A sender can combine this information with transmission history and its recovery algorithm to assess undo or greater reordering tolerance. The report alone does not prescribe a particular window change.",
+    "link": {
+      "title": "RFC 2883: An Extension to SACK (D-SACK)",
+      "url": "https://www.rfc-editor.org/rfc/rfc2883"
+    }
+  }
+]

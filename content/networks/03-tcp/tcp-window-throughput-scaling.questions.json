@@ -1,0 +1,92 @@
+[
+  {
+    "id": "tcp-flow-control-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A connection has no window scaling, so the receive window is at most 65,535 bytes. The RTT is 50 ms and the link is 1 Gbit/s. Roughly what is the maximum throughput? Use the steady-state window/RTT payload model, with the full receive window available and no tighter congestion or application limit.",
+    "options": [
+      {
+        "text": "1 Gbit/s, the link speed",
+        "explanation": "The link could carry that, but the sender may only have one window unacknowledged per round trip, which caps it far lower."
+      },
+      {
+        "text": "About 10.5 Mbit/s",
+        "explanation": "Correct. A full 65,535-byte window every 50 ms gives about 1.31 MB/s, equivalent to about 10.5 Mbit/s."
+      },
+      {
+        "text": "About 1.3 Mbit/s",
+        "explanation": "This forgets to convert bytes to bits. 1.31 is megabytes per second; multiply by 8 for megabits."
+      },
+      {
+        "text": "About 3.3 Gbit/s",
+        "explanation": "3.3 Gbit/s does not follow from the stated window/RTT model and also exceeds the supplied 1 Gbit/s link capacity."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. At most one window can be in flight before the first ACK returns, one RTT later.\n2. So:\n\n```formula\nX ≤ W / RTT\nX ≤ 65,535 B / (0.05 s) = 1,310,700 B/s\nX ≤ 1,310,700 × 8 bit/s ≈ 10.5 Mbit/s\nwhere\nX: throughput, in bytes per second (B/s)\nW: the window, 65,535 bytes (B)\nRTT: round-trip time, 50 ms = 0.05 s\nB: bytes\nbit: binary digit; × 8 turns bytes into bits\nMbit/s: megabits per second\ns: seconds\n≤: is at most\n≈: approximately equal to\nIn words: one 64 KB window per 50 ms round trip is at most about 10.5 Mbit/s.\n```\n\n3. That is about 1% of the link. The fix is window scaling plus large enough buffers.",
+    "link": {
+      "title": "Bandwidth-delay product — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bandwidth-delay_product"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need a single TCP flow to fill a 10 Gbit/s path with an 80 ms RTT. What is the smallest window scale shift count that allows a large enough window? Treat 10 Gbit/s as the target payload rate, ignore protocol overhead, and assume buffer and congestion-window capacity can be provisioned.",
+    "options": [
+      {
+        "text": "7",
+        "explanation": "A shift of seven permits about 8.4 MB, far below the required 100 MB."
+      },
+      {
+        "text": "10",
+        "explanation": "A shift of ten permits about 67 MB, still short of the required 100 MB bandwidth-delay product."
+      },
+      {
+        "text": "14",
+        "explanation": "14 is the maximum allowed and would work (about 1 GiB), but it isn't the smallest that does."
+      },
+      {
+        "text": "11",
+        "explanation": "Correct. A shift of eleven permits about 134 MB, covering the required 100 MB. A shift of ten would not suffice."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Bandwidth-delay product, then the multiplier the 16-bit field needs, then the smallest power of two that big:\n\n```formula\nBDP = C RTT\nBDP = 10^10 bit/s × 0.08 s\nBDP = 8 × 10^8 bit\nBDP = 8 × 10^8 bit / 8 = 100 MB\nM = BDP / F_max\nM = 100,000,000 B / (65,535 B)\nM ≈ 1,526\n2^10 = 1,024 < 1,526 ≤ 2^11 = 2,048\nW = 65,535 B × 2^11\nW ≈ 134 MB ≥ 100 MB\nwhere\nBDP: bandwidth-delay product, the data in flight needed to fill the path\nC: the target rate, 10 Gbit/s = 10^10 bits per second (bit/s)\nRTT: round-trip time, 80 ms = 0.08 s\nM: the multiplier the window field needs\nF_max: the largest unscaled window, 65,535 bytes (B)\nW: the largest window with shift 11\nbit: binary digit\nMB: megabytes, millions of bytes\nB: bytes\ns: seconds\n<: is less than\n≤: is at most\n≥: is at least\n≈: approximately equal to\nIn words: the path holds 100 MB, so the window must be multiplied by about 1,526; shift 10 gives only 1,024, shift 11 gives 2,048.\n```\n\n\nThis requires roughly 100 MB of usable in-flight payload capacity, with enough implementation-dependent buffer memory and congestion window. There is no universal Linux 6 MB maximum.",
+    "link": {
+      "title": "RFC 7323: TCP Extensions for High Performance",
+      "url": "https://www.rfc-editor.org/rfc/rfc7323"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A download plateaus near 5.2 Mbit/s at 100 ms RTT. Captures on both sides of a newly installed firewall confirm the peers offer window scaling but the option is removed on the way, leaving unscaled operation. Why is that rate plausible in the steady-state window/RTT model?",
+    "options": [
+      {
+        "text": "Congestion control (CUBIC) is too conservative",
+        "explanation": "The rate alone would not exclude congestion or other limits. Here the captures separately establish the lack of window scaling."
+      },
+      {
+        "text": "The server's CPU can't keep up",
+        "explanation": "CPU limits can produce stable plateaus too. The supplied handshake evidence, rather than a rate pattern alone, identifies this scenario’s window constraint."
+      },
+      {
+        "text": "Nagle's algorithm is delaying segments",
+        "explanation": "Full-sized ready segments are not held by Nagle’s small-segment rule, although partial tails and incremental writes can be affected. The supplied captures establish the window-scaling problem in this scenario."
+      },
+      {
+        "text": "The firewall is stripping the window scale option from SYNs, capping the window at 65,535 bytes",
+        "explanation": "Correct. The captures establish unscaled operation, and 65,535 / 0.1 × 8 ≈ 5.243 Mbit/s matches the model. Throughput alone would not prove option stripping."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Unscaled windows are at most 65,535 bytes.\n2. The unscaled ceiling:\n\n```formula\nX ≤ W × 8 / RTT\nX ≤ 65,535 B × 8 / (0.1 s)\nX ≤ 5,242,800 bit/s ≈ 5.2 Mbit/s\nwhere\nX: throughput, in bits per second (bit/s)\nW: the largest unscaled window, 65,535 bytes (B)\nRTT: round-trip time, 100 ms = 0.1 s\nB: bytes\nbit: binary digit\nMbit/s: megabits per second\ns: seconds\n≤: is at most\n≈: approximately equal to\nIn words: without scaling, a 100 ms path cannot exceed about 5.2 Mbit/s.\n```\n\n3. Endpoint and on-path captures establish that scaling was removed; the numerical match is supporting evidence, not a unique diagnosis.\n4. Inspect both handshake directions because inconsistent option rewriting can also produce disagreement or packet drops, not merely a clean throughput cap.",
+    "link": {
+      "title": "RFC 7323: TCP Extensions for High Performance",
+      "url": "https://www.rfc-editor.org/rfc/rfc7323"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "tcp-connections-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A packet capture for a TCP connection attempt shows one case where the client receives a valid RST immediately, and another where repeated SYN attempts receive no response before the configured timeout. Which explanation is consistent with this evidence?",
+    "options": [
+      {
+        "text": "The RST case could be an unfiltered host with no listener; the silent case could be a firewall dropping the SYNs",
+        "explanation": "Correct. These are possible explanations, not unique diagnoses: a firewall can actively reject, while loss, routing failures or an unavailable host can also cause silence."
+      },
+      {
+        "text": "Refused: a firewall dropped the SYN. Timeout: nothing listens on port 8080.",
+        "explanation": "Silent dropping does not itself generate the observed immediate RST. A normal unfiltered TCP endpoint with no listener normally rejects a SYN."
+      },
+      {
+        "text": "Refused: the server's SYN queue is full. Timeout: the server sent RST.",
+        "explanation": "The capture explicitly distinguishes a received valid RST from silence. SYN-backlog overflow can trigger drops or cookies, with behaviour depending on configuration."
+      },
+      {
+        "text": "Both mean the server is down; the difference is only in how curl reports it",
+        "explanation": "The captures show distinct protocol outcomes. Neither error alone proves the service host is powered off."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A valid RST to the opening SYN rejects the attempt and can produce ECONNREFUSED.\n2. No response leaves retry/timeout handling to the stack and application.\n3. Neither observation alone identifies the exact device or failure cause.\n4. Do not infer a universal Linux timeout from a 1, 2, 4… series: retrieved kernel documentation includes configurable linear initial SYN timeouts as well as exponential timer backoff.",
+    "link": {
+      "title": "RFC 9293: Transmission Control Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc9293"
+    }
+  },
+  {
+    "id": "tcp-connections-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An off-path attacker knows the 4-tuple of a long-lived BGP session and floods it with forged RSTs, guessing sequence numbers. One forged RST lands inside the receive window but not on the exact next expected sequence number. What does a stack that implements RFC 5961 do?",
+    "options": [
+      {
+        "text": "Tears the connection down, because any in-window RST is valid",
+        "explanation": "That was the older RFC 793 behaviour, and it is exactly what made blind reset attacks practical: the attacker only had to land somewhere in a large window."
+      },
+      {
+        "text": "Sends a challenge ACK; only an RST with the exact expected sequence number resets the connection",
+        "explanation": "Correct for the stated established-connection RFC 5961 rule. A rate-limited challenge ACK may be used. The mechanism improves resistance to blind resets; it is not peer authentication or proof that side channels cannot exist."
+      },
+      {
+        "text": "Silently ignores every RST on an established connection",
+        "explanation": "RST must still work, or crashed and rebooted peers could never clear stale connections. RFC 5961 narrows acceptance; it doesn't remove it."
+      },
+      {
+        "text": "Replies with its own RST to the attacker's source address",
+        "explanation": "The specified response is a challenge ACK toward the claimed peer, not a reset. It asks the peer’s TCP state to respond consistently; this is not a cryptographic proof."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The older in-window test accepted any sequence number within a range. In a simplified stationary 65,536-byte window, a uniform random 32-bit guess hits that range with this probability:\n\n```formula\nP_win = W / 2^32\nP_win = 65,536 / 4,294,967,296\nP_win = 1 / 65,536 ≈ 0.0000153\nwhere\nP_win: the chance that one random guess lands inside the window\nW: the receive window, 65,536 sequence numbers; it is divided by 2^32 = 4,294,967,296, the count of all possible 32-bit sequence numbers\n≈: approximately equal to\nIn words: a uniform guess hits this stationary window with probability one in 65,536. Independent guesses therefore take 65,536 attempts on average for a first hit; that is not a guarantee that this many attempts succeed or cover the whole sequence space.\n```\n\n2. RFC 5961’s established-state rule accepts an exact RCV.NXT match as a reset; an in-window nonmatch triggers a challenge ACK, subject to limiting; out-of-window resets are discarded.\n3. In an idealised stationary state with no feedback, guessing one exact 32-bit value is harder. Real state motion, rate limits, side channels and deployment details prevent interpreting this as a measured attack cost or complete authentication.",
+    "link": {
+      "title": "RFC 5961: Improving TCP's Robustness to Blind In-Window Attacks",
+      "url": "https://www.rfc-editor.org/rfc/rfc5961"
+    }
+  }
+]

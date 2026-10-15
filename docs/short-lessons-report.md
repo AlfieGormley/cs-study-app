@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 31/76. Updated 2026-10-15.
+Verified modules: 32/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -38,6 +38,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | os/I/O & Event-Driven Servers | 6 | 32 | 67 | 29 | 356 | 455 | 66 |
 | os/Virtualisation & Containers | 6 | 29 | 66 | 34 | 510 | 605 | 36 |
 | networks/Network Foundations & the Link Layer | 6 | 37 | 72 | 81 | 431 | 629 | 41 |
+| networks/Transport Layer: TCP & UDP in Depth | 7 | 43 | 81 | 89 | 319 | 532 | 48 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3215,6 +3216,55 @@ Low-confidence areas:
 - **medium** — nf-shared-ethernet: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
 - **medium** — nf-arp-cache-failover: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
 - **medium** — nf-stp-recovery: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
+
+## networks: Transport Layer: TCP & UDP in Depth
+
+[Independent verification record](../content/networks/03-tcp/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- A reset-guess probability example incorrectly treated the expected 65,536 uniform attempts as guaranteed coverage. It now states the first-hit expectation and explicitly denies that guarantee.
+- AccECN no longer says original DCTCP requires it: RFC 8257 uses modified ECE feedback independently of RFC 9768 AccECN. The glossary distinguishes those mechanisms.
+- SYN_SENT and SYN_RCVD definitions now include the RFC-required simultaneous-open path rather than restricting them to client-waits-SYNACK/server states.
+- Python daemon threads do not end merely because the main thread exits: process exit waits until no non-daemon threads remain. The glossary now gives that rule and abrupt-cleanup limitation.
+- The old select(10,000 sockets) example violated the usual Linux fd_set/FD_SETSIZE limit. It now distinguishes select’s normal 1,024 descriptor limit from poll’s larger scanned set.
+- Application-limited and loss-based entries/examples no longer make universal window-growth or overflow claims; Reno/sawtooth examples distinguish fast-recovery events from RTO behaviour.
+- QUIC path validation is distinguished from handshake/token address validation; packet-number-space aliases now open a definition that explains the separate numbering/ACK context.
+- recvfrom/sendto definitions now scope datagram guarantees to UDP rather than claiming these APIs are datagram-only; BlockingIOError includes connection-in-progress error codes.
+- Physical denominators include all necessary brackets, UDP bit/byte conversion is explicit, window-scaling worked substitutions retain units, and binary floating-point output is labelled rounded.
+- Code comments are combined into readable purpose-oriented lines without changing executable statements; obsolete numbered cross-references now point to the correct short unit.
+
+Remaining gaps:
+
+- No WAN packet-capture experiment, SYN flood, AQM benchmark or QUIC migration experiment. Source-supported algorithms and explicit bounded models do not imply measured deployment performance.
+- The selector loop deliberately retains partial-write/would-block defects for its own debugging question; it is not a production server. Services need total deadlines and resource/connection policies.
+- Advanced UDP options and implementation-specific recovery/state handling are described selectively rather than implementing a full transport stack.
+- The Chiu/Jain scanned first page/abstract was inspected visually, not a complete independent proof of the paper; the fairness attribution remains limited to its simplified model.
+
+Low-confidence areas:
+
+- **medium** — tcp-port-numbers: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-syn-flood-cookies: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-graceful-close-time-wait: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-close-states-production: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-rto-backoff-ambiguity: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-rack-tail-probes: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-buffer-autotuning: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-nagle-delayed-acks: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-split-write-latency: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-aimd-reno-recovery: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-reno-large-path-recovery: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-cubic-time-target: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-bbr-versioned-model: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-ecn-congestion-feedback: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-short-transfer-timing: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-mathis-loss-model: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-bufferbloat-aqm: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-stream-blocking-ossification: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-quic-transport-tradeoffs: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-socket-calls-backlogs: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-length-prefixed-service: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+- **medium** — tcp-readiness-asyncio: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
 
 ## synth: Sound & Digital Audio
 

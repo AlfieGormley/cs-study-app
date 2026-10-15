@@ -1,0 +1,70 @@
+[
+  {
+    "id": "tcp-flow-control-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On an established connection, a trace confirms a small header leaves immediately, its ACK is delayed by the server for 40 ms, and a separately written sub-MSS body remains in the client’s TCP send queue until that ACK arrives. Nagle is enabled, both windows are open and the server awaits the full request. Which mechanism explains this trace?",
+    "options": [
+      {
+        "text": "The server's receive window is zero",
+        "explanation": "The prompt says both advertised and congestion windows allow sending, so a zero window is not this trace’s cause."
+      },
+      {
+        "text": "Slow start is restarting on every request",
+        "explanation": "The stated trace identifies waiting for the header ACK with capacity available, rather than a congestion-window limit. Response duration alone would not establish that distinction."
+      },
+      {
+        "text": "Nagle holds the body until the header is ACKed, and the server delays that ACK until its ~40 ms delayed-ACK timer fires",
+        "explanation": "Correct. This is the write-write-read interaction. The server can't piggyback the ACK on a response because it doesn't have the whole request yet."
+      },
+      {
+        "text": "The server's SYN queue is full, so each connection waits",
+        "explanation": "This is an established connection, so the listener’s SYN backlog does not explain the observed body hold."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `send(header)`: nothing is in flight, so Nagle lets it go immediately.\n2. `send(body)`: the header is still unACKed and the body is smaller than an MSS, so **Nagle holds it**.\n3. The server got the header but not the full request. It has nothing to send back, so it **delays the ACK**, hoping to piggyback it.\n4. In the stated measured trace, after 40 ms the delayed-ACK timer fires; the ACK arrives; Nagle releases the body; the server responds.\n5. This confirmed interaction adds a wait; it is not a universal timer or outcome for every request. Possible remedies: `sendall(header + body)`, or `TCP_NODELAY`.",
+    "link": {
+      "title": "Nagle's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Nagle%27s_algorithm"
+    }
+  },
+  {
+    "id": "tcp-flow-control-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A client sends a 200-byte header and 300-byte body in separate calls and a trace confirms the Nagle/delayed-ACK interaction. Which client changes can remove that specific dependency? For batching choices assume an empty send queue, both pieces supplied before packetisation, a 500-byte message below MSS and sufficient windows/buffer space. Select all that apply.",
+    "options": [
+      {
+        "text": "Send header and body together with one `sendall(header + body)`",
+        "explanation": "Correct under the batching assumptions: supplying the complete message avoids waiting for the first partial message’s ACK before supplying its remainder. sendall still does not guarantee one packet in general."
+      },
+      {
+        "text": "Use `socket.sendmsg([header, body])` (scatter/gather, like writev)",
+        "explanation": "Correct under the stated assumptions: both buffers are supplied together. sendmsg may return a partial byte count, which the caller must handle; one call does not universally imply one packet."
+      },
+      {
+        "text": "Set `TCP_NODELAY` on the client socket",
+        "explanation": "Correct. This removes Nagle’s hold of the body. Other send constraints still apply, so it does not guarantee immediate transmission."
+      },
+      {
+        "text": "Set `TCP_QUICKACK` on the client socket",
+        "explanation": "QUICKACK changes when the client sends ACKs. The stall comes from the **server** delaying its ACK, so this does nothing here."
+      },
+      {
+        "text": "Increase the client's SO_SNDBUF to 1 MB",
+        "explanation": "The send buffer already has room; Nagle is holding the body because the header is unACKed, not because of a lack of buffer."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Batching can avoid the split-message dependency under the explicit assumptions; TCP_NODELAY removes Nagle’s waiting condition. Client-side QUICKACK changes the wrong endpoint’s ACK behaviour for this trace, and a larger send buffer does not override Nagle when capacity already exists. Neither batching nor NODELAY guarantees one write per packet or eliminates all possible transport delays.",
+    "link": {
+      "title": "Nagle's algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Nagle%27s_algorithm"
+    }
+  }
+]

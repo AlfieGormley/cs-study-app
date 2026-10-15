@@ -1,0 +1,103 @@
+[
+  {
+    "id": "tcp-udp-ports-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which requirements can motivate an application to use ordinary UDP datagrams with application-specific control instead of one TCP byte stream? This compares base transports, not reliable protocols such as QUIC built above UDP. Select all that apply.",
+    "options": [
+      {
+        "text": "Independent full-state game snapshots where superseded updates should not block newer ones",
+        "explanation": "Correct. The application can discard stale snapshots and avoid TCP byte-stream head-of-line blocking. Important events or delta-dependent state may require separate reliability."
+      },
+      {
+        "text": "A software download whose only stated requirement is reliable delivery of every file byte",
+        "explanation": "That requirement alone does not motivate replacing TCP with base UDP. A higher-level reliable protocol such as QUIC can also carry downloads; this is not a claim that files cannot use UDP-based transports."
+      },
+      {
+        "text": "A small DNS request/reply where avoiding a fresh transport handshake is useful",
+        "explanation": "Correct. UDP can carry the small exchange without a transport handshake; DNS still needs retries, validation and TCP support where required. Existing TCP connections can be reused."
+      },
+      {
+        "text": "Deadline-sensitive voice packets for which later packets should not wait for expired ones",
+        "explanation": "Correct. Media-specific loss recovery can respect playback deadlines. Concealment, FEC or timely retransmission can all be useful; retransmission is not universally pointless."
+      },
+      {
+        "text": "A payment API whose only stated requirement is that the transaction must not be lost",
+        "explanation": "Base UDP adds no delivery guarantee. TCP or QUIC can carry reliable data, but neither alone guarantees durable payment processing: acknowledgements, retries and idempotency belong at the application layer."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Select the requirements that benefit from independent datagrams or no fresh transport handshake: snapshots, a small DNS exchange and deadline-sensitive voice. A file’s completeness requirement or a payment’s durability requirement alone does not motivate bare UDP. Reliable transports built over UDP remain valid options, and application correctness is separate from byte delivery.",
+    "link": {
+      "title": "User Datagram Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/User_Datagram_Protocol"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A game sends 60 small position updates per second to the server over **TCP**. RTT is 100 ms. One segment carrying an update is lost. What does the server's game loop experience?",
+    "options": [
+      {
+        "text": "It misses that one update and carries on with the next one 16 ms later",
+        "explanation": "TCP does not skip missing stream bytes to expose later ones. UDP-based independent snapshots can avoid that stream-ordering constraint, subject to loss and scheduling."
+      },
+      {
+        "text": "Nothing at all, because TCP retransmits transparently",
+        "explanation": "The retransmission is transparent to correctness, not to timing. The delay it causes is the whole problem."
+      },
+      {
+        "text": "Later bytes on that TCP stream wait for the missing bytes; after recovery, several buffered updates may become readable",
+        "explanation": "Correct. TCP exposes an ordered byte stream. The question’s RTT does not specify an exact stall duration or imply the application’s whole game loop freezes."
+      },
+      {
+        "text": "The TCP connection is reset",
+        "explanation": "One lost segment does not by itself instruct TCP to reset. Recovery is normally attempted; repeated failure can eventually reach an implementation or application timeout."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Later stream bytes can arrive out of order and be buffered.\n2. TCP cannot expose them as contiguous application data until the earlier gap is filled.\n3. Loss detection and recovery time depend on ACKs, timers, the loss position and implementation. RTT alone provides no exact pause duration.\n4. At 60 Hz, six update intervals span 100 ms:\n\n```formula\nT = 1 / f = 1 / (60 Hz) ≈ 16.7 ms\nN = 100 ms / (16.7 ms) ≈ 6\nwhere\nT: the time between updates, in milliseconds (ms)\nf: the update rate, 60 per second\nN: how many update intervals fit in one 100 ms RTT\nHz: hertz, times per second\nms: milliseconds\n≈: approximately equal to\nIn words: updates are about 16.7 ms apart, so one RTT spans about six of them.\n```\n\nThat arithmetic is only an illustration, not a guaranteed six-update stall.\n5. An application can continue local prediction or other work while waiting.",
+    "link": {
+      "title": "Head-of-line blocking — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Head-of-line_blocking"
+    }
+  },
+  {
+    "id": "tcp-udp-ports-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Why does QUIC run on top of UDP rather than as a brand-new IP protocol alongside TCP and UDP? Select all that apply.",
+    "options": [
+      {
+        "text": "Using existing UDP support can ease traversal of middleboxes compared with introducing a new IP protocol number",
+        "explanation": "Correct. Some devices filter unknown protocols or lack suitable translation support. Devices can support other transports too, and UDP can itself be blocked."
+      },
+      {
+        "text": "UDP lets QUIC be implemented in an application or library in user space, without waiting for OS kernels to be updated",
+        "explanation": "Correct. Existing UDP socket interfaces allow QUIC implementations in application libraries; operating-system policy and network access still apply."
+      },
+      {
+        "text": "UDP provides the reliability QUIC needs, so QUIC doesn't have to implement it",
+        "explanation": "UDP provides no reliability. QUIC implements acknowledgements, retransmission and congestion control itself."
+      },
+      {
+        "text": "UDP's checksum replaces the need for encryption",
+        "explanation": "The checksum is not cryptographic authentication. QUIC uses TLS 1.3 for its handshake and derives keys for packet protection; a checksum does not replace that."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Reusing UDP allows implementations to use existing endpoint socket APIs and network support.\n2. This can reduce the deployment changes required by a new IP protocol.\n3. It does not make UDP universally reachable or restrict QUIC to user-space implementations.\n4. QUIC supplies its own loss recovery, stream ordering, congestion control and packet protection above UDP.",
+    "link": {
+      "title": "RFC 9000: QUIC",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  }
+]

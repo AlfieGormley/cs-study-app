@@ -1,0 +1,95 @@
+[
+  {
+    "id": "test-doubles-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An `OrderService` test mocks the pricer, the tax calculator, the repository and the payment client, then asserts `payment.charge` was called with `12`, the value the tax mock was told to return. Someone introduces a bug that makes the real calculator return 0% instead of this scenario's required 20% tax. What happens to this test?",
+    "options": [
+      {
+        "text": "It still passes, because it only checks the plumbing between mocks, not the real tax rules",
+        "explanation": "Correct. Over-mocked tests restate the implementation; real bugs in mocked-out collaborators are invisible to them."
+      },
+      {
+        "text": "It fails, because the total is wrong",
+        "explanation": "The tax calculator is mocked, so its real logic never runs in this test."
+      },
+      {
+        "text": "It errors, because the mock and real class disagree",
+        "explanation": "Nothing compares the mock to the real class unless you use autospec, and the signature hasn't changed anyway."
+      },
+      {
+        "text": "It fails only if run with `--strict-markers`",
+        "explanation": "Markers have nothing to do with it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace what actually executes:\n\n1. `pricer.price` (mock) returns 10.\n2. `tax.add` (mock) returns 12.\n3. `OrderService` passes 12 to `payment.charge` (mock).\n4. Assert 12. Pass.\n\nThe real tax calculator never runs, so its bug cannot affect this test. Better: use the real (pure, fast) pricer and tax calculator and double only the payment client, which has side effects.",
+    "link": {
+      "title": "Mocks Aren't Stubs — Martin Fowler",
+      "url": "https://martinfowler.com/articles/mocksArentStubs.html"
+    }
+  },
+  {
+    "id": "test-doubles-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your service calls `requests.get` to a weather API. Which approach gives the most trustworthy tests?",
+    "options": [
+      {
+        "text": "Patch `requests.get` in every unit test with a `Mock` returning a hand-written JSON dict",
+        "explanation": "This encodes your guess of the API's behaviour in dozens of places. If the guess is wrong or the API changes, every test is wrong together."
+      },
+      {
+        "text": "Call the real API in every unit test for realism",
+        "explanation": "That makes unit tests slow, flaky and dependent on someone else's uptime and rate limits."
+      },
+      {
+        "text": "Skip testing the weather code because it is third-party",
+        "explanation": "The parsing and error handling are your code and need tests."
+      },
+      {
+        "text": "Wrap the API in a small `WeatherClient` adapter you own; double the adapter in unit tests; cover the adapter with a few integration tests against the real or sandbox API",
+        "explanation": "Correct. 'Don't mock what you don't own': the adapter gives you a narrow interface to double, and the adapter's own tests check your assumptions against reality."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Split the problem:\n\n1. **Your logic** (what to do with a forecast) should be tested fast and deterministically. Double a narrow interface you control: `WeatherClient.forecast(city)`.\n2. **Your assumptions about the API** (field names, API error responses) must be checked against the real thing, in a handful of integration tests on the adapter.\n\nThis keeps hundreds of tests fast while keeping the one risky boundary honest.",
+    "link": {
+      "title": "Test Doubles — Software Engineering at Google, ch. 13",
+      "url": "https://abseil.io/resources/swe-book/html/ch13.html"
+    }
+  },
+  {
+    "id": "test-doubles-q12",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In which of these tests is **interaction verification** (asserting on calls made to a double) the right approach? Select all that apply.",
+    "options": [
+      {
+        "text": "Checking that a password-reset request invokes its email adapter once with the intended user",
+        "explanation": "Correct for the local adapter-invocation requirement. It does not prove successful delivery of an email by a remote provider."
+      },
+      {
+        "text": "Checking that this checkout code invokes its payment adapter once when handling the same logical request twice",
+        "explanation": "Correct for the local call-count requirement. A single remote payment effect needs additional idempotency and failure-path checks."
+      },
+      {
+        "text": "Checking that `Cart.total()` internally calls `_sum_lines()` before `_apply_vat()`",
+        "explanation": "That is internal plumbing; assert on the total instead, so refactoring doesn't break the test."
+      },
+      {
+        "text": "Checking that a user is saved, when a fake repository is available",
+        "explanation": "With a fake you can use state verification: save, then read back. That is less coupled to how saving happens."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Ask: is the call itself the behaviour a user or another system cares about?\n\n- A: yes, the local email-adapter invocation is the asserted contract; delivery requires separate checks.\n- B: yes, the number of local adapter calls is the asserted contract, not proof of remote payment effects.\n- C: no, it is how `total()` works internally.\n- D: no, what matters is that the user can be found afterwards, which a fake lets you check directly.\n\nPrefer state; use interactions for side effects at the system's edges.",
+    "link": {
+      "title": "Mocks Aren't Stubs — Martin Fowler",
+      "url": "https://martinfowler.com/articles/mocksArentStubs.html"
+    }
+  }
+]

@@ -1,0 +1,160 @@
+[
+  {
+    "id": "test-integration-e2e-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In consumer-driven contract testing, who runs the verification that the provider honours the contract?",
+    "options": [
+      {
+        "text": "The consumer, in its own CI, against a mock provider",
+        "explanation": "The consumer's run *produces* the contract; it never touches the real provider."
+      },
+      {
+        "text": "A shared staging environment, nightly",
+        "explanation": "Avoiding dependence on shared environments is a main motivation for contract tests."
+      },
+      {
+        "text": "Nobody; the contract is documentation only",
+        "explanation": "A contract that isn't verified is just a hope. Verification is the point."
+      },
+      {
+        "text": "The provider, in its CI, replaying the contract against the real provider code",
+        "explanation": "Correct. That is what catches a provider change that would break a consumer, before the provider deploys."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "There are two halves:\n\n1. **Consumer CI**: tests run against a mock provider and record what they need: the contract.\n2. **Provider CI**: replays each contract's requests against the real provider and checks the responses.\n\nStep 2 is where a renamed field or a changed status code fails, in the build of the team who made the change.",
+    "link": {
+      "title": "Pact documentation",
+      "url": "https://docs.pact.io/"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Orders' unit tests stub the Users API with `{\"id\": 42, \"email\": \"a@x.io\"}`. The Users team renames `email` to `primary_email` and all of their own tests pass. What catches the break **before** deployment?",
+    "options": [
+      {
+        "text": "Orders' unit tests",
+        "explanation": "They still use the old stub, which nobody has changed. They stay green."
+      },
+      {
+        "text": "Users' unit tests",
+        "explanation": "Users' tests were updated with the rename; they know nothing about what Orders reads."
+      },
+      {
+        "text": "A consumer-driven contract test: Orders' contract says it reads `email`, and Users' CI verifies that contract against the new code",
+        "explanation": "Correct. The provider build fails because the response no longer contains `email`, before Users deploys."
+      },
+      {
+        "text": "Nothing can, short of production monitoring",
+        "explanation": "This is exactly the problem contract tests solve, without needing both services running together."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each team's tests check only their side:\n\n- Orders' stub: an old belief about Users.\n- Users' tests: Users' new behaviour.\n\nNothing connects them. The contract does: it is Orders' belief written down as data and run against Users' real code. With the rename, the provider check fails on the missing `email` field (in the lesson's example, `KeyError: 'email'`).",
+    "link": {
+      "title": "Consumer-Driven Contracts — martinfowler.com",
+      "url": "https://martinfowler.com/articles/consumerDrivenContracts.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The provider's response is `{\"id\": 42, \"email\": \"a@x.io\", \"created\": \"2026-01-01\"}`, and the consumer's contract requires only `id` (int) and `email` (str). Using the lesson's contract test, what happens?",
+    "options": [
+      {
+        "text": "It fails because `created` is not in the contract",
+        "explanation": "The test only checks the fields listed in the contract. Extra fields are ignored."
+      },
+      {
+        "text": "It fails because `created` is a string date, not a datetime",
+        "explanation": "The contract says nothing about `created`, so its type isn't checked."
+      },
+      {
+        "text": "It errors because the contract has no `created` type",
+        "explanation": "The loop iterates over the contract's fields only."
+      },
+      {
+        "text": "It passes: extra fields don't matter to a consumer that ignores them",
+        "explanation": "Correct for this contract and a consumer that ignores extra fields. It checks only the recorded required fields; unrecorded consumer dependencies need their own tests."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The verification loop:\n\n```\nfor f, typ in fields.items():\n  # id:int, email:str\n  assert isinstance(body[f], typ)\n```\n\n`body['id']` is 42 (int), `body['email']` is a str: pass. `created` is never examined. This is the core freedom of consumer-driven contracts: the provider may add or change anything no consumer depends on.",
+    "link": {
+      "title": "Consumer-Driven Contracts — martinfowler.com",
+      "url": "https://martinfowler.com/articles/consumerDrivenContracts.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your team keeps an `InMemoryUsers` fake used by 400 unit tests and a real `PostgresUsers`. How do you stop the fake drifting from the real behaviour?",
+    "options": [
+      {
+        "text": "Run one shared suite of behavioural tests against both implementations, e.g. a parametrised fixture",
+        "explanation": "Correct. If either implementation diverges on an exercised case with an adequate assertion, that check fails. This supplies evidence for the covered contract, not proof that all behaviour matches."
+      },
+      {
+        "text": "Code-review every fake change carefully",
+        "explanation": "Reviews help but don't reliably catch behaviour differences such as uniqueness or ordering rules."
+      },
+      {
+        "text": "Replace the fake with `Mock()` so there is nothing to drift",
+        "explanation": "A bare Mock has no behaviour at all, so it 'drifts' completely and silently."
+      },
+      {
+        "text": "Delete the unit tests and rely on E2E tests",
+        "explanation": "That throws away fast feedback and moves towards the ice-cream cone."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The fake is a promise: 'behaves like the real thing for what tests need'. Make the promise executable:\n\n```\n@pytest.fixture(params=[\n    InMemoryUsers, PostgresUsers])\ndef users(request): ...\n```\n\nEach behavioural test now runs twice. If someone adds a rule for matching email addresses without letter case to Postgres but not the fake, the fake's run of `test_duplicate_case_insensitive` fails. This is a contract test for an internal interface.",
+    "link": {
+      "title": "Contract Test — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/ContractTest.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your organisation has 30 services and a shared staging environment where E2E tests fail about one run in four, usually because another team's service is being updated. Which changes are likely to help? Select all that apply.",
+    "options": [
+      {
+        "text": "Move most cross-service checks to consumer-driven contract tests run in each service's CI",
+        "explanation": "Correct. They check each seam without needing other services up, so another team's deploy can't break them."
+      },
+      {
+        "text": "Add automatic retries until the E2E suite passes, and treat that as green",
+        "explanation": "Retries hide real failures and do nothing about the cause; teams soon stop trusting the suite."
+      },
+      {
+        "text": "Reduce the E2E suite to a handful of critical journeys",
+        "explanation": "Correct. Fewer tests that depend on the whole system means fewer chances to hit environmental failures."
+      },
+      {
+        "text": "Use ephemeral per-branch environments, or stub other services, for most higher-level tests",
+        "explanation": "Correct. Tests stop depending on other teams' incomplete updates."
+      },
+      {
+        "text": "Add more E2E tests to improve coverage of the shared environment",
+        "explanation": "More tests against an unstable environment mean more spurious test failures, not more confidence."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "The cause is coupling to an environment nobody controls. Attack the coupling:\n\n- Check seams with contracts in each service's own pipeline (A).\n- Keep only the few E2E journeys that really need the whole system (C).\n- Give tests environments they own (D).\n\nRetries (B) and more E2E tests (E) leave the cause alone and make the signal noisier.",
+    "link": {
+      "title": "Consumer-Driven Contracts — martinfowler.com",
+      "url": "https://martinfowler.com/articles/consumerDrivenContracts.html"
+    }
+  }
+]

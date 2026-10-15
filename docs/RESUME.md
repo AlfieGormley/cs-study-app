@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 56/76 modules; 360 originals → 1929 short lessons with 4221 focused questions.
+- Independently verified: 57/76 modules; 366 originals → 1951 short lessons with 4289 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `d68e3f8`, version `020de2132c30`, 1901 short lessons/4155 focused questions
-  across 55 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
-- Current generated candidate: `3681568901a9`, 56 modules/1929 units/4221 questions.
+- Latest confirmed live release: `451048a`, version `3681568901a9`, 1929 short lessons/4221 focused questions
+  across 56 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Current generated candidate: `32821d7aa537`, 57 modules/1951 units/4289 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -24,9 +24,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- software-engineering/se-testing: verifying; /root/se_testing_short_verify.
-- software-engineering/se-git: authoring; /root/se_git_short_author.
+- software-engineering/se-git: verifying; /root/se_git_short_verify.
 - software-engineering/se-architecture: authoring; /root/se_architecture_short_author.
+- software-engineering/se-practices: authoring; /root/se_practices_short_author.
 
 Verification and integration:
 

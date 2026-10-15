@@ -1,0 +1,168 @@
+[
+  {
+    "id": "test-unit-testing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A teammate writes:\n\n```python\ndef test_register():\n    register(\"ada@x.io\", \"pw\")\n```\n\nWhat is wrong with it?",
+    "options": [
+      {
+        "text": "Nothing; if `register` misbehaves the test fails",
+        "explanation": "Only if it raises. If it returns the wrong value, stores nothing or sends no email, this test still passes."
+      },
+      {
+        "text": "It has no assertion, so it only checks that no exception escapes",
+        "explanation": "Correct. It contributes to coverage while verifying almost nothing. Assert the observable result, such as the user existing afterwards."
+      },
+      {
+        "text": "pytest requires at least one `assert`, so it errors",
+        "explanation": "pytest accepts tests without asserts; it just passes them if nothing raises, which is exactly the danger."
+      },
+      {
+        "text": "Test names must describe the expected result, so pytest skips it",
+        "explanation": "Naming is a convention for humans; Under default discovery, pytest collects eligible test-prefixed functions in discovered test modules; configuration can change this."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Ask: what bug would make this test fail?\n\n- `register` crashes: fails. Good.\n- `register` silently does nothing: **passes**.\n- `register` stores the wrong email: **passes**.\n\nSo the test catches only crashes. Add the 'assert' step: e.g. `assert users.get_by_email(\"ada@x.io\") is not None`.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A test asserts `'ABC' in svc._cache` after calling `svc.price('ABC')`. A colleague replaces the dict with `functools.lru_cache`; prices are identical. What has happened?",
+    "options": [
+      {
+        "text": "A real regression was caught",
+        "explanation": "Callers see exactly the same prices. Nothing observable changed."
+      },
+      {
+        "text": "A false alarm: the test was coupled to an implementation detail and broke on a pure refactor",
+        "explanation": "Correct. Tests should check behaviour through the public interface; this one checked a private attribute."
+      },
+      {
+        "text": "The refactor must be reverted to keep the suite green",
+        "explanation": "Reverting a valid refactor to satisfy a brittle test is the wrong way round. Fix the test."
+      },
+      {
+        "text": "The test should be deleted and caching left untested",
+        "explanation": "If caching matters, test it observably, e.g. that the backing price source is called once for two lookups."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Apply the rule: if a pure refactor breaks a test, the test was coupled to implementation.\n\n1. Behaviour before: `price('ABC')` returns X.\n2. Behaviour after: `price('ABC')` returns X.\n3. Test result changed from pass to fail.\n\nSo the test measured *how*, not *what*. Rewrite it against public behaviour; if the caching itself is a requirement, give `PriceService` a fake price source and assert it was queried only once.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these introduce a risk of **non-repeatable outcomes**, depending on its assertions? Select all that apply.",
+    "options": [
+      {
+        "text": "Calling `datetime.now()` inside the code under test and asserting on the result",
+        "explanation": "The assertion can depend on wall-clock time; merely reading time does not guarantee that pass/fail changes."
+      },
+      {
+        "text": "Using `random.random()` without a fixed seed or injected generator",
+        "explanation": "Uncontrolled random inputs can expose different paths. They do not necessarily change pass/fail if the asserted property always holds."
+      },
+      {
+        "text": "Using `pytest.mark.parametrize` with ten literal cases",
+        "explanation": "Literal parameters are identical every run; this is perfectly repeatable."
+      },
+      {
+        "text": "Reading from a module-level list that other tests append to",
+        "explanation": "Correct. The result depends on which tests ran first, so it changes with order and selection."
+      },
+      {
+        "text": "Using the `tmp_path` fixture to write files",
+        "explanation": "A fresh directory isolates this source of state. It does not guarantee repeatability of all filesystem operations or make a disk-using test small under Google's classification."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A repeatable test gives the same result on every run, on every machine, in any order. Check each for a hidden input:\n\n- A: hidden input is the clock.\n- B: hidden input is the random state.\n- C: no hidden input.\n- D: hidden input is other tests' side effects.\n- E: its directory is isolated per test, but filesystem operations still depend on available resources and platform behaviour.\n\nFix the hidden inputs by injecting them (a `now` parameter, a seeded `random.Random`) or by giving each test fresh state.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Which test best follows the 'DAMP' advice for tests?",
+    "options": [
+      {
+        "text": "A test that loops over a list of 20 cases with an `if` choosing the expected test result for each",
+        "explanation": "Logic in tests can be wrong itself. Prefer `parametrize` with literal expected test results."
+      },
+      {
+        "text": "A test that inherits setup from three base classes so no line is ever repeated",
+        "explanation": "That is DRY taken too far: understanding one failure means reading four files."
+      },
+      {
+        "text": "A test about one response field that compares the full 40-field JSON snapshot",
+        "explanation": "Over-specified: 39 unrelated fields can break it, and the reader cannot tell which field the test is about."
+      },
+      {
+        "text": "A test whose inputs and expected outputs are visible in its body, with irrelevant setup hidden in a small factory such as `make_user(age=17)`",
+        "explanation": "Correct. The reader sees what matters (age 17) and nothing that doesn't, and understands the test without leaving it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "DAMP (descriptive and meaningful phrases) means optimising tests for the reader:\n\n- Show the values that drive this test's outcome.\n- Hide incidental details behind well-named helpers.\n- Avoid control flow, inheritance chains and huge snapshots.\n\n`make_user(age=17)` followed by `assert not can_rent(user)` reads like a sentence. Some duplication across tests is a fair price for that clarity.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are reviewing a file of small, focused unit tests. Which of these are genuine problems worth flagging? Select all that apply.",
+    "options": [
+      {
+        "text": "A test with three asserts checking the first name, last name and title returned by one `parse_name` call",
+        "explanation": "Several asserts about one behaviour are fine. 'One assert per test' is a myth; one *behaviour* per test is the goal."
+      },
+      {
+        "text": "A single test that registers a user, logs in, changes the password and deletes the account",
+        "explanation": "Correct. Four behaviours in one test: when it fails you do not know which broke, and later steps never run."
+      },
+      {
+        "text": "A test that calls a private method `_normalise()` directly",
+        "explanation": "Correct. It couples the test to internals; test through the public method, or extract the helper as its own unit."
+      },
+      {
+        "text": "A test that uses `monkeypatch.setenv` to set `DB_URL`",
+        "explanation": "That is the right tool: the change is undone automatically after the test."
+      },
+      {
+        "text": "A test that sleeps for 2 seconds waiting for a background thread",
+        "explanation": "Correct. It is slow and still flaky if the thread takes 2.1 s. Make the work synchronous in tests or wait on an explicit signal."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Judge each against 'fast, independent, repeatable, one behaviour, public interface':\n\n- A: one behaviour, several asserts. Fine.\n- B: many behaviours in one test. Split it.\n- C: tests a private method. Brittle.\n- D: correct use of a built-in fixture.\n- E: sleeps are slow and nondeterministic.\n\nSo B, C and E are worth flagging.",
+    "link": {
+      "title": "Unit Testing — Software Engineering at Google, ch. 12",
+      "url": "https://abseil.io/resources/swe-book/html/ch12.html"
+    }
+  }
+]

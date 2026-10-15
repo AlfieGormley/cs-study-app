@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 56/76. Updated 2026-10-15.
+Verified modules: 57/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -63,6 +63,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | security/Security Engineering in Practice | 4 | 23 | 45 | 13 | 252 | 333 | 47 |
 | software-engineering/Design Principles & Clean Code | 6 | 26 | 69 | 8 | 292 | 395 | 45 |
 | software-engineering/Design Patterns | 6 | 28 | 66 | 13 | 273 | 380 | 54 |
+| software-engineering/Testing | 6 | 22 | 68 | 15 | 196 | 301 | 76 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4535,6 +4536,30 @@ Low-confidence areas:
 - **medium** — glossary:golden-hammer: golden-hammer. Named heuristic, not a measured universal rule. Exact Maslow/date attribution removed from lesson.
 - **medium** — glossary:characterization-test: characterization-test. Core preserve-existing-behaviour concept checked; terminology also rests on secondary description of Feathers’s practice.
 - **medium** — glossary:dylan: dylan. Language behaviour and Apple manual primary; ancillary early-1990s history is secondary.
+
+## software-engineering: Testing
+
+[Independent verification record](../content/software-engineering/03-testing/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Moved pyramid q10 after sizes/shapes and service q11 after consumer/provider mechanics. Made retry-exhaustion q8 standalone; supplied coverage/isolation context locally.
+- Removed unsupported absolute timing/reliability/diagnosis and all-behaviour claims in active bodies/questions. Corrected triangulation option itself rather than preserving a false assertion with a prompt caveat.
+- Corrected the single-digit run-length decoder description, explicit-example phase semantics, FIRST wording and namespace/process definitions. Native supplemental checks substantiate the code-related concerns.
+- Corrected units and seconds/minute conversion on worked question cards; recomputed all15 cards.
+- Replaced non-evidence source pointers: PyPI JS challenge, framed QuickCheck page, generic BIPM landing, unrelated Playwright CI definitions, and claims absent from overview pages. Read original Goodhart/Google mutation papers, Dijkstra transcription and original QuickCheck creator lecture; checked publisher book date.
+- Final actual dictionary context review replaced remaining CAS spurious-failure, network round-trip and execution-phase runtime links with precise contextual wording.
+- PactFlow old docs are a redirect splash; glossary now describes the current SmartBear Swagger Contract Testing documentation with a substantive live source.
+
+Remaining gaps:
+
+- Inherited testing scope: no production benchmark, public shop deployment, full Pact deployment or empirical universal TDD outcome is claimed.
+- Application-specific partial sketches were executed with explicitly declared scratch scaffolds. Browser journey uses intercepted local HTML and PostgreSQL uses a real isolated container.
+- Pyramid proportions and test timing examples are illustrative/source-specific. Hypothesis settings and commercial tool documentation are time-sensitive, fetched and checked on 2026-10-15.
+
+Low-confidence areas:
+
+None newly recorded. Inherited glossary qualifications remain in the verification record.
 
 ## synth: Sound & Digital Audio
 

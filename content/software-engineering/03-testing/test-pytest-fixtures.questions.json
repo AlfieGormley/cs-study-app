@@ -1,0 +1,62 @@
+[
+  {
+    "id": "test-unit-testing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After these tests run in order, what is in `log`?\n\n```python\nlog = []\n\n@pytest.fixture(scope=\"module\")\ndef conn():\n    log.append(\"open\")\n    # Keep this fixture alive for reuse.\n    yield 1\n    log.append(\"close\")\n\n@pytest.fixture\ndef tx(conn):\n    log.append(\"begin\")\n    yield conn\n    # Runs after each test using tx.\n    log.append(\"rollback\")\n\ndef test_a(tx): pass\ndef test_b(tx): pass\ndef test_c(conn): pass\n```\n\n(Assume we inspect `log` at the end of test_c's body, before pytest starts its teardown phase.)",
+    "options": [
+      {
+        "text": "open, begin, rollback, close, open, begin, rollback, close, open",
+        "explanation": "That would be function fixture scope for `conn`. Module scope creates it once per file."
+      },
+      {
+        "text": "open, begin, begin, rollback, rollback",
+        "explanation": "Function-scoped teardown runs right after each test, not batched at the end."
+      },
+      {
+        "text": "open, begin, rollback, begin, rollback, close",
+        "explanation": "`close` runs only when the module's tests are all finished, which is after the point we inspect."
+      },
+      {
+        "text": "open, begin, rollback, begin, rollback",
+        "explanation": "Correct. `conn` is module-scoped, so it opens once and stays open; `tx` is function-scoped, so it begins and is rolled back around each of `test_a` and `test_b`. `test_c` reuses the open `conn`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Walk through each test:\n\n```\ntest_a: conn (new)  -> open\n        tx          -> begin\n        teardown tx -> rollback\ntest_b: conn reused\n        tx          -> begin\n        teardown tx -> rollback\ntest_c: conn reused, no tx\n```\n\n`close` is appended only after the last test in the module. This pattern (expensive connection once, cheap transaction per test) is how many suites keep database tests both fast and isolated.",
+    "link": {
+      "title": "How to use fixtures — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/fixtures.html"
+    }
+  },
+  {
+    "id": "test-unit-testing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A suite's database fixture was changed from `scope=\"function\"` to `scope=\"session\"` to save time. Now `test_list_users` passes alone but fails in the full run. What is the most likely cause?",
+    "options": [
+      {
+        "text": "Session-scoped fixtures run after the tests",
+        "explanation": "Fixtures always set up before the tests that use them, whatever the scope."
+      },
+      {
+        "text": "pytest runs session fixtures in a separate process",
+        "explanation": "They run in the same process; that is how they can be shared."
+      },
+      {
+        "text": "Other tests now share the same database and leave rows behind, so the listing sees extra users",
+        "explanation": "Correct. Wider scope trades isolation for speed. Without per-test cleanup (e.g. a per-test transaction rollback), state leaks between tests."
+      },
+      {
+        "text": "`test_list_users` must be marked `@pytest.mark.session`",
+        "explanation": "No such marker is needed. Scope is set on the fixture, not the test."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "'Passes alone, fails in the suite' is a clue to investigate shared state and environmental differences.\n\n1. Before: each test got a fresh database, so no leaks.\n2. After: one database for the whole run.\n3. `test_create_user` inserts 'ada'; nothing removes it.\n4. `test_list_users` expects 2 users but finds 3.\n\nKeep the expensive part session-scoped, but add a function-scoped fixture that opens a transaction and rolls it back after each test.",
+    "link": {
+      "title": "How to use fixtures — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/fixtures.html"
+    }
+  }
+]

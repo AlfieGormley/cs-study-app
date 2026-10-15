@@ -1,0 +1,130 @@
+[
+  {
+    "id": "test-doubles-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`checkout.py` does `from payments import charge` and calls `charge(card, total)`. Assume checkout was imported before the patch. What happens when this test runs?\n\n```python\nwith patch(\"payments.charge\") as f:\n    f.return_value = {\"status\":\n                      \"paid\"}\n    place_order(\"4242\", 10)\n```",
+    "options": [
+      {
+        "text": "The patched `charge` runs and `place_order` returns `\"ok\"`",
+        "explanation": "`checkout` copied a reference to the original function at import time, so it never sees the patch on `payments`."
+      },
+      {
+        "text": "The real `payments.charge` runs, because `checkout.charge` still points to the original function",
+        "explanation": "Correct. Patch where the name is looked up: `patch(\"checkout.charge\")`."
+      },
+      {
+        "text": "`patch` raises because `payments.charge` is imported elsewhere",
+        "explanation": "`patch` happily replaces the attribute on `payments`; it just has no effect on other modules' copies."
+      },
+      {
+        "text": "Both the patch and the real function run",
+        "explanation": "Only one function object is called: the one `checkout.charge` refers to, which is the original."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Follow the references:\n\n```\nimport time:\n  checkout.charge = payments.charge\n                    (original fn)\ntest:\n  payments.charge = <MagicMock>\n  checkout.charge still -> original\n```\n\n`place_order` looks up `charge` in `checkout`'s globals, finds the original, and makes the real call. Patch `checkout.charge` instead.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Now `checkout.py` does `import payments` and calls `payments.charge(card, total)`. Which patch target makes the test use the double?",
+    "options": [
+      {
+        "text": "`patch(\"checkout.charge\")`",
+        "explanation": "There is no `charge` name in `checkout` now; this would raise `AttributeError` because the attribute does not exist."
+      },
+      {
+        "text": "Either works the same",
+        "explanation": "Only one of them is where the name is looked up."
+      },
+      {
+        "text": "`patch(\"payments.charge\")`",
+        "explanation": "Correct. The lookup happens on the `payments` module at call time, so replacing `payments.charge` is seen by `checkout`."
+      },
+      {
+        "text": "Neither; module attributes cannot be patched",
+        "explanation": "Patching module attributes is exactly what `patch` does."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Apply 'patch where it is looked up':\n\n1. `checkout` holds a reference to the `payments` **module**.\n2. Each call evaluates `payments.charge` fresh.\n3. So replacing the `charge` attribute on the `payments` module takes effect.\n\n`patch` also refuses to create attributes that don't exist by default, so `checkout.charge` fails with `AttributeError`.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this test do?\n\n```python\npay = Mock()\n# Typo creates a different child mock.\npay.chrage(\"4242\", 10)\npay.charge.assert_not_called()\n```",
+    "options": [
+      {
+        "text": "Passes: the typo created a separate child mock, and `charge` really was never called",
+        "explanation": "Correct. Without a `spec`, the mock cannot know `chrage` is a typo. If production code had this typo, a test like this would not notice."
+      },
+      {
+        "text": "Raises `AttributeError` because `chrage` does not exist",
+        "explanation": "A bare Mock creates many ordinary attributes on demand, including this typo; unsupported special attributes and protected assertion names can raise AttributeError."
+      },
+      {
+        "text": "Fails, because `charge` was called",
+        "explanation": "Nothing called `charge`; the call went to a different child, `chrage`."
+      },
+      {
+        "text": "Fails with `TypeError` for the wrong argument count",
+        "explanation": "A bare `Mock` accepts any arguments."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A bare `Mock`:\n\n1. `pay.chrage` creates a new child mock named `chrage`.\n2. Calling it records the call on that child.\n3. `pay.charge` is another, untouched child.\n4. `assert_not_called()` on it passes.\n\nWith `Mock(spec=PaymentClient)` step 1 would raise `AttributeError`, because the real class has no `chrage`.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "`PaymentClient.charge(card, amount)` gains a required `currency` parameter, and production code is not yet updated. Which tests of the calling code would **fail** and expose the problem? Select all that apply.",
+    "options": [
+      {
+        "text": "Tests using a bare `Mock()` for the client",
+        "explanation": "A bare `Mock` accepts any arguments, so `charge(card, amount)` still 'works' and the tests stay green."
+      },
+      {
+        "text": "Tests using `create_autospec(PaymentClient, instance=True)`",
+        "explanation": "Correct. Autospec copies the real signature, so calling without `currency` raises `TypeError`."
+      },
+      {
+        "text": "Tests using `Mock(spec=PaymentClient)`",
+        "explanation": "`spec` checks attribute names, not method signatures, so the call with two arguments still succeeds."
+      },
+      {
+        "text": "Integration tests that call the real client against the provider's sandbox",
+        "explanation": "Correct. The real method rejects the missing argument."
+      },
+      {
+        "text": "Tests using `patch('app.client', autospec=True)`",
+        "explanation": "Correct. `autospec=True` on `patch` gives the same signature checking as `create_autospec`."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Separate what each double checks:\n\n| Double | Names | Signatures |\n|---|---|---|\n| `Mock()` | no | no |\n| `Mock(spec=...)` | yes | no |\n| autospec | yes | yes |\n\nOnly signature-checking doubles (B, E) and the real implementation (D) catch a changed signature. This is why bare mocks are dangerous: they keep passing while the real API moves on.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  }
+]

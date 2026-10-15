@@ -1,0 +1,122 @@
+[
+  {
+    "id": "test-integration-e2e-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which is a **narrow** integration test?",
+    "options": [
+      {
+        "text": "Running the orders, users and payments services together and placing an order through the API",
+        "explanation": "That spans many real services: a broad integration (or E2E) test."
+      },
+      {
+        "text": "Calling `apply_discount` with fixed inputs",
+        "explanation": "No external dependency at all: a unit test."
+      },
+      {
+        "text": "Running your `UserRepo` class against a real Postgres, with nothing else involved",
+        "explanation": "Correct. One piece of your code plus one real external dependency."
+      },
+      {
+        "text": "Clicking through sign-up in a browser against the full running application",
+        "explanation": "That drives the whole system from the outside: an E2E test."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Narrow integration = your code that talks to one external thing, tested against that real thing, with everything else absent or doubled.\n\n- Three services running together: broad.\n- `UserRepo` against real Postgres: one class, one real DB. Narrow.\n- `apply_discount` with fixed inputs: no external thing. Unit.\n- Browser sign-up: whole system. E2E.",
+    "link": {
+      "title": "Integration Test — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/IntegrationTest.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With the module-scoped `conn` and the data-access fixture from the lesson, a teammate deletes the `conn.rollback()` line. Tests run in order: `test_add_then_find`, `test_unique_email`, `test_isolated`. What happens?",
+    "options": [
+      {
+        "text": "All three still pass",
+        "explanation": "Without the rollback, the row inserted by the first test is still there for the next two."
+      },
+      {
+        "text": "`test_add_then_find` passes; `test_unique_email` fails on its first insert with IntegrityError; `test_isolated` fails because the user exists",
+        "explanation": "Correct. The leftover `a@x.io` row makes the first `add` in test 2 violate UNIQUE outside the `raises` block, and test 3 finds it."
+      },
+      {
+        "text": "Only `test_isolated` fails",
+        "explanation": "`test_unique_email` also fails: its *first* `add` raises, before the `pytest.raises` block is entered."
+      },
+      {
+        "text": "All three fail",
+        "explanation": "The first test runs on an empty table and passes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the shared table:\n\n```\ntest 1: insert a@x.io -> ok, pass\n        (row stays)\ntest 2: insert a@x.io -> IntegrityError\n        outside raises -> FAIL\ntest 3: by_email -> 1, not None -> FAIL\n```\n\nThe failure in test 2 is subtle: the error the test *expects* happens one line too early, which pytest reports as an unexpected exception. Shared state without cleanup makes later tests depend on earlier ones.",
+    "link": {
+      "title": "How to use fixtures — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/fixtures.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your repository tests run on SQLite for speed; production is Postgres. A migration declares `code VARCHAR(3)`, and the app performs an ordinary parameterised INSERT of `'GBPX'`, with no explicit cast or truncation. What do the tests and production do?",
+    "options": [
+      {
+        "text": "Tests pass (SQLite stores the 4-character string); production raises 'value too long'",
+        "explanation": "Correct. SQLite treats `VARCHAR(3)` as TEXT affinity with no length limit, while Postgres enforces it. Test against the production engine, e.g. with Testcontainers."
+      },
+      {
+        "text": "Both reject the value",
+        "explanation": "SQLite does not enforce `VARCHAR(n)` lengths."
+      },
+      {
+        "text": "Tests fail; production truncates to 'GBP'",
+        "explanation": "It is the other way round, and Postgres raises an error rather than truncating silently."
+      },
+      {
+        "text": "Both store 'GBP'",
+        "explanation": "Neither silently truncates."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. SQLite uses type *affinity*: `VARCHAR(3)` maps to TEXT and the length is ignored, so `'GBPX'` is stored.\n2. Postgres enforces `varchar(3)` and raises `value too long for type character varying(3)`.\n3. So the bug passes every test and fails in production.\n\nThe fix is not 'more tests', it is a test environment closer to production: a real Postgres in a container, started once per session.",
+    "link": {
+      "title": "Datatypes in SQLite",
+      "url": "https://www.sqlite.org/datatype3.html"
+    }
+  },
+  {
+    "id": "test-integration-e2e-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A test suite uses per-test transaction rollback for isolation. A new test checks `OrderService.place()`, which internally calls `conn.commit()`. What is the risk?",
+    "options": [
+      {
+        "text": "None; the fixture's rollback undoes everything",
+        "explanation": "A rollback can only undo uncommitted work. After `commit()`, the rows are permanent."
+      },
+      {
+        "text": "The rollback raises because there is no transaction",
+        "explanation": "Calling `rollback()` with no open transaction is harmless in most drivers; the problem is silent data leakage."
+      },
+      {
+        "text": "The committed order rows survive the rollback and leak into later tests",
+        "explanation": "Correct. A plain rollback or savepoint cannot undo a real outer COMMIT. Use explicit cleanup, an isolated database, or a framework-supported test transaction that intercepts application commits before they reach the outer transaction."
+      },
+      {
+        "text": "`commit()` is ignored inside a pytest fixture",
+        "explanation": "pytest has no influence over your database driver."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Sequence:\n\n```\nfixture: (implicit) BEGIN\ntest:    INSERT order\nservice: COMMIT        <- permanent\nfixture: ROLLBACK      <- nothing left\n```\n\nThe next test that counts orders sees an extra one, and it fails or passes depending on order: a flaky, order-dependent suite. Options: truncate affected tables after the test, use a framework test transaction that confines application commits to managed savepoints (a bare savepoint alone does not survive an outer COMMIT), or give the test its own database.",
+    "link": {
+      "title": "How to use fixtures — pytest docs",
+      "url": "https://docs.pytest.org/en/stable/how-to/fixtures.html"
+    }
+  }
+]

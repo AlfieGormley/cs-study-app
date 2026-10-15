@@ -1,0 +1,152 @@
+[
+  {
+    "id": "test-doubles-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your tests use an `InMemoryOrders` class that stores orders in a dict, assigns increasing ids and raises on duplicate order numbers, just like the Postgres-backed repository. What kind of test double is it?",
+    "options": [
+      {
+        "text": "Fake",
+        "explanation": "Correct. A fake is a working, simplified implementation; here it keeps data in memory instead of a database."
+      },
+      {
+        "text": "Stub",
+        "explanation": "A stub returns canned answers and has no real logic. This class actually stores and enforces rules."
+      },
+      {
+        "text": "Mock",
+        "explanation": "A mock is pre-programmed with expected calls and verifies them. This class does not check how it was called."
+      },
+      {
+        "text": "Dummy",
+        "explanation": "A dummy is passed but never used. This class does real work in the test."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask two questions:\n\n1. Does it have working behaviour? Yes: it stores, assigns ids and enforces uniqueness.\n2. Does it take a shortcut compared with production? Yes: a dict instead of Postgres.\n\nWorking-but-simplified is the definition of a fake. Stubs return fixed answers; mocks verify calls; dummies are never used.",
+    "link": {
+      "title": "Test Double — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/TestDouble.html"
+    }
+  },
+  {
+    "id": "test-doubles-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which situation is the **weakest** reason to replace a collaborator with a test double?",
+    "options": [
+      {
+        "text": "The collaborator charges a real credit card",
+        "explanation": "Side effects like real charges are a strong reason to use a double."
+      },
+      {
+        "text": "The collaborator is a third-party API that is sometimes down",
+        "explanation": "Nondeterministic, slow dependencies are a classic reason to use a double."
+      },
+      {
+        "text": "The collaborator is a small pure function that formats a date",
+        "explanation": "Correct. It is fast, deterministic and in-process, so the real thing is the better choice; doubling it just adds setup and drift."
+      },
+      {
+        "text": "You need to test what happens when the provider times out",
+        "explanation": "Hard-to-provoke failures are best produced on demand with a double's `side_effect`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The reasons to double are: slow, nondeterministic, side-effecting, hard to provoke, or not yet built.\n\n- Real card charges: side-effecting. Double it.\n- Flaky third-party API: nondeterministic and slow. Double it.\n- Provider timeouts: hard to provoke. Double it.\n- Pure date formatter: none of the above. Use the real function.\n\nDoubling a pure function only adds a way for the test to disagree with reality.",
+    "link": {
+      "title": "Test Doubles — Software Engineering at Google, ch. 13",
+      "url": "https://abseil.io/resources/swe-book/html/ch13.html"
+    }
+  },
+  {
+    "id": "test-doubles-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In this test, what role is `rates` playing?\n\n```python\nrates = Mock()\n# Supply a fixed rate, not real logic.\nrates.get.return_value = 1.17\nassert convert(100, \"GBP\",\n    \"EUR\", rates) == 117.0\n```",
+    "options": [
+      {
+        "text": "A fake: it implements exchange rates",
+        "explanation": "It has no working logic; it returns 1.17 for any call."
+      },
+      {
+        "text": "A mock in the strict sense: it verifies expected calls",
+        "explanation": "Nothing here checks the calls. Adding `rates.get.assert_called_once_with(...)` would make it act as a mock or spy."
+      },
+      {
+        "text": "A dummy: it is never used",
+        "explanation": "`convert` calls `rates.get`, so it is used."
+      },
+      {
+        "text": "A stub: it supplies a canned answer so the test can check `convert`'s result",
+        "explanation": "Correct. The test only feeds in a fixed rate and checks the returned value (state), without verifying how `rates` was called."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Look at what the test does with the double:\n\n1. It configures a return value: canned answer.\n2. It asserts on `convert`'s output, not on `rates`.\n\nCanned answers with no verification of calls is a stub. The same `Mock` object becomes a spy or mock the moment you assert on its calls.",
+    "link": {
+      "title": "Test Double — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/TestDouble.html"
+    }
+  },
+  {
+    "id": "test-doubles-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is the result of `pay_with_retry(pay)`?\n\n```python\npay = Mock(side_effect=[\n    TimeoutError,\n    {\"status\": \"paid\"}])\n\ndef pay_with_retry(pay, tries=3):\n    # Consume one configured item per\n    # try.\n    for i in range(tries):\n        try:\n            # Report the successful\n            # attempt.\n            return pay(), i + 1\n        # Exhaustion is not this\n        # exception.\n        except TimeoutError:\n            pass\n    raise RuntimeError(\"gave up\")\n```",
+    "options": [
+      {
+        "text": "`({'status': 'paid'}, 1)`",
+        "explanation": "The first call raises `TimeoutError`, so it is caught and the loop continues."
+      },
+      {
+        "text": "`RuntimeError: gave up`",
+        "explanation": "The second attempt succeeds, so the loop returns before running out of tries."
+      },
+      {
+        "text": "`TimeoutError` propagates",
+        "explanation": "It is caught by `except TimeoutError`."
+      },
+      {
+        "text": "`({'status': 'paid'}, 2)`",
+        "explanation": "Correct. Call 1 raises `TimeoutError` (i=0, swallowed); call 2 returns the dict (i=1), so it returns `(dict, 2)` and `pay.call_count` is 2."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "`side_effect` as an iterable is consumed one item per call. An exception class or instance is raised; anything else is returned.\n\n| i | side_effect item | result |\n|---|---|---|\n| 0 | TimeoutError | caught |\n| 1 | dict | return (dict, 2) |\n\nThis is how you test retry logic without waiting for real timeouts.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  },
+  {
+    "id": "test-doubles-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A retry function calls `pay()` up to three times, catches only `TimeoutError`, returns immediately on success and raises `RuntimeError` only after three caught timeouts. With `pay = Mock(side_effect=[TimeoutError, TimeoutError])`, what happens?",
+    "options": [
+      {
+        "text": "`RuntimeError: gave up` after 3 calls",
+        "explanation": "The third call never reaches a TimeoutError: the side_effect list is exhausted."
+      },
+      {
+        "text": "`StopIteration` is raised on the third call and escapes the function",
+        "explanation": "Correct. When an iterable `side_effect` runs out, the mock raises `StopIteration`. It is not a `TimeoutError`, so the retry loop doesn't catch it."
+      },
+      {
+        "text": "The third call returns `None`",
+        "explanation": "An exhausted iterable does not fall back to a default return value."
+      },
+      {
+        "text": "`TimeoutError` escapes on the second call",
+        "explanation": "Both TimeoutErrors are caught; the loop allows three tries."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace it:\n\n```\ni=0  TimeoutError -> caught\ni=1  TimeoutError -> caught\ni=2  list empty   -> StopIteration\n```\n\n`StopIteration` is not caught by `except TimeoutError`, so it escapes. The test author probably intended to test the 'gave up' path. Fix: give three failures, e.g. `side_effect=[TimeoutError] * 3`, or set `side_effect=TimeoutError` to raise on every call. A test double's own behaviour has to match the scenario you think you are testing.",
+    "link": {
+      "title": "unittest.mock — Python docs",
+      "url": "https://docs.python.org/3/library/unittest.mock.html"
+    }
+  }
+]

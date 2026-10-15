@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 39/76. Updated 2026-10-15.
+Verified modules: 40/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -46,6 +46,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | architecture/Data Representation | 6 | 37 | 76 | 60 | 393 | 566 | 52 |
 | architecture/Digital Logic | 6 | 34 | 74 | 233 | 261 | 602 | 14 |
 | architecture/Instruction Sets & Assembly | 6 | 35 | 73 | 58 | 375 | 541 | 40 |
+| architecture/Pipelining & CPU Performance | 6 | 29 | 66 | 65 | 187 | 282 | 9 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3620,6 +3621,45 @@ Low-confidence areas:
 - **medium** — isa-aslr-guessing-leaks: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
 - **medium** — isa-stack-canaries-defences: Core ISA/ABI/language contracts verified; examples are bounded scalar models or measured fixtures, with implementation, platform and performance caveats.. Not a proof for every CPU, compiler, loader, concurrent code-publication scheme or security configuration.
 - **medium** — isa-machine-cycle: Module glossary has incidental product/history and implementation-dependent typical-system descriptions.. Definitions are scoped and core meanings reviewed; sources do not establish exhaustive vendor lineages, all cache hierarchies, every current tool version or physical-system performance.
+
+## architecture: Pipelining & CPU Performance
+
+[Independent verification record](../content/architecture/04-pipelining/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Balanced/unbalanced stages previously opened a definition titled Balanced pipeline stages. The stable entry now describes stage balance explicitly, including both cases and boundary overhead.
+- Removed bare 1-bit from the one-bit predictor aliases because it also describes ordinary bit widths; precise predictor/entry names remain.
+- Doubling-frequency prompt now explicitly keeps activity and represented capacitance fixed as well as voltage; the formula defines total represented C so activity is not counted twice.
+- Register-content givens and answer labels now use natural-language values instead of uncaught symbolic equations outside cards.
+- Restored picosecond units on intermediate clock/latency/speedup substitutions and grouped unit-bearing denominators in two pipeline questions.
+- Changed stale mapping in the renaming takeaway to previous physical register; stale mapping otherwise resolved to a networking cache entry.
+- Reworded checking/replaying memory-order violations so detection and recovery no longer opens deadlock policy.
+- Reworded the unchanged one-core-time assumption so serial execution no longer opens transaction serial order.
+- Replaced generic GCC built-in references with the actual optimisation manual for loop unrolling/profile-guided optimisation, and replaced the 1974 scaling-paper reference with Intel’s original node-naming disclosure for the modern process-label claim. Definitions remain unchanged.
+
+Remaining gaps:
+
+- No RTL synthesis, physical circuit timing, processor predictor reverse engineering, or real workload speed/power benchmarks; original commercial stage/ROB figures remain intentionally omitted.
+- The straight-line stall counter omits branch/cache/multicycle behaviour and late store-data bypasses, and the renamer omits real zero-register/free-list-reclamation/speculative recovery; these limitations are stated locally.
+- Schematic IBM floating-point notation is not assembled as actual IBM syntax; its tag/value broadcasts are checked as a bounded model against the original algorithm.
+- TAGE, tournament and perceptron families receive conceptual coverage; there is no new complete TAGE implementation or current commercial predictor inventory.
+
+Low-confidence areas:
+
+- **medium** — pipe-iron-law-metrics-and-measurement: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-five-stage-regular-isa-and-depth: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-hazards-branch-resolution-and-cpi: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-branch-prediction-target-and-predictor-families: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-branch-prediction-predictable-code: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-out-of-order-ready-independent-work: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-out-of-order-tomasulo-tags: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-out-of-order-retire-and-recover: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-out-of-order-window-and-hardware-cost: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-power-wall-switching-power: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-power-wall-constant-field-scaling: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-power-wall-multicore-power-model: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+- **medium** — pipe-power-wall-budgets-and-specialisation: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
 
 ## synth: Sound & Digital Audio
 

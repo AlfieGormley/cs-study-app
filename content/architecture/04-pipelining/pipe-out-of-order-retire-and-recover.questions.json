@@ -1,0 +1,92 @@
+[
+  {
+    "id": "pipe-out-of-order-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An out-of-order core schedules ready instructions when the required resources are available. Why might its design use a reorder buffer to retire instructions in program order?",
+    "options": [
+      {
+        "text": "To make instructions execute faster",
+        "explanation": "Retirement order doesn't speed execution; it controls when results become architecturally visible."
+      },
+      {
+        "text": "Because functional units can only accept instructions in order",
+        "explanation": "Execution is out of order by design; the scheduler sends any ready instruction to a free unit."
+      },
+      {
+        "text": "So that exceptions are precise and mispredicted work can be discarded before it changes architectural state",
+        "explanation": "Correct. In-order commitment provides a precise architectural boundary for faults and discards uncommitted wrong-path results. It does not by itself impose sequential consistency on memory operations across threads."
+      },
+      {
+        "text": "To store the branch predictor's history",
+        "explanation": "Predictor history lives in the front end; the ROB tracks in-flight instructions."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Suppose instruction 10 executes before instruction 5, and then instruction 5 page-faults.\n2. Without a ROB or another precise-state mechanism, out-of-order register updates made at once could expose instruction 10's result: the OS sees an impossible state (imprecise exception).\n3. With a ROB, instruction 10's result waits in its ROB entry (or an uncommitted physical register).\n4. Instruction 5 reaches the head, faults, and the core discards 5 to 10 and everything after. The state is precise.\n5. The same mechanism undoes wrong-path work after a mispredicted branch.",
+    "link": {
+      "title": "Re-order buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Re-order_buffer"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A branch was predicted taken, and 40 wrong-path instructions have already executed and written physical registers when the branch resolves as not taken. What does the core do?",
+    "options": [
+      {
+        "text": "Lets them retire, then runs compensating instructions",
+        "explanation": "Wrong-path instructions must never retire; there are no compensating instructions in hardware recovery."
+      },
+      {
+        "text": "Squashes every ROB entry younger than the branch, restores the rename table to the state it had at the branch, safely reclaims the wrong-path physical registers, and refetches from the correct path",
+        "explanation": "Correct. Since nothing younger had committed, no architectural state changed. The RAT checkpoint (or a walk back through the ROB) restores the mappings."
+      },
+      {
+        "text": "Flushes only the 40 executed instructions; unexecuted wrong-path ones can stay",
+        "explanation": "Every instruction after the branch is on the wrong path, executed or not. All are squashed."
+      },
+      {
+        "text": "Raises an exception to the operating system",
+        "explanation": "Ordinary branch misprediction recovery is handled by hardware; it does not itself require an OS exception."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The branch's ROB entry marks the boundary: everything younger is wrong-path.\n2. Squash: discard those ROB entries, scheduler entries and store-buffer entries.\n3. Restore the RAT: mappings revert, and wrong-path physical registers return to the free list when safely reusable.\n4. Redirect fetch to the correct target.\n5. Architectural state is untouched. Some microarchitectural effects, such as cache changes, may persist; predictor-history recovery varies, which is what the Spectre attacks exploited.",
+    "link": {
+      "title": "Re-order buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Re-order_buffer"
+    }
+  },
+  {
+    "id": "pipe-out-of-order-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An older store `sw x3, 0(x5)` hasn't computed its address yet. A younger load `lw x7, 0(x6)` is ready. The core speculatively lets the load go first. Later the store's address turns out equal to the load's. What happens? Assume aligned ordinary memory, equal access sizes, no intervening store or external writer, and a design that recovers by squashing from the load.",
+    "options": [
+      {
+        "text": "The load keeps its value; loads and stores can't overlap",
+        "explanation": "The addresses overlap. The load may have read the pre-store value rather than the value required by the older store. The specified design detects the ordering violation and replays; numerical equality would not establish a general ordering guarantee."
+      },
+      {
+        "text": "The store is cancelled",
+        "explanation": "The store is correct and older; it must happen. The load is what went wrong."
+      },
+      {
+        "text": "The core detects the violation and re-executes the load and younger work; the load must obtain the older store’s value",
+        "explanation": "Correct under the stated recovery design. The value may be forwarded when store data is ready, or read after the store becomes visible; forwarding at once is not guaranteed."
+      },
+      {
+        "text": "The program reads the old value and the OS fixes it",
+        "explanation": "This is invisible to software and handled in hardware."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The younger load must observe the older same-address store under these assumptions. If it speculatively read stale data, the core detects the ordering violation and recovers by the stipulated squash. On re-execution it waits, forwards or reads the now-updated memory as appropriate. Other designs may use more selective replay.",
+    "link": {
+      "title": "Out-of-order execution — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Out-of-order_execution"
+    }
+  }
+]

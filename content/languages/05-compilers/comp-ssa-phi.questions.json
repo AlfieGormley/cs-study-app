@@ -1,0 +1,96 @@
+[
+  {
+    "id": "comp-ir-ssa-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these snippets is in SSA form?",
+    "options": [
+      {
+        "text": "`x = 1; x = x + 1; return x`",
+        "explanation": "`x` is assigned twice, which SSA forbids. Renaming gives `x1 = 1; x2 = x1 + 1; return x2`."
+      },
+      {
+        "text": "`a = 1; b = a + 1; a = b * 2; return a`",
+        "explanation": "`a` has two assignments."
+      },
+      {
+        "text": "`a = 1; b = a + 1; c = b * 2; return c`",
+        "explanation": "Correct. Each name is assigned exactly once in the program text, so every use refers to one known definition."
+      },
+      {
+        "text": "`for i in range(3): s = s + i`",
+        "explanation": "Repeated execution alone does not violate static single assignment. Here s has no initial reaching definition and the loop-carried value needs an explicit phi and renamed definitions."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "SSA's rule is *static*: in the program text, each variable has exactly one assignment.\n\n1. Option A: two assignments to `x`. Not SSA.\n2. Option B: two to `a`. Not SSA.\n3. Option C: `a`, `b`, `c` once each. SSA.\n4. Option D: a loop body is one textual assignment that runs many times, and its value merges with the initial one at the loop header, which requires `s1 = phi(s0, s2)`. As written, not SSA.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://llvm.org/docs/LangRef.html#phi-instruction"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Convert this loop to SSA. Where does a phi function for `i` go?\n\n```\ni = 0\nwhile i < n:\n    i = i + 1\nreturn i\n```",
+    "options": [
+      {
+        "text": "At the start of the loop body, `i1 = phi(i0, i2)`",
+        "explanation": "The body is entered only from the loop test, which already has the merged value. The merge must happen where the two incoming edges meet."
+      },
+      {
+        "text": "At the loop header (the `i < n` test), `i1 = phi(i0 from entry, i2 from body)`",
+        "explanation": "Correct. The header has two predecessors: entry, where `i` is `i0 = 0`, and the end of the body, where it is `i2 = i1 + 1`. That merge point is in the dominance frontier of the body's assignment."
+      },
+      {
+        "text": "After `return i`",
+        "explanation": "Nothing executes after `return`; phis must appear at the top of a block where paths merge."
+      },
+      {
+        "text": "No phi is needed: `i` is assigned once inside the loop",
+        "explanation": "Textually `i` has two assignments (`i = 0` and `i = i + 1`), and their values meet at the header."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Blocks: entry (`i0 = 0`), header (`i < n`?), body (`i2 = i1 + 1`), exit (`return i1`).\n2. The header has two incoming edges: from entry and from body.\n3. Each edge brings a different version of `i`, so the header needs `i1 = phi(i0, i2)`.\n4. The test, the body and the return all use `i1`.\n\n```\nheader:\n  i1 = phi [i0, entry],\n           [i2, body]\n  if i1 < n goto body\n  else goto exit\nbody:\n  i2 = i1 + 1\n  goto header\nexit:\n  return i1\n```",
+    "link": {
+      "title": "Efficiently Computing SSA Form — Cytron et al.",
+      "url": "https://www.cs.utexas.edu/~pingali/CS380C/2010/papers/ssaCytron.pdf"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Why do optimisers prefer SSA? Select all that apply.",
+    "options": [
+      {
+        "text": "Each use of a value has exactly one definition, so def-use chains are trivial",
+        "explanation": "Correct. Finding where `t5` came from is a lookup, not a data-flow analysis."
+      },
+      {
+        "text": "An unconditional fact proved about a value, such as \"`t3` is 16\", holds at every use",
+        "explanation": "Correct. Nothing can reassign `t3`, so constant propagation can substitute everywhere without checking for intervening writes."
+      },
+      {
+        "text": "SSA programs run faster, because phi functions are cheap CPU instructions",
+        "explanation": "Phis are not machine instructions. They are removed before code generation and turned into copies, so SSA itself does not make code faster."
+      },
+      {
+        "text": "Two deterministic pure arithmetic instructions in one block with the same operator and operand names compute the same value",
+        "explanation": "Correct. This is what makes value numbering (CSE) simple: same names mean same values."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Check each claim:\n\n1. **One definition per name.** That is the definition of SSA. True.\n2. **Facts hold everywhere.** Follows from 1: no later assignment can invalidate them. True.\n3. **Phis are fast instructions?** LLVM phi semantics are lowered into target operations, often edge copies that coalescing can remove. False.\n4. **Same names, same values.** Without SSA, `a + b` twice could differ if `a` was reassigned between them. With SSA it cannot. True.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://llvm.org/docs/LangRef.html#phi-instruction"
+    }
+  }
+]

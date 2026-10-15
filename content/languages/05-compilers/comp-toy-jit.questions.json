@@ -1,0 +1,92 @@
+[
+  {
+    "id": "comp-vms-jit-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Suppose a measurement finds a positive compile cost C and a positive per-run saving S for Calc's toy jit. When is using it worthwhile?",
+    "options": [
+      {
+        "text": "Always: faster code is always better",
+        "explanation": "If the program runs once, you pay the full compile cost and gain almost nothing."
+      },
+      {
+        "text": "Never, because compiling at runtime is always slower than interpreting",
+        "explanation": "Under the question's assumption, each compiled run is cheaper; with enough runs the compile cost is repaid."
+      },
+      {
+        "text": "When the same program will run enough times that the per-run saving outweighs the one-off compile cost",
+        "explanation": "Correct. This is the central trade-off of every JIT, and why real runtimes only compile code that profiling shows is hot."
+      },
+      {
+        "text": "Only when the program contains `let`",
+        "explanation": "The trade-off depends on how often the code runs, not which constructs it uses."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Compiling has a fixed cost C.\n2. Each run saves S: the interpreted time minus the compiled time.\n3. Break-even comes when the savings add up to the cost:\n\n```formula\nn × S = C\nn = C / S\nwhere\nn: the number of runs at which compiling has exactly paid for itself\nC: the one-off compile cost, in microseconds (µs)\nS: the time saved by each compiled run, in µs\nµs: microseconds, millionths of a second\nIn words: divide the compile cost by the saving per run to get the break-even number of runs.\n```\n\n4. Below that many runs, interpret; above it, compile.\n\nRuntimes such as V8 and HotSpot estimate this with call and loop counters: a function is only handed to an optimising compiler after it has proved itself hot.",
+    "link": {
+      "title": "Maglev: V8's Fastest Optimizing JIT — V8 blog",
+      "url": "https://v8.dev/blog/maglev"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A function takes 5 µs per call in the interpreter and 0.5 µs once JIT-compiled. Compiling it costs 900 µs. After how many calls does compiling it first break even?",
+    "options": [
+      {
+        "text": "About 20",
+        "explanation": "20 calls save 20 × 4.5 = 90 µs, a tenth of the compile cost."
+      },
+      {
+        "text": "About 180",
+        "explanation": "This divides 900 by 5, ignoring that compiled calls still cost 0.5 µs each. The saving per call is 4.5 µs."
+      },
+      {
+        "text": "About 1,800",
+        "explanation": "This divides by 0.5 µs, the compiled time, rather than by the time saved per call."
+      },
+      {
+        "text": "About 200",
+        "explanation": "Correct. Each compiled call saves 5 − 0.5 = 4.5 µs, and 900 / 4.5 = 200 calls repay the compilation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Set the two total costs equal and solve for the number of calls:\n\n```formula\nt_i × n = C + t_c × n\n5 × n = 900 + 0.5 × n\n4.5 × n = 900\nn = 900 / 4.5 = 200\nwhere\nn: the number of calls\nt_i: the time per interpreted call, 5 µs\nt_c: the time per compiled call, 0.5 µs\nC: the one-off compile cost, 900 µs\nµs: microseconds, millionths of a second\nIn words: interpreting costs 5 µs a call; compiling costs 900 µs once plus 0.5 µs a call; the totals meet at 200 calls.\n```\n\nBelow 200 calls the interpreter is cheaper overall. This is why runtimes wait for evidence of hotness, and why tiered systems put a cheap baseline compiler (Sparkplug, C1) in front of the expensive one: a smaller C lowers the break-even point.",
+    "link": {
+      "title": "HotSpot Glossary of Terms — OpenJDK",
+      "url": "https://openjdk.org/groups/hotspot/docs/HotSpotGlossary.html"
+    }
+  },
+  {
+    "id": "comp-vms-jit-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Calc's toy JIT names each `let` variable after its slot (`s0`, `s1`). Suppose it used the source names instead, emitting `(x := 1, (x := 2, x)[1] + x)[1]` for `let x = 1 in (let x = 2 in x) + x`. What would that return, and why?",
+    "options": [
+      {
+        "text": "3, the same as `evaluate`",
+        "explanation": "`evaluate` returns 3, but the walrus version gives 4: Python's `:=` overwrites the single local `x`."
+      },
+      {
+        "text": "4, because the inner `x := 2` overwrites the outer `x`, so the final `+ x` reads 2 instead of 1",
+        "explanation": "Correct. Python has one `x` per function, not one per `let`. The checker gives the two bindings different slots, so `s0` and `s1` never clash and the result is correctly 3."
+      },
+      {
+        "text": "A `SyntaxError`, because `:=` cannot appear twice",
+        "explanation": "Multiple assignment expressions in one expression are legal; the generated code runs."
+      },
+      {
+        "text": "2, because only the inner binding is evaluated",
+        "explanation": "Both bindings are evaluated; the issue is that they share storage."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `x := 1`: the lambda's local `x` is 1.\n2. Inner tuple: `x := 2` sets the *same* local to 2; the inner value is 2.\n3. `+ x` now reads 2, not 1. Total: 2 + 2 = 4.\n4. Calc semantics (and `evaluate`): inner `x` is a different binding, so the answer is 2 + 1 = 3.\n\nUsing the checker's slots (`s0` for the outer, `s1` for the inner) gives `(s0 := 1, (s1 := 2, s1)[1] + s0)[1]` = 3. When a compiler targets another language, it must translate *scoping*, not just syntax.",
+    "link": {
+      "title": "A Virtual Machine — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/a-virtual-machine.html"
+    }
+  }
+]

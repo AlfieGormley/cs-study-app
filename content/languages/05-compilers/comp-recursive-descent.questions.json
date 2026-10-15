@@ -1,0 +1,92 @@
+[
+  {
+    "id": "comp-parsing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does the Calc program `10 - 4 - 3` evaluate to, and why?",
+    "options": [
+      {
+        "text": "9, because the parser groups it as `10 - (4 - 3)`",
+        "explanation": "That grouping is right associativity. Subtraction is left-associative in Calc, as in maths and almost every language."
+      },
+      {
+        "text": "3, because the parser groups it as `(10 - 4) - 3`",
+        "explanation": "Correct. The loop in `expr` (or `prec + 1` in precedence climbing) keeps wrapping the tree built so far on the left, giving `BinOp('-', BinOp('-', 10, 4), 3)`."
+      },
+      {
+        "text": "It is a syntax error, because the grammar is ambiguous",
+        "explanation": "Calc's grammar is not ambiguous: precedence levels and associativity rules give exactly one tree."
+      },
+      {
+        "text": "It depends on the order in which the evaluator visits children",
+        "explanation": "The evaluator just follows the tree. Grouping is fixed by the parser before evaluation starts."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `expr` parses `10` as the first term.\n2. It sees `-`, parses the next term `4`, and builds `node = (10 - 4)`.\n3. It sees `-` again, parses `3`, and builds `node = ((10 - 4) - 3)`.\n4. Evaluate: 10 − 4 = 6, then 6 − 3 = 3.\n\nThe tree leans left, which is what left associativity means.",
+    "link": {
+      "title": "Parsing Expressions — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/parsing-expressions.html"
+    }
+  },
+  {
+    "id": "comp-parsing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A student writes the rule `expr = expr \"+\" term | term` directly as a recursive descent function whose first line is `left = self.expr()`. What happens when it parses `1 + 2`?",
+    "options": [
+      {
+        "text": "It parses correctly but builds a right-leaning tree",
+        "explanation": "It never gets far enough to build any tree, because it never consumes a token."
+      },
+      {
+        "text": "It raises `RecursionError`: `expr` calls itself before consuming a token, so it recurses forever",
+        "explanation": "Correct. Direct left recursion makes this naive recursive-descent parser call the same function at the same position endlessly. Rewrite it as `term { \"+\" term }` instead."
+      },
+      {
+        "text": "It raises `SyntaxError: expected NUM`",
+        "explanation": "No token is ever examined; the failure is unbounded recursion, not a mismatch."
+      },
+      {
+        "text": "It works, because Python optimises tail calls",
+        "explanation": "Python does not do tail-call optimisation, and this call is not in tail position anyway; it is the very first thing the function does."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `expr()` at token 0 calls `expr()`.\n2. That call is still at token 0, so it calls `expr()` again.\n3. No call ever reaches the code that consumes a token, so the position never changes.\n4. Python stops it at the recursion limit (1,000 frames by default) with `RecursionError`.\n\nBottom-up LR parsers handle left recursion naturally; naive recursive descent needs rewriting or specialized left-recursion support, which CPython's PEG parser has.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/parsing-expressions.html"
+    }
+  },
+  {
+    "id": "comp-parsing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You add function calls to Calc's `factor`: `factor = NAME | NAME \"(\" expr \")\" | NUM | ...`. Why is this no longer LL(1), and what is the standard fix?",
+    "options": [
+      {
+        "text": "Two alternatives start with NAME, so one token of lookahead cannot choose. Left-factor it: `NAME [ \"(\" expr \")\" ]`",
+        "explanation": "Correct. After seeing NAME, parse it, then peek: if the next token is `(`, it is a call. The common prefix is pulled out so each decision needs only one token."
+      },
+      {
+        "text": "It is left-recursive; rewrite it as a loop",
+        "explanation": "Neither alternative starts with `factor`, so there is no left recursion. The problem is a shared prefix."
+      },
+      {
+        "text": "It is ambiguous; add precedence levels",
+        "explanation": "Each string still has one parse. The problem is choosing between rules with one token, not multiple trees."
+      },
+      {
+        "text": "LL(1) parsers cannot handle brackets; switch to LR",
+        "explanation": "LL(1) parsers handle brackets fine, as `\"(\" expr \")\"` already shows."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. LL(1) means: looking at the next token, you can always tell which alternative to take.\n2. Compare the tokens each alternative can start with:\n\n```formula\nFIRST(A_1) = {NAME}\nFIRST(A_2) = {NAME}\nwhere\nFIRST: the FIRST set of an alternative: the set of token kinds that can appear as its first token\nA_1: the alternative `NAME` (a plain variable)\nA_2: the alternative `NAME \"(\" expr \")\"` (a call)\nNAME: the token kind for an identifier\n{ }: curly braces list the members of a set\nIn words: both alternatives can only start with a NAME token, so seeing a NAME does not tell the parser which one to take.\n```\n\nThe sets overlap, so the grammar is not LL(1).\n3. Left factoring rewrites `A = x | x y` as `A = x [ y ]`, where square brackets in EBNF mean \"optional\".\n4. In code:\n\n```\nif peek() == \"NAME\":\n    name = eat(\"NAME\")\n    if peek() == \"(\":\n        ... parse call\n    return Var(name)\n```",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/parsing-expressions.html"
+    }
+  }
+]

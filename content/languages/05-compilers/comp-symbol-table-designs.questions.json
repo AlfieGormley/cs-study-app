@@ -1,0 +1,92 @@
+[
+  {
+    "id": "comp-semantic-analysis-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This Python code raises `UnboundLocalError` on the `print` line. Why?\n\n```python\nx = 1\ndef g():\n    # Read first, then assign below.\n    print(x)\n    x = 2\ng()\n```",
+    "options": [
+      {
+        "text": "Python reads the global `x`, then fails when assigning because globals are read-only",
+        "explanation": "Assigning inside a function does not touch the global; it creates a local. And the error happens at the `print`, before the assignment runs."
+      },
+      {
+        "text": "Python executes functions bottom-up",
+        "explanation": "Statements run top to bottom. The issue is a decision made at compile time, before anything runs."
+      },
+      {
+        "text": "The compiler's symbol table marks `x` as local to `g` because it is assigned anywhere in `g`, so `print(x)` reads an empty local slot",
+        "explanation": "Correct. CPython builds the symbol table when it compiles `g`. One assignment makes `x` local for the whole function, so the `print` compiles to a fast local load of a slot that has not been filled."
+      },
+      {
+        "text": "`print` cannot take a global argument",
+        "explanation": "`print(x)` works fine if `g` contains no assignment to `x`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Compiling `g`, CPython's symtable pass sees `x = 2` and classifies `x` as local to `g`.\n2. Every use of `x` in `g` therefore compiles to a local-slot load, not `LOAD_GLOBAL`.\n3. At runtime the `print` executes first, and the slot is empty.\n4. CPython raises `UnboundLocalError: cannot access local variable 'x' where it is not associated with a value`.\n\nFix: `global x` (to assign the global), or rename the local. This is the same compile-time scope resolution Calc's checker does.",
+    "link": {
+      "title": "Why am I getting an UnboundLocalError? — Python FAQ",
+      "url": "https://docs.python.org/3/faq/programming.html#why-am-i-getting-an-unboundlocalerror-when-the-variable-has-a-value"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Calc's `Scopes` gives every binding a fresh slot number and never reuses one. How many slots does `(let x = 1 in x) + (let y = 2 in y)` get, and what could a smarter compiler do?",
+    "options": [
+      {
+        "text": "1 slot, because the checker already reuses slots",
+        "explanation": "`define` always uses `self.nslots` and increments it; nothing ever decrements it. The real checker reports 2."
+      },
+      {
+        "text": "2 slots, and they can never share because names differ",
+        "explanation": "Names do not matter for storage. What matters is the binding-slot lifetime; x's result is copied onto the operand stack before its binding slot can be reused."
+      },
+      {
+        "text": "0 slots, because the values are constants and are folded away",
+        "explanation": "The checker does not do constant folding; it assigns a slot to every `let`. An optimiser might later remove them, but that is a separate pass."
+      },
+      {
+        "text": "2 slots; since `x` and `y` are never alive at the same time, a smarter compiler could give both slot 0",
+        "explanation": "Correct. `nslots` is 2. The two scopes do not overlap, so their bindings could share storage. Reusing slots when lifetimes are disjoint is the same idea as the later register-allocation units."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Left `let` defines `x` with slot 0; `nslots` becomes 1.\n2. Its scope is popped, but `nslots` stays 1.\n3. Right `let` defines `y` with slot 1; `nslots` becomes 2.\n4. `x` is dead before `y` is born, so a compiler could set `nslots` back when a scope closes (slot = current depth), using 1 slot.\n\nThe operand stack still holds the left result while evaluating the right side. Binding-slot reuse and result-value liveness are distinct.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/resolving-and-binding.html"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You implement the symbol table as a *dictionary of stacks*: `table[name]` is a stack of symbols, and lookup reads the top. What extra bookkeeping is needed when a scope closes?",
+    "options": [
+      {
+        "text": "None: the garbage collector removes symbols that are out of scope",
+        "explanation": "The symbols are still referenced from `table[name]`; nothing becomes garbage until you pop them explicitly."
+      },
+      {
+        "text": "Clear the whole dictionary and rebuild it from the outer scopes",
+        "explanation": "That would be correct, but every scope exit would then cost time proportional to the total number of names in scope, throwing away the design's whole advantage."
+      },
+      {
+        "text": "Each scope must remember which names it defined, so that on exit it can pop exactly those names' stacks",
+        "explanation": "Correct. Lookup becomes a single hash probe, expected O(1) hash-table work (a constant amount, however deep the nesting), but closing a scope needs a list of the names it introduced. That is the trade."
+      },
+      {
+        "text": "Lookups must now search every stack from bottom to top",
+        "explanation": "The point of the design is that the innermost binding is always on top of its name's stack, so lookup reads one element."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the expected hash-probe costs of the two designs:\n\n```formula\nL_SD = O(d)\nX_SD = O(1)\nL_DS = O(1)\nX_DS = O(k)\nwhere\nL_SD: the cost of one lookup with a stack of dictionaries\nX_SD: the cost of closing a scope with a stack of dictionaries (detach the top dictionary)\nL_DS: the cost of one lookup with a dictionary of stacks\nX_DS: the cost of closing a scope with a dictionary of stacks\nO: Big O notation: O(d) means \"grows at most in proportion to d\"; O(1) means \"a constant amount, independent of size\"\nd: the nesting depth: how many scopes are on the stack\nk: the number of names the closing scope defined\nIn words: the stack of dictionaries makes lookup slower as nesting deepens but closing a scope cheap; the dictionary of stacks makes lookup constant but closing a scope costs one pop per name it defined.\n```\n\nDetaching a dictionary is constant-time at the stack level, but reclaiming its k entries can cost O(k). Each scope in the dictionary-of-stacks design keeps a list of the names it defined. On exit, for each name, `table[name].pop()`, deleting the key if the stack empties. This wins when nesting is deep or the global scope is huge, such as C translation units that include thousands of declarations from headers.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/resolving-and-binding.html"
+    }
+  }
+]

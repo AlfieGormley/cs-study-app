@@ -1,0 +1,122 @@
+[
+  {
+    "id": "comp-parsing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In Calc, `^` is right-associative. What is the value of `2 ^ 3 ^ 2`?",
+    "options": [
+      {
+        "text": "64",
+        "explanation": "64 is `(2 ^ 3) ^ 2` = 8², the left-associative reading."
+      },
+      {
+        "text": "12",
+        "explanation": "Power is not multiplication; this looks like 2 × 3 × 2."
+      },
+      {
+        "text": "512",
+        "explanation": "Correct. Right associativity groups it as `2 ^ (3 ^ 2)` = 2⁹ = 512, the same as Python's `2 ** 3 ** 2`."
+      },
+      {
+        "text": "36",
+        "explanation": "This is (2 × 3)², which mixes up the operators."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Right-associative means the rightmost `^` is applied first: `2 ^ (3 ^ 2)`.\n2. Work from the inside out:\n\n```formula\n3 ^ 2 = 3 × 3 = 9\n2 ^ 9 = 512\nwhere\n^: \"raised to the power\": as many copies of the left number multiplied together as the right number says\nIn words: the inner power gives 9, and 9 copies of 2 multiplied together make 512.\n```\n\nIn the parser this comes from `nxt = prec` for `^`: the recursive call for the right operand accepts another `^`, so it grabs `3 ^ 2` as a unit.",
+    "link": {
+      "title": "Parsing expressions by precedence climbing — Eli Bendersky",
+      "url": "https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing"
+    }
+  },
+  {
+    "id": "comp-parsing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You change Calc's `BINARY` table so that `\"-\": (1, \"R\")`. What does `10 - 4 - 3` now evaluate to?",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That is the left-associative answer, which the change has just broken."
+      },
+      {
+        "text": "It raises a syntax error",
+        "explanation": "The parser still accepts the same strings; only the shape of the tree changes."
+      },
+      {
+        "text": "-3",
+        "explanation": "Neither grouping gives −3: `(10 - 4) - 3` is 3 and `10 - (4 - 3)` is 9. A negative answer would need the minus signs to apply to `10` itself."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. With `nxt = prec`, the right operand `expr(1)` swallows `4 - 3`, giving `10 - (4 - 3)` = 10 − 1 = 9."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Trace precedence climbing with `-` right-associative:\n\n```\nexpr(1): left = 10\n '-' prec 1 >= 1\n right = expr(1)     # nxt = prec = 1\n   left = 4\n   '-' prec 1 >= 1  -> continue!\n   right = expr(1) -> 3\n   -> (4 - 3)\n -> 10 - (4 - 3)\n```\n\n10 − 1 = 9. One character in the table silently changes the meaning of every chain of subtractions, which is why parser test suites check associativity explicitly.",
+    "link": {
+      "title": "Parsing expressions by precedence climbing — Eli Bendersky",
+      "url": "https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing"
+    }
+  },
+  {
+    "id": "comp-parsing-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does Calc return for `2 * -3 ^ 2`?",
+    "options": [
+      {
+        "text": "36",
+        "explanation": "That would need `(2 * -3) ^ 2`, but `^` binds tighter than `*`."
+      },
+      {
+        "text": "18",
+        "explanation": "This treats it as `2 * (-3) ^ 2` = 2 × 9. In Calc unary minus binds *looser* than `^`, so the minus applies to `3 ^ 2`."
+      },
+      {
+        "text": "-18",
+        "explanation": "Correct. `unary` parses its operand with `expr(3)`, so `-3 ^ 2` is `-(3 ^ 2)` = −9, and 2 × −9 = −18. Python's `2 * -3 ** 2` gives the same."
+      },
+      {
+        "text": "A syntax error, because `*` cannot be followed by `-`",
+        "explanation": "`-` starts a unary expression, which is a valid right operand for `*`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `expr(1)` parses `2`, sees `*` (prec 2), and calls `expr(3)` for the right side.\n2. `expr(3)` calls `unary`, which sees `-` and parses its operand with `expr(3)`.\n3. That parses `3`, sees `^` (prec 3 ≥ 3) and takes `3 ^ 2`.\n4. Tree: `2 * Neg(3 ^ 2)`.\n5. Evaluate: 3² = 9, negate: −9, times 2: −18.",
+    "link": {
+      "title": "Parsing Expressions — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/parsing-expressions.html"
+    }
+  },
+  {
+    "id": "comp-parsing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You add `==` to Calc with lower precedence than `+`, as `BINARY[\"==\"] = (0, \"L\")`, and teach the lexer to emit `==`. `parse(\"1 + 1 == 2\")` fails with `expected EOF, got '==' at 6`. Why?",
+    "options": [
+      {
+        "text": "`==` must be right-associative",
+        "explanation": "Associativity only matters for chains like `a == b == c`; this input has a single `==`."
+      },
+      {
+        "text": "`expr` starts with `min_prec=1`, so the top-level loop stops at any operator with precedence 0 and leaves it unparsed",
+        "explanation": "Correct. Precedence 0 is below the default minimum, so `==` is never accepted. Either renumber all levels so the weakest is 1, or start with `min_prec=0`."
+      },
+      {
+        "text": "The lexer splits `==` into two `=` tokens",
+        "explanation": "The error message names a single `'=='` token, so the lexer produced it correctly."
+      },
+      {
+        "text": "Precedence climbing cannot handle more than three levels",
+        "explanation": "It handles any number of levels; that is its whole advantage over one-function-per-level."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace `parse` → `expr(1)`:\n\n```\nleft = 1\n'+' prec 1 >= 1: right = expr(2) -> 1\nleft = (1 + 1)\n'==' prec 0 < 1: break\nreturn (1 + 1)\n```\n\n`parse` then calls `expect(\"EOF\")`, sees `==` at position 6 and fails. The table and the entry point must agree: renumber to `== : 1`, `+ - : 2`, `* / : 3`, `^ : 4` (and `unary` must call `expr(4)`), or change all full-expression entry points, including parentheses and let bodies, to start at expr(0). Note how the unary minus line hard-codes 3: that is a maintenance hazard worth naming as a constant.",
+    "link": {
+      "title": "Parsing expressions by precedence climbing — Eli Bendersky",
+      "url": "https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing"
+    }
+  }
+]

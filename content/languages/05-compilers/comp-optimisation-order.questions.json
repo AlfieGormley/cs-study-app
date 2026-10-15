@@ -1,0 +1,62 @@
+[
+  {
+    "id": "comp-ir-ssa-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`optimise` needed two rounds of its four passes to reduce `a - b + y * (k - 4)` (with `k` bound to 5, and `a` and `b` both bound to `x * 5`) to `ret y`. What made the second round necessary?",
+    "options": [
+      {
+        "text": "`const_fold` must always run twice",
+        "explanation": "`const_fold` evaluates every constant expression in one forward pass; nothing new for it to do appeared in round 2."
+      },
+      {
+        "text": "`dce` deleted an instruction that `simplify` needed",
+        "explanation": "DCE only removes unused instructions, which by definition nothing needs."
+      },
+      {
+        "text": "CSE ran after `simplify` and created `t2 - t2`, which only `simplify` can reduce to 0",
+        "explanation": "Correct. Before CSE, the subtraction was `t2 - t3`, with different names. Once CSE renamed `t3` to `t2`, the `x - x` identity applied, but `simplify` had already run that round."
+      },
+      {
+        "text": "SSA forbids optimising an instruction twice in one round",
+        "explanation": "SSA restricts assignments, not optimisations. Passes may rewrite instructions as often as they like."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Round 1:\n1. `const_fold`: k = 5, `k - 4` = 1, so `t2 = x * 5`, `t3 = x * 5`, `t6 = y * 1`.\n2. `simplify`: `y * 1` → y. `t2 - t3` has different operand names, so no rule fires.\n3. `cse`: `t3` has the same key as `t2` → alias, giving `t4 = t2 - t2`.\n\nRound 2:\n4. `simplify`: `t2 - t2` → 0, then `0 + y` → y.\n5. `dce` deletes `t2`.\n\nRound 3 changes nothing, so it stops. Running `cse` before `simplify` would have needed one fewer round here, which shows why pass ordering is tuned.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://llvm.org/docs/LangRef.html#phi-instruction"
+    }
+  },
+  {
+    "id": "comp-ir-ssa-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With input `x`, what does Calc's optimiser produce for `let a = x * 1 in let b = a + 0 in b * b - x * x`?",
+    "options": [
+      {
+        "text": "`ret 0`",
+        "explanation": "Correct. `simplify` reduces `a` and `b` to `x`, so `b * b` becomes `x * x`. CSE then sees two identical `x * x`, `simplify` turns `t - t` into 0, and DCE removes the rest."
+      },
+      {
+        "text": "`t3 = x * x` / `t5 = t3 - t3` / `ret t5`",
+        "explanation": "This stops before the second round. `optimise` repeats until nothing changes, and `t3 - t3` simplifies to 0."
+      },
+      {
+        "text": "`t1 = x * 1` / `t3 = t1 * t1` / `t4 = x * x` / `t5 = t3 - t4` / `ret t5`",
+        "explanation": "This ignores `simplify`: `x * 1` is just `x`, and `t2 = t1 + 0` is just `t1`."
+      },
+      {
+        "text": "`ret x * x - x * x`",
+        "explanation": "The IR has no nested expressions; and in any case the passes reduce this to a constant."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Lowered:\n\n```\nt1 = x * 1\nt2 = t1 + 0\nt3 = t2 * t2\nt4 = x * x\nt5 = t3 - t4\n```\n\nRound 1: `simplify` aliases t1 → x and t2 → x, so `t3 = x * x`. `cse` finds `t4` has the same key, aliases t4 → t3, giving `t5 = t3 - t3`.\n\nRound 2: `simplify` sees `a == b` for `-`, so t5 → 0. `dce` deletes `t3`.\n\nRound 3: no change. Result: `ret 0`.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://llvm.org/docs/LangRef.html#phi-instruction"
+    }
+  }
+]

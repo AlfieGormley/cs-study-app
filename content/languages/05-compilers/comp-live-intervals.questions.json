@@ -1,0 +1,62 @@
+[
+  {
+    "id": "comp-codegen-regalloc-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "For distinct values not proven equal, when can two compatible temporaries share an interchangeable register in the straight-line interval model?",
+    "options": [
+      {
+        "text": "When they have the same value",
+        "explanation": "Equal values could share, but that is CSE's job. Values that differ can still share a register if they are never needed at the same time."
+      },
+      {
+        "text": "When they are both constants",
+        "explanation": "Constants can often be encoded as immediates and need no register at all; constness is not the criterion for sharing."
+      },
+      {
+        "text": "Never: each temporary needs its own register",
+        "explanation": "That would need as many registers as temporaries. Reuse is the whole point of register allocation."
+      },
+      {
+        "text": "When their live ranges do not overlap",
+        "explanation": "Correct. If one value is dead (no later uses) before the other is defined, the register can be reused without losing anything."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A value is *live* from its definition until its last use.\n2. If value A's last use comes at or before value B's definition, A's register holds nothing useful any more when B is written.\n3. So A and B can use the same register.\n4. If their ranges overlap, writing B would destroy A while it is still needed.\n\nIn graph-colouring terms, overlapping values \"interfere\" and get an edge between them.",
+    "link": {
+      "title": "LLVM code generator design",
+      "url": "https://llvm.org/docs/CodeGenerator.html"
+    }
+  },
+  {
+    "id": "comp-codegen-regalloc-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the idealized model of interchangeable registers, allowing a dying operand register to hold the result, with inputs a, b and c, how many registers does this code need to avoid any spills?\n\n```\nt1 = a + b\nt2 = a * c\nt3 = t1 - t2\nt4 = t3 + b\nret t4\n```",
+    "options": [
+      {
+        "text": "2",
+        "explanation": "Two registers are not enough even before the first instruction finishes: `a`, `b` and `c` all arrive live."
+      },
+      {
+        "text": "3",
+        "explanation": "Three holds the inputs, but instruction 0 defines `t1` while `a`, `b` and `c` are all still needed later."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. Right after `t1 = a + b`, the live values are `a` (used at 1), `b` (used at 3), `c` (used at 1) and `t1`: four at once. That is MaxLive, and linear scan with k = 4 spills nothing."
+      },
+      {
+        "text": "7",
+        "explanation": "Seven is the number of distinct values. Many of them have non-overlapping lifetimes and can share."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compute live ranges (definition, last use):\n\n```\na  -1..1    b  -1..3    c  -1..1\nt1  0..2    t2  1..2\nt3  2..3    t4  3..ret\n```\n\nLive after each instruction:\n\n```\n0  a b c t1    (4)\n1  b t1 t2     (3)\n2  b t3        (2)\n3  t4          (1)\n```\n\nTake the largest count:\n\n```formula\nMaxLive = max(L_0, L_1, L_2, L_3)\nMaxLive = max(4, 3, 2, 1) = 4\nwhere\nMaxLive: the largest number of values live at the same time\nL_0: values live after instruction 0\nL_1: values live after instruction 1\nL_2: values live after instruction 2\nL_3: values live after instruction 3\nmax: the largest of the listed values\nIn words: at the busiest point four values are live together, so four interchangeable registers are needed to avoid spilling.\n```\n\nRunning `linear_scan` with k = 3 registers spills `b`; with k = 4 it spills nothing.",
+    "link": {
+      "title": "Linear Scan Register Allocation — Poletto and Sarkar",
+      "url": "https://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf"
+    }
+  }
+]

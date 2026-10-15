@@ -1,0 +1,70 @@
+[
+  {
+    "id": "comp-semantic-analysis-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Using the lesson's `type_of` checker (with `Bool` and `If` added), which expressions are rejected with a type error? Select all that apply. Assume `x` has type `int`.",
+    "options": [
+      {
+        "text": "`if 1 then 2 else 3`",
+        "explanation": "Correct. `need(c, \"bool\", env)` sees `int` for the condition."
+      },
+      {
+        "text": "`if true then 1 else false`",
+        "explanation": "Correct. The `then` branch is `int`, so `need(b, \"int\", env)` rejects the `bool` else-branch. Both branches must agree so the `if` has a single type."
+      },
+      {
+        "text": "`if true then 1 else 2 + x`",
+        "explanation": "Accepted: condition is `bool`, both branches are `int` (`2 + x` is `int` because `x` is `int`)."
+      },
+      {
+        "text": "`1 + true`",
+        "explanation": "Correct. The `+` case requires both operands to be `int`, and `true` is `bool`."
+      },
+      {
+        "text": "`if true then x else x`",
+        "explanation": "Accepted: both branches have type `int`."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Apply the rules case by case:\n\n| Expression | Check that fails |\n|---|---|\n| `if 1 ...` | cond is int, needs bool |\n| `... else false` | else is bool, needs int |\n| `... else 2 + x` | none: int, int |\n| `1 + true` | right is bool, needs int |\n| `... x else x` | none |\n\nNote that the checker never evaluates anything. `if true then 1 else false` would *run* fine (it always picks 1), but this checker rejects it because its rules require equal branch types. Other static systems may narrow types using known conditions.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/resolving-and-binding.html"
+    }
+  },
+  {
+    "id": "comp-semantic-analysis-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A checker finds that `y` in `let z = y + 1 in z * 2 + z` is undefined. A naive implementation then reports four more errors about `z`, `+` and `*`. What technique stops this cascade?",
+    "options": [
+      {
+        "text": "Stop compiling at the first error",
+        "explanation": "This avoids cascades but throws away the ability to report several genuine, independent errors in one compile, which users rely on."
+      },
+      {
+        "text": "Give the failing node a special *error type* that is silently compatible with every check, so later checks involving it stay quiet",
+        "explanation": "Correct. `y` gets type `<error>`; `y + 1` then also gets `<error>` without a new message, and so does `z`. Only the root cause is reported. Clang, rustc and TypeScript all do this."
+      },
+      {
+        "text": "Report errors in reverse order so the root cause is last",
+        "explanation": "Ordering does not remove the bogus messages; they would still all appear."
+      },
+      {
+        "text": "Treat undefined names as global variables",
+        "explanation": "This hides a real error. The user wants to hear about `y`, just only once."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Lookup of `y` fails: report one error, and return the type `<error>` for that node.\n2. `y + 1`: one operand is `<error>`. Rule: if any operand is `<error>`, the result is `<error>` and no message is printed.\n3. `z` is bound with type `<error>`.\n4. `z * 2 + z`: every check involves `<error>`, so nothing is reported.\n\nResult: one accurate message instead of five. The same idea appears in parsers as panic-mode recovery.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/resolving-and-binding.html"
+    }
+  }
+]

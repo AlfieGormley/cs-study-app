@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 46/76. Updated 2026-10-15.
+Verified modules: 47/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -53,6 +53,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | languages/Type Systems | 6 | 26 | 69 | 28 | 264 | 387 | 38 |
 | languages/Memory Management & Garbage Collection | 6 | 26 | 66 | 29 | 277 | 398 | 80 |
 | languages/Functional Programming | 6 | 33 | 68 | 43 | 248 | 392 | 82 |
+| languages/Compilers & Interpreters | 7 | 37 | 86 | 36 | 293 | 452 | 53 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3928,6 +3929,62 @@ Low-confidence areas:
 - **medium** — fp-hamt-updates: Layout and thresholds refer to documented implementations. Exact payload arithmetic is a model, not a measured allocation or latency ratio.. Layout and thresholds refer to documented implementations. Exact payload arithmetic is a model, not a measured allocation or latency ratio.
 - **medium** — fp-snapshot-sharing: Reference checks and immutable sharing require the documented API, publication and lifetime assumptions; no universal speed or render guarantee is claimed.. Reference checks and immutable sharing require the documented API, publication and lifetime assumptions; no universal speed or render guarantee is claimed.
 - **medium** — fp-transient-builds: Current library ownership/lifetime contracts and CPython implementation were checked; allocation and performance depend on library version and workload.. Current library ownership/lifetime contracts and CPython implementation were checked; allocation and performance depend on library version and workload.
+
+## languages: Compilers & Interpreters
+
+[Independent verification record](../content/languages/05-compilers/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- AOT can use runtime profiles collected earlier; PGO is not exclusively an AOT-only activity.
+- Rust regex is a third-party crate, not the Rust standard library; single-search and repeated-search bounds differ.
+- A C lvalue need not be modifiable; a const-qualified object can still be an lvalue.
+- Left factoring does not guarantee the entire grammar LL(1); FIRST/empty-alternative analysis also needs following tokens.
+- Not every AST removes parentheses, and token-based parsing is not the only parsing architecture.
+- SSA is static single assignment with available definitions, not single execution; LLVM phi placement, loop headers and incoming-edge semantics qualified.
+- C signed left shift requires a nonnegative left operand, even when a negative multiplication result would fit.
+- JVM max_stack counts long/double values as two units, unlike the one-value Calc model.
+- Register-allocation/coalescing and live-interval claims now state interchangeable-register, equal-value, ABI and side-effect assumptions.
+- W^X does not imply every JIT must use one specific permission-switching technique; runtime deoptimisation destinations and performance costs vary.
+- Geometric mean does not automatically neutralise outliers; cache misses may hit another cache rather than main memory.
+- Swift’s parser is no longer incorrectly included in a universal precedence-climbing claim; TypeScript parser evidence is versioned.
+- The branch label in the SSA drawing now agrees with its C/LLVM example.
+- FIRST now distinguishes deriving the empty string from deriving no string; Pratt and recursive-descent definitions no longer overstate equivalence or require hand writing.
+- The immediate-operand example was invalid as a real AArch64 multiply-immediate; it is now a genuine assembled add-immediate example. LEA tiling distinguishes base/index registers from a constant displacement.
+- CIL execution can use JIT or AOT; callee-saved ABI wording includes the stack pointer and conservative coalescing preserves colourability rather than promising an easier problem.
+- A parser-practice question requiring the production-parser examples moved after those examples, preserving its ID, key, option count, level and type. The polymorphic-cache question now has explicit local teaching support.
+- Removed historical missing-test-artifact commentary from learner lessons and questions, retaining the actual teaching scope, limitations and benchmark guidance.
+- Deoptimisation destinations are explicitly runtime dependent; the later IR reference and old lesson-number cross-reference were corrected.
+
+Remaining gaps:
+
+- This preserves a teaching compiler made of excerpts, not a packaged standalone Calc distribution. Parser wrappers, complete checker scaffolding, identity/simplify/show helpers and several target emitters are supplied only in scratch to execute the published portions.
+- Production instruction scheduling, full instruction selection, global register-allocation implementation and real native JIT machine-code emission remain conceptual as in the original scope.
+- No HotSpot/PyPy/LuaJIT runtime was executed here; their mechanisms are primary-source checked. No Apple iOS JIT entitlement/deployment experiment was performed.
+- The Sethi–Ullman, interval-allocation and liveness fixtures are finite exact models under the lesson’s explicit register/evaluation assumptions, not arbitrary target-allocation proofs.
+- x86-64 output was cross-compiled and inspected but was not executed on this AArch64 host. Actual LLVM phi code and AArch64 target examples were executed; iOS entitlements, HotSpot, PyPy and LuaJIT were source checked only.
+
+Low-confidence areas:
+
+- **medium** — comp-pipeline-stages: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-calc-trace: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-execution-strategies: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-lexer-limits: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-lr-actions: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-parser-engineering: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-ast-representations: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-symbol-table-designs: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-semantic-types: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-three-address-lowering: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-ssa-phi: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-production-optimisation: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-stack-codegen: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-graph-allocation: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-target-selection: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-dispatch-specialisation: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-jit-profiles: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-jit-recovery: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
+- **medium** — comp-jit-tradeoffs: Compiler/runtime/framework details and empirical design trade-offs depend on the cited version, platform, build and workload.. Primary implementation documentation was fetched and the text qualified; only the listed local Python/C/V8 examples were executed. No universal performance result or deployment permission is inferred.
 
 ## synth: Sound & Digital Audio
 

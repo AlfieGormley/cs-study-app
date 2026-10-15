@@ -1,0 +1,108 @@
+[
+  {
+    "id": "comp-parsing-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about LL and LR parsing are true? Select all that apply.",
+    "options": [
+      {
+        "text": "LR parsers can handle left-recursive grammars directly",
+        "explanation": "Correct. Bottom-up parsers reduce `E + T` to `E` after seeing it; left recursion causes no infinite loop. Bison grammars are usually written left-recursive."
+      },
+      {
+        "text": "Every LR(1) grammar is also LL(1)",
+        "explanation": "It is the other way round: every LL(1) grammar is LR(1), and LR(1) covers strictly more grammars."
+      },
+      {
+        "text": "Recursive descent parsers are a form of top-down (LL-style) parsing",
+        "explanation": "Correct. They start from the start symbol and predict which rule applies, as LL parsing does."
+      },
+      {
+        "text": "Major compilers such as GCC, Clang and V8 use hand-written recursive descent",
+        "explanation": "Correct. GCC switched away from Bison for C++ in 3.4 and for C in 4.1; Clang and V8 also use hand-written parsing."
+      },
+      {
+        "text": "LR parsers cannot report syntax errors",
+        "explanation": "They detect errors as soon as no action applies; the difficulty is producing *friendly* messages, not detecting the error."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Check each against the mechanics:\n\n1. **Left recursion.** LR shifts tokens and reduces once a full right-hand side is on the stack, so the rule `E → E + T` (\"an expression can be an expression, then `+`, then a term\") is fine. True.\n2. **Every LR(1) grammar is LL(1)?** No, it is the other way round (see the relation below). False.\n3. **Recursive descent.** One function per rule, called top-down. True.\n4. **Industry practice.** True; parser generators also serve production languages such as PostgreSQL.\n5. **Errors.** LR parsers detect errors precisely; their messages are just harder to tailor. False.\n\nThe relation behind claim 2:\n\n```formula\nLL(1) ⊂ LR(1)\nwhere\nLL(1): the class of grammars a top-down parser can handle by reading left to right with 1 token of lookahead\nLR(1): the class of grammars a bottom-up shift-reduce parser can handle with 1 token of lookahead\n⊂: \"is a proper subset of\": every member of the left class is in the right class, and the right class has extra members\nIn words: every LL(1) grammar is also LR(1), but some LR(1) grammars, such as left-recursive ones, are not LL(1).\n```",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/parsing-expressions.html"
+    }
+  },
+  {
+    "id": "comp-parsing-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Why do production compilers such as GCC, Clang and V8 hand-write their parsers instead of generating them? Select all that apply.",
+    "options": [
+      {
+        "text": "It is easier to produce precise, helpful error messages and recover from errors",
+        "explanation": "Correct. A hand-written parser knows exactly what it was trying to parse and can say \"expected `)` to match this `(`\", or suggest fixes."
+      },
+      {
+        "text": "Real languages have context-sensitive corners, like C++ needing to know whether a name is a type",
+        "explanation": "Correct. Hand-written code can consult the symbol table or look ahead arbitrarily far where the grammar alone is not enough."
+      },
+      {
+        "text": "Generated LR parsers cannot handle operator precedence",
+        "explanation": "Bison has `%left`, `%right` and `%prec` declarations exactly for this; precedence is easy in LR generators."
+      },
+      {
+        "text": "Hand-written parsers can be tuned for speed, such as V8's lazy pre-parsing of function bodies",
+        "explanation": "Correct. V8 pre-parses inner functions quickly and only fully parses them when called, which is easy to build into a hand-written parser."
+      },
+      {
+        "text": "Context-free grammars cannot describe programming languages at all",
+        "explanation": "CFGs describe most of the syntax; the hand-written parser still follows one. The issue is the few non-context-free parts and the engineering benefits."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Weigh the actual reasons:\n\n1. **Errors.** A practical engineering reason. True.\n2. **Context sensitivity.** C typedef-name classification can need symbol information; C++ also has syntactic declaration-disambiguation rules. True.\n3. **Precedence.** Generators handle it with declarations. False.\n4. **Speed and lazy parsing.** V8 skips full parsing of functions that may never run. True.\n5. **CFGs useless?** No; they remain the specification. False.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/parsing-expressions.html"
+    }
+  },
+  {
+    "id": "comp-parsing-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On CPython 3.14 with the default recursion limit of 1,000, `parse(\"(\" * d + \"1\" + \")\" * d)` has three recursive parser frames per nesting level. Ignoring small caller overhead, what approximate nesting budget does that suggest?",
+    "options": [
+      {
+        "text": "About 1,000, one frame per bracket",
+        "explanation": "Each bracket costs more than one frame: `expr` calls `unary`, which calls `atom`, which calls `expr` again."
+      },
+      {
+        "text": "About 330",
+        "explanation": "Correct. Each nesting level uses three frames (`expr` → `unary` → `atom` → back to `expr`), so 1,000 / 3 ≈ 333 levels. Caller overhead and runtime details shift the exact threshold."
+      },
+      {
+        "text": "About 100",
+        "explanation": "That would mean ten frames per level; the call chain per bracket is three functions long."
+      },
+      {
+        "text": "It never fails, because the parser uses a loop for brackets",
+        "explanation": "Only operator chains use a loop. Brackets are handled by recursion through `atom`."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. For each `(`, the call chain is `expr` → `unary` → `atom` → (sees `(`) → `expr` ...\n2. That is 3 frames per level.\n3. Budget: about 1,000 frames, minus a few for `parse`, the caller and the interpreter.\n4. Divide the budget by the cost per level:\n\n```formula\nd_max ≈ L / f\nd_max ≈ 1000 / 3 ≈ 333\nwhere\nd_max: the deepest bracket nesting that fits, in levels\nL: the recursion limit, in stack frames; 1,000 by default in CPython\nf: the number of stack frames each nesting level uses, here 3\n≈: approximately equal to\nIn words: about 333 levels of brackets use up the 1,000-frame recursion limit.\n```\n\nThis is a model estimate, not a verified exact failure threshold.\n\nReal compilers face the same issue with generated or adversarial code, which is why CPython's own parser enforces a nesting limit and reports a clean error instead of crashing.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/parsing-expressions.html"
+    }
+  }
+]

@@ -1,0 +1,126 @@
+[
+  {
+    "id": "comp-pipeline-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do the brackets in `2 * (3 + 4)` not appear anywhere in Calc's AST?",
+    "options": [
+      {
+        "text": "The lexer discards them along with whitespace",
+        "explanation": "The lexer must keep brackets as tokens; without them the parser could not know `3 + 4` is grouped. Only whitespace is discarded."
+      },
+      {
+        "text": "They are stored as a special Group node",
+        "explanation": "Some concrete syntax trees and code formatters do keep them, but Calc deliberately omits them; other ASTs, including Clang's, can retain parentheses."
+      },
+      {
+        "text": "Their only job is to shape the tree, and once `+` is a child of `*` that information is in the structure itself",
+        "explanation": "Correct. Brackets tell the parser how to group. After parsing, the `+` node being the right child of `*` encodes the grouping, so the brackets are redundant."
+      },
+      {
+        "text": "Calc ignores brackets and always evaluates left to right",
+        "explanation": "If brackets were ignored, the result would be `2 * 3 + 4 = 10`. Calc respects them: the answer is 14 because of the grouping."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Compare the two trees:\n\n```\n2 * (3 + 4)      2 * 3 + 4\n    *                +\n   / \\              / \\\n  2   +            *   4\n     / \\          / \\\n    3   4        2   3\n```\n\nThe trees differ, so structure carries the grouping. Writing `(...)` into the tree as well would be duplicate information, which Calc chooses to omit; abstraction does not require every AST to discard parentheses.",
+    "link": {
+      "title": "A Map of the Territory — Crafting Interpreters",
+      "url": "https://craftinginterpreters.com/a-map-of-the-territory.html"
+    }
+  },
+  {
+    "id": "comp-pipeline-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run `python3 -c \"import dis; dis.dis('2 * (3 + 4)')\"` on CPython 3.14 and see an instruction loading `14`. What happened?",
+    "options": [
+      {
+        "text": "The compiler folded the constant expression at compile time",
+        "explanation": "Correct. Both operands of `+` and `*` are constants, so CPython's compiler computes 14 once and stores it, removing the arithmetic from runtime."
+      },
+      {
+        "text": "CPython ran the expression while disassembling it",
+        "explanation": "`dis` only disassembles; it does not execute the code. The 14 is baked into the bytecode."
+      },
+      {
+        "text": "Python caches the results of previous expressions",
+        "explanation": "There is no cache of expression results; the folding is a static transformation done before any execution."
+      },
+      {
+        "text": "The lexer recognised `2 * (3 + 4)` as a single number token",
+        "explanation": "The lexer produces seven tokens here: `2`, `*`, `(`, `3`, `+`, `4`, `)`. Folding happens later, on the tree."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. CPython lexes and parses to an AST: `BinOp(2, Mult, BinOp(3, Add, 4))`.\n2. Before emitting bytecode, an optimisation step looks for operators whose operands are all constants.\n3. `3 + 4` becomes `7`, then `2 * 7` becomes `14`.\n4. The arithmetic is replaced by \"load 14, return\".\n\nTry `dis.dis('a * (b + c)')` instead: now you see two `BINARY_OP` instructions, because the values are not known until runtime.",
+    "link": {
+      "title": "dis — Python docs",
+      "url": "https://docs.python.org/3/library/dis.html"
+    }
+  },
+  {
+    "id": "comp-pipeline-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these Calc programs are rejected by the shown lexer, parser or literal-only checker before optimization? Select all that apply.",
+    "options": [
+      {
+        "text": "`2 $ 3`",
+        "explanation": "Correct. `$` is not a legal character, so the lexer fails immediately."
+      },
+      {
+        "text": "`2 * (3 +`",
+        "explanation": "Correct. The tokens are legal but do not form a valid expression: the parser runs out of input inside the brackets."
+      },
+      {
+        "text": "`y + 1` (no `y` defined)",
+        "explanation": "Correct. Semantic analysis looks up `y` in the symbol table, finds nothing, and reports an undefined name."
+      },
+      {
+        "text": "`let x = 2 in 1 / (x - 2)`",
+        "explanation": "Not with simple checks. Our checker only flags division by a literal `0`. Seeing that `x - 2` is zero needs constant propagation, which this checker does not perform. Closed finite Calc could instead be evaluated statically, subject to resources."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Map each program to the first stage that can see the problem:\n\n| Program | Stage |\n|---|---|\n| `2 $ 3` | Lexer |\n| `2 * (3 +` | Parser |\n| `y + 1` | Semantic |\n| `1 / (x - 2)` | Runtime |\n\nThe last one *could* be caught by an optimiser that propagates `x = 2`, and finite closed Calc is not an undecidability example. Exact fault prediction becomes undecidable for unrestricted Turing-complete languages.",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/a-map-of-the-territory.html"
+    }
+  },
+  {
+    "id": "comp-pipeline-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In three-address code, `2 * (3 + 4)` becomes `t1 = 3 + 4; t2 = 2 * t1`. What is the main reason compilers use this form rather than optimising the tree directly?",
+    "options": [
+      {
+        "text": "It is shorter than the tree",
+        "explanation": "It is often longer. The benefit is uniformity, not size."
+      },
+      {
+        "text": "CPUs execute three-address code directly",
+        "explanation": "No mainstream CPU executes this IR. It is closer to assembly than a tree is, but it still has to be lowered to real instructions and registers."
+      },
+      {
+        "text": "Every instruction has at most one operator and names its result, so passes can analyse and rewrite instructions one at a time",
+        "explanation": "Correct. Naming every intermediate value makes data flow explicit, so optimisations like constant folding and common-subexpression elimination become simple loops over a list."
+      },
+      {
+        "text": "It removes the need for a parser",
+        "explanation": "Three-address code is produced *from* the parse tree; the parser is still required."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In a tree, the value of `3 + 4` is implicit: it is \"whatever the right child of `*` computes\".\n2. In three-address code it has a name, `t1`. Anything that uses it says so.\n3. A pass can now ask simple questions: \"are both operands of this instruction constants?\" If so, replace it.\n\n```\nt1 = 3 + 4   -> t1 is 7\nt2 = 2 * t1  -> t2 is 14\nret t2       -> ret 14\n```",
+    "link": {
+      "title": "Primary implementation reference",
+      "url": "https://craftinginterpreters.com/a-map-of-the-territory.html"
+    }
+  }
+]

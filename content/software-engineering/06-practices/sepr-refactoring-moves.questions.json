@@ -1,0 +1,88 @@
+[
+  {
+    "id": "sepr-refactoring-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Every time the business adds a new payment method, a developer has to edit `checkout.py`, `refunds.py`, `reports.py`, `emails.py` and `fraud.py`. Which code smell is this?",
+    "options": [
+      {
+        "text": "Divergent change",
+        "explanation": "Divergent change is the mirror image: one module edited for many unrelated reasons. Here it is one reason causing edits in many modules."
+      },
+      {
+        "text": "Feature envy",
+        "explanation": "Feature envy is a function that uses another object's data more than its own. It can contribute, but it does not describe one change scattering across files."
+      },
+      {
+        "text": "Long function",
+        "explanation": "Nothing here says any function is long; the problem is how knowledge of payment methods is spread out."
+      },
+      {
+        "text": "Shotgun surgery",
+        "explanation": "Correct. One logical change (a new payment method) forces small edits in many places. The fix is to gather payment-method knowledge into one place, often with polymorphism: one class per method."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Count reasons and places. Reasons to change: one (new payment method). Places edited: five.\n2. One reason, many places: **shotgun surgery**.\n3. Many reasons, one place: **divergent change**.\n4. A typical fix: a `PaymentMethod` interface with `charge`, `refund`, `describe` and `risk_score`, so adding a method means adding one class.",
+    "link": {
+      "title": "Code smell — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Code_smell"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume w is a nonnegative integer number of kilograms and country is a plain string. Consider this function:\n\n```python\ndef ship_cost(w, country):\n    if country == \"GB\":\n        if w <= 2:\n            return 4\n        return 4 + (w - 2)\n    if w <= 2:\n        return 10\n    return 10 + 2 * (w - 2)\n```\n\nAfter an \"Extract Function\" refactoring, which version preserves behaviour?",
+    "options": [
+      {
+        "text": "```python\ndef tiered(w, base, per_kg):\n    # Only weight above 2 is charged.\n    extra = max(0, w - 2)\n    return base + per_kg * extra\n\ndef ship_cost(w, country):\n    if country == \"GB\":\n        return tiered(w, 4, 1)\n    return tiered(w, 10, 2)\n```",
+        "explanation": "Correct. For weights up to 2 kg, `max(0, w - 2)` is 0, so the cost is just `base`. Above 2 kg it gives `base + per_kg * (w - 2)`, matching both branches of the original."
+      },
+      {
+        "text": "```python\ndef tiered(w, base, per_kg):\n    return base + per_kg * w\n\ndef ship_cost(w, country):\n    if country == \"GB\":\n        return tiered(w, 4, 1)\n    return tiered(w, 10, 2)\n```",
+        "explanation": "This charges per kg from zero, not above 2 kg. A 1 kg GB parcel would cost 5 instead of 4, so behaviour has changed."
+      },
+      {
+        "text": "```python\ndef tiered(w, base, per_kg):\n    # Only weight above 2 is charged.\n    extra = max(0, w - 2)\n    return base + per_kg * extra\n\ndef ship_cost(w, country):\n    if country == \"GB\":\n        return tiered(w, 4, 2)\n    return tiered(w, 10, 1)\n```",
+        "explanation": "The per-kg rates are swapped between GB and elsewhere. A 5 kg GB parcel would cost 10 instead of 7."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Option A's helper computes:\n\n```formula\nk = b + r × max(0, w − 2)\nGB, 1 kg: k = 4 + 1 × 0 = 4\nGB, 5 kg: k = 4 + 1 × 3 = 7\nFR, 2 kg: k = 10 + 2 × 0 = 10\nFR, 4 kg: k = 10 + 2 × 2 = 14\nwhere\nk: the shipping cost returned\nb: the base charge: 4 for GB, 10 elsewhere\nr: the charge per kilogram above 2 kg: 1 for GB, 2 elsewhere\nw: the parcel weight in kilograms (kg)\nmax: the larger of its two inputs, so weight under 2 kg adds nothing\n2: the free weight allowance, in kg\nkg: kilograms\nGB: the country code for the United Kingdom\nFR: the country code for France\nIn words: everyone pays the base charge, plus the per-kilogram rate for every kilogram over 2.\n```\n\nThe original gives 4, 7, 10 and 14 for the same four cases, so Option A matches for the stated input domain. The key insight is that `max(0, w - 2)` replaces the `if w <= 2` branch. Option B drops the 2 kg threshold, and option C swaps the rates. A characterisation test with these four cases would have caught both mistakes instantly.",
+    "link": {
+      "title": "Catalog of Refactorings — refactoring.com",
+      "url": "https://refactoring.com/catalog/"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A function `report(start_date, end_date, ...)` and eight others all take `start_date, end_date` as consecutive parameters, and several of them repeat the check `if start_date > end_date: raise ...`. Which refactoring best addresses this?",
+    "options": [
+      {
+        "text": "Inline Function, to remove the duplicate checks",
+        "explanation": "Inlining spreads code out further; it would make the duplication worse."
+      },
+      {
+        "text": "Replace Conditional with Polymorphism",
+        "explanation": "There is no type-based branching here. The smell is two values that always travel together."
+      },
+      {
+        "text": "Introduce Parameter Object: a `DateRange` that validates itself on construction",
+        "explanation": "Correct. The pair is a data clump. Bundling it into an object gives the concept a name, puts the validation in one place and shortens nine signatures."
+      },
+      {
+        "text": "Rename the parameters to `start` and `end` for brevity",
+        "explanation": "Shorter names do not address either the clump or the duplicated validation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Spot the smell: the same two parameters appear together in nine signatures. That is a **data clump**.\n2. The duplicated validation is a sign that the pair forms a concept with its own rules.\n3. Introduce a `DateRange(start, end)` whose constructor raises if `start > end`.\n4. Change the nine functions to take a `DateRange`. The checks disappear from them because an invalid range can no longer exist.\n5. Bonus: behaviour like `days()` or `contains(d)` now has an obvious home. Preserve accepted inputs, validation timing and mutability constraints; introducing new rejection in callers that previously accepted invalid ranges is a separate behaviour change.",
+    "link": {
+      "title": "Catalog of Refactorings — refactoring.com",
+      "url": "https://refactoring.com/catalog/"
+    }
+  }
+]

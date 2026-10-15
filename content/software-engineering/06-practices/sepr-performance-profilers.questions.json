@@ -1,0 +1,122 @@
+[
+  {
+    "id": "sepr-profiling-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Here is part of a cProfile report (some columns trimmed):\n\n```\nncalls tottime cumtime function\n     1   0.01   12.40  run\n  2000   0.20   12.10  handle\n  2000  11.50   11.50  http_get\n 90000   0.25    0.25  parse_row\n```\n\nWhich change would most likely give the biggest improvement?",
+    "options": [
+      {
+        "text": "Optimise `parse_row`, because it is called 90,000 times",
+        "explanation": "Call count is not cost. `parse_row` costs 0.25 s in total, about 2% of the runtime."
+      },
+      {
+        "text": "Optimise `run`, because it has the largest cumtime",
+        "explanation": "`run`'s cumtime includes everything it calls. Its own tottime is 0.01 s; there is nothing to optimise inside it."
+      },
+      {
+        "text": "Reduce the time spent in `http_get`, for example by batching requests or making them concurrent",
+        "explanation": "Correct. This is the dominant measured cost. Inspect whether it is waiting, computing or retrying before choosing batching or concurrency."
+      },
+      {
+        "text": "Optimise `handle`, because it calls `http_get`",
+        "explanation": "`handle` itself only spends 0.2 s. Its large cumtime comes from `http_get`; you change `handle` only insofar as it decides how `http_get` is called."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The supplied cProfile table is illustrative; `http_get` accounts for most cumulative runtime, while `parse_row` is small.\n2. Quantify that contribution and the average call duration:\n\n```formula\np = 11.5 s / (12.4 s)\np ≈ 0.927\nt = 11.5 s / 2000\nt = 0.00575 s = 5.75 ms\nwhere\np: the fraction of the total illustrated runtime attributed to http_get\nt: the average illustrated duration per call\ns: seconds\nms: milliseconds, one thousandth of a second\n≈: approximately equal to\nIn words: http_get accounts for about 93% of runtime and averages 5.75 milliseconds per call.\n```\n\n3. Its name does not establish waiting. Inspect whether it computes, waits or retries before changing it.\n4. If measurements confirm independent equal-duration I/O calls and enough downstream capacity, a hypothetical twenty-way overlap has the following idealised call-time floor:\n\n```formula\nT = 11.5 s / 20\nT = 0.575 s\nwhere\nT: ideal elapsed time for the calls alone with twenty concurrent calls, excluding overhead and other work\ns: seconds\n20: the assumed concurrency, dividing 2000 equal-duration calls into equal groups\nIn words: this ideal model reduces the calls’ elapsed time to 0.575 seconds; a real service requires measurement.\n```\n\nBatching and concurrency must preserve ordering, side effects and rate limits.",
+    "link": {
+      "title": "The Python Profilers — Python docs",
+      "url": "https://docs.python.org/3.14/library/profile.html"
+    }
+  },
+  {
+    "id": "sepr-profiling-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a CPU-sampled flame graph with complete stack unwinding of a web service, what does a very wide box near the **top** of a stack indicate?",
+    "options": [
+      {
+        "text": "A function that ran for a long time early in the recording, since the x-axis is time",
+        "explanation": "The x-axis in a standard flame graph is not time; stacks are sorted (often alphabetically) and merged. Use a 'flame chart' if you need a timeline."
+      },
+      {
+        "text": "A function that appeared in many samples and was itself running on the CPU, rather than just calling other functions",
+        "explanation": "Correct. Width is the proportion of samples containing the function. Near the top means few or no callees above it, so the time is spent in the function itself: a prime optimisation target."
+      },
+      {
+        "text": "A function with a very deep call stack",
+        "explanation": "Stack depth is shown by height (how many boxes are stacked), not width."
+      },
+      {
+        "text": "A function that was called many times",
+        "explanation": "Flame graphs from sampling profilers show time (samples), not call counts. One long call and many short ones can look the same width."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Y-axis: stack depth. Each box's parent is directly below it.\n2. Width: share of samples in which the function appeared on the stack.\n3. A wide box with nothing (or little) above it is on-CPU itself in many samples.\n4. A wide box with wide children is just a caller; follow the width upwards.\n5. The x-axis order has no meaning; boxes are sorted so identical stacks merge.",
+    "link": {
+      "title": "Flame Graphs — Brendan Gregg",
+      "url": "https://www.brendangregg.com/flamegraphs.html"
+    }
+  },
+  {
+    "id": "sepr-profiling-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An endpoint takes 900 ms of wall-clock time, but the process uses only about 30 ms of CPU time per request. A CPU sampling profiler shows nothing interesting. What is the most likely explanation?",
+    "options": [
+      {
+        "text": "The profiler is broken; CPU profiles always explain latency",
+        "explanation": "CPU profilers only see threads that are running on a CPU. Time spent blocked does not appear."
+      },
+      {
+        "text": "The Python interpreter is too slow; rewrite in a compiled language",
+        "explanation": "Only 30 ms is spent computing. A compiled language might shave some of that, but the 870 ms of waiting would remain."
+      },
+      {
+        "text": "The machine needs more capacity to execute threads",
+        "explanation": "Low CPU time for one request does not prove the machine is idle. More cores may help scheduler queueing, but first identify whether the delay is scheduling, I/O or locks."
+      },
+      {
+        "text": "The request spends most of its time off-CPU, potentially waiting on I/O, locks or CPU scheduling",
+        "explanation": "Correct. 870 ms of the 900 ms is waiting. Look at tracing, slow-query logs, connection pool waits and lock contention, or use a wall-clock or off-CPU profiler."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Wall time 900 ms, CPU time 30 ms: about 97% of the time the request is not computing.\n2. A sampling CPU profiler records stacks of on-CPU threads, so blocked time is invisible to it.\n3. Candidates: slow queries, N+1 queries, remote service requests, exhausted connection pools, lock waits, or runnable time waiting for a CPU.\n4. Tools: distributed traces with spans per call, database slow-query logs, or off-CPU / wall-clock profiling (py-spy's `--idle` option includes idle stacks).",
+    "link": {
+      "title": "Off-CPU Analysis — Brendan Gregg",
+      "url": "https://www.brendangregg.com/offcpuanalysis.html"
+    }
+  },
+  {
+    "id": "sepr-profiling-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need to profile a production Python service that is intermittently slow. Restarting it is undesirable, and you cannot add more than a few percent overhead. Which tool fits best?",
+    "options": [
+      {
+        "text": "`cProfile`, enabled by restarting the service under `python -m cProfile`",
+        "explanation": "This particular command requires a restart; cProfile can also be enabled programmatically in a running process if instrumentation exists. Its per-call overhead must be assessed."
+      },
+      {
+        "text": "Adding `print(time.time())` around every function and redeploying",
+        "explanation": "Requires a deploy, adds I/O to every call, and produces unmanageable output."
+      },
+      {
+        "text": "Running the same code on a laptop with `timeit`",
+        "explanation": "A laptop micro-benchmark will not reproduce production data, load or the intermittent condition."
+      },
+      {
+        "text": "A sampling profiler such as `py-spy`, attached to the running process by PID",
+        "explanation": "Correct among these choices. External attachment can avoid restart, subject to platform/security permissions. Measure its overhead at the chosen profiler sampling frequency rather than assuming a fixed percentage."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Constraints: no restart, low overhead, real production behaviour.\n2. The offered cProfile launch requires restart, while programmatic activation needs integration and incurs per-call cost.\n3. Sampling profilers take periodic stack snapshots. py-spy runs as a separate process and can attach by PID.\n4. Typical commands:\n\n```\npy-spy top --pid 4321\npy-spy record -o out.svg --pid 4321\n```\n\nAttachment permissions are platform- and policy-dependent. Some configurations need elevated privileges; assess the applicable permission rules and avoid assuming root is always required.\n\nThe SVG is a flame graph of what the service was doing during the slow period. Verify the profiler meets the overhead limit on this workload.",
+    "link": {
+      "title": "py-spy — sampling profiler for Python (GitHub)",
+      "url": "https://github.com/benfred/py-spy"
+    }
+  }
+]

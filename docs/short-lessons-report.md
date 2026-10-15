@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 59/76. Updated 2026-10-15.
+Verified modules: 60/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -66,6 +66,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | software-engineering/Testing | 6 | 22 | 68 | 15 | 196 | 301 | 76 |
 | software-engineering/Version Control & CI/CD | 6 | 26 | 69 | 15 | 279 | 389 | 39 |
 | software-engineering/Software Architecture at the Code Level | 6 | 25 | 67 | 10 | 171 | 1143 | 24 |
+| software-engineering/Engineering Practices | 6 | 24 | 66 | 26 | 235 | 483 | 62 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4629,6 +4630,31 @@ Low-confidence areas:
 
 - **medium** — sea-module-information-hiding: Deep/shallow terminology and open() example.. Author’s official scanned chapter excerpt was freshly fetched and visually read (pages 39–41); it supports general-purpose/deeper design and shallow interface examples, but the exact introductory definition is outside this free extract. open() behavior independently checked in Python docs. Never presented as an empirically universal quality guarantee.
 - **medium** — sea-module-abstractness-metrics: Rarely changing string-library exception in the zone of pain.. Primary Martin papers support the corner, metric and non-universal caveat; the specific string-library example lacks direct primary corroboration in the fetched papers.
+
+## software-engineering: Engineering Practices
+
+[Independent verification record](../content/software-engineering/06-practices/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Kanban board actually has2 Review cards against limit2; replaced false one-free-slot instruction with clear-Review-first flow. Original board preserved.
+- Unique record ID48213 does not imply iteration48213; conditional-breakpoint distractor now explains filtering by ID without inventing batch order.
+- Worst-case question no longer implies set membership is unconditionally constant-time; it distinguishes expected hashing from collision worst cases.
+- Corrected multiple overbroad claims and explanations: dependency versions, annual-only maintenance, long-lived branches, intentional estimate manipulation versus planning fallacy, and categorical point-hour rules.
+- Repaired actual dictionary senses for permissions/AWS access policy, row latency/cloud transfer cost, team ownership/C++ shared ownership, weighted/unweighted mean, class-private/module helper, planning-poker/probabilistic majority vote, runtime decrease/Hypothesis shrinking, and generic algorithmic divide-and-conquer. Added precise235th PERT weighted mean entry.
+- Glossary clarifies REPL statement output, sample scopes, NumPy object arrays, thermal limits, connection-pool failure policies, docs-as-code repository flexibility, no universal merge guarantees, and other before/after details recorded individually.
+- Replaced HTTP200 soft-404 re:Work reader link with actual primary Google article; author JS slide bodies and exact original Agans chapter fetched, actual linked Zeller chapter title/author corrected.
+- Earlier GitHub-flow context required long-lived branch to include durable main. Definition now explains lifetime generally and scopes divergence risk to separate feature/development branches; every affected earlier complete question/body inspected.
+
+Remaining gaps:
+
+- Production py-spy/perf attachment and supported sanitizer target/toolchain behaviour were checked in primary documentation, not against a live service. Actual app.py/business Git v2.3.0 commands remain expressly labelled templates.
+- PERT distribution calibration, full queueing proofs and specialised memory tooling are outside inherited module scope; all existing substantive examples and caveats retained.
+- Exact original Hofstadter book wording remains a disclosed medium-confidence historical provenance gap; active wording is hedged.
+
+Low-confidence areas:
+
+- **medium** — sepr-relative-estimates: Exact original wording/provenance of the Hofstadter book quotation. The original1979 book passage was not authenticated. A fetched author-associated Visible Language journal biography quotes a variant. Active prose and glossary expressly label the familiar text as commonly quoted and tongue-in-cheek; no quantitative prediction relies on it.
 
 ## synth: Sound & Digital Audio
 

@@ -1,0 +1,130 @@
+[
+  {
+    "id": "sepr-refactoring-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your library exposes `fetch_user(id)`, used by 40 internal services owned by other teams. You want to rename it to `get_user(id)`. What is the safest approach?",
+    "options": [
+      {
+        "text": "Rename it in one commit and ask every team to update their code the same day",
+        "explanation": "Coordinating 40 deploys at once is unrealistic; any service that misses the window breaks."
+      },
+      {
+        "text": "Add `get_user`, make `fetch_user` delegate to it (marked deprecated), migrate callers over time, then delete `fetch_user` when usage reaches zero",
+        "explanation": "Correct. This is parallel change (expand, migrate, contract). Every intermediate state works, and each team migrates on its own schedule."
+      },
+      {
+        "text": "Leave the name as it is; public names can never be changed",
+        "explanation": "They can be changed safely, just not atomically. Parallel change exists for this case."
+      },
+      {
+        "text": "Copy the function body into `get_user` so both versions are independent",
+        "explanation": "Two copies will drift apart as bugs are fixed in one and not the other. The old name should delegate to the new one, not duplicate it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Expand with a compatible alias; announce deprecation through the agreed contract (warnings themselves can affect callers). Inventory callers, including infrequent jobs, and migrate supported versions. Remove the old name only after the compatibility and rollback windows close; zero observed calls alone does not prove no caller remains.",
+    "link": {
+      "title": "Parallel Change — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need to replace an in-house ORM used in about 300 places across a monolith with SQLAlchemy. The team deploys from `main` several times a day. Which plan best fits?",
+    "options": [
+      {
+        "text": "Create a long-lived `sqlalchemy-migration` branch, convert all 300 call sites, then merge when complete",
+        "explanation": "Months of divergence from a busy `main` can increase merge and integration risk, while this plan defers production validation until conversion is complete."
+      },
+      {
+        "text": "Introduce a repository interface in front of the old ORM, move callers to it, add a SQLAlchemy implementation behind a flag, switch over gradually, then delete the old ORM",
+        "explanation": "Correct. This is branch by abstraction: all work merges to `main` continuously, both implementations coexist behind one interface, and you can flip back if the new one misbehaves."
+      },
+      {
+        "text": "Use a strangler fig facade in front of the monolith's HTTP routes",
+        "explanation": "Strangler fig works at the system boundary, routing requests between old and new systems. The ORM is an internal component used throughout one codebase, so an internal abstraction is the better fit."
+      },
+      {
+        "text": "Freeze feature work for a quarter so the migration can be done without conflicts",
+        "explanation": "Freezing the business for a refactor is rarely acceptable and still carries big-bang risk at the end."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Constraint: trunk-based development with frequent deploys. A long branch fights this.\n2. The component is internal and widely used, so you want a seam inside the code.\n3. Branch by abstraction:\n   - Add `UserRepository` (etc.) with the operations callers need.\n   - Implement it with the old ORM first. Move callers over in small PRs.\n   - Add a SQLAlchemy implementation. Toggle per repository with a flag.\n   - Compare results in staging, then flip in production one area at a time.\n   - Remove the old implementation when nothing uses it.\n4. Keep each step deployable. A flag rollback works only while data, transactions and side effects remain compatible with the old implementation.",
+    "link": {
+      "title": "Branch By Abstraction — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/BranchByAbstraction.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A team is replacing a 15-year-old monolithic insurance system with new services using the strangler fig pattern. Which practices help the migration succeed? Select all that apply.",
+    "options": [
+      {
+        "text": "Put a routing facade in front of the legacy system so individual routes can be moved to the new services",
+        "explanation": "Correct. The facade is the heart of the pattern: clients do not need to know which system serves a route."
+      },
+      {
+        "text": "Migrate one slice of functionality at a time and switch off its legacy path once the new one is proven",
+        "explanation": "Correct. Incremental slices deliver value early and limit the blast radius of each mistake."
+      },
+      {
+        "text": "Stop all changes to the legacy system until the new one fully replaces it",
+        "explanation": "A multi-year freeze is rarely possible; the business keeps needing changes. The pattern tolerates the old system still changing, because only migrated slices leave it."
+      },
+      {
+        "text": "Compare outputs of old and new implementations on real traffic (shadowing) before cutting over a route",
+        "explanation": "Correct. Shadow traffic surfaces the hidden behaviour that legacy systems are full of, before customers see a difference."
+      },
+      {
+        "text": "Rebuild the whole system in parallel, then switch all traffic over in one weekend",
+        "explanation": "That is a big-bang rewrite, the approach the strangler fig exists to avoid."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. The pattern's core idea: the new system grows around the old one, route by route.\n2. That needs a facade (A) and incremental slices (B).\n3. Legacy code encodes years of undocumented rules. Shadowing (D) sends the same request to both and compares answers, so differences are found before cut-over.\n4. C is unrealistic and unnecessary. E is the big-bang rewrite: integrated replacement value is deferred, and missed legacy behaviour can become a cutover incident. Shadowing must suppress or isolate writes, payments, notifications and other side effects; blindly replaying live mutations can duplicate actions.",
+    "link": {
+      "title": "Strangler Fig Application — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You need to rename a column `users.fullname` to `users.display_name` in a Postgres database behind a web app that runs several instances and is deployed with rolling updates (old and new versions run at the same time). Which sequence is safe?",
+    "options": [
+      {
+        "text": "Run `ALTER TABLE users RENAME COLUMN fullname TO display_name`, then deploy the new code",
+        "explanation": "During the rolling deploy, old instances still query `fullname`, which no longer exists, so they fail until they are replaced."
+      },
+      {
+        "text": "Deploy code that uses `display_name`, then rename the column",
+        "explanation": "The new code fails until the rename runs; with any gap between the two, requests error."
+      },
+      {
+        "text": "Add display_name; deploy atomic dual writes while reading fullname; drain old-only writers; backfill safely and validate; switch reads; retain compatibility through rollback; retire all old readers/writers before dropping fullname",
+        "explanation": "Correct. Column existence alone is insufficient: old writers and stale backfills can leave the new value wrong. Synchronize writes and enforce rollout barriers."
+      },
+      {
+        "text": "Rename the column inside a transaction so no request ever sees it missing",
+        "explanation": "The transaction makes the rename atomic for the database, but old application instances still query the old name once the change is committed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Add the new column.\n2. Deploy writes that update both columns in one transaction, still reading the old column.\n3. Confirm every old-only writer is gone, including background jobs, or synchronize it at the database.\n4. Backfill from current row values with concurrency-safe updates and validate equality.\n5. Switch reads and retain dual writes during the rollback window.\n6. Retire every old reader/writer before contract. A column rename transaction alone cannot update old application code.",
+    "link": {
+      "title": "Parallel Change — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  }
+]

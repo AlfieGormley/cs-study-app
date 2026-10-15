@@ -1,0 +1,130 @@
+[
+  {
+    "id": "sepr-refactoring-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A colleague's pull request is titled \"Refactor billing module\". It renames three functions, extracts two helpers, and changes the rounding of totals from truncation to round-half-up because \"the old way was wrong\". What is the main problem?",
+    "options": [
+      {
+        "text": "Renaming functions is not a refactoring, so the title is misleading",
+        "explanation": "Rename is one of the most common refactorings. The renames are fine; the problem is the rounding change."
+      },
+      {
+        "text": "The rounding fix changes observable behaviour, so the PR mixes refactoring with a behaviour change",
+        "explanation": "Correct. Refactoring must preserve behaviour. Changing rounding alters outputs, so if a test or customer total changes you cannot tell whether the restructure or the fix caused it. Split it into two PRs."
+      },
+      {
+        "text": "Extracting helpers should always be done in a separate PR from renames",
+        "explanation": "Several behaviour-preserving moves can live together; they follow the same behaviour-preserving discipline. It is behaviour changes that must be separated."
+      },
+      {
+        "text": "Refactoring should only be done in a dedicated, planned sprint",
+        "explanation": "Most refactoring is preparatory or opportunistic, done continuously alongside feature work. Planned refactoring is the exception."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask of each change: does any observable output differ?\n2. Renames and extractions: no. Same inputs give the same outputs.\n3. Rounding: yes. A total of 10.005 truncated to 10.00 now becomes 10.01.\n4. So the PR wears both of Beck's \"two hats\" at once.\n5. Fix: land the pure refactor first (tests unchanged and green), then a small, clearly titled PR for the rounding change, with tests updated to the new expected values.",
+    "link": {
+      "title": "Definition of Refactoring — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/DefinitionOfRefactoring.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You must restructure a 600-line function in a legacy module with no tests. You are not sure what some branches are meant to do. What should you do first?",
+    "options": [
+      {
+        "text": "Rewrite the function cleanly from the specification, then delete the old one",
+        "explanation": "There may be no accurate specification, and the old code contains behaviour (including quirks callers rely on) that a rewrite will silently drop."
+      },
+      {
+        "text": "Fix the branches that look wrong, so the tests you write later describe correct behaviour",
+        "explanation": "Changing behaviour before you have a safety net is exactly how legacy refactors break production. Callers may depend on the 'wrong' behaviour."
+      },
+      {
+        "text": "Write characterisation tests that record what the function currently returns for a range of inputs",
+        "explanation": "Correct. Characterisation tests pin down current behaviour, bugs included, so any accidental change during refactoring shows up as a failing test."
+      },
+      {
+        "text": "Use the IDE's automated refactorings, which make tests unnecessary",
+        "explanation": "Automated refactorings are safer than hand edits, but they cannot see dynamic dispatch, reflection or string-based lookups, and they do not cover the manual steps you will also take."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Refactoring means behaviour stays the same, so you need a way to detect change.\n2. With no tests, write some. But you do not know what is *correct*, so assert what the code *does*.\n3. Call it with representative inputs, including edge cases (zero, empty, very large), and paste the actual outputs into assertions.\n4. Now refactor in small steps, running the tests after each.\n5. Only afterwards, as a separate visible change, fix any bugs the characterisation tests revealed.",
+    "link": {
+      "title": "Workflows of Refactoring — Martin Fowler",
+      "url": "https://martinfowler.com/articles/workflowsOfRefactoring/"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of the following are refactorings in the strict sense (they preserve observable behaviour)? Select all that apply.",
+    "options": [
+      {
+        "text": "Renaming an internal local variable from `d` to `days_overdue`, updating all references and preserving the public contract",
+        "explanation": "Correct. Local names are invisible to callers; behaviour is unchanged."
+      },
+      {
+        "text": "Extracting a loop body into a private function while preserving computation order, results, errors and externally relied-on effects",
+        "explanation": "Correct. The same computation runs in the same order; only the structure differs."
+      },
+      {
+        "text": "Replacing a linear search with a dictionary lookup for stable hashable keys, preserving equality, duplicate selection and the public behaviour contract",
+        "explanation": "Correct under the stated properties of this replacement. The representation changes while lookup results and contractual effects stay the same; merely using a dictionary would not prove that. Timing or allocation changes can matter when the contract includes them."
+      },
+      {
+        "text": "Changing a function so it raises `ValueError` instead of returning `None` for bad input",
+        "explanation": "Callers see a different result (an exception instead of a value), so this is a behaviour change, even if it is an improvement."
+      },
+      {
+        "text": "Renaming a JSON field in an API response from `ts` to `timestamp`",
+        "explanation": "Clients parse that field name. It is part of the contract, so renaming it changes observable behaviour and needs parallel change."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask, for each: could any caller, client or test (other than one checking internals) observe a difference?\n\n1. Internal local rename with updated references and the same contract: no.\n2. Extract the internal helper function while preserving contractual effects: no.\n3. Dictionary lookup with the stated preserved contract: no contractual difference. Watch the choice of result for duplicate lookup keys, which is the classic way this goes wrong.\n4. Exception instead of `None`: yes, callers that checked for `None` now crash.\n5. JSON field rename: yes, every client parsing `ts` breaks.\n\nSo A, B and C are refactorings; D and E are behaviour changes and should be made deliberately.",
+    "link": {
+      "title": "Definition of Refactoring — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/DefinitionOfRefactoring.html"
+    }
+  },
+  {
+    "id": "sepr-refactoring-q11",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which of these modules is the best candidate for a planned refactoring effort?",
+    "options": [
+      {
+        "text": "A 2,000-line parser written in 2016 that nobody has needed to change in three years, with no open bugs",
+        "explanation": "Its recent change-related cost is low, so the pricing hotspot is a stronger candidate on the stated evidence. Still check security, operational and knowledge risks."
+      },
+      {
+        "text": "A 400-line pricing module changed in 60% of last quarter's pull requests, where most of those PRs needed review fixes for regressions",
+        "explanation": "Correct. Frequent modification and review fixes make this a strong candidate for investigation. Check that structure is causing the regressions and estimate the cost and likely benefit before planning the refactoring."
+      },
+      {
+        "text": "A well-tested utility module that uses an older naming convention than the rest of the codebase",
+        "explanation": "Cosmetic inconsistency is cheap to live with. It might be worth a rename while passing through, but not a planned effort."
+      },
+      {
+        "text": "A deprecated module scheduled for deletion next month",
+        "explanation": "With deletion expected soon, structural improvements have little time to earn a return. Urgent security or operational fixes may still be needed before deletion."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Compare evidence of ongoing cost with the remaining life of the module.\n2. The parser has little recent change friction, although security, operational and knowledge risks still need assessment.\n3. Naming preferences alone are weaker evidence, and deletion limits the useful life of improvements.\n4. The pricing module combines frequent modification with frequent regressions. Investigate whether its structure causes that pain and whether a focused fix will help.\n5. This motivates the hotspot analysis developed later; no formula or guaranteed payback follows from line count alone.",
+    "link": {
+      "title": "Workflows of Refactoring — Martin Fowler",
+      "url": "https://martinfowler.com/articles/workflowsOfRefactoring/"
+    }
+  }
+]

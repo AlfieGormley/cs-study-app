@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sepr-debugging-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef add_tag(tag, tags=[]):\n    # Reuses and mutates the default.\n    tags.append(tag)\n    return tags\n\n# First call leaves \"x\" in that list.\nadd_tag(\"x\")\nprint(add_tag(\"y\"))\n```",
+    "options": [
+      {
+        "text": "`['y']`",
+        "explanation": "This assumes a fresh empty list is created on every call. Python evaluates default values once, at definition time."
+      },
+      {
+        "text": "`['x', 'y']`",
+        "explanation": "Correct. The default list is created once and shared, so the first call's `'x'` is still in it when the second call appends `'y'`."
+      },
+      {
+        "text": "`['y', 'x']`",
+        "explanation": "`append` adds to the end, so `'y'` comes after `'x'`."
+      },
+      {
+        "text": "A `TypeError`, because a list cannot be a default argument",
+        "explanation": "Mutable defaults are legal Python; that is what makes the bug easy to write."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. When `def` runs, Python evaluates `[]` once and stores that list object as the default.\n2. `add_tag(\"x\")`: no `tags` passed, so the shared list is used. It becomes `['x']`.\n3. `add_tag(\"y\")`: the *same* list object is used again. It becomes `['x', 'y']`.\n4. Fix: `tags=None`, then `if tags is None: tags = []` inside the function.",
+    "link": {
+      "title": "Default argument values — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"
+    }
+  },
+  {
+    "id": "sepr-debugging-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A batch job crashes on the record whose unique ID is 48213 in a batch of 100,000 with a bad value. You are using pdb. What is the most efficient way to stop exactly at the failing record?",
+    "options": [
+      {
+        "text": "Set an ordinary breakpoint in the loop and press `c` until you reach record 48,213",
+        "explanation": "The ID does not identify its position in the batch. An unconditional breakpoint can stop on many unrelated records; a condition filters for the actual ID."
+      },
+      {
+        "text": "Set a conditional breakpoint, for example `b job.py:57, rec.id == 48213`, or run under `python -m pdb` and inspect post-mortem when it crashes",
+        "explanation": "Correct. A conditional breakpoint stops only when the condition is true. Post-mortem mode drops you into the crashing frame with all its locals once the exception happens."
+      },
+      {
+        "text": "Add `print(rec)` inside the loop and read the 100,000 lines of output",
+        "explanation": "This works eventually but buries the one interesting record in noise. If you print, print only when the record matches."
+      },
+      {
+        "text": "Step through every iteration with `s`",
+        "explanation": "Stepping into each call is even slower than continuing; it is for walking through one call in detail."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. You know which record fails, so you want the debugger to skip the rest.\n2. Conditional breakpoint: `b job.py:57, rec.id == 48213`, then `c`. pdb checks the condition whenever that line is reached and stops only when it is true. Repeated execution for that record could stop again.\n3. Alternative: you know it crashes, so run `python -m pdb job.py`, enter `c` at the initial stop and let it raise, and pdb enters post-mortem in the raising frame. Use `p rec`, `w`, and `u` to see how the bad value arrived.",
+    "link": {
+      "title": "pdb — The Python Debugger",
+      "url": "https://docs.python.org/3/library/pdb.html"
+    }
+  },
+  {
+    "id": "sepr-debugging-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Orders occasionally get a negative total. You trace it to `apply_discount`, which can subtract more than the subtotal when two promotions stack. Product confirms the two promotions must not stack. A teammate proposes adding `total = max(total, 0)` at the end of `checkout()`. What is the best response?",
+    "options": [
+      {
+        "text": "Reject it; first write a test reproducing the double discount, fix the stacking rule in `apply_discount`, then search for other places that apply promotions the same way",
+        "explanation": "Correct. Establish the intended stacking rule, reproduce the violation in a test, then fix and validate the relevant logic. The test demonstrates the case; investigation connects it to the cause. Check other consumers and paths as well."
+      },
+      {
+        "text": "Accept it; the customer never sees a negative total, so the bug is fixed",
+        "explanation": "This hides the symptom. Discounts that should not stack still stack, and other code that reads the discount (refunds, reports, revenue) still sees the wrong value."
+      },
+      {
+        "text": "Reject it and remove all promotions until a full rewrite is ready",
+        "explanation": "Disproportionate. The cause is understood and can be fixed precisely."
+      },
+      {
+        "text": "Accept it but log a warning; logs are enough to track the issue",
+        "explanation": "Logging a symptom you have already diagnosed defers the real fix and still leaves wrong discount data elsewhere."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Ask *why* the total went negative: two promotions both applied in full.\n2. That is a business-rule bug in `apply_discount`. Fixing it there corrects every consumer of the discount, not just `checkout`.\n3. Write the test first: basket £20, two £15 promotions, expect the rule you agree with product (e.g. best single promotion, total £5).\n4. Fix, watch it pass, run the suite.\n5. Search for other code paths that apply promotions (e.g. the mobile API) and check them too.\n6. A `max(…, 0)` guard plus an alert can stay as a safety net, but it is not the fix.",
+    "link": {
+      "title": "Rubber duck debugging — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Rubber_duck_debugging"
+    }
+  }
+]

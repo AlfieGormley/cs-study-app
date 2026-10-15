@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 64/76. Updated 2026-10-15.
+Verified modules: 65/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -71,6 +71,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | theory/Discrete Structures | 6 | 40 | 75 | 229 | 343 | 686 | 64 |
 | theory/Probability for Computer Science | 6 | 41 | 70 | 177 | 217 | 708 | 32 |
 | theory/Automata & Regular Languages | 6 | 32 | 73 | 92 | 170 | 367 | 48 |
+| theory/Context-Free Languages & Computability | 6 | 32 | 67 | 87 | 175 | 361 | 34 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4805,6 +4806,31 @@ Low-confidence areas:
 - **medium** — auto-regex-defences: Current regex implementation composition, supported syntax or documented API guarantees.. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
 - **medium** — auto-regex-growth-outages: Current regex implementation composition, supported syntax or documented API guarantees.. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
 - **medium** — auto-thompson-practice: Current regex implementation composition, supported syntax or documented API guarantees.. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+
+## theory: Context-Free Languages & Computability
+
+[Independent verification record](../content/theory/05-computability/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Inherent ambiguity now quantifies over context-free grammars explicitly, rather than arbitrary grammar formalisms.
+- Chart parsing definition now describes reusable partial results, avoiding the false universal claim that every chart parser stores every substring.
+- Stored-program definition distinguishes instruction storage from shared instruction/data memory; Harvard machines also store programs.
+- Formal regular-expression primitives include the empty language and empty string, so the definition really covers all regular languages.
+- Remaining inline grammar relations, a plain-fenced derivation and a Rice membership table were moved into formula cards, plain words or actual labelled trees. All original IDs, keys, option counts and concepts retained.
+- Actual compiler caught a new grammar-state phrase linking to the OS shared-state-variable definition; precise grammar wording removes the wrong link.
+
+Remaining gaps:
+
+- Reverse PDA-to-CFG construction remains an explicitly labelled sketch; full normalisation/rule construction is outside the retained scope.
+- Inherent ambiguity, CFG ambiguity/universality/equivalence, PCP/Hilbert/SystemF and eventual busy-beaver domination are sourced results without every full proof.
+- The unspecified six-state Collatz-like machine claim is omitted; no concrete convention or machine was provided.
+- Reading-time metadata is an estimate; no timed learner trial was conducted.
+- Finite execution tests corroborate examples and never prove universal Goldbach, totality, pumping or asymptotic claims.
+
+Low-confidence areas:
+
+None newly recorded. Inherited glossary qualifications remain in the verification record.
 
 ## synth: Sound & Digital Audio
 

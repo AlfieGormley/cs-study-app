@@ -22,6 +22,20 @@ test('code and existing links stay safe and unnested', () => {
   assert.doesNotMatch(render('```js\nRedis.get(key)\n```'), /data-term/);
   assert.doesNotMatch(inline('<img src=x onerror=alert(1)> Redis'), /<img/);
 });
+test('escaped generic code terms link without unescaping displayed markup', () => {
+  const options = { subject: 'languages' };
+  const entry = exactTerm('Box<T>', options.subject);
+  assert.ok(entry);
+  const linked = inline('`Box<T>`', options);
+  assert.ok(linked.includes(`data-term="${entry.id}"`));
+  assert.match(linked, /<code>Box&lt;T&gt;<\/code>/);
+  assert.equal((inline('`Box<T>` and `Box<Expr>`', { ...options, seen: new Set() }).match(/data-term=/g) || []).length, 1);
+  assert.doesNotMatch(inline('`Box&lt;T&gt;`', options), /data-term=/);
+  assert.doesNotMatch(inline('[`Box<T>`](https://doc.rust-lang.org/)', options), /data-term=/);
+  const unsafe = inline('`Box<T><img src=x onerror=alert(1)>`', options);
+  assert.doesNotMatch(unsafe, /<img|data-term=/);
+  assert.match(unsafe, /&lt;img/);
+});
 test('noninteractive content never gains dictionary buttons', () => {
   const source = '# Redis\n\nRedis and `Redis`\n\n- Redis\n\n| Redis | SQL |\n|---|---|\n| Redis | SQL |\n\n> [!note] Redis\n> Redis';
   assert.doesNotMatch(render(source, {interactive:false}), /<button/);

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 42/76. Updated 2026-10-15.
+Verified modules: 43/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -49,6 +49,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | architecture/Pipelining & CPU Performance | 6 | 29 | 66 | 65 | 187 | 282 | 9 |
 | architecture/Caches & the Memory Hierarchy | 6 | 31 | 69 | 92 | 185 | 377 | 39 |
 | architecture/Parallel Hardware | 6 | 33 | 73 | 74 | 213 | 393 | 42 |
+| languages/Programming Paradigms | 6 | 31 | 68 | 20 | 449 | 568 | 52 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3765,6 +3766,40 @@ Low-confidence areas:
 - **medium** — par-sampling-profiles: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
 - **medium** — par-roofline-ceilings: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
 - **medium** — par-roofline-investigation: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+
+## languages: Programming Paradigms
+
+[Independent verification record](../content/languages/01-paradigms/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Corrected quiz references that opened unrelated language pages, including HotSpot, spreadsheets, Bash scope, Datalog, JavaScript arrays and Haskell evaluation.
+- Moved the Kubernetes manifest-recognition question into desired-state teaching, preserving all question identities and answer contracts.
+- Corrected Java sealed declarations to restrict direct branches rather than all descendants; non-sealed branches may grow.
+- Corrected GHC rewrite-rule/fusion claims: the compiler trusts rules and transformations must preserve termination/evaluation semantics even for pure code.
+- Qualified Datalog termination to fair positive finite-domain bottom-up set evaluation; recursive CTEs and unrestricted dialects need their own stopping conditions.
+- Corrected historical release/development distinctions for Elixir, F# and Erlang; removed the subjective friendlier-syntax claim and unsupported precise Curry biographical dates.
+- Separated Go class-inheritance absence from interface embedding, inherited implementation from behavioral substitutability, and SCADE/Lustre clocked semantics from fixed-rate actor dataflow.
+- Fixed a closing formula fence that shared its line with prose, and qualified closure retention/GC/frame allocation and parallelism implementation assumptions.
+
+Remaining gaps:
+
+- Advanced monads, persistent-structure implementation, type theory and compiler internals remain in their later course modules as in the original scope.
+- No production cloud reconciliation, exhaustive engine survey, certification assessment or compiler performance benchmark; corresponding statements are qualified.
+- A small Datalog unit is intentionally shorter; it includes the previously implicit synchronous-round trace required by its questions.
+- No native ALGOL/CLU or Safari execution; no live Kubernetes/Terraform/cloud deployment, compiler-IR/disassembly survey or production performance benchmark.
+- Original depth and all 64 executable statement sequences preserved; examples remain educational fixtures rather than production banking/concurrency/deployment implementations.
+
+Low-confidence areas:
+
+- **medium** — para-state-and-control: Paradigm boundaries and how/what taxonomy. Pedagogical categories rather than a universal standard; operational examples and control-flow theorem checked against primary sources.
+- **medium** — para-polymorphic-dispatch: HotSpot guarded inlining and runtime dispatch costs. Official implementation glossary checked; Java outputs executed, but no compiler-IR/disassembly or performance benchmark. Exact optimisations remain version/workload dependent.
+- **medium** — para-recursion-costs: Proper-tail-call engine support and default recursion limit. Primary WebKit and Python documentation plus native Node/CPython behavior; no Safari runtime or exhaustive engine survey. Limits/configuration and engine support can change.
+- **medium** — para-choosing-language-style: Language/team/ecosystem and optimisation guidance. Rules of thumb and workload-dependent opportunities, not measured productivity rankings or unconditional speed guarantees.
+- **medium** — para-closure-storage: Closure physical storage, GC and upvalue details. Primary CPython/Lua/Rust/C++ sources and native fixtures support the examples; allocation can change under optimisation and unused bindings need not be retained.
+- **medium** — para-nonstrict-arguments: ALGOL call-by-name and CLU argument-sharing attribution. ALGOL original report section 4.7.3.2 extracted from the Computer History Museum preservation scan. CLU TR190 primary indexed excerpt independently retrieved, but local scan is image-only. Native ALGOL/CLU execution was not available; abstract demand models and Python mutation/rebinding checked.
+- **medium** — para-pure-functions: Inherited historical dates and influence labels in glossary. Prioritised primary project announcements, designer histories and institutional pages; corrected Elixir/F#/Kotlin/Erlang date distinctions. Some biographical minutiae and broad influence language have only institutional/authoritative overview corroboration, not original archival evidence. All flagged entries have medium confidence.
+- **medium** — para-desired-state: Infrastructure reconciliation and serial ORM latency examples. Primary Kubernetes/Terraform/Django docs checked and real Django/SQLite 501-versus-1 queries executed. No live cloud deployment or network-latency measurements; stable-input assumptions and hypothetical timings stated.
 
 ## synth: Sound & Digital Audio
 

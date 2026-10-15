@@ -60,6 +60,13 @@ comments and any new questions. Check factual claims against fetched primary sou
 and preserve the verified original facts. Existing glossary entries need no rewriting, but their
 verification records must remain present and their hashes valid.
 
+For author diagnostics before stamping, the coordinator's scratch helper
+`/tmp/cs-study-short-lessons/author-dictionary-snapshot.mjs <scratch-output> [root]` runs the real compiler's
+pre-write stage and saves its validation errors alongside scratch glossary and renderer modules. It never
+stamps, changes repository outputs or turns an invalid build into a pass. Its output has been compared with
+the genuine whole build, including namespaced IDs and donated aliases. Final independent verification and
+release checks must still use a genuinely stamped whole-build snapshot.
+
 Check ambiguous glossary names in the compiled dictionary as well as local source entries. A phrase may
 resolve to another module's definition. Prefer precise existing aliases or narrow local terms: for example,
 `server processing time` for request-handling duration, rather than bare `processing time`, which denotes

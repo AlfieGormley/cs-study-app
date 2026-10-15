@@ -1,0 +1,62 @@
+[
+  {
+    "id": "para-oop-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does `a.m(x)` return?\n\n```java\n// Static types choose the signature.\nclass A {\n  String m(Object o) {\n    return \"A.obj\";\n  }\n  String m(String s) {\n    return \"A.str\";\n  }\n}\nclass B extends A {\n  String m(Object o) {\n    return \"B.obj\";\n  }\n}\n\nA a = new B();\nObject x = \"hi\";\n// a.m(x) ?\n```",
+    "options": [
+      {
+        "text": "`\"A.str\"`",
+        "explanation": "This assumes overload resolution looks at the runtime type of `x` (String). Java chooses among overloads at compile time from the *static* type, which is `Object`."
+      },
+      {
+        "text": "`\"A.obj\"`",
+        "explanation": "The compiler did pick the `m(Object)` signature, but which *implementation* of that signature runs is decided at runtime, and the object is a `B`, which overrides it."
+      },
+      {
+        "text": "`\"B.obj\"`",
+        "explanation": "Correct. Step 1 (compile time): static arg type `Object` selects signature `m(Object)`. Step 2 (runtime): the receiver is a `B`, whose override of `m(Object)` runs."
+      },
+      {
+        "text": "A compile error: the call is ambiguous",
+        "explanation": "With an `Object` argument only `m(Object)` is applicable, so there's no ambiguity."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Java method calls are resolved in two phases.\n\n1. Compile time, overloads: the compiler looks at the static type of `a` (`A`) and of `x` (`Object`). Of `A`'s methods, only `m(Object)` accepts an `Object`. The call is bound to the signature `m(Object)`.\n2. Runtime, overrides: the JVM dispatches that signature on the actual receiver, a `B`. `B` overrides `m(Object)`, so `\"B.obj\"` runs.\n\nFor comparison, `a.m(\"hi\")` would pick `m(String)` at compile time; `B` doesn't override it, so it returns `\"A.str\"`. Single dispatch on the receiver, static choice on the arguments: that is why the visitor pattern exists.",
+    "link": {
+      "title": "JLS 15.12: Method invocation expressions — Oracle",
+      "url": "https://docs.oracle.com/javase/specs/jls/se21/html/jls-15.html#jls-15.12"
+    }
+  },
+  {
+    "id": "para-oop-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A hot loop in a Java service calls `shape.area()` on a `List<Shape>`. In one deployment the list only ever contains `Circle`s; in another it holds 6 different `Shape` subclasses evenly mixed. Why might the first run noticeably faster under HotSpot?",
+    "options": [
+      {
+        "text": "Virtual calls are always resolved at compile time by `javac`",
+        "explanation": "`javac` emits `invokevirtual`/`invokeinterface`; target selection happens in the JVM at runtime."
+      },
+      {
+        "text": "The JVM creates a new vtable on every call when there are many classes",
+        "explanation": "Vtables are built once per class, when the class is loaded. The cost is the indirect call and the lost inlining, not table creation."
+      },
+      {
+        "text": "Circles are smaller objects, so they fit in cache",
+        "explanation": "Object size isn't the main effect here. The difference comes from what the JIT can do at the call site."
+      },
+      {
+        "text": "A monomorphic site may allow guarded inlining of Circle.area; a diverse receiver profile can make useful inlining harder and retain indirect dispatch",
+        "explanation": "Correct. This is an optimization opportunity, not a guaranteed performance outcome. HotSpot decisions depend on profile, method size, compiler and version."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "HotSpot profiles receiver types. A monomorphic site may inline the observed implementation with a guard or another valid type assumption. A diverse receiver profile can reduce profitable inlining opportunities, leaving indirect dispatch and fewer downstream optimizations. Some polymorphic sites can still inline targets; six classes does not impose a universal ban. Measure the actual compiled workload.",
+    "link": {
+      "title": "OpenJDK: HotSpot optimisation glossary",
+      "url": "https://openjdk.org/groups/hotspot/docs/HotSpotGlossary.html"
+    }
+  }
+]

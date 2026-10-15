@@ -1,0 +1,66 @@
+[
+  {
+    "id": "para-logic-dataflow-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are essentially **dataflow** systems, where execution order is determined by data dependencies? Select all that apply.",
+    "options": [
+      {
+        "text": "An Excel workbook",
+        "explanation": "Correct. Formula cells recalculate when the cells they reference change, in dependency order."
+      },
+      {
+        "text": "`cat log | grep ERROR | sort`",
+        "explanation": "Correct. It is a dataflow pipeline whose processes may run concurrently, but sort normally consumes all input before emitting the globally sorted result."
+      },
+      {
+        "text": "A Makefile",
+        "explanation": "Correct. Make builds a dependency graph of targets and rebuilds only those downstream of changed files."
+      },
+      {
+        "text": "A Python `while` loop that increments a counter",
+        "explanation": "This is imperative: a program counter steps through statements in a fixed order."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask: *does the system decide what to run next based on which inputs are ready or changed?*\n\n- Spreadsheet: yes, recalculation follows references.\n- Pipe: yes, reads can wait for upstream data, while buffering and each command's own behavior affect progress.\n- Make: yes, targets are rebuilt when prerequisites change, in dependency order.\n- While loop: no, order is fixed by the code.",
+    "link": {
+      "title": "GNU Make: rules and prerequisites",
+      "url": "https://www.gnu.org/software/make/manual/html_node/Rule-Introduction.html"
+    }
+  },
+  {
+    "id": "para-logic-dataflow-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A naive push-based reactive library has a source signal initially equal to 1. Its derived signal `b` multiplies source signal `a` by 10; signal `c` adds `a` and `b`. When `a` changes it notifies its subscribers in the order `c`, then `b`. You set `a = 2`. What value does `c` hold immediately after its first recomputation?",
+    "options": [
+      {
+        "text": "22",
+        "explanation": "22 is the correct final value, once `b` has been updated to 20 and `c` recomputed again. The first recomputation of `c` comes before `b` changes."
+      },
+      {
+        "text": "12",
+        "explanation": "Correct. `c` is recomputed first, reading the new `a` (2) and the stale `b` (10): 2 + 10 = 12. That transient inconsistent value is a **glitch**."
+      },
+      {
+        "text": "11",
+        "explanation": "11 is the original value (1 + 10). `c` does see the new value of `a` when it recomputes."
+      },
+      {
+        "text": "21",
+        "explanation": "This would mix the old `a` (1) with the new `b` (20), but `b` hasn't been updated yet when `c` first runs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nb = a × 10\nc = a + b\nc_glitch = 2 + 10 = 12\nc_final = 2 + 20 = 22\nwhere\na: the source signal, changed from 1 to 2\nb: a derived signal, 10 before the change and 20 after\nc: a derived signal, 11 before the change\nc_glitch: c after its first recomputation: new a, stale b\nc_final: c after b has updated and c is recomputed again\nIn words: recomputing c before b mixes the new a with the old b, giving 12, a value the formulas never allow.\n```\n\n1. Before: `a` is 1, `b` is 10, `c` is 11.\n2. Set `a` to 2. Notify `c` first: it reads the new `a` and the stale `b`, giving 12. This state (`a` 2, `c` 12) is inconsistent with the formulas.\n3. Notify `b`: it becomes 20. `b` notifies `c`, which becomes 22.\n4. Anything that observed `c` between steps 2 and 3 saw 12, a glitch. It might trigger an effect, such as sending an alert.\n\nFix: update in **topological order** (b before c), or mark dependants dirty and recompute lazily on read. Modern signal libraries use these techniques to be glitch-free.",
+    "link": {
+      "title": "Reactive dataflow — primary reference",
+      "url": "https://preactjs.com/blog/signal-boosting/"
+    }
+  }
+]

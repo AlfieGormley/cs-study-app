@@ -5,6 +5,9 @@ import { aliasKey, fallsBack } from './glossary-rules.js';
 export const glossary = [...core, ...moduleTerms];
 
 const esc = (text) => String(text).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const escapedCharacters = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" };
+// Decode once for lookup only; keep the displayed HTML escaped.
+const unescapeText = (text) => text.replace(/&(?:amp|lt|gt|quot|#39);/g, (entity) => escapedCharacters[entity]);
 const byId = new Map();
 const coreMap = new Map();         // alias key -> { entry, alias }: core terms, every subject
 const bySubject = new Map();       // subject id -> Map(alias key -> { entry, alias })
@@ -69,7 +72,7 @@ export function linkTerms(html, { interactive = true, terms = true, seen = null,
   const parts = html.split(/(<[^>]*>)/g);
   return parts.map((part, index) => {
     if (!protectedDepth && part === '<code>' && parts[index+2] === '</code>') {
-      const entry = exactTerm(parts[index+1], subject);
+      const entry = exactTerm(unescapeText(parts[index+1]), subject);
       if (entry && first(entry)) {
         const label = `<code>${parts[index+1]}</code>`;
         parts[index+1] = ''; parts[index+2] = '';

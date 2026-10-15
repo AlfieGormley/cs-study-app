@@ -1,0 +1,92 @@
+[
+  {
+    "id": "para-imperative-declarative-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A query `SELECT * FROM orders WHERE customer_id = 42` takes 8 seconds. A colleague adds an index on `customer_id` and, without any change to the SQL, it now takes 3 ms. Which property of declarative languages does this illustrate?",
+    "options": [
+      {
+        "text": "Declarative code always runs faster than imperative code",
+        "explanation": "Not always: declarative engines can pick bad plans and be much slower than hand-written code. The point here is about who controls the strategy."
+      },
+      {
+        "text": "SQL caches the result of every query",
+        "explanation": "PostgreSQL and most databases do not cache query results; they cache data pages. The speed-up came from a new access path, not a result cache."
+      },
+      {
+        "text": "Indexes make every query faster, whatever the language",
+        "explanation": "An imperative program that loops over every row would ignore the index entirely. The index only helped because the planner was free to use it."
+      },
+      {
+        "text": "Because the query only states *what* rows are wanted, the planner is free to switch strategy (full scan to index scan) when the environment changes",
+        "explanation": "Correct. The SQL never said 'scan the table', so the planner could choose an index scan once one existed. An imperative loop over the table would have stayed slow until rewritten."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Before: assume the measured plan was a sequential scan (a full table scan), confirmed with EXPLAIN.\n2. After: the planner sees a B-tree index and statistics saying few rows match, so it picks an index scan.\n3. The SQL text never mentioned scanning or indexes. It only said which rows were wanted.\n4. Compare an imperative version: `for row in orders: if row.customer_id == 42: ...`. Adding an index does nothing for it; you would have to rewrite it to use the index.\n\nThis is the core payoff of declarative code: under-specifying the how leaves room for optimisation. `EXPLAIN` shows which plan was chosen.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "para-imperative-declarative-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which JavaScript expression computes the same value as this loop?\n\n```javascript\n// Sum only positive inputs.\nlet t = 0;\nfor (const x of xs) {\n  if (x > 0) t += x * 10;\n}\n```\n\nAssume xs is an ordinary dense array of finite Number values, with standard array methods and no concurrent mutation.",
+    "options": [
+      {
+        "text": "`xs.map(x => x * 10).filter(x => x > 0).reduce((a, b) => a + b, 0)`",
+        "explanation": "Correct, though it reads in a different order. Multiplying by a positive 10 never changes a number's sign, so filtering after the map keeps exactly the same elements. It is not the most natural translation, but it is equivalent."
+      },
+      {
+        "text": "`xs.filter(x => x > 0).map(x => x * 10).reduce((a, b) => a + b)`",
+        "explanation": "Without the initial value `0`, `reduce` throws a TypeError on an empty array, whereas the loop returns 0. The missing seed is a classic difference between the two styles."
+      },
+      {
+        "text": "`xs.reduce((a, x) => x > 0 ? x * 10 : a, 0)`",
+        "explanation": "This returns the last positive element times 10, not a running sum. The callback forgets to add to the accumulator `a`."
+      },
+      {
+        "text": "`xs.filter(x => x > 0).map(x => x * 10)`",
+        "explanation": "This returns an array of the scaled values, not their sum. There's no reduction step."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Check each candidate against the loop on edge cases, for example `xs = []` and `xs = [-1, 2]` (loop gives 0 and 20).\n\n- A: `[]` gives 0 thanks to the seed. `[-1, 2]` maps to `[-10, 20]`, filters to `[20]`, sums to 20. Matches.\n- B: `[].reduce(f)` with no seed throws `TypeError: Reduce of empty array with no initial value`. Does not match.\n- C: `[-1, 2]` gives `a=0`, then `x=-1` keeps 0, then `x=2` returns 20. Looks right, but `[1, 2]` gives 20 rather than 30: it replaces instead of adding.\n- D: returns `[20]`, an array.\n\nSo A is the only equivalent. The tidier form is `filter` then `map` then `reduce` with seed 0.",
+    "link": {
+      "title": "ECMAScript 2023: Array algorithms",
+      "url": "https://tc39.es/ecma262/2023/"
+    }
+  },
+  {
+    "id": "para-imperative-declarative-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In Haskell, `sum (map (*2) (filter even xs))` can be compiled into a single loop with no intermediate lists. Why is this optimisation much harder for the compiler of an imperative program that builds each list in a separate loop with mutation?",
+    "options": [
+      {
+        "text": "Imperative compilers don't support loops",
+        "explanation": "They obviously do. The issue is proving the transformation is safe."
+      },
+      {
+        "text": "In the imperative version, the intermediate lists are observable mutable state; the compiler must prove nothing else reads or modifies them, and that reordering the loops doesn't change any side effects",
+        "explanation": "Correct. Purity simplifies reasoning, while mutation requires alias/effect analysis. Even pure-language fusion rules must preserve evaluation and termination semantics; arbitrary rewrites are not always safe."
+      },
+      {
+        "text": "Haskell lists are stored as arrays",
+        "explanation": "Haskell lists are linked lists. Fusion works because of purity, not the representation."
+      },
+      {
+        "text": "Imperative programs cannot use higher-order functions",
+        "explanation": "Plenty of imperative languages have them. The barrier is side effects, not function values."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Think about what the compiler must guarantee when it fuses three passes into one.\n\n1. Fusing changes the *order* of operations: instead of filtering everything then mapping everything, it processes element by element.\n2. For this supported fusion rule, the compiler preserves Haskell evaluation semantics. `even` and `(*2)` can't print, mutate or throw differently depending on order, so the result is provably the same. GHC uses rewrite rules (foldr/build fusion) to do this.\n3. In an imperative program, each loop might mutate shared state, call a function with side effects, or alias the intermediate array. Reordering could change the output, so the compiler must prove none of this happens.\n\nThis is the deeper reason declarative code leaves room for optimisation: it removes **observable ordering**.",
+    "link": {
+      "title": "GHC: rewrite rules and fusion",
+      "url": "https://downloads.haskell.org/ghc/latest/docs/users_guide/exts/rewrite_rules.html"
+    }
+  }
+]

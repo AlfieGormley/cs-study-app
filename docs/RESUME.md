@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 42/76 modules; 284 originals → 1542 short lessons with 3352 focused questions.
+- Independently verified: 43/76 modules; 290 originals → 1573 short lessons with 3420 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `bc5ff75`, version `3b360b7d6a59`, 1509 short lessons/3279 focused questions
-  across 41 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `16fd8ee84cc5`, 42 modules/1542 units/3352 questions.
+- Latest confirmed live release: `b2a423a`, version `16fd8ee84cc5`, 1542 short lessons/3352 focused questions
+  across 42 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Current generated candidate: `26773e82aeae`, 43 modules/1573 units/3420 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -18,12 +18,13 @@ to run to completion without further approval questions. Published batches are m
   (290 cards, 208 independent maths checks, no unresolved active format issues).
 - All eight operating-systems modules are converted and published: 266 short units/561 questions.
 - All six networking modules are converted and published: 233 short units/447 questions.
+- All six computer-architecture modules are converted and published: 199 short units/431 questions.
 
 Current allocations:
 
-- languages/lang-paradigms: authoring; /root/languages_paradigms_short_author.
-- languages/lang-types: authoring; /root/languages_types_short_author.
+- languages/lang-types: verifying; /root/languages_types_short_verify.
 - languages/lang-memory: authoring; /root/languages_memory_short_author.
+- languages/lang-functional: authoring; /root/languages_functional_short_author.
 
 Verification and integration:
 
@@ -32,7 +33,7 @@ Verification and integration:
 - Root owns shared code/generated assets. Preview only verified modules; do not publish data compiled
   from current unverified drafts. Every active formula hit needs conversion or a genuine documented
   exception/false positive; code comments and actual outputs need native checks.
-- The current candidate passes the full isolated build, 61 Node tests, all short lesson/question phone
+- The current candidate passes the full isolated build, 62 Node tests, all short lesson/question phone
   renders and real lesson/quiz routes in every converted module. Installed-app updates, exact progress
   preservation, offline practice, completion-age sliders/text input and dictionary integration pass.
 - Previously published short units remain active during follow-ups. Migrations copy exact old completion
@@ -53,15 +54,19 @@ Working evidence and helpers:
 - `audit-archives.mjs` compares all 964 originals to Git blobs. Final whole-course migration audit is
   `scripts/audit-short-lessons.mjs` with the original snapshots; interim batches use `--partial`, but
   the final audit MUST omit it. Finish all 76 modules/all 482 mappings before calling the task done.
+- `author-dictionary-snapshot.mjs <scratch-output> [root]` executes the real compiler pre-write stage
+  for author lookup diagnostics. It retains validation errors and writes only scratch terms/glossary/renderer;
+  it never stamps, bypasses a build or publishes. Proven identical to all 18,930 full-build terms at release42.
+  Final verifier/root checks still require a genuinely stamped whole-build snapshot.
 - `check-module-dictionary.mjs <preview> <verifier-report> <subject>` checks identities, full definitions
   and actual rendered links. `check-dsa-dictionary.mjs` retains earlier Linear/Hashing/Trees meaning probes.
 - `qa-preview.mjs <preview>` runs the compiled dictionary probes, all short mobile renders/routes,
-  question audit, generated-file copy, 61 Node tests, installed update, age/offline and archive audit.
+  question audit, generated-file copy, all Node tests (actual count recorded), installed update, age/offline and archive audit.
   It saves logs under qa-<version>, records candidate evidence and refreshes reports. It never stages
   or publishes. Do not mutate queue.json while it runs. Stage only reviewed module paths afterward,
   run check-staged-release.mjs, then commit/push and verify the public release.
 - `verify-live-release.py <full-commit-sha>` checks successful Pages deployment and byte equality of
-  app/manifest/progress/index against Git, writes a checksum proof and records exact snapshot counts.
+  app/manifest/progress/glossary/index against Git, writes a checksum proof and records exact snapshot counts.
   Run only after recorded integration passes and push; exit 3 means deployment is pending. Its API
   query includes a current timestamp to avoid cached queued statuses. It does not push or approve work.
 - `write-active-resume.mjs` regenerates this active section while preserving historical handoffs below.

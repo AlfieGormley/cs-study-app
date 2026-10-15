@@ -1,0 +1,92 @@
+[
+  {
+    "id": "para-logic-dataflow-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague rewrites the rules as:\n\n```prolog\n% Recursive goal runs before parent.\nancestor(X, Y) :-\n    ancestor(X, Z),\n    parent(Z, Y).\nancestor(X, Y) :- parent(X, Y).\n```\n\nWhat happens with `?- ancestor(tom, W).`? Assume ordinary untabled Prolog and the acyclic family facts in the lesson.",
+    "options": [
+      {
+        "text": "It returns the same answers, since the logic is equivalent",
+        "explanation": "Logically equivalent, yes, but Prolog's depth-first search tries the first clause first, and that clause's first goal is the same call again."
+      },
+      {
+        "text": "It returns the answers in reverse order",
+        "explanation": "It never gets to produce any answer: the first goal recurses without consuming anything."
+      },
+      {
+        "text": "It loops (until the stack is exhausted), because the first goal calls `ancestor(tom, Z)` again before any fact is reached",
+        "explanation": "Correct. This is left recursion. Each call immediately makes an identical call, so the search descends forever."
+      },
+      {
+        "text": "It fails immediately with `false`",
+        "explanation": "It doesn't fail; it never terminates. Failure would require exhausting all alternatives."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace Prolog's strategy (clauses top to bottom, goals left to right, depth-first):\n\n```\nancestor(tom, W)\n  clause 1: ancestor(tom, Z1)\n    clause 1: ancestor(tom, Z2)\n      clause 1: ancestor(tom, Z3)\n        ... forever\n```\n\nIt never reaches clause 2 or a `parent` fact. The fix is to put `parent` first (`parent(X, Z), ancestor(Z, Y)`), which terminates for these acyclic facts; cyclic parent relations can still loop without tabling or cycle handling. Datalog, with bottom-up evaluation, doesn't have this problem.",
+    "link": {
+      "title": "Primary language or design reference",
+      "url": "https://www.swi-prolog.org/pldoc/man?section=quickstart"
+    }
+  },
+  {
+    "id": "para-logic-dataflow-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With only the `parent` facts from the lesson loaded (none mention `carol`), what does `?- \\+ parent(carol, _).` return, and what does it mean?",
+    "options": [
+      {
+        "text": "`true`: Prolog could not prove that carol is anyone's parent, so under the closed-world assumption the negation succeeds",
+        "explanation": "Correct. `\\+` is negation as failure. It succeeds when the inner goal can't be proved from the database, not when it is proved false in some wider sense."
+      },
+      {
+        "text": "`false`: Prolog can't say anything about unknown people",
+        "explanation": "Prolog doesn't have an 'unknown' answer. Under the closed-world assumption, unprovable means false, so the negation is true."
+      },
+      {
+        "text": "An error, because `carol` is not declared",
+        "explanation": "Prolog doesn't require atoms to be declared. `carol` is simply an atom with no facts about it."
+      },
+      {
+        "text": "`true`, meaning it has been proved that carol has no children in the real world",
+        "explanation": "That is classical negation. Prolog only knows its database. Add `parent(carol, dan).` and the answer flips."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `\\+ G` runs G. If G succeeds, `\\+ G` fails; if G fails, `\\+ G` succeeds.\n2. `parent(carol, _)` matches no fact, so it fails.\n3. Therefore `\\+ parent(carol, _)` is true.\n4. Interpretation: 'not provable from what I know', the closed-world assumption. Databases make the same assumption: a `SELECT` that returns no rows is taken to mean 'there are none'.",
+    "link": {
+      "title": "SWI-Prolog: negation as failure",
+      "url": "https://www.swi-prolog.org/pldoc/doc_for?object=(%5C%2B)/1"
+    }
+  },
+  {
+    "id": "para-logic-dataflow-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Using the lesson's three `parent` facts, the clauses are reordered so the recursive rule comes first (it still calls `parent` first):\n\n```prolog\n% Parent still runs before recursion.\nancestor(X, Y) :- parent(X, Z),\n                  ancestor(Z, Y).\nancestor(X, Y) :- parent(X, Y).\n```\n\nIn what order does `?- ancestor(tom, W).` produce its answers?",
+    "options": [
+      {
+        "text": "bob, ann, pat",
+        "explanation": "That is the order when the base clause comes first. Here the recursive clause is tried first, so deeper descendants are found before direct children."
+      },
+      {
+        "text": "It loops forever",
+        "explanation": "These specified facts form a finite acyclic chain, so the parent-first recursion terminates. Other programs can loop from cycles or other recursion patterns, not only left recursion."
+      },
+      {
+        "text": "ann, pat, bob",
+        "explanation": "Correct. The recursive clause runs first: Z = bob, then within `ancestor(bob, W)` its recursive clause fails (ann and pat have no children) and its base clause gives ann, pat. Only then does the top-level base clause give bob."
+      },
+      {
+        "text": "pat, ann, bob",
+        "explanation": "Facts are tried top to bottom, so `parent(bob, ann)` is found before `parent(bob, pat)`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Depth-first, clauses top to bottom:\n\n```\nancestor(tom, W)\n R: parent(tom,Z) Z=bob\n    ancestor(bob, W)\n     R: parent(bob,Z2)\n        Z2=ann: ancestor(ann,W)\n          fails (no children)\n        Z2=pat: ancestor(pat,W)\n          fails\n     B: parent(bob,W)\n        W=ann   answer 1\n        W=pat   answer 2\n B: parent(tom,W)\n    W=bob       answer 3\n```\n\nSame logical meaning, same set of answers, different order. In Prolog, clause order is part of how the program behaves.",
+    "link": {
+      "title": "Primary language or design reference",
+      "url": "https://www.swi-prolog.org/pldoc/man?section=quickstart"
+    }
+  }
+]

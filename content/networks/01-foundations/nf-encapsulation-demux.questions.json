@@ -1,0 +1,100 @@
+[
+  {
+    "id": "nf-layered-models-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A host receives an Ethernet frame whose EtherType field is `0x86DD`. Which software should the frame's payload be handed to?",
+    "options": [
+      {
+        "text": "The ARP module",
+        "explanation": "ARP's EtherType is `0x0806`. Mixing these up is a common slip; each protocol carried directly in Ethernet has its own value."
+      },
+      {
+        "text": "The IPv4 stack",
+        "explanation": "IPv4 is `0x0800`. `0x86DD` identifies a different network-layer protocol."
+      },
+      {
+        "text": "The IPv6 stack",
+        "explanation": "Correct. EtherType `0x86DD` means the payload is an IPv6 packet, so the link layer passes it up to IPv6."
+      },
+      {
+        "text": "The TCP stack",
+        "explanation": "In the specified standard IP stack, TCP is inside IP and selected by protocol number 6; EtherType 0x86DD selects IPv6 first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Demultiplexing happens one layer at a time:\n\n| Header | Field | Value | Meaning |\n|---|---|---|---|\n| Ethernet | EtherType | 0x86DD | IPv6 |\n| IPv6 | Next Header | 6 | TCP |\n| TCP | Dest port | 443 | Conventionally HTTPS |\n\nEtherType selects the encapsulated protocol, which need not always be IP (ARP is another example). So `0x86DD` goes to IPv6, and IPv6 then decides where its own payload goes.",
+    "link": {
+      "title": "EtherType — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/EtherType"
+    }
+  },
+  {
+    "id": "nf-layered-models-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "An IPv4 packet carrying TCP passes through an ordinary router (no NAT, no firewall). Which of these fields are different when the packet leaves the router compared with when it arrived? Select all that apply. Assume distinct ordinary Ethernet interfaces/next-hop MACs, no IP options, tunnelling or fragmentation, and successful forwarding.",
+    "options": [
+      {
+        "text": "The Ethernet source and destination MAC addresses",
+        "explanation": "Correct. The router strips the incoming frame and builds a new one for the next link, addressed from its own outgoing interface to the next hop's MAC."
+      },
+      {
+        "text": "The IP TTL",
+        "explanation": "Correct. IPv4 forwarding reduces TTL by at least one; expiry prevents indefinite routing loops."
+      },
+      {
+        "text": "The IP header checksum",
+        "explanation": "Correct. Because the TTL changed, the IPv4 header checksum must be recomputed (or incrementally updated). IPv6 dropped the header checksum partly to avoid this per-hop work."
+      },
+      {
+        "text": "The destination IP address",
+        "explanation": "It stays unchanged under the stated ordinary-forwarding assumptions. Address translation and some routing/tunnelling mechanisms require separate treatment."
+      },
+      {
+        "text": "The TCP destination port",
+        "explanation": "The specified plain forwarding operation does not change the TCP destination port. Port rewriting is a NAT behaviour, which this question excludes."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think about which layers are hop-by-hop and which are end-to-end.\n\n1. **Link layer (hop-by-hop).** Each link gets a brand-new frame. New MACs, new FCS.\n2. **Network layer (inspected at every hop).** Addresses stay fixed, but the router decrements TTL. The IPv4 checksum covers the TTL, so it changes too.\n3. **Transport and up (end-to-end).** Untouched by a plain router.\n\nSo three things change: MACs, TTL and IP checksum. NAT can change an address and optionally a port, requiring checksum correctness to be maintained; not every translation changes every field.",
+    "link": {
+      "title": "RFC 1812: Requirements for IP Version 4 Routers",
+      "url": "https://www.rfc-editor.org/rfc/rfc1812"
+    }
+  },
+  {
+    "id": "nf-layered-models-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A packet travels from a laptop to a server, crossing three routers. Every link is Ethernet. How many distinct Ethernet frames (each with its own header) carry this one IP packet? Assume no tunnelling, fragmentation, retransmission or frame duplication.",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "That would be true only if the frame survived end to end. Routers terminate the link layer: they strip the frame and build a new one for the next link."
+      },
+      {
+        "text": "3",
+        "explanation": "This counts routers rather than links. There is one more link than there are routers in the chain."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. Three routers in a line create four links (laptop–R1, R1–R2, R2–R3, R3–server), and each link gets its own frame."
+      },
+      {
+        "text": "6",
+        "explanation": "This counts each router twice (receive and send). A frame received on one link and a new frame sent on the next are two of the four links' frames, not extra ones."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nlaptop -1- R1 -2- R2 -3- R3 -4- server\n```\n\n1. The link layer is hop-by-hop, so each numbered link has its own frame.\n2. Each frame has the MAC of that link's sender as source and that link's receiver as destination.\n3. The IP packet inside keeps the same source and destination IP throughout.\n\nSo: 3 routers, 4 links, 4 frames, 1 IP packet. (Ordinary bridges within a LAN do not create another routed IP hop; VLAN tags and per-link FCS handling may still change frame representation.)",
+    "link": {
+      "title": "Internet protocol suite — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Internet_protocol_suite"
+    }
+  }
+]

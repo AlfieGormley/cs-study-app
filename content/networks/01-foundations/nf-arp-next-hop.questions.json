@@ -1,0 +1,92 @@
+[
+  {
+    "id": "nf-arp-switching-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A laptop is `192.168.1.20/24` with default gateway `192.168.1.1`. It wants to send a packet to `8.8.8.8` and its ARP cache is empty. Which IP address does it put in its ARP request? Assume ordinary unicast Ethernet, only connected and default routes, and no proxy ARP.",
+    "options": [
+      {
+        "text": "`8.8.8.8`",
+        "explanation": "The selected next hop is the default gateway. The laptop resolves that address, not the remote destination."
+      },
+      {
+        "text": "`192.168.1.1`",
+        "explanation": "Correct. The destination is off-subnet, so the frame goes to the default gateway. The laptop ARPs for the gateway's MAC; the IP header still says 8.8.8.8."
+      },
+      {
+        "text": "`192.168.1.255`",
+        "explanation": "That is the subnet's broadcast IP. ARP requests go to the broadcast *MAC* `ff:ff:ff:ff:ff:ff`, but they ask about a specific IP."
+      },
+      {
+        "text": "None: it asks DNS for the MAC address",
+        "explanation": "Ordinary DNS name resolution does not resolve the Ethernet next-hop mapping; ARP does."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Apply the mask: 192.168.1.20/24 is in 192.168.1.0/24.\n2. Is 8.8.8.8 in 192.168.1.0/24? No.\n3. So the next hop is the gateway, 192.168.1.1, and the laptop needs **its** MAC.\n4. ARP request: \"Who has 192.168.1.1? Tell 192.168.1.20.\"\n\nThe resulting frame has the router's MAC as destination and 8.8.8.8 as the IP destination. The router will build a fresh frame for its next link.",
+    "link": {
+      "title": "Address Resolution Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Address_Resolution_Protocol"
+    }
+  },
+  {
+    "id": "nf-arp-switching-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "For an initial Ethernet/IPv4 ARP lookup with no cache entry, proxy ARP or address conflict, how are the request and normal reply addressed?",
+    "options": [
+      {
+        "text": "Both are broadcast to `ff:ff:ff:ff:ff:ff`",
+        "explanation": "The initial lookup request is broadcast. The normal reply is unicast; other ARP uses can include broadcast replies or unicast validation requests."
+      },
+      {
+        "text": "The request is unicast to the router, which replies on the target's behalf",
+        "explanation": "The asker doesn't know any MAC for the target yet, so it can't unicast. Routers don't answer ARP for other hosts unless proxy ARP is configured."
+      },
+      {
+        "text": "The request is broadcast; the reply is unicast to the requester",
+        "explanation": "Correct. Eligible hosts can receive the broadcast, subject to filtering or isolation. Under the stated assumptions, the target replies directly to the sender’s MAC."
+      },
+      {
+        "text": "Both are sent inside IP packets to the subnet broadcast address",
+        "explanation": "ARP isn't carried in IP at all. It sits directly in an Ethernet frame with EtherType 0x0806; it has to work before IP delivery on the LAN is possible."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The initial request uses the broadcast destination and contains the sender IP and MAC. The addressed host can reply directly to that MAC. Each ARP message is 28 bytes. On basic untagged Ethernet, header, padding and FCS make a minimum 64-byte frame; capture formats may omit padding or FCS.",
+    "link": {
+      "title": "RFC 826: An Ethernet Address Resolution Protocol",
+      "url": "https://www.rfc-editor.org/rfc/rfc826"
+    }
+  },
+  {
+    "id": "nf-arp-switching-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server is mistakenly configured as `192.168.1.20` with mask `255.255.0.0` (/16), but the network is really `192.168.1.0/24`. It tries to reach `192.168.5.10`, which is on a different VLAN behind the router. The router has proxy ARP disabled. What happens? Assume no more-specific routes, no ARP spoofing, and a correct default gateway otherwise.",
+    "options": [
+      {
+        "text": "It works normally, because the router forwards all traffic between subnets",
+        "explanation": "On this ordinary Ethernet next hop the host must address its Ethernet frames to the router. The mistaken connected route instead triggers direct ARP for the remote host."
+      },
+      {
+        "text": "The server ARPs for 192.168.1.1 and sends via the gateway",
+        "explanation": "That's what would happen with the correct /24 mask. With /16 the server believes 192.168.5.10 is on its own subnet and skips the gateway."
+      },
+      {
+        "text": "The server broadcasts an ARP for 192.168.5.10, nobody on its VLAN answers, and the connection fails",
+        "explanation": "Correct. With /16, 192.168.5.10 looks local, so the server ARPs for it directly. The real host is on another VLAN, beyond the broadcast domain, so no reply comes."
+      },
+      {
+        "text": "The switch forwards the ARP to the other VLAN, and the target replies",
+        "explanation": "Normal VLAN bridging does not carry this broadcast into the other VLAN; no proxy is configured to answer here."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Server's view: 192.168.1.20/16 → its subnet is 192.168.0.0 to 192.168.255.255.\n2. Is 192.168.5.10 in that? Yes, so the server treats it as local.\n3. It broadcasts \"Who has 192.168.5.10?\" in its own VLAN.\n4. The target is in another VLAN, so it never sees the request. No reply, so no frame can be sent and the connection times out.\n5. Meanwhile, hosts in 192.168.1.x still work, which is what makes wrong masks confusing to debug.\n\nA suitably configured proxy ARP router could answer for the remote host and mask the error, provided forwarding and return routing also work.",
+    "link": {
+      "title": "Address Resolution Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Address_Resolution_Protocol"
+    }
+  }
+]

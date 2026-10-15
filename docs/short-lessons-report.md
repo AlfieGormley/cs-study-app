@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 30/76. Updated 2026-10-15.
+Verified modules: 31/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -37,6 +37,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | os/File Systems & Storage | 6 | 38 | 74 | 48 | 338 | 450 | 43 |
 | os/I/O & Event-Driven Servers | 6 | 32 | 67 | 29 | 356 | 455 | 66 |
 | os/Virtualisation & Containers | 6 | 29 | 66 | 34 | 510 | 605 | 36 |
+| networks/Network Foundations & the Link Layer | 6 | 37 | 72 | 81 | 431 | 629 | 41 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -123,42 +124,13 @@ Low-confidence areas:
 
 Corrections and qualifications in this conversion:
 
-- Clarify the compressed overview diagram; preserve its archival drawing.
-- Separate DNS from origin RTTs and use consistent server work; remove incompatible 900 ms versus 250 ms comparison.
-- Make provider-specific ALIAS steering assumptions explicit instead of asserting universal loss of client location.
-- Qualify the QUIC balancing requirement for migration rather than every possible deployment.
-- Remove a universal minimum one-RTT loss-recovery assertion; retain the illustrative stale-update calculation.
-- Remove an unqualified 1–2 RTT HTTP/2 completion estimate.
-- State the independence assumption required by the loss-probability calculation.
-- Rule out the otherwise plausible unhealthy-new-pod distractor.
-- Scope the TCP fallback recommendation to clients/networks that require it.
-- Date the time-sensitive certificate schedule and distinguish a past milestone from future milestones.
-- Clarify that the lifetime limit applies to newly issued certificates, and use correct temporal wording.
-- Distinguish logical handshake rounds from extra transport delay due to certificate bytes.
-- Finish the author’s performance hedge in the worked example; remove the residual universal RSA cost assertion.
-- Keep fail-open as a deliberate workload policy rather than a universal recommendation.
-- Remove a guaranteed fast passive-detection time when failures may only complete after timeouts.
-- Label unmeasured finite-ring ownership as an illustration.
-- Distinguish the illustrative rate budget from Envoy’s concurrent-retry budget.
-- Remove an unsupported universal typical range.
-- Qualify SSE buffering and header control rather than asserting a universal full-buffer flush rule.
-- Limit ambient coverage to enrolled workloads.
-- Add the product-specific override that can defeat origin privacy headers.
-- Link the new primary source for the privacy caveat.
-- Extend the privacy fix to include CDN overrides.
-- Make one-fetch shielding and refresh counts explicit ideal model outcomes rather than guarantees.
-- Qualify cache-key-dependent query versioning, unmeasured hit ratios and asset compatibility.
-- Remove an unmeasured universal origin/site capacity ceiling while retaining 80 PB and 178 Tbps arithmetic.
-- Remove unsupported universal BGP timing/prevalence guidance.
-- Remove the duplicate unsupported BGP convergence time estimate.
-- Make the connection-break failure model explicit and remove an unsupported BGP convergence estimate.
-- Correct the scope of QUIC encryption and explain visible Initial ClientHello instead of claiming most transport headers are encrypted.
-- Remove universal binary parsing performance and invisible HTTP version claims; ALPN preferences may be visible.
-- Replace an unqualified cross-product throughput claim and table ranking with sourced architecture and workload-dependent performance.
-- Distinguish weighted DNS answer selection from exact request traffic shares, consistent with the later global-policy unit.
-- Correct provider-specific alias target capabilities: Route 53 cannot resolve an arbitrary external CDN hostname as a generic alias.
-- Add the primary documentation for supported alias targets.
-- Correct the worked apex workaround so a generic CDN target is not incorrectly assumed to be a valid Route 53 alias.
+- DNS lookup costs are independent of origin RTT; corrected q3 keeps identical 100 ms server work in both designs (900 ms direct/340 ms edge under stated assumptions).
+- Route 53 aliases target selected AWS/same-zone resources, not arbitrary external CDN names; conditional ALIAS steering assumptions made explicit.
+- QUIC protects selected header bits and application data; Initial ClientHello remains observable without ECH. Migration requires routing to the endpoint holding state.
+- CloudFront positive minimum TTL can override private/no-store; authenticated-path fixes include suitable cache policy.
+- Shield/collapsing one-fetch counts are ideal model outcomes; stale-while-revalidate alone does not guarantee one global refresh.
+- Retry rate budgets distinguished from Envoy concurrent budgets; certificate CPU cost, binary parsing performance, BGP times and finite-size load claims are scoped or hedged.
+- Weighted DNS selects answers, not exact request percentages; ambiguous new-pod health distractor is ruled out explicitly.
 
 Remaining gaps:
 
@@ -856,90 +828,15 @@ Low-confidence areas:
 
 Corrections and qualifications in this conversion:
 
-- Grammar
-- 202 still needs completion tracking
-- 304 is not a redirect to follow
-- Arbitrary header does not establish idempotency
-- Unsupported adoption quantifier and strict REST distinction
-- Avoid universal API-style capability ratings
-- Connect services can directly support browser-compatible protocols
-- REST/HTTP can stream; transport constraints differ from API style
-- Avoid database-schema dictionary alias
-- Avoid unrelated schema meaning and allow disabled introspection
-- GitHub rate-limit cost differs from its separate potential-node limit
-- GraphQL errors/nulls and protocol extensions are not identical response shape
-- HTTP permits explicitly cacheable POST responses
-- Avoid categorical POST-caching prohibition
-- Avoid database-schema dictionary alias
-- Use precise glossary phrase
-- Use precise glossary phrase
-- Official proto3 allows some compatible type changes; conservative rule is advice
-- Remove unsupported aggregate vendor adoption claim
-- HTTP/1.1 does not inherently spread traffic through short connections
-- REST can stream and use deadlines; no unsupported 50k/s performance claim
-- Close ambiguous remote status/crash window
-- Make correct option contain its necessary safety assumption
-- Rollback handling must be explicit across SQL implementations
-- Correct failure-count indexing terminology
-- 503 does not prove whole-fleet outage or dictate monitor behavior
-- 403 is not necessarily permanent
-- Snippet only records accepted requests
-- Remove repeated inline symbolic expression
-- Avoid instantaneous revocation overstatement
-- Signature alone is not full token validation; symmetric forms differ
-- Verification requires claims/issuer/audience policy
-- Deny-list does not guarantee instant propagation
-- GitHub has no automatic failed-delivery retry
-- Bounded retries are not an unconditional at-least-once guarantee
-- Local summary must reflect the actual split
-- Local summary must reflect the actual split
-- Age bound differs from complete clock-skew freshness policy
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Resolve dictionary words to their intended local meaning
-- Correct or substantiate glossary semantics against independently fetched primary source
-- Correct or substantiate glossary semantics against independently fetched primary source
-- Correct or substantiate glossary semantics against independently fetched primary source
-- Correct or substantiate glossary semantics against independently fetched primary source
-- Correct or substantiate glossary semantics against independently fetched primary source
-- Correct or substantiate glossary semantics against independently fetched primary source
-- Narrow local term prevents database-schema link in protobuf material
-- Current primary docs distinguish v1 from v2
-- Prevent replaying saved 500 behavior being applied to v2
-- Scope takeaway
-- Scope provider question to checked v1 contract
-- Keep algorithm bounds in plain words rather than inline relations
-- Capitalisation after terminology fix
-- Timeline labels are not equations
-- Budget timeline need not use undefined pseudo-symbols
-- Avoid inline equations in an option explanation
-- Use plain numeric statements; formula below preserves calculation
-- Remove inline symbolic timing relation already defined locally
-- Avoid repeated inline symbolic expression
-- Compiler skips a term when an earlier alias owns its display name; precise display name prevents credential aliases being donated to certificate revocation
-- JWT decode fragment does not by itself require issuer or exp presence
-- Replace repeated prose maths with words while preserving existing formula cards
-- Forwarding an arbitrary key alone does not make an external side effect idempotent
-- Make downstream deduplication contract explicit in correct option
-- Cover actual technical vocabulary identified by glossary coverage with a narrow primary-sourced local definition
-- Cover actual technical vocabulary identified by glossary coverage with a narrow primary-sourced local definition
-- Cover actual technical vocabulary identified by glossary coverage with a narrow primary-sourced local definition
-- Cover actual technical vocabulary identified by glossary coverage with a narrow primary-sourced local definition
-- Bold technical introductions need precise glossary targets
-- Convert inherited policy pseudocode to actual executed Python/Lua with explicit fixture context and preserved teaching contracts
-- Convert inherited policy pseudocode to actual executed Python/Lua with explicit fixture context and preserved teaching contracts
-- Convert inherited policy pseudocode to actual executed Python/Lua with explicit fixture context and preserved teaching contracts
-- Convert inherited policy pseudocode to actual executed Python/Lua with explicit fixture context and preserved teaching contracts
-- Correct active/archival parsing: determine owning file before inspecting prose that may contain /payments or another slash; the old resp=post hit was active, not archival.
+- Scoped Stripe saved-failure replay to API v1; current API v2 recovery differs.
+- A forwarded idempotency key alone is insufficient; downstream enforcement and authoritative reconciliation must be explicit.
+- REST can stream and use application deadlines; removed unsupported universal performance/adoption claims.
+- GraphQL point cost differs from its node limit; HTTP permits explicit POST caching.
+- Bounded webhook retries do not guarantee eventual delivery, and GitHub has no automatic failed-delivery retry.
+- Credential/session/token revocation aliases now resolve to a precise local definition, avoiding compiler alias donation to certificate revocation.
+- GraphQL/protobuf schemas and SSE replay use intended dictionary senses; server processing time correctly resolves to request-handling duration.
+- New and corrected glossary definitions verified against primary field-presence, Stripe, RFC and NIST sources.
+- Converted four policy-pseudocode groups to independently executed native Python/Lua; removed every active pseudocode-lint debt and corrected the /payments owning-file classification error.
 
 Remaining gaps:
 
@@ -1667,93 +1564,14 @@ Low-confidence areas:
 
 Corrections and qualifications in this conversion:
 
-- A hardware **prefetcher** can recognise a sequential pattern and fetch later lines ahead of demand; effectiveness depends on the processor, stride and workload.
-- dependent pointer loads can make the list slower, but no speed ratio follows without measuring the workload.
-- and that can dominate running time, depending on the cache hierarchy and workload.
-- Here n is the square grid’s side length; r and c are its zero-based row and column indices.
-- 32 KiB.
-- Whether the lines survive until the next column depends on cache capacity, associativity and conflict behaviour; the access pattern alone does not fix the miss count.
-- Result: B can be slower despite identical arithmetic; a speed ratio needs a measurement.
-- 32 KiB
-- a conventional 64-bit CPython build
-- a conventional GIL-enabled CPython build can use `realloc` to extend a block in place when the allocator permits. The free-threaded build’s resize path instead allocates replacement storage and copies references.
-- 500,000 pointer slots (typically 8 bytes each on a conventional 64-bit build)
-- result += word   # full-copy model
-- Under the question’s full-copy assumption, the growing prefix is copied into a longer value. Observable immutability alone does not rule out internal optimisations.
-- total = k × n(n + 1) / 2
-total = 51 × 200,000 × 200,001 / 2
-total = 1,020,005,100,000
-total ≈ 1.02 × 10^12
-- k: characters per output record, including its newline; here fifty-one
-- about 1.02 trillion character copies.
-- total building work is linear in row count plus output size, excluding the work inside toCsv:
-- An ordinary nonempty proper CPython slice such as `s[1:]` generally copies its selected characters; empty and full unchanged slices can reuse objects.
-- For a matching palindrome, the slices also create quadratic memory traffic. With a configured recursion limit of 1,000, input lengths near two thousand can fail sooner than the naive frame count suggests because caller frames also count; check sys.getrecursionlimit().
-- it costs O(k + 1), including the final value read; this is O(n)
-- O(k + 1): follow k `next` pointers, then read the value
-- O(k + 1) total work including the final read, and O(n) in the worst case.
-- Reading the head (zero-based position 0)
-- total ≈ n^2 / 4
-- `i < n / 2`
-- For a sequence of n elements, keeping both head and tail handles for the doubly linked representation and using constant-time value/allocation operations:
-- prefetching can favour an array. Separately allocated list nodes add links and dependent loads; they do not guarantee one cache miss per node.
-- can differ; their size requires measurement.
-- so cache misses can serialize those loads. Neither a miss at every node nor a fixed slowdown is guaranteed.
-- Still O(k + 1), including the value read:
-- # Buggy: no head-removal case.
-- switches from None to the other head, then walks
-- in CPython with sys.getrecursionlimit() set to 1,000.
-- the configured limit of 1,000
-- The question specifies a recursion limit of 1,000
-- In the ordinary unoptimised call-stack model, each active call has a **stack frame** retaining its arguments, local state and a **return address** (where to continue when it finishes). Returning releases that frame. Registers, inlining, tail calls and runtime-managed frames can change the physical layout.
-- (configured as 1,000 in this example)
-- removes the interpreter’s recursive-call depth limit
-- still subject to memory, container and process-resource limits.
-- Without optimisation, C recursion can exhaust a configured native thread stack. A guard-page fault is common, but the stack layout, protection and resulting failure depend on the platform.
-- With the recursion limit configured as 1,000, a straightforward five-thousand-level recursive factorial exceeds it and raises RecursionError.
-- events = pushes + pops + exits
-events ≤ n + n + n = 3n
-- events: counted push events, pop events and final failed while checks; a successful while check is charged together with its ensuing pop, not counted separately
-- three counted events per input value. Each event takes fixed work under this model; this is not an exact count of Python instructions or individual comparisons.
-- at most three counted events per input item, grouping each successful while check with its pop. It is O(n), not an exact machine-instruction count.
-- total: pushes, pop events including their successful checks, and final failed while checks; successful checks are not counted separately
-- three counted events per element, each doing bounded work
-- For the sorted-array row, keep descending order and remove the minimum at the end without shifting; insertion bounds are amortised over backing growth. In the table, log n means
-- {"glossary":"next-greater-element","field":"aliases","before":["next-greater","next greater","next-smaller"],"after":["next-greater","next greater"]}
-- A Python library for numerical computing. Its ndarray represents an array with a fixed dtype, shape and strides; newly allocated numeric arrays commonly use contiguous storage, while views can be noncontiguous and object arrays store references rather than raw numeric values.
-- An array organised by row and column. A rectangular built-in C or C++ array occupies contiguous slots, with row-major ordering; other representations such as Java arrays of row arrays or NumPy strided views need not be one contiguous block.
-- Wrapping a primitive value, such as a Java int, as an object reference, such as Integer, so it can be used where objects are required. Boxed objects add headers and reference access, but caching can let several boxed values share one object. ArrayList<Integer> stores references; int[] stores primitive values directly.
-- Python’s built-in mapping from keys to values, implemented as a hash table. Keys must be hashable: str and int qualify, and a tuple qualifies only when all its elements are hashable. A list cannot be used as a key; immutability alone does not guarantee hashability.
-- Joining strings end to end. In a full-copy model the result copies both inputs, with work proportional to their combined length. Some runtimes can reuse or extend unshared storage while preserving observable string immutability, so allocation behaviour is implementation-dependent.
-- A contiguous run of text units taken from a string, such as "ell" from "hello". Ordinary proper String.substring results in OpenJDK have copied their selected units since Java 7u6; an unchanged whole-string result can reuse the original.
-- Associating a variable name with an object, or changing that association. After s += "x" on a Python string, other names still observe the old text. A runtime may reuse unshared internal storage when no alias can observe a mutation; rebinding does not promise a fresh allocation.
-- A value whose observable contents cannot change after creation. Operations return a result without changing the old value; an unchanged result may reuse the old object. Strings in Python, Java, JavaScript, C# and Go are immutable.
-- Converting Unicode text to a specified normal form so canonically equivalent sequences compare equally, for example composing e plus U+0301 to é under NFC. It does not make every visually identical string equal: unrelated characters can look alike.
-- The configured limit on nested interpreter calls, inspected with sys.getrecursionlimit(). Conventional CPython builds commonly start at 1,000, but configuration and implementation matter. Exceeding it raises RecursionError; excessively raising it can still crash a process on some platforms.
-- In Java, a synchronized method or block acquires a particular monitor so threads holding that same monitor cannot execute their critical sections simultaneously. Different monitors do not exclude each other. Runtime optimisations can remove some uncontended locking overhead.
-- A variable local to a function or method invocation. Conceptually its state belongs to that call; actual storage can use registers, native stack slots or runtime-managed frame/object storage rather than one universal layout.
-- IEEE 754 binary64 floating-point format: 64 bits (8 bytes), with roughly 15–16 significant decimal digits. Java double uses this format, conventional C/C++ double implementations and CPython float do too; the C and C++ languages do not universally require double to be binary64.
-- A value referring to a memory location or object. Conventional 64-bit CPython builds use 8-byte object pointers, but the representation and width depend on the language implementation and ABI. A Python list’s slots refer to objects stored separately.
-- When requested data is absent from a cache level and must come from another level or main memory. The extra cost depends on hardware, contention and the access pattern; a miss does not always mean a main-memory read.
-- Processor hardware that predicts some future memory accesses, such as sequential streams, and fetches cache lines ahead of demand. Supported patterns and effectiveness vary by processor, strides, working set and contention.
-- Following dependent references where the next address becomes known only after the current load completes. This limits overlap of loads along that chain; other independent work can still overlap, and actual cost depends on the cache state and hardware.
-- With doubling at full capacity and halving when at or below half full, a full 1,024-slot array can grow on push and shrink on pop repeatedly. A strictly-below-half rule needs a nearby alternating sequence; quarter-full shrinking leaves a larger gap.
-- Short Message Service. An ordinary single segment has up to 140 payload bytes, traditionally enough for 160 GSM 7-bit basic-alphabet characters or 70 UCS-2 code units; GSM extension characters consume two septets, concatenation reduces payload, and services that support non-BMP emoji typically use UTF-16 surrogate pairs that consume two 16-bit units.
-- They transfer a **cache line**, whose size depends on the processor; this example assumes 64 bytes,
-- one aligned 64-byte cache line contains sixteen 4-byte integers.
-- A conventional CPython build commonly starts with a recursion limit of 1,000;
-- When the buffer is not full, the next free slot at the back is `count` places after `head`,
-- https://opendatastructures.org/ods-python/3_2_DLList_Doubly_Linked_Li.html
-- https://docs.oracle.com/en/java/javase/21/vm/java-hotspot-virtual-machine-performance-enhancements.html
-- A HotSpot JVM representation using 32-bit offsets for many object references in a 64-bit process. With eight-byte object alignment these can address a heap of about 32 GiB; actual use and supported sizes depend on JVM configuration and alignment, rather than every 64-bit JVM reference being four bytes.
-- The fixed-size block transferred or stored as a unit by a CPU cache. Line size depends on the processor and cache level. An aligned 64-byte line contains sixteen 4-byte integers or eight 8-byte doubles; the course’s numerical examples assume that width rather than a universal hardware guarantee.
-- https://numpy.org/doc/stable/reference/arrays.ndarray.html
-- https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Integer.html#valueOf(int)
-- https://docs.oracle.com/en/java/javase/21/vm/java-hotspot-virtual-machine-performance-enhancements.html
-- int32: 4-byte slots, start address 1000
-- n: the positive number of elements appended, at least one
-
-- # Older no-larger values cannot win.
+- CSV full-copy sum includes newline:51 units per row gives1,020,005,100,000 copies for200,000rows.
+- Monotonic-stack3n bound counts grouped events, not pushes+pops+all individual loop checks.
+- Zero-position linked lookup uses O(k+1), including reading the head value.
+- Runtime/hardware/performance qualifications remove universal cache-miss/speed/pointer-width/default-limit/native-fault claims.
+- CPython free-threaded list resize copies replacement storage; GIL-enabled realloc can extend in place.
+- Known glossary errors fixed: NumPy/noncontiguous views, tuple hashability, independently boxed objects versus caches, immutable internal allocation, normalisation versus visual similarity, next-smaller opposite alias, precise cache/stack/primitive-layout contracts.
+- Two broken glossary sources replaced by fetched Open Data Structures dummy-node section and Oracle compressed-oops documentation.
+- All original keys/types/levels/option counts and12 archival files remain intact.
 
 Remaining gaps:
 
@@ -3131,45 +2949,12 @@ Low-confidence areas:
 
 Corrections and qualifications in this conversion:
 
-- Remove long-lesson scope claim after splitting.
-- Match Intel address-tag masking qualification already present in the question and glossary.
-- Standalone original 8086 card must express twenty-bit truncation even when addition carries.
-- Define modulo in corrected standalone card.
-- Keep card prose consistent with corrected wrap formula.
-- Page-table allocation count must round up; fractional final leaf tables cannot be allocated.
-- State alignment and round-up assumptions explicitly.
-- Intel permits extra invalidation; no guaranteed retention or universal speedup magnitude.
-- Attach rseq specifically to per-CPU mode rather than implying it is used by legacy per-thread caches.
-- Keep lesson consistent with platform/build/option qualifications in its verified question.
-- Symbolic cardinality relation belongs in a formula card, not unmarked prompt prose.
-- Use ordinary prose rather than a standalone inline function expression.
-- Avoid uncarded symbolic ranges and preserve the necessary OPT tie-handling qualification.
-- Standalone card must not contradict surrounding explanation that a program may explicitly exit 137.
-- Remove obsolete long-lesson numbering and guaranteed cache retention.
-- Remove obsolete long-lesson reference.
-- Oracle NMT tracks internal VM memory, not exclusively non-heap usage.
-- Remove generic lazy-population aliases that capture file-backed mappings, which are not demand-zero faults.
-- The mmap call and memory-mapping alias also cover anonymous mappings; a file-only definition is misleading.
-- Retain explicit file forms while defining the general operation correctly.
-- Support anonymous mmap uses instead of incorrectly promising file backing.
-- RDB is not exclusively written by a child; Redis documents SAVE and BGSAVE.
-- A radix tree is a broader data structure, not necessarily a page table.
-- Avoid stating that x86-64 universally uses four levels.
-- Keep glossary consistent with independently checked OPT tie caveat and avoid uncarded algebra.
-- Avoid equating an exact fraction with its rounded decimal inside floor notation.
-- Keep exact level count without substituting a rounded decimal as though exact.
-- Keep exact buddy order without equating logarithm with its rounded decimal.
-- Using a library does not ensure every one of its pages remains resident.
-- Qualify the actual resident cache evidence.
-- Nothing read since boot does not exclude cache population through writes or readahead.
-- Use actual cache and backing assumptions rather than an invalid inference from read history.
-- Do not make process count a universal replacement for page-map accounting when one process maps backing repeatedly.
-- Precise cross-subject in-process-cache phrase prevents bare cache opening the CPU-cache definition.
-- Precise cross-subject in-process-cache phrase prevents bare cache opening the CPU-cache definition.
-- Precise cross-subject in-process-cache phrase prevents bare cache opening the CPU-cache definition.
-- Precise cross-subject in-process-cache phrase prevents bare cache opening the CPU-cache definition.
-- Use precise in-process cache alias for the reachable software cache.
-- Independent x86-64/glibc2.39 emulated run reported 543 minor faults, not the serial base-page model count. Distinguish validated arithmetic assumptions from actual runtime counters; THP always does not guarantee every allocation size.
+- Original8086 standalone card now keeps only twenty address bits, including overflow boundaries.
+- Dense leaf-table formula now rounds up whole pages under explicit alignment.
+- Minor-fault question uses actual backing/cache evidence instead of inferring residency from read history.
+- Observed first-touch543 counter distinguished from explicit16384/32 models.
+- NMT definition includes tracked Java heap and states untracked allocation gaps.
+- General mmap/demand-zero/in-process-cache aliases resolve the correct meaning; OPT ties, PCID retention and LSan availability qualified.
 
 Remaining gaps:
 
@@ -3276,73 +3061,12 @@ Low-confidence areas:
 
 Corrections and qualifications in this conversion:
 
-- With the poller active and the application collecting CQEs from shared memory, suitable steady-state I/O **can avoid submission and completion-wait system calls**. A blocking wait, idle wakeup or other control operation can still require a syscall.
-- errors can cancel subsequent soft-linked requests.
-- larger transmitted frames lower the packet rate. Adding a VLAN tag to a given frame can increase its size, but minimum-frame padding rules mean a tag alone does not universally determine the new frame length.
-- Seastar (behind ScyllaDB) uses a **shard-per-core** design: each application shard owns its data and exchanges messages with other shards. This programming model reduces shared mutable application state; it is not a claim that the entire runtime and operating system contain no shared memory or locks.
-- fragment reassembly, UDP length consistency
-- A `read()` that needs storage can still wait for it; a cache miss is not itself proof that a device read is necessary (for example, a sparse-file hole needs none).
-- Correct. Batching amortises syscall entry/exit cost. The impact of speculative-execution mitigations depends on architecture, kernel configuration and workload; no universal cost increase is implied.
-- Correct for suitable operations while the SQ poller remains active and the application collects CQEs without a blocking wait. Polling consumes CPU; idle wakeups and other control operations can still require system calls.
-- Ordinary asynchronous network I/O uses the runtime’s platform backend, such as epoll on Linux or IOCP on Windows, rather than one blocked pool worker per socket. The queued dns.lookup is a separate pool user.
-- At top level the ordering is not guaranteed; that does not imply it is random on every run. In this I/O callback, Node documents that the immediate runs first.
-- DMA can use appropriately mapped kernel buffers. Direct DMA involving user pages requires the relevant mapping, pinning and lifetime protocol; neither kind is excluded by DMA itself.
-- Raising the consumer’s scheduling priority does not remove hard-IRQ entry/handler work. Kernel configuration, including threaded interrupts, affects scheduling, so the needed fix addresses notification and receive processing.
-- {"glossaryId":"device-controller","before":{"id":"device-controller","term":"Device controller","aliases":["device controllers","controller chip","NVMe SSD controller","SSD controller"],"definition":"The chip (often a small computer with its own firmware) that drives a device and presents registers the CPU reads and writes. The CPU never drives the flash chips or the radio directly; it gives commands to the controller.","source":"https://pages.cs.wisc.edu/~remzi/OSTEP/file-devices.pdf"},"after":{"id":"device-controller","term":"Device controller","aliases":["device controllers","controller chip","NVMe SSD controller","SSD controller"],"definition":"Hardware that manages a device and presents a command/data interface to host software, often with firmware and its own processor. In the controller-based examples here, the driver commands the controller rather than directly driving the physical mechanism.","source":"https://pages.cs.wisc.edu/~remzi/OSTEP/file-devices.pdf"}}
-- {"glossaryId":"nvme","before":{"id":"nvme","term":"NVMe","aliases":["Non-Volatile Memory Express","NVM Express"],"definition":"Non-Volatile Memory Express: the standard interface for SSDs attached over PCIe. It uses many submission and completion queues in RAM plus doorbell registers, so one drive can handle very many requests in parallel.","source":"https://en.wikipedia.org/wiki/NVM_Express"},"after":{"id":"nvme","term":"NVMe","aliases":["Non-Volatile Memory Express","NVM Express"],"definition":"Non-Volatile Memory Express: a family of interfaces and protocols for non-volatile storage. The PCIe transport uses memory-based submission/completion queues and doorbells; NVMe also has fabric transports such as TCP and RDMA.","source":"https://nvmexpress.org/specifications/"}}
-- {"glossaryId":"interrupt-vector","before":{"id":"interrupt-vector","term":"Interrupt vector","aliases":["interrupt vectors"],"definition":"A number identifying one interrupt source, used as an index into the table of handler addresses. MSI-X lets one device own many vectors, one per queue.","source":"https://en.wikipedia.org/wiki/Interrupt_vector_table"},"after":{"id":"interrupt-vector","term":"Interrupt vector","aliases":["interrupt vectors"],"definition":"A number used to select an interrupt/exception handler entry. MSI-X permits multiple independently configured vectors; mapping a queue to a dedicated vector and CPU depends on device support, allocation and affinity.","source":"https://docs.kernel.org/PCI/msi-howto.html"}}
-- {"glossaryId":"iommu","before":{"id":"iommu","term":"IOMMU","aliases":["IOMMUs","input-output memory management unit"],"definition":"Input-output memory management unit: hardware that translates and checks the addresses devices use for DMA, like an MMU for devices. It confines each device to buffers mapped for it, which protects the kernel and enables safe device assignment to VMs.","source":"https://en.wikipedia.org/wiki/Input%E2%80%93output_memory_management_unit"},"after":{"id":"iommu","term":"IOMMU","aliases":["IOMMUs","input-output memory management unit"],"definition":"Input-output memory management unit: hardware that translates and checks device DMA addresses against configured mappings. It contributes to device isolation; safe assignment also depends on hardware topology, interrupt isolation, reset behavior and configuration.","source":"https://docs.kernel.org/driver-api/vfio.html"}}
-- {"glossaryId":"device-passthrough","before":{"id":"device-passthrough","term":"Device passthrough","aliases":["passthrough","device assignment","device-assignment","assigns an NVMe device"],"definition":"Giving a virtual machine direct control of a physical device, so the guest's driver programs it without the hypervisor in the data path. It needs an IOMMU and interrupt remapping so the device cannot reach host memory.","source":"https://docs.kernel.org/driver-api/vfio.html"},"after":{"id":"device-passthrough","term":"Device passthrough","aliases":["passthrough","device assignment","device-assignment","assigns an NVMe device"],"definition":"Assigning a physical device or supported device function to a VM so its guest driver controls the device interface. Safe direct assignment normally requires suitable DMA/interrupt isolation, device groups, reset behavior and correct configuration; an IOMMU alone is not a complete guarantee.","source":"https://docs.kernel.org/driver-api/vfio.html"}}
-- {"glossaryId":"spinlock","before":{"id":"spinlock","term":"Spinlock","aliases":["spinlocks","spin lock"],"definition":"A lock that waits by busy-looping rather than sleeping, so it can be used in atomic context such as interrupt handlers. It must be held only briefly.","source":"https://docs.kernel.org/locking/spinlocks.html"},"after":{"id":"spinlock","term":"Spinlock","aliases":["spinlocks","spin lock"],"definition":"A lock whose conventional non-RT implementation waits by spinning. Linux raw_spinlock_t remains a spinning lock; PREEMPT_RT changes spinlock_t into a sleeping-lock implementation, so the lock type and execution context determine permitted use.","source":"https://docs.kernel.org/locking/locktypes.html"}}
-- {"glossaryId":"gfp-flags","before":{"id":"gfp-flags","term":"GFP flags","aliases":["GFP_KERNEL","GFP_ATOMIC","kmalloc"],"definition":"Flags passed to Linux kernel memory allocation (`kmalloc`). `GFP_KERNEL` may sleep to free memory, so it is only for process context; `GFP_ATOMIC` never sleeps and is used in atomic context, but fails more often.","source":"https://docs.kernel.org/core-api/memory-allocation.html"},"after":{"id":"gfp-flags","term":"GFP flags","aliases":["GFP_KERNEL","GFP_ATOMIC","kmalloc"],"definition":"Linux kernel allocation flags: GFP_KERNEL permits reclaim that may sleep and requires a sleepable context. GFP_ATOMIC is non-sleeping and can access reserves, but allocation may still fail; callers must handle that failure.","source":"https://docs.kernel.org/core-api/memory-allocation.html"}}
-- {"glossaryId":"kernel-thread","before":{"id":"kernel-thread","term":"Kernel thread","aliases":["kernel threads","kthread"],"definition":"A thread that runs only kernel code and has no user address space, used for background work such as ksoftirqd, workqueue workers and io_uring's SQPOLL thread.","source":"https://en.wikipedia.org/wiki/Thread_(computing)#Kernel_threads"},"after":{"id":"kernel-thread","term":"Kernel thread","aliases":["kernel threads","kthread"],"definition":"A task used for kernel work, such as ksoftirqd or worker handling. Conventional kernel threads do not have an ordinary userspace execution context; some kernel workers temporarily borrow a user memory context, so this is not an absolute no-address-space rule.","source":"https://docs.kernel.org/core-api/workqueue.html"}}
-- {"glossaryId":"nanosecond","before":{"id":"nanosecond","term":"Nanosecond","aliases":["ns","nanoseconds"],"definition":"One billionth of a second (10^−9 s). At 10 Gbit/s a minimum Ethernet frame arrives every 67.2 ns.","source":"https://en.wikipedia.org/wiki/Nanosecond"},"after":{"id":"nanosecond","term":"Nanosecond","aliases":["ns","nanoseconds"],"definition":"One billionth of a second. In the stated back-to-back, minimum untagged Ethernet occupancy model, a 10 Gbit/s link has 67.2 nanoseconds per frame; actual arrival spacing depends on traffic and link rules.","source":"https://en.wikipedia.org/wiki/Nanosecond"}}
-- {"glossaryId":"io-socket-buffer","before":{"id":"io-socket-buffer","term":"Send buffer","aliases":["Socket buffer","receive buffer","receive buffers","send buffers","socket receive queue","socket's receive queue","kernel receive buffer","kernel socket buffers","SO_SNDBUF"],"definition":"Kernel memory attached to a socket: the receive buffer holds data that has arrived but not been read, and the send buffer holds data accepted by `send()` but not yet acknowledged. Sizes are set with options such as `SO_SNDBUF`.","source":"https://man7.org/linux/man-pages/man7/socket.7.html"},"after":{"id":"io-socket-buffer","term":"Send buffer","aliases":["Socket buffer","receive buffer","receive buffers","send buffers","socket receive queue","socket's receive queue","kernel receive buffer","kernel socket buffers","SO_SNDBUF"],"definition":"Kernel memory accounting and queued data associated with a socket. Receive queues hold unread input; send queues hold accepted output until protocol/ownership rules permit release. TCP acknowledgements and datagram transmission have different lifetimes; options such as SO_SNDBUF control limits.","source":"https://man7.org/linux/man-pages/man7/socket.7.html"}}
-- {"glossaryId":"io-read-syscall","before":{"id":"io-read-syscall","term":"recv()","aliases":["read()","read(2)","recv","ssize_t"],"definition":"The system calls that copy available data from a file or socket into a user buffer. They return the number of bytes read (type `ssize_t`), 0 at end of file, or −1 with `errno` set on error.","source":"https://man7.org/linux/man-pages/man2/read.2.html"},"after":{"id":"io-read-syscall","term":"recv()","aliases":["read()","read(2)","recv","ssize_t"],"definition":"read reads from a descriptor; recv reads from a socket with additional flags. They return a byte count of signed type ssize_t or −1 on error. For a positive-length stream read, zero indicates EOF; zero-length requests and zero-size datagrams need separate interpretation.","source":"https://man7.org/linux/man-pages/man2/recv.2.html"}}
-- {"glossaryId":"send-syscall","before":{"id":"send-syscall","term":"send()","aliases":["sendall","write()"],"definition":"System calls that copy data from a user buffer into a socket's send buffer (or a file). They may accept fewer bytes than requested, so callers must handle partial writes.","source":"https://man7.org/linux/man-pages/man2/send.2.html"},"after":{"id":"send-syscall","term":"send()","aliases":["sendall","write()"],"definition":"write and send can accept fewer bytes than requested; retain and retry the unsent suffix as appropriate. Python socket.sendall instead attempts the whole payload and returns None on success; on failure it raises without reporting a usable partial count.","source":"https://docs.python.org/3/library/socket.html"}}
-- {"glossaryId":"eof","before":{"id":"eof","term":"EOF","aliases":["end of file","end-of-file","receive EOF"],"definition":"End of file: for a socket, the peer has closed its sending side and no more data will come. `read()` signals it by returning 0.","source":"https://man7.org/linux/man-pages/man2/read.2.html"},"after":{"id":"eof","term":"EOF","aliases":["end of file","end-of-file","receive EOF"],"definition":"End of file. On a positive-length stream read, zero indicates receive EOF after preceding data is drained; the peer may have closed only its sending direction. Zero-length read requests and zero-size datagrams do not by themselves establish EOF.","source":"https://man7.org/linux/man-pages/man2/recv.2.html"}}
-- {"glossaryId":"tcp-handshake","before":{"id":"tcp-handshake","term":"TCP handshake","aliases":["three-way handshake"],"definition":"The SYN, SYN-ACK, ACK exchange that opens a TCP connection before any data flows.","source":"https://en.wikipedia.org/wiki/Transmission_Control_Protocol#Connection_establishment"},"after":{"id":"tcp-handshake","term":"TCP handshake","aliases":["three-way handshake"],"definition":"The usual SYN, SYN-ACK, ACK exchange that establishes a TCP connection. TCP can carry data in handshake segments under supported rules, so establishment is not universally completed before any data is sent.","source":"https://www.rfc-editor.org/rfc/rfc9293"}}
-- {"glossaryId":"eintr","before":{"id":"eintr","term":"EINTR","aliases":[],"definition":"The error returned when a blocking system call is interrupted by a signal before it completes. Code usually just retries the call.","source":"https://man7.org/linux/man-pages/man3/errno.3.html"},"after":{"id":"eintr","term":"EINTR","aliases":[],"definition":"An error indicating interruption by a signal for an operation that reports it. Whether and how to retry depends on the call: preserve timeout/progress semantics, and do not blindly retry Linux close after EINTR.","source":"https://man7.org/linux/man-pages/man2/close.2.html"}}
-- {"glossaryId":"fork","before":{"id":"fork","term":"fork()","aliases":[],"definition":"The Unix system call that creates a child process as a copy of the parent, sharing its open file descriptions. Linux uses copy-on-write so the copy is cheap until pages are modified.","source":"https://man7.org/linux/man-pages/man2/fork.2.html"},"after":{"id":"fork","term":"fork()","aliases":[],"definition":"The Unix call that creates a child with its own process state and descriptors referring to the parent’s open file descriptions. Linux uses copy-on-write for suitable private mappings, but page-table duplication and other work still have a cost.","source":"https://man7.org/linux/man-pages/man2/fork.2.html"}}
-- {"glossaryId":"copy-on-write","before":{"id":"copy-on-write","term":"Copy-on-write","aliases":["copy on write","COW"],"definition":"Sharing memory pages between processes until one writes to a page, at which point that page alone is copied. It makes `fork()` cheap, which Redis relies on for snapshots.","source":"https://en.wikipedia.org/wiki/Copy-on-write"},"after":{"id":"copy-on-write","term":"Copy-on-write","aliases":["copy on write","COW"],"definition":"Sharing suitable memory pages until a write requires a private copy. Linux fork uses this for private mappings, reducing eager copying without eliminating fork’s page-table, allocation and bookkeeping costs.","source":"https://man7.org/linux/man-pages/man2/fork.2.html"}}
-- {"glossaryId":"io-thread-stack","before":{"id":"io-thread-stack","term":"Stack reservation","aliases":["Thread stack","thread stacks","stack size","guard page","guard pages"],"definition":"The memory a thread uses for its function calls and local variables. On Linux, glibc takes the default size from the RLIMIT_STACK soft limit (commonly 8 MiB) and reserves it as virtual address space, backed by RAM only when touched; a guard page below it catches overflows.","source":"https://man7.org/linux/man-pages/man3/pthread_create.3.html"},"after":{"id":"io-thread-stack","term":"Stack reservation","aliases":["Thread stack","thread stacks","stack size","guard page","guard pages"],"definition":"Memory for a thread’s call frames and local variables. Under Linux NPTL, a finite startup RLIMIT_STACK sets the default stack size; an unlimited limit uses an architecture-specific default. Attributes can override it. Virtual reservation, resident pages and guard size are distinct.","source":"https://man7.org/linux/man-pages/man3/pthread_create.3.html"}}
-- {"glossaryId":"virtual-address-space","before":{"id":"virtual-address-space","term":"Virtual address space","aliases":["address space","address spaces","reserved address space"],"definition":"The range of virtual addresses a process can use. Reserving address space does not use RAM until the pages are touched.","source":"https://en.wikipedia.org/wiki/Virtual_address_space"},"after":{"id":"virtual-address-space","term":"Virtual address space","aliases":["address space","address spaces","reserved address space"],"definition":"The range of virtual addresses available to a process. A reservation is distinct from resident RAM; demand allocation, existing shared mappings, page faults and mapping flags determine when physical memory is associated with it.","source":"https://en.wikipedia.org/wiki/Virtual_address_space"}}
-- {"glossaryId":"o-nonblock","before":{"id":"o-nonblock","term":"O_NONBLOCK","aliases":["setblocking(False)"],"definition":"A file status flag that makes I/O on a descriptor non-blocking. It has no effect on regular files, whose reads block on the disk regardless.","source":"https://man7.org/linux/man-pages/man2/open.2.html"},"after":{"id":"o-nonblock","term":"O_NONBLOCK","aliases":["setblocking(False)"],"definition":"An open-file-description status flag requesting non-blocking behavior for supported operations. Linux ignores it for ordinary regular-file and block-device I/O, so storage waits can still occur; this does not mean every read necessarily accesses storage.","source":"https://man7.org/linux/man-pages/man2/open.2.html"}}
-- {"glossaryId":"fd-setsize","before":{"id":"fd-setsize","term":"FD_SETSIZE","aliases":[],"definition":"The number of bits in an `fd_set`, fixed at 1024 on Linux glibc. Passing a descriptor of 1024 or above to `FD_SET` writes out of bounds.","source":"https://man7.org/linux/man-pages/man2/select.2.html"},"after":{"id":"fd-setsize","term":"FD_SETSIZE","aliases":[],"definition":"The capacity of an fd_set bitmap, 1024 descriptor bits in Linux glibc. Using an out-of-range descriptor with FD_SET has undefined behavior; exact failure, including a fortify abort or memory overwrite, depends on implementation and build.","source":"https://man7.org/linux/man-pages/man2/select.2.html"}}
-- {"glossaryId":"buffer-overflow","before":{"id":"buffer-overflow","term":"Buffer overflow","aliases":["buffer overflows","writes past the end","out-of-bounds"],"definition":"Writing beyond the end of a memory buffer, corrupting neighbouring data. `FD_SET` on a descriptor of 1024 or above is a classic example.","source":"https://en.wikipedia.org/wiki/Buffer_overflow"},"after":{"id":"buffer-overflow","term":"Buffer overflow","aliases":["buffer overflows","writes past the end","out-of-bounds"],"definition":"An access that writes outside a buffer’s valid range. In C this can cause undefined behavior; memory corruption is possible but not guaranteed. Out-of-range unchecked FD_SET use is one example.","source":"https://en.wikipedia.org/wiki/Buffer_overflow"}}
-- {"glossaryId":"unix-signals","before":{"id":"unix-signals","term":"Unix signal","aliases":["SIGHUP","SIGSEGV","SIGIO signal"],"definition":"An asynchronous notification sent to a process: SIGHUP traditionally means reload configuration (nginx), SIGSEGV is an invalid memory access.","source":"https://man7.org/linux/man-pages/man7/signal.7.html"},"after":{"id":"unix-signals","term":"Unix signal","aliases":["SIGHUP","SIGSEGV","SIGIO signal"],"definition":"Notifications delivered to a process or thread. SIGHUP denotes a terminal/controlling-process hangup by default and is conventionally repurposed by nginx for reload; SIGSEGV reports an invalid memory reference.","source":"https://man7.org/linux/man-pages/man7/signal.7.html"}}
-- {"glossaryId":"o-direct","before":{"id":"o-direct","term":"O_DIRECT","aliases":["direct I/O"],"definition":"An open flag that asks the kernel to transfer data directly between the device and the user buffer, bypassing the page cache. It needs aligned buffers and does not by itself make I/O asynchronous.","source":"https://man7.org/linux/man-pages/man2/open.2.html"},"after":{"id":"o-direct","term":"O_DIRECT","aliases":["direct I/O"],"definition":"An open flag requesting a direct-I/O path that normally avoids the page cache. Alignment and support requirements depend on kernel/filesystem; unsupported or misaligned cases may fail or fall back to buffered I/O. The flag alone does not make I/O asynchronous.","source":"https://man7.org/linux/man-pages/man2/open.2.html"}}
-- {"glossaryId":"io-uring-cqe-more","before":{"id":"io-uring-cqe-more","term":"IORING_CQE_F_MORE","aliases":["MORE"],"definition":"A CQE flag meaning more completions will follow for the same request, for example a later notification that a zero-copy send's buffer is free, or further results from a multishot operation.","source":"https://man7.org/linux/man-pages/man7/io_uring.7.html"},"after":{"id":"io-uring-cqe-more","term":"IORING_CQE_F_MORE","aliases":[],"definition":"A CQE flag meaning more completions will follow for the same request, for example a later notification that a zero-copy send's buffer is free, or further results from a multishot operation.","source":"https://man7.org/linux/man-pages/man7/io_uring.7.html"}}
-- {"glossaryId":"linked-sqes","before":{"id":"linked-sqes","term":"Linked SQEs","aliases":["linked SQE","IOSQE_IO_LINK","soft links"],"definition":"SQEs joined by IOSQE_IO_LINK execute in dependency order. Documented failures can cancel later soft-linked requests; linking does not automatically set a later write length from an earlier read result.","source":"https://man7.org/linux/man-pages/man7/io_uring.7.html"},"after":{"id":"linked-sqes","term":"Linked SQEs","aliases":["linked SQE","IOSQE_IO_LINK","soft-linked SQEs","soft-linked requests"],"definition":"SQEs joined by IOSQE_IO_LINK execute in dependency order. Documented failures can cancel later soft-linked requests; linking does not automatically set a later write length from an earlier read result.","source":"https://man7.org/linux/man-pages/man7/io_uring.7.html"}}
-- {"glossaryId":"multishot","before":{"id":"multishot","term":"Multishot","aliases":["multishot accept","multishot receive","multishot operations"],"definition":"io_uring operations where one SQE produces a stream of CQEs, one per accepted connection or received chunk, until cancelled or an error occurs (accept from 5.19, receive from 6.0).","source":"https://man7.org/linux/man-pages/man7/io_uring.7.html"},"after":{"id":"multishot","term":"Multishot","aliases":["multishot accept","multishot receive","multishot operations"],"definition":"Supported io_uring operations where one request can produce multiple completions, such as accept since Linux 5.19 and receive since 6.0. Check IORING_CQE_F_MORE on every CQE; absence means the request ended, including normal termination and conditions such as buffer exhaustion.","source":"https://man7.org/linux/man-pages/man3/io_uring_prep_recv_multishot.3.html"}}
-- {"glossaryId":"spectre-meltdown","before":{"id":"spectre-meltdown","term":"Spectre and Meltdown","aliases":["Spectre/Meltdown","Spectre","Meltdown"],"definition":"CPU vulnerabilities disclosed in 2018 that let code read memory through speculative execution. Their kernel mitigations made each system call more expensive, increasing the value of batching.","source":"https://en.wikipedia.org/wiki/Meltdown_(security_vulnerability)"},"after":{"id":"spectre-meltdown","term":"Spectre and Meltdown","aliases":["Spectre/Meltdown","Spectre","Meltdown"],"definition":"Families of speculative-execution side-channel vulnerabilities disclosed in 2018. Mitigations can add overhead on affected systems, with costs depending on CPU, mitigation choice, kernel and workload; no universal syscall-cost increase is implied.","source":"https://docs.kernel.org/admin-guide/hw-vuln/spectre.html"}}
-- {"glossaryId":"node-js","before":{"id":"node-js","term":"Node.js","aliases":["Node 20"],"definition":"A JavaScript runtime built on V8 and libuv. JavaScript runs on one event-loop thread; file, DNS and some crypto work go to libuv's thread pool.","source":"https://nodejs.org/en/about"},"after":{"id":"node-js","term":"Node.js","aliases":["Node 20"],"definition":"A JavaScript runtime built on V8 and libuv. Each event loop executes its callbacks on its owning thread; worker_threads can run additional JavaScript threads. Some asynchronous file, name-resolution, crypto and compression work uses libuv workers.","source":"https://nodejs.org/api/worker_threads.html"}}
-- {"glossaryId":"io-thread-pool","before":{"id":"io-thread-pool","term":"Helper threads","aliases":["Thread pool","thread pools","worker pool","worker pools","worker threads","worker thread","helper thread"],"definition":"A fixed set of threads that take jobs from a queue, so blocking or CPU-heavy work runs off the main thread without creating a thread per job.","source":"https://en.wikipedia.org/wiki/Thread_pool"},"after":{"id":"io-thread-pool","term":"Helper threads","aliases":["Thread pool","thread pools","worker pool","worker pools","worker threads","worker thread","helper thread"],"definition":"A collection of worker threads that take queued jobs, avoiding one new thread per job. Some pools have a configured fixed size (such as libuv’s), while other implementations resize dynamically.","source":"https://en.wikipedia.org/wiki/Thread_pool"}}
-- {"glossaryId":"graceful-reload","before":{"id":"graceful-reload","term":"Graceful reload","aliases":["graceful reloads"],"definition":"Applying new configuration by starting new workers while old workers finish their existing connections, so traffic is not cut off.","source":"https://nginx.org/en/docs/control.html"},"after":{"id":"graceful-reload","term":"Graceful reload","aliases":["graceful reloads"],"definition":"Starting workers with new configuration while old workers finish existing connections. This supports service continuity, but configuration errors, shutdown deadlines and failed connections mean zero loss is not an unconditional guarantee.","source":"https://nginx.org/en/docs/control.html"}}
-- {"glossaryId":"seastar","before":{"id":"seastar","term":"Seastar","aliases":["ScyllaDB"],"definition":"A C++ framework that runs one event loop per core with no shared state (shard-per-core); it underlies the ScyllaDB database.","source":"https://seastar.io/"},"after":{"id":"seastar","term":"Seastar","aliases":["ScyllaDB"],"definition":"A C++ framework organized around application shards and event loops, commonly one per core, that underlies ScyllaDB. Its shared-nothing application model reduces shared mutable data; it does not imply every runtime or OS component has no locks.","source":"https://seastar.io/"}}
-- {"glossaryId":"shard-per-core","before":{"id":"shard-per-core","term":"Shard-per-core","aliases":["shard per core"],"definition":"A design where each CPU core owns its own slice of the data and its own event loop, and cores communicate only by message passing, avoiding locks.","source":"https://seastar.io/shared-nothing/"},"after":{"id":"shard-per-core","term":"Shard-per-core","aliases":["shard per core"],"definition":"A design giving each application shard a core and ownership of its data, with cross-shard work expressed through messages. It reduces shared mutable application state; implementation details can still use shared memory and synchronization.","source":"https://seastar.io/shared-nothing/"}}
-- {"glossaryId":"oom-killer","before":{"id":"oom-killer","term":"OOM killer","aliases":["OOM-killed","OOM","out of memory"],"definition":"The Linux out-of-memory killer, which terminates a process to free memory when the system runs out.","source":"https://docs.kernel.org/admin-guide/mm/concepts.html"},"after":{"id":"oom-killer","term":"OOM killer","aliases":["OOM-killed","OOM","out of memory"],"definition":"Linux’s mechanism for selecting tasks to kill under qualifying out-of-memory conditions, including cgroup limits. Not every allocation failure invokes it, and the exact choice depends on policy and context.","source":"https://docs.kernel.org/admin-guide/mm/concepts.html"}}
-- {"glossaryId":"ethernet-frame","before":{"id":"ethernet-frame","term":"Ethernet frame","aliases":["Ethernet frames","Ethernet","minimum-size frame","minimum-size frames","minimum frame","Ethernet header"],"definition":"The unit sent on an Ethernet link: a 14-byte header, payload and a 4-byte FCS. The minimum frame is 64 bytes, and on the wire each also needs 8 bytes of preamble/SFD and a 12-byte gap.","source":"https://en.wikipedia.org/wiki/Ethernet_frame"},"after":{"id":"ethernet-frame","term":"Ethernet frame","aliases":["Ethernet frames","Ethernet","minimum-size frame","minimum-size frames","minimum frame","Ethernet header"],"definition":"The link-layer unit transmitted by Ethernet. An untagged Ethernet II frame has a 14-byte header, payload/padding and 4-byte FCS, with a minimum 64-byte frame. The lesson’s rate model adds 8 preamble/SFD byte-times and a 12-byte-time gap; tagging and physical-link rules need their own accounting.","source":"https://www.ciscopress.com/articles/article.asp?p=3089352&seqNum=4"}}
-- {"glossaryId":"napi-budget","before":{"id":"napi-budget","term":"NAPI budget","aliases":["netdev_budget","netdev_budget_usecs","NAPI weight","driver weight","per-driver weight","poll budget"],"definition":"Limits on how much receive work one softirq round may do: a per-device weight (typically 64 packets) and the overall `netdev_budget` (packets) and `netdev_budget_usecs` (time).","source":"https://docs.kernel.org/networking/napi.html"},"after":{"id":"napi-budget","term":"NAPI budget","aliases":["netdev_budget","netdev_budget_usecs","NAPI weight","driver weight","per-driver weight","poll budget"],"definition":"Receive-work limits: a NAPI instance’s poll receives a budget, commonly related to its configured weight, while a conventional receive-softirq round also has overall packet/time limits through netdev_budget and netdev_budget_usecs. TX completions follow different budget rules.","source":"https://docs.kernel.org/networking/napi.html"}}
-- {"glossaryId":"io-rss","before":{"id":"io-rss","term":"Receive Side Scaling","aliases":["Receive Side Scaling (RSS)","receive-side scaling"],"definition":"Receive Side Scaling: the NIC hashes each packet's flow (often with the Toeplitz hash) and uses an indirection table to choose an RX queue, spreading flows across queues and CPUs while keeping each flow in order.","source":"https://docs.kernel.org/networking/scaling.html"},"after":{"id":"io-rss","term":"Receive Side Scaling","aliases":["Receive Side Scaling (RSS)","receive-side scaling"],"definition":"Receive Side Scaling: a NIC hashes supported packet fields and maps the hash through an indirection table to an RX queue. Stable per-flow mapping helps preserve order; interrupt affinity and software steering separately determine later CPU placement.","source":"https://docs.kernel.org/networking/scaling.html"}}
-- {"glossaryId":"numa","before":{"id":"numa","term":"NUMA","aliases":["non-uniform memory access"],"definition":"Non-uniform memory access: on multi-socket machines each CPU has nearby memory and reaches other sockets' memory more slowly, so placing threads near their data and devices matters.","source":"https://en.wikipedia.org/wiki/Non-uniform_memory_access"},"after":{"id":"numa","term":"NUMA","aliases":["non-uniform memory access"],"definition":"Non-uniform memory access: memory-access cost depends on where processors and memory reside in the hardware topology. Nodes can exist within one socket as well as across sockets; placement of data, threads and devices can affect locality.","source":"https://docs.kernel.org/admin-guide/numastat.html"}}
-- {"glossaryId":"tx-completion","before":{"id":"tx-completion","term":"TX completion","aliases":["transmit completion","TX completions"],"definition":"The NIC reporting that it has finished sending a frame, so the driver can free or reuse the buffer. It does not mean the remote side has received it.","source":"https://docs.kernel.org/networking/napi.html"},"after":{"id":"tx-completion","term":"TX completion","aliases":["transmit completion","TX completions"],"definition":"A device/driver indication that transmit resources can be reclaimed under its ownership protocol. This can be distinct from final wire transmission and does not prove remote receipt or application processing.","source":"https://www.kernel.org/doc/html/latest/networking/kapi.html"}}
-- {"glossaryId":"hugepages","before":{"id":"hugepages","term":"Hugepages","aliases":["hugepage","huge pages","huge page"],"definition":"Memory pages much larger than the normal 4 KiB (typically 2 MiB or 1 GiB), so one TLB entry covers more memory and TLB misses fall.","source":"https://docs.kernel.org/admin-guide/mm/hugetlbpage.html"},"after":{"id":"hugepages","term":"Hugepages","aliases":["hugepage","huge pages","huge page"],"definition":"Pages larger than the architecture’s base page size, for example 2 MiB or 1 GiB on supporting x86 systems. Larger mappings can cover more memory per TLB entry; supported sizes and actual performance depend on platform and workload.","source":"https://docs.kernel.org/admin-guide/mm/hugetlbpage.html"}}
-- {"glossaryId":"io-pmd","before":{"id":"io-pmd","term":"Poll-mode driver","aliases":["poll-mode drivers","PMD","PMDs"],"definition":"A DPDK driver that reads the NIC's RX ring in a busy loop from user space instead of using interrupts.","source":"https://doc.dpdk.org/guides/prog_guide/ethdev/ethdev.html"},"after":{"id":"io-pmd","term":"Poll-mode driver","aliases":["poll-mode drivers","PMD","PMDs"],"definition":"A DPDK driver interface commonly polled from userspace to receive/transmit packet bursts. Dedicated busy-poll use avoids waiting for a packet interrupt; supported interrupt/power-management modes and hardware/software PMDs vary.","source":"https://doc.dpdk.org/guides/prog_guide/ethdev/ethdev.html"}}
-- {"glossaryId":"ebpf","before":{"id":"ebpf","term":"eBPF","aliases":["BPF","extended BPF","BPF loader program","BPF loader"],"definition":"A Linux facility for loading small verified programs into the kernel and attaching them to hooks (network, tracing, cgroups), where they run safely at kernel speed.","source":"https://ebpf.io/what-is-ebpf/"},"after":{"id":"ebpf","term":"eBPF","aliases":["BPF","extended BPF","BPF loader program","BPF loader"],"definition":"A facility for loading programs checked by a verifier and attaching them to supported hooks, including networking and tracing. Verification enforces documented safety rules but is not proof that kernel, JIT or program logic has no bugs.","source":"https://docs.kernel.org/bpf/verifier.html"}}
-- {"glossaryId":"checksum","before":{"id":"checksum","term":"Checksum","aliases":["checksums","checksum validation"],"definition":"A small value computed from data so that corruption can be detected; IP, UDP and TCP headers carry checksums.","source":"https://en.wikipedia.org/wiki/Checksum"},"after":{"id":"checksum","term":"Checksum","aliases":["checksums","checksum validation"],"definition":"A value calculated over selected data to help detect corruption. IPv4 has a header checksum; IPv6 has no corresponding base-header checksum. TCP and UDP have protocol-specific checksum rules.","source":"https://www.rfc-editor.org/rfc/rfc791"}}
-- {"glossaryId":"observability","before":{"id":"observability","term":"Observability","aliases":["eBPF tracing"],"definition":"Being able to see what a system is doing from its outputs (metrics, logs, traces). eBPF tracing attaches programs to kernel and application events to collect this cheaply.","source":"https://ebpf.io/what-is-ebpf/"},"after":{"id":"observability","term":"Observability","aliases":["eBPF tracing"],"definition":"Understanding system behavior through outputs such as metrics, logs and traces. eBPF can instrument supported kernel/application events; overhead and completeness depend on the program, hook and workload.","source":"https://ebpf.io/what-is-ebpf/"}}
-- {"glossaryId":"device-interrupt-masking","before":{"id":"device-interrupt-masking","term":"Device interrupt masking","aliases":["interrupt-masking","mask the interrupt","masks the interrupt","masked interrupt","masked interrupts"],"definition":"Temporarily stopping a particular interrupt from being delivered (or all interrupts on one CPU) without losing the device's request. NAPI masks a NIC's receive interrupt while it polls, then unmasks it when the queue is empty.","source":"https://docs.kernel.org/core-api/genericirq.html"},"after":{"id":"device-interrupt-masking","term":"Device interrupt masking","aliases":["interrupt-masking","mask the interrupt","masks the interrupt","masked interrupt","masked interrupts"],"definition":"Temporarily preventing delivery of a device interrupt under a defined device/controller protocol. Masking does not itself prove events cannot be lost; the driver must coordinate acknowledgement, polling and unmasking to avoid races.","source":"https://docs.kernel.org/core-api/genericirq.html"}}
-- The `selectors` example is a reactor. Windows IOCP and submitted io_uring reads/writes provide completion interfaces suitable for proactors. Interpret the operation, not only the API name: io_uring also has readiness-poll requests, and some kqueue filters can report AIO completions.
-- and epoll and kqueue socket-readiness filters
-- - **Event type matters.** EVFILT_READ reports readiness; other supported filters, such as FreeBSD EVFILT_AIO, can report asynchronous completion. It is too broad to classify every kqueue event as a socket-readiness event.
-- **Extra information.**
-- an operation avoids waiting for readiness and can report try-again (model 2). This is not a fixed elapsed-time guarantee.
-- {"file":"io-reactors-timers.questions.json","question":"io-event-loops-q3","before":{"id":"io-event-loops-q3","level":"basic","type":"single","prompt":"Which of these is a **proactor** rather than a reactor?","options":[{"text":"A loop built on epoll","explanation":"epoll reports readiness ('you can read now'), which is the reactor pattern."},{"text":"A loop built on kqueue","explanation":"kqueue is also readiness-based, so it's a reactor."},{"text":"A loop built on `select`","explanation":"`select` is the original readiness API, so a reactor."},{"text":"A loop built on io_uring or Windows IOCP","explanation":"Correct. They report completed operations ('your read finished, here are n bytes'), which is the proactor pattern."}],"answer":3,"workedExample":"Ask: does the loop tell me *I can do it* or *it's done*?\n\n| API | Reports | Pattern |\n|---|---|---|\n| select/poll/epoll/kqueue | ready | reactor |\n| IOCP, io_uring | done | proactor |","link":{"title":"Design overview — libuv documentation","url":"https://docs.libuv.org/en/v1.x/design.html"}},"after":{"id":"io-event-loops-q3","level":"basic","type":"single","prompt":"Which loop dispatches completed I/O operations in the **proactor** pattern, rather than asking a handler to perform a socket read after readiness?","options":[{"text":"A loop dispatching epoll socket-readability notifications","explanation":"This notification reports readiness. The handler still performs the read, giving the reactor pattern."},{"text":"A loop dispatching kqueue EVFILT_READ socket-readability notifications","explanation":"EVFILT_READ reports readiness for the handler to read. Other kqueue filters, including FreeBSD EVFILT_AIO, can report different events; the specific operation matters."},{"text":"A loop dispatching select socket-readability results","explanation":"select reports readiness, leaving the actual read to the handler: the reactor pattern."},{"text":"A loop dispatching completed submitted reads through io_uring or Windows IOCP","explanation":"Correct. These handlers receive the completed operation result, giving the proactor pattern. An io_uring readiness-poll request would instead report readiness."}],"answer":3,"workedExample":"Classify the notification contract:\n\n| Event | Meaning | Pattern |\n|---|---|---|\n| select/poll/epoll socket readiness | ready to attempt I/O | reactor |\n| kqueue EVFILT_READ on a socket | ready to attempt a read | reactor |\n| Completed submitted read through IOCP or io_uring | operation finished | proactor |\n\nAn API name alone does not determine every use: io_uring also supports readiness polling, and FreeBSD kqueue has an AIO-completion filter.","link":{"title":"Design overview — libuv documentation","url":"https://docs.libuv.org/en/v1.x/design.html"}}}
-- {"file":"io-kqueue-portability.questions.json","question":"io-multiplexing-q12","before":{"id":"io-multiplexing-q12","level":"advanced","type":"multi","prompt":"You're porting an epoll server to macOS using kqueue. Which statements are true? Select all that apply.","options":[{"text":"One `kevent()` call can both apply a batch of registration changes and return ready events","explanation":"Correct. The changelist and eventlist are separate arguments of the same call, whereas epoll needs one `epoll_ctl` syscall per change."},{"text":"kqueue can watch process exit, signals and timers directly with filters such as `EVFILT_PROC`, `EVFILT_SIGNAL` and `EVFILT_TIMER`","explanation":"Correct. Linux achieves the same by turning them into descriptors (`pidfd`, `signalfd`, `timerfd`) and adding those to epoll."},{"text":"Edge-triggered behaviour is requested with `EV_CLEAR`","explanation":"Correct. `EV_CLEAR` resets the filter's state after the event is retrieved, giving edge-like semantics."},{"text":"kqueue is completion-based like IOCP, so reads finish in the kernel","explanation":"kqueue is readiness-based: `EVFILT_READ` tells you data is available (and how many bytes), and you still call `read()`."}],"answer":[0,1,2],"workedExample":"Both APIs maintain registrations, but the mapping is conceptual:\n\n| epoll concept | kqueue counterpart |\n|---|---|\n| create instance | kqueue |\n| modify interest | kevent changelist |\n| retrieve events | kevent eventlist |\n| readable socket | EVFILT_READ |\n| edge-like handling | EV_CLEAR, filter-dependent |\n| disable after delivery | EV_DISPATCH |\n| remove after delivery | EV_ONESHOT |\n\nEPOLLONESHOT disables until EPOLL_CTL_MOD rearms; EV_ONESHOT deletes and must be added again. EVFILT_READ is readiness, not a completed socket read.","link":{"title":"Kqueue: A generic and scalable event notification facility (PDF)","url":"https://people.freebsd.org/~jlemon/papers/kqueue.pdf"}},"after":{"id":"io-multiplexing-q12","level":"advanced","type":"multi","prompt":"You're porting an epoll server to macOS using kqueue. Which statements are true? Select all that apply.","options":[{"text":"One `kevent()` call can both apply a batch of registration changes and return ready events","explanation":"Correct. The changelist and eventlist are separate arguments of the same call, whereas epoll needs one `epoll_ctl` syscall per change."},{"text":"kqueue can watch process exit, signals and timers directly with filters such as `EVFILT_PROC`, `EVFILT_SIGNAL` and `EVFILT_TIMER`","explanation":"Correct. Linux achieves the same by turning them into descriptors (`pidfd`, `signalfd`, `timerfd`) and adding those to epoll."},{"text":"Edge-triggered behaviour is requested with `EV_CLEAR`","explanation":"Correct. `EV_CLEAR` resets the filter's state after the event is retrieved, giving edge-like semantics."},{"text":"kqueue EVFILT_READ completes the requested socket read and reports the copied result, like an IOCP read completion","explanation":"EVFILT_READ reports socket readiness; the application still performs the read. Some other kqueue filters can report completion events, so inspect the particular filter."}],"answer":[0,1,2],"workedExample":"Both APIs maintain registrations, but the mapping is conceptual:\n\n| epoll concept | kqueue counterpart |\n|---|---|\n| create instance | kqueue |\n| modify interest | kevent changelist |\n| retrieve events | kevent eventlist |\n| readable socket | EVFILT_READ |\n| edge-like handling | EV_CLEAR, filter-dependent |\n| disable after delivery | EV_DISPATCH |\n| remove after delivery | EV_ONESHOT |\n\nEPOLLONESHOT disables until EPOLL_CTL_MOD rearms; EV_ONESHOT deletes and must be added again. EVFILT_READ is readiness, not a completed socket read.","link":{"title":"Kqueue: A generic and scalable event notification facility (PDF)","url":"https://people.freebsd.org/~jlemon/papers/kqueue.pdf"}}}
-- {"glossaryId":"power-of-two","before":{"id":"power-of-two","term":"Power of two","aliases":["powers of two"],"definition":"A number of the form 2^k, such as 64, 256 or 4,096. Ring sizes are powers of two so an index can be wrapped with a fast bitwise AND instead of division.","source":"https://en.wikipedia.org/wiki/Power_of_two"},"after":{"id":"power-of-two","term":"Power of two","aliases":["powers of two"],"definition":"A number obtainable by multiplying 2 by itself a whole number of times, including 1, 2, 64 and 256. The io_uring ring capacities discussed here are powers of two, so their slot calculation can use a bit mask; circular buffers in general need not have such a capacity.","source":"https://en.wikipedia.org/wiki/Power_of_two"}}
-- Multiplexing tells you about **I/O readiness**:
-- {"glossaryId":"readiness-io","before":{"id":"readiness-io","term":"Readiness-based I/O","aliases":["readiness-based","readiness API","readiness APIs","readiness model","readiness models","readiness notification","readiness notifications"],"definition":"I/O where the kernel tells you when an operation can be done without blocking (a socket is readable) and you then perform it yourself. select, poll, epoll and kqueue work this way.","source":"https://man7.org/linux/man-pages/man7/epoll.7.html"},"after":{"id":"readiness-io","term":"Readiness-based I/O","aliases":["readiness-based","readiness API","readiness APIs","readiness model","readiness models","readiness notification","readiness notifications","I/O readiness"],"definition":"I/O where the kernel tells you when an operation can be done without blocking (a socket is readable) and you then perform it yourself. select, poll, epoll and kqueue work this way.","source":"https://man7.org/linux/man-pages/man7/epoll.7.html"}}
+- Removed the universal default-seccomp claim: supported Docker setups ordinarily apply a default profile, whereas unset Kubernetes workload profiles can be Unconfined when seccompDefault is disabled. Confirmed both primary documentation pages and all three contextual aliases.
+- Independent pass: 66 correction locations; full before/after evidence /tmp/os-io-short-verify/corrections.json.
+- Distinguished operation contracts from API names: kqueue EVFILT_AIO can report completion, while EVFILT_READ is readiness; io_uring poll requests do not automatically make a loop a proactor. Rewrote the proactor question with explicit event contracts, keeping its original key.
+- Narrowed zero-syscall SQPOLL claims to active-poller/shared-CQ collection and qualified speculative-mitigation overhead.
+- Corrected stream EOF versus zero-size datagrams, Python sendall result behavior, SIGHUP hangup/reload meaning, EINTR retry guidance, O_NONBLOCK storage waits, PREEMPT_RT spinlock distinctions, NVMe fabric transports, and safe device-assignment prerequisites.
+- Removed guarantees about VLAN-tag packet-rate changes, fixed resource/NUMA/TX completion assumptions, and described shared-nothing application ownership without claiming a lockless entire runtime.
 
 Remaining gaps:
 
@@ -3462,6 +3186,35 @@ Low-confidence areas:
 - **medium** — virt-pod-security-runtime: Version, implementation, configuration or workload-specific details. Retrieved upstream sources support the mechanism; no full deployed VM/runtime/cluster or universal performance/isolation outcome was demonstrated.
 - **medium** — virt-microvm-boundaries: Published Firecracker startup and VMM-memory targets. Upstream SPECIFICATION scopes these to particular hosts, small VM, tuned kernel and exclusions; not measured in this review.
 - **medium** — glossary: Product and deployment-dependent glossary summaries. Listed medium entries depend on maintained products, policy versions or configuration; core definitions were checked, not every possible installation.
+
+## networks: Network Foundations & the Link Layer
+
+[Independent verification record](../content/networks/01-foundations/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Removed opposite-sense loop-free alias that opened Switching loop.
+- Ethernet frame-rate/data-frame wording now avoids video-fps and HTTP DATA definitions in the actual compiled dictionary.
+- Separated Fast Ethernet family from100BASE-TX;1000BASE-X includes copper1000BASE-CX rather than fibre only.
+- STP root/designated roles no longer imply immediate forwarding; segment election includes port-ID ties and failover requires an available alternate path.
+- Successful retransmissions can deliver missing useful data; goodput counts unique delivery while extra attempts consume capacity.
+- Transformer isolation requires separate appropriately insulated windings; autotransformers do not provide it.
+- Pipelining example and ARQ sequence assumptions are now local to their own short units.
+
+Remaining gaps:
+
+- No physical Ethernet, optical or Wi-Fi equipment was measured; duplex, switching, STP, radio and failover behaviour is explained from protocol/configuration sources, not a universal measured outcome.
+- Python snippets are bounded educational models, not complete frame/VLAN/FCS parsers, production switches or ARQ stacks.
+- Ancillary inherited glossary entries supported by secondary references are explicitly medium confidence. Their definitions and aliases were independently reviewed, but family-source coverage is not a claim of primary verification of each historical/product statement.
+- Queueing, independent-bit-error and Go-Back-N work formulas retain ideal assumptions; no general measured-network throughput guarantee is made.
+
+Low-confidence areas:
+
+- **medium** — nf-copper-wireless: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
+- **medium** — nf-fibre-power-speed: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
+- **medium** — nf-shared-ethernet: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
+- **medium** — nf-arp-cache-failover: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
+- **medium** — nf-stp-recovery: Protocol and model reasoning is checked; vendor/OS behaviour, hardware examples and ancillary historical details require the stated configuration or remain supported by secondary references.. No physical equipment or production deployment was exercised; explicit ideal-model assumptions and product snapshots are retained.
 
 ## synth: Sound & Digital Audio
 

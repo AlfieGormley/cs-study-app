@@ -1,0 +1,92 @@
+[
+  {
+    "id": "nf-performance-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A backup job replicates data between continents at a target payload rate of 10 Gbit/s with a 100 ms RTT. What is the bandwidth-delay product, i.e. how much data must be unacknowledged at once to keep the path full?",
+    "options": [
+      {
+        "text": "125 KB",
+        "explanation": "This is off by a factor of 1000; it uses 100 µs instead of 100 ms."
+      },
+      {
+        "text": "12.5 MB",
+        "explanation": "This uses 10 ms rather than 100 ms, or 1 Gbit/s rather than 10. Check both factors."
+      },
+      {
+        "text": "125 MB",
+        "explanation": "Correct. 10¹⁰ bits/s × 0.1 s = 10⁹ bits = 125 MB."
+      },
+      {
+        "text": "1 GB",
+        "explanation": "That is 1 Gbit, forgetting to divide by 8 to get bytes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nBDP = R RTT\nBDP = 10¹⁰ bit/s × 0.1 s = 10⁹ bit\nBDP = 10⁹ bit / 8 = 1.25 × 10⁸ B\nBDP = 125 MB\nwhere\nBDP: the bandwidth-delay product: data sent but not yet acknowledged when the path is kept full\nR: the target payload rate, 10 Gbit/s = 10¹⁰ bits per second\nRTT: the round-trip time, 100 ms = 0.1 s\nbit: one binary digit; bit/s is bits per second\ns: seconds\nB: bytes; there are 8 bits in a byte\nMB: megabytes (decimal); 1 MB is 1,000,000 bytes\nIn words: at 10 Gbit/s, a 100 ms round trip holds 10⁹ bits, so **125 MB** must be in flight to keep the path full.\n```\n\n Sustaining that payload rate requires sufficient sender flight allowance and advertised receive window, plus suitable buffering and path capacity. Exact socket memory accounting and OS defaults vary; 125 MB is the payload in-flight target, not a universal socket-setting recipe.",
+    "link": {
+      "title": "Bandwidth-delay product — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bandwidth-delay_product"
+    }
+  },
+  {
+    "id": "nf-performance-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A TCP connection does not negotiate window scaling. Its receiver advertises at most 65,535 bytes. Over a 1 Gbit/s path with a 100 ms acknowledgement RTT, what approximate steady payload-rate upper bound follows from this receive-window constraint?",
+    "options": [
+      {
+        "text": "About 1 Gbit/s",
+        "explanation": "The link has sufficient raw rate, but the stated receive-window/RTT constraint bounds steady payload throughput well below it. ACKs can advance a sliding window continuously rather than only in batches."
+      },
+      {
+        "text": "About 52 Mbit/s",
+        "explanation": "This uses a 10 ms RTT. With 100 ms, the sender gets only ten windows' worth of data out per second."
+      },
+      {
+        "text": "About 5.2 Mbit/s",
+        "explanation": "Correct. At most one 65,535-byte window (524,280 bits) is delivered per 0.1 s round trip, about 5.24 Mbit/s."
+      },
+      {
+        "text": "About 655 kbit/s",
+        "explanation": "This forgets to convert bytes to bits (65,535 / 0.1). Multiply by 8."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "A sliding window allows new data as ACKs advance it; it is not necessarily sent in stop-and-wait batches. In the steady window-limited model, at most one window is delivered per round trip:\n\n```formula\nX ≤ W / RTT\nX ≤ 65,535 B × 8 bit/B / 0.1 s\nX ≤ 524,280 bit / 0.1 s\nX ≈ 5.24 × 10⁶ bit/s ≈ 5.24 Mbit/s\nwhere\nX: the steady payload throughput limit\nW: the window: at most 65,535 bytes (B) unacknowledged\nRTT: the acknowledgement round-trip time, 100 ms = 0.1 s\nB: bytes; bit/B is bits per byte (8)\nbit: one binary digit\ns: seconds\nMbit/s: megabits per second (millions of bits per second)\n≈: approximately equal to\nIn words: one 65,535-byte window every 100 ms is only about **5.2 Mbit/s**, about half a percent of the gigabit link.\n```\n\nThe path's bandwidth-delay product, 1 Gbit/s × 0.1 s, is 10⁸ bits or 12.5 MB, much larger than that window.",
+    "link": {
+      "title": "RFC 7323: TCP Extensions for High Performance",
+      "url": "https://www.rfc-editor.org/rfc/rfc7323"
+    }
+  },
+  {
+    "id": "nf-performance-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A ship connects via a geostationary satellite at 35,786 km altitude. Data goes ship → satellite → ground station, and replies come back the same way. Radio travels at about 3 × 10⁸ m/s. Ignoring everything except propagation over the satellite hops, roughly what is the minimum RTT, and how big a window does one TCP flow need for 50 Mbit/s?",
+    "options": [
+      {
+        "text": "About 120 ms RTT; about 750 KB window",
+        "explanation": "120 ms is roughly the time for one up-or-down hop. A round trip involves four such hops (up, down, up, down)."
+      },
+      {
+        "text": "About 240 ms RTT; about 1.5 MB window",
+        "explanation": "240 ms is the *one-way* time (up and down once). The reply has to make the same two hops back."
+      },
+      {
+        "text": "About 480 ms RTT; about 3 MB window",
+        "explanation": "Correct. Four hops of at least 35,786 km is about 143,000 km; at 3 × 10⁸ m/s that's about 477 ms. The bandwidth-delay product is 50 Mbit/s × 0.48 s ≈ 24 Mbit, which is 3 MB."
+      },
+      {
+        "text": "About 480 ms RTT; 64 KB is enough because satellites are slow links",
+        "explanation": "50 Mbit/s is not slow. One 65,535-byte window (about 524,000 bits) per 0.48 s round trip is about 1.1 Mbit/s, so a 64 KB window would use about 2% of the link."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. One way is up and down: at least 2 × 35,786 km = 71,572 km (more if the ship isn't directly below).\n2. A round trip doubles that: four hops, about 143,144 km.\n\n```formula\nD_rt ≥ 4 × 35,786 km ≈ 1.43 × 10⁸ m\nRTT ≥ D_rt / c\nRTT ≥ 1.43 × 10⁸ m / (3 × 10⁸ m/s)\nRTT ≥ 0.477 s ≈ 480 ms\nBDP = R RTT\nBDP = 5 × 10⁷ bit/s × 0.48 s\nBDP = 2.4 × 10⁷ bit = 3 MB\nwhere\nD_rt: the distance travelled in one round trip: ship to satellite to ground and back again, four hops of at least 35,786 kilometres (km)\nkm: kilometres; 1 km is 1,000 m\nm: metres; m/s is metres per second\nRTT: the round-trip time\nc: the speed of radio in air and space, about 3 × 10⁸ m/s\ns: seconds\nms: milliseconds, thousandths of a second\nBDP: the bandwidth-delay product: data that must be in flight to keep the link full\nR: the target rate, 50 Mbit/s = 5 × 10⁷ bits per second\nbit: one binary digit; bit/s is bits per second\nMB: megabytes; 1 MB is 1,000,000 bytes = 8,000,000 bits\n≥: greater than or equal to (a minimum)\n≈: approximately equal to\nIn words: four trips of at least 35,786 km at the speed of light take about **480 ms**, and filling 50 Mbit/s for that long needs about **3 MB** in flight.\n```\n\nLower orbits reduce the geometric propagation component, although actual RTT also depends on satellite routing and ground paths. No universal operating altitude or measured end-to-end RTT is implied.",
+    "link": {
+      "title": "Bandwidth-delay product — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Bandwidth-delay_product"
+    }
+  }
+]

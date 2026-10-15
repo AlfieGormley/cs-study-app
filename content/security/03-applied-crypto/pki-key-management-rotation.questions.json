@@ -1,0 +1,62 @@
+[
+  {
+    "id": "pki-key-management-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An application encrypts every row of a large table with one long-lived AES-256-GCM key and a fresh random 96-bit nonce per row. It writes about 10 million rows a day. Roughly when does it hit NIST's limit for random nonces, and why does the limit exist?",
+    "options": [
+      {
+        "text": "After about 430 days, at 4,294,967,296 encryptions, to keep the chance of a nonce collision negligible",
+        "explanation": "Correct: 4,294,967,296 is about 4.29 billion encryptions, and at 10 million a day that takes about 429.5 days. Nonce reuse repeats the GCM encryption stream and undermines authentication; exact authentication-key recovery depends on the available messages and tags."
+      },
+      {
+        "text": "Never; 96-bit nonces have roughly 79 octillion possibilities",
+        "explanation": "The limit is set by the birthday bound, which is about the square root of the nonce space, and NIST adds a wide safety margin."
+      },
+      {
+        "text": "After 281 trillion rows, when the key wears out",
+        "explanation": "Keys do not 'wear out'. The constraint is collision probability between random nonces."
+      },
+      {
+        "text": "After one day, because keys must be rotated daily",
+        "explanation": "There is no daily requirement; the bound depends on volume."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "For random 96-bit IVs, SP 800-38D limits total invocations under the key to 4,294,967,296. At 10 million a day:\n\n```formula\nt = q_max / r\nt = 4,294,967,296 / 10,000,000 ≈ 429.5 d\nwhere\nt: the time until the key reaches the limit, in days (d)\nq_max: the NIST limit, 2^32 = 4,294,967,296 encryptions per key\nr: the write rate, 10 million rows (encryptions) per day\n≈: approximately equal to\nd: days\nIn words: one key reaches NIST's random-nonce limit after about 430 days of writes.\n```\n\nThe standard explicitly sets this conservative invocation cap. The birthday approximation illustrates the repeated-nonce risk:\n\n```formula\nP ≈ q(q − 1) / (2^{b+1})\nP ≈ 2^{32} × 2^{32} / 2^{97} = 2^{−33}\nwhere\nP: the probability that any two of the q random nonces are equal\nq: the number of encryptions under the key, here 2^32\nb: the nonce length, 96 bits\n≈: approximately equal to\nIn words: at 2^32 encryptions the chance of any repeated nonce is about 2^−33 (1 in 8.6 billion), below NIST's 2^−32 design target.\n```\n\nReuse reveals overlapping plaintext XORs and can enable tag forgery. A fresh key per object reduces invocations per key; it does not excuse nonce reuse if that key is used again.",
+    "link": {
+      "title": "NIST SP 800-38D: GCM and GMAC",
+      "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
+    }
+  },
+  {
+    "id": "pki-key-management-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A KMS key that wraps all your DEKs is suspected to have been exposed (an insider exported old key material from a misconfigured backup HSM). You enable automatic key rotation. Is the data now safe?",
+    "options": [
+      {
+        "text": "Yes, rotation replaces the key material, so the leaked version is useless",
+        "explanation": "KMS keeps old versions so it can still unwrap old DEKs. The attacker holds one of those old versions and can unwrap them too."
+      },
+      {
+        "text": "No: assess exposed DEKs and use fresh DEKs with data re-encryption where needed; re-wrapping alone cannot undo exposure",
+        "explanation": "Correct. Rotation protects data encrypted *after* rotation. Recovering from compromise means re-encryption, and if the DEKs themselves may have been unwrapped, fresh DEKs too."
+      },
+      {
+        "text": "Yes, because the data is encrypted with DEKs, not the KEK",
+        "explanation": "The DEKs are protected only by the KEK. Unwrap them with the leaked KEK and the data follows."
+      },
+      {
+        "text": "No, and nothing can be done; delete the data",
+        "explanation": "Re-encryption under new keys fixes the problem for future exposure. Deletion is not necessary."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Automatic rotation protects new wraps, not old ciphertexts. A leaked old KEK can still unwrap captured old DEKs. Recovery requires assessing which DEKs were exposed, using fresh DEKs where needed and re-encrypting affected data; it cannot undo disclosure of captured old ciphertext. AWS-generated KMS material versions cannot be individually deleted: migrate away from the logical key before deleting it when appropriate.\n\nIf the attacker retained old wrapped DEKs and the exposed KEK, re-wrapping the same DEKs cannot undo their ability to recover them. Use fresh DEKs and re-encrypt current data for recovery; old copies already held by the attacker remain exposed.",
+    "link": {
+      "title": "NIST SP 800-57 Part 1: Recommendation for Key Management",
+      "url": "https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final"
+    }
+  }
+]

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "pki-certificates-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What problem does a certificate solve that a digital signature alone does not?",
+    "options": [
+      {
+        "text": "It encrypts the public key so attackers cannot read it",
+        "explanation": "Public keys are meant to be public. Certificates are sent in full and encrypting the key would serve no purpose."
+      },
+      {
+        "text": "It makes signatures faster to verify",
+        "explanation": "Certificates add verification work: the client checks the CA's signatures as well."
+      },
+      {
+        "text": "It binds a public key to an identity (a name), vouched for by a CA the client already trusts",
+        "explanation": "Correct. A signature proves a message came from some key's holder; the certificate tells you whose key it is."
+      },
+      {
+        "text": "It replaces the private key so the server does not need one",
+        "explanation": "The server still needs its private key to prove it owns the certificate's public key, for example by signing the TLS handshake."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A signature check answers: was this made with the private key matching public key P?\n2. It does not answer: is P really bank.com's key? An attacker can generate their own pair and claim the name.\n3. A certificate is a trusted third party's signature over (name, P).\n4. If you trust that CA's key, you can trust the binding, and then the signature check means something.",
+    "link": {
+      "title": "Public key infrastructure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Public_key_infrastructure"
+    }
+  },
+  {
+    "id": "pki-certificates-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why do CAs issue website certificates from intermediate CAs rather than directly from their root?",
+    "options": [
+      {
+        "text": "Intermediates allow routine issuance while restricting root-key use; recovering from an intermediate compromise requires replacing it and ensuring relying parties reject it",
+        "explanation": "Correct. Isolation can protect the trust anchor, but revocation distribution, certificate replacement and client enforcement remain operational work."
+      },
+      {
+        "text": "Intermediates make the chain shorter for clients",
+        "explanation": "An intermediate adds a certificate to the chain. The benefit is security, not size."
+      },
+      {
+        "text": "Root keys cannot produce signatures that browsers accept on leaves",
+        "explanation": "Roots can sign leaves technically; RFC 5280 does not forbid it. It is a key-protection policy, not a format limit."
+      },
+      {
+        "text": "Intermediates are required for RSA but not for ECDSA",
+        "explanation": "The hierarchy is independent of the signature algorithm."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "An intermediate can be replaced under an existing trusted root, but clients must reject the compromised issuer and affected leaves may need replacement. A compromised root can require updating many trust stores. Both recoveries can be costly; keeping a root offline with restricted use reduces exposure, rather than making intermediate compromise cheap or harmless.",
+    "link": {
+      "title": "Public key infrastructure — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Public_key_infrastructure"
+    }
+  },
+  {
+    "id": "pki-certificates-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A certificate has subject `CN=www.shop.com` and a Subject Alternative Name list containing only `shop.com`. A browser connects to `https://www.shop.com`. What happens?",
+    "options": [
+      {
+        "text": "It succeeds, because the Common Name matches",
+        "explanation": "Browsers ignore the Common Name for hostname matching and use only the SAN extension."
+      },
+      {
+        "text": "It succeeds, but shows a warning icon",
+        "explanation": "A hostname mismatch is a hard failure in browsers, not a cosmetic warning."
+      },
+      {
+        "text": "It succeeds, because `shop.com` covers all its subdomains",
+        "explanation": "A DNS name in SAN matches exactly. Covering subdomains needs a wildcard entry, and even `*.shop.com` matches one level only."
+      },
+      {
+        "text": "It fails with a name mismatch, because only SAN is checked and `shop.com` does not cover `www.shop.com`",
+        "explanation": "Correct. The existing SAN does not cover www.shop.com. Add that exact SAN or an applicable *.shop.com wildcard."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Modern clients (browsers since around 2017) match the hostname only against SAN `dNSName` entries.\n2. The SAN list is `[shop.com]`.\n3. `www.shop.com` ≠ `shop.com`, and there is no wildcard.\n4. So validation fails. The fix is to request both names in the CSR: `shop.com` and `www.shop.com`.",
+    "link": {
+      "title": "RFC 5280: Internet X.509 PKI Certificate and CRL Profile",
+      "url": "https://www.rfc-editor.org/rfc/rfc5280"
+    }
+  },
+  {
+    "id": "pki-certificates-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An employee obtains an ordinary leaf certificate for `blog.example.org` (with `CA:FALSE`) and uses its private key to sign a certificate for `bank.com`. A client receives the chain `bank.com ← blog.example.org ← intermediate ← root`. Every signature verifies. What should stop this?",
+    "options": [
+      {
+        "text": "Nothing; if every signature verifies, the chain is valid",
+        "explanation": "Signatures are only one check. This is exactly the bug Moxie Marlinspike found in Internet Explorer in 2002."
+      },
+      {
+        "text": "Certificate Transparency logs refuse the forged certificate",
+        "explanation": "CT would make issuance visible if submitted, but the forger simply would not log it. Browsers might reject the missing SCTs, but the fundamental check is Basic Constraints."
+      },
+      {
+        "text": "The client checks Basic Constraints: `blog.example.org` is not a CA, so it cannot issue certificates",
+        "explanation": "Correct. The proposed intermediate explicitly has CA:FALSE, so a proper path validator rejects it. Key Usage and other constraints are additional applicable checks."
+      },
+      {
+        "text": "The hostname check fails because `bank.com` doesn't match `blog.example.org`",
+        "explanation": "The client checks the hostname against the *leaf*, which here says `bank.com`. That check passes."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Walk the validation checklist for the chain:\n\n1. Signatures: all verify. Pass.\n2. Dates: assume valid. Pass.\n3. Every issuer must be a CA. The issuer of `bank.com` is `blog.example.org`, which has `CA:FALSE`. **Fail.**\n4. Hostname vs leaf SAN: `bank.com`. Would pass.\n\nStep 3 is what makes leaf keys unable to mint certificates. Clients that skipped it (IE in 2002, several later TLS libraries) accepted forged chains.",
+    "link": {
+      "title": "RFC 5280: Internet X.509 PKI Certificate and CRL Profile",
+      "url": "https://www.rfc-editor.org/rfc/rfc5280"
+    }
+  }
+]

@@ -1,0 +1,66 @@
+[
+  {
+    "id": "sys-mitigations-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "With a compatible GCC/glibc toolchain, a team adds `-D_FORTIFY_SOURCE=3` to an unoptimised build using `-O0`. Why are glibc’s fortified wrappers not enabled?",
+    "options": [
+      {
+        "text": "FORTIFY only checks heap buffers",
+        "explanation": "It checks destinations whose size the compiler can determine, including local arrays."
+      },
+      {
+        "text": "FORTIFY needs optimisation (`-O1` or higher) to compute object sizes and swap in checked functions",
+        "explanation": "Correct. Without optimisation, the fortified wrappers are not used. Enable it in optimised builds, where it is meant to run."
+      },
+      {
+        "text": "Level 3 is not a valid level",
+        "explanation": "Level 3 is supported by compatible modern compiler/glibc combinations and uses dynamic object-size information. Support must be checked for the actual toolchain."
+      },
+      {
+        "text": "FORTIFY only checks `strcpy`, not `memcpy`",
+        "explanation": "It covers a family of functions including `memcpy`, `memmove`, `strcpy`, `sprintf` and more."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "`_FORTIFY_SOURCE` works through header magic: when the compiler can calculate the destination size (with `__builtin_object_size` or, at level 3, `__builtin_dynamic_object_size`), the call becomes `__memcpy_chk(dst, src, n, dst_size)`, which aborts if `n > dst_size`. That size analysis relies on the optimiser. At `-O0`, glibc does not enable the fortified wrappers (and recent versions warn). Run fortified checks in `-O2` builds, and test with ASan too; Clang recommends optimisation of at least -O1 for reasonable ASan performance. Neither tool proves absence of bugs.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://sourceware.org/glibc/manual/latest/html_node/Source-Fortification.html"
+    }
+  },
+  {
+    "id": "sys-mitigations-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For a conventional supported ELF toolchain using full RELRO (`-Wl,-z,relro,-z,now`), which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Required dynamic function bindings are resolved when the object is loaded instead of lazily on first call",
+        "explanation": "`-z now` requests eager binding at program or shared-object load; it does not resolve every symbol in every future library before main."
+      },
+      {
+        "text": "After start-up, the GOT is made read-only",
+        "explanation": "In the stated conventional full-RELRO layout the loader makes the relevant region read-only after relocations. An ordinary write to a protected GOT entry then faults; unrelated pointers remain outside that protection."
+      },
+      {
+        "text": "Eager binding can increase work at load time relative to lazy binding",
+        "explanation": "Work that lazy binding would defer is done earlier. Actual timing depends on the program and how it is used."
+      },
+      {
+        "text": "It prevents buffer overflows on the stack",
+        "explanation": "RELRO protects one specific table of pointers; it does nothing about stack buffer overflows."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Lazy function bindings need writable entries until resolution. Eager binding allows the loader to protect the designated relocation region, including the GOT in the conventional full-RELRO layout. Later object loads have their own relocation processing. This protects those entries, not every function pointer or buffer in the program.",
+    "link": {
+      "title": "Compiler Options Hardening Guide — OpenSSF",
+      "url": "https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html"
+    }
+  }
+]

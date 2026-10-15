@@ -1,0 +1,92 @@
+[
+  {
+    "id": "pki-tls-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a certificate-authenticated TLS 1.3 ECDHE handshake, why is a signature needed as well as key agreement?",
+    "options": [
+      {
+        "text": "To make the shared secret longer",
+        "explanation": "The signature supplies authentication, not another key-agreement secret. Signature bytes can enter later transcript contexts, but they do not enlarge the DH shared secret."
+      },
+      {
+        "text": "It doesn't; the signature is only for compliance",
+        "explanation": "Removing it makes man-in-the-middle attacks trivial, so it is essential."
+      },
+      {
+        "text": "To encrypt the certificate",
+        "explanation": "The certificate is encrypted with handshake keys from ECDH; signing does not encrypt."
+      },
+      {
+        "text": "Because without authentication, an attacker can run separate ECDH exchanges with client and server and relay between them",
+        "explanation": "Correct. Unauthenticated ECDH agrees a key with whoever answers. The signature over the transcript proves the certificate owner took part in *this* exchange."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Without authentication: client ↔ attacker (key K1), attacker ↔ server (key K2).\n2. Both legitimate sides complete a handshake and see nothing wrong; the attacker decrypts with K1 and re-encrypts with K2.\n3. With CertificateVerify, the server signs a hash covering both key shares.\n4. The attacker's share is different, and they cannot sign it with the server's private key, so the client rejects the connection.",
+    "link": {
+      "title": "Man-in-the-middle attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Man-in-the-middle_attack"
+    }
+  },
+  {
+    "id": "pki-tls-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The TLS 1.3 CertificateVerify signature covers 64 space bytes, the string `\"TLS 1.3, server CertificateVerify\"`, a zero byte and the transcript hash. What is the purpose of the spaces and context string?",
+    "options": [
+      {
+        "text": "Padding to make RSA signatures the right length",
+        "explanation": "RSA-PSS does its own padding. The prefix is about meaning, not length."
+      },
+      {
+        "text": "A timestamp to prevent replay",
+        "explanation": "Replay is prevented by the fresh random values and key shares in the transcript, not by the prefix."
+      },
+      {
+        "text": "Encryption of the transcript before signing",
+        "explanation": "Nothing is encrypted; the signed bytes are fixed text plus a hash."
+      },
+      {
+        "text": "Domain separation: distinguish this TLS version and role from other signing contexts and reduce cross-protocol signature confusion",
+        "explanation": "Correct. Without a unique prefix, an attacker might get a server to sign bytes in one context (TLS 1.2, client role) that are valid in another."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Different signing contexts must use distinct input formats. TLS 1.3 prefixes the transcript hash with 64 spaces and a role-specific context string. The fixed prefix resists confusion with earlier TLS formats, and distinct client/server labels prevent simple role substitution. This is not a guarantee about an arbitrary external protocol that deliberately accepts identical signed bytes.",
+    "link": {
+      "title": "The Illustrated TLS 1.3 Connection",
+      "url": "https://tls13.xargs.org/"
+    }
+  },
+  {
+    "id": "pki-tls-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In 2015 the Logjam attack let a man-in-the-middle downgrade some TLS 1.2 connections to 512-bit \"export\" Diffie–Hellman, even though the server signed its DH parameters. Which TLS 1.3 design choice prevents this class of attack?",
+    "options": [
+      {
+        "text": "TLS 1.3 uses larger RSA keys for signatures",
+        "explanation": "Signature key size was not the problem; the signed data simply did not include the negotiation."
+      },
+      {
+        "text": "The server signature covers the transcript up to its Certificate message, including the negotiation and client offer",
+        "explanation": "Correct. In TLS 1.2 the ServerKeyExchange signature did not cover the cipher-suite choice, so 512-bit parameters signed for an export suite were also accepted by a client expecting normal DHE."
+      },
+      {
+        "text": "TLS 1.3 encrypts the ClientHello",
+        "explanation": "Plain TLS 1.3 sends the ClientHello in clear. The protection comes from binding it into the transcript."
+      },
+      {
+        "text": "TLS 1.3 forbids Diffie–Hellman",
+        "explanation": "TLS 1.3 certificate handshakes use ephemeral (EC)DH with negotiated groups, rather than export-grade parameters. PSK-only handshakes are a separate supported mode."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Logjam exploited export DH parameters whose TLS 1.2 signature did not bind the cipher-suite negotiation. TLS 1.3 CertificateVerify covers the transcript up to that point, including the client offer and server selection, and TLS 1.3 does not define export-grade groups. Attack runtime figures are omitted here because they depend on the measured group, precomputation and hardware.",
+    "link": {
+      "title": "Logjam (computer security) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Logjam_(computer_security)"
+    }
+  }
+]

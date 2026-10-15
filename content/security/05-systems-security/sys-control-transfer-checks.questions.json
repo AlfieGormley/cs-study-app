@@ -1,0 +1,70 @@
+[
+  {
+    "id": "sys-mitigations-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An attacker has bypassed ASLR with a leak and uses a stack buffer overflow (with the canary also leaked) to chain together snippets of existing libc code, each ending in `ret`. Assuming it is supported and enabled for the relevant code, which mitigation checks these modified returns?",
+    "options": [
+      {
+        "text": "DEP/NX",
+        "explanation": "The snippets are in libc's executable code, so NX allows them. Code reuse exists precisely to get around NX."
+      },
+      {
+        "text": "A hardware shadow stack (for example Intel CET)",
+        "explanation": "Correct. Each `ret` compares the return address on the ordinary call stack with the protected copy on the shadow stack. The overwritten addresses don't match, so the first hijacked return faults."
+      },
+      {
+        "text": "Full RELRO",
+        "explanation": "RELRO protects the GOT, not return addresses on the stack."
+      },
+      {
+        "text": "Using `-fstack-protector-strong` instead of `-fstack-protector`",
+        "explanation": "The canary is already leaked and restored by the attacker; a stronger instrumentation policy does not help."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The attack described is return-oriented programming: abusing `ret` instructions so that overwritten return addresses chain existing code snippets.\n2. Its weak point is that it relies on *returns going somewhere other than where they were called from*.\n3. A shadow stack stores a copy of each return address in memory that ordinary writes cannot modify. On `ret`, the CPU checks both copies match.\n4. The first faked return fails the check. Forward-edge CFI (IBT, CFG) complements this for indirect calls and jumps.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://docs.kernel.org/arch/x86/shstk.html"
+    }
+  },
+  {
+    "id": "sys-mitigations-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which are **forward-edge** control-flow protections (guarding indirect calls and jumps) rather than backward-edge (returns)? Select all that apply.",
+    "options": [
+      {
+        "text": "Microsoft Control Flow Guard (CFG)",
+        "explanation": "CFG validates covered indirect-call targets against a table of permitted target addresses. It is a forward-edge policy; an allowed address is not a proof of the intended function type."
+      },
+      {
+        "text": "Intel IBT (ENDBR64 landing pads)",
+        "explanation": "With x86-64 IBT enabled, covered indirect branches must reach suitable ENDBR64 targets. Shadow stacks separately protect returns."
+      },
+      {
+        "text": "Clang `-fsanitize=cfi`",
+        "explanation": "Clang provides indirect-call and virtual-call CFI schemes with type-based policies; their documented build requirements must be satisfied."
+      },
+      {
+        "text": "Intel CET shadow stack",
+        "explanation": "This is the backward-edge half: it checks return addresses."
+      },
+      {
+        "text": "Stack canaries",
+        "explanation": "Canaries are stack-corruption guards, not a general forward-edge CFI mechanism. They do not verify that each indirect call reaches a permitted target."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "CFG, IBT/BTI and Clang forward-edge CFI constrain covered indirect transfers. A shadow stack checks returns against protected copies. A canary detects some stack corruption on protected exits and is not a complete return-integrity scheme. Enforcement must be enabled and must cover the code in question.",
+    "link": {
+      "title": "Control-flow integrity — Clang documentation",
+      "url": "https://clang.llvm.org/docs/ControlFlowIntegrity.html"
+    }
+  }
+]

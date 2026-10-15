@@ -1,0 +1,32 @@
+[
+  {
+    "id": "pki-tls-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "TLS 1.3 guidance limits AES-GCM to about roughly 23.7 million full-size (16 KiB) records per key. A video service streams about 50 MB/s (decimal) over a long-lived connection. Roughly how often must its sending direction rekey, and how?",
+    "options": [
+      {
+        "text": "Every roughly 23.7 million bytes (about 24 MB), by opening a new TCP connection",
+        "explanation": "The limit is in records, not bytes. roughly 23.7 million records of 16 KiB each is around 390 GB."
+      },
+      {
+        "text": "Never; the 64-bit sequence number cannot wrap",
+        "explanation": "Sequence wrap is not the constraint: this AEAD's usage bound is reached substantially before the record counter wraps."
+      },
+      {
+        "text": "About every 2 hours, by sending KeyUpdate, which ratchets the traffic secret with HKDF",
+        "explanation": "Correct. The full-size record allowance corresponds to roughly 389 GB. At the stated decimal rate this takes about 2.2 hours; the worked calculation below shows the units. KeyUpdate rekeys in-band."
+      },
+      {
+        "text": "Every 2 hours, by doing a full new handshake with a new certificate",
+        "explanation": "A new handshake would work but is unnecessary; KeyUpdate exists for exactly this."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "First the byte limit, then the time to reach it:\n\n```formula\nD = R_max × S_rec\nD = 2^{24.5} × 16,384 B\nD ≈ 3.887 × 10^{11} B\nt = D / v\nt ≈ 3.887 × 10^{11} B / (5 × 10^7 B/s)\nt ≈ 7,775 s ≈ 2.16 h\nwhere\nD: the data one AES-GCM key may protect, in bytes (B)\nR_max: the RFC 8446 limit, 2^24.5 ≈ 23.7 million full-size records per key\nS_rec: the content of one full-size record, 16 KiB = 16,384 bytes\nt: the time until the sending direction must rekey, in seconds (s)\nv: the streaming rate, 50 MB/s = 5 × 10^7 bytes per second\n≈: approximately equal to\nB: bytes\nB/s: bytes per second\ns: seconds\nh: hours; 1 h = 3,600 s\nIn words: about 389 GB fits under one key, and at 50 MB/s that takes a little over two hours.\n```\n\nSend KeyUpdate before the usage bound; it advances this direction's traffic secret with the \"traffic upd\" label, derives a new key/IV and resets its sequence number. The other direction updates separately. Check the library's actual key-usage enforcement rather than assuming automatic rekeying.",
+    "link": {
+      "title": "RFC 9846: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc9846"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "pki-mistakes-pq-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An API authenticates each request with a tag that is a plain hash of the secret key followed by the request parameters:\n\n```formula\nt = SHA256(K ‖ m)\nwhere\nt: the tag sent with the request\nSHA256: the SHA-256 hash function\nK: the API's secret key\nm: the request parameters, as a string\n‖: concatenation: the key's bytes followed by the parameters' bytes\nIn words: the tag is the SHA-256 hash of the key and the parameters glued together.\n```\n\nAn attacker has one valid request with parameters `user=alice&amount=10` and its tag, but not the key. What can they do?",
+    "options": [
+      {
+        "text": "Nothing; SHA-256 is preimage-resistant",
+        "explanation": "The attack never inverts SHA-256. It continues the hash from its output state."
+      },
+      {
+        "text": "Recover the secret key",
+        "explanation": "Length extension does not reveal the key; it only lets the attacker extend messages."
+      },
+      {
+        "text": "Compute a valid tag for those parameters with padding and extra data appended (e.g. `&amount=1000000`) via a length-extension attack",
+        "explanation": "Correct for the raw secret-prefix SHA-256 construction when key length is known or guessed. Whether the forged byte string is accepted as a useful request also depends on parser and format validation."
+      },
+      {
+        "text": "Only replay the same request",
+        "explanation": "Replay is possible too, but length extension lets them create new valid requests."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Merkle–Damgård hashes (MD5, SHA-1, SHA-256) output their full internal state.\n2. So the tag is SHA-256's internal state after processing the key, the parameters and SHA-256's own padding.\n3. Load that state and keep hashing extra data. The result equals the hash of key, parameters, padding and extra data (below).\n4. The attacker only needs to guess the key's length to construct the padding.\n5. The server parses the params; many parsers take the last `amount=`, so the attacker's value wins.\n6. Fix: HMAC-SHA256, which is immune by design. (SHA-3 and BLAKE2/3 are also not vulnerable, but use HMAC or another real message authentication code anyway.)\n\n```formula\nt = SHA256(K ‖ m)\nSHA256(K ‖ m ‖ P_m ‖ x) = SHA256_t(x)\nwhere\nt: the valid tag the attacker has\nSHA256: the SHA-256 hash function\nK: the secret key, unknown to the attacker\nm: the original parameters, \"user=alice&amount=10\"\nP_m: the padding SHA-256 adds after K ‖ m (a 1 bit, zeros and the length), computable once the key length is guessed\nx: the attacker's extra data, \"&amount=1000000\"\nSHA256_t: SHA-256 restarted from internal state t and run over x\n‖: concatenation\nIn words: resuming the hash from the published tag produces the correct tag for the longer message, without ever knowing K.\n```",
+    "link": {
+      "title": "Length extension attack — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Length_extension_attack"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team builds a new file-encryption feature. Which design avoids the most mistakes from this lesson?",
+    "options": [
+      {
+        "text": "A high-level AEAD API (e.g. libsodium's `secretstream` or Tink) with keys from a CSPRNG held in a KMS, a fresh DEK per file, and the file ID as associated data",
+        "explanation": "Correct. The chosen high-level interface manages its documented nonce/state handling; callers still select an appropriate template and enforce key/context policy. Per-file DEKs limit use per key and AAD binds the file ID."
+      },
+      {
+        "text": "AES-128-ECB, because it is the fastest mode",
+        "explanation": "ECB leaks equality between blocks: repeated plaintext patterns remain visible."
+      },
+      {
+        "text": "AES-256-CBC with a fixed IV, plus a SHA-256 hash of key then ciphertext as an integrity check",
+        "explanation": "A fixed IV leaks equal prefixes, and a plain hash of key then data is length-extendable. Two mistakes from the lesson."
+      },
+      {
+        "text": "AES-256-GCM with a nonce derived from the current timestamp in seconds",
+        "explanation": "With one shared key, two files encrypted in the same second reuse a nonce. Independently generated per-file keys change that analysis, but timestamp-only nonce generation is unsafe for a reused key."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Score each against the mistakes:\n\n| Design | Problems |\n|---|---|\n| CBC + fixed IV + hash of key then ciphertext | IV reuse, length extension |\n| ECB | equal blocks leak |\n| High-level AEAD + KMS | none of these |\n| GCM + timestamp nonce | nonce reuse |\n\nThe pattern: use misuse-resistant libraries, a CSPRNG, AEAD, a fresh key per object (envelope encryption from the key-management lesson) and context binding.",
+    "link": {
+      "title": "Cryptographic Storage Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html"
+    }
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "pki-e2ee-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The lesson's symmetric ratchet `step()` derives keys like this:\n\n```formula\nmk = HMAC(ck, 0x01)\nck' = HMAC(ck, 0x02)\nwhere\nmk: the message key for the current message\nck: the current chain key\nck': the next chain key, which replaces ck\nHMAC: hash-based message authentication code (HMAC-SHA256), a keyed hash that cannot be run backwards\n0x01: the constant byte 1, labelling the message-key output\n0x02: the constant byte 2, labelling the next-chain-key output\nIn words: each chain key yields one message key and the next chain key, then is deleted.\n```\n\nAn attacker steals Alice's sending chain key after she has sent messages 0–4 in the current chain, and before message 5. Which messages in this chain can the attacker decrypt?",
+    "options": [
+      {
+        "text": "Messages 0–4 only",
+        "explanation": "Earlier keys came from earlier chain keys, which HMAC's one-wayness hides. The stolen key points forward, not backward."
+      },
+      {
+        "text": "All messages in the chain, 0 onwards",
+        "explanation": "That would require running HMAC backwards. The symmetric ratchet is designed so past keys cannot be recovered."
+      },
+      {
+        "text": "Message 5 and later in this chain, until a DH ratchet step replaces the chain",
+        "explanation": "Correct. From the current chain key the attacker can compute every future message key in this chain, but not past ones; the next DH ratchet step creates a new chain the attacker cannot derive."
+      },
+      {
+        "text": "None, because message keys are deleted after use",
+        "explanation": "Deletion protects *past* message keys. The future ones can still be derived from the stolen chain key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The stolen value is the chain key for message 5. Running the ratchet forwards from it:\n\n```formula\nmk_5 = HMAC(ck_5, 0x01)\nck_6 = HMAC(ck_5, 0x02)\nmk_6 = HMAC(ck_6, 0x01)\nwhere\nck_5: the stolen chain key, current before message 5\nmk_5: the message key for message 5\nck_6: the next chain key\nmk_6: the message key for message 6, and so on for later messages\nHMAC: HMAC-SHA256, a one-way keyed hash\n0x01: the constant byte that labels a message key\n0x02: the constant byte that labels the next chain key\nIn words: the attacker can step forwards for ever in this chain, but cannot step backwards, because finding ck_4 from ck_5 would mean inverting HMAC.\n```\n\nSo with the chain key for message 5 alone, an attacker derives the keys for message 5 and later in that chain, but cannot invert the KDF to recover erased earlier keys. A new chain derived from uncompromised root/DH state is outside this chain-key-only exposure. Theft of the whole device state is a stronger scenario and requires fresh unknown ratchet contributions before recovery.",
+    "link": {
+      "title": "The Double Ratchet Algorithm — Signal",
+      "url": "https://signal.org/docs/specifications/doubleratchet/"
+    }
+  }
+]

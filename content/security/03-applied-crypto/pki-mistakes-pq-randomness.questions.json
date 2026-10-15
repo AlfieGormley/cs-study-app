@@ -1,0 +1,62 @@
+[
+  {
+    "id": "pki-mistakes-pq-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A service generates password-reset tokens with `random.choice(string.ascii_letters)` repeated 32 times. What is wrong, and what should it use?",
+    "options": [
+      {
+        "text": "Nothing; 54,294,967,296 possibilities is far too many to guess",
+        "explanation": "The space is large, but the generator is predictable. An attacker doesn't guess randomly; they reconstruct the generator's internal state."
+      },
+      {
+        "text": "The tokens are too short; use 64 characters",
+        "explanation": "Length doesn't fix predictability: if the RNG state is known, every character is known."
+      },
+      {
+        "text": "`random` is a Mersenne Twister whose state can be reconstructed from observed outputs, so future tokens can be predicted; use `secrets.token_urlsafe()`",
+        "explanation": "Correct. Python's `random` is for simulations. `secrets` (backed by the OS CSPRNG) is designed for tokens and keys."
+      },
+      {
+        "text": "It should hash each token with SHA-256 first",
+        "explanation": "Hashing a predictable value gives a predictable hash."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The token space itself is enormous:\n\n```formula\nN = 52^{32} ≈ 8.2 × 10^{54}\nH = 32 × log_2(52) ≈ 182 bits\nwhere\nN: the number of possible 32-letter tokens using 52 letters (a–z and A–Z)\nH: the entropy, in bits, if every letter were truly random\nlog_2: logarithm base 2: the number of bits needed to pick one of 52 options (about 5.7)\n≈: approximately equal to\nbits: binary digits, the unit of entropy; each extra bit doubles the number of possibilities\nIn words: a truly random token like this would carry about 182 bits, far beyond any brute-force guessing.\n```\n\nBut the letters are not truly random. MT19937 is not a cryptographic generator. A suitable sequence of 624 full 32-bit outputs allows state cloning; random.choice tokens expose partial outputs through rejection sampling, so that simple count is not an exact recovery guarantee for this API. Predictability risk is sufficient reason to use secrets.token_urlsafe(32), backed by the operating system CSPRNG.",
+    "link": {
+      "title": "secrets — Python docs",
+      "url": "https://docs.python.org/3/library/secrets.html"
+    }
+  },
+  {
+    "id": "pki-mistakes-pq-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In 2012 researchers factored the RSA keys of tens of thousands of network devices by computing GCDs between public keys, without any quantum computer. What was the root cause?",
+    "options": [
+      {
+        "text": "RSA-1024 is too short",
+        "explanation": "Even 2048-bit keys would fall: the attack works on shared primes regardless of length."
+      },
+      {
+        "text": "Devices generated keys at first boot with almost no entropy, so different devices produced the same primes; the GCD of two public moduli reveals a shared prime instantly",
+        "explanation": "Correct. If two moduli share one prime, their greatest common divisor is that prime, and both factor immediately. This is a randomness failure, not a weakness of RSA."
+      },
+      {
+        "text": "Shor's algorithm was run on a classical computer",
+        "explanation": "Shor needs a sufficiently capable quantum computer for its efficient factoring advantage. Classical GCD can reveal a shared prime without factoring either modulus independently; timing depends on input and implementation."
+      },
+      {
+        "text": "The devices used ECB mode",
+        "explanation": "ECB is a symmetric cipher mode, unrelated to RSA key generation."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nn_1 = p × q_1\nn_2 = p × q_2\ngcd(n_1, n_2) = p   when q_1 ≠ q_2\nwhere\nn_1: the first device's public RSA modulus\nn_2: the second device's public RSA modulus\np: the prime both devices generated\nq_1: the first device's other prime\nq_2: the second device's other prime\ngcd: greatest common divisor: the largest number dividing both exactly, found quickly by Euclid's algorithm\nIn words: a prime shared by two public moduli is their greatest common divisor, so it falls out of a cheap calculation without factoring either one.\n```\n\nDividing each modulus by the shared prime yields the remaining factors. Batch-GCD techniques scale this check to collections of public keys. Insufficient entropy can cause shared factors; a universal microsecond or multi-hour runtime is omitted because no benchmark setup is specified.",
+    "link": {
+      "title": "Mining your Ps and Qs: weak keys in network devices",
+      "url": "https://factorable.net/"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sys-mitigations-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the conventional protected stack-frame layout shown in the lesson, where is the canary and when is it checked?",
+    "options": [
+      {
+        "text": "At the very bottom of the stack, checked when the program exits",
+        "explanation": "A per-process check at exit would be far too late: the hijacked return would already have happened."
+      },
+      {
+        "text": "Between the local buffers and the saved return address, checked just before the function returns",
+        "explanation": "Correct. A linear overflow from a buffer must cross the canary to reach the return address, and the epilogue verifies it before `ret`."
+      },
+      {
+        "text": "Inside every heap allocation, checked on `free`",
+        "explanation": "That describes some heap hardening, not stack canaries. Canaries protect stack frames."
+      },
+      {
+        "text": "In the CPU's shadow stack, checked on every instruction",
+        "explanation": "Shadow stacks are a separate hardware mechanism and hold copies of return addresses, not canaries."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Picture the frame from high to low addresses: return address, saved frame pointer, **canary**, buffers. An overflow writes upward from a buffer, so it hits the canary before it can reach the return address. The function's epilogue compares the canary with the per-process secret and calls `__stack_chk_fail` if they differ, so the corrupted return address is never used.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
+    }
+  },
+  {
+    "id": "sys-mitigations-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Consider this deliberately invalid copy in a function using stack protection. Assume a conventional ABI with `is_admin` at offset 16 and a four-byte int. Why is a canary not enough to guarantee the authorization decision is safe? The C overflow has undefined behaviour; no outcome is guaranteed.\n\n```c\nstruct user {\n    char name[16];\n    int  is_admin;\n} u;\nu.is_admin = 0;\n/* BUG: the member has only 16 bytes. */\nstrcpy(u.name, input);\nif (u.is_admin) grant();\n```",
+    "options": [
+      {
+        "text": "The canary detects the overflow and the program aborts before `grant()`",
+        "explanation": "A canary may be checked only at a protected exit, after the authorization decision. It does not bounds-check the member copy."
+      },
+      {
+        "text": "The compiler reorders `name` after `is_admin`, so the overflow is harmless",
+        "explanation": "Compilers can reorder separate local variables, but C fixes the order of fields inside a struct, so `is_admin` must follow `name`."
+      },
+      {
+        "text": "The overflow can corrupt `is_admin`, which is used before an exit-time canary check",
+        "explanation": "A neighbouring data field can affect authorization before the function exits. The exact outcome is undefined, and a canary is not a general check of every local value."
+      },
+      {
+        "text": "DEP stops the write because the stack is non-executable",
+        "explanation": "NX controls execution, not writes. The stack is writable by design."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Under the stated ABI the flag follows the 16-byte name array. An overlong copy can affect the flag, and the decision occurs before the normal exit check. This is a possible data-corruption risk, not a guaranteed C execution. Fix the invalid copy and validate truncation/errors rather than relying on a guard.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+    }
+  },
+  {
+    "id": "sys-mitigations-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The inspected glibc guard-initialization code clears the first byte in memory, which is the lowest byte on little-endian x86-64. How can this NUL byte hinder a conventional string-based overwrite or read?",
+    "options": [
+      {
+        "text": "To make it easier to compute",
+        "explanation": "Generating the value is trivial either way; the zero byte has a security purpose."
+      },
+      {
+        "text": "A NUL-terminated copy cannot preserve that byte and continue past it, and a string read beginning before it stops there",
+        "explanation": "An overflowing strcpy can overwrite the destination NUL, but cannot include that NUL in the source and then keep copying later bytes. A read starting after the zero can still disclose other guard bytes."
+      },
+      {
+        "text": "Because the CPU requires aligned values on the stack",
+        "explanation": "Alignment concerns the address, not the value stored there."
+      },
+      {
+        "text": "To mark the end of the stack frame for debuggers",
+        "explanation": "Debuggers use frame pointers or unwind tables, not the canary."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For a conventional forward copy, preserving the canary’s first zero byte requires a source NUL there, which ends the copy. The destination zero itself does not stop strcpy. A string read that reaches the intact zero stops, but a read starting after it can reveal remaining bytes. Length-based copying and other leaks remain relevant.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://codebrowser.dev/glibc/glibc/sysdeps/generic/dl-osinfo.h.html"
+    }
+  }
+]

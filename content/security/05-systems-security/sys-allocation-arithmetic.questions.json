@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sys-memory-bugs-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume `size_t` and `count` are 32-bit unsigned types, `count = 0x10000001`, and an item needs 16 bytes. What byte count is passed to `malloc`? Allocation success is not assumed.\n\n```c\nitem *a = malloc(count * 16);\n```",
+    "options": [
+      {
+        "text": "16 bytes requested",
+        "explanation": "The mathematical product is 0x100000010. Keeping only its lowest 32 bits leaves 0x10, or 16; attempting all intended item writes would exceed a successful allocation."
+      },
+      {
+        "text": "About 4 GB",
+        "explanation": "The true product is about 4 GB, but it cannot be represented in a 32-bit `size_t`, so it wraps."
+      },
+      {
+        "text": "0 bytes, and malloc returns NULL",
+        "explanation": "The wrapped value is 0x10, not 0. Only the bits above bit 31 are lost."
+      },
+      {
+        "text": "The multiplication traps and the program aborts",
+        "explanation": "For the specified unsigned operation the C language defines wraparound. Dedicated unsigned-overflow instrumentation may diagnose it; ordinary undefined-behaviour checks need not, because unsigned wraparound is defined."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "A 32-bit unsigned type keeps only the lowest 32 bits of a result:\n\n```formula\nS = (ns) mod 2^32\nns = 0x10000001 × 16\nns = 0x100000010\nns = 4,294,967,312\nS = 4,294,967,312 − 4,294,967,296\nS = 16 B\nwhere\nS: the byte count passed to malloc, in bytes (B)\nn: count, 0x10000001 = 268,435,457\ns: the item size, 16 B\nmod: modulo, the remainder after dividing; a value mod 2^32 keeps its lowest 32 bits\n2^32: 32 copies of 2 multiplied together, 4,294,967,296: how many values 32 bits can hold\n0x10000001: a hexadecimal (base-16) number, marked by the 0x prefix\nB: byte, 8 bits\nIn words: the true product needs 33 bits; dropping the top bit (subtracting 2^32 once) leaves a request for only 16 bytes.\n```\n\nCheck `count > SIZE_MAX / sizeof(item)` before multiplication, apply an application limit, and handle allocation failure. On implementations such as glibc, `calloc(count, sizeof(item))` rejects multiplication overflow, but its return must still be checked.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+    }
+  }
+]

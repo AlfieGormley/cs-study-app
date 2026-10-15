@@ -1,0 +1,92 @@
+[
+  {
+    "id": "pki-key-management-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In envelope encryption, which key encrypts the actual file contents?",
+    "options": [
+      {
+        "text": "The KMS key (KEK), by sending the file to the KMS",
+        "explanation": "The KEK only wraps data keys. Sending bulk data to KMS is what envelope encryption avoids, and AWS KMS `Encrypt` accepts only 4 KB."
+      },
+      {
+        "text": "The TLS session key",
+        "explanation": "TLS protects data in transit and its keys vanish when the connection closes; it cannot protect stored files."
+      },
+      {
+        "text": "The user's password",
+        "explanation": "Passwords may be used to derive keys in some systems, but envelope encryption is about DEKs and KEKs."
+      },
+      {
+        "text": "A data encryption key (DEK), generated for that file and used locally",
+        "explanation": "Correct. The DEK encrypts the data on the client; the KEK encrypts the DEK."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The DEK encrypts the file locally; the KEK wraps that DEK. KMS requests carry the small key or wrapped-key blob plus metadata, not the whole file. A 256-bit AES DEK is 32 bytes; its wrapped encoding is larger.",
+    "link": {
+      "title": "AWS KMS cryptography essentials — AWS docs",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html"
+    }
+  },
+  {
+    "id": "pki-key-management-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `seal()` with a 32-byte DEK, 12-byte nonces and 16-byte GCM tags, how many bytes are the wrapped DEK and the data blob for a 1,000-byte record?",
+    "options": [
+      {
+        "text": "Wrapped DEK 32, blob 1,000",
+        "explanation": "This ignores the nonce stored by seal() and its 16-byte tag. GCM requires a nonce input but does not inherently prepend it to ciphertext."
+      },
+      {
+        "text": "Wrapped DEK 60, blob 1,028",
+        "explanation": "Correct. Wrapped: 12 + 32 + 16 = 60. Blob: 12 + 1,000 + 16 = 1,028."
+      },
+      {
+        "text": "Wrapped DEK 48, blob 1,016",
+        "explanation": "This counts the tag but forgets the 12-byte nonce prepended to each."
+      },
+      {
+        "text": "Wrapped DEK 60, blob 1,060",
+        "explanation": "The data blob does not contain the DEK; only the nonce and tag are added to the record."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "AES-GCM ciphertext is as long as the plaintext, plus a 16-byte tag, and `seal()` also prepends the 12-byte nonce:\n\n```formula\nL_out = L_nonce + L_in + L_tag\nL_wrap = 12 + (32 + 16) = 60 B\nL_blob = 12 + (1000 + 16) = 1028 B\nwhere\nL_out: the length of one value stored by seal(), in bytes (B)\nL_nonce: the 12-byte nonce stored in front\nL_in: the plaintext length: 32 B for the DEK, 1,000 B for the record\nL_tag: the 16-byte GCM authentication tag\nL_wrap: the wrapped DEK: nonce n2 plus the DEK encrypted under the KEK\nL_blob: the data blob: nonce n1 plus the record encrypted under the DEK\nB: bytes\nIn words: each sealed value is its plaintext plus 28 bytes, so the wrapped DEK is 60 bytes and the 1,000-byte record becomes 1,028.\n```\n\nOverhead per record: 28 bytes, plus 60 for the wrapped DEK if each record has its own key. (A real AWS KMS wrapped key is larger, because it includes key metadata.)",
+    "link": {
+      "title": "NIST SP 800-38D: GCM and GMAC",
+      "url": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
+    }
+  },
+  {
+    "id": "pki-key-management-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An attacker with write access to your database copies user 99's encrypted SSN (and wrapped DEK) into user 42's row, then views their own profile as user 42. Your code uses KMS with encryption context `{\"user\": <row's user id>}`. What happens?",
+    "options": [
+      {
+        "text": "User 99's SSN is shown, because the DEK and ciphertext are valid",
+        "explanation": "This would happen without context binding. With encryption context, the wrapped DEK was sealed with `user=99` as associated data."
+      },
+      {
+        "text": "The KMS returns user 42's real SSN",
+        "explanation": "KMS has no idea what any SSN is. It only unwraps keys when the context matches."
+      },
+      {
+        "text": "Decryption fails, because the context `user=42` does not match the `user=99` the data key was wrapped with",
+        "explanation": "Correct. Encryption context is AEAD associated data: it must match exactly, or unwrapping fails."
+      },
+      {
+        "text": "The attacker gets the KEK",
+        "explanation": "The KEK never leaves the KMS, whatever happens to ciphertexts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. When user 99's SSN was written, the DEK was wrapped with context `user=99`.\n2. The attacker moves the bytes, not the context; the application supplies context from the row it is reading: `user=42`.\n3. KMS unwraps only if context matches. `user=42 ≠ user=99`, so the call fails with an error.\n4. This is the 'confused deputy / cut-and-paste' attack, and AAD binding is the fix. The failed decrypt also shows up in the audit log, which is a useful alert.",
+    "link": {
+      "title": "AWS KMS cryptography essentials — AWS docs",
+      "url": "https://docs.aws.amazon.com/kms/latest/developerguide/kms-cryptography.html"
+    }
+  }
+]

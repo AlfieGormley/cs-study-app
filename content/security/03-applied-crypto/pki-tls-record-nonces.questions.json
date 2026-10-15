@@ -1,0 +1,92 @@
+[
+  {
+    "id": "pki-tls-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a TLS 1.3 connection, which primitive actually encrypts the HTTP request bytes?",
+    "options": [
+      {
+        "text": "The server's RSA or ECDSA certificate key",
+        "explanation": "The certificate key only signs the handshake (CertificateVerify). It never encrypts application data."
+      },
+      {
+        "text": "X25519",
+        "explanation": "X25519 is a key agreement function. It produces a shared secret; it does not encrypt data."
+      },
+      {
+        "text": "An AEAD cipher such as AES-128-GCM or ChaCha20-Poly1305, with keys derived by HKDF",
+        "explanation": "Correct. Every TLS 1.3 cipher suite is an AEAD, keyed from the traffic secrets in the key schedule."
+      },
+      {
+        "text": "HMAC-SHA256",
+        "explanation": "HMAC appears in HKDF and the Finished message, but it provides integrity, not encryption."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Map each primitive to its job:\n\n| Primitive | Job |\n|---|---|\n| X25519 | agree a secret |\n| Cert + signature | authenticate server |\n| HKDF / HMAC | derive keys, Finished |\n| AEAD | encrypt records |\n\nThe request is application data, so it travels in AEAD-protected records.",
+    "link": {
+      "title": "RFC 9846: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc9846"
+    }
+  },
+  {
+    "id": "pki-tls-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A TLS 1.3 connection uses the IV `5d313eb2671276ee13000b30`. Each record's nonce is the IV XORed with the 64-bit record sequence number, right-aligned. What is the nonce for record number 2?",
+    "options": [
+      {
+        "text": "`5d313eb2671276ee13000b30`",
+        "explanation": "That is the nonce for record 0. Reusing it for record 2 would be a catastrophic AEAD nonce reuse."
+      },
+      {
+        "text": "`5d313eb2671276ee13000b32`",
+        "explanation": "Correct. Only the last byte changes: 0x30 XOR 0x02 is 0x32."
+      },
+      {
+        "text": "`5d313eb2671276ee13000b2e`",
+        "explanation": "This subtracts 2. The operation is XOR, not arithmetic: 0x30 XOR 0x02 is 0x32."
+      },
+      {
+        "text": "A random 12-byte value sent in the record header",
+        "explanation": "TLS 1.3 never sends the nonce. Both sides compute it from the IV and their record sequence number."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The nonce is the IV XORed with the sequence number, padded on the left with zero bytes to the IV's 12 bytes:\n\n```formula\nN = IV ⊕ S\nIV = 0x5d313eb2671276ee13000b30\nS = 0x000000000000000000000002\nN = 0x5d313eb2671276ee13000b32\nwhere\nN: the 12-byte nonce for this record, never sent on the wire\nIV: the static 12-byte IV from the key schedule\nS: the record sequence number, here 2, written as 12 bytes with zeros on the left\n⊕: XOR (exclusive OR), byte by byte: an output bit is 1 when the input bits differ\nIn words: XORing with zero leaves a byte unchanged, so only the IV's last byte changes for record 2.\n```\n\nThe last byte in binary:\n\n```formula\n0x30 = 0011 0000\n0x02 = 0000 0010\n0x30 ⊕ 0x02 = 0011 0010 = 0x32\nwhere\n⊕: XOR, bit by bit: 1 where the two bits differ, 0 where they match\nIn words: the 2 sets one extra bit in 0x30, giving 0x32.\n```",
+    "link": {
+      "title": "RFC 9846: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc9846"
+    }
+  },
+  {
+    "id": "pki-tls-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An active attacker removes a complete TLS 1.3 record from an HTTP response and rewrites TCP sequence/acknowledgement numbers so the remaining bytes are delivered as a contiguous stream. What happens at the client when the next record arrives?",
+    "options": [
+      {
+        "text": "The client decrypts the remaining records and the response is silently truncated",
+        "explanation": "Records are not independent. The next record is decrypted using the expected sequence number, which no longer matches."
+      },
+      {
+        "text": "TCP retransmits the record automatically",
+        "explanation": "The attacker forwarded TCP segments consistently; at the TLS layer one record is simply missing."
+      },
+      {
+        "text": "The next record fails AEAD authentication, because the client uses the wrong sequence number in the nonce, and the connection is torn down",
+        "explanation": "Correct. The implicit sequence number makes deletion, reordering and replay detectable without extra bytes on the wire."
+      },
+      {
+        "text": "Nothing, because the record header is not authenticated",
+        "explanation": "The header is authenticated as AEAD associated data; and the missing record breaks the nonce sequence anyway."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The server sends records with sequence numbers 5, 6 and 7. The attacker removes record 6.\n2. The client receives what it believes is record 6 and builds its nonce from sequence number 6.\n3. The record was actually sealed with the nonce for sequence number 7:\n\n```formula\nN_client = IV ⊕ 6\nN_server = IV ⊕ 7\nwhere\nN_client: the nonce the client uses to open the record\nN_server: the nonce the server used to seal it\nIV: the static 12-byte IV both sides derived from the traffic secret\n⊕: XOR (exclusive OR), applied to the sequence number written as 12 bytes\nIn words: the two nonces differ, so the record cannot be opened with the nonce the client expects.\n```\n\n4. Wrong nonce means the AEAD tag check fails, and TLS sends a `bad_record_mac` alert and closes.\n5. Cutting the stream off at the *end* is handled separately: TLS requires a `close_notify` alert, so a cut-off connection is distinguishable from a clean close.",
+    "link": {
+      "title": "RFC 9846: TLS 1.3",
+      "url": "https://www.rfc-editor.org/rfc/rfc9846"
+    }
+  }
+]

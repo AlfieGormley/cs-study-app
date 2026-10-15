@@ -1,0 +1,69 @@
+[
+  {
+    "id": "pki-signatures-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this code print with overwhelming probability, using the indicated random-nonce ECDSA mode?\n\n```python\nm = b\"hello\"\n# Ed25519 repeats for these same bytes.\ne1 = ed_key.sign(m)\ne2 = ed_key.sign(m)\n# ECDSA P-256 with random k\nc1 = ec_key.sign(m, ecdsa_sha256)\nc2 = ec_key.sign(m, ecdsa_sha256)\n# Compare signature bytes, not keys.\nprint(e1 == e2, c1 == c2)\n```",
+    "options": [
+      {
+        "text": "`True True`",
+        "explanation": "Ed25519 is deterministic, but standard ECDSA uses a fresh random nonce per signature, so its signatures differ each time."
+      },
+      {
+        "text": "`False False`",
+        "explanation": "Ed25519 derives its nonce from a secret and the message, so signing the same message twice gives identical bytes."
+      },
+      {
+        "text": "`False True`",
+        "explanation": "This has the two schemes the wrong way round."
+      },
+      {
+        "text": "`True False`",
+        "explanation": "Correct. Ed25519 is deterministic by design. ECDSA with a random `k` produces a different `(r, s)` each time, yet both verify."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Ed25519 computes its nonce as a hash of a secret prefix derived from the key, and the message. Same key and message, same nonce, same signature: `e1 == e2`.\n2. ECDSA as used here picks a random `k` per call. Different `k` gives different `r` and `s`: `c1 != c2`.\n3. Both ECDSA signatures still verify; a signature scheme can have many valid signatures per message.\n\n(ECDSA with RFC 6979 deterministic nonces would print `True` for both, but that is not the default here.)",
+    "link": {
+      "title": "Ed25519 signing — pyca/cryptography docs",
+      "url": "https://cryptography.io/en/latest/hazmat/primitives/asymmetric/ed25519/"
+    }
+  },
+  {
+    "id": "pki-signatures-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "An embedded signer has a securely generated, protected long-term key, but its signing-time RNG is weak. Which choices remove dependence on fresh random per-signature nonces, assuming correct side-channel-resistant implementations? Select all that apply.",
+    "options": [
+      {
+        "text": "Derive the nonce from the key and message hash by a fixed rule (RFC 6979)",
+        "explanation": "Correct. RFC 6979 derives the nonce from secret key material and the message hash, avoiding this signing-time RNG dependency. It does not eliminate weak key-generation or side-channel failures."
+      },
+      {
+        "text": "Switch to Ed25519, which derives its nonce from a secret and the message",
+        "explanation": "Correct. Ed25519 does not request a fresh random nonce for each signature. Secure key generation and implementation defenses are still necessary."
+      },
+      {
+        "text": "Use SHA-512 instead of SHA-256 for the message hash",
+        "explanation": "The nonce is a separate value from the message hash. A weak or repeated `k` leaks the key whatever hash is used."
+      },
+      {
+        "text": "Keep using random nonces but only sign a few messages a day",
+        "explanation": "Fewer signatures are not a reliable fix. Reuse for two distinct hash representatives can recover the key; biased-nonce attacks depend on the bias and available observations."
+      },
+      {
+        "text": "Encrypt the signatures before sending them",
+        "explanation": "This hides `(r, s)` from passive observers, but the receiver still sees them and exposure of vulnerable signatures may permit key recovery under the nonce failure. It treats the symptom, not the cause."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Deterministic ECDSA derives its nonce from the private key and message hash; Ed25519 derives a nonce from a secret-derived prefix and message. These designs remove reliance on fresh signing-time entropy, but secure key generation and side-channel/fault resistance still matter. Repeated nonces on suitable distinct hashes can reveal an ECDSA private key from two signatures. Rate limits do not repair that underlying flaw; exploitability of bias depends on its structure and observations.",
+    "link": {
+      "title": "RFC 6979: Deterministic Usage of DSA and ECDSA",
+      "url": "https://www.rfc-editor.org/rfc/rfc6979"
+    }
+  }
+]

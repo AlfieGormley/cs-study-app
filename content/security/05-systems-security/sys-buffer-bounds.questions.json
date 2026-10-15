@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sys-memory-bugs-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "How much destination space does this copy require, and by how many bytes does that exceed `buf`? Executing the overflowing call has undefined behaviour.\n\n```c\nchar buf[8];\n/* BUG: ten letters plus NUL need 11. */\nstrcpy(buf, \"ABCDEFGHIJ\");\n```",
+    "options": [
+      {
+        "text": "10 bytes required, exceeding capacity by 2",
+        "explanation": "This forgets the NUL terminator. `strcpy` copies the string's characters *and* the terminating `\\0`."
+      },
+      {
+        "text": "8 bytes required, fitting exactly",
+        "explanation": "The required destination capacity includes the entire source and its NUL. The API has no destination-capacity argument."
+      },
+      {
+        "text": "11 bytes required, exceeding capacity by 3",
+        "explanation": "Ten single-byte letters plus NUL require 11 bytes; capacity is 8. This does not guarantee any particular overwrite when the invalid call executes."
+      },
+      {
+        "text": "It fails to compile because the string is too long",
+        "explanation": "A diagnostic may be issued or treated as a build error. The C language does not require a compiler to reject this library-precondition violation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "`strcpy` copies every character and then the terminating NUL (the zero byte ending a C string):\n\n```formula\nB_need = L + 1\nB_need = 10 B + 1 B = 11 B\nB_over = B_need − C\nB_over = 11 B − 8 B = 3 B\nwhere\nB_need: the destination space strcpy needs, in bytes (B)\nL: the source string's length in bytes, not counting the NUL; \"ABCDEFGHIJ\" has 10\n1: the one extra byte for the NUL\nB_over: how far the copy runs past the end of the destination, in bytes\nC: the destination's capacity; char buf[8] holds 8 B\nB: byte, 8 bits\nIn words: ten letters plus the NUL need 11 bytes, three more than the 8-byte buffer holds.\n```\n\nThe required capacity is 11 bytes, exceeding 8 by 3. The call is invalid; it might corrupt neighbouring state, abort or behave otherwise. Use a bounded API with correct arguments and check truncation/errors.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which loop condition makes this copy safe?\n\n```c\nchar id[8];\n/* Stop before the invalid index. */\nfor (int i = 0; ???; i++)\n    id[i] = src[i];\n```\n\n(Assume the source array holds at least 8 bytes.)",
+    "options": [
+      {
+        "text": "`i <= 8`",
+        "explanation": "Classic off-by-one: this visits indices zero through eight, nine loop passes, and writes `id[8]`, which is one past the end."
+      },
+      {
+        "text": "`i < 8`",
+        "explanation": "Correct. Valid indices for an 8-element array are 0 to 7; `i < 8` stops after writing index 7."
+      },
+      {
+        "text": "`i <= sizeof id`",
+        "explanation": "`sizeof id` is 8, so this is the same off-by-one as `i <= 8`."
+      },
+      {
+        "text": "`i < 9`",
+        "explanation": "Equivalent to `i <= 8`: nine loop passes, the last writing out of bounds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For an eight-byte raw copy with at least eight readable source bytes, `i < 8` visits indices 0 through 7. Conditions allowing index 8 overrun the destination. This raw copy does not guarantee a NUL terminator; a string needs room for one and an explicit termination policy.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+    }
+  }
+]

@@ -4,18 +4,9 @@
     "term": "Memory safety",
     "aliases": [
       "memory-safety",
-      "memory-safe",
-      "memory unsafety",
-      "memory-unsafe",
-      "Memory-unsafe",
-      "memory-safety bug",
-      "memory-safety bugs",
-      "memory-safety failure",
-      "memory-safety errors",
-      "memory errors",
-      "memory bugs"
+      "memory-safe"
     ],
-    "definition": "The property that a program only accesses memory inside the bounds and lifetime of the objects it is allowed to use. C and C++ do not enforce it, so bugs such as buffer overflows and use-after-free can corrupt or disclose memory.",
+    "definition": "The property that accesses respect object bounds, valid lifetimes and permitted memory operations. Ordinary raw-pointer operations in C/C++ do not universally enforce it, so memory-safety bugs can corrupt or disclose data.",
     "example": "Chromium reported that around 70% of a sample of 912 high or critical security bugs since 2015 were memory-safety bugs.",
     "source": "https://www.chromium.org/Home/chromium-security/memory-safety/"
   },
@@ -51,8 +42,8 @@
     "aliases": [
       "C/C++"
     ],
-    "definition": "A programming language that extends C with classes, templates and a large standard library. Like C it gives direct access to memory without universal bounds or lifetime checks, so it shares C's memory-safety bugs.",
-    "source": "https://en.wikipedia.org/wiki/C%2B%2B"
+    "definition": "A general-purpose language with classes, templates and low-level memory operations. It shares much syntax and some library interfaces with C, but is a separate language; ordinary raw-pointer operations do not universally enforce object bounds or lifetimes.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/n4950.pdf"
   },
   {
     "id": "pointer",
@@ -64,7 +55,7 @@
     ],
     "definition": "A value holding the memory address of something else, such as a buffer or a function. In C, code can do arithmetic on pointers and follow them without the language checking that the target is still valid.",
     "example": "If p points to the start of char buf[16], then p + 15 points at its last byte and p + 16 is one past the end.",
-    "source": "https://en.cppreference.com/w/c/language/pointer"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "bounds-check",
@@ -90,8 +81,8 @@
       "lifetime discipline"
     ],
     "definition": "The period during which an object's storage is validly reserved for it, for example from malloc until free. Using the object outside its lifetime is a temporal memory-safety bug.",
-    "example": "After free(s), the lifetime of *s has ended even though the pointer s still holds the old address.",
-    "source": "https://en.cppreference.com/w/c/language/lifetime"
+    "example": "After free(s), the lifetime of *s has ended. C makes pointers to that ended object indeterminate; do not inspect or dereference them as if they were valid addresses.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "spatial-memory-error",
@@ -136,8 +127,7 @@
     "id": "process-memory-layout",
     "term": "Process memory layout",
     "aliases": [
-      "process layout",
-      "process image"
+      "process layout"
     ],
     "definition": "How a running program's memory is arranged: code, global data, the heap and the stack placed in separate regions of its address space. Exact placement depends on the operating system, architecture and ASLR.",
     "source": "https://en.wikipedia.org/wiki/Data_segment"
@@ -151,8 +141,8 @@
       "stack page",
       "stack region"
     ],
-    "definition": "The region of memory that holds each active function call's local variables, saved registers and return address. On common architectures it grows downwards, towards lower addresses, as calls nest.",
-    "example": "Calling greet() pushes a new stack frame holding buf[16]; returning pops it.",
+    "definition": "Storage used to keep track of active function calls on many implementations. Some locals, saved registers and return information may be stored there; registers, optimisation and the calling convention determine the actual layout.",
+    "example": "A conventional unoptimised greet call can use a frame holding buf[16]; optimisation and the ABI determine whether those objects and a separate frame remain.",
     "source": "https://en.wikipedia.org/wiki/Call_stack"
   },
   {
@@ -163,7 +153,7 @@
       "stack-frame",
       "protected stack-frame layout"
     ],
-    "definition": "The block of call-stack memory belonging to one function call: its locals, saved registers and the return address. Overflowing a buffer in a frame can overwrite the other items in it.",
+    "definition": "Storage associated with one active function call, often including spilled values, locals or saved state. Its contents and even whether a separate frame exists depend on the architecture, calling convention and compiler.",
     "source": "https://en.wikipedia.org/wiki/Call_stack#Stack_and_frame_pointers"
   },
   {
@@ -178,7 +168,7 @@
       "heap allocations",
       "heap page"
     ],
-    "definition": "The region where a program allocates memory at run time with malloc (or new in C++) and later frees it. Objects there live until explicitly freed, which is where use-after-free and double free bugs arise.",
+    "definition": "Dynamically allocated storage obtained through interfaces such as malloc in C or new in C++. It can occupy multiple mappings; allocated objects remain alive until released through the appropriate mechanism.",
     "example": "malloc(64) returns a pointer to 64 bytes of heap memory.",
     "source": "https://en.wikipedia.org/wiki/Memory_management#Manual_memory_management"
   },
@@ -192,7 +182,7 @@
       "global variables",
       "global variable"
     ],
-    "definition": "Regions of a program image holding global and static variables: .data stores those with initial values, .bss those that start as zero. They are writable but, with NX, not executable.",
+    "definition": "Common program-image sections for initialised data and zero-initialised storage. Their actual permissions come from the loaded mappings; a section name alone does not guarantee that a page is non-executable.",
     "source": "https://en.wikipedia.org/wiki/.bss"
   },
   {
@@ -212,7 +202,7 @@
       "saved register",
       "saved regs"
     ],
-    "definition": "CPU register values that a function stores on the stack on entry so it can restore them before returning to its caller.",
+    "definition": "Register values stored so a function can restore them when required by its calling convention. Some are kept in a stack frame; exact registers and storage locations depend on the ABI and generated code.",
     "source": "https://en.wikipedia.org/wiki/Calling_convention"
   },
   {
@@ -223,7 +213,7 @@
       "saved return address",
       "return-address"
     ],
-    "definition": "The address of the instruction a function should continue at after it returns, typically saved on the stack by the call instruction. Overwriting it lets an attacker choose where execution goes when the function returns.",
+    "definition": "The location execution should resume after a function call. Architectures may keep it in a link register or on a stack; corrupting stored return information can redirect a later return when no effective check stops it.",
     "example": "On x86-64, call pushes the 8-byte return address and ret pops it into the instruction pointer.",
     "source": "https://en.wikipedia.org/wiki/Return_statement"
   },
@@ -234,7 +224,7 @@
       "frame pointer",
       "frame pointers"
     ],
-    "definition": "A register value marking the base of a stack frame. A function saves its caller's frame pointer on the stack so the chain of frames can be followed and restored; debuggers can use it to walk the stack.",
+    "definition": "A register used as a stable reference for a function's stack frame in some calling conventions. Compilers may omit it; saving and restoring it and unwinding frames depend on the ABI and generated code.",
     "source": "https://en.wikipedia.org/wiki/Call_stack#Stack_and_frame_pointers"
   },
   {
@@ -243,13 +233,10 @@
     "aliases": [
       "local variables",
       "locals",
-      "local arrays",
-      "automatic variable",
-      "automatic value",
-      "automatic storage"
+      "local arrays"
     ],
-    "definition": "A variable declared inside a function, which C calls an automatic variable. It normally lives in that call's stack frame (or a register) and disappears when the function returns.",
-    "source": "https://en.cppreference.com/w/c/language/storage_duration"
+    "definition": "A variable declared in a local scope. A local can have automatic, static or thread storage duration; ordinary non-static function locals usually have automatic duration and may be held in registers or on the stack.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "memory-allocator",
@@ -267,7 +254,7 @@
     "id": "allocator-metadata",
     "term": "Allocator metadata",
     "aliases": [],
-    "definition": "Bookkeeping the memory allocator keeps next to or inside heap blocks, such as chunk sizes and free-list pointers. Corrupting it can make later malloc or free calls write attacker-chosen values.",
+    "definition": "Bookkeeping an allocator uses to manage storage, such as sizes and free-list links. Its location and protection depend on the allocator; corrupting it can cause failures or exploitable behaviour without guaranteeing a particular write.",
     "source": "https://sourceware.org/glibc/wiki/MallocInternals"
   },
   {
@@ -278,7 +265,7 @@
       "control pointers",
       "control information"
     ],
-    "definition": "Values that decide where execution goes next, such as return addresses and function pointers. Corrupting them turns a memory bug into control of the program, which is why many mitigations protect them.",
+    "definition": "Values used to determine control transfers, such as stored return addresses and function pointers. Corrupting them can redirect execution if the resulting transfer is possible and effective protections do not reject it.",
     "source": "https://en.wikipedia.org/wiki/Control_flow"
   },
   {
@@ -310,8 +297,8 @@
       "data-only attacks",
       "data-only corruption"
     ],
-    "definition": "An attack that changes ordinary data, such as an authorisation flag, rather than redirecting execution. Control-flow defences such as canaries, CFI and shadow stacks do not stop it.",
-    "example": "Overflowing name[16] into the neighbouring is_admin field grants access without touching any return address.",
+    "definition": "An attack that corrupts ordinary program data, such as an authorisation flag, without needing an unintended control-flow transfer. Protections limited to return or indirect-branch integrity do not generally validate that data.",
+    "example": "A possible threat scenario is an overflow from name[16] affecting a neighbouring is_admin decision without changing a return address; the invalid C copy has no guaranteed outcome.",
     "source": "https://en.wikipedia.org/wiki/Memory_corruption"
   },
   {
@@ -326,8 +313,8 @@
       "writes past the end",
       "overflowing copy"
     ],
-    "definition": "A bug where a program writes past the end (or before the start) of a buffer, overwriting neighbouring memory. Depending on what lies next to the buffer, it can change data, crash the program or redirect execution.",
-    "example": "Copying a 40-byte name into char buf[16] with strcpy writes 25 bytes past the end.",
+    "definition": "A write outside a buffer's bounds, before its start or beyond its end. In C this is undefined behaviour: corrupting nearby data, crashing or redirecting execution are possible risks, not guaranteed traces.",
+    "example": "Copying a 40-byte name with strcpy needs 41 bytes including NUL, exceeding char buf[16] by 25; the invalid call has no promised overwrite trace.",
     "source": "https://cwe.mitre.org/data/definitions/787.html"
   },
   {
@@ -337,7 +324,7 @@
       "stack buffer overflows",
       "stack-based buffer overflow"
     ],
-    "definition": "A buffer overflow in a buffer that lives on the call stack. Because the return address sits in the same stack frame, it is the classic route to hijacking a function's return.",
+    "definition": "An out-of-bounds write involving a buffer stored on a call stack. It may affect nearby state or saved control information depending on the generated layout; C does not guarantee a particular overwrite or outcome.",
     "source": "https://cwe.mitre.org/data/definitions/121.html"
   },
   {
@@ -346,7 +333,7 @@
     "aliases": [
       "linear overflows"
     ],
-    "definition": "An overflow that writes consecutive bytes onwards from the buffer, so it must pass through everything between the buffer and its target. A stack canary relies on this: the overflow has to cross the canary to reach the return address.",
+    "definition": "A write proceeding through consecutive locations beyond a buffer boundary. In a protected layout where a canary lies between that buffer and saved return information, reaching the latter crosses the guard; layouts and detection are not universal.",
     "source": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
   },
   {
@@ -362,11 +349,8 @@
     "id": "out-of-bounds-read",
     "term": "Out-of-bounds read",
     "aliases": [
-      "OOB",
       "OOB read",
       "out-of-bounds reads",
-      "out-of-bounds",
-      "Out-of-bounds",
       "over-read",
       "over-reads"
     ],
@@ -395,7 +379,7 @@
       "leaked pointer value",
       "kernel pointer leak"
     ],
-    "definition": "An information leak that reveals a memory address, for example through an out-of-bounds read. One leaked pointer into a library reveals where that whole library is loaded, undoing ASLR for it.",
+    "definition": "An information disclosure that reveals a pointer value. If the corresponding build and relative offset are known, it can identify the base of that particular fixed-layout mapping; it does not automatically reveal other mappings.",
     "source": "https://cwe.mitre.org/data/definitions/200.html"
   },
   {
@@ -413,7 +397,7 @@
     ],
     "definition": "A byte whose value is 0. As a character it is called NUL, written '\\0' in C; C strings end at the first NUL, so string functions copy or read until they meet one.",
     "example": "\"abc\" occupies 4 bytes: 'a', 'b', 'c' and a NUL.",
-    "source": "https://en.cppreference.com/w/c/string/byte"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "c-string",
@@ -429,8 +413,8 @@
       "unbounded string operation",
       "unbounded string operations"
     ],
-    "definition": "A sequence of bytes ending in a NUL byte, which is how C represents text. Functions that work on C strings have no separate length and rely on that terminator, so a missing NUL makes them read past the end.",
-    "source": "https://en.cppreference.com/w/c/string/byte"
+    "definition": "A sequence of characters ending with a NUL byte. Operations expecting a C string require a reachable terminator within valid storage; an unterminated array does not satisfy that contract.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "strcpy",
@@ -438,9 +422,9 @@
     "aliases": [
       "strcpy()"
     ],
-    "definition": "The C library function strcpy(dst, src) that copies a NUL-terminated string, including its NUL, into dst. It is never told dst's size, so too long a source overflows the destination.",
-    "example": "strcpy into char buf[8] from \"ABCDEFGHIJ\" needs 11 bytes and overflows by 3.",
-    "source": "https://en.cppreference.com/w/c/string/byte/strcpy"
+    "definition": "The C library function strcpy(dst, src) copies a valid NUL-terminated source including its NUL into a sufficiently large, non-overlapping destination. It has no destination-capacity argument; violating those requirements gives undefined behaviour.",
+    "example": "Copying \"ABCDEFGHIJ\" needs 11 bytes including NUL, exceeding char buf[8] by 3; no particular effect of that invalid call is promised.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "strncpy",
@@ -450,7 +434,7 @@
     ],
     "definition": "The C library function strncpy(dst, src, n) that copies at most n bytes. If the source is n bytes or longer it does not add a terminating NUL, and if shorter it pads the rest with NULs, so it is not a safe strcpy.",
     "example": "strncpy(dst, \"abcdef\", 4) leaves dst holding abcd with no NUL.",
-    "source": "https://en.cppreference.com/w/c/string/byte/strncpy"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "strlcpy",
@@ -467,9 +451,9 @@
     "aliases": [
       "snprintf()"
     ],
-    "definition": "The C library function that formats text into a buffer of a given size, never writing more than that size and adding a NUL when the size is non-zero. It returns the length the full output would have needed, so a return equal to or above the size signals truncation.",
+    "definition": "A C formatting function that bounds output by the supplied capacity and, for valid arguments with non-zero capacity, writes a terminating NUL. A non-negative return gives the full required length excluding NUL; a negative return reports an encoding error.",
     "example": "snprintf(d, 8, \"%s\", \"hello world\") stores hello w and returns 11.",
-    "source": "https://en.cppreference.com/w/c/io/fprintf"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "printf",
@@ -479,7 +463,7 @@
       "printf family"
     ],
     "definition": "The C library function that prints text according to a format string, replacing directives such as %s and %d with its further arguments. Passing untrusted text as the format string is the format-string bug.",
-    "source": "https://en.cppreference.com/w/c/io/fprintf"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "sprintf",
@@ -487,8 +471,8 @@
     "aliases": [
       "sprintf()"
     ],
-    "definition": "A C library function that formats text into a buffer like printf but with no size limit, so long output overflows the buffer. snprintf is the bounded replacement.",
-    "source": "https://en.cppreference.com/w/c/io/fprintf"
+    "definition": "A C library function formatting text into a destination without a capacity argument. The caller must provide enough valid storage for all output and its NUL; use snprintf with correct arguments and error/truncation handling to bound writes.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "fputs",
@@ -496,8 +480,8 @@
     "aliases": [
       "fputs()"
     ],
-    "definition": "The C library function that writes a string to a stream exactly as it is, without interpreting % directives. That makes it safe for printing untrusted text.",
-    "source": "https://en.cppreference.com/w/c/io/fputs"
+    "definition": "A C library function that writes a valid NUL-terminated string to a stream without interpreting percent-format directives. It still requires a valid string and stream and can report an output failure.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "memcpy",
@@ -505,9 +489,9 @@
     "aliases": [
       "memcpy()"
     ],
-    "definition": "The C library function memcpy(dst, src, n) that copies exactly n bytes, whatever they contain. It checks nothing, so n must fit both the source and the destination.",
+    "definition": "A C library function that copies a specified number of bytes between valid, non-overlapping ranges. The caller must ensure both ranges are large enough; use memmove for permitted overlap.",
     "example": "Heartbleed's bug was a memcpy whose n came from the attacker.",
-    "source": "https://en.cppreference.com/w/c/string/byte/memcpy"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "memmove",
@@ -516,14 +500,14 @@
       "memmove()"
     ],
     "definition": "A C library function like memcpy that copies n bytes but also works correctly when the source and destination overlap.",
-    "source": "https://en.cppreference.com/w/c/string/byte/memmove"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "gets",
     "term": "gets()",
     "aliases": [],
     "definition": "An old C library function that read a line of input into a buffer with no way to give the buffer's size, so any long line overflowed it. It was removed from the language in C11.",
-    "source": "https://en.cppreference.com/w/c/io/gets"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "truncation",
@@ -535,7 +519,7 @@
     ],
     "definition": "Cutting data off at a size limit, keeping only the first part, such as a string shortened to fit a buffer. In C, bounded functions such as snprintf truncate output that does not fit, and code must check for it because silently shortened data can itself cause bugs.",
     "example": "Formatting \"hello world\" into 8 bytes truncates it to hello w.",
-    "source": "https://en.cppreference.com/w/c/io/fprintf"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "size-t",
@@ -543,14 +527,14 @@
     "aliases": [],
     "definition": "The unsigned integer type C uses for object sizes and byte counts, returned by sizeof and taken by malloc. It is typically 32 bits on 32-bit platforms and 64 bits on 64-bit ones.",
     "example": "With a 32-bit size_t the largest value is 4,294,967,295.",
-    "source": "https://en.cppreference.com/w/c/types/size_t"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "size-max",
     "term": "SIZE_MAX",
     "aliases": [],
     "definition": "A C constant equal to the largest value size_t can hold: 2^32 − 1 (4,294,967,295) for a 32-bit size_t. Checking count > SIZE_MAX / size before multiplying detects size overflow.",
-    "source": "https://en.cppreference.com/w/c/types/limits"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "sizeof",
@@ -558,8 +542,8 @@
     "aliases": [
       "sizeof()"
     ],
-    "definition": "A C operator that gives the size in bytes of a type or object, worked out by the compiler. For an array such as char buf[16], sizeof buf is 16.",
-    "source": "https://en.cppreference.com/w/c/language/sizeof"
+    "definition": "A C operator giving the size of an object or type in C bytes. Many results are compile-time constants, but sizes involving variable-length arrays can be evaluated at run time.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "fixed-width-integers",
@@ -569,8 +553,8 @@
       "uint32_t",
       "uint64_t"
     ],
-    "definition": "C types from <stdint.h> with an exact size: uint8_t is an unsigned 8-bit integer (1 byte), uint32_t 32 bits (4 bytes) and uint64_t 64 bits (8 bytes).",
-    "source": "https://en.cppreference.com/w/c/types/integer"
+    "definition": "Optional exact-width unsigned C types from <stdint.h>: uint8_t has 8 value bits, uint32_t 32 and uint64_t 64. On an eight-bit-byte implementation their sizes are one, four and eight bytes; an implementation need not provide every exact-width type.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "unsigned-integer",
@@ -581,9 +565,9 @@
       "unsigned arithmetic",
       "unsigned integers"
     ],
-    "definition": "An integer type that holds only zero and positive values. An n-bit unsigned type holds 0 to 2^n − 1, and in C its arithmetic wraps around instead of failing when a result is too big or below zero.",
+    "definition": "An integer type representing non-negative values. Arithmetic performed in an unsigned type reduces results modulo one more than that type's maximum; integer promotions may first move smaller operands to another type.",
     "example": "A 32-bit unsigned value holds 0 to 4,294,967,295.",
-    "source": "https://en.wikipedia.org/wiki/Integer_(computer_science)"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "integer-overflow",
@@ -593,7 +577,7 @@
       "size overflow",
       "multiplication overflow"
     ],
-    "definition": "When an arithmetic result is too large for its integer type. For unsigned types in C the result silently wraps around; when it feeds a size calculation, a huge request can become a tiny allocation.",
+    "definition": "An arithmetic result outside the representable range of its intended type. C unsigned arithmetic wraps modulo the type's range, while signed overflow is normally undefined behaviour; either can undermine size calculations.",
     "example": "With a 32-bit size_t, 268,435,457 × 16 wraps to 16.",
     "source": "https://cwe.mitre.org/data/definitions/190.html"
   },
@@ -609,7 +593,7 @@
     ],
     "definition": "What an unsigned integer does when a result leaves its range: it keeps only the lowest bits, so counting continues from 0 after the maximum (and from the maximum below 0). For a 32-bit type this is arithmetic modulo 2^32.",
     "example": "In 32-bit unsigned arithmetic, 4,294,967,295 + 1 gives 0 and 0 − 1 gives 4,294,967,295.",
-    "source": "https://en.wikipedia.org/wiki/Integer_overflow"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "subtraction-underflow",
@@ -628,7 +612,7 @@
       "0x"
     ],
     "definition": "The prefix C and most programming tools put before a hexadecimal number, so 0x10 means sixteen rather than ten.",
-    "source": "https://en.cppreference.com/w/c/language/integer_constant"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "machine-word",
@@ -637,8 +621,8 @@
       "64-bit word",
       "word size"
     ],
-    "definition": "The natural integer and pointer size of a processor: 8 bytes (64 bits) on x86-64 and AArch64. The glibc stack canary is one machine word.",
-    "source": "https://en.wikipedia.org/wiki/Word_(computer_architecture)"
+    "definition": "An architecture-dependent natural unit for registers and operations, whose meaning depends on context. x86-64 has 64-bit general-purpose registers; the illustrated glibc guard is a uintptr_t, eight bytes in the conventional 64-bit ABI. Other ABIs can use smaller pointers.",
+    "source": "https://raw.githubusercontent.com/bminor/glibc/master/sysdeps/generic/dl-osinfo.h"
   },
   {
     "id": "little-endian",
@@ -661,7 +645,7 @@
       "heap-use-after-free"
     ],
     "definition": "A temporal memory-safety bug in which a program keeps using a pointer after the memory it points to has been freed. If the allocator has reused that memory for attacker-controlled data, the stale access can read or act on it.",
-    "example": "A freed session object's memory is reused for request bytes, and a stale check of s->is_admin reads the attacker's byte.",
+    "example": "A possible threat scenario is a freed session's storage being reused for request bytes before a stale alias is accessed; C does not guarantee what the invalid access observes.",
     "source": "https://cwe.mitre.org/data/definitions/416.html"
   },
   {
@@ -688,8 +672,8 @@
       "stale aliases",
       "cached pointer"
     ],
-    "definition": "A pointer that still holds the address of an object whose lifetime has ended, for example after free. Using it is a use-after-free.",
-    "source": "https://en.wikipedia.org/wiki/Dangling_pointer"
+    "definition": "A pointer formerly associated with an object whose lifetime has ended, such as storage released by free. C can make the pointer value indeterminate when the object ends; later use is not a portable way to access any replacement object.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "pointer-alias",
@@ -701,8 +685,8 @@
       "untracked raw aliases",
       "other aliases"
     ],
-    "definition": "A second pointer to the same object. Freeing through one pointer, or setting it to NULL, does nothing to the others, which then dangle.",
-    "source": "https://en.wikipedia.org/wiki/Aliasing_(computing)"
+    "definition": "Another pointer referring to the same object. Setting one pointer to NULL does not alter its aliases; if the object is freed, those aliases no longer provide valid access to that object.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "memory-ownership",
@@ -715,7 +699,7 @@
       "shared ownership",
       "ownership discipline"
     ],
-    "definition": "A rule about which part of a program is responsible for freeing an allocation. Code that only borrows a pointer must not free it or keep it after the owner frees it; clear ownership prevents use-after-free and double free.",
+    "definition": "A convention or language mechanism specifying who releases an allocation and how borrowing or shared lifetime is managed. Correctly maintained ownership prevents stale access and duplicate release, but a stated convention alone does not enforce it.",
     "source": "https://en.cppreference.com/w/cpp/memory/unique_ptr"
   },
   {
@@ -724,7 +708,7 @@
     "aliases": [
       "unique_ptr"
     ],
-    "definition": "A C++ smart pointer that is the single owner of an object and frees it automatically when it goes out of scope. It cannot be copied, only moved, so ownership stays clear.",
+    "definition": "A move-only C++ smart pointer holding exclusive ownership through an associated deleter. Destruction or reset invokes that deleter for its managed object; release instead transfers the stored pointer without destroying the object. Borrowed aliases still need lifetime discipline.",
     "source": "https://en.cppreference.com/w/cpp/memory/unique_ptr"
   },
   {
@@ -733,7 +717,7 @@
     "aliases": [
       "shared_ptr"
     ],
-    "definition": "A C++ smart pointer that shares ownership through a reference count and frees the object when the last shared_ptr to it is destroyed.",
+    "definition": "A C++ smart pointer sharing ownership through a control block. The managed object is destroyed when the last owning shared_ptr releases it; weak_ptr references may keep the control block storage alive for longer.",
     "source": "https://en.cppreference.com/w/cpp/memory/shared_ptr"
   },
   {
@@ -747,7 +731,7 @@
       "null check"
     ],
     "definition": "A pointer value that points to no object. free(NULL) does nothing, but dereferencing NULL is undefined behaviour, not a guaranteed clean crash.",
-    "source": "https://en.cppreference.com/w/c/types/NULL"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "dereference",
@@ -758,7 +742,7 @@
       "dereferenced"
     ],
     "definition": "To follow a pointer and access the object at its address, such as reading s->is_admin through the pointer s.",
-    "source": "https://en.wikipedia.org/wiki/Dereference_operator"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "malloc",
@@ -769,7 +753,7 @@
     ],
     "definition": "The C library function that allocates a block of heap memory of a given number of bytes and returns a pointer to it, or NULL on failure. The block must later be released with free.",
     "example": "malloc(count * 16) requests 16 bytes per item, unless the multiplication wraps.",
-    "source": "https://en.cppreference.com/w/c/memory/malloc"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "calloc",
@@ -778,7 +762,7 @@
       "calloc()"
     ],
     "definition": "A C library function that allocates memory for count items of a given size and zeroes it. glibc's calloc returns NULL instead of wrapping when count × size overflows.",
-    "source": "https://en.cppreference.com/w/c/memory/calloc"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "reallocarray",
@@ -796,18 +780,15 @@
       "unsynchronized access",
       "unsynchronised access"
     ],
-    "definition": "Two threads using the same memory at the same time without a lock or other coordination, with at least one writing. In C and C++ it is a data race and undefined behaviour.",
-    "source": "https://en.cppreference.com/w/c/language/memory_model"
+    "definition": "Access to shared state without sufficient coordination. In C/C++, conflicting actions in different threads, at least one non-atomic and neither ordered before the other by happens-before, constitute a data race and give undefined behaviour.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "format-string-bug",
     "term": "Format-string bug",
     "aliases": [
       "format-string bugs",
-      "format string",
-      "format strings",
       "format-string flaw",
-      "format-string",
       "untrusted format"
     ],
     "definition": "A bug where untrusted text is passed as the format argument of printf or a similar function, so % directives in it are interpreted. It can disclose memory or, with %n, attempt a write.",
@@ -822,8 +803,8 @@
       "conversion directives",
       "% directives"
     ],
-    "definition": "A %-sequence in a printf format string that tells printf to consume an argument, such as %s (a string), %d (an integer), %x (hexadecimal) or %n (store the number of characters printed so far through a pointer).",
-    "source": "https://en.cppreference.com/w/c/io/fprintf"
+    "definition": "A %-sequence in a printf format string. Conversions such as %s, %d and %x consume arguments of specified types, and %n stores the emitted character count through a pointer; %% instead emits a literal percent sign without consuming an argument.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "calling-convention",
@@ -831,7 +812,7 @@
     "aliases": [
       "calling conventions"
     ],
-    "definition": "The rules for how a function receives arguments (which registers or stack slots), returns results and preserves registers on a given architecture. A format-string bug reads whatever happens to be where the missing arguments would be.",
+    "definition": "Platform rules for passing arguments, returning results and preserving registers. Supplying missing or wrongly typed printf arguments violates its contract; a particular leak or output is not portable.",
     "source": "https://en.wikipedia.org/wiki/Calling_convention"
   },
   {
@@ -855,9 +836,9 @@
       "struct padding",
       "struct's padding"
     ],
-    "definition": "Unused bytes the compiler inserts between or after a struct's fields so each field is aligned. Their contents are not set by assigning the fields, so copying the raw struct out can leak old memory.",
+    "definition": "Bytes between or after structure members that are not part of those members, commonly needed for alignment. C gives padding unspecified values when structure or member values are stored, so member assignments do not establish safe contents for a raw copy across a trust boundary.",
     "example": "In struct { uint8_t flag; uint64_t value; }, bytes 1–7 are typically padding, making the struct 16 bytes.",
-    "source": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "alignment",
@@ -866,7 +847,7 @@
       "8-byte alignment"
     ],
     "definition": "The requirement that a value of a given type starts at an address that is a multiple of some number, often its own size. A uint64_t is typically 8-byte aligned, which is why padding appears before it.",
-    "source": "https://en.wikipedia.org/wiki/Data_structure_alignment"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "wire-format",
@@ -882,7 +863,7 @@
     "id": "copy-to-user",
     "term": "copy_to_user",
     "aliases": [],
-    "definition": "A Linux kernel function that copies bytes from kernel memory into a user-space buffer, checking that the destination is a valid user address. Whatever bytes it is given, including struct padding, reach the user program.",
+    "definition": "A Linux kernel helper for copying a specified number of bytes to user space, with user-access checks. It can fail or copy only part of the requested range; the caller must also ensure that the source bytes are appropriate to disclose.",
     "source": "https://www.kernel.org/doc/html/latest/core-api/kernel-api.html"
   },
   {
@@ -934,7 +915,7 @@
       "CVEs",
       "CVE ID"
     ],
-    "definition": "Common Vulnerabilities and Exposures: a public catalogue that gives each known security vulnerability a unique identifier such as CVE-2014-0160 (Heartbleed).",
+    "definition": "Common Vulnerabilities and Exposures: a programme assigning identifiers and publishing records for publicly disclosed vulnerabilities. A CVE ID such as CVE-2014-0160 identifies one record; not every known vulnerability necessarily has an ID or a published record.",
     "source": "https://www.cve.org/About/Overview"
   },
   {
@@ -988,8 +969,7 @@
     "term": "UBSan (UndefinedBehaviorSanitizer)",
     "aliases": [
       "UBSan",
-      "UndefinedBehaviorSanitizer",
-      "ASan/UBSan"
+      "UndefinedBehaviorSanitizer"
     ],
     "definition": "A Clang and GCC run-time checker that reports certain kinds of undefined behaviour when they happen, such as signed integer overflow or misaligned pointers.",
     "source": "https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html"
@@ -1043,7 +1023,7 @@
       "instrumented indirect calls",
       "instruments the running app"
     ],
-    "definition": "Extra checking code inserted into a program, by the compiler or at run time, to observe or verify what it does. Only instrumented code is checked, so uninstrumented libraries can hide bugs.",
+    "definition": "Additional code or runtime machinery used to observe or check a program. Coverage depends on the mechanism; compiler instrumentation and intercepted library operations can detect different accesses, and gaps can leave bugs undetected.",
     "source": "https://clang.llvm.org/docs/AddressSanitizer.html"
   },
   {
@@ -1087,7 +1067,7 @@
       "coverage-guided",
       "feedback-guided fuzzing"
     ],
-    "definition": "Fuzzing that measures which code each input exercises and keeps mutating the inputs that reach new code, so it explores a program far more deeply than random inputs.",
+    "definition": "Fuzzing that uses execution feedback, such as newly reached code, to choose useful inputs for further mutation. It can improve exploration but does not guarantee deeper coverage or discovery of every bug.",
     "source": "https://llvm.org/docs/LibFuzzer.html"
   },
   {
@@ -1100,9 +1080,7 @@
   {
     "id": "afl-plus-plus",
     "term": "AFL++",
-    "aliases": [
-      "AFL"
-    ],
+    "aliases": [],
     "definition": "A widely used coverage-guided fuzzer, the community successor to American Fuzzy Lop (AFL).",
     "source": "https://aflplus.plus/"
   },
@@ -1141,7 +1119,7 @@
       "static analyzer",
       "static analyzers"
     ],
-    "definition": "Examining source code for bugs without running it. It can reason about all paths but often reports false positives and misses bugs that depend on run-time values.",
+    "definition": "Analysis of a program without executing its normal workload. Tools approximate possible behaviour and can report false positives or miss bugs; their guarantees depend on the analysis and assumptions.",
     "source": "https://en.wikipedia.org/wiki/Static_program_analysis"
   },
   {
@@ -1188,10 +1166,9 @@
     "id": "gcc",
     "term": "GCC",
     "aliases": [
-      "GNU Compiler Collection",
-      "GCC/Clang"
+      "GNU Compiler Collection"
     ],
-    "definition": "The GNU Compiler Collection, a widely used open-source compiler for C, C++ and other languages; the default compiler on most Linux distributions.",
+    "definition": "The GNU Compiler Collection, an open-source compiler collection supporting C, C++ and other languages. Its flags and enabled protections depend on the compiler version, target and build configuration.",
     "source": "https://gcc.gnu.org/"
   },
   {
@@ -1208,7 +1185,7 @@
       "GNU C Library",
       "GNU C library"
     ],
-    "definition": "The GNU C Library, the standard C library on most Linux systems. It provides malloc, strcpy, printf and also stack-canary set-up and source fortification.",
+    "definition": "The GNU C Library, a C library implementation used by GNU/Linux systems. It provides interfaces such as malloc, strcpy and printf, and implementation support for stack guards and source fortification. Other Linux systems can use another C library.",
     "source": "https://sourceware.org/glibc/"
   },
   {
@@ -1219,8 +1196,8 @@
       "C standard library",
       "libc mapping"
     ],
-    "definition": "The C standard library a program links against, providing functions such as malloc, printf and memcpy; on most Linux systems it is glibc. It is mapped into almost every process, which makes it a favourite target for code reuse.",
-    "source": "https://en.cppreference.com/w/c/header"
+    "definition": "A C library implementation providing interfaces such as malloc, printf and memcpy. It can be linked dynamically or statically; glibc is one GNU/Linux implementation. Known code in a loaded library may be used by code-reuse attacks.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "posix",
@@ -1283,7 +1260,7 @@
       "canary's value",
       "stack protection"
     ],
-    "definition": "A secret random value the compiler places between a function's local buffers and its saved return address, checked before the function returns. A linear overflow that reaches the return address must overwrite it first, so the program aborts instead of returning.",
+    "definition": "A guard checked by generated code on protected function exits. In a conventional layout it lies between local buffers and saved return information, so a linear overwrite crossing it may be detected; coverage and layout depend on the compiler and ABI.",
     "example": "With glibc on x86-64 the canary is 8 bytes with its lowest byte set to zero, leaving 56 random bits.",
     "source": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
   },
@@ -1292,7 +1269,7 @@
     "term": "__stack_chk_fail",
     "aliases": [],
     "definition": "The function that stack-protector code calls when a canary check fails. In glibc it reports stack smashing and aborts the process.",
-    "source": "https://refspecs.linuxbase.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic/baselib---stack-chk-fail-1.html"
+    "source": "https://raw.githubusercontent.com/bminor/glibc/master/debug/stack_chk_fail.c"
   },
   {
     "id": "fstack-protector",
@@ -1301,7 +1278,7 @@
       "-fstack-protector",
       "stack-protector"
     ],
-    "definition": "GCC and Clang options that add stack canaries. -fstack-protector protects only functions that call alloca or have stack buffers of at least 8 bytes (GCC's default threshold); -fstack-protector-strong also protects functions with any local array or that take the address of a local variable.",
+    "definition": "GCC options that insert stack guards in selected functions. The basic option covers functions with alloca or sufficiently large stack buffers; the strong option also includes local arrays and local-frame-address references, considering objects that remain on the stack after optimisation.",
     "source": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
   },
   {
@@ -1332,7 +1309,7 @@
       "forking servers",
       "Forked workers"
     ],
-    "definition": "The Unix system call that creates a child process as a copy of the calling process, with the same memory contents and layout, so the child shares the parent's canary and ASLR bases.",
+    "definition": "A POSIX operation creating a child process with an initially copied address space. The child initially inherits mapping locations and guard values in copied memory; later runtime actions or executing a new program can change them.",
     "source": "https://pubs.opengroup.org/onlinepubs/9799919799/functions/fork.html"
   },
   {
@@ -1359,7 +1336,7 @@
       "W^X",
       "write XOR execute"
     ],
-    "definition": "A policy that no page may be both writable and executable at the same time, so code can never be modified where it runs. It is stronger than NX alone, which only prevents executing non-executable pages.",
+    "definition": "A policy prohibiting simultaneous write and execute permission for a mapping. Stronger variants also address writable aliases of executable storage; ordinary NX alone only blocks execution from pages marked non-executable.",
     "source": "https://en.wikipedia.org/wiki/W%5EX"
   },
   {
@@ -1449,7 +1426,7 @@
       "ROP gadgets",
       "gadget chain"
     ],
-    "definition": "A short instruction sequence already in executable memory that ends in a return instruction. Chained together, gadgets let an attacker perform arbitrary operations without injecting code.",
+    "definition": "An existing instruction sequence ending in a return, used as a building block in a return-oriented program. Which operations an attacker can compose depends on the available sequences, controllable state and effective protections.",
     "example": "A gadget such as pop rdi; ret lets the attacker load a chosen value into a register.",
     "source": "https://en.wikipedia.org/wiki/Return-oriented_programming"
   },
@@ -1459,7 +1436,7 @@
     "aliases": [
       "ret"
     ],
-    "definition": "The machine instruction that returns from a function by taking the return address from the stack and jumping to it.",
+    "definition": "In x86, an instruction returning from a function by taking the return address from the ordinary stack, with additional checks when features such as CET shadow stacks are enabled. Other architectures can use a return instruction that takes its target from a register instead.",
     "source": "https://www.felixcloutier.com/x86/ret"
   },
   {
@@ -1491,7 +1468,7 @@
       "Address space layout randomisation",
       "address space layout randomization"
     ],
-    "definition": "An operating-system protection that loads the stack, heap, libraries and (for PIE programs) the main program at random addresses, so an attacker cannot predict where useful code or data is. A pointer leak can undo it for one mapping.",
+    "definition": "Address space layout randomisation: platform policy that varies placement of selected mappings. Coverage and entropy depend on support and configuration; knowing a build-specific pointer offset can reveal a particular mapping base.",
     "example": "With 28 random bits a library can start at any of 268,435,456 positions.",
     "source": "https://docs.kernel.org/admin-guide/sysctl/vm.html"
   },
@@ -1518,7 +1495,7 @@
       "relevant mappings",
       "Operating-system mappings"
     ],
-    "definition": "A region of a process's address space backed by something, such as a library file or anonymous memory, with its own permissions. ASLR randomises where each mapping starts, its base.",
+    "definition": "An address-space region associated with backing storage and access permissions. ASLR may randomise the placement of selected mappings; not every region must move or be independently placed.",
     "source": "https://pubs.opengroup.org/onlinepubs/9799919799/functions/mmap.html"
   },
   {
@@ -1529,7 +1506,7 @@
       "library bases",
       "base addresses"
     ],
-    "definition": "The address where a mapping, such as a shared library, starts in memory. Everything inside sits at a fixed offset from it, so knowing the base locates everything.",
+    "definition": "The starting address used to describe a mapping or loaded object. For a known fixed-layout image, known relative offsets locate targets from that base; independently allocated or specially resolved objects may need different reasoning.",
     "source": "https://en.wikipedia.org/wiki/Base_address"
   },
   {
@@ -1541,7 +1518,7 @@
       "known offsets",
       "known-offset"
     ],
-    "definition": "The distance in bytes from the start of something, such as a struct or a library, to an item inside it. Library offsets are fixed for a given build, so base + offset gives an item's address.",
+    "definition": "A distance from a specified origin, usually measured in bytes for a structure field or mapped image. Adding a known target's relative offset to the matching fixed-layout image base locates it; separately allocated or specially resolved objects need different reasoning.",
     "source": "https://en.wikipedia.org/wiki/Offset_(computer_science)"
   },
   {
@@ -1619,12 +1596,11 @@
     "term": "PIE (position-independent executable)",
     "aliases": [
       "PIE",
-      "non-PIE",
       "position-independent executable",
       "-fPIE",
       "-pie"
     ],
-    "definition": "A program compiled so its code works at any load address, letting ASLR place the main executable randomly as well as its libraries. A non-PIE executable's main code sits at a fixed address. -fPIE and -pie are the GCC compile and link flags.",
+    "definition": "A position-independent executable, built so the main image can run at different load addresses. Random placement still requires loader and OS policy; conventional non-PIE ELF main-code addresses are generally fixed.",
     "source": "https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html"
   },
   {
@@ -1636,7 +1612,7 @@
       "relocation read-only",
       "-z relro"
     ],
-    "definition": "Relocation Read-Only: a linker and loader feature that makes an ELF program's relocation data read-only once it has been filled in at start-up. Full RELRO also binds functions eagerly so the GOT can be protected too.",
+    "definition": "Relocation Read-Only: a supported ELF linker/loader arrangement that protects a designated relocation region after processing. Full RELRO also uses eager function binding so the conventional GOT layout can be made read-only; other pointers remain unprotected.",
     "source": "https://best.openssf.org/Compiler-Hardening-Guides/Compiler-Options-Hardening-Guide-for-C-and-C++.html"
   },
   {
@@ -1647,7 +1623,7 @@
       "relocation region",
       "relocation processing"
     ],
-    "definition": "Patching addresses in a program or library when it is loaded, because the final location of code and data, especially with ASLR, is only known then.",
+    "definition": "Adjusting address-dependent values when code or data is placed at its final location. Linkers can apply relocations while producing an executable, and dynamic loaders apply the relevant remaining relocations when objects are loaded.",
     "source": "https://en.wikipedia.org/wiki/Relocation_(computing)"
   },
   {
@@ -1658,8 +1634,8 @@
       "Global Offset Table",
       "GOT overwrite"
     ],
-    "definition": "A table in an ELF program holding the addresses of external functions and variables, filled in by the dynamic loader. Overwriting an entry redirects every call through it, which full RELRO prevents by making it read-only.",
-    "source": "https://refspecs.linuxfoundation.org/ELF/zSeries/lzsabi0_zSeries/x2251.html"
+    "definition": "Global Offset Table: an ELF mechanism holding addresses used by generated code, including data and function references. Redirecting a writable relevant entry can affect accesses or calls; full RELRO protects the covered entries in a conventional supported layout.",
+    "source": "https://sourceware.org/binutils/docs/ld/Options.html"
   },
   {
     "id": "lazy-binding",
@@ -1698,7 +1674,7 @@
       "LDFLAGS"
     ],
     "definition": "Conventional build variables (for example in Makefiles) holding the options passed to the C compiler (CFLAGS) and the linker (LDFLAGS).",
-    "source": "https://www.gnu.org/software/make/manual/html_node/Implicit-Variables.html"
+    "source": "https://raw.githubusercontent.com/mirror/make/master/doc/make.texi"
   },
   {
     "id": "dynamic-loader",
@@ -1741,7 +1717,7 @@
       "fortification",
       "source fortification"
     ],
-    "definition": "A glibc and compiler feature that replaces calls such as memcpy and strcpy with checked versions when the destination's size can be worked out, aborting on overflow. Level 3 also uses sizes known only at run time. It works only in optimised builds.",
+    "definition": "A glibc/compiler feature adding diagnostics and checks to supported library calls when suitable object-size information is available. Glibc enables its wrappers with optimisation; level 3 uses dynamic object sizes and requires compatible toolchain support.",
     "example": "memcpy(dst, src, n) becomes __memcpy_chk(dst, src, n, dst_size), which aborts if n > dst_size.",
     "source": "https://sourceware.org/glibc/manual/latest/html_node/Source-Fortification.html"
   },
@@ -1761,7 +1737,7 @@
     "term": "__memcpy_chk",
     "aliases": [],
     "definition": "The checked version of memcpy that fortified code calls: it takes the destination's size as an extra argument and aborts if the copy would exceed it.",
-    "source": "https://refspecs.linuxbase.org/LSB_5.0.0/LSB-Core-generic/LSB-Core-generic/baselib---memcpy-chk-1.html"
+    "source": "https://raw.githubusercontent.com/bminor/glibc/master/debug/memcpy_chk.c"
   },
   {
     "id": "abi",
@@ -1777,12 +1753,10 @@
     "id": "x86-64",
     "term": "x86-64",
     "aliases": [
-      "x86",
-      "x86 targets",
       "x86-64 IBT",
       "x86_64"
     ],
-    "definition": "The 64-bit version of Intel and AMD's x86 processor architecture, used in most PCs and servers. It is little-endian.",
+    "definition": "The 64-bit extension of the x86 instruction-set architecture, implemented by Intel and AMD processors among others. It uses little-endian byte order; a chosen ABI determines the sizes of C types and pointers.",
     "source": "https://en.wikipedia.org/wiki/X86-64"
   },
   {
@@ -1819,7 +1793,7 @@
       "Backward edges",
       "backward-edge"
     ],
-    "definition": "In control-flow integrity, a return from a function back to its caller. Shadow stacks and pointer authentication protect backward edges.",
+    "definition": "A return transfer from a function to its caller. Shadow stacks and selected pointer-authentication arrangements can protect stored return information; their coverage depends on enablement and code generation.",
     "source": "https://docs.kernel.org/arch/x86/shstk.html"
   },
   {
@@ -1828,14 +1802,9 @@
     "aliases": [
       "indirect calls",
       "indirect-call",
-      "indirect branch",
-      "indirect branches",
-      "indirect jump",
-      "indirect jumps",
-      "indirect transfers",
       "indirect call targets"
     ],
-    "definition": "A call or jump whose destination is read from a register or memory at run time, such as calling through a function pointer, rather than fixed in the instruction. Corrupting that value redirects execution.",
+    "definition": "A call whose target is obtained at run time, for example from a function pointer. Indirect jumps also obtain their target at run time; corrupting a target can redirect execution or trigger a check or fault.",
     "source": "https://en.wikipedia.org/wiki/Indirect_branch"
   },
   {
@@ -1844,8 +1813,8 @@
     "aliases": [
       "function pointers"
     ],
-    "definition": "A pointer holding the address of a function, used to call it indirectly. Overwriting one makes the next indirect call go wherever the attacker chose.",
-    "source": "https://en.cppreference.com/w/c/language/pointer#Pointers_to_functions"
+    "definition": "A pointer to a function, usable for indirect calls with a compatible type. Corrupting it can redirect a call or cause another failure, subject to calling rules, mapping permissions and enabled control-flow protections.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "virtual-call",
@@ -1855,8 +1824,8 @@
       "virtual-call",
       "C++ virtual call"
     ],
-    "definition": "A C++ method call dispatched at run time through a table of function pointers (the vtable), so it is an indirect call that CFI can protect.",
-    "source": "https://en.wikipedia.org/wiki/Virtual_function"
+    "definition": "A C++ call selecting the appropriate virtual-function overrider from an object's dynamic type unless dispatch is suppressed or optimised away. Common ABIs implement dynamic dispatch with a virtual table; the C++ language does not require that representation.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2023/n4950.pdf"
   },
   {
     "id": "clang-cfi",
@@ -1864,7 +1833,7 @@
     "aliases": [
       "-fsanitize=cfi"
     ],
-    "definition": "Clang's control-flow integrity schemes, enabled with -fsanitize=cfi. They check that indirect and virtual calls reach a function of the expected type, and need link-time optimisation and suitable visibility settings.",
+    "definition": "A family of Clang control-flow integrity schemes, including type-based indirect-call and virtual-call checks. Most schemes require the documented LTO and visibility setup; other schemes such as kcfi have different requirements.",
     "source": "https://clang.llvm.org/docs/ControlFlowIntegrity.html"
   },
   {
@@ -1876,7 +1845,7 @@
       "link-time optimization",
       "LTO/visibility"
     ],
-    "definition": "Optimising a whole program at link time, when the compiler can see all its pieces together. Clang CFI needs it to know every valid call target.",
+    "definition": "Link-time optimisation, which allows compiler analysis and optimisation across linked compilation units. Most Clang cfi sanitizer schemes require LTO; this is not a requirement of every control-flow protection.",
     "source": "https://llvm.org/docs/LinkTimeOptimization.html"
   },
   {
@@ -1917,8 +1886,7 @@
     "term": "Intel IBT",
     "aliases": [
       "IBT",
-      "Indirect Branch Tracking",
-      "IBT/BTI"
+      "Indirect Branch Tracking"
     ],
     "definition": "Indirect Branch Tracking, part of Intel CET: when enabled, an indirect call or jump must land on an ENDBR64 (or ENDBR32) instruction, otherwise the CPU faults.",
     "source": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
@@ -1930,18 +1898,17 @@
       "BTI",
       "Branch Target Identification"
     ],
-    "definition": "Branch Target Identification, an Armv8.5-A feature: on protected pages, indirect branches must land on a BTI landing-pad instruction, otherwise the CPU faults.",
-    "source": "https://gcc.gnu.org/onlinedocs/gcc/AArch64-Options.html"
+    "definition": "Branch Target Identification, introduced in Armv8.5-A: covered indirect branches into guarded pages must reach a compatible landing pad when checking is enabled. Accepted instructions and branch classes matter; some pointer-authentication instructions also serve as landing pads.",
+    "source": "https://llvm.org/doxygen/AArch64BranchTargets_8cpp_source.html"
   },
   {
     "id": "endbr64",
     "term": "ENDBR64",
     "aliases": [
-      "ENDBR64 landing pads",
-      "ENDBR32"
+      "ENDBR64 landing pads"
     ],
-    "definition": "The x86 instruction that marks a valid target for indirect branches under Intel IBT. On processors without IBT it does nothing.",
-    "source": "https://www.felixcloutier.com/x86/endbr64"
+    "definition": "The x86-64 ENDBR instruction marking a valid indirect-branch target when Intel IBT checking applies. With IBT disabled it has no such checking effect; ENDBR32 is the distinct form for 32-bit code.",
+    "source": "https://raw.githubusercontent.com/llvm/llvm-project/main/llvm/lib/Target/X86/X86IndirectBranchTracking.cpp"
   },
   {
     "id": "landing-pad",
@@ -1952,8 +1919,8 @@
       "landing-pad schemes",
       "landing-pad validation"
     ],
-    "definition": "A special instruction that marks a place an indirect branch is allowed to arrive, such as ENDBR64 or BTI. Any marked place is accepted, so it is coarser than checking the intended function.",
-    "source": "https://gcc.gnu.org/onlinedocs/gcc/AArch64-Options.html"
+    "definition": "A marked location accepted by an enabled indirect-branch protection. Intel IBT uses ENDBR instructions; Arm BTI accepts compatible BTI instructions and some pointer-authentication instructions. Acceptance depends on branch class and configuration and does not establish an intended function type.",
+    "source": "https://llvm.org/doxygen/AArch64BranchTargets_8cpp_source.html"
   },
   {
     "id": "cet",
@@ -1974,7 +1941,7 @@
     "aliases": [
       "-fcf-protection"
     ],
-    "definition": "A GCC and Clang option that builds code for Intel CET, adding ENDBR64 landing pads and marking the binary as shadow-stack compatible. Enforcement still depends on the CPU, kernel and runtime.",
+    "definition": "On supported x86 GCC targets, a flag requesting branch and return control-flow protection code and binary metadata. The full setting requests both; effective CET enforcement still requires compatible CPU, OS and runtime enablement.",
     "source": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
   },
   {
@@ -1985,7 +1952,7 @@
       "Shadow stacks",
       "hardware shadow stack"
     ],
-    "definition": "A second, protected stack that holds only copies of return addresses. On each return the CPU (or code) checks the normal return address against the copy and faults if they differ, stopping return-address overwrites such as ROP.",
+    "definition": "Protected storage for copies of function return addresses. When enforcement covers a call and return, the return is checked against the protected copy; a mismatch faults instead of using the forged return address.",
     "source": "https://docs.kernel.org/arch/x86/shstk.html"
   },
   {
@@ -1996,7 +1963,7 @@
       "pointer authentication code",
       "Pointer authentication"
     ],
-    "definition": "An Armv8.3-A feature that stores a short keyed cryptographic code in a pointer's unused upper bits and checks it before the pointer is used. A pointer changed by an attacker fails the check. It authenticates pointers but does not encrypt them.",
+    "definition": "An Arm feature that adds and authenticates a keyed code for selected pointers using context. It authenticates rather than encrypts; coverage and finite authentication-code strength depend on configuration and it is not general memory safety.",
     "source": "https://docs.kernel.org/arch/arm64/pointer-authentication.html"
   },
   {
@@ -2009,9 +1976,9 @@
       "memory tagging",
       "Memory tagging"
     ],
-    "definition": "An Armv8.5-A feature that gives every 16-byte granule of memory a 4-bit allocation tag and every pointer a 4-bit tag in its top byte; a checked access faults when they differ. It catches many overflows and use-after-free bugs, probabilistically.",
-    "example": "With 16 possible tags, a stale pointer matches a randomly retagged granule 1 time in 16.",
-    "source": "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+    "definition": "Arm Memory Tagging Extension: suitably configured memory uses four-bit allocation tags for sixteen-byte granules, compared with logical pointer tags on checked accesses. Software must manage tags; mismatches can be reported synchronously or asynchronously, and matching tags or unchecked accesses can miss bugs.",
+    "example": "Only under an independent uniform choice among all sixteen tags does one stale tag match with probability one in sixteen; allocator policies can differ.",
+    "source": "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html"
   },
   {
     "id": "memory-tag",
@@ -2025,8 +1992,8 @@
       "retagged",
       "retagging"
     ],
-    "definition": "In MTE, a 4-bit value attached both to a granule of memory (the allocation tag) and to the pointers used to reach it (the pointer tag). Freed memory is retagged, so stale pointers usually carry the wrong tag.",
-    "source": "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+    "definition": "In MTE, a four-bit allocation value associated with a sixteen-byte granule or a logical value carried by a pointer. Software arranges tag assignment and retagging; freeing memory does not by itself guarantee that every stale pointer mismatches.",
+    "source": "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html"
   },
   {
     "id": "granule",
@@ -2036,8 +2003,8 @@
       "freed granule",
       "same-granule"
     ],
-    "definition": "In MTE, the 16-byte block of memory that shares one allocation tag. An overflow that stays inside one granule is not detected.",
-    "source": "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+    "definition": "In MTE, the sixteen-byte region sharing one allocation tag. A boundary violation that remains within a granule with the matching tag is not identified by that tag comparison.",
+    "source": "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html"
   },
   {
     "id": "mte-modes",
@@ -2046,8 +2013,8 @@
       "synchronous mode",
       "asynchronous mode"
     ],
-    "definition": "Ways MTE reports tag mismatches: synchronous mode faults on the exact bad access; asynchronous mode records the fault and reports it later, which is cheaper but lets execution continue for a while.",
-    "source": "https://source.android.com/docs/security/test/memory-safety/arm-mte"
+    "definition": "MTE reporting choices: synchronous checking reports a mismatch at the access; asynchronous checking can allow execution to continue before a later report. Linux also documents an asymmetric mode where available; enabled modes and costs depend on platform and workload.",
+    "source": "https://docs.kernel.org/arch/arm64/memory-tagging-extension.html"
   },
   {
     "id": "allocator-hardening",
@@ -2063,8 +2030,8 @@
       "safe-linking",
       "safe linking"
     ],
-    "definition": "A glibc malloc hardening (since glibc 2.32) that scrambles singly linked free-list pointers with bits of their own address, so an overwrite without a heap address leak produces an unusable pointer.",
-    "source": "https://sourceware.org/glibc/wiki/MallocInternals"
+    "definition": "A glibc hardening mechanism for selected singly linked allocator lists that encodes links using address bits and also uses alignment checks. It constrains some pointer-corruption attacks but does not make all corruptions unusable or require a leak in every attack.",
+    "source": "https://raw.githubusercontent.com/bminor/glibc/master/malloc/malloc.c"
   },
   {
     "id": "free-list",
@@ -2074,7 +2041,7 @@
       "free-list",
       "free-list pointers"
     ],
-    "definition": "An allocator's list of freed blocks waiting to be reused, linked by pointers stored inside the freed blocks themselves, which makes those pointers a target for heap corruption.",
+    "definition": "An allocator data structure tracking available blocks. Some implementations store links inside freed blocks, making those links targets for corruption; other structures and hardening choices are possible.",
     "source": "https://sourceware.org/glibc/wiki/MallocInternals"
   },
   {
@@ -2084,7 +2051,7 @@
       "MiraclePtr",
       "raw_ptr"
     ],
-    "definition": "Chrome's MiraclePtr implementation: pointers declared as raw_ptr<T> keep a reference count, and memory freed while such references remain is quarantined and poisoned instead of reused, blunting use-after-free.",
+    "definition": "One Chromium raw_ptr implementation that tracks references for eligible allocations and holds freed storage while tracked references remain. Other raw_ptr implementations, unsupported allocations and untracked aliases have different coverage; it does not establish universal memory safety.",
     "source": "https://chromium.googlesource.com/chromium/src/+/main/base/memory/raw_ptr.md"
   },
   {
@@ -2093,11 +2060,10 @@
     "aliases": [
       "executable storage",
       "legitimately executable",
-      "not executable",
       "writable and executable",
       "writable/executable mappings"
     ],
-    "definition": "Memory whose pages are marked so the CPU may run instructions from it, normally only a program's and its libraries' code. NX keeps data such as the stack and heap out of it, but code-reuse attacks run code that is already executable.",
+    "definition": "Memory mapped with permission to fetch and execute instructions. Stack and heap mappings are commonly non-executable, but actual permissions and JIT-generated executable mappings depend on platform policy.",
     "source": "https://learn.microsoft.com/en-us/windows/win32/memory/data-execution-prevention"
   },
   {
@@ -2112,7 +2078,7 @@
       "reused live storage",
       "address has been reused"
     ],
-    "definition": "An allocator handing memory that was freed to a later allocation. If a stale pointer still refers to it, that pointer now reaches the new object, often filled with attacker-chosen data, which is what makes use-after-free exploitable.",
+    "definition": "An allocator making released storage available to a later object. A stale alias can then overlap new contents, but accessing an object outside its lifetime is invalid and C does not promise a particular observed value.",
     "source": "https://cwe.mitre.org/data/definitions/416.html"
   },
   {
@@ -2124,7 +2090,7 @@
       "generated code",
       "compiler-generated code"
     ],
-    "definition": "The compiler stage that produces machine instructions from a program; its output is the generated code. Protections such as stack canaries and pointer authentication are added here, so they cover only the code the compiler built with them.",
+    "definition": "The compiler stage producing machine instructions from a program. Compiler-generated checks protect the covered generated operations; hand-written assembly, separately compiled code and runtime enablement can require separate arrangements.",
     "source": "https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html"
   },
   {
@@ -2132,10 +2098,11 @@
     "term": "Encoding error (C)",
     "aliases": [
       "encoding error",
-      "encoding errors"
+      "encoding errors",
+      "character encoding error"
     ],
     "definition": "A failure to convert between characters and bytes, for example an invalid multibyte or wide-character sequence. C's snprintf returns a negative value when one occurs, which is different from truncation.",
-    "source": "https://en.cppreference.com/w/c/io/fprintf"
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
   },
   {
     "id": "chromium-stable-channel",
@@ -2146,5 +2113,71 @@
     ],
     "definition": "The main release of Chrome and Chromium that ordinary users run, as opposed to the Beta, Dev and Canary test channels. Chromium's memory-safety statistics count security bugs that affected this release.",
     "source": "https://developer.chrome.com/docs/web-platform/chrome-release-channels"
+  },
+  {
+    "id": "sys-memory-unsafety",
+    "term": "Memory unsafety",
+    "aliases": [
+      "memory-unsafe",
+      "memory-safety bug",
+      "memory-safety bugs",
+      "memory-safety failure",
+      "memory-safety errors",
+      "memory errors",
+      "memory bugs"
+    ],
+    "definition": "Failure to respect object bounds or lifetimes, or lack of checks preventing such failures. It includes spatial and temporal memory errors; it is the absence or violation of memory safety.",
+    "source": "https://www.chromium.org/Home/chromium-security/memory-safety/"
+  },
+  {
+    "id": "sys-format-string",
+    "term": "Format string",
+    "aliases": [
+      "format strings"
+    ],
+    "definition": "Text describing how a formatting function should produce output, including conversion directives and literal text. A fixed valid format is normal; letting untrusted input control it creates a separate format-string vulnerability.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+  },
+  {
+    "id": "sys-non-pie",
+    "term": "Non-PIE executable",
+    "aliases": [
+      "non-PIE"
+    ],
+    "definition": "An executable whose main image is not built as position independent. Conventional non-PIE ELF main code normally uses fixed addresses, even when other mappings are randomised.",
+    "source": "https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html"
+  },
+  {
+    "id": "sys-automatic-storage",
+    "term": "Automatic storage duration",
+    "aliases": [
+      "automatic variable",
+      "automatic value",
+      "automatic storage"
+    ],
+    "definition": "In C, storage lasting for the execution of an associated block or call, with special lifetime rules for variable-length arrays. Automatic locals without an initializer have indeterminate values; static locals have different duration.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+  },
+  {
+    "id": "sys-object-bounds",
+    "term": "Object bounds",
+    "aliases": [
+      "out-of-bounds",
+      "OOB"
+    ],
+    "definition": "The limits of storage belonging to an object. An out-of-bounds access crosses those limits and may be a read or a write; mapped adjacent memory does not make it valid.",
+    "source": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+  },
+  {
+    "id": "sys-indirect-branch",
+    "term": "Indirect branch",
+    "aliases": [
+      "indirect branches",
+      "indirect jump",
+      "indirect jumps",
+      "indirect transfers"
+    ],
+    "definition": "A control transfer whose target is obtained at run time rather than fixed directly in the instruction, including relevant indirect calls or jumps. The instruction class and target constraints depend on the architecture.",
+    "source": "https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html"
   }
 ]

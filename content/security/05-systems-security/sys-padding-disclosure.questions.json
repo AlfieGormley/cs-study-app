@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sys-memory-bugs-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A kernel driver copies this raw struct across a trust boundary. Assume an ABI where `value` is at offset 8 and the struct occupies 16 bytes. What risk remains after assigning both fields?\n\n```c\nstruct info {\n    uint8_t  flag;\n    uint64_t value;\n};\nstruct info r;\nr.flag = 1;\nr.value = v;\n/* Raw copies also send padding. */\ncopy_to_user(u, &r, sizeof r);\n```",
+    "options": [
+      {
+        "text": "None; both fields are initialised",
+        "explanation": "The members are assigned, but that does not establish safe portable contents for the struct padding."
+      },
+      {
+        "text": "`sizeof r` is 9, so the copy is too short",
+        "explanation": "With 8-byte alignment for `uint64_t`, the struct is 16 bytes, not 9."
+      },
+      {
+        "text": "Seven padding bytes may contain unspecified data and disclose information",
+        "explanation": "Under the stated ABI offsets 1 through 7 are padding. Assigning members does not establish portable padding contents, so serializing the raw object can disclose unintended bytes."
+      },
+      {
+        "text": "`uint8_t` cannot be copied to user space",
+        "explanation": "Any bytes can be copied; the problem is which bytes are in the struct."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Given the stated layout, flag uses byte 0, padding occupies bytes 1–7, and value uses bytes 8–15:\n\n```formula\nP = o_v − s_f = 8 B − 1 B = 7 B\nS = o_v + s_v = 8 B + 8 B = 16 B\nwhere\nP: the number of padding bytes between flag and value\no_v: the offset of value from the struct's start; 8 B under the stated ABI, a multiple of 8 so the uint64_t is aligned\ns_f: the size of flag, a uint8_t: 1 B\nS: the whole struct's size, sizeof r\ns_v: the size of value, a uint64_t: 8 B\nB: byte, 8 bits\nIn words: the compiler leaves a 7-byte gap after the 1-byte flag so value starts at offset 8, making the struct 16 bytes, not 9.\n```\n\nDo not transmit the padding. Encode the two named fields into an explicit wire format with defined endianness. `{0}` or an earlier `memset` is not a portable guarantee that padding stays zero after later member stores.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sys-memory-bugs-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```c\nchar d[8];\n/* Return counts required characters. */\nint n = snprintf(d, sizeof d,\n    \"%s\", \"hello world\");\n/* Buffer keeps seven chars plus NUL. */\nprintf(\"%d [%s]\\n\", n, d);\n```",
+    "options": [
+      {
+        "text": "`11 [hello world]`",
+        "explanation": "`snprintf` never writes more than `sizeof d` bytes, so the full string cannot be stored in an 8-byte buffer."
+      },
+      {
+        "text": "`7 [hello w]`",
+        "explanation": "The contents are right but the return value is not the number of characters written; it is the length the full output *would* have had."
+      },
+      {
+        "text": "`11 [hello w]`",
+        "explanation": "Correct. It stores 7 characters plus a NUL in the 8 bytes, and returns 11, the untruncated length. `n >= sizeof d` tells you it truncated."
+      },
+      {
+        "text": "`-1 [hello w]`",
+        "explanation": "A negative return means a character encoding error, not truncation. C99 `snprintf` returns the would-be length on truncation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The required formatted length is 11. `snprintf` keeps one byte of the capacity for the NUL:\n\n```formula\nK = C − 1 = 8 − 1 = 7\nn = 11\nn ≥ C\nwhere\nK: how many characters actually fit before the NUL\nC: the buffer's capacity, sizeof d, 8 bytes\n1: the byte reserved for the terminating NUL\nn: the value snprintf returns: the length of the full untruncated output, here 11 for \"hello world\"\n≥: greater than or equal to\nIn words: only 7 characters fit in an 8-byte buffer, and because the returned 11 is at least the capacity 8, the output was truncated.\n```\n\nEight output bytes hold seven characters, `hello w`, followed by NUL. Therefore the result is `11 [hello w]`. Check errors before converting the return value to an unsigned type:\n\n```c\nif (n < 0 || (size_t)n >= sizeof d) {\n    /* Handle error or truncation. */\n}\n```",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reviewer replaces `strcpy(dst, src)` with `strncpy(dst, src, sizeof dst)` where `dst` is `char dst[4]` and the source string is `\"abcdef\"`. What is the remaining problem?",
+    "options": [
+      {
+        "text": "None; `strncpy` is the safe version of `strcpy`",
+        "explanation": "This is the common misconception. `strncpy` bounds the write but does not guarantee a terminator."
+      },
+      {
+        "text": "`strncpy` still writes 7 bytes",
+        "explanation": "It writes at most `n` = 4 bytes, so there is no write overflow here."
+      },
+      {
+        "text": "`dst` has no NUL terminator, so unbounded string operations on it are invalid",
+        "explanation": "The four bytes are `abcd`, with no terminator. Passing that array to an unbounded string operation violates its input requirements and can over-read."
+      },
+      {
+        "text": "`strncpy` pads with spaces, corrupting the string",
+        "explanation": "It fills the rest with NUL bytes, and only when the source is *shorter* than `n`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Four source bytes fill `dst` as `abcd`; no NUL fits. An unbounded string operation is invalid on this result. Use a bounded formatting/copy API with error and truncation checks, or explicitly terminate within the destination while treating lost data as truncation. `strlcpy` is an option only where provided.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
+    }
+  }
+]

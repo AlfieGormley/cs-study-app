@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sys-memory-bugs-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A malformed Heartbleed request supplied fewer payload bytes than its length field claimed. Which behaviour made the vulnerable OpenSSL implementation an information-disclosure vulnerability?",
+    "options": [
+      {
+        "text": "Crashed immediately on the oversized length",
+        "explanation": "A crash was possible, but was not a reliable protection. The vulnerability could disclose process memory rather than rejecting every malformed request."
+      },
+      {
+        "text": "It could copy beyond the supplied payload into a response, disclosing up to about 64 KB",
+        "explanation": "Correct. `memcpy` used the attacker's length without checking it against the record's real size, so it over-read adjacent heap memory, which could hold keys and cookies."
+      },
+      {
+        "text": "Wrote 64 KB of attacker data over its heap",
+        "explanation": "Heartbleed was an out-of-bounds *read* (an information leak), not a write."
+      },
+      {
+        "text": "Rejected the message because TLS records are authenticated",
+        "explanation": "The heartbeat was processed inside the TLS layer; record authentication does not validate this inner length field."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The request contains a type, two-byte payload length, payload and at least 16 bytes of random padding. Vulnerable code trusted the claimed length in a copy. A robust parser first checks that the header is present, parses the length, and then checks payload plus minimum padding against the remaining record:\n\n```formula\n1 + 2 + L + 16 ≤ R\nL ≤ R − 19\nwhere\n1: the one-byte message type\n2: the two-byte payload-length field\nL: the payload length the request claims, in bytes\n16: the minimum padding RFC 6520 requires, in bytes\nR: the number of heartbeat-message bytes actually received\n≤: less than or equal to\nIn words: the claimed payload may be at most the received size minus the 19 bytes of header and minimum padding; anything larger must be discarded.\n```\n\nWith 40 bytes received, a claim above 21 is rejected. A two-byte field can claim up to 65,535 bytes, which is where the roughly 64 KB disclosure limit comes from. The review does not assume every malformed maximum-length request yields an identical complete reply.",
+    "link": {
+      "title": "Primary reference for this example",
+      "url": "https://openssl-library.org/news/secadv/20140407.txt"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "pki-e2ee-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In X3DH, Alice computes four Diffie–Hellman values and feeds all of them into the session key:\n\n```formula\nDH1 = DH(IK_A, SPK_B)\nDH2 = DH(EK_A, IK_B)\nDH3 = DH(EK_A, SPK_B)\nDH4 = DH(EK_A, OPK_B)\nwhere\nDH: one Diffie–Hellman computation: DH(X, Y) combines the private half of key pair X with the public half of key pair Y\nIK_A: Alice's long-term identity key pair\nIK_B: Bob's long-term identity key pair\nSPK_B: Bob's signed prekey pair (medium-term)\nEK_A: Alice's fresh ephemeral key pair for this session\nOPK_B: one of Bob's one-time prekey pairs\nDH1: the identity-key-to-signed-prekey result\nDH2: the ephemeral-to-Bob's-identity-key result\nDH3: the ephemeral-to-signed-prekey result\nDH4: the ephemeral-to-one-time-prekey result\nIn words: four pairings of Alice's keys with Bob's, each giving a shared secret that Bob can recompute with his private halves.\n```\n\nWhat would break if Alice left DH2 out (keeping DH1, DH3, DH4)?",
+    "options": [
+      {
+        "text": "Forward secrecy, because DH2 is the only ephemeral term",
+        "explanation": "DH3 and DH4 also use the ephemeral EK_A, so forward secrecy would remain."
+      },
+      {
+        "text": "Bob's authentication would rest only on his prekeys: anyone who obtained the private halves of SPK_B and an OPK could act as Bob without ever having his identity key",
+        "explanation": "Correct. DH2 is the only term that needs Bob's long-term identity private key, tying the shared secret to Bob himself rather than only to keys he signed."
+      },
+      {
+        "text": "Alice's authentication",
+        "explanation": "Alice is authenticated by DH1, which uses IK_A. Dropping DH2 does not affect that."
+      },
+      {
+        "text": "Nothing; DH2 is redundant",
+        "explanation": "Each DH term has a role. DH2 binds Bob's identity key directly into the secret."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "DH1 and DH3 require Bob's signed-prekey private half; DH4 requires the optional one-time-prekey private half; DH2 additionally requires Bob's identity private half. Omitting DH2 lets an attacker with the used prekey private keys derive the secret without the identity private key. The server distributes public prekeys, not their private halves.",
+    "link": {
+      "title": "The X3DH Key Agreement Protocol — Signal",
+      "url": "https://signal.org/docs/specifications/x3dh/"
+    }
+  },
+  {
+    "id": "pki-e2ee-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why did Signal add a post-quantum KEM to its initial key agreement (PQXDH) in 2023, years before a large quantum computer exists, while keeping classical X25519 alongside it?",
+    "options": [
+      {
+        "text": "Harvest-now-decrypt-later: ciphertext recorded today could be decrypted once quantum computers exist, so key agreement must be quantum-resistant now; the hybrid keeps classical security if the new KEM turns out weak",
+        "explanation": "Correct. Confidentiality must last as long as the messages matter. Mixing both secrets into the KDF means an attacker must break both."
+      },
+      {
+        "text": "Because quantum computers already break X25519",
+        "explanation": "No quantum computer today can break X25519. The concern is the future."
+      },
+      {
+        "text": "To replace signatures on prekeys with quantum-safe ones",
+        "explanation": "PQXDH does not make classical prekey authentication quantum-resistant. A sufficiently capable active quantum attacker would require resistant authentication; this differs from recorded-traffic confidentiality."
+      },
+      {
+        "text": "Because ML-KEM is faster than X25519",
+        "explanation": "ML-KEM is fast, but its keys and ciphertexts are much larger. Speed was not the motive."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A passive adversary can store encrypted traffic indefinitely.\n2. Shor's algorithm on a large quantum computer would solve elliptic-curve discrete logs, revealing X3DH secrets from recorded public keys.\n3. So key agreement needs quantum resistance *before* such machines exist.\n4. New PQ schemes have had less scrutiny; one NIST candidate (SIKE) was broken classically in 2022.\n5. Hybrid: the KEM's shared secret goes into the same KDF as the four DH values (below). Secure if either X25519 or the KEM holds.\n\n```formula\nSK = KDF(DH1 ‖ DH2 ‖ DH3 ‖ DH4 ‖ SS)\nwhere\nSK: the session's shared secret key\nKDF: key derivation function (HKDF in PQXDH)\nDH1: the identity-to-signed-prekey Diffie–Hellman result\nDH2: the ephemeral-to-identity-key result\nDH3: the ephemeral-to-signed-prekey result\nDH4: the ephemeral-to-one-time-prekey result (if one was available)\nSS: the shared secret from encapsulating to Bob's post-quantum KEM prekey\n‖: concatenation\nIn words: the session key depends on both the classical and the post-quantum secrets, so an attacker must recover both to learn it.\n```",
+    "link": {
+      "title": "Quantum Resistance and the Signal Protocol — Signal blog",
+      "url": "https://signal.org/blog/pqxdh/"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sys-memory-bugs-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which of these is a **temporal** memory-safety bug rather than a spatial one?",
+    "options": [
+      {
+        "text": "Writing `arr[10]` into a 10-element array",
+        "explanation": "That is spatial: the address is outside the object's bounds, even though the object is alive."
+      },
+      {
+        "text": "Heartbleed's over-long `memcpy` read",
+        "explanation": "Also spatial: an out-of-bounds read past the end of a live buffer."
+      },
+      {
+        "text": "Reading `s->name` after `free(s)`",
+        "explanation": "Correct. The address was once valid, but the object's lifetime has ended. That is a use-after-free, a temporal bug."
+      },
+      {
+        "text": "A `malloc` size that wrapped round to a small number",
+        "explanation": "Wrapping can produce an undersized request; later accesses beyond the actual allocation are spatial errors. The arithmetic alone is not a temporal error."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Spatial checks concern object boundaries; temporal checks concern lifetime. In the selected option the session has been freed, so accessing its former member is invalid even though that member belonged to the original layout. A wrapped allocation can lead to spatial errors when code later exceeds the actual allocation.",
+    "link": {
+      "title": "CWE-416: Use After Free — MITRE",
+      "url": "https://cwe.mitre.org/data/definitions/416.html"
+    }
+  },
+  {
+    "id": "sys-memory-bugs-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server frees a `session` object on logout but a cached pointer to it survives. Shortly after, a request allocates a buffer of the same size and fills it with request data. Why is the later `if (sess->is_admin)` check dangerous rather than merely buggy?",
+    "options": [
+      {
+        "text": "Because freed memory is zeroed, so `is_admin` reads as false and locks users out",
+        "explanation": "Freeing storage does not promise that a later invalid access reads zero. Denying legitimate access can itself be a security/availability problem."
+      },
+      {
+        "text": "The allocator may reuse that storage for request data, allowing a stale access to influence authorization",
+        "explanation": "If reuse occurs, the stale access can observe storage occupied by request-controlled bytes. The access is undefined behaviour, so this is a threat scenario rather than a promised C execution trace."
+      },
+      {
+        "text": "Because `free` returns the page to the OS, so access always segfaults",
+        "explanation": "The allocator may retain the mapping or release it; neither behaviour makes stale access valid or guarantees a segmentation fault."
+      },
+      {
+        "text": "Because the compiler removes the check after `free`",
+        "explanation": "The compiler has no obligation to preserve a meaningful check after undefined behaviour. Optimisation is another reason the result cannot be predicted; allocation reuse explains the illustrated security risk."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A possible sequence is allocate X, free X, X's storage is reused for request bytes, then access X through a stale alias. Prevent it through ownership and lifetime discipline. Nulling one pointer does not invalidate all aliases. ASan can detect accesses while freed storage remains poisoned, but may miss accesses after that address has been reused for a live allocation.",
+    "link": {
+      "title": "CWE-416: Use After Free — MITRE",
+      "url": "https://cwe.mitre.org/data/definitions/416.html"
+    }
+  }
+]

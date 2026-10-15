@@ -1,0 +1,92 @@
+[
+  {
+    "id": "pki-signatures-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service verifies JWTs signed with RS256 using a library call `verify(token, key=public_key_pem)`, letting the library read the algorithm from the token header. An attacker sends a token with `\"alg\": \"HS256\"` and a valid HMAC computed using the public key PEM as the secret. What happens, and what is the fix?",
+    "options": [
+      {
+        "text": "Rejected, because HMAC can't use a public key",
+        "explanation": "An HMAC accepts any byte string as a key, including the PEM text of a public key, which the attacker can download."
+      },
+      {
+        "text": "Accepted by a vulnerable library, because it trusts the header's algorithm; pin the expected algorithm to RS256",
+        "explanation": "Correct. The library switches to HMAC and uses the 'key' it was given (the public key) as the shared secret, which the attacker also knows. Never let the message choose how it is verified."
+      },
+      {
+        "text": "Accepted, and the fix is to use a 4096-bit RSA key",
+        "explanation": "Key size is irrelevant: RSA is never used in the forged path."
+      },
+      {
+        "text": "Rejected, because the payload is encrypted",
+        "explanation": "JWS tokens are signed, not encrypted. The payload is base64url, readable by anyone."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The library sees `alg: HS256` and computes `HMAC(key, header.payload)`.\n2. The `key` it was handed is the RSA public key PEM, which is public.\n3. The attacker computed the same HMAC with the same PEM, so the tags match.\n4. The token is accepted with whatever claims the attacker wrote.\n\nFix: `verify(token, key, algorithms=[\"RS256\"])`, or use a library that binds the algorithm to the key. The same mistake allowed `alg: none` tokens.",
+    "link": {
+      "title": "Critical vulnerabilities in JSON Web Token libraries — Auth0",
+      "url": "https://auth0.com/blog/critical-vulnerabilities-in-json-web-token-libraries/"
+    }
+  },
+  {
+    "id": "pki-signatures-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A SAML handler verifies a signature referencing one Assertion by ID, then uses a separate unscoped query that selects the first Assertion's NameID. Assume it performs no protective schema/uniqueness checks. An attacker inserts an unsigned Assertion before the signed one. What can go wrong?",
+    "options": [
+      {
+        "text": "Verification passes on the signed assertion, but the lookup returns the attacker's unsigned one, so the attacker logs in as anyone",
+        "explanation": "Correct. This is XML Signature Wrapping: verify one thing, act on another. The fix is to act only on the exact element (bytes) that was verified."
+      },
+      {
+        "text": "The XML parser rejects duplicate elements",
+        "explanation": "XML syntax permits repeated elements, though schema and protocol validation may reject a particular structure. The prompt stipulates that this handler omits those protections."
+      },
+      {
+        "text": "Nothing; the signature check fails because the document changed",
+        "explanation": "The signature covers only the referenced element. Adding a sibling elsewhere leaves that element, and its signature, intact."
+      },
+      {
+        "text": "The attacker can now recover the IdP's private key",
+        "explanation": "Nothing about the key leaks; the bug is in what the application reads after verification."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The signature references the signed assertion by ID, and verifying it succeeds.\n2. The lookup is a separate query over the whole document. It finds the *first* `<Assertion>`, which is the attacker's.\n3. So the security check and the business logic look at different data.\n4. Rule: after verifying, use only the verified data: hand the verified element on, or the canonical bytes that were checked. Do not run a separate unscoped selection over the original document; consume the verified element or validated representation.",
+    "link": {
+      "title": "SAML Security Cheat Sheet — OWASP",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/SAML_Security_Cheat_Sheet.html"
+    }
+  },
+  {
+    "id": "pki-signatures-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A code-signing key may have leaked as early as January. Which independent evidence could support distinguishing releases signed before that earliest plausible compromise, subject to validation and relying-party policy?",
+    "options": [
+      {
+        "text": "Nothing; every signature from that key must be distrusted",
+        "explanation": "Without independent timing evidence, verification alone cannot distinguish pre-compromise releases. Acceptance depends on the available evidence and policy."
+      },
+      {
+        "text": "Releases whose signatures were countersigned by a trusted timestamping authority before January",
+        "explanation": "A valid trusted timestamp predating the earliest plausible compromise supports prior existence of the signed artifact. It is not automatic proof of legitimate authorship; key custody, chain status and policy still matter."
+      },
+      {
+        "text": "Re-verify the old signatures with the public key",
+        "explanation": "They will verify perfectly. So would signatures the attacker creates now, with any date they like."
+      },
+      {
+        "text": "Switch to Ed25519, which makes past signatures safe",
+        "explanation": "Changing algorithm protects future signatures only. It says nothing about which past signatures were made by the company rather than an attacker."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A compromised key can create valid new signatures with attacker-controlled dates. RFC3161 timestamps bind a message imprint and trusted time in a signed timestamp token. A validated timestamp before the earliest plausible compromise can support acceptance of an older artifact under the applicable policy. Other reliable prior records may also help. Revoke/replace the affected signing credential and investigate the actual compromise interval; revocation date and invalidity date are distinct fields, not an instruction to backdate a CRL entry.",
+    "link": {
+      "title": "Trusted timestamping — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Trusted_timestamping"
+    }
+  }
+]

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "pki-signatures-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An ECDSA signer uses the same secret nonce and the same key for two signatures over two different message hashes (distinct modulo the curve's prime group order, so the two signatures' s values differ). Given those signatures and messages, what can an attacker recover?",
+    "options": [
+      {
+        "text": "Nothing useful; the nonce is secret and never appears in the signature",
+        "explanation": "The nonce is secret, but two signatures with the same nonce share the same r value and give two linear equations in two unknowns: the nonce and the private key."
+      },
+      {
+        "text": "Only replay the two existing images on other devices",
+        "explanation": "Replay was possible anyway. The far bigger problem is that the key itself is exposed."
+      },
+      {
+        "text": "Recover the nonce, then the private key, and sign arbitrary firmware",
+        "explanation": "Correct. With equal r values, subtracting the two signing equations reveals the nonce, and either equation then gives the private key (worked example). This is how fail0verflow recovered Sony's PS3 signing key in 2010."
+      },
+      {
+        "text": "Decrypt the firmware images",
+        "explanation": "Signatures do not encrypt anything; there is nothing to decrypt. The leak is the signing key."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each ECDSA signature is a pair (r, s):\n\n```formula\nr = x(k × G) mod n\ns = (k^{−1}(h + rd)) mod n\nwhere\nr: the first half of the signature, from the nonce's curve point\ns: the second half of the signature\nk: the secret per-signature nonce\nG: the curve's fixed public generator point\nk × G: elliptic-curve scalar multiplication (adding G to itself k times)\nx: the x-coordinate of a curve point\nh: the message hash, as a number\nd: the private key\nn: the prime order of G\nk^{−1}: the inverse of k modulo n\nmod: modulo: the remainder after dividing by n\nIn words: r depends only on the nonce, and s ties the nonce, the hash and the private key together.\n```\n\nThe same k gives the same r for both signatures. Multiply each s by k and subtract:\n\n```formula\ns_1 k ≡ h_1 + rd   (mod n)\ns_2 k ≡ h_2 + rd   (mod n)\n(s_1 − s_2)k ≡ h_1 − h_2   (mod n)\nk ≡ (h_1 − h_2) / (s_1 − s_2)   (mod n)\nd ≡ (s_1 k − h_1) / r   (mod n)\nwhere\ns_1: the s value of the first signature, public\ns_2: the s value of the second signature, public\nh_1: the first message hash, public\nh_2: the second message hash, public\nr: the shared r value, public\nk: the reused nonce\nd: the private key\nn: the prime order of the generator; all arithmetic is modulo n\n≡: congruence: equal remainders modulo n\nmod: modulo: the remainder after dividing by n\n/: division modulo n, meaning multiplication by the modular inverse of the divisor\nIn words: subtracting cancels the private-key term, which reveals k; with k known, the first equation gives d.\n```\n\nAll of r, s_1, s_2, h_1 and h_2 are public, so two lines of modular arithmetic give the private key. The fix is fresh, unbiased nonces, or deterministic nonces via RFC 6979 or Ed25519.\n\nThe stated distinct hash representatives make s_1 − s_2 nonzero, so the inverse exists. Repeating a signature on the same message does not provide this independent equation.",
+    "link": {
+      "title": "Elliptic Curve Digital Signature Algorithm — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm"
+    }
+  }
+]

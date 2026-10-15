@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 60/76. Updated 2026-10-15.
+Verified modules: 61/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -67,6 +67,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | software-engineering/Version Control & CI/CD | 6 | 26 | 69 | 15 | 279 | 389 | 39 |
 | software-engineering/Software Architecture at the Code Level | 6 | 25 | 67 | 10 | 171 | 1143 | 24 |
 | software-engineering/Engineering Practices | 6 | 24 | 66 | 26 | 235 | 483 | 62 |
+| theory/Logic & Proofs | 6 | 37 | 74 | 171 | 277 | 388 | 31 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4655,6 +4656,35 @@ Remaining gaps:
 Low-confidence areas:
 
 - **medium** — sepr-relative-estimates: Exact original wording/provenance of the Hofstadter book quotation. The original1979 book passage was not authenticated. A fetched author-associated Visible Language journal biography quotes a variant. Active prose and glossary expressly label the familiar text as commonly quoted and tongue-in-cheek; no quantitative prediction relies on it.
+
+## theory: Logic & Proofs
+
+[Independent verification record](../content/theory/01-logic-proofs/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Corrected three corrupted exponent descriptions:3 to the thirteenth, Java wrap modulus2 to the thirty-second, and exhaustive200-variable search2 to the two hundredth.
+- Repaired malformed nested formula fences and swallowed traces in predicate q5; three standalone cards now explain the True False output.
+- Removed bisect alias from bisect_left: Python bisect is bisect_right. Added precise bisect.bisect_left alias and documented the distinction.
+- Exponential-time definition now includes bases between one and two, including1.5; distinguishes the broader complexity-class convention.
+- Big-O witness construction now explicitly uses a nonnegative integer threshold so max with floor(c)+1 is a valid natural-number input.
+- Avoided an integer-only exponent dictionary definition in the irrational-exponent existence proof.
+- Replaced Big-O comparison function wording that incorrectly opened a sorting-comparator definition.
+- Reworded invalid logical inference so affirming/denying glossary entries do not open the Linux EINVAL error definition.
+- Reworded Hoare loop invariant method to avoid an unrelated loop-invariant code-motion definition.
+- Reworded TLA+ state exploration to avoid reachable states opening an unreachable-state definition and to avoid an automaton-specific initial-state definition.
+- Reworded CNF interchange format so standard input does not open Unix standard-stream definitions.
+- Reworded foreign key constraints to select the referential-integrity definition instead of candidate-key uniqueness.
+- Specified min-heaps where parent no greater than children is claimed; max-heaps have the reverse ordering.
+
+Remaining gaps:
+
+- No substantive archived topic removed; SAT proof logging, industrial encodings and formal proof-assistant mechanisation remain introductory or outside the original scope.
+- No unbounded program claim is inferred from a finite experiment: native runs supplement the explicit algebraic, inductive, invariant and well-founded arguments.
+
+Low-confidence areas:
+
+- **medium** — logp-invariants-hoare: Collatz termination for every positive integer remains an open problem; this status is time-sensitive.. Checked against freshly fetched Terence Tao primary exposition and a current literature search. No accepted full proof located; future mathematical developments require rechecking the status.
 
 ## synth: Sound & Digital Audio
 

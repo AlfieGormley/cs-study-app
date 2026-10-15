@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 58/76 modules; 372 originals → 1977 short lessons with 4358 focused questions.
+- Independently verified: 59/76 modules; 378 originals → 2002 short lessons with 4425 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `7d9e261`, version `32821d7aa537`, 1951 short lessons/4289 focused questions
-  across 57 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
-- Current generated candidate: `40fc5032b0f9`, 58 modules/1977 units/4358 questions.
+- Latest confirmed live release: `ea6c7b5`, version `40fc5032b0f9`, 1977 short lessons/4358 focused questions
+  across 58 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Current generated candidate: `b82f880c76fb`, 59 modules/2002 units/4425 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -24,9 +24,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- software-engineering/se-architecture: authoring; /root/se_architecture_short_author.
-- software-engineering/se-practices: authoring; /root/se_practices_short_author.
+- software-engineering/se-practices: verifying; /root/se_practices_short_verify.
 - theory/th-logic: authoring; /root/theory_logic_short_author.
+- theory/th-discrete: authoring; /root/theory_discrete_short_author.
 
 Verification and integration:
 

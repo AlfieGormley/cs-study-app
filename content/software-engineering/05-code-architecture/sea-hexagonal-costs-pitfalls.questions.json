@@ -1,0 +1,159 @@
+[
+  {
+    "id": "sea-hexagonal-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team defines this port:\n\nThis interface fragment assumes Protocol and SQLAlchemy (`sa`) imports.\n\n```python\nclass OrderRepo(Protocol):\n    def query(self) -> sa.orm.Query:\n        ...\n```\n\nUse cases then call `repo.query().filter(...)`. What is wrong?",
+    "options": [
+      {
+        "text": "Nothing; a `Protocol` makes it an abstraction, so the core is decoupled",
+        "explanation": "Being declared as a `Protocol` doesn't help if its signature exposes SQLAlchemy. The core still has to import and understand SQLAlchemy queries."
+      },
+      {
+        "text": "Repositories should only ever have `get` and `add`",
+        "explanation": "Specific query methods like `list_overdue()` are fine, as long as they're expressed in domain terms."
+      },
+      {
+        "text": "Protocols can't have return type annotations",
+        "explanation": "They can; return annotations are normal in Protocol methods."
+      },
+      {
+        "text": "The port leaks the database technology into the core, so swapping storage or faking it means emulating SQLAlchemy's query API",
+        "explanation": "Correct. A port should speak the core's language (`get(order_id)`, `pending_since(date)`). Returning an ORM `Query` makes every use case depend on SQLAlchemy."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A port's job is to describe what the core **needs**, in the core's vocabulary.\n2. `-> sa.orm.Query` is a SQLAlchemy type. Any code using it calls `.filter`, `.join`, `.all()`, all SQLAlchemy API.\n3. To test with a fake you'd now have to reimplement a query builder. To move to another store you'd rewrite every use case.\n4. Better:\n\n```python\nclass OrderRepo(Protocol):\n    def get(self, oid: int) -> Order:\n        ...\n    def overdue(self, d) -> list[Order]:\n        ...\n```",
+    "link": {
+      "title": "Architecture Patterns with Python: Repository Pattern",
+      "url": "https://www.cosmicpython.com/book/chapter_02_repository.html"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which of these does *not* need a port (an abstraction owned by the core) in a hexagonal Python service?",
+    "options": [
+      {
+        "text": "A `Money` value class used by `Order` to add prices",
+        "explanation": "No external adapter boundary is needed for this pure collaboration. Internal abstractions can still serve other design goals; they are not universally useless."
+      },
+      {
+        "text": "Charging cards through Stripe",
+        "explanation": "A third-party API with network calls and side effects is a textbook driven port."
+      },
+      {
+        "text": "Reading the current time, so rules like \"expires in 30 days\" can be tested",
+        "explanation": "Time is an external dependency. Injecting a clock (or passing `now` in) lets tests control it, so it's a good candidate for a port."
+      },
+      {
+        "text": "Publishing an `OrderPlaced` event to Kafka",
+        "explanation": "Messaging is I/O to the outside world, so it belongs behind a port such as `EventPublisher`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ports go at the boundary between the core and things that are **slow, non-deterministic or replaceable**:\n\n| Dependency | I/O? | Port? |\n|---|---|---|\n| Clock | Non-deterministic | Yes |\n| Stripe | Network | Yes |\n| Kafka | Network | Yes |\n| `Money` | Pure | No |\n\nDomain objects collaborating inside the core should just call each other directly.",
+    "link": {
+      "title": "Hexagonal Architecture — Alistair Cockburn",
+      "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which are genuine costs of hexagonal / clean architecture? Select all that apply.",
+    "options": [
+      {
+        "text": "Mapping code between ORM rows and domain objects",
+        "explanation": "Correct. Keeping domain classes free of the ORM means writing and maintaining the translation in adapters (or using imperative mapping, which has its own complexity)."
+      },
+      {
+        "text": "More indirection: you follow a port to find which adapter actually runs",
+        "explanation": "Correct. The composition root decides the wiring, so reading a use case doesn't tell you the concrete implementation."
+      },
+      {
+        "text": "Business rules can no longer be unit-tested without a database",
+        "explanation": "That's the opposite of true. Isolated, fast testing of rules is a main *benefit*."
+      },
+      {
+        "text": "Additional integration work for framework features built around ORM models, such as Django admin and ModelForm",
+        "explanation": "Separate domain classes need mapping or other integration with ORM-based features; those features are not inherently lost."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Weigh the trade explicitly:\n\n- **Pay**: mapping layers, indirection, fewer framework shortcuts.\n- **Get**: fast tests, swappable infrastructure, a core that reads as business logic.\n\nBoth costs and benefits depend on mapping complexity, integration needs, testing and expected changes; there is no fixed per-entity cost law. That's why the advice is to adopt it where rules are rich, and stay with framework defaults for thin CRUD.",
+    "link": {
+      "title": "Hexagonal architecture (software) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're reviewing a hexagonal codebase. Which findings indicate business policy has leaked out of the core? Select all that apply.",
+    "options": [
+      {
+        "text": "`SqlOrderRepository.list()` adds `WHERE status != 'cancelled'` because \"nobody wants cancelled orders\"",
+        "explanation": "Correct. Deciding which orders count is policy. Hidden in the adapter, it's invisible to the core, untested by fake-based tests, and different from what an in-memory fake does."
+      },
+      {
+        "text": "The Flask view rejects an order if `total > 10_000` before calling the use case",
+        "explanation": "Correct. A limit on order size is a business rule. In the view, the CLI and batch adapters bypass it."
+      },
+      {
+        "text": "The Flask view returns 400 if the JSON body is missing the `quantity` field",
+        "explanation": "Not a leak. Validating the *shape* of input is the adapter's job; the core should receive well-formed values. Whether quantity 0 is allowed would be policy."
+      },
+      {
+        "text": "`StripeAdapter` retries an uncertain charge only within the core’s retry policy, preserving the provider’s idempotency contract",
+        "explanation": "Transport retry mechanics can belong in an adapter, but charging retries must preserve the payment provider's idempotency contract and overall budget. Retrying a timeout blindly can duplicate effects."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "A useful test: *would a business person have an opinion on this?*\n\n| Finding | Business opinion? | Where |\n|---|---|---|\n| Exclude cancelled | Yes | Core |\n| Max order size | Yes | Core |\n| JSON field present | No | Adapter |\n| Safe retry mechanics | Budget agreed | Adapter |\n\nThe danger with leaked policy is that each adapter grows its own version. The fake repository doesn't filter cancelled orders, so tests pass while production behaves differently.\n\nThe core owns the business retry policy; the adapter may implement backoff and transport mechanics while honoring its permitted attempts and deadlines and the provider’s idempotency rules.",
+    "link": {
+      "title": "Hexagonal Architecture — Alistair Cockburn",
+      "url": "https://alistair.cockburn.us/hexagonal-architecture/"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A five-person team is building an internal admin tool in Django: forms to create, edit and list suppliers, with almost no business rules. A senior engineer proposes full clean architecture: entities, use-case interactors, repository ports and presenters. What's the best judgement?",
+    "options": [
+      {
+        "text": "Adopt it; every serious application needs clean architecture from day one",
+        "explanation": "Architecture is a trade-off. Applying the heaviest structure to the thinnest logic maximises cost and minimises benefit."
+      },
+      {
+        "text": "Use Django's defaults (models, forms, admin) and extract a framework-free core later if real business rules emerge",
+        "explanation": "Given these requirements, framework defaults may be proportionate. Separate domain classes add work but do not inherently prohibit using Django admin or model forms on ORM models."
+      },
+      {
+        "text": "Use clean architecture but skip tests, to save the time the extra layers cost",
+        "explanation": "That keeps the costs and throws away the main benefit, which is cheap isolated testing."
+      },
+      {
+        "text": "Write everything in views to avoid any layering",
+        "explanation": "Throwing away even the framework's model/view split goes too far. Django's defaults already give a reasonable structure for CRUD."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Estimate what the architecture protects: business rules. Here there are almost none.\n2. Estimate its cost: a domain class, an ORM model, a mapper, a port, an adapter, a use case and a presenter per entity, plus integration with Django admin and ModelForm if separate domain classes are introduced.\n3. Given the stated simple requirements, the proposed structure may cost more than it helps; evaluate actual future needs.\n4. Keep the door open: if rules such as supplier approval workflows appear, put them in plain modules, and introduce ports at the boundary then. Architecture can evolve (see the last lesson of this module).",
+    "link": {
+      "title": "Hexagonal architecture (software) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)"
+    }
+  }
+]

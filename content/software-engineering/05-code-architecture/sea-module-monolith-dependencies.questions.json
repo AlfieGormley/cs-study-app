@@ -1,0 +1,96 @@
+[
+  {
+    "id": "sea-modularity-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A 600,000-line Django monolith has hundreds of cross-module imports violating newly agreed boundaries. Leadership wants boundaries enforced \"starting this sprint\". What's the most effective approach?",
+    "options": [
+      {
+        "text": "Turn on strict boundary checks in CI immediately, failing every build until all violations are fixed",
+        "explanation": "That blocks all work for weeks and encourages people to disable the checks. Shopify and Packwerk use a recorded baseline precisely to avoid this."
+      },
+      {
+        "text": "Record existing violations as a baseline (an ignore or to-do list), fail CI only on new ones, and burn the baseline down over time",
+        "explanation": "Correct. This \"stops the bleeding\" right away while letting teams pay down existing violations incrementally. Packwerk's `package_todo.yml` and import-linter's `ignore_imports` both support this."
+      },
+      {
+        "text": "Split the monolith into microservices so boundaries are enforced by the network",
+        "explanation": "A network boundary is very expensive and doesn't fix tangled code; it turns local function calls into distributed ones. Clean the module boundaries first."
+      },
+      {
+        "text": "Document the boundaries on the wiki and ask people to follow them",
+        "explanation": "Without automated checks, boundaries erode one convenient import at a time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Goal: no *new* violations from today, and fewer existing ones over time.\n2. Mechanism:\n   - Declare modules and contracts.\n   - Run the checker; write current violations to a baseline file.\n   - CI fails if a violation isn't in the baseline.\n3. Each team picks off baseline entries in normal work; the file gets smaller.\n4. This is how Shopify's Packwerk works (`bin/packwerk update-todo` records existing violations; strict enforcement rejects violations even when recorded; ordinary checking can permit recorded debt while failing unrecorded violations).",
+    "link": {
+      "title": "Packwerk — Shopify on GitHub",
+      "url": "https://github.com/Shopify/packwerk"
+    }
+  },
+  {
+    "id": "sea-modularity-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You maintain a Python **web application** (not a library). Which dependency practices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Lock exact versions of all required packages, including requirements reached through other packages, with hashes",
+        "explanation": "Locks plus hash-checking constrain selected artifacts, but do not prove safety or reproduce an entire environment. Toolchain, OS dependencies and build behavior also matter."
+      },
+      {
+        "text": "Declare only loose ranges like `django>=4` and install the newest each deploy",
+        "explanation": "Every deploy could pull different transitive versions, so a working build can break without any code change. Ranges suit libraries; applications should lock."
+      },
+      {
+        "text": "Use a bot (Dependabot, Renovate) to propose small, frequent upgrades that run through CI",
+        "explanation": "Correct. Small upgrades are easy to review and bisect. Big-bang upgrades after years of drift are risky and slow."
+      },
+      {
+        "text": "Call a volatile third-party SDK through one adapter module rather than from 200 files",
+        "explanation": "An adapter can limit affected call sites, but a provider's changed semantics may still require changes to its port or callers."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Separate the two roles:\n\n- **Libraries** declare ranges so they can be installed alongside other libraries.\n- **Applications** pin everything with a lock file (`uv lock`, `poetry.lock`, `pip-compile --generate-hashes`) and upgrade deliberately.\n\nThen keep the lock fresh with automated PRs, and isolate fast-changing third-party APIs behind adapters so upgrades stay local.",
+    "link": {
+      "title": "install_requires vs requirements files — Python Packaging User Guide",
+      "url": "https://packaging.python.org/en/latest/discussions/install-requires-vs-requirements/"
+    }
+  },
+  {
+    "id": "sea-modularity-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Package A requires `protobuf<4` and package B requires `protobuf>=4`. You need both in one Python application. Why can't pip just install both versions, and what are realistic options?",
+    "options": [
+      {
+        "text": "pip can install both; Python picks the right version per importing package",
+        "explanation": "Python has one ordinary module-cache entry per name in an interpreter: `import google.protobuf` resolves to exactly one installed copy."
+      },
+      {
+        "text": "Rename one copy to `protobuf3` and edit imports",
+        "explanation": "Vendoring a renamed copy is technically possible but fragile, especially for packages with C extensions and global registries; it's a last resort, not the usual answer."
+      },
+      {
+        "text": "Normal pip-managed Python environments resolve one version of each distribution, so the constraints conflict; options include upgrading A, finding a compatible version range, forking/patching, or isolating one side in a separate process",
+        "explanation": "Correct. Unlike npm's nested `node_modules`, a normal pip-managed Python environment resolves one version per distribution. You resolve the conflict by changing a constraint, or by putting the conflicting part in its own process or service with its own environment."
+      },
+      {
+        "text": "Use `pip install --force-reinstall` for both",
+        "explanation": "Force-reinstalling just replaces one version with the other; the environment still ends up with one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In Python, `sys.modules` maps one name to one module, and a normal pip-managed environment resolves one version of each distribution.\n2. A needs a version below 4, B needs 4 or above: no single version satisfies both. pip's resolver reports a conflict.\n3. Options, cheapest first:\n   - Check whether newer A supports protobuf 4.\n   - Find an older B that works with protobuf 3.\n   - Patch or fork A.\n   - Run A in a separate process (worker, sidecar) with its own environment.\n4. Prevention: fewer and better-maintained dependencies, regular upgrades so you don't fall several majors behind.",
+    "link": {
+      "title": "Dependency resolution — pip documentation",
+      "url": "https://pip.pypa.io/en/stable/topics/dependency-resolution/"
+    }
+  }
+]

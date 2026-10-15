@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sea-api-design-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef tag(item, tags=[]):\n    # Mutates whichever list this call\n    # received.\n    tags.append(item)\n    return tags\n\ntag(\"a\")\n# Both calls retain the same default\n# list.\nprint(tag(\"b\"))  # ['a', 'b']\n```",
+    "options": [
+      {
+        "text": "`['b']`",
+        "explanation": "That assumes a fresh list per call. Python evaluates default values once, at definition time."
+      },
+      {
+        "text": "`['a', 'b']`",
+        "explanation": "Correct. The default list is created once when `def` runs and shared by every call that omits `tags`. The first call appends `'a'` to it; the second appends `'b'` to the same list."
+      },
+      {
+        "text": "`['b', 'a']`",
+        "explanation": "`append` adds to the end, so order is call order: `'a'` then `'b'`."
+      },
+      {
+        "text": "`TypeError`: mutable defaults are not allowed",
+        "explanation": "Python allows them, which is exactly why this bug is so common."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `def` runs once and evaluates `[]`, storing that single list object as the default.\n2. `tag(\"a\")`: `tags` is the shared list → `['a']`.\n3. `tag(\"b\")`: `tags` is *the same* list → `['a', 'b']`.\n4. Fix: `tags=None`, then `if tags is None: tags = []` inside the function.\n\nFor an API, a shared mutable default is state leaking between unrelated callers, which is a nasty surprise to ship.",
+    "link": {
+      "title": "Default argument values — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"
+    }
+  },
+  {
+    "id": "sea-api-design-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your payments library calls a database and currently lets `psycopg.OperationalError` propagate to callers. Why is this a design problem?",
+    "options": [
+      {
+        "text": "Callers will write `except psycopg.OperationalError`, which makes your choice of database driver part of your public API",
+        "explanation": "Exposing driver-specific errors couples callers to that driver. Translate expected storage failures into your public hierarchy, with distinctions that accurately describe the cause and retryability."
+      },
+      {
+        "text": "Psycopg exceptions can't be caught with `except`",
+        "explanation": "They can be caught like any exception; that's precisely the problem, because callers start catching them."
+      },
+      {
+        "text": "It makes the library slower",
+        "explanation": "Exception propagation cost isn't the concern."
+      },
+      {
+        "text": "Exceptions should never cross library boundaries; return error codes instead",
+        "explanation": "Exceptions are idiomatic in Python. The issue is *which* types cross the boundary, not whether any do."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Anything a caller can observe becomes part of the API, including exception types.\n2. If callers catch `psycopg.OperationalError`, you can't move to another driver without breaking them.\n3. This partial error boundary assumes an existing cursor and imported driver. Define StorageUnavailable as a library exception in the PaymentError hierarchy:\n\n```python\ntry:\n    row = cur.fetchone()\nexcept psycopg.OperationalError as e:\n    raise StorageUnavailable() from e\n```\n\n4. `from e` keeps the original traceback for debugging, while callers depend only on your own `PaymentError` hierarchy.\nOperationalError covers multiple failures: this simplified wrapper must not imply that every such error is transient or safe to retry.",
+    "link": {
+      "title": "Published Interface — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/PublishedInterface.html"
+    }
+  }
+]

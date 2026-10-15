@@ -1,0 +1,126 @@
+[
+  {
+    "id": "sea-adr-evolution-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the strangler fig pattern?",
+    "options": [
+      {
+        "text": "Rewriting the whole system from scratch, then switching over in one release",
+        "explanation": "That's the big-bang rewrite the strangler fig is designed to avoid."
+      },
+      {
+        "text": "Running two versions of a function in parallel and comparing results",
+        "explanation": "That's a parallel run (as in GitHub's Scientist library), a related but different technique."
+      },
+      {
+        "text": "Gradually replacing a legacy system by routing one capability at a time to new code behind a facade, until the old system can be removed",
+        "explanation": "The aim is incremental replacement while serving users. Data migration and side effects can make particular steps hard to reverse; routing alone does not prove safety."
+      },
+      {
+        "text": "Locking a legacy system so no one can change it",
+        "explanation": "Freezing code is not a migration strategy; the strangler fig is about actively replacing it piece by piece."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Put a facade or router in front of the old system; at first it forwards everything.\n2. Build one capability (say invoices) anew.\n3. Route invoice requests to the new code; everything else still goes to the old system.\n4. Repeat for each capability.\n5. When nothing routes to the old system, delete it.\n\nIn code, the \"facade\" can be a module interface or a port inside a monolith, not only an HTTP proxy.",
+    "link": {
+      "title": "Strangler Fig Application — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/StranglerFigApplication.html"
+    }
+  },
+  {
+    "id": "sea-adr-evolution-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your team must replace the ORM used in 300 files. A colleague proposes a long-lived `orm-migration` branch, merged in three months. What does branch by abstraction suggest instead?",
+    "options": [
+      {
+        "text": "Use both ORMs randomly per request until one wins",
+        "explanation": "Random use without an abstraction means callers depend on both ORMs directly, which is worse than either alone."
+      },
+      {
+        "text": "Create one feature branch per file and merge them all at the end",
+        "explanation": "That's 300 long-lived branches instead of one, with even worse merge conflicts."
+      },
+      {
+        "text": "Copy the codebase, convert the copy, and switch the deployment",
+        "explanation": "That's a fork-and-rewrite: the copy diverges from ongoing development, and the switch is big-bang."
+      },
+      {
+        "text": "Introduce an abstraction over data access, move callers to it in small commits on main, build the new ORM implementation behind it, switch over (perhaps by toggle), then delete the old one",
+        "explanation": "Small changes avoid a single long-diverged merge, but compatibility tests, successful required checks and data-safe rollback still require explicit work."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Branch by abstraction, step by step:\n\n1. `OrderRepository` port, with the existing ORM as its first adapter.\n2. Convert callers one area at a time to use the port. Commit to main daily.\n3. Write `NewOrmOrderRepository` implementing the same port; test it.\n4. Composition root picks the adapter via a toggle; roll out gradually.\n5. Remove the old adapter and the toggle.\n\nIt's the hexagonal port idea used as a way to migrate.",
+    "link": {
+      "title": "Branch By Abstraction — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/BranchByAbstraction.html"
+    }
+  },
+  {
+    "id": "sea-adr-evolution-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are replacing a pricing engine that calculates £40m a year of quotes. Which techniques reduce the risk of the switch? Select all that apply.",
+    "options": [
+      {
+        "text": "Parallel run: compute both prices, serve the old one, log every difference",
+        "explanation": "This provides comparison evidence if shadow work has isolated side effects and bounded resource use. Running both can still add production load and differences can contain sensitive data."
+      },
+      {
+        "text": "Put the new engine behind the same port and flip a feature toggle for 1% of quotes, then widen",
+        "explanation": "Gradual exposure can limit impact. Switching the flag off may stop future use, but it cannot undo already-issued prices or incompatible state; test rollback semantics."
+      },
+      {
+        "text": "Delete the old engine on the day the new one is deployed, to avoid confusion",
+        "explanation": "Removing the fallback before the new engine has proven itself turns any defect into an outage with no quick way back."
+      },
+      {
+        "text": "Write an ADR recording the context, the chosen approach and the accepted risks",
+        "explanation": "Correct. It doesn't reduce runtime risk directly, but it records why and how the switch was made, which makes reviewing the plan and later investigating differences much easier."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Layer the safeguards:\n\n1. **Branch by abstraction**: both engines implement `PricingEngine`.\n2. **Parallel run**: old result served; differences logged and investigated until they are understood.\n3. **Toggle rollout**: 1% → 10% → 50% → 100%, watching error rates and differences.\n4. **ADR**: documents the plan, the acceptance criteria (e.g. differences under 0.1% and explained) and who decided.\n5. **Then** delete the old engine and the toggle.\n\nToggles are temporary: put a removal date on them, as Pete Hodgson's feature-toggle guide recommends for release toggles.",
+    "link": {
+      "title": "Feature Toggles — Pete Hodgson on martinfowler.com",
+      "url": "https://martinfowler.com/articles/feature-toggles.html"
+    }
+  },
+  {
+    "id": "sea-adr-evolution-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An engineering manager says: \"Our 8-year-old codebase is a mess. Let's freeze features for 18 months and rewrite it from scratch.\" What is the strongest engineering concern?",
+    "options": [
+      {
+        "text": "Rewrites are impossible in Python",
+        "explanation": "Rewrites are possible in any language; the risk is organisational and technical, not linguistic."
+      },
+      {
+        "text": "The old code embodies years of bug fixes and edge cases nobody documented, and a long feature freeze lets competitors move ahead; incremental replacement (strangler fig) delivers value while reducing risk",
+        "explanation": "Correct. That is Spolsky's argument from Netscape's multi-year rewrite. The old code's ugliness often hides hard-won knowledge. Strangling it piece by piece keeps the business moving and lets you stop when the remaining parts are good enough."
+      },
+      {
+        "text": "18 months is too short; rewrites always take exactly three years",
+        "explanation": "There's no fixed duration. The concern is the risk of a long, single-cutover project, not a specific number."
+      },
+      {
+        "text": "New code always has more bugs than old code",
+        "explanation": "Not always, but rewritten code does lose many fixes for edge cases encoded in the old code. The deeper problem is the big-bang, value-free period."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Spolsky uses Netscape as an argument about delayed delivery and lost knowledge; this is not proof of a universal rewrite outcome or a verified single-cause chronology.\n2. Old code that looks messy often encodes fixes: \"this weird check is for one bank's date format\".\n3. A plan that withholds all delivery until completion delays realized value, and requirements keep moving during it.\n4. Incremental alternative:\n   - Modularise and add fitness functions.\n   - Strangle the worst areas first, behind ports.\n   - Ship continuously; stop when the remaining legacy is cheap enough to keep.",
+    "link": {
+      "title": "Things You Should Never Do, Part I — Joel Spolsky",
+      "url": "https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/"
+    }
+  }
+]

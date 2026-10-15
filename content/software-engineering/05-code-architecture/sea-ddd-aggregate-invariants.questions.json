@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sea-ddd-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An `Order` aggregate allows at most 50 lines. A developer writes `order.lines.append(OrderLine(...))` in a service because it's quicker. What principle does this violate, and what's the consequence?",
+    "options": [
+      {
+        "text": "Value objects must be immutable; `OrderLine` should be frozen",
+        "explanation": "Even with a frozen `OrderLine`, appending to the list from outside still bypasses the root. The issue is access to the aggregate's internals."
+      },
+      {
+        "text": "Only the aggregate root should be modified from outside; bypassing `add_line` lets the 50-line invariant (and draft-only rule) be broken",
+        "explanation": "Correct. The root exists to enforce invariants on the whole cluster. Exposing the internal list means any caller can skip the checks, so the invariant is no longer guaranteed."
+      },
+      {
+        "text": "One repository per aggregate; the service should use an `OrderLineRepository`",
+        "explanation": "A separate line repository would make the problem worse, letting lines be saved independently of the root's rules."
+      },
+      {
+        "text": "Reference other aggregates by id; `OrderLine` should hold an order id",
+        "explanation": "`OrderLine` is inside the `Order` aggregate, not a separate aggregate. Referencing by id applies *between* aggregates."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Invariants of the aggregate: at most 50 lines, lines only while `draft`.\n2. `Order.add_line` checks both before appending.\n3. `order.lines.append(...)` goes around it. Nothing stops a 51st line or a line on a shipped order.\n4. Fix: keep the list private (`_lines`), expose a read-only view (a tuple or property), and route all changes through root methods.",
+    "link": {
+      "title": "DDD Aggregate — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/DDD_Aggregate.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two requests load order 42 (`version = 7`) at the same time. Request A adds a line and saves first. Then request B, which also added a line, runs:\n\n```sql\nUPDATE orders\nSET version = 8\nWHERE id = 42 AND version = 7;\n```\n\nWhat happens? Assume A committed the root version and child rows together, and B runs this statement against current committed data (for example PostgreSQL Read Committed).",
+    "options": [
+      {
+        "text": "B's update succeeds and both lines are kept",
+        "explanation": "A already moved the version to 8, so `version = 7` no longer matches. And if B overwrote the lines, A's line would be lost."
+      },
+      {
+        "text": "The database blocks B until A's transaction ends, then applies B",
+        "explanation": "Optimistic UPDATE statements also take database locks, but A has already committed in this scenario. With a concurrently running A, B could wait before detecting a conflict; stronger isolation can raise a serialization error."
+      },
+      {
+        "text": "B's update matches 0 rows, so the application detects a conflict and should reload and retry (or report it)",
+        "explanation": "Correct. That's optimistic concurrency. A bumped the version to 8, so B's `WHERE version = 7` matches nothing. The app treats 0 updated rows as a conflict, rather than silently overwriting A's change."
+      },
+      {
+        "text": "The database rejects a duplicate primary-key value",
+        "explanation": "Nothing here touches a unique constraint. The update simply affects zero rows, which the application must check for."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Both read version 7.\n2. A writes with `WHERE version = 7` and sets version 8: 1 row updated.\n3. B writes with `WHERE version = 7`: the row now has version 8, so **0 rows updated**.\n4. The repository checks the row count, raises a `ConcurrencyError`, and the use case reloads the order (now with A's line), re-applies B's change and retries.\n\nOne version column on the **aggregate root** protects the whole aggregate, which is why the aggregate is also the unit of concurrency control.\nThis protects child rows only if every writer advances the root version and persists the child changes in the same transaction; check and roll back failed attempts.",
+    "link": {
+      "title": "Architecture Patterns with Python: Aggregates and Consistency Boundaries",
+      "url": "https://www.cosmicpython.com/book/chapter_07_aggregate.html"
+    }
+  },
+  {
+    "id": "sea-ddd-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team models `Customer` as an aggregate containing all of the customer's orders, addresses and invoices. Customers average 2,000 orders. Assume whole-graph loading and one shared root version for every write. What problems should they expect?",
+    "options": [
+      {
+        "text": "With whole-graph loading and one shared version, loading is large and unrelated order updates contend on that version.",
+        "explanation": "Correct. Large aggregates are slow to load and create contention: because the root's version protects everything inside, unrelated order edits collide. Make `Order` its own aggregate referencing `customer_id`."
+      },
+      {
+        "text": "None, as long as the database has indexes",
+        "explanation": "Indexes don't change the fact that the aggregate is loaded, locked and versioned as one unit."
+      },
+      {
+        "text": "Value objects can't be stored inside aggregates",
+        "explanation": "Aggregates commonly contain value objects (addresses, money). That isn't the problem."
+      },
+      {
+        "text": "Only that the code will be longer",
+        "explanation": "The serious costs are runtime ones: loading time, memory and concurrency conflicts."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Every operation on any order goes through the `Customer` root and saves it, bumping its version.\n2. Two people editing different orders for the same customer both started from the same version number; the second save fails. Conflicts grow with activity.\n3. Every load fetches 2,000 orders plus lines.\n4. Ask which rules need **immediate** consistency across orders and the customer. Usually none, so split: `Order` aggregate with `customer_id`. A strict shared credit limit needs an atomic reservation protocol; an uncoordinated read/check or delayed event alone cannot prevent concurrent overspending.",
+    "link": {
+      "title": "Architecture Patterns with Python: Aggregates and Consistency Boundaries",
+      "url": "https://www.cosmicpython.com/book/chapter_07_aggregate.html"
+    }
+  }
+]

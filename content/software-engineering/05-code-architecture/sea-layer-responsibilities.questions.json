@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sea-layered-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a layered application with presentation, application, domain and data layers, which import breaks the layering rule? Assume relaxed layering in the order listed.",
+    "options": [
+      {
+        "text": "`presentation/views.py` imports `application/services.py`",
+        "explanation": "Allowed: presentation sits above application, and calls may go downwards."
+      },
+      {
+        "text": "`application/services.py` imports `domain/order.py`",
+        "explanation": "Allowed: the application layer orchestrates domain objects, which sit below it."
+      },
+      {
+        "text": "`domain/order.py` imports `presentation/serializers.py`",
+        "explanation": "Correct. The domain is below presentation, so this import points upwards. The business rules would now depend on how JSON is formatted, and a change to the API could break the domain."
+      },
+      {
+        "text": "`presentation/views.py` imports `domain/order.py` to catch `OrderClosed`",
+        "explanation": "Allowed: it skips the application layer, but it still points downwards. Relaxed layering permits this; only upward imports break the rule."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Write down the order, top to bottom: presentation, application, domain, data.\n2. The rule: a module may import from layers *below* it, never above.\n3. Check each import:\n   - views → services: down. Fine.\n   - services → domain: down. Fine.\n   - views → domain: down, skipping one. Fine under relaxed layering.\n   - domain → presentation: **up**. Violation.\n4. Why it matters: the domain is meant to be the most stable code. If it imports a serializer, a change to the HTTP response shape can force a change to the business rules, and you can't reuse the domain from a CLI without dragging the web layer along.",
+    "link": {
+      "title": "Presentation Domain Data Layering — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/PresentationDomainDataLayering.html"
+    }
+  },
+  {
+    "id": "sea-layered-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the main reason for separating code into layers?",
+    "options": [
+      {
+        "text": "It makes the program run faster, because each layer can be optimised separately",
+        "explanation": "Layering adds indirection, if anything. Its benefits are about change and understanding, not speed."
+      },
+      {
+        "text": "It removes the need for automated tests",
+        "explanation": "Layering makes testing easier (rules can be tested without a database), but it doesn't replace tests."
+      },
+      {
+        "text": "It is required to deploy each layer as a separate service",
+        "explanation": "Layers here are logical code structure inside one application. Deploying tiers separately (multi-tier) is a separate, optional decision."
+      },
+      {
+        "text": "So concerns have separate responsibilities and changes can be more local",
+        "explanation": "Separation can localize changes, but a feature or database semantic change may still affect multiple layers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Think of three likely future changes:\n\n| Change | Layer touched |\n|---|---|\n| Mobile app wants a new JSON shape | Presentation |\n| VAT rate changes | Domain |\n| Move from MySQL to Postgres | Data |\n\nIn a tangled codebase each of these touches the same big functions. With suitable boundaries, these changes can be more localized; this is a design aim, not a guarantee. That locality is the payoff; everything else (testability, reuse) follows from it.",
+    "link": {
+      "title": "Multitier architecture — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Multitier_architecture"
+    }
+  },
+  {
+    "id": "sea-layered-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What happens when this view is called with the code `\"WINTER5\"`?\n\nThis fragment assumes a Flask app/request and working `load`/`save` helpers.\n\n```python\n@app.post(\"/orders/<int:oid>/disc\")\ndef disc(oid):\n    code = request.json[\"code\"]\n    row = load(oid)\n    if code == \"SPRING10\":\n        # Unknown codes leave new\n        # unassigned.\n        new = row[\"total\"] * 0.9\n    save(oid, new)\n    return {\"total\": new}\n```",
+    "options": [
+      {
+        "text": "It returns the original total unchanged",
+        "explanation": "Nothing assigns `new` to the original total. Python doesn't fall back to a default for a missing local."
+      },
+      {
+        "text": "It raises `UnboundLocalError` when `save(oid, new)` runs",
+        "explanation": "Correct. Because `new` is assigned somewhere in the function, Python treats it as a local. The `if` branch didn't run, so reading it raises `UnboundLocalError` (a subclass of `NameError`), which Flask turns into a 500."
+      },
+      {
+        "text": "It returns `{\"total\": None}`",
+        "explanation": "Python doesn't initialise locals to `None`; an unassigned local can't be read at all."
+      },
+      {
+        "text": "It raises `KeyError` on `request.json[\"code\"]`",
+        "explanation": "The key `code` is present in the request body, so that lookup succeeds."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `code` is `\"WINTER5\"`, so the `if` condition is false and the body is skipped.\n2. At compile time Python saw an assignment to `new` in this function, so `new` is a **local** variable for the whole function.\n3. `save(oid, new)` reads `new` before any assignment, which raises `UnboundLocalError: cannot access local variable 'new'...`.\n4. The architectural point: business logic mixed into a view is hard to test in isolation, so bugs like this slip through. Moved into a domain method with a unit test for an unknown code, it would be caught at once.",
+    "link": {
+      "title": "Architecture Patterns with Python: Service Layer",
+      "url": "https://www.cosmicpython.com/book/chapter_04_service_layer.html"
+    }
+  }
+]

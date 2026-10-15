@@ -1,0 +1,126 @@
+[
+  {
+    "id": "sea-api-design-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your library is at version `2.3.1`. You add a new optional keyword argument `retries=0` to `fetch()`; existing calls behave exactly as before. What should the next version be under SemVer?",
+    "options": [
+      {
+        "text": "`2.4.0`",
+        "explanation": "Correct. A backwards-compatible addition bumps MINOR and resets PATCH to 0."
+      },
+      {
+        "text": "`2.3.2`",
+        "explanation": "PATCH is for backwards-compatible bug fixes. New functionality, even optional, is a MINOR bump."
+      },
+      {
+        "text": "`3.0.0`",
+        "explanation": "MAJOR is for incompatible changes. Existing callers are unaffected, so it isn't breaking."
+      },
+      {
+        "text": "`2.4.1`",
+        "explanation": "When MINOR increases, PATCH resets to 0."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "SemVer rules:\n\n| Change | Bump |\n|---|---|\n| Compatible bug fix | PATCH |\n| Compatible new feature | MINOR |\n| Incompatible change | MAJOR |\n\nAn optional keyword argument with a default that preserves existing behaviour is a compatible addition: `2.3.1 → 2.4.0`.",
+    "link": {
+      "title": "Semantic Versioning 2.0.0",
+      "url": "https://semver.org/"
+    }
+  },
+  {
+    "id": "sea-api-design-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your library's `parse()` raises `ValueError(\"bad date: 2024-13-01\")`. A large customer's code does `if \"bad date\" in str(e):` to decide whether to retry. You change the message to `\"invalid date\"`. Which idea best explains what happens next?",
+    "options": [
+      {
+        "text": "SemVer: message changes are PATCH-level, so nothing can break",
+        "explanation": "SemVer describes your *documented* contract. It can't stop people depending on undocumented behaviour, which is exactly what happened."
+      },
+      {
+        "text": "The open–closed principle",
+        "explanation": "OCP is about extending behaviour without modifying code; it doesn't explain why changing a message broke a client."
+      },
+      {
+        "text": "The Liskov substitution principle",
+        "explanation": "LSP concerns subtypes being usable in place of their base types. This is about callers relying on unspecified behaviour."
+      },
+      {
+        "text": "Hyrum's law: with enough users, every observable behaviour, including error text, is depended on by someone",
+        "explanation": "Correct. The message was never a promise, but it was observable, so somebody built on it. The fix is to give callers a proper thing to depend on: a specific exception subclass or a library-defined failure identifier attribute."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Contract: `parse()` raises `ValueError` on bad input. The message wording is not documented.\n2. Observable: the message text is visible to callers.\n3. Hyrum's law predicts somebody will depend on observable behaviour, and they did.\n4. Better API: `class InvalidDate(ValueError)` with a `.value` attribute. Callers write `except InvalidDate:` and callers have a stable alternative to parsing messages, though existing text-dependent clients still need migration.",
+    "link": {
+      "title": "Hyrum's Law",
+      "url": "https://www.hyrumslaw.com/"
+    }
+  },
+  {
+    "id": "sea-api-design-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your library is at `1.8.0`. Which of these changes require a MAJOR version bump under SemVer? Select all that apply.",
+    "options": [
+      {
+        "text": "Renaming parameter `ttl` to `max_age` in `cache(key, ttl=60)`",
+        "explanation": "Correct. Anyone calling `cache(k, ttl=30)` gets a `TypeError`. Renaming a parameter that can be passed by keyword is breaking."
+      },
+      {
+        "text": "Changing `timeout`'s default from `None` (wait forever) to `30`",
+        "explanation": "Correct, in most projects' judgement. Callers relying on unlimited waits now get timeouts. Changing a default changes behaviour for every caller who didn't pass the argument."
+      },
+      {
+        "text": "Adding a new function `cache_many()`",
+        "explanation": "A pure addition is MINOR: no existing call changes."
+      },
+      {
+        "text": "Making `get()` return a `tuple` instead of a `list`",
+        "explanation": "Correct. Callers who `.append()` to the result, or compare it with `== [...]`, break."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "For each change, ask: **can existing, correct calling code stop working?**\n\n| Change | Existing code breaks? |\n|---|---|\n| Rename `ttl` | Yes: `ttl=` is rejected |\n| New default | Yes: behaviour changes |\n| New function | No |\n| list → tuple | Yes: `.append` fails |\n\nThree are breaking → MAJOR (`2.0.0`), or do them compatibly: accept both names with a deprecation warning, and change the default only in the next major release.",
+    "link": {
+      "title": "Semantic Versioning 2.0.0",
+      "url": "https://semver.org/"
+    }
+  },
+  {
+    "id": "sea-api-design-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A popular library has been at `0.27.x` for four years with millions of downloads. A minor release `0.28.0` removes a function. According to SemVer, is this allowed, and what's the practical lesson?",
+    "options": [
+      {
+        "text": "Not allowed; removing a function always requires a MAJOR bump",
+        "explanation": "SemVer explicitly exempts major version zero: \"anything MAY change at any time\"."
+      },
+      {
+        "text": "Allowed only if the function was marked private",
+        "explanation": "Under 0.y.z SemVer makes no promises at all, private or public."
+      },
+      {
+        "text": "Allowed by SemVer's initial-development rule, unless the project promises stricter compatibility; users should lock or constrain versions and inspect changes.",
+        "explanation": "Correct. SemVer's FAQ suggests that if software is used in production or people depend on its API, it should probably already be 1.0.0. Staying at 0.x lets maintainers break things without a major bump, which pushes the risk onto users."
+      },
+      {
+        "text": "Not allowed; SemVer forbids removals in any release",
+        "explanation": "Removals are allowed in MAJOR releases (and anywhere in 0.y.z)."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. SemVer item 4: major version zero (`0.y.z`) is for initial development. Anything may change; the public API should not be considered stable.\n2. So `0.27 → 0.28` removing a function is within the rules.\n3. SemVer's FAQ: if your software is being used in production, or users depend on it, you should probably be at 1.0.0 already.\n4. For users of 0.x libraries: use an exact lock for artifact selection (`~=0.27.0` permits later 0.27 patch releases, so it is a range rather than an exact pin), and read changelogs before upgrading.",
+    "link": {
+      "title": "Semantic Versioning 2.0.0",
+      "url": "https://semver.org/"
+    }
+  }
+]

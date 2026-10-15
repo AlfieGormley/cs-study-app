@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 58/76. Updated 2026-10-15.
+Verified modules: 59/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -65,6 +65,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | software-engineering/Design Patterns | 6 | 28 | 66 | 13 | 273 | 380 | 54 |
 | software-engineering/Testing | 6 | 22 | 68 | 15 | 196 | 301 | 76 |
 | software-engineering/Version Control & CI/CD | 6 | 26 | 69 | 15 | 279 | 389 | 39 |
+| software-engineering/Software Architecture at the Code Level | 6 | 25 | 67 | 10 | 171 | 1143 | 24 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4585,6 +4586,49 @@ Remaining gaps:
 Low-confidence areas:
 
 None newly recorded. Inherited glossary qualifications remain in the verification record.
+
+## software-engineering: Software Architecture at the Code Level
+
+[Independent verification record](../content/software-engineering/05-code-architecture/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- An adapter implements a port; it is not the port.
+- State zero-denominator domain of abstractness and derived distance.
+- Protocol definitions import typing; explicit measurement scope prevents a contradictory zero-outgoing example.
+- Explicitly supplied lists do not use the shared default.
+- An adjacent-call rule does not guarantee hiding leaked types or semantics.
+- Default filters are conditional; attribution matters when stacklevel changes.
+- Runtime-checkable method protocols also support issubclass; runtime checks do not enforce annotated signatures.
+- Question must state its package-count simplification independently of the preceding lesson.
+- Consistent application-package measurement boundary for Protocol example.
+- Avoid contradicting permitted explicit corrections and forward links.
+- Independent accuracy correction: domain, construction prerequisites or guarantee scope.
+- Independent accuracy correction: domain, construction prerequisites or guarantee scope.
+- Independent accuracy correction: domain, construction prerequisites or guarantee scope.
+- Independent accuracy correction: domain, construction prerequisites or guarantee scope.
+- Independent accuracy correction: domain, construction prerequisites or guarantee scope.
+- Independent accuracy correction: domain, construction prerequisites or guarantee scope.
+- Actual compiled Network stacks tooltip describes kernel protocol implementation, whereas OSI/TCP-IP here are reference models.
+- Compiled retry budget denotes aggregate traffic amplification; this question means per-operation policy.
+- Preserve per-operation retry semantics rather than a traffic-fraction budget tooltip.
+- Compiled stack frame alias opens a whole call-stack definition; this sentence needs one active call.
+- Earlier compiled transitive dependency definition says only indirectly, whereas a dependency may also be directly declared.
+- Compiled error code tooltip is Unix errno; this library identifier need not be an integer.
+- Replace a universal feedback-delay claim with a conditional migration risk; existing software may keep delivering value during a rewrite.
+- Keep the same false duplicate-key distractor at its original index while avoiding a borrowed constraint-violation tooltip that overstates permanent retry failure.
+
+Remaining gaps:
+
+- Teaching fragments retain explicit production gaps: HTTP authorization/input validation, transaction/idempotency and retry policies, complete notification/outbox relay, currency/rounding rules and full import resolution.
+- PostgreSQL Read Committed behavior source-checked against current official docs; SQL executed in SQLite, with no PostgreSQL server started.
+- Some general glossary entries retain secondary attached links. Each was reviewed; medium confidence is retained for crm, cross-functional-team, deep-module, distributed-transaction, facade, getters-and-setters, kilobyte, load-test, multitier-architecture, osi-model, serializer, shallow-module, sku, tcp-ip-model, two-phase-commit, typosquatting, zone-of-pain. Related primary supplements do not establish every example/attribution.
+- No source substantive section, original executable statement, formula equation or drawing intentionally omitted; archive and AST/equation parity independently checked.
+
+Low-confidence areas:
+
+- **medium** — sea-module-information-hiding: Deep/shallow terminology and open() example.. Author’s official scanned chapter excerpt was freshly fetched and visually read (pages 39–41); it supports general-purpose/deeper design and shallow interface examples, but the exact introductory definition is outside this free extract. open() behavior independently checked in Python docs. Never presented as an empirically universal quality guarantee.
+- **medium** — sea-module-abstractness-metrics: Rarely changing string-library exception in the zone of pain.. Primary Martin papers support the corner, metric and non-universal caveat; the specific string-library example lacks direct primary corroboration in the fetched papers.
 
 ## synth: Sound & Digital Audio
 

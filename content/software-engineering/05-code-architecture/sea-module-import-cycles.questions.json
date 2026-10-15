@@ -1,0 +1,95 @@
+[
+  {
+    "id": "sea-modularity-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Given these files, what happens when you run `python main.py`?\n\n```python\n# main.py\nimport orders\n\n# orders.py\n# billing re-enters orders before Order\n# exists.\nfrom billing import invoice_for\nclass Order: ...\n\n# billing.py\nfrom orders import Order\ndef invoice_for(o): ...\n```",
+    "options": [
+      {
+        "text": "`ImportError`: `Order` can't be imported from the partially initialised `orders` module",
+        "explanation": "Correct. `orders` starts running, imports `billing`, which asks for `orders.Order`. `orders` is in `sys.modules` but stopped at its first line, so `Order` doesn't exist yet."
+      },
+      {
+        "text": "It runs fine; Python resolves circular imports automatically",
+        "explanation": "Python can handle some cycles, but not a `from X import Y` where Y hasn't been defined yet."
+      },
+      {
+        "text": "Infinite recursion until `RecursionError`",
+        "explanation": "Python doesn't re-execute a module that's already in `sys.modules`, so there's no infinite loop; it finds the half-built module instead."
+      },
+      {
+        "text": "`NameError: name 'Order' is not defined` inside `orders.py`",
+        "explanation": "The failure occurs inside `billing.py`'s import statement, and it's an `ImportError`, not a `NameError`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Trace it:\n\n```\nmain: import orders\n orders put in sys.modules\n orders L1: from billing import ..\n  billing put in sys.modules\n  billing L1: from orders import\n              Order\n   orders is in sys.modules but\n   has no Order yet: ImportError\n```\n\nSwitching `billing` to `import orders` and using `orders.Order` lazily would make it run, but the design cycle remains. A better fix: move `Order` to a module both can import, or have `billing` depend on a `Billable` Protocol.",
+    "link": {
+      "title": "Circular dependency — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circular_dependency"
+    }
+  },
+  {
+    "id": "sea-modularity-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "`notifications` imports `orders` to format order emails, and `orders` imports `notifications` to send them. Which changes genuinely remove the design cycle? Select all that apply.",
+    "options": [
+      {
+        "text": "Move `import notifications` inside the `orders` function that uses it",
+        "explanation": "This dodges the import-time error but the dependency still exists at runtime. The packages remain mutually dependent."
+      },
+      {
+        "text": "`orders` publishes an `OrderPlaced` event; `notifications` subscribes and formats the email",
+        "explanation": "Correct. `orders` no longer knows `notifications` exists. Dependencies now run one way: `notifications → orders` (for the event type)."
+      },
+      {
+        "text": "`orders` defines a `Notifier` Protocol and receives an implementation via its constructor; `notifications` implements it",
+        "explanation": "Correct. Dependency inversion: `orders` owns the abstraction, `notifications` depends on `orders`. The composition root wires them."
+      },
+      {
+        "text": "Add `if TYPE_CHECKING:` around the imports in both modules",
+        "explanation": "That only skips the imports at runtime for type hints. If the code actually calls across, the cycle is still there in practice."
+      }
+    ],
+    "answer": [
+      1,
+      2
+    ],
+    "workedExample": "A design cycle is removed only if one of the two arrows disappears.\n\n| Change | orders → notif | notif → orders |\n|---|---|---|\n| Local import | still there | still there |\n| Events | gone | stays |\n| Protocol + DI | gone | stays |\n| TYPE_CHECKING | still used | still used |\n\nEvents and dependency inversion both delete the `orders → notifications` arrow, leaving an acyclic graph.",
+    "link": {
+      "title": "Package principles — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Package_principles"
+    }
+  },
+  {
+    "id": "sea-modularity-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An import-linter `independence` contract lists `shop.orders`, `shop.billing` and `shop.catalogue`. `shop.orders` imports `shop.utils`, and `shop.utils` imports `shop.billing`. Does the contract pass?",
+    "options": [
+      {
+        "text": "Yes; `orders` never imports `billing` directly",
+        "explanation": "Independence contracts check indirect imports too, so a chain through an unlisted module still counts."
+      },
+      {
+        "text": "Yes; `utils` isn't listed, so it is ignored",
+        "explanation": "Unlisted modules can still be part of a chain that links two listed ones, and the contract follows those chains."
+      },
+      {
+        "text": "No; there's an indirect dependency `orders → utils → billing`",
+        "explanation": "Correct. Independence means no imports in any direction between the listed modules, even indirectly. `shop.utils` makes `orders` depend on `billing`."
+      },
+      {
+        "text": "It depends on whether `billing` imports `orders` back",
+        "explanation": "Independence forbids dependencies in *either* direction; one direction is enough to fail."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The contract: `orders`, `billing`, `catalogue` must not depend on each other, directly or indirectly.\n2. Build the graph: `orders → utils → billing`.\n3. There's a path from `orders` to `billing`, so `orders` depends on `billing`. Contract broken.\n4. Fix: split `shop.utils` so the piece `orders` uses doesn't import `billing`, or move what both need into a lower shared module that imports neither.\n\nThis is also why grab-bag `utils` modules are dangerous: they quietly connect things.",
+    "link": {
+      "title": "Import Linter: contract types",
+      "url": "https://import-linter.readthedocs.io/en/stable/contract_types/"
+    }
+  }
+]

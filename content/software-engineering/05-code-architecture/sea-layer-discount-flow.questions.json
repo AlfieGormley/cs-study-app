@@ -1,0 +1,66 @@
+[
+  {
+    "id": "sea-layered-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A product team says: \"Our discount rules need to run both in the web checkout and in a nightly batch job that re-prices abandoned baskets.\" Where should the rule \"a closed order cannot be discounted\" live?",
+    "options": [
+      {
+        "text": "In the domain layer, for example `Order.apply_discount`",
+        "explanation": "Correct. It's a business rule that would exist without software, so it belongs in the domain, where both the web and batch entry points reach it through the application layer."
+      },
+      {
+        "text": "In the SQL `UPDATE` statement as a `WHERE status = 'open'` clause",
+        "explanation": "A guarded database update can reinforce the invariant atomically under concurrency. It is not a substitute for a shared domain rule, and a separate read-then-save must also prevent races."
+      },
+      {
+        "text": "In the Flask view for `/discount`",
+        "explanation": "Then the batch job can't reuse it without faking an HTTP request. Rules placed in views are the problem layering exists to solve."
+      },
+      {
+        "text": "In both the view and the batch script, so each can be tuned",
+        "explanation": "Duplication increases the risk of divergent rules; divergence is not logically inevitable."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Ask what kind of knowledge it is:\n\n1. Is it about HTTP, JSON or screens? No, so not presentation.\n2. Is it about how rows are stored? No, so not data.\n3. Is it a sequence of steps for one use case (load, change, save, email)? That is the application layer.\n4. Is it a rule the business would state even on paper? Yes: \"closed orders can't be discounted\". That is **domain**.\n\nPutting it in `Order.apply_discount` means every entry point (view, batch job, admin CLI) goes through the same rule.",
+    "link": {
+      "title": "Presentation Domain Data Layering — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/PresentationDomainDataLayering.html"
+    }
+  },
+  {
+    "id": "sea-layered-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your application layer function looks like this:\n\n```python\ndef place_order(repo, mailer, cmd):\n    o = repo.get(cmd.oid)\n    if o.total > 500 and \\\n       o.customer.tier != \"gold\":\n        o.status = \"needs_review\"\n    else:\n        o.status = \"placed\"\n    repo.save(o)\n    mailer.send(o.customer.email)\n```\n\nWhich statements are fair observations? Select all that apply.",
+    "options": [
+      {
+        "text": "The review threshold is a business rule and belongs in the domain, such as `o.place()`",
+        "explanation": "In the intended rich-model design the rule belongs in a shared domain operation. A service can itself be reused by multiple entry points, so its location does not make reuse impossible."
+      },
+      {
+        "text": "Setting `o.status` directly from outside lets any caller put the order into an invalid state",
+        "explanation": "A domain method centralizes valid transitions, but Python public attributes can still be assigned directly unless access is otherwise controlled."
+      },
+      {
+        "text": "Loading, saving and sending the email are orchestration, which is the application layer's job",
+        "explanation": "Correct. This part is in the right place: coordinating repository, domain and side effects for one use case is exactly what a service layer does."
+      },
+      {
+        "text": "The application layer should never call infrastructure like a mailer",
+        "explanation": "A use case can coordinate side effects through an injected collaborator. Passing the object makes the dependency explicit; the required interface and behavior must still be designed."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Split the function into what it *decides* and what it *coordinates*:\n\n- Decides: the 500 threshold and the gold-tier exception. That's policy → domain.\n- Mutates: `o.status = ...` from outside → the object can't defend its invariants.\n- Coordinates: get, save, send email → application layer. Correct as it is.\n\nRefactored:\n\n```python\ndef place_order(repo, mailer, cmd):\n    o = repo.get(cmd.oid)\n    # Domain method owns the transition\n    # rule.\n    o.place()\n    repo.save(o)\n    mailer.send(o.customer.email)\n```\n\nThe service is now a thin script of steps and the rule lives in `Order.place()`.\nThe snippet illustrates responsibility placement, not atomic delivery: committing an order and sending email require an explicit failure/retry policy, often an outbox.",
+    "link": {
+      "title": "Service Layer — Patterns of Enterprise Application Architecture",
+      "url": "https://martinfowler.com/eaaCatalog/serviceLayer.html"
+    }
+  }
+]

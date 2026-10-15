@@ -1,0 +1,126 @@
+[
+  {
+    "id": "sea-layered-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You look at a codebase and find this pattern on almost every endpoint:\n\n```python\ndef get_user_view(uid):\n    return svc.get_user(uid)\n\nclass UserService:\n    def get_user(self, uid):\n        return self.repo.get_user(uid)\n```\n\nThe service adds nothing. What is this called, and what's a reasonable response?",
+    "options": [
+      {
+        "text": "The architecture sinkhole anti-pattern; if it's widespread, relax the layering (or simplify) rather than writing more pass-throughs",
+        "explanation": "Correct. Requests falling straight through layers with no logic added is the sinkhole. A few such paths are normal; if most are, the strict layering is costing more than it gives, and allowing simple reads to skip the service layer is a common fix."
+      },
+      {
+        "text": "The anaemic domain model; move all the logic into the repository",
+        "explanation": "Anaemic domain describes domain objects with no behaviour. And moving logic into the repository would mix rules with storage, which is worse."
+      },
+      {
+        "text": "A circular dependency; split the service into two",
+        "explanation": "Nothing here is circular: view → service → repository is a straight line downwards."
+      },
+      {
+        "text": "This is ideal strict layering and should be applied everywhere",
+        "explanation": "Strict layering is a choice with a cost. Pure pass-through layers add files and indirection without adding isolation where none is needed."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Trace the call: view → service → repository → one query. Nothing is decided or transformed on the way.\n2. That's a **architecture sinkhole** path. There is no measured universal acceptable percentage supplied here. Judge whether the boundary provides useful isolation or merely forwards calls.\n3. Options:\n   - Make the service layer **open** for reads, so views may call the repository (or a read model) directly.\n   - Keep the service only where use cases have real orchestration: transactions, permissions, events.\n4. Don't confuse this with an anaemic domain, which is about *domain* classes lacking behaviour.",
+    "link": {
+      "title": "Software Architecture Patterns — Mark Richards",
+      "url": "https://www.oreilly.com/content/software-architecture-patterns/"
+    }
+  },
+  {
+    "id": "sea-layered-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are symptoms of an **anaemic domain model**? Select all that apply.",
+    "options": [
+      {
+        "text": "`Order` has only fields, plus getters and setters",
+        "explanation": "Correct. Domain objects with data but no behaviour are the defining symptom."
+      },
+      {
+        "text": "`OrderService.cancel(order)` checks status, refunds, sets `order.status = \"cancelled\"`",
+        "explanation": "Correct. Business rules (when can an order be cancelled?) sit in a service that manipulates the object from outside, rather than in `order.cancel()`."
+      },
+      {
+        "text": "`Order.cancel()` raises if the order has already shipped",
+        "explanation": "Not a symptom. This is a rich domain object enforcing its own rule, the opposite of anaemic."
+      },
+      {
+        "text": "The same \"can this order be cancelled?\" check is copied in three different services",
+        "explanation": "Correct. When rules live in services rather than on the object, each new service tends to re-implement them, and the copies drift."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Fowler's description: the domain objects look real (names match the business), but \"there is hardly any behaviour on these objects\". Logic sits in services that treat objects as data structures.\n\nCheck each option:\n\n1. Only fields and accessors: symptom.\n2. Service flips `status` after its own checks: symptom; the rule belongs on `Order`.\n3. `Order.cancel()` guarding itself: healthy.\n4. Duplicated checks across services: a typical *consequence* of anaemia, because there is no single home for the rule.\n\nThe fix is \"tell, don't ask\": call `order.cancel()` and let the object decide.",
+    "link": {
+      "title": "Anemic Domain Model — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/AnemicDomainModel.html"
+    }
+  },
+  {
+    "id": "sea-layered-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a classic layered design, the domain layer sits above the data layer. Your `Order` class inherits from the ORM's base model so it can be saved. Six months later you want to unit-test pricing rules without a database, and to add a second storage backend for an archive. What is the root architectural cause of the difficulty?",
+    "options": [
+      {
+        "text": "The domain is coupled to persistence machinery, which can complicate isolation and alternate storage even if some ORM methods can be tested without a live database.",
+        "explanation": "This design names the ORM inside domain classes. Dependency inversion or extracting pure calculations can reduce that coupling; ORM inheritance alone does not imply every test opens a database."
+      },
+      {
+        "text": "There are too few layers; add a caching layer between domain and data",
+        "explanation": "Another layer doesn't change the direction of the dependency. The domain would still import storage code."
+      },
+      {
+        "text": "Python's dynamic typing makes it impossible to separate concerns",
+        "explanation": "Plenty of Python projects separate domain and storage cleanly, for example with repositories and plain classes or dataclasses."
+      },
+      {
+        "text": "The presentation layer is calling the domain directly instead of via services",
+        "explanation": "That might be untidy, but it doesn't explain why the *domain* can't be tested without a database."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Draw the dependencies: `Order` → ORM base → database connection.\n2. Constructing Order requires the ORM classes and possibly framework setup; whether a live database is needed depends on what its methods access.\n3. A second backend is awkward because `Order` *is* a table mapping for the first one.\n4. The fix: the domain defines what it needs (an `OrderRepository` interface) and stays a plain class. The data layer implements that interface for the ORM and for the archive. Now the arrow points from data to domain. That inversion is the core idea of hexagonal architecture.",
+    "link": {
+      "title": "Architecture Patterns with Python: Repository Pattern",
+      "url": "https://www.cosmicpython.com/book/chapter_02_repository.html"
+    }
+  },
+  {
+    "id": "sea-layered-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Django codebase follows the \"fat models\" style: `Invoice(models.Model)` holds fields and business methods like `invoice.mark_paid()`. A new requirement is to compute invoice totals in a pure-Python pricing library shared with a non-Django service. What is the most proportionate change?",
+    "options": [
+      {
+        "text": "Rewrite the whole app in hexagonal style with repositories for every model",
+        "explanation": "Large rewrites for one shared calculation are disproportionate. The cost lands everywhere; the benefit is in one place."
+      },
+      {
+        "text": "Make the non-Django service install Django and import the models",
+        "explanation": "That couples the second service to Django, its settings and your schema, which is exactly the dependency you're trying to avoid."
+      },
+      {
+        "text": "Extract the pricing rules into plain functions or classes with no Django imports, and have `Invoice` call them",
+        "explanation": "Correct. Pull out only the part that must be framework-free. Django models keep doing persistence and simple behaviour, while the shared rules become a small pure module both services can import and test without a database."
+      },
+      {
+        "text": "Copy the pricing methods into the other service",
+        "explanation": "Two copies can drift and produce different totals, increasing synchronization and testing work."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Identify what actually needs to be independent: the pricing calculation, not every model.\n2. Extract it into a module with no framework imports:\n\n```python\n# pricing.py\ndef total(lines, vat_rate):\n    # Sum line values before adding the\n    # tax.\n    net = sum(l.qty * l.price\n              for l in lines)\n    return net * (1 + vat_rate)\n```\n\n3. `Invoice.total()` delegates to `pricing.total(...)`; the other service calls it with its own data.\n4. This is the incremental version of the domain/data split. Apply it where a real need appears, rather than restructuring everything up front.\n\nThis is a pricing fragment: callers provide line objects and compatible numeric prices/rates (for money, typically Decimal), with explicit currency and rounding rules.",
+    "link": {
+      "title": "Architecture Patterns with Python: Service Layer",
+      "url": "https://www.cosmicpython.com/book/chapter_04_service_layer.html"
+    }
+  }
+]

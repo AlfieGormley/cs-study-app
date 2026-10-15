@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sea-hexagonal-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does hexagonal architecture make business rules easy to unit-test?",
+    "options": [
+      {
+        "text": "Because the core depends only on ports, so tests can plug in fast in-memory adapters instead of a database or network",
+        "explanation": "A fake can exercise domain behavior without external I/O. Its latency is not a fixed guarantee, and separate checks must verify real adapter semantics."
+      },
+      {
+        "text": "Because adapters are automatically mocked by the framework",
+        "explanation": "There's no framework doing this. You write fake adapters yourself, which is simple precisely because the ports are small and owned by the core."
+      },
+      {
+        "text": "Because the core contains no logic, so there is nothing to test",
+        "explanation": "The core is where the logic lives. The aim is to make that logic testable in isolation."
+      },
+      {
+        "text": "Because hexagonal architecture requires 100% test coverage",
+        "explanation": "It requires nothing of the sort; it only makes isolated tests cheap to write."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `PlaceOrder` is constructed with a repository and a notifier, typed against `Protocol` ports.\n2. In production the composition root passes `SqlOrderRepository` and `SmtpNotifier`.\n3. In a test you pass `FakeRepo` (a dict) and `FakeNotifier` (a list).\n4. The same port-shaped interaction can be used, so the test exercises the real rules with none of the slow or flaky I/O.",
+    "link": {
+      "title": "Architecture Patterns with Python: Repository Pattern",
+      "url": "https://www.cosmicpython.com/book/chapter_02_repository.html"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this test print?\n\n```python\nclass FakeRepo:\n    def __init__(self):\n        self.d = {}\n    def add(self, o):\n        # Store the object itself, not a\n        # copy.\n        self.d[o.id] = o\n    def get(self, i):\n        return self.d[i]\n\nclass Order:\n    def __init__(self, i):\n        self.id = i\n        self.status = \"draft\"\n    def place(self):\n        # Record the valid state\n        # transition.\n        self.status = \"placed\"\n\nrepo = FakeRepo()\nrepo.add(Order(7))\no = repo.get(7)\no.place()\n# Reads the same object that place\n# mutated.\nprint(repo.get(7).status)  # placed\n```",
+    "options": [
+      {
+        "text": "`draft`",
+        "explanation": "That would be true if `get` returned a copy, or if changes needed a `save` call. This fake stores and returns the same object."
+      },
+      {
+        "text": "`KeyError: 7`",
+        "explanation": "Order 7 was added before being fetched, so the key exists."
+      },
+      {
+        "text": "`placed`",
+        "explanation": "Correct. The dict stores a reference to the `Order`. `get(7)` returns that same object, `place()` mutates it, and the next `get(7)` returns the mutated object."
+      },
+      {
+        "text": "`None`",
+        "explanation": "`status` is set in `__init__` and then changed by `place()`; it's never `None`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `repo.add(Order(7))` stores the object under key 7.\n2. `o = repo.get(7)` returns a reference to that same object.\n3. `o.place()` sets `status = \"placed\"` on it.\n4. `repo.get(7)` returns the same object again, so it prints `placed`.\n\n**Fakes vs reality:** a real SQL repository may return a *new* object each time, so a forgotten `add`/`commit` loses the change. Fakes that silently share references can hide that bug. Cosmic Python's unit of work adds an explicit `commit()` and a `committed` flag on the fake for this reason.",
+    "link": {
+      "title": "Architecture Patterns with Python: Repository Pattern",
+      "url": "https://www.cosmicpython.com/book/chapter_02_repository.html"
+    }
+  },
+  {
+    "id": "sea-hexagonal-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Does this code satisfy the `OrderRepository` Protocol for a static type checker such as mypy?\n\nAssume `Protocol` is imported from `typing` and `Order` is an already defined domain class.\n\n```python\nclass OrderRepository(Protocol):\n    def get(self, oid: int) -> Order:\n        ...\n\nclass MemRepo:\n    def __init__(self) -> None:\n        self.d: dict[int, Order] = {}\n    def get(self, oid: int) -> Order:\n        return self.d[oid]\n\ndef run(repo: OrderRepository): ...\n\nrun(MemRepo())\n```",
+    "options": [
+      {
+        "text": "No: `MemRepo` must inherit from `OrderRepository`",
+        "explanation": "Protocols use *structural* subtyping. Explicit inheritance is optional; matching method signatures is enough."
+      },
+      {
+        "text": "No: Protocols only work with `abc.ABC` subclasses",
+        "explanation": "Protocols and abstract base classes are different mechanisms. ABC runtime checks can use inheritance, virtual registration or subclass hooks; registration alone does not establish static structural typing."
+      },
+      {
+        "text": "Only at runtime if the Protocol is decorated with `@runtime_checkable`",
+        "explanation": "@runtime_checkable enables runtime isinstance checks and, for protocols containing only methods, issubclass checks. Static checking of this call works without it. Runtime checks inspect member presence rather than enforcing full annotated signatures."
+      },
+      {
+        "text": "Yes: `MemRepo` has a compatible `get` method, so it structurally matches the Protocol",
+        "explanation": "Correct. PEP 544 protocols check the shape of the class. The adapter doesn't even need to import the port, which keeps it loosely coupled."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `OrderRepository` is a `Protocol` with one method, `get(int) -> Order`.\n2. `MemRepo.get` has the same signature.\n3. Under PEP 544, a class is compatible with a protocol if it has all the protocol's members with compatible types. No inheritance is needed.\n4. mypy accepts `run(MemRepo())`.\n\nContrast with `abc.ABC`: runtime membership can come from inheritance, registration or a subclass hook; static type-checker acceptance is a separate question. Protocols suit ports well because adapters can satisfy them without depending on the core's module.",
+    "link": {
+      "title": "PEP 544 — Protocols: structural subtyping",
+      "url": "https://peps.python.org/pep-0544/"
+    }
+  }
+]

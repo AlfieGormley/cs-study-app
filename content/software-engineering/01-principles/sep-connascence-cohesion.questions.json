@@ -1,0 +1,126 @@
+[
+  {
+    "id": "sep-coupling-cohesion-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A project has a `helpers.py` containing `slugify()`, `retry()`, `parse_vat_number()` and `send_slack_alert()`. Which type of cohesion does it have?",
+    "options": [
+      {
+        "text": "Functional",
+        "explanation": "Functional cohesion means everything works together on one task. These four functions have nothing in common."
+      },
+      {
+        "text": "Coincidental",
+        "explanation": "Correct. The only reason they're together is that nobody knew where else to put them. It is the weakest form of cohesion."
+      },
+      {
+        "text": "Temporal",
+        "explanation": "Temporal cohesion groups things because they run at the same time, like start-up steps. These functions run at unrelated times."
+      },
+      {
+        "text": "Sequential",
+        "explanation": "Sequential cohesion means one part's output feeds the next. None of these functions feeds another."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask what single purpose links the four functions. There isn't one: text formatting, retry logic, tax parsing and alerting.\n2. Grouping without a reason is **coincidental cohesion**.\n3. Why it hurts: anything importing `helpers` depends on all four and their imports (an HTTP client for Slack, perhaps), and ownership may become unclear.\n4. Fix by moving each function next to the code it serves (`text.slugify`, `tax.parse_vat_number`).",
+    "link": {
+      "title": "Cohesion (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cohesion_(computer_science)"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this class most clearly suggest?\n\n```python\nclass Employee:\n    name: str\n    email: str\n    tax_code: str\n    salary: int\n\n    def send_welcome(self):\n        ...  # uses name, email\n    def payslip(self):\n        ...  # uses tax_code, salary\n```",
+    "options": [
+      {
+        "text": "It has low cohesion: two groups of methods use disjoint fields, so it is likely two concepts (contact details and payroll)",
+        "explanation": "Correct. When methods split cleanly into groups that never touch each other's fields, the class is doing two jobs. Payroll rules and contact rules will change for different reasons and different people."
+      },
+      {
+        "text": "It has tight coupling to the email service",
+        "explanation": "We can't see any coupling to an email service. The visible issue is how the fields and methods inside the class relate."
+      },
+      {
+        "text": "It violates the Law of Demeter",
+        "explanation": "No method reaches through another object; they only use their own fields."
+      },
+      {
+        "text": "It is fine: all the fields describe an employee",
+        "explanation": "They do all relate to an employee in the business sense, but that's logical grouping. Cohesion asks whether the parts work together, and these groups don't."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Draw a grid of methods against fields:\n\n```\n            name email tax salary\nwelcome      x    x\npayslip                x    x\n```\n\n2. The grid splits into two blocks with no overlap. That's the signature of low cohesion (what LCOM metrics measure).\n3. Consequences: a payroll change means editing a class also used for welcome emails, and tests for one concern have to build the other's data.\n4. A typical refactor: `Employee` holds a `Contact` and a `PayrollRecord`, each cohesive.",
+    "link": {
+      "title": "Cohesion (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cohesion_(computer_science)"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Select **all** the changes that weaken the connascence between caller and callee.",
+    "options": [
+      {
+        "text": "Replacing `create(\"Ada\", 36, True)` with `create(name=\"Ada\", age=36, admin=True)`",
+        "explanation": "Correct. This turns connascence of position (caller must know the order) into connascence of name, which is weaker and survives reordering."
+      },
+      {
+        "text": "Replacing `if status == 3` with `if status == Status.CANCELLED`",
+        "explanation": "Correct. Connascence of meaning (both sides must know 3 means cancelled) becomes connascence of name."
+      },
+      {
+        "text": "Replacing a named tuple `(id, total)` with a plain tuple",
+        "explanation": "This goes the wrong way: callers now rely on position (`t[1]`) instead of names (`t.total`)."
+      },
+      {
+        "text": "Having both client and server import one shared `checksum()` function instead of each implementing the algorithm",
+        "explanation": "Correct. A shared implementation removes duplicated algorithm definitions. Independently deployed client/server versions must still agree on the checksum algorithm and encoding."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Connascence strength (weakest to strongest): name, type, meaning, position, algorithm.\n\n1. Positional arguments → keyword arguments: **position → name**. Weaker.\n2. Magic number → enum: **meaning → name**. Weaker.\n3. Named tuple → plain tuple: **name → position**. Stronger. Wrong direction.\n4. Two copies of a checksum → one shared function: **algorithm → name**. Weaker at the source-code level. Deployed client/server versions must still use compatible algorithms and encodings.\n\nRule of thumb: the further apart two pieces of code are (different modules, teams, services), the weaker their connascence should be.",
+    "link": {
+      "title": "Connascence.io",
+      "url": "https://connascence.io/"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An orders service publishes events with `\"status\": 3`. Three consumer services, owned by other teams, each hard-code `3 == cancelled`. The orders team wants to insert a new status and renumber. What is the best description and remedy?",
+    "options": [
+      {
+        "text": "Content coupling; give consumers direct database access so they can read the status table",
+        "explanation": "That would make coupling far worse: consumers would depend on the orders service's internal schema."
+      },
+      {
+        "text": "Connascence of meaning across team boundaries; publish names like `\"CANCELLED\"` in a documented, versioned event schema and never renumber existing values",
+        "explanation": "Correct. Every consumer must share the knowledge that 3 means cancelled. Converting to a named value in an explicit contract weakens it to connascence of name, and an explicit compatibility policy can require additive changes; versioning alone does not make changes compatible."
+      },
+      {
+        "text": "Control coupling; remove the status field from events",
+        "explanation": "The status isn't steering the consumers' control flow from outside, and consumers genuinely need it. Removing it just moves the problem."
+      },
+      {
+        "text": "No problem: renumber and tell the other teams",
+        "explanation": "Coordinated changes across teams and deploys are exactly what loose coupling is meant to avoid. Any consumer that misses the memo silently misreads events."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Identify what the services must agree on: the *meaning* of the integer 3. That's **connascence of meaning**.\n2. Assess locality: it spans three services and four teams, the worst place for strong connascence.\n3. Renumbering breaks every consumer silently (no compile error; a cancelled order might be read as shipped).\n4. Remedy:\n   - Use self-describing values: `\"status\": \"CANCELLED\"`.\n   - Put them in a published schema (JSON Schema, Avro, Protobuf enums).\n   - Make changes **additive**: add new values, never reuse or renumber old ones.\n5. Consumers must also tolerate unknown values, so adding a status doesn't crash them.",
+    "link": {
+      "title": "Connascence.io",
+      "url": "https://connascence.io/"
+    }
+  }
+]

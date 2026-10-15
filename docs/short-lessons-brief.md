@@ -73,6 +73,14 @@ resolve to another module's definition. Prefer precise existing aliases or narro
 a stream processor's clock timestamp in system design. Time-window sizes, algorithm sliding windows,
 instruction windows and TCP windows likewise need the definition appropriate to their context.
 
+For a diagnostic of every actual rendered link in the active units and complete question fields, run
+`/tmp/cs-study-short-lessons/inspect-rendered-term-contexts.mjs <compiler-snapshot> <source-module> <output.json>`.
+The snapshot may be the real compiler's scratch dictionary/renderer above or a genuinely built isolated
+release. The helper uses that renderer, excludes archived lessons, and records each linked phrase's
+compiled identity, full definition and surrounding text. Review the foreign-subject groups first, then
+ambiguous terms within the same subject. A foreign definition can be correct; check its meaning rather
+than removing links mechanically. This diagnostic does not replace source review or a stamped build.
+
 Formula lint is a heuristic, so also inspect the prose, tables and diagrams. Symbolic indexing ranges
 such as “vertices 0 to n − 1” need a card or equivalent natural-language wording. Define coordinates
 and other variables locally in each short unit. Inline code formatting is an exception only for real

@@ -1,0 +1,126 @@
+[
+  {
+    "id": "sep-solid-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the `Rectangle` and `Square` classes from the lesson (where `Square.setWidth` and `setHeight` set both sides), what does this print?\n\n```java\nRectangle r = new Square();\nr.setWidth(5);\n// The setter updates both dimensions.\nr.setHeight(4);\nSystem.out.println(r.area());\n```",
+    "options": [
+      {
+        "text": "20",
+        "explanation": "That's what a caller of `Rectangle` expects, which is exactly the LSP problem. But the object is a `Square`, so `setHeight(4)` also resets the width."
+      },
+      {
+        "text": "25",
+        "explanation": "That would be the result if only `setWidth` had run. The later `setHeight(4)` overwrites both sides."
+      },
+      {
+        "text": "16",
+        "explanation": "Correct. `setWidth(5)` makes both sides 5; `setHeight(4)` then makes both sides 4, so the area is 4 × 4 = 16."
+      },
+      {
+        "text": "It doesn't compile, because a `Square` can't be assigned to a `Rectangle`",
+        "explanation": "`Square extends Rectangle`, so the assignment is valid. The compiler is happy, which is why LSP bugs are dangerous."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace the fields:\n\n| Call | w | h |\n|---|---|---|\n| `new Square()` | 0 | 0 |\n| `setWidth(5)` | 5 | 5 |\n| `setHeight(4)` | 4 | 4 |\n\n`area()` = 4 × 4 = **16**.\n\nCode written against `Rectangle` reasonably assumes that setting the height leaves the width alone. `Square` breaks that postcondition, so it is not substitutable, even though \"a square is a rectangle\" sounds right. The compiler can't catch this: LSP is about behaviour, not types.",
+    "link": {
+      "title": "Liskov substitution principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Liskov_substitution_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "`Account.withdraw(amount)` accepts any positive amount and guarantees the balance falls by exactly `amount`. Which subclass behaviours would violate the Liskov substitution principle? Select **all** that apply.",
+    "options": [
+      {
+        "text": "`FrozenAccount.withdraw` raises `AccountFrozen` for any amount",
+        "explanation": "Correct. It throws an exception callers of `Account` have no reason to expect, and effectively refuses every valid input."
+      },
+      {
+        "text": "`CappedAccount.withdraw` raises `ValueError` for amounts over 500",
+        "explanation": "Correct. This **strengthens the precondition**: the parent accepts any positive amount, the subtype accepts fewer. Code that worked with `Account` can now fail."
+      },
+      {
+        "text": "`FeeAccount.withdraw` deducts `amount + 1` as a fee",
+        "explanation": "Correct. This **weakens the postcondition** (balance falls by exactly `amount`). Callers that reconcile balances will be wrong by 1 per withdrawal."
+      },
+      {
+        "text": "`AuditedAccount.withdraw` behaves identically and also writes an audit log entry",
+        "explanation": "Not a violation. It keeps every promise the parent makes and adds a harmless extra. Subtypes may do more, as long as they don't break the contract."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each subtype against the parent's contract:\n\n| Subtype | Pre | Post | Verdict |\n|---|---|---|---|\n| Frozen | narrower | n/a | breaks |\n| Capped | narrower | same | breaks |\n| Fee | same | weaker | breaks |\n| Audited | same | same+ | fine |\n\nRules:\n1. Preconditions: a subtype may accept **more**, never less.\n2. Postconditions: a subtype may promise **more**, never less.\n3. Exception outcomes must stay within those permitted by the parent’s contract.\n\nIf an account genuinely can be frozen, the parent's contract should say so (`withdraw` may raise `AccountFrozen`), and every caller handles it.",
+    "link": {
+      "title": "Liskov substitution principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Liskov_substitution_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`ImmutableRectangle` promises non-negative `width` and `height` and `area() == width * height`. It has no setters; any `with_width` operation may return a new general rectangle. `ImmutableSquare` preserves these promises and additionally has equal sides. Does this subtype violate LSP?",
+    "options": [
+      {
+        "text": "Yes: a square can never be a valid rectangle subtype",
+        "explanation": "The mutable version fails because of the setters' postconditions. Remove mutation and that broken promise disappears."
+      },
+      {
+        "text": "Yes: the extra invariant `width == height` strengthens a precondition",
+        "explanation": "Adding an invariant to a subtype is allowed as long as the parent's own contract still holds. Invariants restrict the subtype's own states; they aren't preconditions on callers."
+      },
+      {
+        "text": "No: without setters, every promise `ImmutableRectangle` makes (it has a width, a height and the right area) is true of an immutable square",
+        "explanation": "Correct. The classic violation came from `setWidth` promising to leave the height unchanged. With no mutators, nothing a caller can do reveals a difference, so the square is substitutable."
+      },
+      {
+        "text": "It depends on whether the classes are written in Java or Python",
+        "explanation": "LSP is about behavioural contracts, which are language-independent."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Recall why the mutable `Square` failed: `setWidth(5)` on a `Rectangle` promises the height is unchanged, and `Square` broke that.\n2. List the immutable parent's promises: `width` and `height` are non-negative numbers, and `area() == width * height`.\n3. Check each for `ImmutableSquare`: all true.\n4. Any \"with_width\" operation returns a *new* object. If it returns a `Rectangle` when the sides differ, no contract is broken.\n5. Conclusion: substitutability depends on the operations in the contract, not on the real-world taxonomy. Immutability often makes LSP problems vanish.",
+    "link": {
+      "title": "Circle–ellipse problem — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circle%E2%80%93ellipse_problem"
+    }
+  },
+  {
+    "id": "sep-solid-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "This Java method compiles and passes code review:\n\n```java\nvoid addDefaults(List<String> tags) {\n    tags.add(\"new\");\n}\n```\n\nAt runtime, a caller passes `Collections.unmodifiableList(existing)`. What happens, and what does it reveal?",
+    "options": [
+      {
+        "text": "It works; `unmodifiableList` only prevents removing elements",
+        "explanation": "Unmodifiable lists reject mutation, including add, remove, clear and set. set replaces an element and is not structurally modifying the list in the JDK terminology."
+      },
+      {
+        "text": "It throws `NullPointerException`",
+        "explanation": "Nothing is null here. The exception is about the operation being unsupported."
+      },
+      {
+        "text": "It fails to compile because `unmodifiableList` returns a different type",
+        "explanation": "It returns `List<T>`, so the call type-checks. That's why the failure only shows at runtime."
+      },
+      {
+        "text": "It throws `UnsupportedOperationException`, showing that a `List` reference doesn't guarantee `add` works: the interface's 'optional operations' weaken substitutability",
+        "explanation": "Correct. The JDK documents `add` as optional, so an unmodifiable list technically honours the written contract but breaks what most callers assume. It's a well-known LSP grey area."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `Collections.unmodifiableList` returns a `List<String>` view whose mutators throw `UnsupportedOperationException`.\n2. The compiler sees `List<String>` and allows `add`.\n3. At runtime the view rejects it.\n4. Is this an LSP violation? The `List` Javadoc marks `add` as an \"optional operation\", so the *documented* contract permits it. But it means code that receives a `List` can't rely on being able to add, which pushes the burden onto every caller.\n5. Designs that avoid this split read and write capabilities into separate types (Kotlin's `List` versus `MutableList`, for example). That's ISP and LSP working together.",
+    "link": {
+      "title": "Collections (Java SE 8 API)",
+      "url": "https://docs.oracle.com/javase/8/docs/api/java/util/Collections.html"
+    }
+  }
+]

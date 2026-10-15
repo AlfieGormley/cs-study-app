@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sep-solid-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A team's `Storage` interface has `read`, `write`, `delete`, `list` and `presign_url`. A read-only cache client must implement all five, so four of them throw. Which principle best addresses this?",
+    "options": [
+      {
+        "text": "Single responsibility",
+        "explanation": "SRP is about how many actors a module serves. The pain here is clients and implementers being forced to depend on methods they don't need."
+      },
+      {
+        "text": "Dependency inversion",
+        "explanation": "The code may well depend on an abstraction already; the problem is that the abstraction is too wide."
+      },
+      {
+        "text": "Open/closed",
+        "explanation": "OCP is about extending behaviour without editing old code, not about the width of an interface."
+      },
+      {
+        "text": "Interface segregation: split it into small role interfaces such as `Reader` and `Writer`",
+        "explanation": "Correct. A fat interface forces the read-only client to implement methods it can't support. Smaller role interfaces let each implementer and client depend only on what it uses."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The smell: implementations that throw \"not supported\" for most of the interface.\n2. ISP says clients shouldn't be forced to depend on methods they don't use, and implementers shouldn't be forced to fake them.\n3. Split by role:\n\n```python\nfrom typing import Protocol\n\nclass Reader(Protocol):\n    def read(self, key) -> bytes: ...\n\nclass Writer(Protocol):\n    def write(self, key, b): ...\n```\n\n4. A read-only client implements `Reader`. Code that only reads asks for a `Reader`, so it can be handed the cache or the full store.\n5. Bonus: the throwing methods violate Liskov substitution if the original contract promises successful support; ISP removes them.",
+    "link": {
+      "title": "Interface segregation principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Interface_segregation_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Given this code, what does a static type checker such as mypy report for the last line?\n\n```python\nfrom typing import Protocol\n\nclass SupportsClose(Protocol):\n    def close(self) -> None: ...\n\nclass Conn:  # no base class\n    def close(self) -> None:\n        print(\"closed\")\n\ndef shutdown(x: SupportsClose):\n    x.close()\n\n# Matching members satisfy the Protocol.\n\nshutdown(Conn())\n```",
+    "options": [
+      {
+        "text": "No error: `Conn` has a compatible `close` method, so it satisfies the protocol structurally",
+        "explanation": "Correct. PEP 544 protocols are checked by shape. Any class with `close() -> None` fits, which makes small role interfaces (ISP) cheap and keeps implementations free of framework base classes."
+      },
+      {
+        "text": "An error: `Conn` doesn't inherit from `SupportsClose`",
+        "explanation": "That's how nominal typing works (as with Java interfaces). `Protocol` is structural: matching methods are enough."
+      },
+      {
+        "text": "A runtime `TypeError` when `shutdown` is called",
+        "explanation": "Protocols add no checking at runtime. Without `@runtime_checkable` and an explicit `isinstance` call, nothing is checked at runtime at all."
+      },
+      {
+        "text": "An error because `Protocol` classes can't have methods with bodies",
+        "explanation": "Protocol methods conventionally have `...` bodies, but that's not the issue here; `Conn` is a normal class."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `SupportsClose` is a **Protocol**, so it describes a shape: \"has a `close()` returning `None`\".\n2. The checker compares `Conn`'s members with that shape. `Conn.close` matches.\n3. So `Conn()` is a valid `SupportsClose`, with no inheritance needed.\n4. Why this matters for SOLID:\n   - ISP: functions can ask for exactly the capability they use.\n   - DIP: the high-level module defines the protocol; low-level classes satisfy it without importing it.",
+    "link": {
+      "title": "PEP 544: Protocols (structural subtyping)",
+      "url": "https://peps.python.org/pep-0544/"
+    }
+  }
+]

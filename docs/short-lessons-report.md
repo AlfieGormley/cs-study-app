@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 54/76. Updated 2026-10-15.
+Verified modules: 55/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -61,6 +61,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | security/Web Application Security | 3 | 14 | 33 | 7 | 215 | 270 | 32 |
 | security/Systems Security | 2 | 15 | 23 | 21 | 200 | 259 | 47 |
 | security/Security Engineering in Practice | 4 | 23 | 45 | 13 | 252 | 333 | 47 |
+| software-engineering/Design Principles & Clean Code | 6 | 26 | 69 | 8 | 292 | 395 | 45 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4472,6 +4473,32 @@ Low-confidence areas:
 - **medium** — secp-leased-database-credentials: Target-enforced expiry and revocation. Vault and AWS API semantics fetched; live permissions/connectivity/existing sessions and database revocation were not tested.
 - **medium** — secp-workload-secret-stores: SDK role selection and secret auditing. Fresh Boto3/CloudTrail/Kubernetes docs plus stubbed retrieval validate the scoped example, not live IAM or production log completeness.
 - **medium** — secp-dependency-selection-attacks: Ancillary sources and historical reconstruction. Two encyclopaedic sources remain; chronology is a reconstruction; Fedora docs returned a bot challenge. These entries are not upgraded to high.
+
+## software-engineering: Design Principles & Clean Code
+
+[Independent verification record](../content/software-engineering/01-principles/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Corrected structural-instability reasoning: the metric neither measures churn nor proves abstraction is needed.
+- Corrected Beck-rule question directly at its original answer index, removing a prompt qualification that preserved an invented universal priority.
+- Narrowed Python handler, exists, unchecked Java exception and deprecation definitions to their actual contracts.
+- Removed precise historical dates or personal credits not supported by freshly fetched originals; original coupling/cohesion history starts in the 1960s.
+- Fixed real compiled dictionary senses: Boolean variables, .NET value type, crawler change rate, compiler front/back ends, Rust scope exit, QUIC address validation, CI status checks, typing.Protocol, heap tie-breakers and cyclic-list wording.
+- Added precise connascence strength/locality/degree, Boolean variable and idempotent request entries; fixed a Markdown-containing alias that could not annotate real prose.
+
+Remaining gaps:
+
+- Original schematic SQL/checkout, SMTP, payment/webhook, retry-signature and validation examples remain sketches. They do not implement production transactions, durable deduplication, exhaustive email validation, bounded jittered retry or adversarial filesystem protection. These limits are explicit in the units.
+- The original unsourced measured speedup remains removed from active content. No replacement benchmark is invented.
+- Specific acronym coinage and several historical dates/credits were removed where fetched originals did not substantiate them. Core concepts remain.
+- Traditional coupling and cohesion labels are diagnostic vocabularies rather than universal rankings; the external-coupling label and exact rule-of-three heuristic retain medium confidence.
+- Sixteen conventional glossary definitions retain medium source confidence where only the fetched reference, rather than a sufficiently specific original, substantiated the complete entry; see glossaryLowConfidence. Their associated code/maths examples were checked independently.
+
+Low-confidence areas:
+
+- **medium** — sep-coupling-boundaries: The additional external-coupling category is an explicitly traditional taxonomy drawn from secondary reference material; the original Structured Design textbook supports the core coupling/cohesion concepts but does not use this exact six-label list.. Core technical content independently verified; this explicitly qualified reference taxonomy/heuristic lacks the original-source support described here.
+- **medium** — sep-knowledge-abstractions: The rule of three is presented as a practical heuristic, not a measured theorem. Its exact count is corroborated by the cited reference; an original Don Roberts source was not available, so personal attribution was removed.. Core technical content independently verified; this explicitly qualified reference taxonomy/heuristic lacks the original-source support described here.
 
 ## synth: Sound & Digital Audio
 

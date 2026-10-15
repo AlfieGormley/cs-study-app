@@ -1,0 +1,96 @@
+[
+  {
+    "id": "sep-coupling-cohesion-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What is the main design problem here, and what is the usual fix?\n\n```python\ndef label(order):\n    # Reach through two structural\n    # links.\n    a = order.customer.address\n    return f\"{a.line1}\\n{a.city}\"\n```",
+    "options": [
+      {
+        "text": "It breaks the Law of Demeter; ask `order` for what you need, such as `order.shipping_label()`",
+        "explanation": "Correct. `label` knows that orders have customers, customers have addresses, and addresses have lines. Restructuring any of those classes breaks it. Asking the nearest object hides the chain."
+      },
+      {
+        "text": "It has control coupling, so add a mode argument",
+        "explanation": "There's no flag here, and adding one would make coupling worse, not better."
+      },
+      {
+        "text": "It violates command-query separation",
+        "explanation": "The function only reads and returns; it has no side effects."
+      },
+      {
+        "text": "It should catch `AttributeError` in case `customer` is `None`",
+        "explanation": "That might be needed for robustness, but it doesn't address the design problem: knowing the internal structure of three classes."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Count the classes `label` must understand: `Order`, `Customer`, `Address`. It talks to \"strangers\" (objects returned by other objects).\n2. That's what the Law of Demeter warns about: a change to how customers store addresses ripples into code that only wanted a shipping label.\n3. Move the knowledge to the nearest object:\n\n```python\nclass Order:\n    def shipping_label(self):\n        return self.customer.label()\n```\n\n4. Each class now knows only its immediate neighbour.\n5. Caveat: chaining on plain data (dicts, fluent builders) is not the same problem; the law is about reaching through other objects' internals.",
+    "link": {
+      "title": "Law of Demeter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Law_of_Demeter"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which smell does this code show?\n\n```python\ndef can_ship(order):\n    c = order.customer\n    return (c.verified\n            and not c.blocked\n            and c.country in SHIP_TO)\n```",
+    "options": [
+      {
+        "text": "Primitive obsession",
+        "explanation": "Primitive obsession is using raw strings and numbers where a small type would help. The code here uses rich objects."
+      },
+      {
+        "text": "Feature envy: the function is more interested in `Customer`'s data than its own",
+        "explanation": "Correct. Every condition is about the customer. That logic probably belongs on `Customer` (say `c.can_receive_shipments()`), next to the data it interrogates."
+      },
+      {
+        "text": "Coincidental cohesion",
+        "explanation": "That applies to a module that groups unrelated things. This is one focused function."
+      },
+      {
+        "text": "Temporal coupling",
+        "explanation": "Temporal coupling means things must happen in a specific order. Nothing here depends on the order of calls."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Look at what the function touches: `verified`, `blocked`, `country`, all on `customer`.\n2. It asks the customer three questions, then makes a decision about the customer. That's **feature envy** and a breach of \"tell, don't ask\".\n3. Move the rule to where the data lives:\n\n```python\nclass Customer:\n    def can_receive(self):\n        return (\n            self.verified\n            and not self.blocked\n            and self.country in SHIP_TO\n        )\n\ndef can_ship(order):\n    return order.customer.can_receive()\n```\n\n4. Now if the shipping rules for customers change, there's one place to look, and other callers can reuse it.",
+    "link": {
+      "title": "Feature Envy — Refactoring.Guru",
+      "url": "https://refactoring.guru/smells/feature-envy"
+    }
+  },
+  {
+    "id": "sep-coupling-cohesion-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Adding support for a new currency requires small edits in nine files across five modules. Which statements are reasonable? Select **all** that apply.",
+    "options": [
+      {
+        "text": "This is shotgun surgery: knowledge about currencies is scattered rather than kept in one cohesive place",
+        "explanation": "Correct. One logical change touching many places is the defining symptom of shotgun surgery."
+      },
+      {
+        "text": "Gathering currency rules (symbols, decimal places, rounding) into one `money`/`currency` module would likely reduce the edits",
+        "explanation": "Correct. Moving related knowledge together raises cohesion and means the next currency is mostly a one-module change."
+      },
+      {
+        "text": "Splitting each of the nine files into smaller files would fix it",
+        "explanation": "Smaller files don't help if currency knowledge is still spread across them. You'd likely have more files to edit, not fewer."
+      },
+      {
+        "text": "Some files may be duplicating currency knowledge, such as decimal places hard-coded in several formatters",
+        "explanation": "Correct. Duplicated knowledge (a DRY problem) is a frequent cause of shotgun surgery: each copy must be updated."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. Name the symptom: one change, many places. That's **shotgun surgery**, the mirror image of divergent change (one module changing for many reasons).\n2. Find the root cause: currency knowledge isn't owned by one module. Often it's duplicated (`round(x, 2)` in nine places).\n3. The fix is to **raise cohesion**: create a `Money` type or `currency` module that owns symbols, minor units and rounding.\n\n```python\nclass Currency:\n    code: str\n    minor_units: int  # GBP 2, JPY 0\n```\n\n4. Splitting files only changes the layout; the knowledge would still be scattered.",
+    "link": {
+      "title": "Shotgun Surgery — Refactoring.Guru",
+      "url": "https://refactoring.guru/smells/shotgun-surgery"
+    }
+  }
+]

@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 54/76 modules; 348 originals → 1875 short lessons with 4086 focused questions.
+- Independently verified: 55/76 modules; 354 originals → 1901 short lessons with 4155 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `0ccd559`, version `da6b0b3cb0dc`, 1852 short lessons/4041 focused questions
-  across 53 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
-- Current generated candidate: `7decfc61cfc6`, 54 modules/1875 units/4086 questions.
+- Latest confirmed live release: `34e452e`, version `7decfc61cfc6`, 1875 short lessons/4086 focused questions
+  across 54 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Current generated candidate: `020de2132c30`, 55 modules/1901 units/4155 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -20,12 +20,13 @@ to run to completion without further approval questions. Published batches are m
 - All six networking modules are converted and published: 233 short units/447 questions.
 - All six computer-architecture modules are converted and published: 199 short units/431 questions.
 - All six programming-language modules are converted and published: 178 short units/424 questions.
+- All six security modules are converted and published: 155 short units/310 questions.
 
 Current allocations:
 
-- software-engineering/se-principles: verifying; /root/se_principles_short_verify.
-- software-engineering/se-patterns: authoring; /root/se_patterns_short_author.
+- software-engineering/se-patterns: verifying; /root/se_patterns_short_verify.
 - software-engineering/se-testing: authoring; /root/se_testing_short_author.
+- software-engineering/se-git: authoring; /root/se_git_short_author.
 
 Verification and integration:
 

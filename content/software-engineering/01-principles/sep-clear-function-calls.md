@@ -1,0 +1,52 @@
+---
+id: sep-clear-function-calls
+title: Make function calls self-explanatory
+level: basic
+minutes: 3
+summary: Keyword-only arguments prevent silent positional mix-ups.
+sourceLesson: sep-clean-code
+---
+
+Readable functions expose intention, make calls unambiguous and preserve the behaviour callers already rely on. This unit concentrates on the information available at a call site.
+
+A positional call relies on the reader remembering the parameter order. Keyword arguments spell out the mapping. A bare `*` in a Python definition goes further: it requires all following parameters to be passed by name, so a positional attempt raises `TypeError` before the body executes. This prevents swapping equally plausible integers without a visible clue.
+
+### Few parameters, no flag arguments
+
+Each parameter is something a caller must understand and get right. Three positional parameters of the same type are an accident waiting to happen:
+
+```python
+# Positions alone hide transfer direction.
+transfer(100, 42, 17)  # which is which?
+```
+
+Python's keyword-only arguments help:
+
+```python
+# The bare * requires names at the call.
+def transfer(*, amount, src, dst): ...
+
+transfer(amount=100, src=42, dst=17)
+```
+
+A **flag argument** (a boolean that changes what the function does) is a sign the function does two things:
+
+```python
+# Named operations expose the chosen mode.
+render(doc, True)       # True what?
+
+# Prefer two named functions
+render_preview(doc)
+render_print(doc)
+```
+
+When many parameters always travel together (`street, city, postcode`), introduce a **parameter object** (`Address`).
+
+## Key takeaways
+- Keyword-only arguments prevent silent positional mix-ups.
+- A behaviour-changing flag can hide several jobs behind one function name.
+- Group parameters that represent one domain value rather than adding unrelated arguments.
+
+## Further reading
+- [peps.python.org](https://peps.python.org/pep-3102/)
+- [FlagArgument](https://martinfowler.com/bliki/FlagArgument.html)

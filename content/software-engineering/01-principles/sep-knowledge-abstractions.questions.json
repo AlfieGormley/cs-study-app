@@ -1,0 +1,156 @@
+[
+  {
+    "id": "sep-dry-kiss-yagni-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A bug report says users can set an 8-character password on sign-up but not on reset. You find:\n\n```python\n# signup.py\nif len(pw) < 8: raise Weak()\n\n# reset.py\nif len(pw) < 10: raise Weak()\n```\n\nWhich principle would have prevented this?",
+    "options": [
+      {
+        "text": "YAGNI",
+        "explanation": "YAGNI is about not building features before they're needed. Both checks are needed; the problem is that they disagree."
+      },
+      {
+        "text": "KISS",
+        "explanation": "Each check is already simple. Simplicity of each copy doesn't stop two copies drifting apart."
+      },
+      {
+        "text": "DRY: one rule (minimum password length) should have one authoritative representation",
+        "explanation": "Correct. The rule exists in two places that must be kept in step by hand, and they drifted. A single `MIN_PASSWORD_LENGTH` and a shared `check_password()` makes drift impossible."
+      },
+      {
+        "text": "Liskov substitution",
+        "explanation": "No subtypes are involved; this is about duplicated knowledge."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask what *knowledge* each line encodes: \"a password must be at least N characters\".\n2. That's one business rule, so it should live in one place.\n3. Two copies means every change must be made twice, and here someone changed only one.\n4. Fix:\n\n```python\nMIN_PASSWORD_LENGTH = 10\n\ndef check_password(pw):\n    if len(pw) < MIN_PASSWORD_LENGTH:\n        raise Weak()\n```\n\nBoth `signup` and `reset` call `check_password`.",
+    "link": {
+      "title": "Don't repeat yourself — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A reviewer suggests merging these into one `twenty_percent(price)` helper \"to keep it DRY\". What is the best response?\n\n```python\ndef vat(price):\n    return round(price * 0.20, 2)\n\ndef staff_discount(price):\n    return round(price * 0.20, 2)\n```",
+    "options": [
+      {
+        "text": "Agree: identical code is always duplication",
+        "explanation": "DRY is about knowledge, not identical text. Identical code that encodes different rules is coincidence."
+      },
+      {
+        "text": "Disagree: these encode different rules (a tax rate and an HR policy) that will change independently, so this is accidental duplication",
+        "explanation": "Correct. If the staff discount moves to 25%, VAT must stay the same. Merging them couples two unrelated decisions, and someone will soon add a parameter to separate them again."
+      },
+      {
+        "text": "Agree, but make it a class to allow future extension",
+        "explanation": "That's merging plus speculative design. The underlying problem (two unrelated rules forced together) is unchanged."
+      },
+      {
+        "text": "Disagree, because functions should never be shorter than five lines",
+        "explanation": "There's no such rule. Short functions are fine; the reason to keep these apart is what they mean."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Apply the DRY test: \"if one changed, would the other *have* to change?\"\n2. VAT is set by government; the staff discount is set by HR. A change to one says nothing about the other.\n3. So the answer is no: this is **accidental duplication**.\n4. A better improvement is naming the knowledge:\n\n```python\nVAT_RATE = 0.20\nSTAFF_DISCOUNT = 0.20\n```\n\nNow each rule has one home, and the two are free to diverge.",
+    "link": {
+      "title": "Don't repeat yourself — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A shared helper has grown to this, and every change to it breaks some caller:\n\n```python\ndef export(rows, fmt, legacy=False,\n           skip_header=False,\n           eu=False, finance=False):\n    ...\n```\n\nFollowing Sandi Metz's advice on \"the wrong abstraction\", what should you do first?",
+    "options": [
+      {
+        "text": "Add another flag for the next requirement, since callers already depend on it",
+        "explanation": "This is the very cycle that produced the mess: each new flag adds a branch only one caller uses."
+      },
+      {
+        "text": "Split it into one subclass per flag combination",
+        "explanation": "With four booleans that's up to 16 combinations, and inheritance makes the coupling permanent."
+      },
+      {
+        "text": "Rewrite it as a generic, configurable pipeline",
+        "explanation": "That's a bigger abstraction built on the same poor understanding of what's really shared."
+      },
+      {
+        "text": "Inline the function back into each caller, delete the branches each caller doesn't use, then look for what's genuinely common",
+        "explanation": "Correct. Metz's advice is to go back to duplication. Once each caller has only the code it actually runs, the real shared idea (if any) becomes visible."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Recognise the pattern: an abstraction that 'almost fitted' each new requirement, so it grew a parameter and a conditional each time.\n2. Now each caller uses a different path through it. Changing one path risks the others.\n3. Metz's recipe:\n   - Inline the function into every caller.\n   - In each copy, delete the branches that caller never takes (`finance` code only stays in the finance caller).\n   - Each copy is now short and clear.\n4. Then look again. Maybe the CSV-writing core is shared and worth extracting; maybe nothing is.\n5. \"Duplication is far cheaper than the wrong abstraction.\"",
+    "link": {
+      "title": "The Wrong Abstraction — Sandi Metz",
+      "url": "https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You're writing code to parse dates from a vendor file. A very similar parser already exists for another vendor. Following the rule of three, what should you do?",
+    "options": [
+      {
+        "text": "Extract a shared parser now, since there are two cases",
+        "explanation": "With only two examples it's hard to tell which differences are fundamental. The rule of three waits for a third case."
+      },
+      {
+        "text": "Duplicate it for now, and extract a shared abstraction if a third similar parser is needed",
+        "explanation": "Correct. 'Write it; the second time, wince and duplicate; the third time, refactor.' Three examples give you much better evidence of what's truly shared."
+      },
+      {
+        "text": "Never extract; duplication is always cheaper",
+        "explanation": "Metz's point is that duplication is cheaper than the *wrong* abstraction, not that abstraction is always wrong. Real shared knowledge should be unified."
+      },
+      {
+        "text": "Copy it and add a comment telling future developers to keep them in sync",
+        "explanation": "If they must be kept in sync, they share knowledge and should be unified. If they needn't, the comment is misleading."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Count occurrences: this is the second.\n2. With two examples, you can see what's the same but not what *varies*. An abstraction built now encodes a guess.\n3. The rule of three:\n   - 1st: write it.\n   - 2nd: duplicate, noting the similarity.\n   - 3rd: refactor, now that you can see the axis of variation.\n4. Exception: if the duplicated part is clearly the same *rule* (both vendors use ISO 8601 and must stay consistent), unify it now. That's DRY on knowledge, not on appearance.",
+    "link": {
+      "title": "Rule of three (computer programming) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Rule_of_three_(computer_programming)"
+    }
+  },
+  {
+    "id": "sep-dry-kiss-yagni-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine DRY violations (duplicated **knowledge**)? Select **all** that apply.",
+    "options": [
+      {
+        "text": "The VAT rate is hard-coded in both the checkout user interface and the invoicing service",
+        "explanation": "Correct. One fact, two copies. When the rate changes, missing one produces mismatched totals. Have the invoicing service supply it."
+      },
+      {
+        "text": "A hand-written API reference lists every endpoint's fields, separately from the code that defines them",
+        "explanation": "Correct. The field definitions exist twice. Generating docs from the code (or the code from an OpenAPI spec) removes the drift."
+      },
+      {
+        "text": "Two unrelated reports both use a `for` loop over rows that writes to a CSV",
+        "explanation": "Not a DRY violation. Sharing a code *shape* is not sharing knowledge. Each report's columns and rules can change independently."
+      },
+      {
+        "text": "The same database connection string is copied into three services' config files",
+        "explanation": "Correct. One fact (where the database lives) in three places. A move or credential rotation needs three coordinated edits."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Apply the test to each: \"if one copy changed, would the others *have* to change?\"\n\n| Case | Must change together? |\n|---|---|\n| VAT in two tiers | yes |\n| API docs versus code | yes |\n| Two CSV loops | no |\n| Connection string ×3 | yes |\n\n1. DRY applies beyond code: config, docs and schemas count.\n2. The usual fix is a single source plus derivation: generated docs, config from one secret store, values supplied by the application service.\n3. The CSV loops look alike but encode different reports; merging them is the wrong abstraction.",
+    "link": {
+      "title": "Don't repeat yourself — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Don%27t_repeat_yourself"
+    }
+  }
+]

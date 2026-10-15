@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sep-error-handling-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ntry:\n    x = int(\"42\")\nexcept ValueError:\n    print(\"bad\")\nelse:\n    # Else follows normal try\n    # completion.\n    print(\"ok\")\nfinally:\n    # Cleanup also runs after success.\n    print(\"done\")\n```",
+    "options": [
+      {
+        "text": "`ok` then `done`",
+        "explanation": "Correct. `int(\"42\")` succeeds, so `except` is skipped, `else` runs (no exception), and `finally` always runs last."
+      },
+      {
+        "text": "`done` only",
+        "explanation": "Here the try block completes normally, so else runs. A return, break or continue exiting try would skip else even without an exception."
+      },
+      {
+        "text": "`bad` then `done`",
+        "explanation": "`except ValueError` only runs if a `ValueError` is raised. `\"42\"` parses fine."
+      },
+      {
+        "text": "`ok` only",
+        "explanation": "`finally` always runs, whether or not an exception occurred."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Walk through it:\n\n1. `try`: `int(\"42\")` returns 42. No exception.\n2. `except ValueError`: skipped (nothing raised).\n3. `else`: runs because `try` completed normally. Prints `ok`.\n4. `finally`: always runs. Prints `done`.\n\nOutput:\n\n```\nok\ndone\n```\n\nWith `int(\"x\")` instead you'd get `bad` then `done`.",
+    "link": {
+      "title": "Errors and Exceptions — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/errors.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Under CPython 3.14 with default warning handling, what does `fetch()` return?\n\n```python\ndef fetch():\n    try:\n        raise TimeoutError(\"db\")\n    finally:\n        # This discards the pending\n        # exception.\n        return \"cached\"\n```",
+    "options": [
+      {
+        "text": "It raises `TimeoutError`",
+        "explanation": "You'd expect that, but a `return` in `finally` overrides the in-flight exception, which is discarded."
+      },
+      {
+        "text": "`None`",
+        "explanation": "The `return \"cached\"` statement runs, so the function returns that string."
+      },
+      {
+        "text": "It raises `SyntaxError`",
+        "explanation": "Python 3.14 emits a `SyntaxWarning` for this (PEP 765), not an error. The code still runs."
+      },
+      {
+        "text": "`\"cached\"`, and the `TimeoutError` is silently lost",
+        "explanation": "Correct. `finally` runs on the way out, and its `return` replaces the pending exception. The timeout leaves no trace, which is why you should never return from `finally`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `try` raises `TimeoutError`. Python starts unwinding.\n2. Before leaving, it must run `finally`.\n3. `finally` executes `return \"cached\"`. A return from `finally` replaces whatever the function was doing, including propagating an exception.\n4. The exception is discarded; the caller sees `\"cached\"` and thinks all is well.\n5. Python 3.14 warns about this at compile time (`SyntaxWarning: 'return' in a 'finally' block`).\n6. If you want a fallback, say so explicitly:\n\n```python\ntry:\n    return query()\nexcept TimeoutError:\n    log.warning(\"db timeout\")\n    return \"cached\"\n```",
+    "link": {
+      "title": "PEP 765: Disallow return/break/continue that exit a finally block",
+      "url": "https://peps.python.org/pep-0765/"
+    }
+  },
+  {
+    "id": "sep-error-handling-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\ndef f(x):\n    try:\n        print(\"a\")\n        # Zero takes the matching\n        # handler path.\n        r = 10 / x\n    except ZeroDivisionError:\n        print(\"b\")\n        return -1\n    else:\n        print(\"c\")\n        return r\n    finally:\n        print(\"d\")\n\nprint(f(0))\n```",
+    "options": [
+      {
+        "text": "`a`, `b`, `-1`, `d`",
+        "explanation": "`finally` runs *before* the function actually returns, so `d` is printed before the caller prints the return value."
+      },
+      {
+        "text": "`a`, `b`, `d`, `-1`",
+        "explanation": "Correct. Division by zero jumps to `except` (prints `b`) and schedules `return -1`; `finally` runs on the way out (prints `d`); then the caller prints `-1`."
+      },
+      {
+        "text": "`a`, `b`, `c`, `d`, `-1`",
+        "explanation": "`else` only runs if the `try` block raised nothing. Here it raised `ZeroDivisionError`."
+      },
+      {
+        "text": "`a`, `d`, then a `ZeroDivisionError` traceback",
+        "explanation": "The exception is caught by the matching `except` clause, so it doesn't propagate."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace `f(0)`:\n\n1. `print(\"a\")`\n2. `10 / 0` raises `ZeroDivisionError`. Skip the rest of `try`.\n3. Matching `except`: `print(\"b\")`, then `return -1` is *pending*.\n4. `else` is skipped (an exception occurred).\n5. Before returning, `finally`: `print(\"d\")`.\n6. The function returns `-1`; the caller prints it.\n\n```\na\nb\nd\n-1\n```\n\nFor `f(5)` the output would be `a`, `c`, `d`, `2.0`.",
+    "link": {
+      "title": "Errors and Exceptions — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/errors.html"
+    }
+  }
+]

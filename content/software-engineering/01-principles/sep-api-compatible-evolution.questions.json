@@ -1,0 +1,152 @@
+[
+  {
+    "id": "sep-writing-for-others-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Your library is at version 2.4.1. You add a new **required** parameter to a public function. Following semantic versioning, what is the next version?",
+    "options": [
+      {
+        "text": "2.4.2",
+        "explanation": "PATCH bumps are for backwards-compatible bug fixes. Existing calls without the new argument will now fail."
+      },
+      {
+        "text": "2.5.0",
+        "explanation": "MINOR bumps are for backwards-compatible additions. A new *optional* parameter would be minor; a required one breaks callers."
+      },
+      {
+        "text": "3.0.0",
+        "explanation": "Correct. Existing calls stop working, which is an incompatible API change, so MAJOR increments and MINOR and PATCH reset to 0."
+      },
+      {
+        "text": "2.4.1-breaking",
+        "explanation": "Pre-release labels such as `-rc.1` mark unstable versions *before* a release. They don't signal a breaking change on their own."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask: do existing callers still work?\n   - `f(a)` was valid; now `f` needs `b` too, so `f(a)` raises `TypeError`.\n2. Not backwards-compatible means **MAJOR**.\n3. Bumping MAJOR resets the others: `2.4.1` → `3.0.0`.\n4. To avoid the major bump, add a backwards-compatible optional parameter with a default (a MINOR change, `2.5.0`), deprecate calls that omit it, and make it required in 3.0.",
+    "link": {
+      "title": "Semantic Versioning 2.0.0",
+      "url": "https://semver.org/"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your search API's docs say results are returned \"in no particular order\". In practice they always came back sorted by id. You switch to a faster index that returns them unsorted, and three customers report broken integrations. What does this illustrate?",
+    "options": [
+      {
+        "text": "Hyrum's Law: with enough users, every observable behaviour is depended on, whatever the contract says",
+        "explanation": "Correct. The sort order was never promised, but it was observable, so someone relied on it. The contract didn't protect you."
+      },
+      {
+        "text": "The customers violated the Liskov substitution principle",
+        "explanation": "LSP concerns subtypes honouring their parents' contracts. This is about clients relying on undocumented behaviour."
+      },
+      {
+        "text": "YAGNI: you didn't need the faster index",
+        "explanation": "Whether the optimisation was needed doesn't change the lesson: the behaviour change broke users who relied on an accident."
+      },
+      {
+        "text": "The change was fine, because the docs were clear",
+        "explanation": "Technically true, but the integrations are still broken, and 'read the docs' doesn't repair customer relationships."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Contract: 'no particular order'.\n2. Observable behaviour: 'always sorted by id'.\n3. Some users coded against the observable behaviour, often without realising it.\n4. That's **Hyrum's Law**. Contracts reduce your obligations on paper, but not in practice.\n5. Defences for next time:\n   - Avoid accidental guarantees (Go randomises map iteration order for this reason).\n   - Offer an explicit `sort=` parameter if order matters to people.\n   - Roll behaviour changes out gradually and announce them.",
+    "link": {
+      "title": "Hyrum's Law",
+      "url": "https://www.hyrumslaw.com/"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does this deprecation use `stacklevel=2`?\n\n```python\ndef connect(host, port=None):\n    if port is None:\n        warnings.warn(\n            \"port will be required\",\n            DeprecationWarning,\n            stacklevel=2,\n        )\n```",
+    "options": [
+      {
+        "text": "It makes the warning appear twice so it's noticed",
+        "explanation": "`stacklevel` doesn't change how often the warning is issued."
+      },
+      {
+        "text": "It raises the warning to an error after two calls",
+        "explanation": "Turning warnings into errors is done with warning filters (`-W error`), not `stacklevel`."
+      },
+      {
+        "text": "It sets the warning's severity to level 2",
+        "explanation": "Python warnings have categories, not numeric severity levels."
+      },
+      {
+        "text": "It attributes the warning to the caller's line, which is the code that needs changing, rather than to the line inside `connect`",
+        "explanation": "Correct. With the default `stacklevel=1`, the warning would point at the `warnings.warn` line inside your library, which the user can't and shouldn't change."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `stacklevel` chooses which stack frame the warning is reported against.\n   - `1` (default): the line that calls `warnings.warn`, inside `connect`.\n   - `2`: the line that called `connect`, in the user's code.\n2. The user needs to find *their* call that omits `port`, so `2` is right.\n3. The message then looks like:\n\n```\napp.py:42: DeprecationWarning:\n  port will be required\n```\n\n4. If the deprecated function is reached through another wrapper inside your library, you'd use 3, and so on.",
+    "link": {
+      "title": "warnings — Python docs",
+      "url": "https://docs.python.org/3/library/warnings.html"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your library emits a `DeprecationWarning` from inside `mylib/client.py` using the default `stacklevel`. A user's application, `app.py`, calls the deprecated function, but when they run `python app.py` they see no warning. Why?",
+    "options": [
+      {
+        "text": "By default Python ignores `DeprecationWarning` unless it's triggered by code in `__main__`; here it's attributed to library code. Test runners like pytest show them",
+        "explanation": "Correct. PEP 565 (Python 3.7) shows deprecation warnings by default only when triggered directly by `__main__`. The warning was attributed to a frame inside the library, so the default filter hid it."
+      },
+      {
+        "text": "Warnings are only shown in debug builds of Python",
+        "explanation": "Warnings work in normal builds; what's shown depends on the active filters."
+      },
+      {
+        "text": "The user must call `warnings.enable()` first",
+        "explanation": "There's no such function. Visibility is controlled with filters (`-W`, `PYTHONWARNINGS`, `warnings.simplefilter`)."
+      },
+      {
+        "text": "`DeprecationWarning` is only shown once per Python installation",
+        "explanation": "The 'default' action shows a warning once per location per process, not once per installation."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Python's default filters ignore `DeprecationWarning`, with one exception (PEP 565): warnings attributed to `__main__` are shown.\n2. With `stacklevel=1`, the warning is attributed to a line in `mylib/client.py`, not `__main__`, so it's ignored.\n3. With `stacklevel=2` *and* the call coming directly from `app.py` (which runs as `__main__`), the user would see it.\n4. Ways users see them anyway:\n   - Test runners (pytest shows them in its summary).\n   - `python -W default app.py`.\n5. For warnings meant for application end users, Python recommends `FutureWarning`, which is shown by default.",
+    "link": {
+      "title": "PEP 565: Show DeprecationWarning in __main__",
+      "url": "https://peps.python.org/pep-0565/"
+    }
+  },
+  {
+    "id": "sep-writing-for-others-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your JSON API has always silently accepted requests with a misspelt field `\"quanity\"`, treating it as `\"quantity\"`. A new parser rejects unknown fields, and several clients break. In light of RFC 9413 and Hyrum's Law, what was the underlying mistake?",
+    "options": [
+      {
+        "text": "Rejecting unknown fields; APIs should always be liberal in what they accept",
+        "explanation": "That's the robustness principle taken at face value. RFC 9413 argues that this tolerance is exactly what made the misspelling part of your communication contract."
+      },
+      {
+        "text": "Not versioning the parser",
+        "explanation": "Versioning would help manage the change, but the root mistake happened earlier: accepting malformed input at all."
+      },
+      {
+        "text": "Clients should have read the docs",
+        "explanation": "True in theory, but under Hyrum's Law the observed behaviour (typos work) mattered more than the docs."
+      },
+      {
+        "text": "Silently tolerating malformed input: once accepted, the tolerance became behaviour clients depended on. Rejecting it clearly from the start would have exposed client bugs immediately",
+        "explanation": "Correct. RFC 9413 notes that unchecked leniency accumulates into a de facto communication contract that's hard to remove. A clear 400 error on day one would have made clients fix the typo."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Postel's principle: 'be liberal in what you accept'. Here that meant accepting a typo.\n2. Hyrum's Law: since the typo worked, clients shipped with it.\n3. Now the leniency is part of the real contract; removing it is a breaking change.\n4. RFC 9413 (Maintaining Robust Protocols, 2023) argues for addressing such deviations actively rather than silently tolerating them.\n5. Recovery options today:\n   - Accept both for a while, log uses of the old spelling, and warn clients (with a deprecation header).\n   - Then reject it in the next major API version.",
+    "link": {
+      "title": "RFC 9413: Maintaining Robust Protocols",
+      "url": "https://www.rfc-editor.org/rfc/rfc9413.html"
+    }
+  }
+]

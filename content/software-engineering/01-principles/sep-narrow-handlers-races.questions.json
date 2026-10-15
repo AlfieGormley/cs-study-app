@@ -1,0 +1,92 @@
+[
+  {
+    "id": "sep-error-handling-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is the most serious problem with this code?\n\n```python\ntry:\n    order = parse(request.body)\n    save(order)\nexcept:\n    pass\n```",
+    "options": [
+      {
+        "text": "It should use `finally` instead of `except`",
+        "explanation": "`finally` is for cleanup that always runs; it doesn't handle errors. Swapping would let errors propagate but wouldn't explain the intent."
+      },
+      {
+        "text": "It silently swallows every failure, including bugs and Ctrl+C, so problems vanish without trace",
+        "explanation": "Correct. A bare `except:` catches `BaseException`, so typos, `AttributeError`s, database outages and even `KeyboardInterrupt` are all discarded. The order may not be saved and nobody will ever know."
+      },
+      {
+        "text": "`pass` is slower than `return`",
+        "explanation": "Performance is irrelevant here; the problem is what happens to the errors."
+      },
+      {
+        "text": "It should catch `Exception` and then `pass`",
+        "explanation": "Slightly better (Ctrl+C would work again), but it still swallows every bug and failure. The fix is to catch what you expect and can handle."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask what can go wrong inside the `try`: malformed input, a bug in `parse`, a database outage in `save`.\n2. Ask what the `except` does with each: nothing. The caller believes the order was saved.\n3. A bare `except:` matches `BaseException`, which includes `KeyboardInterrupt` and `SystemExit`.\n4. Better:\n\n```python\ntry:\n    order = parse(request.body)\nexcept ParseError as e:\n    return bad_request(str(e))\nsave(order)  # failures propagate\n```\n\n5. Unexpected failures should reach a top-level handler that logs them and returns a 500.",
+    "link": {
+      "title": "Errors and Exceptions — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/errors.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why is the second version better?\n\n```python\n# A\nif os.path.exists(path):\n    with open(path) as f:\n        return f.read()\nreturn None\n\n# B\ntry:\n    with open(path) as f:\n        return f.read()\nexcept FileNotFoundError:\n    return None\n```",
+    "options": [
+      {
+        "text": "B is faster because exceptions are cheap in Python",
+        "explanation": "Raising is relatively costly in Python, and in any case speed isn't the main point."
+      },
+      {
+        "text": "A has a time-of-check to time-of-use race: the file can be deleted between `exists()` and `open()`; B handles the failure at the moment it happens",
+        "explanation": "Correct. A's check can be stale by the time `open` runs, so A can still crash. B (EAFP) asks the only question that matters: did opening work?"
+      },
+      {
+        "text": "A doesn't work on Windows",
+        "explanation": "`os.path.exists` works on all platforms."
+      },
+      {
+        "text": "B catches every possible error",
+        "explanation": "B catches only `FileNotFoundError`. Permission errors would still propagate, which is right."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In A, two separate system calls happen: `exists()` and later `open()`.\n2. Another process can delete or rename the file in between. Then `open()` raises `FileNotFoundError` anyway, which A doesn't handle.\n3. That's a **TOCTOU** (time-of-check to time-of-use) race. It's also a classic security bug class (an attacker swaps a file between check and use).\n4. B is **EAFP**: attempt the operation and handle the specific failure. This removes the separate existence-check race; it does not by itself prevent malicious path/symlink substitution or all filesystem races.\n5. Note B also still checks only for 'missing', so other failures (permission denied) surface, as they should.",
+    "link": {
+      "title": "Glossary: EAFP — Python docs",
+      "url": "https://docs.python.org/3/glossary.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`user` comes from a cache and may lack an `\"email\"` key. What goes wrong here?\n\n```python\ntry:\n    user = cache[uid]\n    send(user[\"email\"])\nexcept KeyError:\n    user = db.load(uid)\n    cache[uid] = user\n```",
+    "options": [
+      {
+        "text": "Nothing: both `KeyError`s mean the user should be reloaded",
+        "explanation": "They mean different things. One is a cache miss; the other is a malformed record, which reloading from the cache-filling path may not fix."
+      },
+      {
+        "text": "The `except` should catch `Exception`",
+        "explanation": "That widens the problem: even more unrelated failures would be treated as cache misses."
+      },
+      {
+        "text": "`cache[uid]` can't raise `KeyError`",
+        "explanation": "Dictionary-style lookup of a missing key raises `KeyError`; that's the cache miss this code expects."
+      },
+      {
+        "text": "The try block confuses a missing email field with a cache miss. Guard only cache[uid], then send after the try/except so both hit and loaded-miss paths send",
+        "explanation": "Correct. Moving send after the handler preserves sending after a successful reload. An else-only send would still skip the cache-miss path."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Two different lines can raise `KeyError`:\n   - `cache[uid]` (expected: cache miss)\n   - `user[\"email\"]` (unexpected: bad record)\n2. The single `except KeyError` can't tell them apart, so a bad record is handled as a miss: reload, re-cache and silently skip `send`.\n3. Shrink the guarded region:\n\n```python\ntry:\n    user = cache[uid]\nexcept KeyError:\n    user = db.load(uid)\n    cache[uid] = user\nsend(user[\"email\"])\n```\n\n4. (An `else:` clause achieves the same when the follow-up should only run on the success path.)\n5. Rule: a `try` block should contain only the operation whose failure the `except` is written for.",
+    "link": {
+      "title": "Errors and Exceptions — Python tutorial",
+      "url": "https://docs.python.org/3/tutorial/errors.html"
+    }
+  }
+]

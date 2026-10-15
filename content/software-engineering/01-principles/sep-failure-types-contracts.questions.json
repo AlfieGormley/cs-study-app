@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sep-error-handling-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A payment provider responds \"card declined: insufficient funds\". How should your checkout code treat this?",
+    "options": [
+      {
+        "text": "As a bug: crash the process so it gets fixed",
+        "explanation": "Nothing is wrong with the code. Declined cards happen every day; crashing would take down checkout for everyone."
+      },
+      {
+        "text": "As a transient failure: retry automatically until it succeeds",
+        "explanation": "Retrying won't add funds to the card, and repeated charge attempts can trigger fraud checks. It isn't transient."
+      },
+      {
+        "text": "As an expected domain outcome: model it explicitly (for example a `CardDeclined` exception or result) and show the customer a clear message",
+        "explanation": "Correct. It's part of the normal business flow. Give it an explicit type so callers handle it on purpose, and tell the user what to do next."
+      },
+      {
+        "text": "Ignore it and mark the order as paid",
+        "explanation": "That ships goods without payment. Swallowing expected failures is as bad as swallowing bugs."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Classify the failure:\n   - Bug? No, the code did what it should.\n   - Environmental/transient? No, retrying won't change the outcome.\n   - **Expected domain outcome**? Yes: cards are declined routinely.\n2. Expected outcomes deserve explicit modelling:\n\n```python\nclass CardDeclined(PaymentError):\n    def __init__(self, reason):\n        self.reason = reason\n        self.retryable = False\n```\n\n3. Checkout catches `CardDeclined` and asks for another card. Everything else (timeouts, bugs) is handled elsewhere, differently.",
+    "link": {
+      "title": "Built-in Exceptions — Python docs",
+      "url": "https://docs.python.org/3/library/exceptions.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You're writing a Java library method that reads a configuration file. Following the guideline in Oracle's Java tutorial, how should it signal (1) the file not existing and (2) a caller passing a `null` path?",
+    "options": [
+      {
+        "text": "Both as checked exceptions, so every failure is visible in the signature",
+        "explanation": "A `null` argument is a programming error the caller can't sensibly recover from at runtime; forcing every caller to catch it adds noise."
+      },
+      {
+        "text": "Both as unchecked exceptions, because checked exceptions are always bad",
+        "explanation": "The tutorial's guideline keeps checked exceptions for recoverable conditions. A missing file is one a caller can reasonably handle (use defaults, prompt the user)."
+      },
+      {
+        "text": "(1) return `null`; (2) ignore it",
+        "explanation": "Returning `null` pushes the failure somewhere else as a `NullPointerException`; ignoring a `null` argument just delays the crash."
+      },
+      {
+        "text": "(1) a checked exception such as `IOException`/`FileNotFoundException`; (2) an unchecked one such as `NullPointerException` or `IllegalArgumentException`",
+        "explanation": "Correct. Oracle's rule of thumb: if a client can reasonably be expected to recover, use a checked exception; if it can't (a programming error), use an unchecked one."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Classify each failure:\n   - Missing file: environmental or expected. A caller can recover (fall back to defaults, ask for another path).\n   - `null` path: a bug in the caller. The fix is to change the calling code.\n2. Oracle's guideline maps these directly:\n   - recoverable → checked (`throws IOException`)\n   - programming error → unchecked (`RuntimeException` subclasses)\n3. Java's own APIs follow this: `Files.readString` declares `IOException`, while `Objects.requireNonNull` throws `NullPointerException`.\n4. Many later JVM languages (Kotlin, Scala) dropped checked exceptions entirely, which shows how contested the idea is. The *classification* still holds.",
+    "link": {
+      "title": "Unchecked Exceptions: The Controversy — Oracle",
+      "url": "https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html"
+    }
+  }
+]

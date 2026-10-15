@@ -1,0 +1,66 @@
+[
+  {
+    "id": "sep-error-handling-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which problems does this code have? Select **all** that apply.\n\n```python\ndef get_user(uid):\n    try:\n        return repo.load(uid)\n    except Exception as e:\n        log.error(f\"load failed: {e}\")\n        return None\n\ndef handler(uid):\n    try:\n        u = get_user(uid)\n        return u.name\n    except Exception as e:\n        log.error(f\"handler: {e}\")\n        raise\n```",
+    "options": [
+      {
+        "text": "Returning `None` on failure means `u.name` later fails with a confusing `AttributeError` far from the real cause",
+        "explanation": "Correct. The database error is turned into `None`, and the caller hits `'NoneType' object has no attribute 'name'`, which hides what really happened."
+      },
+      {
+        "text": "`except Exception` in `get_user` also hides bugs inside `repo.load`, not just 'user not found'",
+        "explanation": "Correct. A typo or a schema bug would be logged and turned into `None`, exactly like a missing user."
+      },
+      {
+        "text": "The failure is logged at more than one layer, cluttering logs with partial reports of one problem",
+        "explanation": "Correct. `get_user` logs, then `handler` logs the resulting `AttributeError`, and the shown code already emits two partial reports for one original failure. Log once, where the error is handled."
+      },
+      {
+        "text": "Using an f-string inside `log.error` is a syntax error",
+        "explanation": "It's valid Python. (Passing arguments as `log.error(\"x %s\", e)` defers formatting, but that's a minor optimisation.)"
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Follow a database outage through the code:\n\n1. `repo.load` raises `OperationalError`.\n2. `get_user` catches every `Exception` subclass, logs \"load failed\", returns `None`.\n3. `handler` does `None.name`, which raises `AttributeError`.\n4. `handler` logs \"handler: 'NoneType' object has no attribute 'name'\" and re-raises.\n5. The client sees an `AttributeError`, and the logs show two messages, neither with the full original traceback.\n\nBetter:\n\n```python\nclass UserNotFound(Exception): ...\n\ndef get_user(uid):\n    user = repo.load(uid)\n    if user is None:\n        raise UserNotFound(uid)\n    return user\n```\n\nLet unexpected errors propagate to one top-level handler that logs them with `log.exception` (which includes the traceback).",
+    "link": {
+      "title": "logging — Python docs",
+      "url": "https://docs.python.org/3/library/logging.html"
+    }
+  },
+  {
+    "id": "sep-error-handling-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your service calls a payment API to charge a card. The call times out after 10 seconds. A colleague proposes wrapping it in `retry(times=3)`. What is the main risk?",
+    "options": [
+      {
+        "text": "Three retries will take too long",
+        "explanation": "Latency matters, but the bigger risk is financial."
+      },
+      {
+        "text": "There is no risk: a timeout means the request failed",
+        "explanation": "A timeout only means *you* stopped waiting. The provider may have processed the charge."
+      },
+      {
+        "text": "The first request may still succeed after timeout, so blind retries can charge twice. Reuse a provider-supported idempotency key for the same logical charge",
+        "explanation": "Correct. Only idempotent operations are safe to retry blindly. Payment APIs such as Stripe accept an idempotency key so a retried request returns the original result instead of charging again."
+      },
+      {
+        "text": "Retries break the single responsibility principle",
+        "explanation": "SRP is about design, not retry safety."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A timeout is ambiguous. Three possibilities:\n   - The request never arrived.\n   - It arrived and failed.\n   - It arrived, **succeeded**, and the response was lost.\n2. In case 3, a retry charges the customer again.\n3. Safe approaches:\n   - Send an **idempotency key** (a unique identifier per logical charge). The provider deduplicates retries within its documented retention and request-matching rules; do not assume an expired key still protects a charge.\n   - Reconcile an authoritative terminal status if needed. A single observation of a missing or pending payment does not prove the original request cannot still complete; do not replace deduplication with a racy check.\n4. Also add **exponential backoff with jitter**, so that thousands of clients don't hammer a recovering provider at once.",
+    "link": {
+      "title": "Idempotence — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Idempotence"
+    }
+  }
+]

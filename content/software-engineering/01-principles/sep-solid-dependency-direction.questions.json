@@ -1,0 +1,96 @@
+[
+  {
+    "id": "sep-solid-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which change applies the dependency inversion principle to this class?\n\n```python\nfrom typing import Protocol\n\nclass Signup:\n    def __init__(self):\n        self.mailer = SendGrid(KEY)\n\n    def register(self, email):\n        ...\n        self.mailer.send(email, \"Hi\")\n```",
+    "options": [
+      {
+        "text": "Make `SendGrid` a singleton so it's created only once",
+        "explanation": "A singleton changes how many instances exist, not which way the dependency points. `Signup` would still depend directly on SendGrid."
+      },
+      {
+        "text": "Move the `SendGrid(KEY)` line into `register`",
+        "explanation": "That still has the high-level class creating and depending on a concrete low-level client; it just does so later."
+      },
+      {
+        "text": "Subclass `SendGrid` to make `Signup`",
+        "explanation": "Inheriting from the mail client couples signup logic to SendGrid even more tightly."
+      },
+      {
+        "text": "Have `Signup` depend on a `Mailer` protocol it defines, and pass in a SendGrid-backed implementation",
+        "explanation": "Correct. Policy (signup) now owns an abstraction shaped by what it needs. The SendGrid adapter depends on that abstraction, and tests can pass a fake."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Identify the levels: `Signup` is policy; `SendGrid` is a detail (one vendor's HTTP API).\n2. Currently policy → detail. Switching to another provider, or testing without network access, is harder without an explicit substitution seam; Python monkey-patching is still possible.\n3. Invert it:\n\n```python\nfrom typing import Protocol\n\nclass Mailer(Protocol):\n    def send(self, to, body): ...\n\nclass Signup:\n    def __init__(self, mailer: Mailer):\n        self.mailer = mailer\n```\n\n4. A `SendGridMailer` implements `Mailer`. In tests, a `FakeMailer` records messages.\n5. The abstraction belongs to the high-level side, so its shape is \"send a message\", not \"SendGrid's 14 parameters\".",
+    "link": {
+      "title": "Dependency inversion principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dependency_inversion_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer says: \"We follow DIP. Every class gets its dependencies through the constructor.\" Their code:\n\n```python\nfrom typing import Protocol\n\nclass Reports:\n    def __init__(self, db: PgClient):\n        self.db = db\n```\n\nWhich is the most accurate response?",
+    "options": [
+      {
+        "text": "Correct: constructor injection is the dependency inversion principle",
+        "explanation": "Injection is a technique, DIP is a principle about dependency direction. They're often confused."
+      },
+      {
+        "text": "This is dependency injection, but `Reports` still depends on a concrete low-level class, so it doesn't invert the dependency",
+        "explanation": "Correct. The source code of `Reports` still names `PgClient`. DIP would have it depend on an abstraction it owns (say a `ReportStore` protocol), which Postgres code implements."
+      },
+      {
+        "text": "It violates DIP because dependencies must be created by a framework such as Spring",
+        "explanation": "Frameworks are one way to wire dependencies. Neither DI nor DIP requires one; plain constructors work fine."
+      },
+      {
+        "text": "It violates the single responsibility principle",
+        "explanation": "Nothing here suggests multiple actors. The question is about the direction of the dependency."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. **Dependency injection**: dependencies are passed in rather than created inside. This code does that.\n2. **Dependency inversion**: high-level modules depend on abstractions, and low-level modules implement them. Check the import graph: `Reports` → `PgClient`. Not inverted.\n3. Practical consequence: the annotation ties statically checked callers to PgClient-compatible types. Python itself will accept another object at runtime; a fake subclass may also satisfy a nominal checker.\n4. Fix:\n\n```python\nfrom typing import Protocol\n\nclass ReportStore(Protocol):\n    def rows(self, q) -> list: ...\n\nclass Reports:\n    def __init__(self, db: ReportStore):\n        self.db = db\n```\n\nDI is a great way to *deliver* DIP, but it isn't the same thing.",
+    "link": {
+      "title": "Dependency inversion principle — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Dependency_inversion_principle"
+    }
+  },
+  {
+    "id": "sep-solid-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these are signs that SOLID is being misapplied? Select **all** that apply.",
+    "options": [
+      {
+        "text": "Every class has a matching interface (`IUserService`, `UserServiceImpl`) with exactly one implementation and no test fakes and no identified boundary or isolation need",
+        "explanation": "Correct under the stated absence of a boundary or isolation need. A single implementation alone does not prove an interface is useless; evaluate what dependency it isolates."
+      },
+      {
+        "text": "A feature is split across 15 classes of one method each, and understanding it means opening them all",
+        "explanation": "Correct. That reads SRP as 'one method per class' and destroys cohesion. SRP is about reasons to change, not size."
+      },
+      {
+        "text": "A class used by the billing team and the compliance team is split after their changes keep conflicting",
+        "explanation": "Not a misapplication: that's SRP applied for exactly the right reason, two actors with different change pressures."
+      },
+      {
+        "text": "Every class has hooks and extension points 'in case someone needs to extend it later'",
+        "explanation": "Correct. Speculative OCP. Extension points cost complexity now for a benefit that may never come (see YAGNI)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "1. SOLID is a response to change pressure. Ask, for each case, whether there's real pressure.\n2. Single-implementation interfaces: the scenario gives no implementation, testing or boundary need. That absence, not implementation count alone, motivates the criticism.\n3. 15 one-method classes: the principle was applied to size instead of actors.\n4. Two teams' changes colliding: real, observed pressure. Splitting is right.\n5. Hooks 'in case': predicted pressure that may never arrive.\n6. Rule of thumb: apply a principle when it removes a pain you have, or a near-certain one you can name.",
+    "link": {
+      "title": "SOLID — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/SOLID"
+    }
+  }
+]

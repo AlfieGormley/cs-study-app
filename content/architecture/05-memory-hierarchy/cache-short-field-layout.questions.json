@@ -1,0 +1,108 @@
+[
+  {
+    "id": "cache-arch-friendly-code-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each `Body` struct is 64 bytes (16 floats). A physics pass reads and writes only one float, `energy`, for all 1,000,000 bodies. Assume four-byte floats, 64-byte lines, aligned cold arrays, each required line fetched once, and no extra traffic. Counting only bytes brought into the cache (not write-backs), how much data does the pass pull through the cache with AoS, and with SoA (`energy[]` as its own array)?",
+    "options": [
+      {
+        "text": "AoS 64 MB, SoA 4 MB",
+        "explanation": "Correct. AoS: one 64-byte line per body = 64 MB, of which only 4 bytes per line are used (6.25%). SoA: 1,000,000 × 4 B = 4 MB, all used."
+      },
+      {
+        "text": "4 MB in both cases, since only `energy` is used",
+        "explanation": "Caches move whole lines. With AoS, each body's `energy` sits in its own 64-byte line, so all 64 bytes come in."
+      },
+      {
+        "text": "AoS 4 MB, SoA 64 MB",
+        "explanation": "Reversed: SoA packs the energies densely; AoS spreads them one per line."
+      },
+      {
+        "text": "AoS 128 MB, SoA 8 MB",
+        "explanation": "This counts the write-back of each dirty line as more data pulled in. Later dirty write-backs are excluded here. They reach DRAM only if they propagate through the full hierarchy; this question counts cache fills."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. AoS: each 64-byte body occupies exactly one line. Touching `energy` loads the whole line.\n2. SoA: `energy[]` is contiguous, 16 floats per line.\n\n```formula\nD_AoS = N B_line\nD_AoS = 1,000,000 × 64 B = 64 MB\nD_SoA = N × s\nD_SoA = 1,000,000 × 4 B = 4 MB\nL_SoA = D_SoA / B_line = 62,500\nwhere\nD_AoS: bytes brought into the cache with AoS\nD_SoA: bytes brought into the cache with SoA\nL_SoA: lines filled with SoA\nN: the number of bodies, 1,000,000\nB_line: the cache line size, 64 bytes\ns: the size of one float, 4 bytes\nB: byte, 8 bits\nMB: megabyte, 1,000,000 bytes\nIn words: AoS pulls in a whole 64-byte line for each 4-byte energy value (6.25% useful); SoA pulls in only the energy values themselves.\n```\n\n3. 64 MB / 4 MB = 16× fewer incoming bytes in this model. Dense storage can also make vectorisation easier, subject to the operation and compiler. Use SoA (or hot/cold splitting) for passes over one or two fields.",
+    "link": {
+      "title": "AoS and SoA — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/AoS_and_SoA"
+    }
+  },
+  {
+    "id": "cache-arch-friendly-code-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A repeated scan reads eight-byte price and qty values from 96-byte records in a working set far larger than the target cache. Assume four-byte float, eight-byte double alignment, and no useful retained whole-set reuse. Which changes can improve locality or reduce the useful-field footprint? Select all that apply.",
+    "options": [
+      {
+        "text": "Store `price` and `qty` in two dense arrays instead of inside a 96-byte record",
+        "explanation": "Correct. The scan then touches only the bytes it needs (SoA / hot-cold split)."
+      },
+      {
+        "text": "Replace a `std::list<Item>` with a `std::vector<Item>`",
+        "explanation": "Correct. Contiguous storage means neighbours share lines and the prefetcher can stream; a list chases a pointer per node."
+      },
+      {
+        "text": "Change `price` from `double` to `float` where the precision is acceptable",
+        "explanation": "Correct where reduced precision is acceptable and the layout packs the smaller field: price storage drops from eight to four bytes. This does not halve the entire record or automatically halve total cache traffic."
+      },
+      {
+        "text": "Add a `bool` field between `price` and `qty` for alignment",
+        "explanation": "A one-byte bool between two eight-byte-aligned doubles can require seven padding bytes. Adding a field is not a general way to improve packing; check the actual layout."
+      },
+      {
+        "text": "Run the scan twice so the second pass hits in cache",
+        "explanation": "A second complete scan does not guarantee hits when the working set greatly exceeds the target cache. It also adds work."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Packing price and qty can reduce a 96-byte record scan to 16 useful bytes per item. Contiguous containers can improve reference locality relative to scattered list nodes. A four-byte price can reduce that field's footprint if layout permits. Extra padding and a second full scan do not establish those benefits. Measure actual misses and preserve numeric semantics.",
+    "link": {
+      "title": "Memory part 5: What programmers can do (LWN)",
+      "url": "https://lwn.net/Articles/255364/"
+    }
+  },
+  {
+    "id": "cache-arch-friendly-code-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For the ordinary dense CPython/NumPy representations and conventional contiguous HotSpot Java array layout discussed in this module, which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "A CPython list stores object references; a contiguous NumPy float64 array stores eight raw bytes per numeric value",
+        "explanation": "Correct. List entries can share objects, and reference/object sizes depend on the runtime. Indirection can add footprint and dependent accesses, but an exact ratio is not universal."
+      },
+      {
+        "text": "A Java `int[]` stores the values contiguously, while `ArrayList<Integer>` stores references to boxed `Integer` objects",
+        "explanation": "Correct. Scanning `ArrayList<Integer>` dereferences one pointer per element, possibly to scattered objects."
+      },
+      {
+        "text": "NumPy's `a.T` copies the array into column-major order",
+        "explanation": "For an ndarray, transpose supplies a view with changed strides. `np.ascontiguousarray(a.T)` copies only if required for C contiguity; `a.T.copy(order=\"C\")` explicitly requests a copy."
+      },
+      {
+        "text": "Python's `array.array('d')` stores raw doubles contiguously, like a C array",
+        "explanation": "Correct. `array.array` stores one C numeric type densely; inspect itemsize for the platform's C-double size."
+      },
+      {
+        "text": "Garbage collectors always place list elements next to each other, so boxing has no cache cost",
+        "explanation": "Allocation order and moving collectors may *help* locality, but boxing still adds pointer indirection and object headers."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Distinguish raw numeric storage from references to boxed objects. NumPy float64 uses eight bytes per value; Python array('d') uses the platform C-double itemsize. CPython list entries reference objects that may be shared. Java primitive arrays avoid per-element boxing, while ArrayList<Integer> references boxed values. A runtime-specific object-size table is absent because no single implementation/configuration is established for this question.",
+    "link": {
+      "title": "The N-dimensional array — NumPy docs",
+      "url": "https://numpy.org/doc/stable/reference/arrays.ndarray.html"
+    }
+  }
+]

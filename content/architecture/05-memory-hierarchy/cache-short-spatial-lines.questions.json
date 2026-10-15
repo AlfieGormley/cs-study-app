@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cache-arch-locality-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A cold cache with 64-byte lines sits in front of a loop that reads an array of 4,096 `double`s (8 bytes each) once, in order. Assume the array starts on a line boundary, each read miss allocates a line, and there is no prefetching or interfering access. how many cache misses occur?",
+    "options": [
+      {
+        "text": "4,096",
+        "explanation": "That would be one miss per element, which ignores that each miss brings in a whole 64-byte line holding 8 doubles."
+      },
+      {
+        "text": "64",
+        "explanation": "64 is the line size in bytes, not the number of lines. The array is 32 KiB, which is many lines."
+      },
+      {
+        "text": "512",
+        "explanation": "Correct. The 32 KiB array spans 512 lines of 64 bytes. Each line misses once, on its first element, then hits 7 times. The worked example shows the arithmetic."
+      },
+      {
+        "text": "8",
+        "explanation": "8 is the number of doubles per line, i.e. the number of accesses each miss serves, not the miss count."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Each miss fetches a whole line, so count lines, not elements. Every line misses once (a compulsory miss) and its other 7 doubles hit:\n\n```formula\nS = N × s\nS = 4,096 × 8 B = 32,768 B\nN_lines = S / L\nN_lines = 32,768 B / (64 B) = 512\nm = N_lines / N\nm = 512 / 4,096 = 1/8 = 12.5 %\nwhere\nS: the array's size in bytes (B); 32,768 B is 32 KiB\nN: the number of doubles read, 4,096, one load each\ns: the size of one double, 8 bytes\nL: the cache line size, 64 bytes\nN_lines: the number of lines the array covers, which is also the number of misses\nm: the miss rate: misses divided by accesses\nB: byte, 8 bits\nKiB: kibibyte, 1,024 bytes\n%: per cent, parts per hundred\nIn words: 4,096 doubles fill 512 lines; each line misses once, so one access in 8 misses.\n```\n\n```\nline 0: d0 MISS d1..d7 hit\nline 1: d8 MISS d9..d15 hit\n...\n512 lines -> 512 misses\n```\n\nWith 4-byte ints instead, each line would hold 16 values and the miss rate would halve to 6.25%.",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Loop A reads every element of an aligned cold 64 MiB int32 array; B reads every 16th element. Lines are 64 bytes. Assume each needed line reaches DRAM exactly once, both loops achieve the same effective DRAM bandwidth, and transfer time dominates all other costs. In this model, how does B's runtime compare with A's?",
+    "options": [
+      {
+        "text": "About 1/16 of A's time, because it does 1/16 of the loads",
+        "explanation": "The model makes transferred lines, rather than load count, determine time. Both touch every line."
+      },
+      {
+        "text": "About the same as A's, because both loops touch every cache line once",
+        "explanation": "Correct. B's stride of 16 four-byte ints is exactly one 64-byte line, so both loops fetch all 1,048,576 lines; B just uses 4 bytes of each."
+      },
+      {
+        "text": "About 16 times longer than A, because strided access defeats caching",
+        "explanation": "Under the stated equal-bandwidth model both transfer the same bytes. Real code can differ if those assumptions fail."
+      },
+      {
+        "text": "About half of A's time, because the prefetcher fetches pairs of lines",
+        "explanation": "The model already specifies equal effective bandwidth and one transfer per needed line; pair prefetching does not halve B's required bytes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count lines, because in this model transferred lines set the time:\n\n```formula\nN_lines = S / L\nN_lines = 64 MiB / (64 B)\nN_lines = 2^26 B / 2^6 B = 2^20\nN_lines = 1,048,576\nd_B = k × s\nd_B = 16 × 4 B = 64 B\nwhere\nN_lines: the number of 64-byte lines in the array\nS: the array's size, 64 MiB\nL: the cache line size, 64 bytes\nMiB: mebibyte, 1,048,576 bytes (2^20 B)\nB: byte, 8 bits\n2^26: 26 copies of 2 multiplied together; 64 MiB is 2^6 × 2^20 bytes\nd_B: loop B's stride, the distance in bytes between the elements it reads\nk: how many elements loop B steps over each time, 16\ns: the size of one int32, 4 bytes\nIn words: the array is about a million lines, and loop B's 64-byte stride lands on every one of them.\n```\n\nA reads 16 ints per line; B reads one int in every line. Both transfer all 64 MiB. Equal effective bandwidth and transfer-dominated runtime therefore give approximately equal times. Without those explicit assumptions, equal line counts alone do not determine runtime.",
+    "link": {
+      "title": "Gallery of processor cache effects",
+      "url": "https://igoro.com/archive/gallery-of-processor-cache-effects/"
+    }
+  },
+  {
+    "id": "cache-arch-locality-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Compare model caches A with 128-byte lines and B with 64-byte lines. An aligned cold array of 1,000,000 eight-byte doubles is read sequentially. Assume each needed line is filled once, with no extra traffic. How many fills are required in A versus B?",
+    "options": [
+      {
+        "text": "62,500 vs 125,000",
+        "explanation": "Correct: the 128-byte lines of A each hold twice as much, so A needs half as many fills as B. The alignment and one-fill assumptions make the count exact."
+      },
+      {
+        "text": "125,000 on both, since the data size is the same",
+        "explanation": "Line size changes how many lines the same bytes occupy. The bytes are the same; the number of fills is not."
+      },
+      {
+        "text": "1,000,000 on both, one per element",
+        "explanation": "Each fill brings in 16 doubles (128 B) or 8 doubles (64 B), so most loads hit."
+      },
+      {
+        "text": "125,000 vs 62,500",
+        "explanation": "This swaps them: the *larger* 128-byte line needs *fewer* fills."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Each needed line is filled once, so the number of fills is the array size divided by the line size:\n\n```formula\nS = 1,000,000 × 8 B = 8,000,000 B\nN_A = S / L_A\nN_A = 8,000,000 B / (128 B) = 62,500\nN_B = S / L_B\nN_B = 8,000,000 B / (64 B) = 125,000\nwhere\nS: the array's size in bytes: 1,000,000 doubles of 8 bytes each\nN_A: the number of line fills cache A needs\nN_B: the number of line fills cache B needs\nL_A: cache A's line size, 128 bytes\nL_B: cache B's line size, 64 bytes\nB: byte, 8 bits\nIn words: doubling the line size halves the number of fills for the same aligned sequential scan.\n```\n\nBoth transfer the same useful array bytes in this aligned model. Larger lines can waste bandwidth on sparse accesses and enlarge the region affected by false sharing. These are model line sizes, not claims about entire processor families.",
+    "link": {
+      "title": "Locality of reference — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+    }
+  }
+]

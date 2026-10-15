@@ -1,0 +1,32 @@
+[
+  {
+    "id": "cache-arch-friendly-code-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An image filter walks down columns of an 8-bit greyscale image 4,096 pixels wide, 64 rows at a time: for each column `j`, read rows 0..63, then move to column `j+1`. The L1 is 32 KiB, 8-way, 64-byte lines. Assume line-aligned storage, an empty cache, simple modulo indexing, LRU replacement, demand allocation, no prefetching and no other accesses. Over the first 64 columns, what miss rate does this model give, and what if each row is padded to 4,160 bytes?",
+    "options": [
+      {
+        "text": "1/64 in both cases, since the 64 lines fit easily in 32 KiB",
+        "explanation": "64 lines is only 4 KiB, but with a 4,096-byte stride they all map to *one* set of 8 ways, so they can't all stay."
+      },
+      {
+        "text": "100% unpadded; about 1/64 padded",
+        "explanation": "Correct. A 4,096-byte stride (64 sets × 64 bytes) leaves set-index bits 6–11 unchanged, so all 64 lines fight for 8 ways and LRU evicts each before reuse. Padding by 64 B spreads the 64 rows over 64 different sets; each line then misses once and serves the next 63 columns: 64 / 4,096 = 1/64."
+      },
+      {
+        "text": "12.5% unpadded; 1.6% padded",
+        "explanation": "12.5% would apply to an 8-byte-element row walk. Here the unpadded column walk misses on every access."
+      },
+      {
+        "text": "100% in both cases, because column walks always miss",
+        "explanation": "Column walks miss when the column's lines can't stay cached. With padding they can, so later columns hit."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Find the number of sets and which set each address uses:\n\n```formula\nN_sets = S_cache / (B_line W)\nN_sets = 32,768 B / (64 B × 8) = 64\nI_set = ⌊A / B_line⌋ mod N_sets\nwhere\nN_sets: the number of sets in the L1\nS_cache: the L1 capacity, 32 KiB = 32,768 bytes\nB_line: the line size, 64 bytes\nW: the associativity, 8 ways (lines per set)\nI_set: the set an address maps to\nA: the byte address\n⌊ ⌋: floor: round down to a whole number\nmod: the remainder after division\nB: byte, 8 bits\nIn words: there are 64 sets, and the line number wrapped round 64 picks the set; that is address bits 6 to 11.\n```\n\n1. So the set index is address bits 6–11 (bits 0–5 are the byte within the line).\n2. Unpadded stride 4,096 B: adding 4,096 changes only bit 12 and above. All 64 rows → same set.\n3. One set holds 8 lines. Column `j` loads 64 lines cyclically through 8 ways; by column `j+1`, row 0's line was evicted long ago. Every access misses: 4,096 / 4,096 = 100% (simulated exactly).\n4. Padded stride 4,160 = 4,096 + 64: each row moves one set further. 64 rows → 64 different sets, 1 line each.\n5. Each line holds 64 one-byte pixels = 64 columns, so it misses once and hits 63 times:\n\n```formula\nr_miss = M / R\nr_miss = 64 / 4,096 = 1/64 ≈ 1.6%\nwhere\nr_miss: the miss rate over the first 64 columns\nM: misses, one per row line: 64\nR: accesses, 64 rows × 64 columns = 4,096\n≈: approximately equal to\n%: per cent, parts per hundred\nIn words: 64 misses out of 4,096 accesses is one miss in 64.\n```\n\nPadded: 1/64 ≈ 1.6%.",
+    "link": {
+      "title": "Memory part 5: What programmers can do (LWN)",
+      "url": "https://lwn.net/Articles/255364/"
+    }
+  }
+]

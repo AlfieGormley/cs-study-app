@@ -1,0 +1,62 @@
+[
+  {
+    "id": "cache-arch-friendly-code-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "For three T×T tiles of eight-byte doubles and a 48 KiB cache budget, what is the largest whole-number tile edge T satisfying this useful-byte inequality?\n\n```formula\n3 × T^2 × s ≤ S_budget\n3 × T^2 × 8 B ≤ 49,152 B\nwhere\nT: the tile edge in elements; a tile is T × T\nT^2: T × T, the elements in one tile\n3: three tiles at once, one each of A, B and C\ns: the size of one double, 8 bytes\nS_budget: the cache budget, 48 KiB = 49,152 bytes\n≤: less than or equal to\nB: byte, 8 bits\nIn words: the bytes in three T × T tiles of doubles must not exceed 48 KiB.\n```\n\nIgnore line rounding, conflicts and other data for this capacity-only calculation.",
+    "options": [
+      {
+        "text": "78",
+        "explanation": "78 fits only *one* tile: a single 78 × 78 tile of doubles is 48,672 bytes, just under 49,152 B. You need A, B and C tiles at once."
+      },
+      {
+        "text": "32",
+        "explanation": "32 leaves more useful-byte headroom, but 45 is the largest integer satisfying this inequality. A power-of-two tile is not universally optimal."
+      },
+      {
+        "text": "45",
+        "explanation": "Correct. Three 45 × 45 tiles of doubles take 48,600 bytes, within 49,152; three 46 × 46 tiles take 50,784 bytes, which is over."
+      },
+      {
+        "text": "64",
+        "explanation": "Three 64 × 64 tiles of doubles take 98,304 bytes, twice the budget."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Solve for T, then check the neighbours:\n\n```formula\n3 × T^2 × 8 B ≤ 49,152 B\nT^2 ≤ 49,152 / 24 = 2,048\nT ≤ √(2,048) ≈ 45.25\n3 × 45^2 × 8 B = 48,600 B\n3 × 46^2 × 8 B = 50,784 B\nwhere\nT: the tile edge, in elements\nT^2: T × T, the elements in one tile\n√: square root: the number that, multiplied by itself, gives the value inside\n≤: less than or equal to\n≈: approximately equal to\nB: byte, 8 bits\nIn words: 24 bytes per unit of T squared must fit in 49,152 bytes, so T can be at most 45; 45 gives 48,600 bytes, and 46 would need 50,784, too many.\n```\n\nThe largest whole number is 45. This necessary byte-budget check does not prove that strided tiles can coexist in a real cache: line fragmentation, mapping conflicts and other data can prevent residency.",
+    "link": {
+      "title": "Loop nest optimization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Loop_nest_optimization"
+    }
+  },
+  {
+    "id": "cache-arch-friendly-code-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For 1024 × 1024 matrices of doubles, unblocked `ikj` matrix multiply has about 0.25 misses per iteration. Use an ideal model with aligned packed tiles, sufficient associativity/capacity to retain all three tiles, no interference or prefetch traffic, and no retained data between tile steps. With 32 × 32 tiles, each step loads each line of three cold 32 × 32 tiles once and does 32 × 32 × 32 = 32,768 iterations. About how many line fills does the blocked version need in total?",
+    "options": [
+      {
+        "text": "About 268 million",
+        "explanation": "That is the *unblocked* count: 0.25 × 1,073,741,824 iterations = 268,435,456."
+      },
+      {
+        "text": "About 33.5 million",
+        "explanation": "This divides the unblocked count by 8, as if blocking only improved spatial locality. It improves reuse by a factor that grows with the tile edge (about 21 for 32 × 32 tiles)."
+      },
+      {
+        "text": "About 12.6 million, roughly 21× fewer",
+        "explanation": "Correct. There are 32 × 32 × 32 = 32,768 tile steps (1024 / 32 = 32 tiles along each of the three loops), each loading 3 × 1,024 doubles / 8 per line = 384 lines: 32,768 × 384 = 12,582,912."
+      },
+      {
+        "text": "About 0.4 million",
+        "explanation": "This undercounts the stipulated 32,768 steps × 384 lines per step. All three tiles must be accounted for."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Count the unblocked fills, then the blocked ones:\n\n```formula\nF_u = n^3 × m_iter\nF_u = 1024^3 × 0.25 = 268,435,456\nS = (n / T)^3 = 32^3 = 32,768\nL = 3 × T^2 × s / B_line\nL = 3 × 32^2 × 8 B / (64 B) = 384\nF_b = S L\nF_b = 32,768 × 384 = 12,582,912\nF_u / F_b ≈ 21.3\nwhere\nF_u: line fills for the unblocked ikj multiply\nF_b: line fills for the blocked multiply\nn: the matrix size (n × n), 1024\nn^3: n × n × n = 1,073,741,824 iterations\nm_iter: unblocked misses per iteration, 0.25\nS: the number of tile steps\nT: the tile edge, 32 elements\nL: lines loaded per tile step (three cold tiles)\ns: the size of one double, 8 bytes\nB_line: the line size, 64 bytes\n≈: approximately equal to\nB: byte, 8 bits\nIn words: 32,768 tile steps that each load 384 lines need about 12.6 million fills, about 21 times fewer than the 268 million of the unblocked loop.\n```\n\nPer iteration that is 384 / 32,768 ≈ 0.0117 misses, against 0.25. In general, for this loop order and model:\n\n```formula\nm_b = (3 × T^2 / 8) / T^3\nm_b = 3 / (8 × T)\ng = m_iter / m_b\ng = 0.25 × 8 × T / 3 = 2 × T / 3\ng = 2 × 32 / 3 ≈ 21.3\nwhere\nm_b: blocked misses per iteration: each tile step loads 3 × T^2 / 8 lines and does T^3 iterations\nT: the tile edge, in elements\nT^2: T × T, the doubles in one tile\nT^3: T × T × T, the iterations in one tile step\n8: doubles per 64-byte line\ng: how many times fewer fills blocking needs\nm_iter: unblocked misses per iteration, 0.25\n≈: approximately equal to\nIn words: the saving grows in proportion to the tile edge: doubling T roughly doubles the reduction, as long as the three tiles still fit.\n```",
+    "link": {
+      "title": "Loop nest optimization — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Loop_nest_optimization"
+    }
+  }
+]

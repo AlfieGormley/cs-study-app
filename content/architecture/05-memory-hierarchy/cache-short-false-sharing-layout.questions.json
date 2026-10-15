@@ -1,0 +1,160 @@
+[
+  {
+    "id": "cache-arch-coherence-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two pinned threads each increment their own eight-byte long counter, both confirmed in one aligned 64-byte line. Final values are read only after join. With other costs controlled, what mechanism can make the two-core run slower?",
+    "options": [
+      {
+        "text": "A data race corrupts the counters",
+        "explanation": "Each thread writes only its own variable, so there's no race on the values. The problem is performance, not correctness."
+      },
+      {
+        "text": "False sharing: ownership of the common line can move between the two cores",
+        "explanation": "Correct. Distinct scalar objects can still occupy one coherence line. A core can perform several stores before ownership changes, so not every increment implies a transfer."
+      },
+      {
+        "text": "The cores are throttled to run at a lower frequency",
+        "explanation": "Frequency changes can affect real measurements, but the question controls other costs and asks about the demonstrated same-line layout."
+      },
+      {
+        "text": "The struct is too large to fit in L1",
+        "explanation": "Under the stipulated ABI the two longs occupy 16 bytes; total cache capacity is not the relevant issue."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "With the struct aligned to 64 bytes and eight-byte longs at offsets 0 and 8, both counters share a line. Each core needs write permission, so alternating ownership can invalidate the other cache. This is a possible costly pattern, not one transfer per increment. Separate independently written objects by the target coherence-line size, or accumulate privately and combine after synchronisation.",
+    "link": {
+      "title": "False sharing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/False_sharing"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each of 8 threads updates `long counts[8]` at index `tid`. Assume eight-byte longs, 64-byte coherence lines, and 64-byte alignment for both the original and replacement storage. How many cache lines does it span, and what's a correct fix for false sharing?",
+    "options": [
+      {
+        "text": "8 lines; no fix needed",
+        "explanation": "8 × 8 bytes = 64 bytes, which is *one* line, not eight."
+      },
+      {
+        "text": "1 line; use `counts[tid * 8]` in a 64-element array, or a struct padded to 64 bytes per thread",
+        "explanation": "Correct. All 8 counters share one line, so all 8 threads fight over it. Spreading them 64 bytes apart gives each its own line."
+      },
+      {
+        "text": "1 line; make the array `volatile`",
+        "explanation": "`volatile` specifies observable accesses, but provides neither atomicity nor thread synchronisation. It doesn't move the counters to different lines, so false sharing remains."
+      },
+      {
+        "text": "2 lines; split it into two arrays of 4",
+        "explanation": "Two arrays of 4 counters still put 4 writers on each line."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Work out the array size, then how many 64-byte lines it covers. Because the array starts on a 64-byte boundary, no line is only partly used:\n\n```formula\nS_arr = n s_long\nS_arr = 8 × 8 B = 64 B\nN_lines = S_arr / B_line\nN_lines = 64 B / (64 B) = 1\nwhere\nS_arr: the total size of the array, in bytes (B)\nn: the number of counters, one per thread: 8\ns_long: the size of one long, 8 bytes under the stated ABI\nN_lines: how many cache lines the array occupies\nB_line: the coherence (cache line) size, 64 bytes\nB: byte, 8 bits\nIn words: eight 8-byte counters fill exactly one 64-byte line, so every thread writes the same line.\n```\n\n2. Every thread's write needs that line in M, so it ping-pongs among 8 cores.\n3. Fix: give each counter its own line:\n\n```\nstruct slot {\n  alignas(64) long v;\n};\nstruct slot counts[8];\n```\n\n   Now `sizeof(counts) = 512` bytes, 8 lines, one per thread.\n4. Better still: count in a local variable and write once at the end.",
+    "link": {
+      "title": "False sharing — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/False_sharing"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Crossbeam documents a conservative 128-byte CachePadded alignment on x86-64. On a model machine with 64-byte coherence lines and adjacent-pair prefetching, what concern motivates padding beyond one line?",
+    "options": [
+      {
+        "text": "x86-64 cache lines are 128 bytes",
+        "explanation": "The stipulated machine has 64-byte lines. Padding can be chosen larger than coherence granularity without claiming every x86-64 processor has one particular geometry."
+      },
+      {
+        "text": "A spatial prefetcher may fetch the neighbouring line in a 128-byte-aligned pair",
+        "explanation": "Correct. Crossbeam cites adjacent-line prefetching as one motivation for conservative padding. The behaviour and benefit depend on the processor and workload."
+      },
+      {
+        "text": "`alignas(64)` is ignored by compilers on x86",
+        "explanation": "Compilers honour `alignas(64)`; the alignment does take effect."
+      },
+      {
+        "text": "Padding must equal the L1 size per way",
+        "explanation": "Cache capacity per way is not the coherence-line or adjacent-prefetch-pair size in this model."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "If a prefetcher brings both halves of an aligned 128-byte region into a cache, a neighbour's independently written line may be fetched unnecessarily and later invalidated. Placing counters in separate 128-byte regions can avoid that particular interaction. This is a documented library heuristic, not proof that every observed contention event has this cause or every x86 processor needs that padding.",
+    "link": {
+      "title": "CachePadded — crossbeam-utils docs",
+      "url": "https://docs.rs/crossbeam-utils/latest/crossbeam_utils/struct.CachePadded.html"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Threads contend on a C/C++ atomic spinlock. Test-and-test-and-set polls with atomic relaxed loads, attempts an acquire exchange when free, and unlocks with a release store. Why can that reduce traffic compared with continuously exchanging?",
+    "options": [
+      {
+        "text": "Loads are atomic and exchanges are not",
+        "explanation": "Both specified operations are atomic. Ordinary non-atomic loads are not made safe against racing writes merely by alignment or hardware coherence."
+      },
+      {
+        "text": "Read polling can hit in shared copies, avoiding repeated competing ownership requests while the lock is held",
+        "explanation": "Correct. A read-modify-write needs exclusive permission, whereas a resident shared read can hit locally. Not every exchange causes a new transfer if the caller already owns the line."
+      },
+      {
+        "text": "The exchange instruction disables the cache",
+        "explanation": "An atomic exchange does not generally disable caching. Ordinary aligned operations on cacheable memory can use coherence; special split or uncacheable cases have additional rules."
+      },
+      {
+        "text": "TTAS reduces the critical section length",
+        "explanation": "The critical section is unchanged; what changes is the coherence traffic while waiting."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Continuous competing exchanges can repeatedly demand ownership. Atomic read polling can instead use Shared hits while the value stays unchanged. Release updates invalidate those copies; contenders then attempt acquisition, potentially causing a burst of traffic. MCS-style queue locks let each waiter poll a distinct node; suitable layout avoids false sharing between nodes. The language-level atomic operations remain necessary.",
+    "link": {
+      "title": "Cache coherence — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Cache_coherence"
+    }
+  },
+  {
+    "id": "cache-arch-coherence-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Many threads increment one global AtomicLong statistic. Approximate concurrent snapshots and delayed batched visibility are acceptable, with exact final totals after synchronised completion. Which changes can reduce update contention? Select all that apply.",
+    "options": [
+      {
+        "text": "Pad `requests` to its own 64- or 128-byte line",
+        "explanation": "This is *true* sharing: one variable, many writers. Padding only helps when *different* variables share a line."
+      },
+      {
+        "text": "Use a striped counter such as LongAdder, distributing updates over cells",
+        "explanation": "Correct. Cells are not necessarily one per thread; this can reduce contention. sum() is not an atomic snapshot during concurrent updates."
+      },
+      {
+        "text": "Keep a per-thread count and add it to the global counter every 1,000 requests",
+        "explanation": "Correct. Batch publication reduces shared updates; flush each remainder before the final total. It changes when requests become visible."
+      },
+      {
+        "text": "Remove atomics and let all threads increment one ordinary shared long without synchronisation",
+        "explanation": "Concurrent unsynchronised increments are not a correct replacement: they can lose updates and fail the language’s synchronisation rules. Reduced overhead cannot justify an incorrect final statistic."
+      },
+      {
+        "text": "Use suitably separated per-thread counters with atomic reads or synchronised aggregation",
+        "explanation": "Correct. Distinct writers reduce update contention; concurrent metrics readers still need safe atomic or synchronised access."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      4
+    ],
+    "workedExample": "This is true sharing of one counter. Padding alone cannot remove that contention, though it can prevent unrelated false sharing. Striping, batching, or separate safely read counters distribute writes. These approaches change snapshot/visibility semantics, so use them only when the statistic permits that trade-off. Read exact final totals after updates stop and all remainders are published.",
+    "link": {
+      "title": "perf-c2c(1) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man1/perf-c2c.1.html"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 40/76. Updated 2026-10-15.
+Verified modules: 41/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -47,6 +47,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | architecture/Digital Logic | 6 | 34 | 74 | 233 | 261 | 602 | 14 |
 | architecture/Instruction Sets & Assembly | 6 | 35 | 73 | 58 | 375 | 541 | 40 |
 | architecture/Pipelining & CPU Performance | 6 | 29 | 66 | 65 | 187 | 282 | 9 |
+| architecture/Caches & the Memory Hierarchy | 6 | 31 | 69 | 92 | 185 | 377 | 39 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3660,6 +3661,63 @@ Low-confidence areas:
 - **medium** — pipe-power-wall-constant-field-scaling: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
 - **medium** — pipe-power-wall-multicore-power-model: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
 - **medium** — pipe-power-wall-budgets-and-specialisation: Implementation/workload-dependent timing, organisation, historical trend or power-management applicability. Primary sources verify the mechanisms; examples explicitly state simplified timing/power assumptions and do not establish physical silicon timing, a feasible voltage point, current product inventory or workload speedups.
+
+## architecture: Caches & the Memory Hierarchy
+
+[Independent verification record](../content/architecture/05-memory-hierarchy/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Uniform random cache access is now a fully occupied independent-access model and a poor-locality example, rather than a universal worst-case bound; adversarial conflicts can be worse.
+- Column-major reuse-distance explanation now counts 1,023 intervening lines in a cycle of 1,024, rather than 1,024 other lines.
+- The hypothetical cache-capacity staircase is explicitly schematic; its labels are not advertised as processor measurements.
+- Address-bit and tile symbols now have standalone local context; organisation-table algebra is expressed in words, substitution units and grouping are explicit, and symbolic products use conventional unambiguous notation.
+- One inherited question had closing formula-fence text on the same line; its closing fence now stands alone.
+- The AMAT trade-off question’s unchanged winning key is retained, while the 6.12-cycle option correctly explains that the one-cycle saving more than pays for extra misses yet still loses to 5.6 cycles.
+- HotSpot contiguous-array assumptions are distinguished from Java language semantics; CPython reference storage, shared objects and NumPy strides/views are kept distinct. array.array is taught locally before its associated question.
+- Every original executable statement is unchanged; comments explain reference-array traversal, bottom-up AMAT, matrix reuse, tile origins, distinct-thread writes, page allocation assumptions and prefetch bounds.
+- First-touch, anonymous-page, working-set, cold-cache and traffic glossary examples now carry their residency, fresh-page, policy and interference assumptions.
+- Random replacement no longer claims no pathological trace or zero state cost; RRIP scan resistance is qualified as workload-dependent, and capacity/conflict misses explicitly use a fully associative LRU reference.
+- Dirty-data preservation and eviction definitions allow buffered overlap/handover; streaming/non-temporal stores are instruction/configuration-dependent, and non-inclusive is no longer aliased as necessarily NINE.
+- Relaxed atomics retain per-object ordering/coherence guarantees; release/acquire synchronisation depends on the acquire reading the matching release sequence. Hardware coherence does not make language data races valid.
+- Test-and-set and test-and-test-and-set now resolve to different definitions. std::list is separated from std::vector; numastat is separated from numactl.
+- Go is narrowly “Go programming language”/“Golang”, leaving ordinary “go” unlinked. Hardware prose uses coherence transactions rather than the database transaction fallback, and DRAM row buffer rather than a missing bare singular alias.
+- MESIF Forward now means a designated clean responder when present; the text does not imply a Forward peer must always remain or answer every request. Textbook BusRd/MESI scope is explicit.
+- NUMA nodes are distinguished from sockets, adjacent-line prefetching does not redefine the coherence granule, and 64/128-byte padding remains an explicit model or documented library heuristic.
+- Inherited glossary definition/source review also qualifies ABI-specific binary32/binary64 language naming, matrix multiplication’s conventional cubic algorithm, burst modes, row-command timing and on-die ECC versus system ECC.
+- Ordinary emphasis phrases and numeric answers no longer masquerade as new glossary terms; genuine technical terms and every substantive original drawing remain available.
+- Independent review replaced an ambiguous false distractor: serialising AtomicLong through a lock can change active contention; the revised false option instead proposes unsafe unsynchronised shared increments. The original correct indices remain unchanged.
+- Independent review corrected the 4,096-element column walk to 4,095 intervening lines, removed a stale reference to three consumers from a one-reader coherence example, and corrected the L3-service-time distractor description.
+- Independent review distinguishes inclusive presence from up-to-date lower data, full versus partial write combining, current-level participation in global miss-rate products, comparator implementation choices and peer-cache line fills.
+- Independent review qualifies RRIP victim predictions, columnar/SoA/array-padding benefit claims, inlining code-size effects, controller scope and memory-bound bottlenecks, and removes the overly broad AMBA-to-CHI alias.
+- Independent review restored units/grouping to worked numeric substitutions and defined diagram tile labels before their preserved drawing; fixed stale split references.
+
+Remaining gaps:
+
+- No vendor-by-vendor cache geometry, replacement/inclusion-policy or cache/DRAM latency catalogue; the inherited explicit exclusions are retained rather than replacing them with guessed representative numbers.
+- No normative/full CHI protocol, transient-state MESI implementation or coherence-liveness proof; this material teaches stable-state intuition before the later parallel hardware module.
+- No claim of a measured matrix, false-sharing, NUMA or prefetch speedup on the user’s phone. Native outputs and bounded models are distinguished from hypothetical time/bandwidth inputs.
+- C code fragments assume valid allocations/dimensions as documented; full allocation-error, overflow and tile-edge handling belong to their complete caller.
+- No controlled physical multicore cache/NUMA/prefetch benchmark; native outputs and abstract model results establish only their stated environments and assumptions.
+- Arm public overview plus primary gem5 implementation documentation support CHI orientation; no normative protocol conformance claim.
+
+Low-confidence areas:
+
+- **medium** — cache-short-amat-cpi-overlap: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-coherence-routing: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-dram-cells-topology: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-dram-peak-bandwidth: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-dram-refresh: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-false-sharing-layout: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-field-layout: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-hierarchy-locality: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-matrix-loop-order: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-matrix-tiling: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-numa-placement: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-prefetch-models: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-row-major-traversal: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-stores-inclusion: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+- **medium** — cache-short-working-access-order: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
 
 ## synth: Sound & Digital Audio
 

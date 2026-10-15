@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 41/76 modules; 278 originals → 1509 short lessons with 3279 focused questions.
+- Independently verified: 42/76 modules; 284 originals → 1542 short lessons with 3352 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `bb54450`, version `93e929dcd024`, 1478 short lessons/3210 focused questions
-  across 40 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
-- Current generated candidate: `3b360b7d6a59`, 41 modules/1509 units/3279 questions.
+- Latest confirmed live release: `bc5ff75`, version `3b360b7d6a59`, 1509 short lessons/3279 focused questions
+  across 41 modules. GitHub Pages succeeded and app/manifest/progress/index files match the tested commit.
+- Current generated candidate: `16fd8ee84cc5`, 42 modules/1542 units/3352 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -21,9 +21,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- architecture/arch-parallel: verifying; /root/architecture_parallel_short_verify.
 - languages/lang-paradigms: authoring; /root/languages_paradigms_short_author.
 - languages/lang-types: authoring; /root/languages_types_short_author.
+- languages/lang-memory: authoring; /root/languages_memory_short_author.
 
 Verification and integration:
 

@@ -1,0 +1,138 @@
+[
+  {
+    "id": "par-simd-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which loops permit the indicated direct lane-wise transformation, assuming valid disjoint output ranges, read-only inputs, supported operations and no reassociation of floating-point sums? For reductions, consider independent partial sums combined at the end. This is a legality question, not a promise that a compiler chooses vectorisation. Select all that apply.",
+    "options": [
+      {
+        "text": "`for (i=0;i<n;i++) a[i] = b[i] * c[i];` (floats)",
+        "explanation": "Eligible: each multiplication is independent; the same per-element operation can be performed in lanes."
+      },
+      {
+        "text": "`for (i=1;i<n;i++) a[i] = a[i-1] + b[i];` (floats)",
+        "explanation": "Not vectorised directly. Each iteration needs the previous result, a loop-carried dependency."
+      },
+      {
+        "text": "`for (i=0;i<n;i++) s += x[i];` with uint32_t elements and uint32_t s",
+        "explanation": "Eligible: unsigned 32-bit addition wraps modulo 4,294,967,296. Regrouping preserves the final uint32_t value under this contract."
+      },
+      {
+        "text": "`for (i=0;i<n;i++) s += x[i];` with `float` elements",
+        "explanation": "Independent partial sums change the floating-point order and are not permitted by this question. Ordered vector reductions are a different transformation."
+      },
+      {
+        "text": "`for (i=0;i<n;i++) a[i] = b[i] > 0 ? b[i] : 0;` (floats)",
+        "explanation": "Eligible with a compare/select that preserves the scalar floating-point semantics, including NaN and signed-zero behaviour."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Independent products and safe per-element compare/selects can run in lanes. Unsigned 32-bit sums can use partial sums because modulo addition is associative. The recurrence needs earlier results, and independent float partial sums change rounding order. Thus options 1, 3 and 5 satisfy the stated transformation rules. Actual compiler selection still depends on target support and profitability.",
+    "link": {
+      "title": "LLVM vectorisation guide",
+      "url": "https://llvm.org/docs/Vectorizers.html"
+    }
+  },
+  {
+    "id": "par-simd-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A compiler rejects a proposed transformation of a sequential float sum into several independent partial sums, with strict floating-point ordering required. Why?",
+    "options": [
+      {
+        "text": "Floats cannot be stored in vector registers",
+        "explanation": "SSE and AVX registers hold floats perfectly well; `addps` adds four of them."
+      },
+      {
+        "text": "Independent partial sums reorder the additions; floating-point addition is not associative, so the result could change",
+        "explanation": "Correct. This transformation changes the arithmetic order. Ordered vector reductions can preserve the order on targets that support them."
+      },
+      {
+        "text": "The loop has unknown trip count `n`",
+        "explanation": "Unknown trip counts are routine; the compiler adds a tail loop."
+      },
+      {
+        "text": "The variable `total` might alias `x`",
+        "explanation": "`total` is a local scalar whose address is not taken, so the compiler knows it cannot alias the array."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Compare the orders:\n\n```formula\ns_seq = ((x[0] + x[1]) + x[2]) + …\nP_k = x[k] + x[k + 8] + x[k + 16] + …\ns_vec = Σ P_k   for k = 0 to 7\nwhere\ns_seq: the scalar sum, added strictly left to right\nx: the array being summed; x[0] is its first element\nP_k: the partial sum kept in lane k\nk: the lane number, 0 to 7\ns_vec: the vectorised sum: the eight partial sums added at the end\nΣ: sum of: add up the terms for every listed value of k\n…: and so on, to the end of the array\nIn words: the vector version adds the same numbers in a different order, eight interleaved running totals combined at the end.\n```\n\nMathematically identical, but each floating-point addition rounds, so a different order can give a substantially different result. For float32, first cancelling two equal large opposite values and then adding one can return one. First adding one to one of those large values can round that increment away, leaving zero after cancellation. Any reassociation must be allowed by the numerical contract.",
+    "link": {
+      "title": "LLVM vectorisation guide",
+      "url": "https://llvm.org/docs/Vectorizers.html"
+    }
+  },
+  {
+    "id": "par-simd-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "This function is not vectorised and the report says *\"possible aliasing\"*. What change most directly helps?\n\n```c\nvoid scale(float *a, float *b,\n           int n) {\n  /* Match each input to its output. */\n  for (int i = 0; i < n; i++)\n    a[i] = b[i] * 2.0f;\n}\n```",
+    "options": [
+      {
+        "text": "Change `int i` to `long i`",
+        "explanation": "The index type is not the problem the compiler reported."
+      },
+      {
+        "text": "Add `-ffast-math`",
+        "explanation": "Fast-math relaxes floating-point rules; it does not tell the compiler the pointers do not overlap."
+      },
+      {
+        "text": "Mark the pointers `restrict` to promise `a` and `b` do not overlap",
+        "explanation": "Correct. If `a` might point one element after `b`, iteration i's store could feed iteration i + 1's load. `restrict` rules that out."
+      },
+      {
+        "text": "Unroll the loop by hand four times",
+        "explanation": "Unrolling does not resolve the aliasing question and may make the loop harder to analyse."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Why aliasing matters:\n\n1. Suppose `a == b + 1`.\n2. Then `a[i] = b[i] * 2` writes `b[i+1]`.\n3. Iteration i + 1 must read that new value. Loading 8 of b at once would read stale values.\n\nWith `float *restrict a, float *restrict b` you promise no overlap, so vectorising is safe. (Compilers sometimes emit a runtime overlap check instead, but the promise must be true for every call; adding it to an overlapping call introduces undefined behaviour.)",
+    "link": {
+      "title": "LLVM vectorisation guide",
+      "url": "https://llvm.org/docs/Vectorizers.html"
+    }
+  },
+  {
+    "id": "par-simd-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A particle simulation stores `struct P { float x, y, z, vx, vy, vz; }` in an array and updates `p[i].x += p[i].vx * dt` for all particles. You consider switching to a structure of arrays (`float x[N], vx[N], ...`). Assume 4-byte floats, a 24-byte struct with no padding, unchanged arithmetic order and contraction rules, and large valid disjoint arrays. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "With SoA, eight consecutive `x` values sit next to each other, so one contiguous vector load fetches them",
+        "explanation": "Correct. Each field becomes its own dense array, matching how SIMD lanes are loaded."
+      },
+      {
+        "text": "With AoS, consecutive `x` values are 24 bytes apart, so vectorising needs strided or gather loads, or shuffles",
+        "explanation": "Correct under the stated layout: the stride is 24 bytes. A compiler may use gathers or loads and shuffles; relative performance is target-dependent."
+      },
+      {
+        "text": "SoA also uses each cache line more fully for this loop, since no bytes are wasted on y, z, vy, vz",
+        "explanation": "Correct for a long sweep: only two of six float fields are needed. Edge lines and alignment affect exact line utilisation."
+      },
+      {
+        "text": "SoA is always better, for every access pattern",
+        "explanation": "False. Accessing all fields of one particle may favour AoS by placing them close together, though a struct may cross a cache-line boundary."
+      },
+      {
+        "text": "Switching layout changes the floating-point results",
+        "explanation": "False under the stated unchanged arithmetic and contraction rules. Layout alone need not change values; a different optimisation contract could."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "SoA places consecutive x values together and consecutive vx values together. In the specified AoS layout, x has a 24-byte stride. Across a long sweep only 8 of every 24 data bytes are useful to this loop; exact line edges vary. SoA is not universally best, and layout alone does not change results when arithmetic and contraction are preserved. The correct choices are the first three.",
+    "link": {
+      "title": "LLVM vectorisation guide",
+      "url": "https://llvm.org/docs/Vectorizers.html"
+    }
+  }
+]

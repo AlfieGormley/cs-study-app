@@ -1,0 +1,100 @@
+[
+  {
+    "id": "par-gpu-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "On NVIDIA GPUs, what is a **GPU warp**?",
+    "options": [
+      {
+        "text": "A group of 32 logical threads whose instructions are issued to active subsets under the SIMT execution model",
+        "explanation": "Correct. Divergence, partial warps and independent thread scheduling mean not every logical thread must execute each issued instruction."
+      },
+      {
+        "text": "Another name for a thread block",
+        "explanation": "A block can contain up to 1,024 threads, i.e. many warps. The block is the unit of scheduling onto an SM; the warp is the unit of instruction issue."
+      },
+      {
+        "text": "A single CUDA core",
+        "explanation": "A CUDA core is an arithmetic execution resource with target-specific capabilities. A warp is a group of threads, not a piece of hardware."
+      },
+      {
+        "text": "The full set of blocks launched by a GPU kernel",
+        "explanation": "That is the grid."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The hierarchy, from big to small:\n\n```\ngrid   all blocks of one launch\nblock  size limits; one SM\nwarp   32 threads; active subsets\nthread one index, own registers\n```\n\nThe thread-block size you choose is split into warps: 256 threads per block makes 8 warps. A block size that is not a multiple of 32 leaves a partially filled last warp; whether another block size performs better requires measurement.",
+    "link": {
+      "title": "CUDA 13.0.3 programming guide",
+      "url": "https://docs.nvidia.com/cuda/archive/13.0.3/cuda-c-programming-guide/index.html"
+    }
+  },
+  {
+    "id": "par-gpu-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In one warp, threads with even `threadIdx.x` take an `if` branch costing 100 cycles and odd threads take the `else` branch costing 60 cycles. Assume the simplified model runs the masked paths consecutively, with no overlap and negligible additional control overhead. Roughly how long does the warp spend on this `if/else`?",
+    "options": [
+      {
+        "text": "100 cycles, the longer of the two",
+        "explanation": "That would be true if the two paths ran in parallel, but a warp executes one instruction stream at a time."
+      },
+      {
+        "text": "80 cycles, the average",
+        "explanation": "Each lane does wait for both paths; averaging does not describe the warp's time."
+      },
+      {
+        "text": "60 cycles",
+        "explanation": "The `if` path alone takes 100 cycles."
+      },
+      {
+        "text": "About 160 cycles: both paths run one after the other with lanes masked",
+        "explanation": "Correct. Divergence runs the paths one after the other. Each runs at 50% lane utilisation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Step through what the warp does:\n\n1. Evaluate the condition per lane: mask = even lanes.\n2. Run the `if` body (100 cycles) with odd lanes masked off.\n3. Invert the mask and run the `else` body (60 cycles).\n4. Reconverge.\n\n```formula\nt_warp ≈ t_if + t_else\nt_warp ≈ 100 + 60 = 160\nwhere\nt_warp: the time the warp spends on the if/else, in clock cycles\nt_if: the time of the if path; 100 cycles\nt_else: the time of the else path; 60 cycles\n≈: approximately equal to (control overhead ignored)\nIn words: a divergent warp runs both paths one after the other, so their times add.\n```\n\nThe total is about **160 cycles** in the stated simplified model. If the condition were uniform per warp, for example `(threadIdx.x / 32) % 2`, each warp would take only its own path: 100 or 60 cycles.",
+    "link": {
+      "title": "CUDA 13.0.3 programming guide",
+      "url": "https://docs.nvidia.com/cuda/archive/13.0.3/cuda-c-programming-guide/index.html"
+    }
+  },
+  {
+    "id": "par-gpu-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "For ordinary CUDA blocks without thread-block clusters or cooperative cross-block facilities, which statements are true? Use linear thread indices and correctly participating barriers. Select all that apply.",
+    "options": [
+      {
+        "text": "All threads of a block run on the same SM",
+        "explanation": "Correct. This is why they can share the SM's GPU shared memory."
+      },
+      {
+        "text": "Threads in the same block can synchronise with `__syncthreads()`",
+        "explanation": "Correct. It is a barrier for all threads of one block."
+      },
+      {
+        "text": "Blocks of the same grid can be relied on to run in a fixed order",
+        "explanation": "False. Blocks may run in any order, concurrently or one after another; correct code must never depend on order."
+      },
+      {
+        "text": "Threads in different blocks can read each other's GPU shared memory",
+        "explanation": "False in this scope. Cluster distributed shared memory is a separate supported facility with explicit synchronisation and lifetime requirements."
+      },
+      {
+        "text": "A block's threads are divided into warps of 32 consecutive threads",
+        "explanation": "Correct. Threads 0–31 form warp 0, 32–63 warp 1, and so on."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Correct choices: a block executes on one SM; its participating threads can use a block-wide barrier; consecutive linear IDs form warps. Ordinary blocks have no fixed execution order and cannot directly read each other’s block-local GPU shared memory. Thread-block clusters extend the latter rule under an additional API contract.",
+    "link": {
+      "title": "CUDA 13.0.3 programming guide",
+      "url": "https://docs.nvidia.com/cuda/archive/13.0.3/cuda-c-programming-guide/index.html"
+    }
+  }
+]

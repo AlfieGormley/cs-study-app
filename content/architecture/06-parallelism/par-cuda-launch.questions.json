@@ -1,0 +1,62 @@
+[
+  {
+    "id": "par-gpu-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In a GPU kernel launched with `blockDim.x = 256`, what global index `i = blockIdx.x * blockDim.x + threadIdx.x` does thread 10 of block 3 compute?",
+    "options": [
+      {
+        "text": "266",
+        "explanation": "This adds 256 + 10, treating block 3 as if it were block 1."
+      },
+      {
+        "text": "778",
+        "explanation": "Correct. 3 × 256 + 10 = 768 + 10 = 778."
+      },
+      {
+        "text": "2,570",
+        "explanation": "This multiplies the thread index by the threads-per-block count, which is backwards."
+      },
+      {
+        "text": "13",
+        "explanation": "This adds the block and thread indices without scaling by the threads-per-block count."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Blocks are laid out one after another:\n\n```\nblock 0: i = 0   .. 255\nblock 1: i = 256 .. 511\nblock 2: i = 512 .. 767\nblock 3: i = 768 .. 1023\n```\n\nSo thread 10 of block 3 is:\n\n```formula\ni = b × N_b + t\ni = 3 × 256 + 10 = 768 + 10 = 778\nwhere\ni: the global index\nb: the block index (blockIdx.x); 3\nN_b: threads per block (blockDim.x); 256\nt: the thread index within the block (threadIdx.x); 10\nIn words: skip three whole blocks of 256 threads, then count 10 more.\n```\n\nThe answer is **778**. Local threads 0 to 31 of that block have global indices 768 to 799 and form one warp, and they read consecutive elements, so the access is coalesced.",
+    "link": {
+      "title": "CUDA 13.0.3 programming guide",
+      "url": "https://docs.nvidia.com/cuda/archive/13.0.3/cuda-c-programming-guide/index.html"
+    }
+  },
+  {
+    "id": "par-gpu-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You launch `saxpy` for 1,000,000 elements (`n`) with 256 threads per block, using `blocks = (n + 255) / 256`. How many blocks are launched, and why does the GPU kernel need `if (i < n)`?",
+    "options": [
+      {
+        "text": "3,906 blocks; the guard is only for safety and never triggers",
+        "explanation": "3,906 × 256 = 999,936, which leaves 64 elements unprocessed. Integer division rounds down; the + 255 rounds up."
+      },
+      {
+        "text": "3,907 blocks; the last block has 3,907 × 256 − 1,000,000 = 192 surplus threads that must never write out of bounds",
+        "explanation": "Correct. Rounding up guarantees coverage; the guard stops the extra threads touching memory past the end."
+      },
+      {
+        "text": "1,000,000 blocks, one per element",
+        "explanation": "Each block contains 256 threads, so you need about n / 256 blocks."
+      },
+      {
+        "text": "3,907 blocks; the guard prevents branch divergence",
+        "explanation": "The guard prevents out-of-bounds access. Here n is divisible by 32: the final block has two fully active warps and six fully inactive warps, so this guard does not split a warp."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Calculate:\n\n```formula\nN_blk = ⌈n / N_b⌉\nN_blk = ⌈1,000,000 / 256⌉\nN_blk = ⌈3,906.25⌉ = 3,907\nN_x = N_blk × N_b − n\nN_x = 1,000,192 − 1,000,000 = 192\nwhere\nN_blk: the number of blocks launched\nn: the number of elements; 1,000,000\nN_b: threads per block; 256\n⌈ ⌉: ceiling: round up to a whole number (what (n + 255) / 256 does in integer arithmetic)\nN_x: the surplus threads with no element to process\nIn words: 3,907 blocks are needed to cover every element, which launches 192 more threads than there are elements.\n```\n\nThose 192 threads compute an index at or beyond n. Without the guard they would read and write past the end of the arrays. It is the GPU version of a SIMD tail loop.",
+    "link": {
+      "title": "CUDA 13.0.3 programming guide",
+      "url": "https://docs.nvidia.com/cuda/archive/13.0.3/cuda-c-programming-guide/index.html"
+    }
+  }
+]

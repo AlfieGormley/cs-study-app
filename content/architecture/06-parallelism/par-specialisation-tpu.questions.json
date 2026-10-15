@@ -1,0 +1,92 @@
+[
+  {
+    "id": "par-accelerators-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can a specialised accelerator do far more arithmetic per joule than a general-purpose CPU core built on the same process?",
+    "options": [
+      {
+        "text": "Its multipliers and adders use a fundamentally cheaper kind of transistor",
+        "explanation": "A fundamentally different transistor is not required. Specialised arithmetic, control and data movement can improve efficiency within a process."
+      },
+      {
+        "text": "It can reduce or amortise instruction-control overhead and data movement for a suitable workload",
+        "explanation": "Correct. Reuse and specialised execution can reduce energy per useful result; the magnitude depends on design, precision and utilisation."
+      },
+      {
+        "text": "Accelerators run at much higher clock speeds",
+        "explanation": "Higher clock is not required; TPU v1’s reported clock was 700 MHz. Clock rate alone does not determine energy per result."
+      },
+      {
+        "text": "Accelerators do not need memory, so they avoid DRAM entirely",
+        "explanation": "They still need memory; the TPU read weights from DDR3 and later HBM. They reduce how often each value is fetched, but cannot avoid fetching it."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "A specialised datapath can reuse operands locally and perform a regular sequence with less per-operation instruction control. This can reduce overhead relative to a general-purpose implementation, but does not eliminate storage or control. Compare equivalent precision and useful results across the whole system rather than assuming a universal per-operation energy ratio.",
+    "link": {
+      "title": "TPU architecture paper",
+      "url": "https://arxiv.org/abs/1704.04760"
+    }
+  },
+  {
+    "id": "par-accelerators-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A hypothetical accelerator has a 128 × 128 array of multiply-accumulate units (MAC units) clocked at 1 GHz. Assume each unit sustains one MAC operation per cycle. Counting each MAC operation as two operations, what is its peak throughput?",
+    "options": [
+      {
+        "text": "About 16 TOPS",
+        "explanation": "This counts each MAC operation as one operation. A MAC operation is a multiply and an add, so it is two."
+      },
+      {
+        "text": "About 256 GOPS",
+        "explanation": "This uses 128 × 2 instead of 128 × 128: it counts one row of the array, not the whole grid."
+      },
+      {
+        "text": "About 65 TOPS",
+        "explanation": "This uses a 256 × 256 array (65,536 MACs) counted once per cycle. The array here is 128 × 128."
+      },
+      {
+        "text": "About 33 TOPS",
+        "explanation": "Correct. 16,384 MACs × 2 ops × 10⁹ cycles/s ≈ 32.8 × 10¹² ops/s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Work it out the same way as the TPU v1 figure in the lesson:\n\n```formula\nN_MAC = 128 × 128 = 16,384\nP_peak = N_MAC × 2 × f_clk\nP_peak = 16,384 × 2 × 10^9 Hz\nP_peak ≈ 32.8 × 10^12 ops/s ≈ 33 TOPS\nwhere\nN_MAC: the number of MAC units in the array\n2: each MAC operation counts as two operations, a multiply and an add\nf_clk: the clock frequency; 1 GHz = 10^9 Hz\nHz: hertz, cycles per second\nP_peak: the peak rate, in operations per second (ops/s)\nops: operations\ns: second\nTOPS: tera-operations per second, 10^12 ops/s\n≈: approximately equal to\nIn words: 16,384 units each doing two operations a billion times a second give about 33 trillion operations a second.\n```\n\nFor comparison, TPU v1 was 65,536 MACs × 2 × 700 MHz ≈ 92 TOPS. Peak assumes every MAC unit is busy every cycle, which requires a suitable schedule, enough independent work and adequate data supply; large dimensions alone do not ensure it.",
+    "link": {
+      "title": "TPU architecture paper",
+      "url": "https://arxiv.org/abs/1704.04760"
+    }
+  },
+  {
+    "id": "par-accelerators-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "TPU v1 peaks at about 92 TOPS but reads weights from DRAM at about 34 GB/s. In a fully connected layer, each int8 weight (1 byte) is used once per example in the batch, as one MAC operation (2 ops). Assume each weight is transferred once per batch and ignore activations and all other traffic. Roughly where do the arithmetic and weight-bandwidth ceilings intersect?",
+    "options": [
+      {
+        "text": "About 1,350",
+        "explanation": "Correct. The two ceilings intersect at about 2,700 operations per weight byte. Each example contributes two, giving a batch size of about 1,350."
+      },
+      {
+        "text": "About 2,700",
+        "explanation": "2,700 is the ops per byte needed, but each example contributes 2 ops (a multiply and an add) per weight byte, so you need half as many examples."
+      },
+      {
+        "text": "About 64",
+        "explanation": "At batch 64 the layer does only 128 ops per weight byte, so it can reach about 34 × 10⁹ × 128 ≈ 4.4 TOPS, under 5% of peak."
+      },
+      {
+        "text": "Batch size does not matter; the layer is always compute-bound on a TPU",
+        "explanation": "The TPU paper found several measured production networks were memory-bandwidth limited. Batch-dependent reuse is one factor; the prompt isolates only weight traffic."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Compare the arithmetic rate with the weight-bandwidth rate using the explicit reuse assumptions.\n\n```formula\nI_r = P / R\nI_r = (92 × 10^12) / (34 × 10^9)\nI_r ≈ 2,700\nI_l = 2N\n2N = 2,700 gives N ≈ 1,350\nwhere\nI_r: the ridge intensity: operations needed per weight byte to keep the chip busy\nP: the peak rate; 92 TOPS = 92 × 10^12 operations per second\nR: the weight bandwidth; 34 GB/s = 34 × 10^9 bytes per second\nI_l: the layer's operations per weight byte: one MAC operation (2 operations) per example\nN: the batch size (examples per batch)\n≈: approximately equal to\nIn words: each weight byte must feed about 2,700 operations, and each example supplies 2, so the batch must be about 1,350.\n```\n\nBelow that, the weight-bandwidth bound is the bandwidth times the layer's operations per byte:\n\n```formula\nI_l = 2N = 400 ops/B\nP_b = I_l R\nP_b = 400 ops/B × 34 × 10^9 B/s\nP_b = 13.6 × 10^12 ops/s\nE = P_b / P ≈ 0.148\nwhere\nP_b: the bandwidth-limited rate, in operations per second\nR: weight bandwidth; 34 × 10^9 bytes per second\nI_l: operations per weight byte, from two operations per example using each one-byte weight\nN: the batch size; 200 here\nE: fraction of the stated arithmetic peak reached by this weight-bandwidth bound, about 14.8%\nP: arithmetic peak, 92 trillion operations per second\nops: counted arithmetic operations\nB: byte\ns: second\n≈: approximately equal to\nIn words: with a batch of 200 the layer can reach only about 13.6 TOPS, around 15% of peak.\n```\n\nReaching that bound still requires adequate scheduling and utilisation; the calculation alone does not establish a historical product-design decision.",
+    "link": {
+      "title": "TPU architecture paper",
+      "url": "https://arxiv.org/abs/1704.04760"
+    }
+  }
+]

@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 41/76. Updated 2026-10-15.
+Verified modules: 42/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -48,6 +48,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | architecture/Instruction Sets & Assembly | 6 | 35 | 73 | 58 | 375 | 541 | 40 |
 | architecture/Pipelining & CPU Performance | 6 | 29 | 66 | 65 | 187 | 282 | 9 |
 | architecture/Caches & the Memory Hierarchy | 6 | 31 | 69 | 92 | 185 | 377 | 39 |
+| architecture/Parallel Hardware | 6 | 33 | 73 | 74 | 213 | 393 | 42 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3718,6 +3719,52 @@ Low-confidence areas:
 - **medium** — cache-short-row-major-traversal: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
 - **medium** — cache-short-stores-inclusion: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
 - **medium** — cache-short-working-access-order: Real processor/runtime performance, policies and implementation-specific behaviour. Core concepts and explicit finite numerical models checked. Platform geometry, runtime implementation, prefetch/refresh/coherence configuration and actual speedups require the named target; conditional text makes no physical target measurement claim.
+
+## architecture: Parallel Hardware
+
+[Independent verification record](../content/architecture/06-parallelism/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Corrected the TPU weight-bandwidth substitution: byte bandwidth is multiplied by operations per byte, rather than being relabelled operations per second. All original answer keys remain unchanged.
+- Corrected CUDA thread-block clusters to the documented co-scheduling guarantee within one GPU Processing Cluster; neighbouring physical SMs are not the API contract.
+- Narrowed DRF-SC and Peterson definitions to the required language/machine-ordering assumptions; publication guarantees the value if observed, not scheduler fairness or bounded termination.
+- XMM/YMM/ZMM now open an explicit 128/256/512-bit register-view definition. GCC -fassociative-math has its own qualified entry rather than aliasing the whole fast-math bundle.
+- Separated sector-byte utilisation from execution-resource utilisation and core/memory-bound top-down subcategories from backend-bound; bad-speculation includes recovery slots.
+- Replaced future-only Intel reference sources that omitted basic VADDPS/YMM coverage with the actual Intel basic architecture SDM; used specific Arm Neon and AMD DSP/timing primary manuals.
+- Whole rendering caught opposite-sense contiguous-memory linking in a Non-contiguous heading and a proven-minimum Theory definition on a measured lower-bound estimate. Precise owned wording now avoids both.
+- Fixed exact-equality signs on rounded Karp–Flatt, ceiling and floor intermediates; preserved 12 executable and 13 drawing/output body fences and all original 72 question contracts.
+
+Remaining gaps:
+
+- No CUDA-capable GPU, FPGA or TPU hardware is available. CUDA indexing and divergence fragments were exercised only through labelled CPU simulations; launch syntax/runtime synchronisation and actual device performance were not executed.
+- Linux perf 6.12.111 installed in an ephemeral container. Real stat and record attempts fail with existing perf_event_open EPERM; report correctly sees no data. No permissions were changed. Displayed counter numbers and timing diagrams are illustrative, never measurements from this host.
+- No physical x86 machine memory-order experiment was performed. AVX compiled x86-64 code ran through Rosetta on an arm64 host. Finite SC/TSO models and fetched ISA/language primary contracts support the ordering teaching; they are not exhaustive proofs of every concurrent program.
+- Existing scope exclusions are retained: generic latency/energy/cost ratios, exhaustive MISD products and hardware-generation configuration catalogues, Rosetta implementation/performance attribution and universal Linux spinlock/PMU resource catalogues.
+- The independent verifier reran exact CPU examples and wrote additional finite models; this does not provide CUDA launch execution, physical-GPU timing, FPGA timing closure, TPU execution or unrestricted PMU measurements. Existing perf EPERM was respected; no permission change or retry was attempted.
+
+Low-confidence areas:
+
+- **medium** — par-arm-ordering: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-language-publication: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-vector-lanes: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-vector-intrinsics: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-vector-legality: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-vector-deployment: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-cuda-launch: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-warp-divergence: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-warp-latency: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-gpu-resource-occupancy: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-gpu-coalescing: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-gpu-banks-transfers: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-specialisation-tpu: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-tpu-numerics: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-configurable-silicon: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-benchmark-timing: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-performance-counters: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-sampling-profiles: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-roofline-ceilings: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
+- **medium** — par-roofline-investigation: Target/compiler/tool or hardware contract is conditional on the stated environment; illustrative performance is a model rather than a measurement.. Primary contracts and bounded numerical examples checked; device/tool versions can change and actual GPU/FPGA/TPU execution or PMU measurements are unavailable where noted.
 
 ## synth: Sound & Digital Audio
 

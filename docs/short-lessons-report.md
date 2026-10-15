@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 57/76. Updated 2026-10-15.
+Verified modules: 58/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -64,6 +64,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | software-engineering/Design Principles & Clean Code | 6 | 26 | 69 | 8 | 292 | 395 | 45 |
 | software-engineering/Design Patterns | 6 | 28 | 66 | 13 | 273 | 380 | 54 |
 | software-engineering/Testing | 6 | 22 | 68 | 15 | 196 | 301 | 76 |
+| software-engineering/Version Control & CI/CD | 6 | 26 | 69 | 15 | 279 | 389 | 39 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4556,6 +4557,30 @@ Remaining gaps:
 - Inherited testing scope: no production benchmark, public shop deployment, full Pact deployment or empirical universal TDD outcome is claimed.
 - Application-specific partial sketches were executed with explicitly declared scratch scaffolds. Browser journey uses intercepted local HTML and PostgreSQL uses a real isolated container.
 - Pyramid proportions and test timing examples are illustrative/source-specific. Hypothesis settings and commercial tool documentation are time-sensitive, fetched and checked on 2026-10-15.
+
+Low-confidence areas:
+
+None newly recorded. Inherited glossary qualifications remain in the verification record.
+
+## software-engineering: Version Control & CI/CD
+
+[Independent verification record](../content/software-engineering/04-git-cicd/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- SHA-1 blob examples now state the repository format; content-address IDs differ in SHA-256 repositories.
+- Certificate Transparency proofs are described relative to observed log states; inconsistent split views need cross-view comparison.
+- CI server aliases no longer open a pipeline definition; tox no longer promises a newly created environment on every invocation.
+- Merge queue checks no longer promise absence of defects; version-sort configuration no longer claims complete SemVer ordering.
+- Packfile deltas can use other versions, not necessarily older ones; merge revert chooses the appropriate mainline parent.
+- Flag, artefact and recovery examples no longer promise unchanged behaviour, fixed seconds, a single configuration per commit, or immutable SHA-shaped image tags.
+- Actual renderer checks corrected residual weak-CAS spurious failure, arithmetic precedence, abstraction escape-hatch, message-schema, user-authentication and payment/test-sandbox senses without editing foreign owners.
+
+Remaining gaps:
+
+- Hosted GitHub Actions was not dispatched: the Python CI YAML is explicitly a configuration template needing a repository, dependencies and hosted services. Local parse/semantic checks do not establish a hosted run.
+- No external push, CI dispatch or deployment was performed. All Git mutations and file-path pushes ran in throwaway verifier repositories/remotes with repository-scoped configuration; the real app Git state and global configuration were untouched.
+- Real systems can differ from illustrative sharding, canary and merge-queue models: assumptions are stated; no measured runtime, billing, statistical detection or rollback latency guarantee is claimed.
 
 Low-confidence areas:
 

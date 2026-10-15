@@ -1,0 +1,122 @@
+[
+  {
+    "id": "git-object-model-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A colleague ran `git reset --hard HEAD~3` on their local feature branch an hour ago and now wants the three commits back. They never pushed them. What should they do?",
+    "options": [
+      {
+        "text": "Inspect git reflog and create git branch rescue <old-tip> while that commit is still available",
+        "explanation": "A rescue branch preserves the recovered commit without overwriting current working files. Reflogs and objects must still be retained."
+      },
+      {
+        "text": "Nothing can be done; `--hard` deletes the commits",
+        "explanation": "`reset` only moves the branch ref and rewrites the working tree. The commit objects are untouched and are still referenced by the reflog."
+      },
+      {
+        "text": "Run `git fetch` to download them again from the remote",
+        "explanation": "They were never pushed, so the remote has never seen them. Fetching cannot return objects that only existed locally."
+      },
+      {
+        "text": "Run `git gc` to rebuild the missing objects",
+        "explanation": "This is backwards. `gc` is what eventually *deletes* unreachable objects; it never recreates anything."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `git log -g --format='%h %gs'` (a compact reflog) shows something like:\n\n```\n1a2b3c4 reset: moving to HEAD~3\n9f8e7d6 commit: Add retries\n```\n\n2. `9f8e7d6` is the old tip. Restore it:\n\n```\ngit branch rescue 9f8e7d6\n# inspect before switching branches\n```\n\n3. Why it works: the objects were never deleted, and reflog entries keep them reachable. Unreachable reflog entries expire after 30 days by default, but configuration and explicit expiry can shorten retention; recover promptly.",
+    "link": {
+      "title": "git-gc documentation",
+      "url": "https://git-scm.com/docs/git-gc"
+    }
+  },
+  {
+    "id": "git-object-model-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A developer commits `.env` containing a live API key, then deletes it in the next commit and pushes both. Is the key safe now?",
+    "options": [
+      {
+        "text": "Yes; the file is gone from the current tree, so clones won't contain it",
+        "explanation": "A normal full clone includes the relevant reachable history. Shallow or filtered clones may omit objects, but deletion from the current tree does not revoke the exposed credential."
+      },
+      {
+        "text": "Yes, as long as `.env` is added to `.gitignore` afterwards",
+        "explanation": "`.gitignore` only stops untracked files being added in future. It has no effect on content already committed."
+      },
+      {
+        "text": "No; the key's blob is still reachable through the first commit. Rotate the key immediately, then rewrite history if needed",
+        "explanation": "Correct. Treat the secret as leaked the moment it is pushed. Rewriting history (for example with `git filter-repo`) helps hygiene, but forks and existing clones may already have it."
+      },
+      {
+        "text": "No, but running `git gc` on the server will remove it",
+        "explanation": "`gc` removes only *unreachable* objects. That blob is reachable from a commit on the branch, so `gc` keeps it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Commit A: tree contains `.env -> blob K` (the key).\n2. Commit B: tree has no `.env`, but B's parent is A.\n3. In a normal full clone, the reachable chain includes: B -> A -> A's tree -> blob K.\n4. `git show A:.env` prints the key for anyone with a clone.\n5. Correct response: revoke and rotate the key first (that actually closes the hole), then optionally rewrite history and force-push, knowing copies may already exist.",
+    "link": {
+      "title": "Git Internals: Git Objects — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-Objects"
+    }
+  },
+  {
+    "id": "git-object-model-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A teammate says: \"Git stores snapshots, so a repo with 1,000 commits of a 1 MB file must use about 1 GB.\" After `git gc`, it uses about 3 MB. What explains this?",
+    "options": [
+      {
+        "text": "Git actually stores diffs between commits, not snapshots",
+        "explanation": "The *model* is snapshots: each commit's tree points at a complete blob. Deltas are a storage optimisation inside packfiles, independent of the model."
+      },
+      {
+        "text": "Packfiles store many objects as deltas against similar objects, and everything is zlib-compressed",
+        "explanation": "Correct. Logically each version is a full blob, but in a pack Git stores most of them as small deltas against a similar base, then compresses."
+      },
+      {
+        "text": "`git gc` deletes old versions of files that are more than 90 days old",
+        "explanation": "`gc` never deletes reachable objects. Every version is still retrievable with `git show <commit>:file`."
+      },
+      {
+        "text": "Identical blobs are deduplicated, so 1,000 versions collapse into one",
+        "explanation": "Deduplication only applies to byte-identical content. If the file changed in each commit, those are 1,000 different blobs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Logically there are 1,000 distinct blobs of about 1 MB each.\n2. Loose, each is stored zlib-compressed on its own; that can still be hundreds of MB.\n3. `git gc` packs them. The pack heuristic groups similar objects (same path, similar size) and stores most as a delta: \"take base X, copy bytes 0-500k, insert these 200 bytes, copy the rest\".\n4. If each commit changes a few lines, each delta is tiny, so the pack is a few MB.\n5. Binary files that change wholesale (compressed images, zips) delta badly. That is when Git repos genuinely balloon, and when Git LFS earns its keep.",
+    "link": {
+      "title": "Git Internals: Packfiles — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Packfiles"
+    }
+  },
+  {
+    "id": "git-object-model-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You check out a commit by hash, make two commits, then run `git switch main`. Git warns that you are leaving 2 commits behind. A month later you remember them, but `git reflog` was cleared by an aggressive `git gc --prune=now` after `git reflog expire --expire=now --all`. What is the state of those commits?",
+    "options": [
+      {
+        "text": "If no other retention root kept them and pruning removed the objects, they are unavailable locally; recovery needs another copy",
+        "explanation": "Correct under the stated absence of other retention roots. Expiring reflogs removes their protection and --prune=now eliminates the normal object-age threshold; the commands do not manufacture another copy."
+      },
+      {
+        "text": "They are safe; detached commits are automatically attached to `main`",
+        "explanation": "Git never moves a branch on your behalf when you leave detached HEAD. That is exactly why it prints the warning."
+      },
+      {
+        "text": "They are on the remote, because commits are pushed when you switch branches",
+        "explanation": "Switching branches is purely local. Nothing is pushed unless you run `git push`."
+      },
+      {
+        "text": "They are stored in `.git/ORIG_HEAD` permanently",
+        "explanation": "`ORIG_HEAD` is a single ref overwritten by operations like reset, merge and rebase; switching from detached HEAD does not set it, and it would not survive later operations anyway."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. While detached, HEAD held the raw hash of your new commits.\n2. `git switch main` pointed HEAD back at `main`. Now only the HEAD reflog mentioned them.\n3. `git reflog expire --expire=now --all` deleted those reflog entries.\n4. `git gc --prune=now` requested pruning of eligible unretained objects with no object-age threshold. If no other retention root protected these commits, their objects are removed.\n\nDefault reflog and object expiry thresholds are independent, not additive: after a reflog expires, the old objects can already be old enough to prune. No extra two-week recovery window is guaranteed. The lesson: before leaving detached HEAD with work you care about, run `git switch -c <name>`.",
+    "link": {
+      "title": "git-gc documentation",
+      "url": "https://git-scm.com/docs/git-gc"
+    }
+  }
+]

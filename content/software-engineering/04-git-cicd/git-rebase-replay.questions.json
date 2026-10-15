@@ -1,0 +1,122 @@
+[
+  {
+    "id": "git-merge-rebase-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "After `git rebase main`, your commit \"Add parser\" has a new hash, even though its diff and message are unchanged. Why?",
+    "options": [
+      {
+        "text": "Rebase always edits the commit message slightly",
+        "explanation": "A plain rebase keeps the message exactly. The hash changes for a structural reason, not a cosmetic one."
+      },
+      {
+        "text": "Only the author timestamp is updated",
+        "explanation": "Rebase preserves the author date by default. It updates the committer date, but even with identical dates the new parent alone would change the hash."
+      },
+      {
+        "text": "Git randomises hashes on every write to prevent collisions",
+        "explanation": "Git hashes are deterministic. The same bytes always give the same hash; that is the basis of content addressing."
+      },
+      {
+        "text": "The new commit has a different parent (and usually a different tree), and both are part of the hashed content",
+        "explanation": "Correct. The replayed commit sits on top of `main`'s tip, so its `parent` line differs, and its tree includes `main`'s newer files."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "A commit's content looks like:\n\n```\ntree   <root tree hash>\nparent <parent hash>\nauthor ...\ncommitter ...\n\nAdd parser\n```\n\n1. Before: `parent` = B (old base).\n2. After rebasing onto E: `parent` = E.\n3. The tree now also contains E's changes, so `tree` differs too.\n4. Different bytes -> different SHA-1 -> new commit C'.\n\nThe original C still exists; it is just no longer on the branch.",
+    "link": {
+      "title": "Git Branching: Rebasing — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Branching-Rebasing"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On `feat` you run `git rebase main`. It stops with a conflict in `cfg.py`, where `main` has `timeout = 45` and your `feat` commit has `timeout = 60`. You want to keep **your feat change**. Which command gives you that version of the file?",
+    "options": [
+      {
+        "text": "`git checkout --ours cfg.py`",
+        "explanation": "During a rebase, ours is the upstream plus already replayed commits; in this conflict it has 45."
+      },
+      {
+        "text": "`git merge --abort`",
+        "explanation": "You are in a rebase, not a merge. The command to abandon it is `git rebase --abort`, and it abandons the whole rebase rather than choosing a side."
+      },
+      {
+        "text": "`git rebase --skip`",
+        "explanation": "Skip drops your commit entirely, so you would end up with `main`'s 45 and lose the rest of that commit's changes."
+      },
+      {
+        "text": "`git checkout --theirs cfg.py`",
+        "explanation": "Correct. In a rebase, \"theirs\" is the commit being replayed, which is your `feat` commit (60)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A rebase checks out `main`'s tip, then applies your commits onto it.\n2. So HEAD during the conflict is `main` plus any commits already replayed: that is \"ours\".\n3. The commit being applied (from `feat`) is \"theirs\".\n4. `git checkout --theirs cfg.py` gives `timeout = 60`.\n5. Then `git add cfg.py` and `git rebase --continue`.\n\nTip: rather than trust memory, look at the marker labels: in a rebase the bottom section is labelled with the commit being applied, e.g. `>>>>>>> 1fe6be0 (feat 60)`.",
+    "link": {
+      "title": "git-rebase documentation",
+      "url": "https://git-scm.com/docs/git-rebase"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "`feat` has 3 commits and `main` has moved on by 2 commits since you branched. You run `git rebase main` on `feat`, then `git switch main && git merge feat`. No conflicts occur and no commit becomes empty. How many new commit objects were created in total? Assume a simple linear feature branch, no patch-equivalent commits already upstream, merge.ff=true, and no branch-specific merge options.",
+    "options": [
+      {
+        "text": "1",
+        "explanation": "That would be a single merge commit (or a squash). Here the rebase replays each commit individually."
+      },
+      {
+        "text": "4",
+        "explanation": "This assumes the final merge creates a merge commit. After the rebase, `main` is an ancestor of `feat`, so the merge is a fast-forward."
+      },
+      {
+        "text": "3",
+        "explanation": "Correct. The rebase creates 3 new commits (C', D', E'), and the merge then fast-forwards `main` to them without creating anything."
+      },
+      {
+        "text": "5",
+        "explanation": "`main`'s 2 commits already exist and are reused as the new base. Rebasing never copies the upstream's commits."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nbefore:      C--D--E      feat\n            /\n   A--M1--M2              main\n\nrebase:            C'-D'-E'  feat\n                  /\n   A--M1--M2              main\n```\n\n1. Rebase writes C', D', E': 3 commits.\n2. `main` (M2) is now an ancestor of `feat` (E'), so `git merge feat` fast-forwards.\n3. Total new commits: 3. With `--no-ff` it would be 4.",
+    "link": {
+      "title": "Git Branching: Rebasing — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Branching-Rebasing"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You branched `ui` off `api` (a colleague's branch) at commit X, the tip of `api`. You added 2 commits. Your colleague then amended X's contents into X' and force-pushed `api`. Which command moves **only your 2 commits** onto the new `api`?",
+    "options": [
+      {
+        "text": "`git rebase --onto api X`",
+        "explanation": "Correct. `--onto api` sets the new base; `X` (the old tip) is the upstream, so only commits after X (your two) are replayed."
+      },
+      {
+        "text": "`git merge api`",
+        "explanation": "A merge keeps old X in your history alongside X', so `ui` would carry both versions of the colleague's work."
+      },
+      {
+        "text": "`git rebase api`",
+        "explanation": "Commits on `ui` not on `api` include the old X as well as your two. Git would try to replay X on top of X', probably conflicting, since its content differs."
+      },
+      {
+        "text": "`git cherry-pick api`",
+        "explanation": "This would copy X' onto `ui`, adding the colleague's commit again rather than moving yours."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nbefore:  ...--X--U1--U2   ui\n          \\\n           X'             api\n```\n\n1. `git rebase --onto <newbase> <upstream>` replays `<upstream>..HEAD` onto `<newbase>`.\n2. `<upstream>` = old X, so `X..ui` = {U1, U2}.\n3. `<newbase>` = `api` (X').\n4. After:\n\n```\n ...--X'--U1'--U2'   ui\n```\n\nYou can find the old X with `git reflog` or git merge-base --fork-point api ui if the local api reflog retained X; for a fetched remote branch use the appropriate origin/api ref.",
+    "link": {
+      "title": "git-rebase documentation",
+      "url": "https://git-scm.com/docs/git-rebase"
+    }
+  }
+]

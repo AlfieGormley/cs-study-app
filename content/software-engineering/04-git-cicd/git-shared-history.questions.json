@@ -1,0 +1,100 @@
+[
+  {
+    "id": "git-merge-rebase-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Five developers commit to a shared `release-2.4` branch. One of them, wanting a tidier history, reorders and rewrites commits with git rebase -i over the last 20 commits of `release-2.4` and force-pushes. What is the most likely result?",
+    "options": [
+      {
+        "text": "Everyone else's next pull silently picks up the cleaner history",
+        "explanation": "Their local branches still contain the old commits. Git sees diverged histories, not an upgrade, so pulls produce conflicts or duplicate commits."
+      },
+      {
+        "text": "Nothing; force-push is rejected on any branch other than `main`",
+        "explanation": "Git itself does not protect any branch by name. Only server-side branch protection rules would stop it."
+      },
+      {
+        "text": "The other four now have commits that no longer exist upstream; their pulls diverge and changes may be duplicated or lost",
+        "explanation": "Correct. This breaks the golden rule of rebasing: never rewrite commits that others have based work on."
+      },
+      {
+        "text": "The rebased commits keep their original hashes, so nothing breaks",
+        "explanation": "Replaying onto changed parents or rewriting content changes hashes. A rebase that has nothing to change can instead change nothing."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Before: everyone has `release-2.4` at commit Z, built from commits ... X, Y, Z.\n2. The rebase writes new commits X', Y', Z' and force-pushes. The remote now has Z'.\n3. A colleague with local work W on top of Z runs `git pull`. Git sees `origin/release-2.4` (Z') and local (W on Z) have diverged from far back.\n4. A merge pulls in both X..Z and X'..Z': the same changes twice under different hashes. A rebase may conflict repeatedly.\n5. If someone then force-pushes their version, other people's work can vanish.\n\nRewrite only branches that are yours alone.",
+    "link": {
+      "title": "Git Branching: Rebasing — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Branching-Rebasing"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Your team uses GitHub's **Squash and merge** for every pull request. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Each pull request becomes exactly one commit on `main` with a single parent",
+        "explanation": "Correct. The combined diff of the branch is committed on top of `main`, so `main` stays linear."
+      },
+      {
+        "text": "The feature branch's original commits become ancestors of `main`",
+        "explanation": "The original branch commits are not made ancestors by a squash. Local branch deletion checks the configured upstream if present, otherwise HEAD; it does not always refuse."
+      },
+      {
+        "text": "Reverting an entire feature is a single `git revert <sha>`",
+        "explanation": "Correct. One commit per feature makes revert and cherry-pick simple, with no `-m` parent choice needed."
+      },
+      {
+        "text": "Continuing to commit on the same branch and opening a second PR can produce conflicts against your own earlier changes",
+        "explanation": "Correct. Git does not know the first squash commit contains your branch's commits, so the squash alone does not advance the merge base and the same changes are compared again."
+      },
+      {
+        "text": "Fine-grained commit messages from the branch are preserved as separate commits in `main`",
+        "explanation": "Incorrect. They are collapsed into one commit. GitHub can paste them into the squash commit's message, but they are no longer separate commits."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Locally a squash merge is:\n\n```\ngit merge --squash feat\ngit commit -m \"Feature X (#123)\"\n```\n\n1. `git cat-file -p HEAD` shows one `parent` line.\n2. `git merge-base main feat` does not advance merely because of the squash: the feature commits did not become ancestors of `main`. Other integrations can change the best common ancestor, so it need not always be the original fork point.\n3. Consequences: easy reverts and readable history, but delete the branch after merging and start the next piece of work from fresh `main`.",
+    "link": {
+      "title": "git-merge documentation",
+      "url": "https://git-scm.com/docs/git-merge"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You rebased your pushed branch `feat`. Meanwhile a colleague pushed a fix to `feat`. Your IDE runs `git fetch` in the background, then you run `git push --force-with-lease`. What happens? Assume force updates are permitted, the fetched tip has never been incorporated into this local branch, and nobody pushes again during the command.",
+    "options": [
+      {
+        "text": "The push succeeds and the colleague's commit is overwritten",
+        "explanation": "Correct. `--force-with-lease` compares the remote with your remote-tracking ref. After the fetch they match, even though you never looked at or incorporated the fix."
+      },
+      {
+        "text": "The push is rejected as stale, protecting the colleague's commit",
+        "explanation": "That is what happens *without* the background fetch. The fetch updated `origin/feat` to include their commit, so the lease check now passes."
+      },
+      {
+        "text": "Git merges the colleague's commit automatically before pushing",
+        "explanation": "`push` never merges. It either updates the remote ref or refuses."
+      },
+      {
+        "text": "The push fails because force-pushing is never allowed after a fetch",
+        "explanation": "Git has no such rule. A fetch merely updates your remote-tracking refs, which is what makes the lease pass."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. You fetched earlier: `origin/feat` = X.\n2. Colleague pushes Y on top of X. Remote `feat` = Y.\n3. Background fetch: `origin/feat` = Y.\n4. `--force-with-lease` asks the server \"is `feat` still Y?\" Yes, so it overwrites with your rebased tip. Y is no longer the remote branch tip; the object can still exist.\n5. Fix: `git push --force-with-lease --force-if-includes`. Git checks whether Y is reachable from an entry in the local branch's reflog used for the rewrite; it does not, so the push is rejected.\n\nIn a scratch repo you can reproduce this: plain `--force-with-lease` after the fetch succeeds with `(forced update)`; adding `--force-if-includes` makes it fail.",
+    "link": {
+      "title": "git-push documentation (force-with-lease)",
+      "url": "https://git-scm.com/docs/git-push"
+    }
+  }
+]

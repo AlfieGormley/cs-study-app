@@ -1,0 +1,62 @@
+[
+  {
+    "id": "git-cd-release-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You need to rename `orders.addr` to `orders.shipping_address` in a service deployed by rolling update to 20 instances, with no downtime and a defined rollback window before destructive schema contraction. What is the correct first step?",
+    "options": [
+      {
+        "text": "Add a nullable `shipping_address` column, leaving `addr` untouched",
+        "explanation": "Correct. Adding the compatible new column is the expand phase, leaving addr available to old code. Check database locking, constraints and application assumptions; additive syntax alone does not guarantee a zero-impact migration."
+      },
+      {
+        "text": "Deploy code that reads `shipping_address`, then add the column",
+        "explanation": "The new code would fail until the column exists. Schema expansion must come before any code that depends on it."
+      },
+      {
+        "text": "Drop `addr` and recreate the data from backups",
+        "explanation": "Destructive and needs downtime. Dropping comes last, once nothing uses the column."
+      },
+      {
+        "text": "`ALTER TABLE orders RENAME COLUMN addr TO shipping_address`, deployed together with the new code",
+        "explanation": "During the rollout the old instances still query `addr` and start failing. Rolling back the code would also fail, because `addr` no longer exists."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Add the nullable new column.\n2. Deploy dual writers that still read the old column, and wait until all old-only writers are gone.\n3. Backfill with concurrency-safe updates and verify consistency.\n4. Switch all readers while preserving dual writes during the rollback window.\n5. Stop old-column writes only when old readers cannot return.\n6. Drop the old column after all dependencies and the rollback window have gone.\n\nContracting the schema is not automatically reversible; define the oldest safe rollback version at each stage.",
+    "link": {
+      "title": "Parallel change (expand and contract) — martinfowler.com",
+      "url": "https://martinfowler.com/bliki/ParallelChange.html"
+    }
+  },
+  {
+    "id": "git-cd-release-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A team uses blue-green application deployment with a shared database. Release 8.0 on green includes a migration that drops the `legacy_tokens` table, which blue (7.9) still reads. Ten minutes after switching traffic to green, a critical bug appears. They switch the router back to blue. What happens?",
+    "options": [
+      {
+        "text": "Everything recovers; blue-green rollback is always instant and safe",
+        "explanation": "Switching back restores the old *code*, but both environments share the database, and the table blue needs has gone."
+      },
+      {
+        "text": "Blue starts failing wherever it reads `legacy_tokens`, because the shared database was changed irreversibly",
+        "explanation": "Correct. Switching traffic can restore old application code, but cannot restore a table removed from the shared database. The drop should have been a separate, later contract step."
+      },
+      {
+        "text": "The router refuses to switch because green is newer",
+        "explanation": "Routers have no notion of version order; switching back is exactly what blue-green is designed to allow."
+      },
+      {
+        "text": "Blue automatically recreates the table on startup",
+        "explanation": "Applications don't normally recreate dropped tables, and even if one did, the data would be lost."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In this scenario, blue and green are separate application environments sharing one database.\n2. Green's migration dropped `legacy_tokens`.\n3. Switch back: blue's code runs again and queries `legacy_tokens`, which fails.\n4. Recovery needs a compatible forward fix or a data-recovery plan, possibly a backup restore with data-loss and downtime implications. A router switch alone cannot restore the dropped table.\n5. Correct approach: release 8.0 stops using the table but doesn't drop it. Only after 8.0 is stable, and 7.9 can never come back, a later release drops it. Every release must be compatible with the previous version's schema needs.",
+    "link": {
+      "title": "Blue-green deployment — Martin Fowler",
+      "url": "https://martinfowler.com/bliki/BlueGreenDeployment.html"
+    }
+  }
+]

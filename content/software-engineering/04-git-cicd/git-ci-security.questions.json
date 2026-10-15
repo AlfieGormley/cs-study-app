@@ -1,0 +1,134 @@
+[
+  {
+    "id": "git-ci-pipelines-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You add dependency caching to a CI job. Which choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Key the cache on a hash of the lockfile, e.g. `hashFiles('**/package-lock.json')`",
+        "explanation": "Correct. When dependencies change, the lockfile changes, the key changes, and a fresh cache is built."
+      },
+      {
+        "text": "Use a constant key such as `deps` so the cache is always hit",
+        "explanation": "Incorrect. The cache never invalidates, so jobs keep restoring stale dependencies, or the cache is never updated because the key already exists."
+      },
+      {
+        "text": "Provide a `restore-keys` prefix fallback so a near-match is restored when the exact key misses",
+        "explanation": "Correct for reusable download caches when the installer still resolves and verifies required packages. Speedup depends on cache contents and workload."
+      },
+      {
+        "text": "Cache the directory containing your deployment credentials to save a login step",
+        "explanation": "Incorrect. GitHub warns that anyone who can open a PR can access cache contents. Never put secrets in cached paths."
+      },
+      {
+        "text": "Include the OS and interpreter version in the key",
+        "explanation": "Correct. Compiled packages for Linux and Python 3.12 can be wrong for macOS or Python 3.13."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "A sound cache key, with values filled in:\n\n```\nkey: deps-Linux-py3.13-<lockhash>\nrestore-keys: deps-Linux-py3.13-\n```\n\nIn the workflow, `Linux` comes from `${{ runner.os }}` and `<lockhash>` from `${{ hashFiles('**/uv.lock') }}`.\n\n1. Exact hit on a package download cache: restore it and still run the locked install/sync step. Downloaded packages are not an installed environment.\n2. Miss: the prefix restores the newest similar cache, the installer fetches only what changed, and a new cache is saved under the new key.\n3. Never cache secrets: caches are readable from PR workflows.",
+    "link": {
+      "title": "Dependency caching reference — GitHub Docs",
+      "url": "https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A maintainer proposes a `pull_request_target` workflow that checks out `github.event.pull_request.head.sha` and runs `make test` with a private registry token. What security problem does executing those tests with the token create? Current event policies or checkout safeguards may block this proposal before execution.",
+    "options": [
+      {
+        "text": "None; `pull_request_target` is designed for exactly this",
+        "explanation": "It is designed for trusted automation (labelling, commenting) that runs the base branch's code. Running the PR's code with its secrets is the documented insecure pattern."
+      },
+      {
+        "text": "The tests execute fork-controlled code in a context holding a private token; an attacker can attempt to exfiltrate it",
+        "explanation": "Correct. The attacker edits the Makefile or a test to send the token to their server. GitHub's docs give this exact workflow as an insecure example."
+      },
+      {
+        "text": "The workflow will fail because fork PRs never receive secrets",
+        "explanation": "Current safeguards may block the proposed checkout, but fork PRs never receive secrets is not a valid general rule for privileged base-repository workflows. The proposal must avoid executing untrusted code with credentials."
+      },
+      {
+        "text": "The checkout will use a stale commit",
+        "explanation": "`head.sha` is the PR's latest commit. Staleness isn't the issue; trust is."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Untrusted PR code includes tests, build scripts, dependencies and configuration, not just the workflow YAML.\n2. If it executes with a private registry token, it can attempt to read or send that token.\n3. A label or approval does not isolate untrusted execution or freeze a movable PR head. Use unprivileged isolated testing where possible.\n4. A privileged follow-up must treat artifacts and metadata from the untrusted run as untrusted input; it must not execute them or interpolate them unsafely into commands.\n5. If a privileged run is unavoidable, review the exact revision, bind approval to that revision and grant only the required scoped credentials. Current event and checkout safeguards can block the illustrated configuration; never disable them as a routine fix.",
+    "link": {
+      "title": "Securely using pull_request_target — GitHub Docs",
+      "url": "https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In March 2025, workflows using `tj-actions/changed-files@v45` began printing CI secrets into their logs, though nobody had changed those workflows. Which practice would have protected them?",
+    "options": [
+      {
+        "text": "Pinning the action to a reviewed, unaffected full-length commit SHA instead of a movable action-version tag",
+        "explanation": "Correct. The attackers retroactively moved version tags to a malicious commit. A full SHA is immutable: it names exact content, so a workflow pinned to a known-good SHA kept running that code."
+      },
+      {
+        "text": "Pinning to `@main` instead of `@v45`",
+        "explanation": "A branch is even more mutable than a tag; it would pick up any malicious commit pushed to it."
+      },
+      {
+        "text": "Using a 7-character short SHA",
+        "explanation": "GitHub requires the full-length SHA for pinning; short SHAs are not accepted for `uses:` and would also be easier to collide."
+      },
+      {
+        "text": "Setting `timeout-minutes`",
+        "explanation": "The malicious step finished quickly. Timeouts limit runaway jobs, not compromised code."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `uses: owner/action@v45` resolves the tag `v45` at run time to whatever commit it currently points at.\n2. The attacker gained access and repointed many tags to a malicious commit.\n3. Workflows resolving an affected tag during the compromise could run the malicious code.\n4. `uses: owner/action@<40-hex-SHA>` names one immutable commit; moving tags doesn't affect it, and swapping content would require a SHA-1 collision.\n5. A pin does not freeze unpinned dependencies downloaded by the action. Keep SHA pins current with a tool such as Dependabot, which proposes updates as reviewable PRs.",
+    "link": {
+      "title": "tj-actions/changed-files compromise — GitHub Advisory",
+      "url": "https://github.com/advisories/GHSA-mrrh-fwg8-r2c3"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Review this GitHub Actions snippet for a deploy job:\n\n```yaml\non:\n  push:\n    branches: [main]\nconcurrency:\n  group: deploy-prod\n  cancel-in-progress: true\npermissions: write-all\n```\n\nWhich concerns are valid? Select all that apply.",
+    "options": [
+      {
+        "text": "`permissions: write-all` gives every job far more token scope than a deploy usually needs",
+        "explanation": "Correct. Grant only what the job needs, e.g. `contents: read` plus `id-token: write` for OIDC to a cloud provider."
+      },
+      {
+        "text": "`cancel-in-progress: true` can cancel a deployment midway when a newer commit lands, potentially leaving production half-deployed",
+        "explanation": "Correct. Avoid cancelling a live deployment midway. cancel-in-progress:false preserves the active run but the default single pending slot still replaces older queued runs; configure queueing deliberately."
+      },
+      {
+        "text": "The concurrency group serializes matching workflow runs within this repository",
+        "explanation": "Correct for runs using that group in this repository. It is not a distributed deployment lock: another repository or a remote task left running after cancellation may still deploy."
+      },
+      {
+        "text": "Triggering on `push` to `main` means fork PRs can run this deploy with secrets",
+        "explanation": "Incorrect. `push` to `main` happens only when someone with write access merges or pushes; fork PR authors cannot trigger it directly."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Go line by line:\n\n1. `on: push: main`: runs after merges. It responds to updates of main; untrusted fork PRs do not directly create those updates. Repository access and the contents of accepted changes still need review.\n2. `concurrency: deploy-prod`: matching workflow runs are serialized within the repository; external deployment activity needs its own coordination.\n3. `cancel-in-progress: true`: commit 2 lands while commit 1 is halfway through a migration, so run 1 is cancelled. Risky for deploys; avoid cancelling active deployments and select the pending-run policy. As checked 2026-10-15, queue: max supports a bounded pending queue and cannot be combined with cancel-in-progress: true.\n4. `write-all`: if any step (or third-party action) is compromised, it can push code, create releases and modify packages. Use explicit, minimal permissions.",
+    "link": {
+      "title": "Secure use reference — GitHub Actions",
+      "url": "https://docs.github.com/en/actions/reference/security/secure-use"
+    }
+  }
+]

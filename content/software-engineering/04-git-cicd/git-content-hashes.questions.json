@@ -1,0 +1,62 @@
+[
+  {
+    "id": "git-object-model-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You run `git commit --amend -m \"Better message\"` on an attached branch, changing the message but no files. What happens to the original commit?",
+    "options": [
+      {
+        "text": "Its message field is edited in place, so the hash stays the same",
+        "explanation": "Objects are immutable. The message is part of the hashed content, so any edit would change the hash; Git never rewrites an object in place."
+      },
+      {
+        "text": "It is deleted immediately from `.git/objects`",
+        "explanation": "Git does not delete objects during normal commands. The old commit remains, reachable from the reflog, until git gc eventually prunes it."
+      },
+      {
+        "text": "A new commit with a new hash is created, the branch moves to it, and the old commit still exists in the store",
+        "explanation": "Correct. Amend builds a replacement commit and moves the branch. The old object remains and may also be retained by other refs or reflogs."
+      },
+      {
+        "text": "It becomes the parent of the amended commit",
+        "explanation": "Amend replaces rather than extends: the new commit takes the *old commit's* parents, so the original is not in its ancestry."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Before: `main -> 375494` (message \"copy\").\n2. Amend writes a new commit: same tree, same parent, message \"Better message\". Its hash, say `a08133`, differs because the message is hashed.\n3. Git updates `refs/heads/main` to `a08133`.\n4. `git cat-file -t 375494` still prints `commit`.\n5. `git reflog` shows `HEAD@{1}: commit: copy`, so you can get it back with `git branch old 375494`.\n\nThis is also why amending a commit you have already pushed forces everyone else to reconcile.",
+    "link": {
+      "title": "Git Internals: Git Objects — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-Objects"
+    }
+  },
+  {
+    "id": "git-object-model-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this Python print?\n\n```python\nimport hashlib\ndef h(kind, body):\n    # Include the header and NUL byte.\n    hd = f\"{kind} {len(body)}\\0\"\n    return hashlib.sha1(\n        hd.encode() + body).hexdigest()\n\na = h(\"blob\", b\"hello\\n\")\nb = h(\"blob\", b\"hello\\n\")\nc = h(\"blob\", b\"hello\")\n# Newline changes the hashed bytes.\nprint(a == b, a == c)\n```",
+    "options": [
+      {
+        "text": "`True True`",
+        "explanation": "The third body has no trailing newline: 5 bytes instead of 6. Both the header (`blob 5` vs `blob 6`) and the content differ, so the hash differs."
+      },
+      {
+        "text": "`False False`",
+        "explanation": "SHA-1 is deterministic. Identical input always produces an identical hash, which is the whole basis of content addressing."
+      },
+      {
+        "text": "`False True`",
+        "explanation": "This would require identical inputs to hash differently and different inputs to collide, the opposite of how a hash function behaves."
+      },
+      {
+        "text": "`True False`",
+        "explanation": "Correct. `a` and `b` hash identical bytes. `c` differs by one byte, so it gets a completely different hash."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `a` hashes `blob 6\\0hello\\n` -> `ce013625...` (the same as `git hash-object` on a file containing `hello` plus newline).\n2. `b` hashes exactly the same bytes, so `a == b` is `True`.\n3. `c` hashes `blob 5\\0hello`: different length in the header and different content, so `a == c` is `False`.\n\nDifferent stored bytes normally produce different blobs. Configured clean filters and line-ending normalization can map different working-tree bytes to the same stored content.",
+    "link": {
+      "title": "Git Internals: Git Objects — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Internals-Git-Objects"
+    }
+  }
+]

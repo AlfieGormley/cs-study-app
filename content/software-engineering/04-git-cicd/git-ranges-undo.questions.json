@@ -1,0 +1,131 @@
+[
+  {
+    "id": "git-merge-rebase-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "History looks like this:\n\n```\n          C---D   feat\n         /\n A---B---E        main\n```\n\nWhat does `git log --oneline feat..main` list?",
+    "options": [
+      {
+        "text": "C and D",
+        "explanation": "That is `main..feat`: commits on `feat` not on `main`. The order of the two names matters."
+      },
+      {
+        "text": "E only",
+        "explanation": "Correct. `X..Y` means reachable from Y but not from X. From `main` you reach E, B, A; from `feat` you reach D, C, B, A. Only E is left."
+      },
+      {
+        "text": "C, D and E",
+        "explanation": "That is the symmetric difference, `feat...main` with three dots."
+      },
+      {
+        "text": "A and B",
+        "explanation": "A and B are reachable from both branches, so any range between them excludes them."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Treat ranges as set subtraction:\n\n```formula\nR_main = {E, B, A}\nR_feat = {D, C, B, A}\nR_main − R_feat = {E}\nwhere\nR_main: the set of commits reachable from main by following parent pointers back from its tip\nR_feat: the set of commits reachable from feat in the same way\nA, B, C, D, E: the commits in the history diagram\n{ }: a set: a collection where order does not matter and nothing appears twice\n−: set difference: everything in the left set that is not also in the right set\nIn words: feat..main lists the commits you can reach from main but not from feat, which is just E.\n```\n\nUseful idioms:\n- `git log origin/main..main`: what I have not pushed.\n- `git log main..origin/main`: what I have not pulled.\n- `git log main...feat`: what differs on either side.",
+    "link": {
+      "title": "gitrevisions: specifying ranges",
+      "url": "https://git-scm.com/docs/gitrevisions"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Feature branch `pay` was merged into `main` with a merge commit M. It broke production, so you ran `git revert -m 1 M`. The team fixes the bug with one new commit on `pay` and merges `pay` into `main` again. The new commit adds a separate file, so this merge is clean. What does main now contain?",
+    "options": [
+      {
+        "text": "All of `pay`'s original work plus the fix, as intended",
+        "explanation": "This is the common expectation, but the original `pay` commits are already ancestors of `main`. Git considers them merged, and the revert undoing them still stands."
+      },
+      {
+        "text": "Only the new fix commit's changes; the original feature stays reverted",
+        "explanation": "Correct. The second merge's base is the old `pay` tip, so only the new commit is merged. To restore the feature, revert the revert commit."
+      },
+      {
+        "text": "A conflict on every file the feature touched",
+        "explanation": "Conflicts depend on the edits; a fix modifying a file deleted by the revert may conflict. The question explicitly makes the new file independent."
+      },
+      {
+        "text": "The merge is refused because M was reverted",
+        "explanation": "Git does not track reverts specially. A revert is just an ordinary commit applying the inverse diff."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. After M, `pay`'s commits (P1, P2) are ancestors of `main`.\n2. `git revert -m 1 M` adds R, which undoes P1 and P2's changes relative to the first parent.\n3. Add fix F on `pay` and merge again. The merge base is P2 (already in `main`).\n4. Three-way merge: base P2, ours (`main` with R), theirs (F). Here F adds an independent file, so that addition merges cleanly; edits to reverted feature files could instead conflict.\n5. Result: feature still missing. Fix: `git revert R` (revert the revert), then merge.\n\nTry it in a scratch repo: after the re-merge only the fix's file appears; reverting the revert brings back the original feature.",
+    "link": {
+      "title": "git-revert documentation",
+      "url": "https://git-scm.com/docs/git-revert"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Since you branched `feat`, someone added `billing.py` on `main`. You compare branches with `git diff main..feat` and it shows `billing.py` being **deleted**, which your branch never did. What is going on?",
+    "options": [
+      {
+        "text": "Your branch really deletes it; Git computes diffs from the commits' changes",
+        "explanation": "Git diffs snapshots, not changes. Your branch simply never had the file because it forked before `billing.py` existed."
+      },
+      {
+        "text": "You need `git diff feat..main` instead, which shows only your changes",
+        "explanation": "Swapping the order just inverts the diff: it would show `billing.py` as added and all your changes reversed."
+      },
+      {
+        "text": "Git has a bug with files added on another branch",
+        "explanation": "This is defined behaviour. The surprise comes from `diff` treating dots differently from `log`."
+      },
+      {
+        "text": "Two dots in `git diff` compares the two tips directly; use `git diff main...feat` to compare against the merge base",
+        "explanation": "Correct. `main..feat` in `diff` means `main` tip vs `feat` tip, so anything new on `main` looks like a deletion. Three dots diffs merge base vs `feat`, which is what PR views show."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `git diff A..B` is the same as `git diff A B`: snapshot A vs snapshot B.\n2. `main`'s snapshot has `billing.py`; `feat`'s does not, so the diff shows a deletion.\n3. `git diff A...B` means `git diff $(git merge-base A B) B`: what differs between a merge base and B; later integrations can move that base.\n4. Try it: add a file on `main` only, and the two-dot diff shows it deleted while the three-dot diff does not mention it.\n\nNote that this is the reverse of how dots feel in `git log`, where `A..B` is the everyday one.",
+    "link": {
+      "title": "gitrevisions: specifying ranges",
+      "url": "https://git-scm.com/docs/gitrevisions"
+    }
+  },
+  {
+    "id": "git-merge-rebase-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A team debates \"merge commits\" versus \"rebase then fast-forward\" for integrating feature branches into `main`. Which claims are accurate? Select all that apply.",
+    "options": [
+      {
+        "text": "With merge commits, git log --first-parent main skips merged branch internals while retaining direct mainline commits",
+        "explanation": "Correct. The first parent of each merge is the previous `main` tip, so following only first parents skips the branch internals."
+      },
+      {
+        "text": "Rebasing means each conflict is resolved commit by commit, so a long branch can mean resolving similar conflicts repeatedly",
+        "explanation": "Correct. Each replayed commit can hit the conflict again; `rerere` can reduce the pain by reusing recorded resolutions."
+      },
+      {
+        "text": "Rebasing preserves the original commit hashes, which keeps CI results valid",
+        "explanation": "Incorrect. Rebasing creates new commits with new hashes, and the code each one contains differs (new base), so earlier CI results do not strictly apply."
+      },
+      {
+        "text": "Linear history avoids unintegrated side-branch candidates when every integrated commit is testable; bisect also works with merge history",
+        "explanation": "Correct. A clean single-parent integration history makes each candidate a meaningful integrated change. Roots have no parent, and bisect is not restricted to linear histories; skips and unbuildable commits can complicate either shape."
+      },
+      {
+        "text": "A merge commit preserves the existing parent relationships; this records ancestry, not a trustworthy wall-clock chronology",
+        "explanation": "Correct. Commits carry editable author/committer timestamps, and independent branches have no intrinsic total time order. A merge preserves their existing ancestry."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Weigh each claim against the mechanics:\n\n1. First-parent: in a merge commit M made by merging `feat` into `main`, parent 1 is the old `main` tip. So --first-parent shows merges and any direct mainline commits, omitting side-branch internals. True.\n2. Rebase replays N commits, each a separate three-way merge, so conflicts can recur. True.\n3. Replaying commits onto changed parents rewrites hashes; a rebase with nothing to replay need not. False.\n4. Bisect on a straight line halves a simple list. True.\n5. Merges preserve real ancestry. True.\n\nOn claim 4, the cost of bisecting a straight line of commits is easy to estimate:\n\n```formula\ns ≈ ⌈log_2(n)⌉\ns ≈ ⌈log_2(500)⌉ = ⌈8.97⌉ = 9\nwhere\ns: roughly how many commits you test before git bisect names the first bad one\nn: the number of candidate commits between the known-good and known-bad commits\nlog_2: the base-2 logarithm: how many halvings take a number down to 1\n⌈ ⌉: the ceiling: round up to a whole number\n≈: approximately equal to\nIn words: each test halves the suspects, so 500 commits need only about 9 tests.\n```\n\nNeither option is \"right\"; many teams rebase private branches and integrate via merge or squash.",
+    "link": {
+      "title": "Git Branching: Rebasing — Pro Git",
+      "url": "https://git-scm.com/book/en/v2/Git-Branching-Rebasing"
+    }
+  }
+]

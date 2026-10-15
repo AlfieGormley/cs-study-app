@@ -1,0 +1,92 @@
+[
+  {
+    "id": "git-ci-pipelines-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "PR A renames `get_user()` to `fetch_user()` everywhere. PR B, opened the same morning, adds a new call to `get_user()`. Both PRs pass CI against `main` and are merged within minutes of each other. `main` is now red. Assuming the combined tests detect the incompatibility, which mechanism checks the integrated candidate before merging?",
+    "options": [
+      {
+        "text": "Running CI twice on each PR",
+        "explanation": "Both runs would test each PR against the same old `main`. The problem is the combination, which neither PR's CI ever saw."
+      },
+      {
+        "text": "Squash merging",
+        "explanation": "Squashing changes commit shape, not what gets tested. The combined code would still be untested."
+      },
+      {
+        "text": "Code owners for the user module",
+        "explanation": "A reviewer might notice, but it relies on humans spotting a cross-PR interaction. It isn't a systematic guarantee."
+      },
+      {
+        "text": "A merge queue that tests each PR on top of the latest `main` plus the PRs ahead of it before merging",
+        "explanation": "Correct. B would be tested on `main + A + B`, fail, and be removed from the queue without breaking `main`."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```\nmain = M\nA tested on M      -> green\nB tested on M      -> green\nmerge A: M+A\nmerge B: M+A+B     -> never tested, red\n```\n\nWith a merge queue:\n\n```\nqueue: A, B\ntest M+A           -> green, merge A\ntest M+A+B         -> red, eject B\n```\n\n\"Require branches to be up to date\" also prevents it, but it forces every PR to update by merge or rebase and rerun CI after every merge, which doesn't scale.",
+    "link": {
+      "title": "Managing a merge queue — GitHub Docs",
+      "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your pipeline builds a Docker image for staging, runs tests there, then **rebuilds** from the same commit for production. A production incident is traced to a different version of a transitive dependency than staging had. What principle was violated?",
+    "options": [
+      {
+        "text": "Fail fast",
+        "explanation": "Fail fast concerns ordering checks by speed. The issue here is that production ran a different artefact from the one tested."
+      },
+      {
+        "text": "The test pyramid",
+        "explanation": "The pyramid is about the mix of test types. Even perfect tests are irrelevant if production runs something else."
+      },
+      {
+        "text": "Build once, deploy many: build one immutable artefact per intended build configuration of a commit and promote that exact artefact through every environment",
+        "explanation": "Correct. Rebuilding re-resolves dependencies and base images, so the production image can differ from the tested one."
+      },
+      {
+        "text": "Least privilege",
+        "explanation": "That principle concerns permissions, not what is deployed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Build 1 (staging), Monday: resolves `libfoo` 2.3.1, tests pass.\n2. Build 2 (production), Thursday: `libfoo` 2.3.2 was published Wednesday and an unpinned range picked it up.\n3. Same commit, different image.\n4. Fix: build `app:sha-abc123` once, push it to a registry, and deploy that digest to staging and then production. Also pin dependencies with a lockfile and pin base images by digest.",
+    "link": {
+      "title": "Continuous Integration — Martin Fowler",
+      "url": "https://martinfowler.com/articles/continuousIntegration.html"
+    }
+  },
+  {
+    "id": "git-ci-pipelines-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your CI pipeline takes 30 minutes. To keep `main` green you enable \"require branches to be up to date before merging\", so each PR must be re-tested on the latest `main` before it can merge. The team opens about 40 PRs per 8-hour working day. What happens? Use a simplified model: independent PRs start from the same old base, every merge invalidates other results, each retest takes 30 minutes, no batching and no failures.",
+    "options": [
+      {
+        "text": "Nothing changes; up-to-date checks are free",
+        "explanation": "Each merge invalidates every other PR's result, forcing another 30-minute run. The cost is real."
+      },
+      {
+        "text": "Git refuses the merges because the branches are out of date",
+        "explanation": "Git would merge fine. The platform rule blocks merging until the branch is updated and re-tested."
+      },
+      {
+        "text": "Throughput doubles because PRs are smaller",
+        "explanation": "The setting doesn't change PR size; it adds a re-test after every merge."
+      },
+      {
+        "text": "In this model throughput is at most about 16 merges per working day; a speculative merge queue can improve it if enough runners are available",
+        "explanation": "Correct. An eight-hour day contains sixteen half-hour test slots, against 40 arriving. A merge queue speculatively tests `main+A`, `main+A+B` and so on in parallel."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. With the rule on, after any merge every other PR is out of date and must update and rerun CI (30 min) before it can merge.\n2. So effectively one merge per CI duration:\n\n```formula\nM = T_day / t_CI\nM = 480 min / 30 min = 16\nM_q = k × M = 5 × 16 = 80\nwhere\nM: the most merges per day when each merge must wait for a fresh CI run\nT_day: the working day, in minutes (min); 8 hours = 480 min\nt_CI: the duration of one CI run, in minutes (min)\nM_q: an upper bound on merges per day for a merge queue testing k candidates at once\nk: the number of speculative builds the queue runs in parallel\nmin: minutes\nIn words: one CI run at a time gives one merge per run; k runs in parallel can give up to k times as many.\n```\n\n3. Per day: 16. Demand: 40. Backlog grows by about 24 PRs per day, and people race to rebase.\n4. A merge queue with, say, 5 parallel speculative builds can test `M+A`, `M+A+B`, ... `M+A+B+C+D+E` at once: up to 5 merges per 30 minutes, an illustrative upper bound of 80 per day if runners are available, queue overhead is negligible and failures are rare; this is not a product throughput guarantee.\n5. Cutting the pipeline to 10 minutes helps every option.",
+    "link": {
+      "title": "Managing a merge queue — GitHub Docs",
+      "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue"
+    }
+  }
+]

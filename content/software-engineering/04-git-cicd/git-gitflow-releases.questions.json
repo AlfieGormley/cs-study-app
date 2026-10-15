@@ -1,0 +1,92 @@
+[
+  {
+    "id": "git-workflows-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In GitFlow, production is on tag `v3.2.0` and `develop` has unreleased work. A critical bug is found in production. Where does the hotfix branch start, and where must it be merged? Assume main still points at that production release and no release branch is currently open.",
+    "options": [
+      {
+        "text": "From `develop`; merged into `main` only",
+        "explanation": "Branching from `develop` would drag unreleased features into the hotfix release. And merging only into `main` would leave `develop` without the fix."
+      },
+      {
+        "text": "From `main`; merged into `develop` only, which is released next sprint",
+        "explanation": "That defeats the purpose of a hotfix: production would wait for the next full release to get an urgent fix."
+      },
+      {
+        "text": "From `main` (the `v3.2.0` tag); merged into both `main` and `develop`",
+        "explanation": "Correct. The fix starts from exactly what is in production, is released as `v3.2.1` from `main`, and is merged back into `develop` so the next release includes it."
+      },
+      {
+        "text": "From a `feature/*` branch; merged into `release/*`",
+        "explanation": "Feature branches hold new work, and release branches stabilise upcoming releases. Neither represents what is running in production."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\ngit switch -c hotfix/3.2.1 v3.2.0\n# fix and commit\ngit switch main\ngit merge --no-ff hotfix/3.2.1\ngit tag -a v3.2.1 -m \"3.2.1\"\ngit switch develop\ngit merge --no-ff hotfix/3.2.1\n```\n\nIf a `release/*` branch is currently open, the model says to merge the hotfix into that instead of `develop`, since the release branch will itself be merged back into `develop`.",
+    "link": {
+      "title": "A successful Git branching model — Vincent Driessen",
+      "url": "https://nvie.com/posts/a-successful-git-branching-model/"
+    }
+  },
+  {
+    "id": "git-workflows-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A GitFlow team shipped hotfix `v4.0.1` from `main` to stop a data-corruption bug. Six weeks later `v4.1.0` is released from a `release/4.1` branch cut from `develop`, and the corruption returns. What is the most likely cause?",
+    "options": [
+      {
+        "text": "Tags in Git are mutable, so `v4.0.1` was overwritten",
+        "explanation": "Tags can be moved with force, but that would not reintroduce a bug in a release built from `develop`."
+      },
+      {
+        "text": "The hotfix was merged into `main` but never into `develop`, so `release/4.1` (cut from `develop`) never contained the fix",
+        "explanation": "Correct. This is GitFlow's characteristic failure: two integration branches, and a hotfix that only reached one of them."
+      },
+      {
+        "text": "Merging `release/4.1` into `main` deleted the hotfix commits",
+        "explanation": "Merge preserves commit ancestry. It does not automatically discard a change made only on main: reintroducing the bug requires another change, a wrongly resolved merge conflict or releasing the unfixed branch directly."
+      },
+      {
+        "text": "The release branch was rebased, changing the fix's hash",
+        "explanation": "A changed hash does not remove a change. The fix was never there in the first place."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `hotfix/4.0.1` branched from `main` and merged into `main` only.\n2. `develop` continued without the fix.\n3. `release/4.1` was cut from `develop`, so it also lacks the fix.\n4. When `release/4.1` is merged into `main`, a badly resolved merge conflict or a later semantic change can undo the fix. Merely leaving an unchanged old line on develop does not by itself make a normal merge overwrite a main-only fix. Releasing directly from the unfixed release branch is another failure path.\n5. Prevention: automate the back-merge (for example a CI check that the hotfix commit, the second parent of the tagged merge on `main`, is in `develop`: `git merge-base --is-ancestor 'v4.0.1^2' develop` exits 0 only if it is), or adopt a trunk-first fixing model.",
+    "link": {
+      "title": "A successful Git branching model — Vincent Driessen",
+      "url": "https://nvie.com/posts/a-successful-git-branching-model/"
+    }
+  },
+  {
+    "id": "git-workflows-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You lead 40 engineers on a SaaS web product deployed to one production environment several times a day. A new manager proposes adopting full GitFlow \"for safety\". What is the strongest argument against it here?",
+    "options": [
+      {
+        "text": "GitFlow is built for discrete, versioned releases and multiple supported versions; with one version deployed continuously it adds a second integration branch and slower, larger integrations without a matching benefit",
+        "explanation": "Correct. Even GitFlow's author recommends simpler flows such as GitHub flow for continuously delivered web apps."
+      },
+      {
+        "text": "GitFlow requires a monorepo",
+        "explanation": "GitFlow is independent of repository layout; it can be used in any repository."
+      },
+      {
+        "text": "GitFlow cannot be used with pull requests",
+        "explanation": "GitFlow works with pull requests; feature branches can be reviewed via PRs into `develop`."
+      },
+      {
+        "text": "Git's merge algorithm performs badly on more than two branches",
+        "explanation": "Git handles thousands of branches easily; the cost of GitFlow is human and process overhead, not tooling performance."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Weigh what GitFlow buys against the context:\n\n| GitFlow offers | Needed here? |\n|---|---|\n| Release branches | No, one version |\n| `main` = last release | No, `main` deploys |\n| Hotfix lane | Trunk is already prod |\n\nCosts: two-way merges, longer branches, a `develop` that differs from production. A better fit is trunk-based development or GitHub flow with short-lived branches, CI and feature flags. \"Safety\" comes from automated tests, small changes and fast rollback, not extra branches.",
+    "link": {
+      "title": "A successful Git branching model — Vincent Driessen",
+      "url": "https://nvie.com/posts/a-successful-git-branching-model/"
+    }
+  }
+]

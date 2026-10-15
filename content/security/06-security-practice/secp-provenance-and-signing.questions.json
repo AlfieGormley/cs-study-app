@@ -1,0 +1,95 @@
+[
+  {
+    "id": "secp-supply-chain-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A company reaches **SLSA Build Level 3** for all its artefacts, with provenance verified at deploy time. Which of these attacks does that substantially mitigate? Select all that apply.",
+    "options": [
+      {
+        "text": "A SUNSPOT-style implant on a long-lived build server that modifies source files during compilation",
+        "explanation": "Correct as mitigation: isolation between runs and protected provenance generation reduce this attack surface. The builder/platform is still a trusted component; the level does not prove it cannot be compromised."
+      },
+      {
+        "text": "An attacker uploading a hand-built binary to the artefact registry using a stolen publish token",
+        "explanation": "Correct. The binary would lack valid provenance from the trusted builder, so verification at deploy time rejects it."
+      },
+      {
+        "text": "A trusted maintainer committing obfuscated malicious code to the main branch",
+        "explanation": "Incorrect. SLSA Build provenance will faithfully attest that the artefact was built from that commit. Stopping this needs source-side controls: review, two-person approval, the Source track."
+      },
+      {
+        "text": "A genuine bug like Log4Shell in a correctly built dependency",
+        "explanation": "Incorrect. Provenance proves where something came from, not that it is bug-free. SCA and SBOMs address known vulnerabilities."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. SLSA Build track protects the path from source to artefact.\n2. L2: signed provenance from a hosted builder, so artefacts built elsewhere (B) fail verification.\n3. L3: hardened, isolated builds, so tampering *during* the build (A) is much harder.\n4. Anything that is already wrong in the source (C) or is an honest bug (D) is built and attested correctly; the provenance is true, the code is still bad.\n5. Hence defence in depth: Build track + source review + SCA.",
+    "link": {
+      "title": "SLSA v1.2 specification",
+      "url": "https://slsa.dev/spec/v1.2/"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Your deploy step verifies a Sigstore signature on each container image: it checks the signature is valid and logged in the transparency log. It does **not** check the signing identity. What attack still works?",
+    "options": [
+      {
+        "text": "None; a valid, logged signature proves the image is authentic",
+        "explanation": "Validity only proves *someone* signed it. Sigstore issues certificates to any OIDC identity, including an attacker's own GitHub account."
+      },
+      {
+        "text": "An attacker can forge signatures because Sigstore keys are short-lived",
+        "explanation": "Short-lived certificates reduce long-lived credential exposure; ephemeral signing keys must still be generated and protected correctly. Short certificate lifetime does not itself enable signature forgery."
+      },
+      {
+        "text": "The transparency log can be edited to remove evidence",
+        "explanation": "The log is append-only and Merkle-tree based, so tampering is detectable. That is not the gap here."
+      },
+      {
+        "text": "An attacker signs a malicious image with their own identity (for example a workflow in their own repository) and pushes it; it passes verification",
+        "explanation": "Correct. Verification must pin the expected identity and issuer, e.g. 'signed by the release workflow in github.com/acme/api on the main branch'. Otherwise you have checked a signature, not a signer."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Sigstore 'keyless' signing: the signer authenticates with OIDC, gets a short-lived certificate naming their identity, signs, and the event is logged.\n2. Anyone with an OIDC identity can do this, including the attacker.\n3. So 'is the signature valid?' is necessary but not sufficient.\n4. The policy must also say *who*: require the certificate identity `https://github.com/acme/api/.github/workflows/release.yml@refs/heads/main`, and require GitHub's OIDC issuer.\n5. Echo of SolarWinds: a signature tells you who; you must decide whom you trust.",
+    "link": {
+      "title": "Sigstore documentation",
+      "url": "https://docs.sigstore.dev/"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A security lead proposes: 'Pin every dependency to its current version permanently, so no malicious update can ever reach us.' What is the strongest objection?",
+    "options": [
+      {
+        "text": "Pinning is impossible in Python",
+        "explanation": "Lockfiles and `--require-hashes` make exact pinning routine in Python."
+      },
+      {
+        "text": "Pinning makes builds non-reproducible",
+        "explanation": "Exact pins and enforced hashes help repeat dependency selection. Complete build reproducibility also depends on platform, build inputs and toolchain; pinning is not inherently an obstacle to it."
+      },
+      {
+        "text": "Attackers can change the content of a pinned version on the registry",
+        "explanation": "Registry immutability rules vary. PyPI can add differently named distribution files to an existing version even though reusing an existing filename is restricted. Artifact hash pinning rejects unapproved files; plain version pinning is weaker."
+      },
+      {
+        "text": "Permanent pins freeze in every vulnerability disclosed later (a team pinned to Log4j 2.14.1 stays exposed to Log4Shell), so pins must be paired with deliberate, frequent, reviewed updates",
+        "explanation": "Correct. Pinning trades one risk (malicious new releases) for another (known-vulnerable old releases). The usual answer is pins plus automated update PRs, SCA alerts, and perhaps a short cooling-off delay for brand-new versions."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Pins and hashes control which artifact is selected, but do not repair vulnerabilities later found in that artifact. Review and test updates using advisory context. A waiting period may help screen unexpected releases but should never become a blanket delay for urgent security fixes. Comparative rates of malicious updates and ordinary vulnerabilities are not quantified here.",
+    "link": {
+      "title": "pip secure installation and hash-checking limits",
+      "url": "https://pip.pypa.io/en/stable/topics/secure-installs/"
+    }
+  }
+]

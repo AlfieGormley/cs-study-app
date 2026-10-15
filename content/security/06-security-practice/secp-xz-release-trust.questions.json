@@ -1,0 +1,70 @@
+[
+  {
+    "id": "secp-supply-chain-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Andres Freund's report shows these timings for a failed SSH login to localhost on Debian unstable:\n\n```\nbefore:  real 0m0.299s\nafter:   real 0m0.807s\n```\n\nWhich option correctly compares the timings and explains how this unexpected anomaly led to investigation?",
+    "options": [
+      {
+        "text": "About 0.5 s (around 2.7×); an engineer investigated unexpected latency, CPU usage and Valgrind errors",
+        "explanation": "Correct: 0.508 seconds and about 2.70 times in Freund’s reported test. He investigated unexpected performance and Valgrind symptoms; this does not establish which other controls had been deployed."
+      },
+      {
+        "text": "About 5 s; SSH logins became unusable, so many users reported it",
+        "explanation": "The times are in seconds with three decimals: 0.299 s and 0.807 s, so the difference is about half a second, easy to overlook."
+      },
+      {
+        "text": "About 0.05 s; it was caught by an automated performance regression test",
+        "explanation": "The difference is ten times larger than this, and it was not caught by automation but by a person investigating."
+      },
+      {
+        "text": "There was no slowdown; it was found by SAST on the xz repository",
+        "explanation": "The report shows a slowdown investigated by Freund. The release-only build change and binary fixtures complicated review; this does not establish that every possible static analysis could never detect relevant malicious changes."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Subtract for the slowdown and divide for the ratio:\n\n```formula\nΔt = t_after − t_before\nΔt = 0.807 s − 0.299 s = 0.508 s\nr = t_after / t_before\nr = (0.807 s) / (0.299 s) ≈ 2.70\nwhere\nΔt: delta t, the extra time each failed login took, in seconds (s)\nt_after: the time with the backdoored liblzma, 0.807 s\nt_before: the time without it, 0.299 s\nr: how many times longer the login took; a ratio, so it has no unit\n≈: approximately equal to (rounded)\ns: seconds\nIn words: each failed SSH login took about half a second longer, roughly 2.7 times as long as before.\n```\n\nFreund investigated this alongside CPU/Valgrind symptoms and disclosed the backdoor on 29 March 2024. These are observations from his setup, not universal performance or attribution claims. The first affected release was in February, not a full two months before disclosure.",
+    "link": {
+      "title": "Andres Freund's xz-utils disclosure (oss-security)",
+      "url": "https://www.openwall.com/lists/oss-security/2024/03/29/4"
+    }
+  },
+  {
+    "id": "secp-supply-chain-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which features made the xz-utils backdoor hard to spot? Select all that apply.",
+    "options": [
+      {
+        "text": "The payload was stored in binary test files that reviewers would not read",
+        "explanation": "Correct. `bad-3-corrupt_lzma2.xz` and `good-large_compressed.lzma` looked like normal corrupt/valid test inputs for a compression library."
+      },
+      {
+        "text": "The trigger (`build-to-host.m4`) existed only in the release tarballs, not in the git repository",
+        "explanation": "Correct for the disclosed trigger: the modified build-to-host.m4 was in the release tarballs and absent from git. Binary payload fixtures were present in git, so repository review still had relevant evidence to inspect."
+      },
+      {
+        "text": "It activated only in specific conditions, such as building a deb or rpm package on x86-64 Linux",
+        "explanation": "Correct. The activation logic targeted particular platform, packaging and environment conditions; simply having an affected version number did not imply identical exploitability on every build."
+      },
+      {
+        "text": "It was introduced by a stranger's one-off pull request on the day of the release",
+        "explanation": "Incorrect. It was introduced by 'Jia Tan', who had built trust over about two years with genuine patches and was a co-maintainer with release rights."
+      },
+      {
+        "text": "It exploited a memory-safety bug in OpenSSH",
+        "explanation": "Incorrect for this incident: the disclosed route was a deliberately modified liblzma reached through distribution library links, not exploitation of an OpenSSH memory-safety flaw. This makes no claim that OpenSSH has no other bugs."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Hiding the code: binary 'test' blobs (A).\n2. Hiding the trigger: tarball-only build script (B).\n3. Limiting exposure to analysis: narrow activation conditions, plus checks for debuggers and environment variables (C).\n4. The *social* layer: a trusted maintainer, not a drive-by contributor (so D is false).\n5. The path into sshd was a chain of linked libraries, not an OpenSSH vulnerability (so E is false).",
+    "link": {
+      "title": "Timeline of the xz open source attack — Russ Cox",
+      "url": "https://research.swtch.com/xz-timeline"
+    }
+  }
+]

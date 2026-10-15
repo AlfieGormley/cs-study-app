@@ -1,0 +1,62 @@
+[
+  {
+    "id": "secp-secrets-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An AWS role trusted by GitHub Actions OIDC has this schematic condition for repositories using legacy name-based subjects:\n\n```\n\"StringLike\": {\n  \"...:sub\": \"repo:acme/*\"\n}\n```\n\nThe role can deploy to production. Workflows run on pull requests. What is the main risk?",
+    "options": [
+      {
+        "text": "None; only members of the acme organisation can run workflows in acme repositories",
+        "explanation": "The legacy wildcard matches many repository/ref, pull-request and environment subjects. Jobs must still have token permission and satisfy event, approval and environment controls; outside PR authors are not automatically authorised."
+      },
+      {
+        "text": "The token will be rejected because `StringLike` cannot be used with `sub`",
+        "explanation": "`StringLike` using wildcards on `sub` is valid IAM syntax; that is precisely why it's dangerous when too broad."
+      },
+      {
+        "text": "The OIDC token lasts for years, so it can be replayed",
+        "explanation": "GitHub's OIDC tokens are short-lived (minutes), and the AWS credentials from STS are temporary too. Replay is not the main issue."
+      },
+      {
+        "text": "The wildcard admits token subjects from many acme repositories and contexts, so any such job that obtains an allowed OIDC token may reach the production role",
+        "explanation": "Correct. Restrict the audience claim and the actual subject format to intended repositories/refs or protected environments, and protect workflow/token permissions. A branch subject alone does not pin one workflow."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "In the illustrated legacy subject format, repo:acme/* matches many repository/ref, pull-request and environment subjects. The matching job must still be able to request an OIDC token and satisfy the rest of the role policy. Fork PRs are not automatically authorised. GitHub immutable subject formats can include owner/repository IDs, so check the format your repository uses rather than copying this schematic policy blindly.",
+    "link": {
+      "title": "Configuring OpenID Connect in AWS — GitHub Docs",
+      "url": "https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services"
+    }
+  },
+  {
+    "id": "secp-secrets-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A hypothetical team has leaked long-lived credentials through git, CI logs and chat. Which architectural change reduces reusable-secret handling and exposure duration across these channels, while still requiring leak prevention and detection?",
+    "options": [
+      {
+        "text": "Pre-commit secret scanning with gitleaks",
+        "explanation": "Static-secret scanning can detect recognised patterns before commit, but it is not guaranteed to catch every git leak and does not cover all other channels."
+      },
+      {
+        "text": "Replacing long-lived static credentials with short-lived, workload-issued ones (roles, OIDC, dynamic secrets), so leaked values expire quickly and humans rarely handle them",
+        "explanation": "Correct when expiry or revocation is enforced. Workload-issued short-lived values reduce manual handling and the reuse period. A compromised workload can still use credentials while valid, and access already gained may have lasting consequences."
+      },
+      {
+        "text": "Masking secrets in CI output",
+        "explanation": "Masking applies to supported log patterns and configured secrets. It does not cover all git or chat disclosures and may miss transformed values."
+      },
+      {
+        "text": "A policy document telling engineers not to share secrets",
+        "explanation": "A policy sets expectations but does not itself prevent accidental copying, constrain credential lifetime or replace technical controls."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Group the leaks by channel: git, CI logs and chat. Channel-specific controls each cover one group.\n2. Ask what these leaks have in common: a long-lived secret value that a human or a log could see.\n3. Remove that and you shrink every channel at once: workloads get credentials from the platform (IAM roles, OIDC, Vault leases), with lifetimes in minutes or hours.\n4. Then layer detection (pre-commit hooks, push protection, log redaction) to catch what remains.",
+    "link": {
+      "title": "OWASP Secrets Management Cheat Sheet",
+      "url": "https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html"
+    }
+  }
+]

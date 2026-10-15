@@ -1,0 +1,130 @@
+[
+  {
+    "id": "secp-secure-sdlc-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which problem is DAST much better placed to find than SAST?",
+    "options": [
+      {
+        "text": "A call to `pickle.loads` on a request body",
+        "explanation": "This is visible directly in the source, which is exactly what SAST (e.g. Bandit's B301 check) is good at."
+      },
+      {
+        "text": "A hard-coded password in a Python module",
+        "explanation": "A literal password string sits in the code, so static analysis or a secret scanner finds it without running anything."
+      },
+      {
+        "text": "The production web server returning responses without a `Strict-Transport-Security` header",
+        "explanation": "Correct. Headers are often set by a reverse proxy, load balancer or framework config, not visible in the application code. DAST sees the real HTTP response."
+      },
+      {
+        "text": "A function that uses `eval` on a configuration value",
+        "explanation": "`eval` calls are a classic target for SAST pattern rules. No running app is needed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Ask: is the evidence in the source code, or only in the running system?\n2. `pickle.loads`, `eval` and password literals are all in the code: SAST territory.\n3. Response headers may come from nginx, a CDN or framework defaults. Reading `app.py` will not tell you what the browser receives.\n4. DAST makes real requests and inspects real responses, so it sees the missing HSTS header.",
+    "link": {
+      "title": "ZAP scanner documentation",
+      "url": "https://www.zaproxy.org/docs/desktop/start/features/"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine limitations of standalone black-box **DAST**, without runtime source instrumentation? Select all that apply.",
+    "options": [
+      {
+        "text": "It needs a running, deployed instance of the application",
+        "explanation": "Correct. DAST sends real requests, so it runs later in the CI/CD pipeline (staging or a test environment) than SAST."
+      },
+      {
+        "text": "It may miss pages behind login or deep in single-page-app routing unless configured with credentials and seed URLs",
+        "explanation": "Correct. A crawler only tests what it can reach. Authenticated scanning and API definitions (e.g. OpenAPI) are needed for good coverage."
+      },
+      {
+        "text": "When it finds a flaw it reports the URL and payload, not the line of code responsible",
+        "explanation": "Correct. DAST is black-box, so mapping a finding back to code is left to the developer (IAST closes this gap)."
+      },
+      {
+        "text": "It cannot find vulnerabilities that are actually exploitable end to end",
+        "explanation": "Incorrect. That is DAST's strength: if the injected payload produces evidence in the response, the flaw is demonstrably reachable."
+      },
+      {
+        "text": "It can only analyse compiled languages",
+        "explanation": "Incorrect. DAST does not look at code at all, so the implementation language is irrelevant."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. DAST is black-box testing of a running app over HTTP.\n2. Consequences of 'running': needs an environment, so it runs later. (A true.)\n3. Consequences of 'black-box crawling': coverage depends on what it can reach. (B true.)\n4. Consequences of 'no code access': findings are URLs, not lines. (C true.)\n5. Its realism is a strength, not a weakness, so D is false; and it is language-agnostic, so E is false.",
+    "link": {
+      "title": "ZAP scanner documentation",
+      "url": "https://www.zaproxy.org/docs/desktop/start/features/"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In December 2021 a team ran their usual SAST scan over their Java service to check for Log4Shell. It reported nothing. Why was this result misleading?",
+    "options": [
+      {
+        "text": "SAST tools cannot analyse Java",
+        "explanation": "Many SAST tools (CodeQL, Semgrep, SpotBugs, SonarQube) analyse Java well. The language was not the problem."
+      },
+      {
+        "text": "A scan limited to application code can miss vulnerabilities inside dependencies; inventory and dependency analysis are needed alongside relevant code analysis",
+        "explanation": "Correct. Calling `log.info(userAgent)` is perfectly normal application code. The dangerous JNDI lookup happened inside Log4j, so you needed to know which services contained a vulnerable Log4j version, including as a transitive dependency."
+      },
+      {
+        "text": "Log4Shell only affected services that called `eval`",
+        "explanation": "Log4Shell did not depend on eval. In affected lookup paths and runtime configurations, logged attacker-controlled text could trigger a remote lookup."
+      },
+      {
+        "text": "SAST only detects vulnerabilities that have already been exploited",
+        "explanation": "SAST reasons about code before deployment and knows nothing about exploitation history."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "CVE-2021-44228 affected vulnerable Log4j Core releases and lookup behavior, not every Java server or every Log4j component. Normal logging calls may feed attacker-controlled data into that dependency. An application-only scan with no relevant models may miss it; dependency inventory/SCA helps locate candidate exposure, while reachability, configuration and runtime analysis refine impact.",
+    "link": {
+      "title": "Apache Log4j security advisories",
+      "url": "https://logging.apache.org/log4j/2.x/security.html"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A file-format parser written in C keeps receiving crash reports from users with odd input files. Which technique is most likely to find the remaining bugs of this kind efficiently?",
+    "options": [
+      {
+        "text": "DAST against the company website",
+        "explanation": "The parser is a library, not a web endpoint; a web scanner would never exercise it with millions of malformed files."
+      },
+      {
+        "text": "Software composition analysis",
+        "explanation": "SCA finds *known* CVEs in third-party packages. These are unknown bugs in the team's own parser."
+      },
+      {
+        "text": "Coverage-guided fuzzing of the parser, ideally with sanitisers such as AddressSanitizer",
+        "explanation": "Correct. A fuzzer mutates inputs millions of times, keeps those that reach new code, and detects crashes and memory errors. This is how OSS-Fuzz finds bugs in parsers continuously."
+      },
+      {
+        "text": "A threat-modelling workshop",
+        "explanation": "Threat modelling identifies risks in a design. It will not pinpoint which byte sequence overflows a buffer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Symptom: crashes on unusual inputs in C code. That smells of memory-safety bugs (out-of-bounds reads, use-after-free).\n2. Need: generate vast numbers of unusual inputs and detect subtle memory errors, not just crashes.\n3. A coverage-guided fuzzer (libFuzzer, AFL++) does exactly that; AddressSanitizer turns silent corruption into a reported crash.\n4. Heartbleed, an out-of-bounds read in OpenSSL, is the classic example of this class of bug being found by testing tools.",
+    "link": {
+      "title": "Fuzzing — OWASP",
+      "url": "https://owasp.org/www-community/Fuzzing"
+    }
+  }
+]

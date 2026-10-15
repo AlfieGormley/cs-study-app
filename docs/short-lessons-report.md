@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 53/76. Updated 2026-10-15.
+Verified modules: 54/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -60,6 +60,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | security/Applied Cryptography & PKI | 6 | 39 | 71 | 49 | 270 | 429 | 107 |
 | security/Web Application Security | 3 | 14 | 33 | 7 | 215 | 270 | 32 |
 | security/Systems Security | 2 | 15 | 23 | 21 | 200 | 259 | 47 |
+| security/Security Engineering in Practice | 4 | 23 | 45 | 13 | 252 | 333 | 47 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4438,6 +4439,39 @@ Low-confidence areas:
 - **medium** — sys-elf-hardening: Implementation/version/configuration-dependent examples and protection coverage. The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
 - **medium** — sys-control-transfer-checks: Implementation/version/configuration-dependent examples and protection coverage. The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
 - **medium** — sys-tagging-layers: Implementation/version/configuration-dependent examples and protection coverage. The central claim is checked against fetched primary language, protocol, toolchain or platform sources and bounded local fixtures; target-specific generated layouts, library/tool versions or enabled hardware enforcement remain conditional. No full 32-bit allocator ABI, real CET/BTI/PAC/MTE enforcement, production exploit, Valgrind run or long fuzzing campaign is claimed.
+
+## security: Security Engineering in Practice
+
+[Independent verification record](../content/security/06-security-practice/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Corrected xz Q6 option 0 directly: an engineer investigated the measured 0.508-second/2.70-times slowdown and other symptoms. Removed an unsupported no-security-control assertion while retaining key 0 and four options.
+- Added primary evidence for Apache JNDI support in July 2013 and Birsan’s firsthand account; avoided claiming the same name-leak/high-version/build-server sequence at every organisation.
+- Removed residual same-hash-proves-same-bytes, audits-every-read, no-downtime-rotation and scanner-coverage guarantees. Credential activity identifies a principal rather than proving which instance or actor used a stolen value.
+- Corrected MSBuild to build engine and made taint sinks open their precise glossary definition.
+- Corrected empirical entropy units and restricted the six-bits-per-character bound to 64 base64 data characters, excluding optional padding. All calculations independently recomputed.
+
+Remaining gaps:
+
+- No live AWS, Vault database revocation, Kubernetes, CI/OIDC, Sigstore or deployment environment was modified. AWS client retrieval used botocore Stubber, and local pattern checks do not validate actual IAM authorisation.
+- The Sigma fragment is illustrative YAML, parsed and contrasted with obfuscated input; no production SIEM backend mapping or detection performance was measured.
+- No Log4Shell exploitation, xz/SolarWinds malware execution or offensive network activity was performed. Historical payload examples are text only. All SQL tests use an isolated local fixture.
+- Preserved earlier explicit omissions: universal credential-abuse times, bug-fix-cost multipliers, inventory-response speed comparisons, Target alert chronology and precise employee-phone-call narrative lack sufficient supporting evidence.
+- Phone checks at author stage use the genuine compiler diagnostic dictionary, renderer and real CSS. They are labelled diagnostic only; a stamped full build, actual lesson/quiz routes, progress migrations, offline/PWA checks and release remain the independent verifier/coordinator responsibilities.
+- All 23 active bodies, 45 complete question records and 252 glossary definitions/aliases were independently read. Primary/documentation checks do not constitute a production security audit or exhaustive historical proof.
+- Fedora Rawhide documentation returned a bot-challenge page despite HTTP 200; its ancillary definition remains medium confidence. Two broad-regex URLs are illustrative/non-links, and two guessed unused supplementary URLs returned 404. The active link checker separately checks actual course links.
+- Actual native engines were rerun with explicit local fixtures; an additional 31,753 independent assertions cover entropy, exact login-window boundaries and genuine offline two-index pip resolution. No production detector performance or SIEM backend was measured.
+
+Low-confidence areas:
+
+- **medium** — secp-xz-release-trust: Social-engineering account coordination and affected-system scope. Primary disclosure/project facts checked. Chronology reconstruction does not prove real identities or coordination of accounts; exploitability depends on specific build/link conditions.
+- **medium** — secp-incident-detection-case-studies: Authentication-verifier clue in SolarWinds. The primary Senate exchange confirms a tip-off, not the detailed employee-phone-call narrative or the only discovery cause.
+- **medium** — secp-audit-events-and-dwell: M-Trends 2026 global median of 14 days. Fresh primary report describes 2025 investigations in its dataset, not every intrusion. Current sample statistics remain time-sensitive.
+- **medium** — secp-ci-oidc-trust: Immutable GitHub subjects and cloud trust-policy authorisation. Primary current docs and June-updated changelog confirm July 2026 rollout and @ delimiter. Local pattern parsing does not validate a live AWS policy.
+- **medium** — secp-leased-database-credentials: Target-enforced expiry and revocation. Vault and AWS API semantics fetched; live permissions/connectivity/existing sessions and database revocation were not tested.
+- **medium** — secp-workload-secret-stores: SDK role selection and secret auditing. Fresh Boto3/CloudTrail/Kubernetes docs plus stubbed retrieval validate the scoped example, not live IAM or production log completeness.
+- **medium** — secp-dependency-selection-attacks: Ancillary sources and historical reconstruction. Two encyclopaedic sources remain; chronology is a reconstruction; Fedora docs returned a bot challenge. These entries are not upgraded to high.
 
 ## synth: Sound & Digital Audio
 

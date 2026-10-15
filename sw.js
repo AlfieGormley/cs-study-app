@@ -1,5 +1,5 @@
 // VERSION is stamped by scripts/build.mjs. Every release changes this worker.
-const VERSION = 'da6b0b3cb0dc';
+const VERSION = '7decfc61cfc6';
 importScripts(`assets.js?v=${VERSION}`);
 const CACHE = `cs-study-${VERSION}`;
 

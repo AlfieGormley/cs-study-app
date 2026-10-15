@@ -1,0 +1,62 @@
+[
+  {
+    "id": "secp-secure-sdlc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A SAST tool reports a possible SQL injection. In taint-analysis terms, what has it found?",
+    "options": [
+      {
+        "text": "A SQL query that is slow because it lacks an index",
+        "explanation": "Performance is not what taint analysis tracks. It models the flow of untrusted data, not query plans."
+      },
+      {
+        "text": "Data from an attacker-controlled source reaching a dangerous sink without passing through a sanitiser",
+        "explanation": "Correct for the configured taint model. It tracks attacker-controlled sources and whether their data reaches the dangerous sink argument without suitable sink-specific handling. Parameter binding keeps values separate from SQL text; it is not a general-purpose sanitising function."
+      },
+      {
+        "text": "A request at runtime that returned a database error",
+        "explanation": "Observing a runtime error is what DAST does. SAST never runs the program; it reasons about the code."
+      },
+      {
+        "text": "A dependency with a published CVE",
+        "explanation": "Matching dependencies against vulnerability databases is software composition analysis (SCA), not taint analysis of your own code."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A taint engine labels values from **taint sources** as tainted, e.g. `request.args.get('name')`.\n2. It propagates the label through assignments, string formatting and function calls.\n3. If a tainted value reaches a **sink**, such as the SQL string passed to `execute`, it raises an alert.\n4. A modelled, sink-appropriate **sanitising function** may remove the label, and parameterised queries avoid putting input into the SQL-text sink because the data travels separately from the SQL text.",
+    "link": {
+      "title": "Semgrep taint analysis",
+      "url": "https://semgrep.dev/docs/writing-rules/data-flow/taint-mode/overview"
+    }
+  },
+  {
+    "id": "secp-secure-sdlc-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which line, if any, should a well-written taint rule flag?\n\n```python\n# Both calls use a local test database.\nname = request.args.get(\"n\")\nq1 = f\"SELECT * FROM t WHERE n='{name}'\"\nq2 = \"SELECT * FROM t WHERE n=?\"\n# A: input became part of SQL grammar.\ndb.execute(q1)        # line A\n# B: bind input as data, not SQL text.\ndb.execute(q2, (name,))  # line B\n```",
+    "options": [
+      {
+        "text": "Line A only",
+        "explanation": "Correct. In line A the tainted `name` is formatted into the SQL text, which reaches the query sink. In line B the SQL text is a constant and `name` travels as a bound parameter, which the driver never parses as SQL."
+      },
+      {
+        "text": "Line B only",
+        "explanation": "Line B is the safe, parameterised form. Flagging it would be a false positive; that is why the lesson's rule uses `focus-metavariable` on the query argument only."
+      },
+      {
+        "text": "Both lines, because `name` is tainted in both",
+        "explanation": "Taint reaching a call is not enough; it must reach the *sink argument*. In line B it reaches a parameter slot, which is not a sink."
+      },
+      {
+        "text": "Neither, because `request.args.get` returns a string, not SQL",
+        "explanation": "Every injection payload is 'just a string'. The danger is a string concatenated into code that is then parsed, which is exactly line A."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Source: `request.args.get(\"n\")`, so `name` is tainted.\n2. `q1` is built from `name` by an f-string: taint propagates, `q1` is tainted.\n3. `q2` is a literal: untainted.\n4. Sink: the first argument of `execute`.\n   - Line A: sink receives tainted `q1`. Flag.\n   - Line B: sink receives untainted `q2`; `name` is in the parameter tuple. No flag.\n5. A rule matching the whole call (any argument) would wrongly flag B, which is how noisy tools lose developers' trust.",
+    "link": {
+      "title": "Semgrep documentation",
+      "url": "https://semgrep.dev/docs/"
+    }
+  }
+]

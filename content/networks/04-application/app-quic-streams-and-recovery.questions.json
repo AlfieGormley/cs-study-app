@@ -1,0 +1,92 @@
+[
+  {
+    "id": "app-http2-quic-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A QUIC sender's packet 7 carrying STREAM data for bytes 1000–1999 is declared lost. Assume those bytes remain needed, unacknowledged elsewhere, and the stream has not been reset. Which retransmission is valid?",
+    "options": [
+      {
+        "text": "A new packet (e.g. number 12) with a STREAM frame for bytes 1000–1999, possibly combined with other QUIC frames",
+        "explanation": "Correct. Required stream bytes are carried in a new packet number within that number space. Their framing may be split or combined; retransmission need not reproduce the old STREAM frame."
+      },
+      {
+        "text": "Packet 7 again, byte for byte, so the receiver can match it",
+        "explanation": "QUIC never reuses packet numbers. Resending packet 7 would bring back TCP's retransmission ambiguity."
+      },
+      {
+        "text": "Nothing; QUIC streams are unreliable like UDP",
+        "explanation": "Ordinary QUIC streams provide reliable ordered byte delivery unless reset or the connection fails. RFC 9221 DATAGRAM is an extension for unreliable application datagrams."
+      },
+      {
+        "text": "The whole stream from byte 0, because QUIC uses go-back-N",
+        "explanation": "QUIC acknowledges packet ranges and resends information still needed for reliable delivery. It does not restart the stream from byte 0 after every gap. Spurious loss or lost ACKs can cause duplicate transmission."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Packet numbers increase monotonically in each number space and are never reused.\n2. The lost information is a STREAM frame (stream ID, offset 1000, length 1000).\n3. The sender puts an equivalent STREAM frame into the next packet it builds, say packet 12, perhaps beside a new ACK frame.\n4. The stream **offset** tells the receiver where the bytes go, so the packet number does not need to match.\n5. When packet 12 is ACKed, the ACK identifies this transmission rather than a reused packet number. ACK delay, scheduling and estimator rules still matter.",
+    "link": {
+      "title": "RFC 9000: QUIC — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "app-http2-quic-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A QUIC client opens HTTP/3 request streams. Assume it uses consecutive available bidirectional IDs from the start and no extension consumes them. Which IDs can its first three requests use?",
+    "options": [
+      {
+        "text": "1, 3, 5",
+        "explanation": "That is HTTP/2's numbering for client streams. QUIC encodes stream type in the two low bits."
+      },
+      {
+        "text": "0, 1, 2",
+        "explanation": "IDs 1 and 2 have type bits `01` (server bidirectional) and `10` (client unidirectional), not client bidirectional."
+      },
+      {
+        "text": "0, 4, 8",
+        "explanation": "Correct. Client-initiated bidirectional streams have low bits `00`, so they go 0, 4, 8, 12..."
+      },
+      {
+        "text": "2, 6, 10",
+        "explanation": "Low bits `10` mean client-initiated **unidirectional** streams, used by HTTP/3 for its control and QPACK streams, not requests."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Stream ID low two bits:\n\n```\n0x0 client bidi   0, 4, 8 ...\n0x1 server bidi   1, 5, 9 ...\n0x2 client uni    2, 6, 10 ...\n0x3 server uni    3, 7, 11 ...\n```\n\n```formula\nid = 4k + t\nid = 4 × 0 + 0, 4 × 1 + 0, 4 × 2 + 0\nid = 0, 4, 8\nwhere\nid: the QUIC stream ID\nk: which stream of that type it is, counting from 0\nt: the type in the two low bits; 0 for client-initiated bidirectional\nIn words: client bidirectional streams are every fourth ID starting at 0.\n```\n\nHTTP/3 requests are client-initiated bidirectional streams, so 0, 4, 8.",
+    "link": {
+      "title": "RFC 9000: QUIC — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "app-http2-quic-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does HTTP/3 use QPACK instead of reusing HPACK unchanged?",
+    "options": [
+      {
+        "text": "HPACK's Huffman code is too slow for QUIC's speeds",
+        "explanation": "QPACK uses the same Huffman code. Speed is not the issue."
+      },
+      {
+        "text": "QUIC encrypts headers, so compression is no longer allowed",
+        "explanation": "Encryption does not forbid compression; HTTP/2 over TLS compresses too."
+      },
+      {
+        "text": "HPACK is limited to 61 headers",
+        "explanation": "61 is the size of HPACK's static table, not a limit on headers. QPACK's static table is actually larger (99 entries)."
+      },
+      {
+        "text": "HPACK assumes header blocks arrive in a single total order; over independent QUIC streams that would reintroduce head-of-line blocking or desynchronise tables",
+        "explanation": "Correct. HPACK's dynamic table updates are implicit in the order of header blocks. QPACK puts table updates on dedicated unidirectional streams and lets each request state which table entries it depends on."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. HPACK: request A's header block inserts entry 62; request B's block references 62.\n2. Within one direction of HTTP/2's ordered TCP field-block sequence, A is decoded before B, so this dependency works.\n3. On QUIC, A and B are on different streams. If A's packet is lost, B may arrive first and reference an entry the decoder lacks.\n4. Options: block B until A arrives (head-of-line blocking again) or break.\n5. QPACK's fix: encoder instructions travel on a separate stream, and each header block declares the table state it needs. Encoders can choose to avoid references that could block.",
+    "link": {
+      "title": "RFC 9204: QPACK — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9204"
+    }
+  }
+]

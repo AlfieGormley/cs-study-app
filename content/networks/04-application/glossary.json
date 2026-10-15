@@ -6,7 +6,7 @@
       "RFCs",
       "Request for Comments"
     ],
-    "definition": "Request for Comments: a numbered document published by the IETF. Internet standards such as HTTP, DNS and SMTP are written down as RFCs, and a protocol is often named by its RFC number.",
+    "definition": "Request for Comments: a numbered publication in the RFC Series. RFCs include Internet standards, experimental work, information and other documents; they can originate from several publication streams, not only the IETF.",
     "example": "RFC 9112 defines the HTTP/1.1 wire format; RFC 1035 defines the DNS message format.",
     "source": "https://www.rfc-editor.org/about/"
   },
@@ -57,7 +57,7 @@
       "HTTP 3",
       "h3"
     ],
-    "definition": "The version of HTTP that runs over QUIC instead of TCP. Each request uses its own QUIC stream, so a lost packet delays only the streams whose data it carried, and headers are compressed with QPACK.",
+    "definition": "HTTP mapped onto QUIC, using a bidirectional stream for each request/response exchange and QPACK for fields. QUIC avoids TCP-style delivery blocking between independent streams, but QPACK dependencies and shared connection resources can still delay other work.",
     "example": "A client that sees Alt-Svc: h3=\":443\" may try HTTP/3 on UDP port 443.",
     "source": "https://www.rfc-editor.org/rfc/rfc9114"
   },
@@ -94,8 +94,8 @@
       "\\r\\n",
       "CRLF-delimited"
     ],
-    "definition": "Carriage return followed by line feed: the two bytes 0D 0A (written \\r\\n in code) that end each line in text protocols such as HTTP/1.1, SMTP and IMAP. An empty line, CRLF on its own, ends the header section.",
-    "example": "A HTTP/1.1 header block ends with \\r\\n\\r\\n: the CRLF of the last header line plus an empty line.",
+    "definition": "Carriage return followed by line feed: bytes 0D 0A, written \\r\\n in code. HTTP/1.1 and SMTP use this sequence to terminate protocol lines; body bytes and protocol-specific exceptions require their own framing rules.",
+    "example": "The ordinary HTTP/1.1 header section ends with two consecutive CRLF sequences.",
     "source": "https://www.rfc-editor.org/rfc/rfc5234"
   },
   {
@@ -200,8 +200,8 @@
       "safe methods",
       "safe HTTP method"
     ],
-    "definition": "An HTTP method defined as read-only, so a request should not change server state: GET, HEAD, OPTIONS and TRACE. SameSite=Lax relies on this, which is why state changes must not happen on GET.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9110#section-9.2.1"
+    "definition": "An HTTP method whose defined semantics are essentially read-only: GET, HEAD, OPTIONS and TRACE. Incidental effects such as access logs are allowed, but the client is not requesting a state-changing action; cookie SameSite rules rely on this distinction.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9110"
   },
   {
     "id": "header-field",
@@ -274,9 +274,9 @@
       "content-length",
       "CL"
     ],
-    "definition": "The header giving the exact size of the message body in bytes. With no transfer coding, the receiver reads exactly that many bytes after the blank line, which is how it knows where the body ends.",
-    "example": "Content-Length: 1256 means 1,256 body bytes follow the headers.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9110#section-8.6"
+    "definition": "An HTTP field giving a decimal number of content octets, whose framing role depends on the message. In ordinary HTTP/1.1 messages without transfer coding it can delimit the body; HEAD and 304 responses can carry a length without any following body.",
+    "example": "Content-Length: 1256 normally frames 1,256 body bytes, but a HEAD response sends no body.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9112"
   },
   {
     "id": "transfer-encoding",
@@ -353,7 +353,7 @@
     "aliases": [
       "end of file"
     ],
-    "definition": "End of file: the condition a reader sees when the other side has closed its sending direction, so no more bytes will arrive. For a socket, recv() returning zero bytes signals EOF.",
+    "definition": "End of file or stream: no further bytes will arrive in that direction. For an ordinary TCP socket, a positive-size recv returning empty bytes after buffered data is consumed indicates peer sending-direction closure, provided no local receive shutdown occurred; zero-size reads and empty UDP datagrams are separate cases.",
     "source": "https://docs.python.org/3/library/socket.html#socket.socket.recv"
   },
   {
@@ -395,7 +395,7 @@
     "aliases": [
       "Connection header"
     ],
-    "definition": "The HTTP/1.1 header option saying the sender will close the connection after this message, so it will not be reused.",
+    "definition": "The HTTP/1.1 Connection option signalling that the connection will not persist after the current response. A client sends it on the request to ask the server to close after that response; it does not mean closing before the response arrives.",
     "source": "https://www.rfc-editor.org/rfc/rfc9110#section-7.6.1"
   },
   {
@@ -406,8 +406,8 @@
       "close-delimiting",
       "read-until-close"
     ],
-    "definition": "An HTTP/1.1 response whose body ends only when the server closes the connection, used when there is no Content-Length or chunked framing. It is fragile because a premature close looks the same as a complete body.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9112#section-6.3"
+    "definition": "An HTTP/1.1 response whose body ends when the connection closes, according to the ordered message-length rules. It can apply when there is no Content-Length, including a response whose final transfer coding is not chunked; premature closure may be indistinguishable from completion.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9112"
   },
   {
     "id": "message-body",
@@ -429,9 +429,9 @@
       "interim response",
       "1xx"
     ],
-    "definition": "An HTTP status code from 100 to 199. It is provisional: it is sent before the final response and never has a body.",
+    "definition": "An HTTP response with a 100–199 status and no message body. Most informational responses precede a final response; 101 instead switches the connection to the negotiated protocol.",
     "example": "100 Continue tells a client to go ahead and send its request body.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9110#section-15.2"
+    "source": "https://www.rfc-editor.org/rfc/rfc9110"
   },
   {
     "id": "status-100",
@@ -440,15 +440,15 @@
       "100-continue",
       "Expect: 100-continue"
     ],
-    "definition": "An interim response telling a client that sent Expect: 100-continue to go ahead and send its request body. It lets a server reject a large upload before the bytes are sent.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9110#section-15.2.1"
+    "definition": "An HTTP interim response indicating that an Expect: 100-continue request can continue with its content. A server can instead reject early, but clients may transmit after a bounded wait, so the mechanism does not guarantee that no body bytes are sent.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9110"
   },
   {
     "id": "status-101",
     "term": "101 Switching Protocols",
     "aliases": [],
-    "definition": "An interim response confirming that the connection is switching to another protocol, such as WebSocket, as the client requested.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9110#section-15.2.2"
+    "definition": "The HTTP/1.1 informational status that switches the connection to a protocol requested with Upgrade. The new protocol takes over immediately after the response headers.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9110"
   },
   {
     "id": "status-200",
@@ -457,8 +457,8 @@
       "HTTP 200",
       "status 200"
     ],
-    "definition": "The HTTP status code for a successful request. gRPC uses 200 even for failed calls and reports the real outcome in trailers.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9110#section-15.3.1"
+    "definition": "The HTTP status for a successfully handled request, with its precise meaning depending on the method. Native gRPC normally uses HTTP 200 even when its own final grpc-status reports an RPC failure; intermediary HTTP errors are separate.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9110"
   },
   {
     "id": "status-204",
@@ -563,12 +563,13 @@
   },
   {
     "id": "cl-te",
-    "term": "CL.TE",
+    "term": "CL.TE and TE.CL",
     "aliases": [
+      "CL.TE",
       "TE.CL",
       "CL.TE smuggling"
     ],
-    "definition": "The request-smuggling variant where the front end frames by Content-Length (CL) and the back end by Transfer-Encoding (TE). TE.CL is the reverse.",
+    "definition": "Two HTTP request-smuggling variants named for the framing rules different hops use. CL.TE means the front end uses Content-Length while the back end uses Transfer-Encoding; TE.CL reverses those roles.",
     "source": "https://portswigger.net/web-security/request-smuggling"
   },
   {
@@ -620,9 +621,9 @@
       "TCP handshake",
       "TLS handshake"
     ],
-    "definition": "The opening exchange of messages that sets up a connection or session before data flows, such as TCP's SYN, SYN-ACK, ACK or the TLS key exchange. Each handshake costs at least one round trip.",
-    "example": "A new HTTPS connection over TCP and TLS 1.3 needs two round trips before the first request.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9293"
+    "definition": "An exchange that establishes connection or security state, such as TCP setup or TLS key negotiation. Its latency depends on the protocol, resumption, early data and network conditions; there is no universal minimum of one round trip for every handshake.",
+    "example": "A fresh ordinary TCP connection followed by a full TLS 1.3 handshake commonly adds two round trips before an application request, when early-data and other optimisations are excluded.",
+    "source": "https://www.rfc-editor.org/rfc/rfc8446"
   },
   {
     "id": "stateless-protocol",
@@ -677,9 +678,9 @@
       "Max-Age",
       "Max-Age=0"
     ],
-    "definition": "Cookie attributes setting its lifetime: Expires gives a date, Max-Age a number of seconds, and Max-Age wins if both appear. Max-Age=0 with a matching name, domain and path deletes a cookie.",
-    "example": "Max-Age=3600 keeps the cookie for one hour.",
-    "source": "https://www.rfc-editor.org/rfc/rfc6265#section-5.2.2"
+    "definition": "Cookie attributes describing expiry: Expires gives a date and Max-Age gives seconds, with Max-Age taking precedence when both are processed. Expiring a stored cookie requires matching its name and scope, including partition context where applicable.",
+    "example": "Max-Age=0 expires the matching stored cookie rather than every cookie with that name.",
+    "source": "https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html"
   },
   {
     "id": "cookie-domain",
@@ -713,8 +714,8 @@
       "Path=/",
       "cookie path"
     ],
-    "definition": "The cookie attribute limiting which URL paths receive the cookie. It is not a security boundary, because script on the same origin can still reach the cookie.",
-    "source": "https://www.rfc-editor.org/rfc/rfc6265#section-5.2.4"
+    "definition": "The cookie attribute that restricts matching request paths. It is not an isolation boundary between applications on one origin: script can potentially reach a matching-path document, while HttpOnly independently restricts cookie APIs.",
+    "source": "https://www.rfc-editor.org/rfc/rfc6265"
   },
   {
     "id": "cookie-secure",
@@ -741,7 +742,7 @@
       "SameSite=Strict",
       "SameSite=None"
     ],
-    "definition": "The cookie attribute controlling whether the cookie is sent on cross-site requests. Strict sends it only same-site; Lax also on top-level navigations with safe methods such as GET; None sends it cross-site and requires Secure.",
+    "definition": "A cookie attribute restricting cross-site sending in supporting browsers. Strict requires a same-site context; Lax also permits qualifying top-level safe navigations; None removes that particular restriction and requires Secure, while other browser and cookie rules still apply.",
     "example": "With SameSite=Lax, a cross-site form POST to your bank does not carry your session cookie.",
     "source": "https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html"
   },
@@ -749,12 +750,12 @@
     "id": "partitioned-cookie",
     "term": "Partitioned cookie",
     "aliases": [
+      "partitioned cookies",
       "CHIPS",
-      "partition key",
-      "unpartitioned"
+      "cookie partition key"
     ],
-    "definition": "A cookie with the Partitioned attribute, stored separately for each top-level site that embeds the setting site, so it cannot be used to track a user across sites. It requires Secure.",
-    "source": "https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Privacy_sandbox/Partitioned_cookies"
+    "definition": "A cookie stored with a top-level-site partition key in supporting browsers, separating its state between embedding sites. Partitioned requires Secure; it limits this cookie-based correlation rather than preventing all tracking.",
+    "source": "https://privacysandbox.google.com/cookies/chips"
   },
   {
     "id": "cookie-prefix",
@@ -800,9 +801,9 @@
       "cross-site",
       "schemeful site"
     ],
-    "definition": "For cookies, the scheme plus the registrable domain (eTLD+1). Two hosts are same-site if those match, even when they are different origins.",
+    "definition": "For ordinary domain-based HTTP(S) URLs, a schemeful site combines the scheme and registrable domain. Matching sites can still have different origins; host forms without a registrable domain and opaque origins need additional rules.",
     "example": "https://shop.example.co.uk and https://api.example.co.uk are the same site.",
-    "source": "https://web.dev/articles/same-site-same-origin"
+    "source": "https://html.spec.whatwg.org/multipage/browsers.html#sites"
   },
   {
     "id": "registrable-domain",
@@ -825,8 +826,8 @@
       "parent-suffix",
       "eTLD"
     ],
-    "definition": "A domain under which anyone can register names, such as com, co.uk or github.io. Browsers refuse cookies scoped to a public suffix, so one tenant cannot set cookies for all the others.",
-    "source": "https://publicsuffix.org/"
+    "definition": "A suffix such as com, co.uk or github.io under which separate parties can obtain names. Cookie processing generally rejects a Domain attribute naming a public suffix; the algorithm has an exception when the setting host itself equals that suffix, and browser lists/policy matter.",
+    "source": "https://httpwg.org/http-extensions/draft-ietf-httpbis-rfc6265bis.html"
   },
   {
     "id": "subdomain",
@@ -889,8 +890,8 @@
       "third-party cookies",
       "third-party-cookie"
     ],
-    "definition": "A cookie sent to a site other than the one in the address bar, for example an embedded advertiser. Browsers increasingly block or partition them.",
-    "source": "https://developer.mozilla.org/en-US/docs/Web/Privacy/Guides/Third-party_cookies"
+    "definition": "A cookie used in a cross-site context, such as an embedded service on another site. Whether it is stored or sent depends on cookie attributes, partitioning and the browser's configured policy.",
+    "source": "https://privacysandbox.google.com/cookies"
   },
   {
     "id": "credentials-mode",
@@ -903,10 +904,10 @@
     "id": "clear-site-data",
     "term": "Clear-Site-Data",
     "aliases": [
-      "Clear-Cookie"
+      "Clear-Site-Data header"
     ],
     "definition": "A response header that tells the browser to delete stored data, such as cookies or cache, for the site. Clear-Cookie is not a real header.",
-    "source": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Clear-Site-Data"
+    "source": "https://w3c.github.io/webappsec-clear-site-data/"
   },
   {
     "id": "user-agent",
@@ -921,10 +922,10 @@
     "id": "content-encoding",
     "term": "Content-Encoding",
     "aliases": [
-      "gzip"
+      "Content-Encoding header"
     ],
     "definition": "The header naming a compression applied to the content itself, such as gzip or br (Brotli). It is a different layer from transfer coding.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9110#section-8.4"
+    "source": "https://www.rfc-editor.org/rfc/rfc9110"
   },
   {
     "id": "staging-environment",
@@ -983,8 +984,8 @@
       "QUIC streams",
       "HTTP/2 streams"
     ],
-    "definition": "An independent, ordered sequence of frames inside one connection, usually carrying one request and its response. Many streams interleave on one connection; HTTP/2 client streams have odd IDs, and stream 0 is the connection itself.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9113#section-5"
+    "definition": "An HTTP/2 stream is a bidirectional exchange of frames within one connection. A QUIC stream is an ordered byte stream, bidirectional or unidirectional; HTTP/3 request/response pairs use bidirectional QUIC streams.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9000"
   },
   {
     "id": "stream-id",
@@ -1087,8 +1088,8 @@
     "aliases": [
       "GOAWAY frame"
     ],
-    "definition": "The HTTP/2 frame that starts a graceful shutdown. It reports the highest stream ID the sender may have processed, so the peer knows which requests are safe to retry elsewhere.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9113#section-6.8"
+    "definition": "An HTTP/2 shutdown frame that reports the highest peer-initiated stream on which the sender might have acted or might still act. Higher IDs were not processed by it; lower unfinished streams can have ambiguous outcomes, so retry safety needs care.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9113"
   },
   {
     "id": "h2-window-update",
@@ -1105,8 +1106,8 @@
     "aliases": [
       "CONTINUATION frames"
     ],
-    "definition": "The HTTP/2 frame that carries the rest of a header block too large for one HEADERS frame.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9113#section-6.10"
+    "definition": "An HTTP/2 frame continuing a field block started by HEADERS or PUSH_PROMISE. Its END_HEADERS flag marks completion; fragments of that block cannot be interleaved with unrelated frames.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9113"
   },
   {
     "id": "h2-priority-frame",
@@ -1162,7 +1163,7 @@
       "header block",
       "header blocks"
     ],
-    "definition": "The encoded set of header fields carried in HEADERS (and any CONTINUATION) frames, compressed with HPACK in HTTP/2 or QPACK in HTTP/3.",
+    "definition": "An encoded group of HTTP field names and values. HTTP/2 uses HPACK and carries fragments in HEADERS or PUSH_PROMISE plus any CONTINUATION frames; HTTP/3 uses QPACK and has different frame and stream rules.",
     "source": "https://www.rfc-editor.org/rfc/rfc9113#section-4.3"
   },
   {
@@ -1182,14 +1183,11 @@
     "id": "flow-control",
     "term": "Flow control",
     "aliases": [
-      "flow-control",
-      "flow control window",
-      "flow-control window",
-      "flow-control windows"
+      "flow-control"
     ],
-    "definition": "A mechanism that stops a sender from overrunning a receiver: the receiver grants credit (a window of bytes) and the sender may not exceed it until more is granted. HTTP/2 does this per stream and per connection, on top of TCP's own.",
-    "example": "A 65,535-byte window over a 100 ms round trip caps one stream at about 5.24 Mbit/s.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9113#section-5.2"
+    "definition": "A mechanism preventing a sender from overrunning a receiver. HTTP/2 grants byte credit both per stream and per connection, independently of TCP flow control; both available windows must permit a DATA payload.",
+    "example": "In an ideal prompt-credit feedback model, 65,535 bytes per 100 ms supports about 5.24 Mbit/s, before other bottlenecks.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9113"
   },
   {
     "id": "padding",
@@ -1235,17 +1233,17 @@
     "id": "hpack",
     "term": "HPACK",
     "aliases": [
-      "header compression"
+      "HPACK header compression"
     ],
-    "definition": "The header compression format for HTTP/2. It replaces repeated header fields with small indexes into a static table of 61 common fields and a per-connection dynamic table, and Huffman-codes literal strings.",
+    "definition": "The HTTP/2 field-compression format, using a 61-entry static table and a separate dynamic table for each connection direction. Literal strings can be sent raw or optionally compressed with its fixed Huffman code.",
     "example": ":method: GET is encoded as the single byte 0x82.",
     "source": "https://www.rfc-editor.org/rfc/rfc7541"
   },
   {
     "id": "hpack-static-table",
-    "term": "Static table",
+    "term": "HPACK static table",
     "aliases": [
-      "static table"
+      "HPACK static tables"
     ],
     "definition": "HPACK's fixed list of 61 common header fields, numbered from 1, that both sides know in advance. QPACK has its own static table of 99 entries.",
     "example": "Index 2 is :method: GET and index 7 is :scheme: https.",
@@ -1253,15 +1251,13 @@
   },
   {
     "id": "hpack-dynamic-table",
-    "term": "Dynamic table",
+    "term": "HPACK dynamic table",
     "aliases": [
-      "dynamic table",
-      "dynamic tables",
-      "dynamic table entries",
-      "table limit"
+      "HPACK dynamic tables",
+      "HPACK dynamic table entries"
     ],
-    "definition": "The HPACK or QPACK table of recently used header fields that encoder and decoder build up identically during a connection. New entries go in at index 62 and the oldest are evicted when the size limit (default 4,096 bytes) would be exceeded.",
-    "source": "https://www.rfc-editor.org/rfc/rfc7541#section-2.3.2"
+    "definition": "The per-direction HPACK table that encoder and decoder maintain for indexed fields. Newest entries begin at index 62 after the 61-entry static table; oldest entries are evicted as needed, and HTTP/2 settings constrain the permitted capacity, initially 4,096 bytes.",
+    "source": "https://www.rfc-editor.org/rfc/rfc7541"
   },
   {
     "id": "huffman-coding",
@@ -1306,8 +1302,8 @@
       "never index",
       "never-indexed form"
     ],
-    "definition": "An HPACK representation that tells every hop, including proxies that re-encode headers, never to put this field into a compression table. It protects secrets such as short cookies or authorization tokens from compression side channels.",
-    "source": "https://www.rfc-editor.org/rfc/rfc7541#section-6.2.3"
+    "definition": "An HPACK literal representation that an intermediary forwarding the field through HPACK must preserve as never-indexed. It keeps the value out of the dynamic table and reduces some compression-guessing risks; it does not guarantee confidentiality or stop logging.",
+    "source": "https://www.rfc-editor.org/rfc/rfc7541"
   },
   {
     "id": "n-bit-prefix",
@@ -1319,9 +1315,9 @@
       "5-bit prefix",
       "7-bit-prefix integer"
     ],
-    "definition": "HPACK's integer format: a number that fits in the remaining N bits of a byte is stored there; otherwise those bits are all ones and the rest follows in 7-bit groups, each byte's top bit meaning more follows.",
+    "definition": "HPACK integer encoding starts with a prefix of a specified bit width. Values strictly smaller than its all-ones value fit directly; otherwise the prefix is all ones and the remainder follows in seven-bit groups, including a final zero byte when the remainder is zero.",
     "example": "With a 5-bit prefix, 1337 is sent as the bytes 31, 154, 10.",
-    "source": "https://www.rfc-editor.org/rfc/rfc7541#section-5.1"
+    "source": "https://www.rfc-editor.org/rfc/rfc7541"
   },
   {
     "id": "crime-attack",
@@ -1345,7 +1341,7 @@
     "id": "qpack",
     "term": "QPACK",
     "aliases": [],
-    "definition": "The header compression format for HTTP/3. Like HPACK it uses static and dynamic tables, but it sends table updates on dedicated unidirectional streams and lets each header block declare which entries it needs, avoiding head-of-line blocking between QUIC streams.",
+    "definition": "HTTP/3 field compression using static and dynamic tables plus dedicated unidirectional encoder/decoder instruction streams. References to dynamic entries not yet received can block a field section; encoders and negotiated limits control that blocking.",
     "source": "https://www.rfc-editor.org/rfc/rfc9204"
   },
   {
@@ -1354,8 +1350,8 @@
     "aliases": [
       "QUIC packets"
     ],
-    "definition": "A unit of QUIC data inside a UDP datagram. Each packet has a header and an encrypted payload made of frames; one datagram can carry several coalesced packets.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9000#section-12"
+    "definition": "A QUIC protocol unit carried inside a UDP datagram; several packets can be coalesced. Initial, Handshake, 0-RTT and 1-RTT packets have protected payloads containing frames, while Retry and Version Negotiation use different formats.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9000"
   },
   {
     "id": "udp-datagram",
@@ -1364,8 +1360,8 @@
       "UDP datagrams",
       "UDP payload"
     ],
-    "definition": "One UDP message: an 8-byte header with ports, length and checksum, followed by the payload. UDP delivers each datagram whole or not at all, with no ordering or retransmission.",
-    "source": "https://www.rfc-editor.org/rfc/rfc768"
+    "definition": "A UDP message with an eight-byte header and payload, preserving message boundaries without providing ordering or retransmission. A receive buffer that is too small can truncate the delivered payload; datagram boundaries do not imply an application always receives every byte.",
+    "source": "https://docs.python.org/3/library/socket.html#socket.socket.recvmsg"
   },
   {
     "id": "quic-frame-types",
@@ -1422,8 +1418,8 @@
     "aliases": [
       "0-RTT data"
     ],
-    "definition": "Zero round-trip time data: application data a client sends in its first flight on a resumed connection, before the handshake completes. It can be replayed by an attacker, so it should carry only safe requests.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9001#section-4.6"
+    "definition": "Application data a client can send before completing a resumed TLS/QUIC handshake using earlier session information. Early data can be replayed; applications need explicitly replay-safe semantics and must follow their protocol's restrictions.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9001"
   },
   {
     "id": "one-rtt",
@@ -1432,8 +1428,8 @@
       "1-RTT data",
       "1-RTT keys"
     ],
-    "definition": "QUIC packets protected with the final handshake keys, sent with short headers; normal application data travels as 1-RTT.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9000#section-17.3.1"
+    "definition": "QUIC packets protected with 1-RTT keys, normally carrying application data in short-header packets once those keys are available. Keys may later be updated, so 1-RTT is not one permanently final key set.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9001"
   },
   {
     "id": "quic-retry",
@@ -1458,8 +1454,8 @@
       "CIDs",
       "peer-issued ID"
     ],
-    "definition": "The two connection IDs in a QUIC long header: the Destination Connection ID (DCID) chosen by the receiver of the packet, and the Source Connection ID (SCID) chosen by its sender. Short headers carry only the DCID. Because packets are matched to a connection by these IDs rather than by IP addresses and ports, a connection can survive an address change.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9000#section-5.1"
+    "definition": "QUIC header identifiers used to associate packets with connection state. Usually each endpoint issues IDs for packets it receives; the client selects the original Initial destination ID before the server supplies one. Short headers carry only the destination ID, and zero-length IDs restrict migration.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9000"
   },
   {
     "id": "packet-number",
@@ -1468,8 +1464,8 @@
       "packet numbers",
       "QUIC packet number"
     ],
-    "definition": "A number QUIC gives each packet, increasing and never reused within its packet number space. Because a retransmission goes in a new packet with a new number, ACKs are never ambiguous.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9000#section-12.3"
+    "definition": "An increasing QUIC transmission identifier that is never reused within its packet-number space. Needed lost information goes in new packets, so acknowledgements can identify the transmission rather than ambiguously referring to reused byte sequence numbers.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9000"
   },
   {
     "id": "packet-number-space",
@@ -1497,7 +1493,7 @@
     "aliases": [
       "header-protection"
     ],
-    "definition": "QUIC encryption of the packet number and some low bits of the first header byte, using a mask computed from a sample of the encrypted payload and a separate header-protection key, so middleboxes cannot read or depend on those fields.",
+    "definition": "QUIC masking of the packet number and selected low bits of the first header byte using a separate protection key. Initial keys are publicly derivable, so this masking does not hide Initial fields from a capable observer; connection IDs and other routing information remain visible.",
     "source": "https://www.rfc-editor.org/rfc/rfc9001#section-5.4"
   },
   {
@@ -1506,7 +1502,7 @@
     "aliases": [
       "latency spin bit"
     ],
-    "definition": "An optional bit in the QUIC short header that flips once per round trip, letting on-path observers estimate RTT. It is outside header protection.",
+    "definition": "An optional QUIC short-header bit that provides an on-path RTT signal during suitable continuous bidirectional traffic. It is outside header protection; disabled signalling, application limits and packet loss can affect observed transitions.",
     "source": "https://www.rfc-editor.org/rfc/rfc9000#section-17.4"
   },
   {
@@ -1542,7 +1538,7 @@
     "id": "address-validation",
     "term": "Address validation",
     "aliases": [],
-    "definition": "Checking that a peer can really receive packets at the address it claims, by sending something unpredictable there and requiring it to be echoed back.",
+    "definition": "QUIC checks that a peer can receive packets at its claimed address. Connection establishment can validate addresses through handshake or token rules; PATH_CHALLENGE/PATH_RESPONSE checks reachability on a path during migration. Unvalidated sending is subject to amplification limits.",
     "source": "https://www.rfc-editor.org/rfc/rfc9000#section-8"
   },
   {
@@ -1587,7 +1583,7 @@
       "retransmit",
       "retransmitted"
     ],
-    "definition": "Detecting lost packets and resending the information they carried. TCP resends bytes with their original sequence numbers; QUIC resends the needed frames in new packets.",
+    "definition": "Detecting lost information and arranging transmission when it is still needed. TCP retransmits stream bytes using their byte sequence numbers; QUIC puts needed information in newly numbered packets, which need not preserve the old frame boundaries and do not repeat every frame type.",
     "source": "https://www.rfc-editor.org/rfc/rfc9002"
   },
   {
@@ -1606,7 +1602,7 @@
     "aliases": [
       "Karn’s algorithm"
     ],
-    "definition": "TCP's rule of not taking round-trip-time samples from retransmitted segments, because their ACKs are ambiguous.",
+    "definition": "TCP excludes retransmitted segments from RTT sampling when their acknowledgements cannot distinguish the original transmission from a later copy. The TCP timestamp option can remove that ambiguity, allowing the RFC 6298 exception.",
     "source": "https://www.rfc-editor.org/rfc/rfc6298"
   },
   {
@@ -1616,8 +1612,8 @@
       "ACK-delay",
       "ACK-delay correction"
     ],
-    "definition": "The time a receiver deliberately waits before sending an acknowledgement. QUIC reports it so the sender can subtract it from RTT samples.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9002#section-5.3"
+    "definition": "In QUIC, the delay between receiving the largest acknowledged packet and sending its acknowledgement, reported by the receiver. RTT adjustment follows handshake state and protocol bounds rather than blindly subtracting any reported value.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9002"
   },
   {
     "id": "go-back-n",
@@ -1643,8 +1639,8 @@
     "aliases": [
       "active migration"
     ],
-    "definition": "Moving a live QUIC connection to a new network path, such as from Wi-Fi to 5G, while keeping its keys and streams. It works because connections are identified by connection IDs rather than addresses; only the client may migrate actively.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9000#section-9"
+    "definition": "Continuing a QUIC connection on a new network path while preserving connection state, keys and streams. Active migration is client-initiated and depends on suitable connection IDs, peer policy, routing and successful validation; server preferred-address handling has its own rules.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9000"
   },
   {
     "id": "nat-rebinding",
@@ -1702,8 +1698,8 @@
       "cwnd",
       "congestion window"
     ],
-    "definition": "The sender-side algorithm that adjusts how much data is in flight to match what the network path can carry. Its state (the congestion window, cwnd) is reset after QUIC migrates to a new path.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9002"
+    "definition": "A sender mechanism adjusting in-flight data and sending behaviour to the network path. QUIC normally resets congestion and RTT state for a validated new path, but may retain state for a port-only address change under the RFC's conditions.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9000"
   },
   {
     "id": "preferred-address",
@@ -1718,8 +1714,8 @@
     "id": "disable-active-migration",
     "term": "disable_active_migration",
     "aliases": [],
-    "definition": "A QUIC transport parameter by which an endpoint asks its peer not to migrate deliberately. It cannot stop NAT rebinding.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9000#section-18.2"
+    "definition": "A QUIC transport parameter restricting the peer's deliberate migration to another address when using the specified server address. It does not prohibit NAT rebinding or a permitted move to a server's preferred address.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9000"
   },
   {
     "id": "quic-lb",
@@ -1745,10 +1741,9 @@
     "term": "HTTPS DNS record",
     "aliases": [
       "HTTPS record",
-      "SVCB",
       "HTTPS RR"
     ],
-    "definition": "A DNS record type (RFC 9460) that tells clients, before they connect, which protocols (such as alpn=h3) and addresses a service supports.",
+    "definition": "A DNS HTTPS service-binding record that can advertise endpoint addresses and parameters such as supported ALPN tokens. It is the HTTPS-specific form of SVCB; the two record types are related, rather than interchangeable names.",
     "source": "https://www.rfc-editor.org/rfc/rfc9460"
   },
   {
@@ -1861,8 +1856,8 @@
       "ms",
       "milliseconds"
     ],
-    "definition": "One thousandth of a second. Network round-trip times are usually tens to hundreds of milliseconds.",
-    "source": "https://en.wikipedia.org/wiki/Millisecond"
+    "definition": "One thousandth of a second. It is a unit for latency and other durations, not a claim that every network has a particular typical delay.",
+    "source": "https://www.bipm.org/en/publications/si-brochure"
   },
   {
     "id": "dns-message-header",
@@ -1927,7 +1922,7 @@
       "AA bit",
       "authoritative answer"
     ],
-    "definition": "A DNS flag set by a server that is authoritative for the name being asked about, meaning the answer comes from the zone itself rather than from a cache.",
+    "definition": "The DNS authoritative-answer flag, describing the responding server's authority for the queried name or first relevant answer owner under the protocol's rules. It is an assertion by the server, not a cryptographic proof.",
     "example": "The name server for example.com sets AA when answering for www.example.com.",
     "source": "https://www.rfc-editor.org/rfc/rfc1035"
   },
@@ -1974,9 +1969,9 @@
       "AD",
       "authenticated data bit"
     ],
-    "definition": "A DNS flag a resolver sets to say it validated the answer with DNSSEC. A client that does not validate itself has to trust the resolver and the path to it for this claim.",
-    "example": "A validating resolver returns the signed A record for example.com with AD=1.",
-    "source": "https://www.rfc-editor.org/rfc/rfc4035"
+    "definition": "A DNS resolver's assertion that relevant answer and authority data satisfy DNSSEC validation, subject to flag and response rules. A stub that does not validate independently must trust the resolver and protected path for that assertion.",
+    "example": "AD can signal validated data; seeing the bit alone is not proof to an untrusted client.",
+    "source": "https://www.rfc-editor.org/rfc/rfc6840"
   },
   {
     "id": "dns-cd-flag",
@@ -1984,9 +1979,9 @@
     "aliases": [
       "CD bit",
       "checking disabled",
-      "CD=0"
+      "CD=1"
     ],
-    "definition": "A DNS flag a client sets to ask the resolver to return data even if DNSSEC validation fails, usually so the client can validate it itself.",
+    "definition": "A DNS request flag asking a validating resolver not to withhold data just because checking would fail, allowing the requester to perform its own validation. CD does not assert that returned data is authentic.",
     "example": "With CD=0 a validating resolver returns SERVFAIL for bogus data; with CD=1 it can hand the data over.",
     "source": "https://www.rfc-editor.org/rfc/rfc4035"
   },
@@ -2007,9 +2002,9 @@
       "RCODEs",
       "response code (DNS)"
     ],
-    "definition": "The 4-bit response code at the end of the DNS flags word. 0 is NOERROR, 1 FORMERR, 2 SERVFAIL, 3 NXDOMAIN and 5 REFUSED.",
+    "definition": "The DNS response-code field has four low bits in the ordinary header; EDNS can extend it. Familiar values include 0 NOERROR, 1 FORMERR, 2 SERVFAIL, 3 NXDOMAIN and 5 REFUSED.",
     "example": "Flags 0x8183 end in 0011, so RCODE is 3: NXDOMAIN.",
-    "source": "https://www.rfc-editor.org/rfc/rfc1035"
+    "source": "https://www.rfc-editor.org/rfc/rfc6891"
   },
   {
     "id": "dns-noerror",
@@ -2076,7 +2071,7 @@
       "additional section",
       "authority and additional sections"
     ],
-    "definition": "The three record lists after the question in a DNS response. Answer holds records that answer the question, authority names the zone's name servers, and additional carries helpful extras such as those servers' addresses.",
+    "definition": "The three resource-record sections after a DNS question. Answer contains records answering it, authority can contain referrals or negative-answer metadata, and additional holds related data; not every authority section is simply a list of name servers.",
     "example": "A referral has an empty answer section and NS records in the authority section.",
     "source": "https://www.rfc-editor.org/rfc/rfc1035"
   },
@@ -2098,7 +2093,7 @@
     "aliases": [
       "zero-length root label"
     ],
-    "definition": "The empty label, a single 00 byte, that ends every domain name on the wire. It stands for the root of the DNS tree.",
+    "definition": "The zero-length label representing the DNS root, encoded as one zero byte in an ordinary uncompressed name. A compressed name can instead terminate by following a pointer to an earlier suffix, so not every occurrence literally ends in zero.",
     "example": "The last byte of the encoded name example.com is the root label 00.",
     "source": "https://www.rfc-editor.org/rfc/rfc1035"
   },
@@ -2218,7 +2213,7 @@
       "A answer"
     ],
     "definition": "A DNS resource record (type 1) holding one IPv4 address for a name. Its RDATA is 4 bytes.",
-    "example": "example.com A 93.184.215.14 maps the name to an IPv4 address.",
+    "example": "The illustrative record example.com A 192.0.2.10 maps a name to a documentation-only IPv4 address.",
     "source": "https://www.rfc-editor.org/rfc/rfc1035"
   },
   {
@@ -2239,7 +2234,7 @@
       "TXT records",
       "TXT"
     ],
-    "definition": "A DNS record holding free-form text strings. SPF policies, DKIM public keys and DMARC policies are all published as TXT records.",
+    "definition": "A DNS record holding free-form text strings. email SPF policies, DKIM public keys and DMARC policies are all published as TXT records.",
     "example": "_dmarc.alice.example TXT \"v=DMARC1; p=reject\" publishes a DMARC policy.",
     "source": "https://www.rfc-editor.org/rfc/rfc1035"
   },
@@ -2258,9 +2253,9 @@
     "id": "dns-512-limit",
     "term": "512-byte UDP limit",
     "aliases": [],
-    "definition": "The original maximum size of a DNS message over UDP. Without EDNS a server must not send more and sets TC instead.",
+    "definition": "The ordinary UDP DNS message-size limit without EDNS. A server must respect that budget; if required response data does not fit, it sets TC rather than sending a partial required RRset as a complete answer.",
     "example": "A 1,900-byte answer cannot be sent in one classic UDP response.",
-    "source": "https://www.rfc-editor.org/rfc/rfc1035"
+    "source": "https://www.rfc-editor.org/rfc/rfc2181"
   },
   {
     "id": "edns0",
@@ -2314,8 +2309,8 @@
     "aliases": [
       "DNS Flag Day"
     ],
-    "definition": "A coordinated 2020 change by DNS software vendors and operators that recommended a default EDNS buffer of 1,232 bytes, to avoid IP fragmentation of UDP answers.",
-    "example": "After Flag Day 2020, larger answers fall back to TCP instead of being fragmented.",
+    "definition": "A coordinated operator/vendor effort that recommended a default 1,232-byte EDNS UDP budget to reduce fragmentation risk and reliable TCP fallback for larger required answers. The recommendation does not guarantee every implementation or path behaves that way.",
+    "example": "1,232 bytes leaves 48 bytes for a basic IPv6 header plus UDP at the 1,280-byte minimum MTU.",
     "source": "https://www.dnsflagday.net/2020/"
   },
   {
@@ -2325,8 +2320,8 @@
       "IP fragments",
       "fragmentation risk"
     ],
-    "definition": "Splitting one IP packet into several smaller pieces when it is larger than a link can carry. Fragments are often dropped by firewalls, and forged fragments can be used to tamper with DNS answers.",
-    "example": "A 4,000-byte UDP DNS answer on a 1,500-byte-MTU path would be split into three fragments.",
+    "definition": "Dividing an IP packet into smaller fragments under the relevant IP version and flags. Fragment loss, filtering and spoofing can make fragmented DNS unreliable or unsafe; IPv6 routers do not fragment forwarded packets.",
+    "example": "An oversized UDP DNS reply may be fragmented, dropped or rejected, depending on the sender and path.",
     "source": "https://www.rfc-editor.org/rfc/rfc8900"
   },
   {
@@ -2336,7 +2331,7 @@
       "1,280-byte IPv6 minimum",
       "IPv6 minimum"
     ],
-    "definition": "Every IPv6 link must carry packets of at least 1,280 bytes, so a packet of that size or smaller should cross any IPv6 path without fragmentation.",
+    "definition": "IPv6 requires links to support packets of 1,280 bytes, using link-layer adaptation if necessary. A 1,280-byte IPv6 packet fits that minimum size budget, but tunnels, extra headers and path failures still need appropriate handling.",
     "example": "1,232 bytes of DNS + 8 of UDP + 40 of IPv6 header = 1,280.",
     "source": "https://www.rfc-editor.org/rfc/rfc8200"
   },
@@ -2368,13 +2363,13 @@
     "term": "Recursive resolver",
     "aliases": [
       "recursive resolvers",
-      "validating resolver",
+      "recursive DNS resolver",
       "resolver",
       "resolvers"
     ],
-    "definition": "A DNS server that answers clients' questions by querying other servers on their behalf, from the root downwards, and caching the results. Your ISP, Cloudflare 1.1.1.1 and Google 8.8.8.8 run them.",
+    "definition": "A DNS resolver that obtains answers on a client's behalf, possibly using its cache, referrals, authoritative queries or a configured upstream. Recursion does not by itself imply DNSSEC validation.",
     "example": "A laptop asks its recursive resolver for example.com, which asks the root, .com and example.com's servers.",
-    "source": "https://www.rfc-editor.org/rfc/rfc8499"
+    "source": "https://www.rfc-editor.org/rfc/rfc9499"
   },
   {
     "id": "stub-resolver-app",
@@ -2460,7 +2455,7 @@
       "ephemeral range",
       "ephemeral ports"
     ],
-    "definition": "A temporary port number the operating system picks for the client side of a connection or query, from a configured range such as 32768–60999 on Linux.",
+    "definition": "A temporary port selected for a client connection or query from an implementation's configured range. The range and selection policy differ between operating systems and deployments.",
     "example": "Each new outgoing DNS query can use a different ephemeral port.",
     "source": "https://www.rfc-editor.org/rfc/rfc6056"
   },
@@ -2472,7 +2467,7 @@
       "out-of-bailiwick",
       "bailiwick rules"
     ],
-    "definition": "A resolver rule that only accepts records from a response if they fall within the authority of the server that sent it. A server for bank.example cannot plant records for google.com.",
+    "definition": "Cache-admission checks constraining supplied records according to the responding server's authority and the current delegation/query context. They stop unrelated records from simply being trusted, but are more nuanced than a suffix-only test.",
     "example": "Records for google.com in a response about x71.bank.example are discarded as out of bailiwick.",
     "source": "https://www.rfc-editor.org/rfc/rfc5452"
   },
@@ -2482,7 +2477,7 @@
     "aliases": [
       "DNS 0x20"
     ],
-    "definition": "Randomising the upper and lower case of letters in a DNS query name and checking the server echoes it exactly. Each letter adds one bit for an off-path attacker to guess. Its name comes from 0x20, the bit that differs between upper and lower case in ASCII.",
+    "definition": "A DNS spoofing-resistance technique that randomises ASCII-letter case in a query and checks compatible servers' echoed question case. Independent random letters add guessing bits only when preservation and checking hold; fallback policy and deployment vary.",
     "example": "A query for wWw.ExAmPlE.cOm only accepts an answer with exactly that case.",
     "source": "https://datatracker.ietf.org/doc/html/draft-vixie-dnsext-dns0x20-00"
   },
@@ -2492,8 +2487,8 @@
     "aliases": [
       "DNS cookie"
     ],
-    "definition": "An EDNS option (RFC 7873) in which client and server exchange short secret values, so forged responses from an off-path attacker who does not know them can be detected.",
-    "example": "A resolver that sent a client cookie rejects a response that does not echo it.",
+    "definition": "An EDNS mechanism exchanging client and server cookie values to provide limited off-path spoofing resistance. Cookies are computed using endpoint context and secrets; they do not give DNSSEC's signed-data authenticity or defeat every on-path attacker.",
+    "example": "A returned client cookie can be checked against the query, while a server cookie supports later requests.",
     "source": "https://www.rfc-editor.org/rfc/rfc7873"
   },
   {
@@ -2528,9 +2523,9 @@
     "id": "port-unreachable",
     "term": "Port unreachable",
     "aliases": [],
-    "definition": "An ICMP error message a host sends when a UDP packet arrives for a port on which nothing is listening.",
-    "example": "A probe to a closed UDP port returns ICMP port unreachable.",
-    "source": "https://www.rfc-editor.org/rfc/rfc792"
+    "definition": "An ICMP error that can report a UDP destination port with no listener. Firewalls, rate limits and error-generation rules can suppress it, so no reply does not prove a port is open.",
+    "example": "A closed unfiltered UDP port may produce a port-unreachable error.",
+    "source": "https://www.rfc-editor.org/rfc/rfc1122"
   },
   {
     "id": "dnssec-app",
@@ -2585,9 +2580,9 @@
       "NSEC",
       "NSEC records"
     ],
-    "definition": "A DNSSEC record that names the next existing name in a zone's sorted order and the types present, so a signed answer can prove a name or type does not exist.",
-    "example": "alpha.example.com NSEC delta.example.com proves charlie.example.com does not exist.",
-    "source": "https://www.rfc-editor.org/rfc/rfc4034"
+    "definition": "A DNSSEC record linking an owner name to the next name in canonical zone order and listing present types. Signed NSEC data can establish covered-name or type absence; a complete NXDOMAIN proof also has wildcard and closest-encloser conditions.",
+    "example": "An alpha-to-delta interval covers charlie itself, but that interval alone is not every condition for a complete NXDOMAIN proof.",
+    "source": "https://www.rfc-editor.org/rfc/rfc4035"
   },
   {
     "id": "nsec3-record",
@@ -2614,7 +2609,7 @@
     "id": "zone-walking",
     "term": "Zone walking",
     "aliases": [],
-    "definition": "Listing all the names in a DNSSEC-signed zone by following its NSEC chain from one name to the next.",
+    "definition": "Enumerating names represented in a conventional static NSEC chain by following its next-name links. Delegations, empty nonterminals and online-signed denial variants limit what a particular chain exposes.",
     "example": "Asking for names just after each NSEC target reveals alpha, delta, kilo and so on.",
     "source": "https://www.rfc-editor.org/rfc/rfc7129"
   },
@@ -2635,8 +2630,8 @@
       "KSK",
       "key-signing key"
     ],
-    "definition": "In a split-key DNSSEC setup, the key that signs the zone's DNSKEY RRset. The parent's DS record points to it, so changing it needs a DS update at the parent.",
-    "example": "Re-signing example.com with a new KSK without updating .com's DS breaks validation.",
+    "definition": "In a split-key DNSSEC design, the operational key role used to sign the DNSKEY RRset. A parent DS commonly authenticates it, so a rollover must preserve a usable chain through parent and cached data; a combined signing key is also possible.",
+    "example": "Removing the only DS-matching key before publishing a valid replacement chain can break validation.",
     "source": "https://www.rfc-editor.org/rfc/rfc6781"
   },
   {
@@ -2657,9 +2652,9 @@
       "root trust anchor",
       "configured root trust anchor"
     ],
-    "definition": "A public key a validator trusts in advance, configured rather than looked up. DNSSEC validation chains every answer back to the root zone's trust anchor.",
-    "example": "Validating resolvers ship with the root KSK as their trust anchor.",
-    "source": "https://www.iana.org/dnssec"
+    "definition": "A configured DNSKEY or DS trust point from which a DNSSEC validator establishes authenticity. The root anchor is common, but locally configured anchors can exist below the root and unsigned data is not automatically authenticated.",
+    "example": "A validator can start from a configured root key and follow authenticated delegations.",
+    "source": "https://www.rfc-editor.org/rfc/rfc4033"
   },
   {
     "id": "chain-of-trust-dnssec",
@@ -2669,7 +2664,7 @@
       "trust chain",
       "signed-data chain"
     ],
-    "definition": "The sequence root key → DS → child DNSKEY → … → RRSIG by which a validator links a signed answer back to its trust anchor. Any broken link makes the data bogus.",
+    "definition": "Authenticated DNSKEY, DS and signature relationships connecting covered DNS data to a configured trust anchor. A missing supported chain can mean bogus, insecure or indeterminate data depending on the delegation and validation context, rather than every missing link meaning bogus.",
     "example": "root → .com DS → .com DNSKEY → example.com DS → example.com DNSKEY → A RRSIG.",
     "source": "https://www.rfc-editor.org/rfc/rfc4033"
   },
@@ -2679,8 +2674,8 @@
     "aliases": [
       "bogus data"
     ],
-    "definition": "The DNSSEC state of data whose signatures should validate but do not, for example because they expired or the DS points to a missing key. A validating resolver returns SERVFAIL for it.",
-    "example": "Forgetting to update the DS after a KSK change makes the zone bogus.",
+    "definition": "Data expected to be authentic under a DNSSEC trust chain but failing validation, for example when no usable valid signature remains. A resolver doing checking normally returns SERVFAIL for affected answers; CD and other response rules matter.",
+    "example": "A sole stale supported DS with no matching child key can make a signed delegation fail validation.",
     "source": "https://www.rfc-editor.org/rfc/rfc4035"
   },
   {
@@ -2708,7 +2703,7 @@
       "KSK rollover"
     ],
     "definition": "Replacing a DNSSEC key with a new one in carefully timed steps, so that caches always hold a key and DS combination that validates.",
-    "example": "A KSK rollover publishes the new key, updates the parent DS, waits for caches, then removes the old key.",
+    "example": "A documented KSK rollover coordinates published keys, valid signatures, parent DS changes and cache lifetimes; overlap and waiting periods depend on the chosen method.",
     "source": "https://www.rfc-editor.org/rfc/rfc6781"
   },
   {
@@ -2727,7 +2722,7 @@
     "term": "KeyTrap",
     "aliases": [],
     "definition": "A 2024 denial-of-service vulnerability in DNSSEC validators: crafted zones with many colliding key tags and signatures forced vulnerable resolvers to try huge numbers of combinations.",
-    "example": "Patched resolvers now cap how many keys and signatures they try per answer.",
+    "example": "Fixes limit or otherwise control validation work; the precise safeguards depend on the resolver implementation.",
     "source": "https://www.athene-center.de/en/keytrap"
   },
   {
@@ -2750,9 +2745,9 @@
       "denial of service",
       "distributed denial of service"
     ],
-    "definition": "Distributed denial of service: overwhelming a service with traffic or work from many sources so legitimate users cannot reach it. DoS is the single-source form.",
+    "definition": "Denial of service makes a service unavailable through excess work, traffic or exploitation. Distributed denial of service uses multiple participating sources; DoS is the broader category and is not restricted to single-source traffic.",
     "example": "A botnet flooding a resolver with queries is a DDoS attack.",
-    "source": "https://en.wikipedia.org/wiki/Denial-of-service_attack"
+    "source": "https://www.rfc-editor.org/rfc/rfc4732"
   },
   {
     "id": "ecdsa-p256-app",
@@ -2780,8 +2775,8 @@
     "aliases": [
       "DNS over TLS"
     ],
-    "definition": "Sending ordinary DNS messages, each with a 2-byte length prefix, inside a TLS connection to port 853 (RFC 7858). It hides queries from the network but its own port makes it easy to block.",
-    "example": "Android's Private DNS setting uses DoT.",
+    "definition": "DNS messages with the normal TCP length prefix carried over TLS, conventionally on TCP port 853. Authenticated TLS protects that hop; the dedicated port can make this transport easier to identify or block.",
+    "example": "Android Private DNS supports DoT; the actual selected transport depends on device version and configuration.",
     "source": "https://www.rfc-editor.org/rfc/rfc7858"
   },
   {
@@ -2791,7 +2786,7 @@
       "DoH",
       "DNS over HTTPS"
     ],
-    "definition": "Sending DNS messages as HTTPS requests (RFC 8484), usually to port 443, with media type application/dns-message. It blends in with web traffic more than DoT.",
+    "definition": "Binary DNS messages carried in HTTPS requests and responses, normally on port 443 with application/dns-message. Shared HTTPS transport can make classification less direct than a dedicated port, but resolver addresses and traffic patterns can still reveal its use.",
     "example": "Firefox can send its lookups to a DoH resolver instead of the network's DNS server.",
     "source": "https://www.rfc-editor.org/rfc/rfc8484"
   },
@@ -2830,9 +2825,9 @@
     "aliases": [
       "base64url-encoded"
     ],
-    "definition": "A variant of base64 that encodes binary data as text using only letters, digits, - and _, so it can appear safely in URLs.",
+    "definition": "A base64 variant replacing the plus and slash alphabet characters with hyphen and underscore. Padding rules depend on the using protocol; DoH GET requests omit trailing equals-sign padding.",
     "example": "A DoH GET puts the DNS message base64url-encoded in /dns-query?dns=....",
-    "source": "https://www.rfc-editor.org/rfc/rfc4648"
+    "source": "https://www.rfc-editor.org/rfc/rfc8484"
   },
   {
     "id": "sni-app",
@@ -2841,7 +2836,7 @@
       "Server Name Indication",
       "TLS SNI"
     ],
-    "definition": "Server Name Indication: the host name a client sends in plaintext at the start of a TLS handshake so the server can pick the right certificate. It reveals which site you are visiting.",
+    "definition": "Server Name Indication: a TLS ClientHello extension naming the intended server. Ordinary unencrypted SNI is visible to an observer; ECH can protect the sensitive inner server name under its successful negotiation and trust assumptions.",
     "example": "Even with DoH, an observer can read bank.example in the SNI unless ECH is used.",
     "source": "https://www.rfc-editor.org/rfc/rfc6066"
   },
@@ -2852,8 +2847,8 @@
       "Encrypted Client Hello",
       "ECH"
     ],
-    "definition": "A TLS extension that encrypts the sensitive parts of the client's first handshake message, including SNI, so an observer cannot read the site name. It is specified in RFC 9849 (2026).",
-    "example": "With ECH, a network sees only the provider's public name instead of the real site.",
+    "definition": "Encrypted Client Hello: TLS protection for an inner ClientHello, including the sensitive server name, specified in RFC 9849. An outer name, server address, traffic patterns and fallback behaviour can still reveal information; ECH is not complete destination anonymity.",
+    "example": "Successful ECH can conceal the inner SNI while leaving an outer public name and destination IP visible.",
     "source": "https://www.rfc-editor.org/rfc/rfc9849"
   },
   {
@@ -2863,9 +2858,9 @@
       "ISPs",
       "internet service provider"
     ],
-    "definition": "Internet service provider: the company that connects you to the internet, and whose resolver you use by default.",
+    "definition": "An Internet service provider supplies internet connectivity. It may offer a default DNS resolver, but devices and applications can be configured to use a different resolver.",
     "example": "Switching to DoH moves your DNS trust from your ISP to the DoH provider.",
-    "source": "https://en.wikipedia.org/wiki/Internet_service_provider"
+    "source": "https://www.rfc-editor.org/rfc/rfc9499"
   },
   {
     "id": "canary-domain",
@@ -2889,9 +2884,9 @@
     "id": "ascii",
     "term": "ASCII",
     "aliases": [],
-    "definition": "A 7-bit character code covering English letters, digits and punctuation, one byte per character. DNS labels are ASCII on the wire.",
-    "example": "The letter a is ASCII 0x61 and A is 0x41.",
-    "source": "https://en.wikipedia.org/wiki/ASCII"
+    "definition": "A seven-bit character code covering Latin letters, digits, punctuation and controls. DNS wire labels can contain arbitrary octets within the DNS grammar; ordinary hostname presentation and the restricted ASCII example impose additional rules.",
+    "example": "ASCII a is 0x61 and A is 0x41; IDNA represents internationalised hostnames through suitable ASCII labels.",
+    "source": "https://www.rfc-editor.org/rfc/rfc4343"
   },
   {
     "id": "smtp-app",
@@ -2986,8 +2981,8 @@
     "aliases": [
       "outbound port 25"
     ],
-    "definition": "The standard port for server-to-server SMTP relay. Many home ISPs block outgoing connections to it to stop infected computers sending spam.",
-    "example": "A laptop on home broadband often cannot connect to any server on port 25.",
+    "definition": "The standard server-to-server SMTP relay port. Some access providers restrict outbound port 25 to reduce abuse; that is deployment policy rather than a requirement of SMTP.",
+    "example": "An MTA normally attempts SMTP relay to an MX host on TCP port 25.",
     "source": "https://www.rfc-editor.org/rfc/rfc5321"
   },
   {
@@ -3027,7 +3022,7 @@
       "equal-preference",
       "lowest-preference"
     ],
-    "definition": "The number in an MX record that orders mail servers: lower numbers are tried first, and servers with equal numbers are chosen between randomly.",
+    "definition": "The number ordering MX destinations: lower values are preferred. A sender randomises equal-preference destinations when it has no clear reason to favour one; connection failure can lead it to try other eligible destinations.",
     "example": "MX 10 is tried before MX 20.",
     "source": "https://www.rfc-editor.org/rfc/rfc5321"
   },
@@ -3035,8 +3030,8 @@
     "id": "implicit-mx",
     "term": "Implicit MX",
     "aliases": [],
-    "definition": "The fallback when a domain has no MX records at all: senders deliver to the domain's own A or AAAA address.",
-    "example": "A domain with only an A record still receives mail at that address.",
+    "definition": "When a mail domain has no MX records, SMTP treats the domain itself as an implicit mail exchanger and attempts its A/AAAA addresses. Actual delivery still requires a reachable server that accepts the message.",
+    "example": "A domain with an A record but no MX can receive SMTP delivery attempts at that address.",
     "source": "https://www.rfc-editor.org/rfc/rfc5321"
   },
   {
@@ -3070,8 +3065,8 @@
       "opportunistic STARTTLS",
       "opportunistic relay"
     ],
-    "definition": "Using TLS if the other side offers it but falling back to plaintext if not. It protects against passive eavesdroppers but an active attacker can strip the offer.",
-    "example": "Most server-to-server mail uses opportunistic STARTTLS on port 25.",
+    "definition": "Using TLS when it can be negotiated, with a policy that can allow unprotected communication when it cannot. Without an effective authenticated-TLS requirement, an active attacker may induce downgrade; configured enforcement changes that outcome.",
+    "example": "A relay that permits plaintext fallback can be vulnerable to a stripped STARTTLS advertisement.",
     "source": "https://www.rfc-editor.org/rfc/rfc7435"
   },
   {
@@ -3096,8 +3091,8 @@
     "aliases": [
       "HELO name"
     ],
-    "definition": "The original SMTP greeting, without extensions. The domain name the client gives in it (or in EHLO) is checked by SPF when the envelope sender is empty.",
-    "example": "A bounce with MAIL FROM:<> is SPF-checked against the HELO name.",
+    "definition": "The original SMTP greeting, without extensions. The domain name the client gives in it (or in EHLO) is checked by email SPF when the envelope sender is empty.",
+    "example": "A bounce with MAIL FROM:<> is email SPF-checked against the HELO name.",
     "source": "https://www.rfc-editor.org/rfc/rfc5321"
   },
   {
@@ -3115,7 +3110,7 @@
     "term": "8BITMIME",
     "aliases": [],
     "definition": "An SMTP extension saying the server accepts message bodies containing bytes above 127, not just 7-bit ASCII.",
-    "example": "A server listing 250 8BITMIME accepts UTF-8 text without re-encoding.",
+    "example": "8BITMIME can carry an appropriately MIME-labelled UTF-8 body; it does not by itself permit internationalised SMTP envelope addresses.",
     "source": "https://www.rfc-editor.org/rfc/rfc6152"
   },
   {
@@ -3131,7 +3126,7 @@
     "term": "RCPT TO",
     "aliases": [],
     "definition": "The SMTP command naming one envelope recipient. Delivery follows these commands, not the To: header.",
-    "example": "A Bcc recipient appears only in an RCPT TO command.",
+    "example": "In a common Bcc implementation Carol is an envelope recipient, while her address is omitted from the delivered visible headers.",
     "source": "https://www.rfc-editor.org/rfc/rfc5321"
   },
   {
@@ -3192,8 +3187,8 @@
     "id": "greylisting",
     "term": "Greylisting",
     "aliases": [],
-    "definition": "An anti-spam technique where a server temporarily rejects mail from an unfamiliar sender with a 4xx code, accepting it when the sender retries. Much spamware never retries.",
-    "example": "A first attempt gets 451; the retry ten minutes later is accepted.",
+    "definition": "Temporarily rejecting selected unfamiliar SMTP delivery attempts with a 4xx response, then accepting qualifying retries. It can discourage senders that do not retry, but neither guarantees spam detection nor classifies every legitimate sender correctly.",
+    "example": "A site may temporarily defer a new sender/recipient/IP combination and accept a permitted later retry.",
     "source": "https://www.rfc-editor.org/rfc/rfc6647"
   },
   {
@@ -3203,10 +3198,9 @@
       "delivery-status notification",
       "DSN",
       "bounce message",
-      "delivery failure notification",
-      "bounce address"
+      "delivery failure notification"
     ],
-    "definition": "An automatic message sent back to the envelope sender saying a message could not be delivered. It is sent with an empty envelope sender, MAIL FROM:<>.",
+    "definition": "An automatic delivery-status message, which can describe failure, delay or success according to the requested notification. Failure notices for accepted mail normally go to the envelope reverse path and use a null reverse path themselves to prevent loops.",
     "example": "Mail to a nonexistent mailbox produces a bounce to the return path.",
     "source": "https://www.rfc-editor.org/rfc/rfc3464"
   },
@@ -3239,9 +3233,10 @@
       "envelope sender's",
       "return-path",
       "reverse path",
-      "custom return path"
+      "custom return path",
+      "bounce address"
     ],
-    "definition": "The address in MAIL FROM, also called the return path: where bounces are sent and the domain SPF checks. It can differ from the visible From: address.",
+    "definition": "The address in MAIL FROM, also called the return path: where bounces are sent and the domain email SPF checks. It can differ from the visible From: address.",
     "example": "Newsletters often use bounce@mail.shop.example as the envelope sender.",
     "source": "https://www.rfc-editor.org/rfc/rfc5321"
   },
@@ -3279,9 +3274,9 @@
     "aliases": [
       "mailing lists"
     ],
-    "definition": "A service that redistributes each message sent to it to many subscribers. Lists often change the subject or add footers, which breaks DKIM signatures.",
+    "definition": "A service redistributing messages to subscribers. Changes to signed subjects or covered body content can invalidate DKIM, while unchanged signed content or an unmodified covered prefix can still validate.",
     "example": "A list adds [team] to the subject and a footer before resending.",
-    "source": "https://en.wikipedia.org/wiki/Electronic_mailing_list"
+    "source": "https://www.rfc-editor.org/rfc/rfc7960"
   },
   {
     "id": "dot-stuffing",
@@ -3336,7 +3331,7 @@
     "aliases": [
       "SMTP MTA Strict Transport Security"
     ],
-    "definition": "SMTP MTA Strict Transport Security (RFC 8461): a domain publishes over HTTPS a policy saying senders must use authenticated TLS to its listed MX hosts, so STARTTLS cannot be stripped once the policy is cached.",
+    "definition": "SMTP MTA Strict Transport Security: an HTTPS-published policy whose enforce mode requires authenticated TLS to permitted MX hosts for supporting senders. A usable cached policy resists STARTTLS stripping; first-time discovery and testing mode have different guarantees.",
     "example": "A sender with alice.example's enforce policy refuses to deliver in plaintext.",
     "source": "https://www.rfc-editor.org/rfc/rfc8461"
   },
@@ -3346,7 +3341,7 @@
     "aliases": [
       "DNS-Based Authentication of Named Entities"
     ],
-    "definition": "DNS-Based Authentication of Named Entities: publishing in DNSSEC-signed TLSA records which certificates or keys a server may use, so senders can require and verify TLS without a CA (RFC 7672 for SMTP).",
+    "definition": "DNS-Based Authentication of Named Entities for SMTP uses DNSSEC-authenticated TLSA records to associate acceptable TLS certificates or keys with a service. SMTP DANE supports specified trust-anchor and end-entity usages; it is not just a universal CA-free certificate pin.",
     "example": "A TLSA record at _25._tcp.mx1.bob.example pins mx1's certificate.",
     "source": "https://www.rfc-editor.org/rfc/rfc7672"
   },
@@ -3431,7 +3426,7 @@
       "unique identifier (IMAP)"
     ],
     "definition": "A message's unique identifier in an IMAP mailbox. It never changes or gets reused while the mailbox's UIDVALIDITY stays the same, so clients cache by it.",
-    "example": "UID FETCH 4827 fetches the same message every session.",
+    "example": "UID FETCH 4827 identifies the same message only within the same account, mailbox and unchanged UIDVALIDITY generation.",
     "source": "https://www.rfc-editor.org/rfc/rfc9051"
   },
   {
@@ -3439,7 +3434,7 @@
     "term": "UIDVALIDITY",
     "aliases": [],
     "definition": "A number an IMAP server reports for each mailbox. If it changes, all previously cached UIDs for that mailbox are invalid and the client must resynchronise.",
-    "example": "A stored UIDVALIDITY 3857529045 that comes back different means the mailbox was rebuilt.",
+    "example": "A changed UIDVALIDITY means the client must discard old UID mappings; a mailbox rebuild is one possible cause.",
     "source": "https://www.rfc-editor.org/rfc/rfc9051"
   },
   {
@@ -3473,8 +3468,8 @@
       "IDLE"
     ],
     "definition": "An IMAP command that keeps the connection open so the server can push mailbox changes, such as new mail, as they happen. Clients reissue it periodically because connections time out.",
-    "example": "A phone in IDLE learns of new mail within seconds.",
-    "source": "https://www.rfc-editor.org/rfc/rfc2177"
+    "example": "A server can send an EXISTS update while the client is idling, subject to connection and server behaviour.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9051"
   },
   {
     "id": "imap-select",
@@ -3544,8 +3539,8 @@
       "?all",
       "softfail"
     ],
-    "definition": "The final term of an SPF record, giving the result for IPs not listed: -all means fail, ~all softfail (suspicious) and ?all neutral (no opinion).",
-    "example": "A record ending -all tells receivers unlisted IPs fail SPF.",
+    "definition": "The catch-all email SPF mechanism, commonly placed last, matching any connecting address. Its qualifier selects a result: -all means fail, ~all softfail and ?all neutral; it is not itself a syntax or lookup-budget error.",
+    "example": "A record ending -all tells receivers unlisted IPs fail email SPF.",
     "source": "https://www.rfc-editor.org/rfc/rfc7208"
   },
   {
@@ -3554,7 +3549,7 @@
     "aliases": [
       "include:"
     ],
-    "definition": "An SPF mechanism that also authorises the IPs listed in another domain's SPF record, such as a mail provider's. Each one counts towards the ten-lookup limit.",
+    "definition": "An email SPF mechanism that recursively evaluates another domain's policy for the connecting address. Only a pass from that evaluation makes include match; errors and other results follow specified rules, and evaluated DNS-causing terms share the overall budget.",
     "example": "include:_spf.google.com authorises Google Workspace servers.",
     "source": "https://www.rfc-editor.org/rfc/rfc7208"
   },
@@ -3566,7 +3561,7 @@
       "10 evaluated DNS-query-causing terms",
       "ten-term limit"
     ],
-    "definition": "SPF allows at most ten evaluated terms that cause DNS queries (include, a, mx, ptr, exists, redirect) across a whole check. Going over gives permerror.",
+    "definition": "email SPF allows at most ten evaluated terms that cause DNS queries (include, a, mx, ptr, exists, redirect) across a whole check. Going over gives permerror.",
     "example": "Five includes, four nested terms, mx and a make eleven: permerror.",
     "source": "https://www.rfc-editor.org/rfc/rfc7208"
   },
@@ -3574,15 +3569,15 @@
     "id": "spf-permerror",
     "term": "permerror",
     "aliases": [],
-    "definition": "A permanent SPF error, for example a syntax error or exceeding the ten-lookup limit. It does not count as an SPF pass for DMARC.",
-    "example": "An SPF record with too many includes always returns permerror.",
+    "definition": "A permanent email SPF error, for example a syntax error or exceeding the ten-lookup limit. It does not count as an email SPF pass for DMARC.",
+    "example": "A check that actually evaluates more than ten DNS-causing terms returns permerror; an earlier match can avoid evaluating later terms.",
     "source": "https://www.rfc-editor.org/rfc/rfc7208"
   },
   {
     "id": "connecting-ip",
     "term": "Connecting IP",
     "aliases": [],
-    "definition": "The IP address of the server that opened the SMTP connection to the receiver. SPF checks whether it is authorised.",
+    "definition": "The IP address of the server that opened the SMTP connection to the receiver. email SPF checks whether it is authorised.",
     "example": "Mail forwarded by a university arrives from the university's connecting IP.",
     "source": "https://www.rfc-editor.org/rfc/rfc7208"
   },
@@ -3594,7 +3589,7 @@
       "ip4:"
     ],
     "definition": "A way of writing a block of IP addresses as an address and a prefix length: 192.0.2.0/24 covers the 256 addresses that share the first 24 bits.",
-    "example": "ip4:192.0.2.0/24 in SPF authorises 192.0.2.0 to 192.0.2.255.",
+    "example": "ip4:192.0.2.0/24 in email SPF authorises 192.0.2.0 to 192.0.2.255.",
     "source": "https://www.rfc-editor.org/rfc/rfc4632"
   },
   {
@@ -3603,9 +3598,9 @@
     "aliases": [
       "mail forwarding"
     ],
-    "definition": "Automatically resending received mail to another address. The forwarder's IP is not in the original sender's SPF record, so SPF often fails after forwarding.",
+    "definition": "Resending received mail to another address. When the connecting forwarder is not authorised by the original envelope domain, retaining that envelope sender can fail email SPF; sender rewriting and surviving aligned DKIM are separate mechanisms.",
     "example": "bob@uni.example forwarding to Gmail makes Gmail see the university's IP.",
-    "source": "https://en.wikipedia.org/wiki/Email_forwarding"
+    "source": "https://www.rfc-editor.org/rfc/rfc7960"
   },
   {
     "id": "dkim",
@@ -3649,7 +3644,7 @@
       "d="
     ],
     "definition": "The d= tag of a DKIM signature: the domain that takes responsibility for the message. DMARC checks whether it aligns with the From: domain.",
-    "example": "A SaaS signing with d=invoicer.example does not align with From: billing@corp.example.",
+    "example": "A valid signature with d=invoicer.example does not align with From: billing@corp.example in the example's unrelated-domain case.",
     "source": "https://www.rfc-editor.org/rfc/rfc6376"
   },
   {
@@ -3660,7 +3655,7 @@
       "bh="
     ],
     "definition": "The bh= tag of a DKIM signature: a hash of the canonicalised message body (or the prefix chosen by l=). Any covered change to the body makes it mismatch.",
-    "example": "A mailing list adding a footer changes the body hash.",
+    "example": "Adding covered non-whitespace body text changes the canonicalised body hash; content outside an l= prefix is not covered.",
     "source": "https://www.rfc-editor.org/rfc/rfc6376"
   },
   {
@@ -3671,7 +3666,7 @@
       "c=relaxed/relaxed",
       "relaxed canonicalisation"
     ],
-    "definition": "Normalising a message before hashing so harmless changes do not break a DKIM signature. relaxed mode tidies whitespace and header-name case; simple tolerates almost nothing.",
+    "definition": "DKIM rules for transforming covered headers and body bytes before hashing. Relaxed mode normalises specified whitespace and header-name case; it does not excuse arbitrary text or header-value changes.",
     "example": "With relaxed, \"Subject:  Hi\" and \"subject: Hi\" hash the same.",
     "source": "https://www.rfc-editor.org/rfc/rfc6376"
   },
@@ -3714,9 +3709,9 @@
     "aliases": [
       "DMARC1"
     ],
-    "definition": "Domain-based Message Authentication, Reporting and Conformance: a policy at _dmarc.<domain> saying a message passes only if SPF or DKIM passes for a domain aligned with the visible From:, and what receivers should do otherwise. RFC 9989 (2026) replaces RFC 7489.",
+    "definition": "Domain-based Message Authentication, Reporting and Conformance: a policy at _dmarc.<domain> saying a message passes only if email SPF or DKIM passes for a domain aligned with the visible From:, and what receivers should do otherwise. RFC 9989 (2026) replaces RFC 7489.",
     "example": "_dmarc.alice.example TXT \"v=DMARC1; p=reject\" asks receivers to reject failing mail.",
-    "source": "https://dmarc.org/overview/"
+    "source": "https://www.rfc-editor.org/rfc/rfc9989"
   },
   {
     "id": "dmarc-alignment",
@@ -3726,9 +3721,9 @@
       "aligned DKIM signature",
       "aligned authentication pass"
     ],
-    "definition": "DMARC's requirement that the domain SPF or DKIM authenticated matches the visible From: domain: the same organisational domain in relaxed mode, exactly the same in strict mode.",
+    "definition": "DMARC's requirement that the domain email SPF or DKIM authenticated matches the visible From: domain: the same organisational domain in relaxed mode, exactly the same in strict mode.",
     "example": "promo.shop.example aligns with shop.example in relaxed mode but not strict.",
-    "source": "https://dmarc.org/overview/"
+    "source": "https://www.rfc-editor.org/rfc/rfc9989"
   },
   {
     "id": "organisational-domain",
@@ -3737,7 +3732,7 @@
       "organizational domain",
       "organisational domains"
     ],
-    "definition": "The registered domain an organisation controls, such as shop.example for promo.shop.example. DMARC relaxed alignment compares organisational domains; RFC 9989 finds them with a DNS tree walk.",
+    "definition": "A domain boundary determined by DMARC's specified discovery procedure for comparing relaxed alignment. RFC 9989 uses DNS tree walks and policy information rather than assuming it is always a two-label registered suffix; older RFC 7489 implementations can differ.",
     "example": "mail.alice.example and alice.example share organisational domain alice.example.",
     "source": "https://www.rfc-editor.org/rfc/rfc9989"
   },
@@ -3751,9 +3746,9 @@
       "relaxed mode",
       "adkim=s"
     ],
-    "definition": "The two DMARC alignment modes. Relaxed (default) accepts subdomains of the same organisational domain; strict (aspf=s for SPF, adkim=s for DKIM) needs an exact domain match.",
-    "example": "With aspf=s, an SPF pass for promo.shop.example does not align with shop.example.",
-    "source": "https://dmarc.org/overview/"
+    "definition": "The two DMARC alignment modes. Relaxed (default) accepts subdomains of the same organisational domain; strict (aspf=s for email SPF, adkim=s for DKIM) needs an exact domain match.",
+    "example": "With aspf=s, an email SPF pass for promo.shop.example does not align with shop.example.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9989"
   },
   {
     "id": "dmarc-policy",
@@ -3764,9 +3759,9 @@
       "p=quarantine",
       "DMARC policy"
     ],
-    "definition": "The p= tag of a DMARC record asking receivers how to treat failing mail: none (monitor only), quarantine (treat as suspicious, e.g. spam folder) or reject (refuse it). Receivers may override it.",
-    "example": "Moving from p=none to p=reject before all senders align rejects legitimate mail.",
-    "source": "https://dmarc.org/overview/"
+    "definition": "The DMARC p= tag requests none (no DMARC-specific enforcement), quarantine (suspicious treatment) or reject (rejection) for failing messages, subject to receiver discretion. RFC 9989 separately requires fully participating domain owners to send with both aligned email SPF and aligned DKIM, and forbids relying solely on email SPF with p=reject.",
+    "example": "Enforcing reject before every legitimate source has an aligned pass can cause legitimate mail to be rejected, subject to receiver policy.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9989"
   },
   {
     "id": "dmarc-aggregate-report",
@@ -3776,9 +3771,9 @@
       "aggregate reports",
       "rua="
     ],
-    "definition": "A periodic summary, requested with the rua= tag, that receivers send to a domain owner listing which IPs sent mail using the domain and whether SPF, DKIM and DMARC passed.",
+    "definition": "A requested summary of observed sending sources and authentication/disposition results. The rua tag supplies report destinations; participation and report delivery are not guaranteed, and RFC 9990 specifies the current aggregate format.",
     "example": "Reports reveal an invoicing SaaS sending as corp.example without alignment.",
-    "source": "https://dmarc.org/overview/"
+    "source": "https://www.rfc-editor.org/rfc/rfc9990"
   },
   {
     "id": "email-spoofing",
@@ -3798,7 +3793,7 @@
     "aliases": [
       "Authenticated Received Chain"
     ],
-    "definition": "Authenticated Received Chain (RFC 8617): each forwarder records the authentication results it saw and signs them, so a final receiver that trusts the forwarder can accept mail whose SPF and DKIM broke in transit.",
+    "definition": "Authenticated Received Chain (RFC 8617): each forwarder records the authentication results it saw and signs them, so a final receiver that trusts the forwarder can accept mail whose email SPF and DKIM broke in transit.",
     "example": "A mailing list adds ARC seals saying DKIM passed on arrival.",
     "source": "https://www.rfc-editor.org/rfc/rfc8617"
   },
@@ -3810,7 +3805,7 @@
       "bulk-sender rules",
       "bulk-sender requirements"
     ],
-    "definition": "A sender of large volumes of mail. Gmail requires senders of around 5,000 or more messages a day to personal accounts to use SPF, DKIM and DMARC.",
+    "definition": "A sender of large volumes of mail. Gmail requires senders of around 5,000 or more messages a day to personal accounts to use email SPF, DKIM and DMARC.",
     "example": "A newsletter sending 20,000 messages a day to Gmail must publish DMARC.",
     "source": "https://support.google.com/a/answer/81126"
   },
@@ -3865,7 +3860,7 @@
       "Network Time Protocol"
     ],
     "definition": "Network Time Protocol: the protocol computers use to set their clocks from time servers over the network. Version 4 runs over UDP port 123.",
-    "example": "A laptop's NTP client queries a pool server every few minutes and nudges its clock to stay within milliseconds of UTC.",
+    "example": "An NTP client polls configured time sources and disciplines its clock. Its accuracy and polling interval depend on the implementation, sources and network.",
     "source": "https://www.rfc-editor.org/rfc/rfc5905"
   },
   {
@@ -3901,7 +3896,7 @@
       "NTP offset",
       "offset estimate"
     ],
-    "definition": "NTP's estimate of how far the server's clock is ahead of the client's clock, computed from four timestamps. A positive offset means the client is behind and should move forward.",
+    "definition": "NTP's estimate of server time minus client time from four timestamps, under its clock-rate and path-delay model. A positive result estimates that the client is behind; filtering, uncertainty and discipline policy determine any correction.",
     "example": "With t1 = 10.000, t2 = 10.150, t3 = 10.152 and t4 = 10.042 seconds, the offset is 0.130 s: the client is 130 ms behind.",
     "source": "https://www.rfc-editor.org/rfc/rfc5905"
   },
@@ -3978,9 +3973,9 @@
       "slew rate",
       "slew rates"
     ],
-    "definition": "Correcting a clock gradually by running it slightly fast or slow until the offset disappears, so time never jumps. The rate is limited, often to hundreds of ppm.",
+    "definition": "Gradually correcting a clock offset by adjusting its rate rather than making a discontinuous step. Available rates and correction policy depend on the implementation and configuration.",
     "example": "At 500 ppm, slewing away a 1-second error takes about 2,000 seconds, roughly 33 minutes.",
-    "source": "https://chrony-project.org/doc/4.5/chrony.conf.html"
+    "source": "https://chrony-project.org/doc/4.7/chrony.conf.html"
   },
   {
     "id": "clock-step",
@@ -4009,9 +4004,9 @@
     "aliases": [
       "chronyd"
     ],
-    "definition": "A modern NTP implementation common on Linux distributions. It synchronises quickly and supports higher slew rates than classic ntpd.",
-    "example": "Many Red Hat and Ubuntu systems use chrony as their default time service.",
-    "source": "https://chrony-project.org/"
+    "definition": "An NTP implementation including the chronyd daemon, with configurable clock discipline, source selection and slew behaviour. Whether a machine uses it by default depends on its distribution and installation.",
+    "example": "chrony configuration determines allowed slew rates and whether an offset may be stepped.",
+    "source": "https://chrony-project.org/doc/4.7/chrony.conf.html"
   },
   {
     "id": "monotonic-clock",
@@ -4021,7 +4016,7 @@
       "time.monotonic()",
       "CLOCK_MONOTONIC"
     ],
-    "definition": "A clock that only ever moves forwards and is never stepped, used to measure elapsed time. Its absolute value is meaningless; only differences between readings matter.",
+    "definition": "A clock that cannot go backwards or be stepped by changing wall-clock time, used to measure durations. Its epoch is unspecified; rate adjustment, resolution and whether suspension counts depend on the specific clock/platform.",
     "example": "Subtracting two time.monotonic() readings in Python gives a request's duration even if NTP stepped the wall clock in between.",
     "source": "https://docs.python.org/3/library/time.html#time.monotonic"
   },
@@ -4043,9 +4038,9 @@
     "aliases": [
       "leap seconds"
     ],
-    "definition": "A one-second adjustment occasionally inserted into UTC to keep it within 0.9 seconds of UT1, the time defined by the Earth's rotation. Software often handles the extra second badly.",
+    "definition": "An adjustment to UTC used under its time-scale rules to keep it near Earth-rotation time UT1. A positive leap adds one second; CGPM Resolution 4 (2022) calls for increasing the permitted UT1–UTC difference by or before 2035 rather than specifying permanent abolition on one unconditional date.",
     "example": "A positive leap second makes the last minute of a day 61 seconds long, ending at 23:59:60.",
-    "source": "https://en.wikipedia.org/wiki/Leap_second"
+    "source": "https://www.bipm.org/en/cgpm-2022/resolution-4"
   },
   {
     "id": "leap-smear",
@@ -4097,7 +4092,7 @@
       "time-based one-time password",
       "Time-based One-Time Password"
     ],
-    "definition": "Time-based One-Time Password: a short code, usually 6 digits, computed from a shared secret and the current time, changing every 30 seconds. Both sides need roughly correct clocks.",
+    "definition": "Time-based One-Time Password: a code computed from a shared secret and a time step, commonly six digits with a 30-second step. Step length, digits, acceptance windows and replay prevention are configured protocol choices; the two sides need sufficiently aligned clocks.",
     "example": "An authenticator app shows a new 6-digit TOTP code every 30 seconds.",
     "source": "https://www.rfc-editor.org/rfc/rfc6238"
   },
@@ -4108,9 +4103,9 @@
       "Kerberos tickets",
       "Kerberos ticket"
     ],
-    "definition": "A network authentication protocol in which a trusted server issues time-limited tickets that prove a user's identity to services. Tickets are rejected if clocks differ too much, by default 5 minutes in many deployments.",
+    "definition": "A network authentication system using tickets issued by trusted services. Ticket validity and replay protection require clock handling; acceptable skew is configurable, with a 300-second default documented for MIT krb5.",
     "example": "A Windows domain login uses Kerberos tickets, so a badly drifted clock can stop users logging in.",
-    "source": "https://www.rfc-editor.org/rfc/rfc4120"
+    "source": "https://web.mit.edu/kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html"
   },
   {
     "id": "gps",
@@ -4213,9 +4208,9 @@
     "aliases": [
       "hardware timestamps"
     ],
-    "definition": "Recording the moment a packet is sent or received in the network card itself rather than in software, removing operating-system delays from time measurements.",
-    "example": "PTP with hardware timestamping can measure packet times to tens of nanoseconds.",
-    "source": "https://en.wikipedia.org/wiki/Precision_Time_Protocol"
+    "definition": "Recording send/receive events in network hardware near the physical interface, reducing software scheduling uncertainty. Timestamp placement, hardware calibration, path asymmetry and clock quality still limit accuracy.",
+    "example": "PTP can use hardware timestamps; the timestamping feature alone does not guarantee nanosecond synchronisation.",
+    "source": "https://docs.kernel.org/networking/timestamping.html"
   },
   {
     "id": "transparent-clock",
@@ -4238,7 +4233,7 @@
       "µs"
     ],
     "definition": "One millionth of a second (10^−6 s).",
-    "example": "PTP can keep clocks within a fraction of a microsecond; NTP over the internet usually manages milliseconds.",
+    "example": "One microsecond is 1,000 nanoseconds; sub-microsecond means less than that duration.",
     "source": "https://en.wikipedia.org/wiki/Microsecond"
   },
   {
@@ -4256,7 +4251,7 @@
     "id": "ssh-transport-layer",
     "term": "SSH transport layer",
     "aliases": [],
-    "definition": "The bottom layer of SSH: it negotiates algorithms, runs the key exchange, authenticates the server with its host key and then encrypts and integrity-protects every packet.",
+    "definition": "SSH's layer for negotiating algorithms, performing key exchange and authenticating the server. Its binary key-exchange packets initially precede encryption; negotiated protection is activated by NEWKEYS.",
     "example": "Everything above it, including password logins, travels inside the transport layer's encryption.",
     "source": "https://www.rfc-editor.org/rfc/rfc4253"
   },
@@ -4269,7 +4264,7 @@
       "identification string"
     ],
     "definition": "The first line each side sends in plaintext when an SSH connection opens, naming the protocol version and software, such as SSH-2.0-OpenSSH_9.6.",
-    "example": "A server banner SSH-2.0-OpenSSH_9.6 tells the client it speaks SSH 2.0 and runs OpenSSH 9.6.",
+    "example": "SSH-2.0-OpenSSH_9.6 advertises SSH version 2.0 and the software string OpenSSH_9.6; a banner alone does not prove the installed software version.",
     "source": "https://www.rfc-editor.org/rfc/rfc4253#section-4.2"
   },
   {
@@ -4340,7 +4335,7 @@
       "OpenSSH 9.0",
       "OpenSSH 10.0"
     ],
-    "definition": "The most widely used SSH implementation, developed by the OpenBSD project and shipped with Linux, macOS and Windows.",
+    "definition": "An SSH implementation developed by the OpenBSD project, providing clients, servers and related tools across several operating systems. Installed versions, build options and defaults vary.",
     "example": "Running ssh -V prints the installed OpenSSH version, for example OpenSSH_9.6.",
     "source": "https://www.openssh.com/"
   },
@@ -4354,8 +4349,8 @@
       "host-key"
     ],
     "definition": "The long-term key pair that identifies an SSH server. The server signs each key exchange with it so the client can check it is talking to the right machine.",
-    "example": "On first connection the client shows the host key's SHA-256 fingerprint and stores it in ~/.ssh/known_hosts.",
-    "source": "https://www.rfc-editor.org/rfc/rfc4251#section-4.1"
+    "example": "A client can compare the server host key with configured trusted keys, a known_hosts entry or a trusted host certificate authority.",
+    "source": "https://www.rfc-editor.org/rfc/rfc4251"
   },
   {
     "id": "known-hosts",
@@ -4376,7 +4371,7 @@
       "host certificates",
       "host-certificate authority"
     ],
-    "definition": "In SSH, a trusted key that signs servers' host keys, so clients can trust any server with a valid certificate instead of trusting each key on first use.",
+    "definition": "A trusted SSH signing key used to authenticate host certificates. Clients must also check certificate validity, host principals and configured restrictions, rather than accepting every certificate carrying that signer.",
     "example": "A company configures every laptop to trust its SSH CA, so new servers need no TOFU prompt.",
     "source": "https://man.openbsd.org/ssh-keygen#CERTIFICATES"
   },
@@ -4387,9 +4382,9 @@
       "trust on first use",
       "trust-on-first-use"
     ],
-    "definition": "Trust on first use: accepting a server's key the first time without independent verification and then insisting it never changes. It is safe only if that first connection was not intercepted.",
+    "definition": "Trust on first use: recording a previously unknown peer's key and checking future connections against it. It does not independently authenticate that first peer or make later key changes inherently illegitimate.",
     "example": "SSH's 'The authenticity of host … can't be established' prompt is a TOFU decision.",
-    "source": "https://en.wikipedia.org/wiki/Trust_on_first_use"
+    "source": "https://man.openbsd.org/ssh#VERIFYING_HOST_KEYS"
   },
   {
     "id": "key-fingerprint",
@@ -4409,9 +4404,9 @@
     "aliases": [
       "exchange hashes"
     ],
-    "definition": "A hash over everything exchanged during an SSH key exchange, including both KEXINIT messages and the shared secret. The server signs it, and session keys are derived from it.",
+    "definition": "A hash over the SSH key-exchange transcript and agreed secret, using the selected method's specified inputs. The server signs it and it contributes to key derivation; the first exchange hash becomes the persistent session identifier.",
     "example": "Changing any byte of the negotiation changes the exchange hash, so the server's signature no longer verifies.",
-    "source": "https://www.rfc-editor.org/rfc/rfc4253#section-8"
+    "source": "https://www.rfc-editor.org/rfc/rfc4253"
   },
   {
     "id": "ssh-session-id",
@@ -4431,9 +4426,9 @@
       "binary packet protocol",
       "binary packets"
     ],
-    "definition": "The SSH packet format: a 4-byte packet length, a 1-byte padding length, the payload, at least 4 bytes of random padding and a message authentication code or AEAD tag.",
-    "example": "A packet carrying a 20-byte payload is padded so its length is a multiple of the cipher block size or 8.",
-    "source": "https://www.rfc-editor.org/rfc/rfc4253#section-6"
+    "definition": "The base SSH binary packet has length and padding-length fields, a payload, padding of at least four bytes and negotiated integrity protection. Base alignment counts the four-byte length field but excludes the MAC; AEAD and Encrypt-then-MAC variants alter details.",
+    "example": "Check the negotiated packet construction rather than applying the base alignment rule to every SSH cipher.",
+    "source": "https://www.rfc-editor.org/rfc/rfc4253"
   },
   {
     "id": "newkeys",
@@ -4483,7 +4478,7 @@
       "GCM",
       "Galois/Counter Mode"
     ],
-    "definition": "AES in Galois/Counter Mode: an AEAD cipher mode that encrypts with AES and produces an authentication tag. Hardware AES support makes it very fast.",
+    "definition": "AES in Galois/Counter Mode: authenticated encryption combining AES encryption with an integrity tag. Some processors provide hardware acceleration; actual performance depends on hardware, implementation and workload.",
     "example": "aes256-gcm@openssh.com is an AES-GCM option in OpenSSH.",
     "source": "https://csrc.nist.gov/pubs/sp/800/38/d/final"
   },
@@ -4502,9 +4497,9 @@
     "id": "cipher-block-size",
     "term": "Cipher block size",
     "aliases": [],
-    "definition": "The fixed chunk size, in bytes, that a block cipher processes at once; 16 bytes for AES. SSH pads packets to a multiple of it (or 8, whichever is larger).",
-    "example": "With AES, an SSH packet's length is padded to a multiple of 16 bytes.",
-    "source": "https://www.rfc-editor.org/rfc/rfc4253#section-6"
+    "definition": "The data-block width processed by a block cipher, 16 bytes for AES. Base RFC 4253 SSH alignment includes its length field and excludes the MAC; negotiated AEAD and other packet formats need their own rules.",
+    "example": "Base AES-CBC SSH packets align the specified packet portion to a 16-byte boundary.",
+    "source": "https://www.rfc-editor.org/rfc/rfc4253"
   },
   {
     "id": "ssh-sequence-number",
@@ -4514,9 +4509,9 @@
       "implicit sequence number",
       "packet sequence number"
     ],
-    "definition": "A per-direction packet counter that SSH never sends but includes in each message authentication code or AEAD computation, so that inserting, deleting or reordering packets is detected.",
-    "example": "The fifth packet a client sends has sequence number 4, counting from 0.",
-    "source": "https://www.rfc-editor.org/rfc/rfc4253#section-6.4"
+    "definition": "An implicit per-direction SSH packet counter, used by base RFC 4253 MACs and some negotiated constructions. SSH AES-GCM uses its own IV-based invocation counter instead; strict KEX addresses the Terrapin manipulation of affected handshake counters.",
+    "example": "The initial counter begins at zero; strict KEX resets it on the specified NEWKEYS transitions.",
+    "source": "https://www.openssh.com/txt/release-9.6"
   },
   {
     "id": "terrapin",
@@ -4537,7 +4532,7 @@
       "kex-strict"
     ],
     "definition": "The Terrapin fix: an SSH extension that resets sequence numbers at NEWKEYS and aborts if any unexpected message appears during the key exchange. Both client and server must support it.",
-    "example": "OpenSSH 9.6 added strict KEX; a 9.5 client talking to it gets no protection.",
+    "example": "OpenSSH 9.6 introduced strict KEX. Both peers must negotiate the extension; an older implementation may gain support through a backport.",
     "source": "https://www.openssh.com/txt/release-9.6"
   },
   {
@@ -4624,7 +4619,7 @@
       "ssh -A",
       "forwarded agent"
     ],
-    "definition": "An SSH option that lets a remote host ask your local SSH agent to sign authentication requests. Anyone with enough privilege on that host can use your agent while you are connected.",
+    "definition": "An SSH feature exposing the local agent's signing service through the remote host. A sufficiently privileged remote attacker can request signatures while it is reachable, subject to confirmation, destination and hardware constraints; this does not normally export the private key.",
     "example": "With ssh -A to a bastion, a root user on the bastion could log in elsewhere as you.",
     "source": "https://man.openbsd.org/ssh#A"
   },
@@ -4646,7 +4641,7 @@
       "bastions",
       "jump host"
     ],
-    "definition": "A hardened server that is the only route from outside into a private network, typically for SSH.",
+    "definition": "A hardened host used as a controlled entry point into a private network, often for SSH access. Whether it is the only available route is a deployment decision.",
     "example": "Engineers ssh to bastion.example and from there to internal servers.",
     "source": "https://en.wikipedia.org/wiki/Bastion_host"
   },
@@ -4713,7 +4708,7 @@
       "SSH_MSG_CHANNEL_WINDOW_ADJUST"
     ],
     "definition": "The number of bytes an SSH channel's sender may still send before the receiver grants more with CHANNEL_WINDOW_ADJUST. A small window limits throughput to about window ÷ RTT.",
-    "example": "A 2 MiB window over a 100 ms round trip caps one channel at about 168 Mbit/s.",
+    "example": "Under an ideal prompt-credit model, a 2 MiB window and 100 ms feedback round trip give a ceiling of about 168 Mbit/s; other limits can lower throughput.",
     "source": "https://www.rfc-editor.org/rfc/rfc4254#section-5.2"
   },
   {
@@ -4753,7 +4748,7 @@
     "aliases": [
       "FTP over TLS"
     ],
-    "definition": "FTP with its control and data connections protected by TLS. It is different from SFTP, which runs over SSH.",
+    "definition": "FTP protected using TLS, distinct from SFTP over SSH. RFC 4217 describes explicit TLS negotiation on the FTP control connection; implicit FTPS commonly uses a separately configured port such as 990.",
     "example": "A legacy bank file exchange may use FTPS on port 990.",
     "source": "https://www.rfc-editor.org/rfc/rfc4217"
   },
@@ -4890,7 +4885,7 @@
       "protobuf tag",
       "field tag"
     ],
-    "definition": "The value written before each protobuf field, equal to (field_number << 3) | wire_type: the field number shifted left 3 bits, combined with a 3-bit wire type.",
+    "definition": "The integer before a protobuf field value that combines the field number and wire type. Multiplying the field number by eight and adding the three-bit wire type forms the tag, which is itself encoded as a varint.",
     "example": "Field 1 with wire type 0 gives tag 0x08; field 2 with wire type 2 gives 0x12.",
     "source": "https://protobuf.dev/programming-guides/encoding/#structure"
   },
@@ -4950,7 +4945,7 @@
       "compressed flag",
       "compressed-flag"
     ],
-    "definition": "The 5 bytes gRPC puts before every message inside HTTP/2 DATA frames: a 1-byte compressed flag (0 or 1) and a 4-byte big-endian message length.",
+    "definition": "The five bytes before each native gRPC message inside HTTP/2 DATA: a one-byte compressed flag and a four-byte big-endian length. The length counts the following encoded message bytes, compressed when the flag is one, and excludes the five-byte prefix.",
     "example": "A 7-byte uncompressed message is prefixed with 00 00 00 00 07.",
     "source": "https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md"
   },
@@ -5014,7 +5009,7 @@
     "aliases": [
       "grpc-timeout"
     ],
-    "definition": "The time by which a gRPC call must finish, sent to the server in the grpc-timeout header as a number plus unit (H, M, S, m, u, n). After it passes the call ends with DEADLINE_EXCEEDED.",
+    "definition": "The time by which a gRPC call must complete. Native gRPC sends an optional remaining duration in grpc-timeout; the client can report DEADLINE_EXCEEDED even after the server committed work, and the server may not send that same status.",
     "example": "grpc-timeout: 250m means 250 milliseconds remain.",
     "source": "https://grpc.io/docs/guides/deadlines/"
   },
@@ -5160,7 +5155,7 @@
       "keepalive ping",
       "keepalive pings"
     ],
-    "definition": "A small message sent on an idle connection to check that the peer is still there and keep middleboxes from dropping it. gRPC uses HTTP/2 PING frames; BitTorrent sends a zero-length message.",
+    "definition": "HTTP/2 PING-based checking of a gRPC connection, subject to client and server policy. It can help detect a broken path or retain some middlebox state, but does not establish application health or guarantee an idle connection survives.",
     "example": "A gRPC client may ping every 30 seconds if the server's policy allows it.",
     "source": "https://grpc.io/docs/guides/keepalive/"
   },
@@ -5181,8 +5176,8 @@
       "Envoy proxy"
     ],
     "definition": "An open-source layer-7 proxy that understands HTTP/2 and gRPC, so it can balance each call (stream) separately across backends.",
-    "example": "Placing Envoy in front of gRPC backends spreads calls from one long-lived connection over all servers.",
-    "source": "https://www.envoyproxy.io/"
+    "example": "An appropriately configured HTTP/2-aware Envoy deployment can select an upstream for each gRPC call; configuration determines its balancing policy.",
+    "source": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/overview"
   },
   {
     "id": "client-side-load-balancing",
@@ -5204,7 +5199,7 @@
     ],
     "definition": "Describes a service that another service calls while handling a request; the caller is upstream.",
     "example": "If A calls B, B is downstream of A.",
-    "source": "https://en.wikipedia.org/wiki/Downstream_(networking)"
+    "source": "https://grpc.io/docs/guides/deadlines/"
   },
   {
     "id": "peer-to-peer",
@@ -5296,7 +5291,7 @@
       "BitTorrent pieces",
       "piece hashes"
     ],
-    "definition": "A fixed-size chunk of a torrent's content, chosen when the torrent is made (for example 256 KiB), with its own 20-byte SHA-1 hash in the metainfo. Peers trade and verify content piece by piece.",
+    "definition": "A chunk of BitTorrent v1 content with a chosen nominal piece length and a 20-byte SHA-1 digest in metainfo. The final piece may be shorter; v2 instead defines per-file SHA-256 Merkle trees.",
     "example": "A 1 GiB file with 256 KiB pieces has 4,096 pieces and 81,920 bytes of hashes.",
     "source": "https://www.bittorrent.org/beps/bep_0003.html"
   },
@@ -5406,7 +5401,7 @@
       "µTP"
     ],
     "definition": "Micro Transport Protocol: a UDP-based transport for BitTorrent with delay-based congestion control (LEDBAT) that backs off when it detects queueing, yielding to other traffic.",
-    "example": "A uTP download slows as soon as a household video call starts adding delay.",
+    "example": "uTP delay-based congestion control aims to yield when competing traffic increases delay; it does not promise an immediate response to every call.",
     "source": "https://www.bittorrent.org/beps/bep_0029.html"
   },
   {
@@ -5553,7 +5548,7 @@
     "aliases": [
       "Kademlia DHT"
     ],
-    "definition": "A distributed hash table design (Maymounkov and Mazières, 2002) that measures distance between IDs with XOR and keeps routing tables of k-buckets, giving lookups in about log n steps.",
+    "definition": "A distributed hash-table design using XOR distance and bounded contact lists called k-buckets. Its logarithmic lookup analysis assumes suitable identifier distribution and maintained live routing information; churn and adversaries can disrupt progress.",
     "example": "BitTorrent's Mainline DHT and IPFS are based on Kademlia.",
     "source": "https://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf"
   },
@@ -5563,7 +5558,7 @@
     "aliases": [
       "BitTorrent DHT"
     ],
-    "definition": "BitTorrent's Kademlia-based DHT (BEP 5), which stores which peers have each info-hash, using bencoded KRPC messages over UDP and k = 8.",
+    "definition": "BitTorrent's Kademlia-based distributed hash table, defined by BEP 5. It stores peer contact information associated with an info-hash using bencoded KRPC messages over UDP and a bucket capacity of eight contacts.",
     "example": "A magnet link with no tracker finds peers via get_peers queries in the Mainline DHT.",
     "source": "https://www.bittorrent.org/beps/bep_0005.html"
   },
@@ -5584,7 +5579,7 @@
       "true metric",
       "triangle inequality"
     ],
-    "definition": "A distance function that is zero only from a point to itself, symmetric (d(a, b) = d(b, a)) and obeys the triangle inequality: going via a third point is never shorter (d(a, c) ≤ d(a, b) + d(b, c)).",
+    "definition": "A nonnegative distance function that is zero exactly when its two inputs are the same, symmetric when their order is exchanged, and satisfies the triangle inequality. The triangle inequality means travelling through a third point cannot make the distance shorter than the direct distance.",
     "example": "XOR distance satisfies all three, so it is a true metric.",
     "source": "https://en.wikipedia.org/wiki/Metric_space"
   },
@@ -5597,7 +5592,7 @@
       "ID space"
     ],
     "definition": "The identifier, 160 bits in Kademlia and Mainline DHT, that each DHT node picks and that shares a space with keys such as info-hashes.",
-    "example": "A node with ID 1000… is responsible for keys whose IDs start similarly.",
+    "example": "Contacts are ranked by their XOR distance to the target; a matching prefix alone does not prove one node is the nearest.",
     "source": "https://www.bittorrent.org/beps/bep_0005.html"
   },
   {
@@ -5606,7 +5601,7 @@
     "aliases": [
       "k-buckets"
     ],
-    "definition": "One list in a Kademlia routing table, holding up to k contacts whose XOR distance from you lies in one power-of-two range. Nearby ranges are covered in detail, far ones sparsely.",
+    "definition": "A bounded list of contacts in a Kademlia routing table. The original distance-bucket model uses power-of-two XOR-distance ranges; Mainline DHT uses splitting identifier ranges and a capacity of eight contacts per bucket.",
     "example": "With k = 8, each bucket in Mainline DHT holds at most 8 contacts.",
     "source": "https://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf"
   },
@@ -5617,7 +5612,7 @@
       "DHT routing tables"
     ],
     "definition": "The set of contacts a DHT node keeps, organised in k-buckets, used to find nodes closer to a target ID.",
-    "example": "A Mainline DHT node typically keeps a few hundred contacts in its routing table.",
+    "example": "A Mainline node splits eligible buckets as its known identifier ranges fill; its actual contact count depends on population and maintenance.",
     "source": "https://www.bittorrent.org/beps/bep_0005.html"
   },
   {
@@ -5658,7 +5653,7 @@
     "aliases": [
       "IP-bound token"
     ],
-    "definition": "An opaque value returned by get_peers that must be presented in a later announce_peer to the same node. It is tied to the requester's IP address, preventing announcements on behalf of other IPs.",
+    "definition": "A value returned by a Mainline DHT node in get_peers and required by that same node for announce_peer. It is bound to the requester's IP to limit forged announcements of other addresses; it does not prove possession of the content.",
     "example": "A node rejects announce_peer whose token does not match the sender's IP.",
     "source": "https://www.bittorrent.org/beps/bep_0005.html"
   },
@@ -5734,7 +5729,7 @@
     ],
     "definition": "The exchange of setup information, such as SDP offers, answers and ICE candidates, that peers need before connecting. WebRTC leaves the method to the application.",
     "example": "Two browsers pass SDP through the app's WebSocket server before media flows.",
-    "source": "https://webrtcforthecurious.com/docs/02-signaling/"
+    "source": "https://www.rfc-editor.org/rfc/rfc9429"
   },
   {
     "id": "sdp",
@@ -5824,8 +5819,8 @@
       "server-reflexive candidates",
       "Server-reflexive (srflx) candidates"
     ],
-    "definition": "An ICE candidate giving the public address and port a NAT mapped for you, learned by asking a STUN server.",
-    "example": "A STUN reply saying you appear as 203.0.113.5:61234 gives a srflx candidate.",
+    "definition": "An ICE candidate for the externally observed mapped address and port learned from a STUN response. That mapping need not apply to every destination or be globally reachable through all intervening NATs.",
+    "example": "A STUN response reporting 203.0.113.5:61234 supplies an illustrative server-reflexive address.",
     "source": "https://www.rfc-editor.org/rfc/rfc8445"
   },
   {
@@ -5847,7 +5842,7 @@
       "peer-reflexive",
       "prflx"
     ],
-    "definition": "An ICE candidate discovered during connectivity checks, when a peer's check arrives from an address not previously signalled.",
+    "definition": "An ICE candidate learned during connectivity checks rather than initial gathering: an unrecognised authenticated request source can create a remote peer-reflexive candidate, and a successful check can reveal a new local mapped address.",
     "example": "A NAT mapping seen only during checks becomes a peer-reflexive candidate.",
     "source": "https://www.rfc-editor.org/rfc/rfc8445"
   },
@@ -5868,7 +5863,7 @@
       "candidate pairs"
     ],
     "definition": "One local and one remote ICE candidate combined into a possible path; ICE checks pairs in priority order.",
-    "example": "host-to-host is checked before srflx-to-srflx because it has higher priority.",
+    "example": "Candidate priorities, local preferences and the pair-priority calculation order checks; host-to-host is not an unconditional first choice in every configuration.",
     "source": "https://www.rfc-editor.org/rfc/rfc8445"
   },
   {
@@ -5921,9 +5916,9 @@
     "aliases": [
       "hole punching"
     ],
-    "definition": "Getting two NATed peers to connect by having each send to the other's public mapping, so each NAT sees outbound traffic and admits the replies.",
-    "example": "If both NATs keep the same mapping for every destination, simultaneous sends open a direct path.",
-    "source": "https://en.wikipedia.org/wiki/UDP_hole_punching"
+    "definition": "Attempting direct UDP communication by creating outbound NAT/filtering state and exchanging checks against candidate public mappings. Success depends on mapping and filtering behaviour, timeouts and policy rather than being guaranteed by simultaneous sends.",
+    "example": "ICE checks establish whether a particular candidate pair actually works.",
+    "source": "https://www.rfc-editor.org/rfc/rfc8445"
   },
   {
     "id": "stun-magic-cookie",
@@ -5933,16 +5928,16 @@
       "0x2112A442"
     ],
     "definition": "The fixed value 0x2112A442 in every STUN header, used to recognise STUN packets and to XOR the reported address.",
-    "example": "A packet with 0x2112A442 at bytes 4–7 is very likely STUN.",
+    "example": "A STUN parser checks the magic cookie along with message type, length and other required structure; matching four bytes alone does not validate a packet.",
     "source": "https://www.rfc-editor.org/rfc/rfc8489#section-6"
   },
   {
     "id": "xor-mapped-address",
     "term": "XOR-MAPPED-ADDRESS",
     "aliases": [],
-    "definition": "The STUN attribute reporting your public address with the port XORed with 0x2112 and the IPv4 address XORed with the magic cookie, so NATs that rewrite addresses in payloads cannot alter it.",
+    "definition": "A STUN attribute encoding a mapped port and IP address through XOR with the magic cookie and, for IPv6, the transaction ID. This obfuscation avoids some payload-rewriting interference; it is neither encryption nor a guarantee against every middlebox.",
     "example": "Port 61234 is sent as 61234 XOR 0x2112.",
-    "source": "https://www.rfc-editor.org/rfc/rfc8489#section-14.2"
+    "source": "https://www.rfc-editor.org/rfc/rfc8489"
   },
   {
     "id": "transaction-id-stun",
@@ -5963,7 +5958,7 @@
       "endpoint-dependent mappings",
       "endpoint-dependent NAT mappings"
     ],
-    "definition": "A NAT that gives a different public port for each destination, so the mapping a STUN server sees does not work for a peer. It often defeats direct hole punching.",
+    "definition": "An older label often used for endpoint-dependent NAT mappings, where the mapping can depend on the remote endpoint. A STUN-learned mapping may not apply to another destination, but the label alone does not prove every possible direct path fails.",
     "example": "Your NAT may use port 61234 to the STUN server but 61890 to the peer.",
     "source": "https://www.rfc-editor.org/rfc/rfc4787"
   },
@@ -5996,7 +5991,7 @@
     "aliases": [
       "Secure Real-time Transport Protocol"
     ],
-    "definition": "Secure RTP: RTP with encrypted payloads and authentication tags. Headers stay readable.",
+    "definition": "A security profile for RTP/RTCP providing negotiated encryption, integrity and replay protection. Ordinary RTP headers remain visible; optional header-extension encryption and negotiated transforms affect details.",
     "example": "WebRTC media always travels as SRTP.",
     "source": "https://www.rfc-editor.org/rfc/rfc3711"
   },
@@ -6015,9 +6010,9 @@
       "Stream Control Transmission Protocol",
       "SCTP over DTLS"
     ],
-    "definition": "Stream Control Transmission Protocol: a transport with multiple independent streams, each reliable or unreliable and ordered or unordered. WebRTC runs it inside DTLS for data channels.",
+    "definition": "A message-oriented transport with multiple streams and reliable delivery in its base protocol, with ordered or unordered messages. WebRTC combines SCTP extensions for partial reliability with DTLS to offer configurable data-channel reliability.",
     "example": "A game can send chat on a reliable SCTP stream and positions on an unreliable one.",
-    "source": "https://www.rfc-editor.org/rfc/rfc9260"
+    "source": "https://www.rfc-editor.org/rfc/rfc8831"
   },
   {
     "id": "data-channel",
@@ -6034,7 +6029,7 @@
     "id": "bundle",
     "term": "BUNDLE",
     "aliases": [],
-    "definition": "An SDP mechanism that carries all media and data of a WebRTC session over one ICE transport (one port) instead of one per stream.",
+    "definition": "SDP negotiation grouping compatible media descriptions onto a shared transport. A BUNDLE group can include several media/data streams, but the mechanism does not require every description in every session to share one group.",
     "example": "With BUNDLE, audio, video and data share a single candidate pair.",
     "source": "https://www.rfc-editor.org/rfc/rfc9143"
   },
@@ -6054,7 +6049,7 @@
     "aliases": [
       "full mesh"
     ],
-    "definition": "A group-call layout in which every participant sends its stream directly to every other participant, so each uploads n − 1 copies.",
+    "definition": "A group-call layout in which each participant sends a copy of its stream to every other participant. This makes each client's upload grow with the number of other participants.",
     "example": "In a 6-person mesh at 1.2 Mbit/s, each client uploads 5 × 1.2 = 6 Mbit/s.",
     "source": "https://webrtcforthecurious.com/docs/08-applied-webrtc/"
   },
@@ -6101,7 +6096,7 @@
     "aliases": [
       "Real-time Transport Protocol"
     ],
-    "definition": "Real-time Transport Protocol: the packet format for audio and video over UDP, with a 12-byte header carrying payload type, sequence number, timestamp and source ID.",
+    "definition": "Real-time Transport Protocol: packet structure and timing/source conventions for media, commonly carried over UDP but usable with other transports. Its fixed header is twelve bytes before contributing-source entries, extensions, payload and any padding.",
     "example": "A 20 ms Opus audio packet travels as one RTP packet.",
     "source": "https://www.rfc-editor.org/rfc/rfc3550"
   },
@@ -6109,9 +6104,7 @@
     "id": "rtcp",
     "term": "RTCP",
     "aliases": [
-      "RTP Control Protocol",
-      "RTCP sender report",
-      "RTCP receiver report"
+      "RTP Control Protocol"
     ],
     "definition": "RTP Control Protocol: RTP's companion that sends periodic reports on loss, jitter, round-trip time and timing, plus feedback such as NACK and PLI.",
     "example": "Receiver reports say what fraction of packets was lost since the last report.",
@@ -6155,9 +6148,9 @@
       "Opus audio",
       "opus/48000/2"
     ],
-    "definition": "An open audio codec for speech and music, mandatory in WebRTC. Its RTP clock always runs at 48,000 ticks per second.",
+    "definition": "An open codec for speech and music that WebRTC implementations must support, although a call may negotiate another supported codec. The Opus RTP timestamp clock is 48,000 ticks per second, independently of the actual encoded audio sampling mode.",
     "example": "A 20 ms Opus frame advances the RTP timestamp by 960.",
-    "source": "https://www.rfc-editor.org/rfc/rfc7587"
+    "source": "https://www.rfc-editor.org/rfc/rfc7874"
   },
   {
     "id": "h264",
@@ -6165,8 +6158,8 @@
     "aliases": [
       "AVC"
     ],
-    "definition": "A widely used video codec (also called AVC). Its RTP clock, like most video, runs at 90,000 ticks per second.",
-    "example": "Most WebRTC browsers can send H.264 video.",
+    "definition": "A video coding standard also called AVC. Its RTP payload format uses a 90,000-tick-per-second timestamp clock; other payload formats define their own clock rules.",
+    "example": "With the H.264 RTP payload format, a timestamp difference of 90,000 ticks represents one second.",
     "source": "https://www.rfc-editor.org/rfc/rfc6184"
   },
   {
@@ -6244,8 +6237,8 @@
       "marker bit"
     ],
     "definition": "A 1-bit RTP header flag whose meaning the payload format defines; for video it usually marks the last packet of a frame.",
-    "example": "A receiver can start decoding a frame once the packet with M=1 arrives.",
-    "source": "https://www.rfc-editor.org/rfc/rfc3550"
+    "example": "H.264 marks the last packet of an access unit; loss or reordering means receiving that bit alone does not prove the complete frame is available.",
+    "source": "https://www.rfc-editor.org/rfc/rfc6184"
   },
   {
     "id": "ssrc",
@@ -6253,7 +6246,7 @@
     "aliases": [
       "synchronisation source"
     ],
-    "definition": "Synchronisation source: a random 32-bit number in each RTP header that identifies the stream's sender.",
+    "definition": "Synchronisation source: a 32-bit identifier chosen to distinguish an RTP timing/sequence source within a session. It is normally initially random to reduce collisions, and does not permanently authenticate a person or device.",
     "example": "Audio and video from one browser have different SSRCs.",
     "source": "https://www.rfc-editor.org/rfc/rfc3550"
   },
@@ -6293,7 +6286,8 @@
     "term": "Sender report (RTCP)",
     "aliases": [
       "sender report",
-      "sender reports"
+      "sender reports",
+      "RTCP sender report"
     ],
     "definition": "An RTCP report from a media sender that pairs its current RTP timestamp with wall-clock time in NTP format, plus packet and byte counts.",
     "example": "Receivers use sender reports to line up audio and video timelines.",
@@ -6304,11 +6298,12 @@
     "term": "Receiver report (RTCP)",
     "aliases": [
       "receiver report",
-      "receiver reports"
+      "receiver reports",
+      "RTCP receiver report"
     ],
     "definition": "An RTCP report from a receiver giving fraction lost, cumulative loss, highest sequence number, interarrival jitter and the LSR and DLSR timing fields.",
-    "example": "A receiver report of fraction lost 0.05 means 5% of packets went missing.",
-    "source": "https://www.rfc-editor.org/rfc/rfc3550#section-6.4.2"
+    "example": "Fraction lost is stored in an eight-bit fixed-point fraction: a field value of 13 represents approximately 5.08% loss for the reporting interval.",
+    "source": "https://www.rfc-editor.org/rfc/rfc3550"
   },
   {
     "id": "lip-sync",
@@ -6317,7 +6312,7 @@
       "lip sync"
     ],
     "definition": "Playing audio and video so speech lines up with mouth movements. RTP uses sender reports to map each stream's unrelated RTP clock to a common wall-clock time.",
-    "example": "Without lip-sync, a 200 ms audio lead is obvious to viewers.",
+    "example": "Receivers use the timing relationship from sender reports to align audio and video; acceptable mismatch depends on the application and observer.",
     "source": "https://www.rfc-editor.org/rfc/rfc3550"
   },
   {
@@ -6335,7 +6330,7 @@
       "last SR timestamp"
     ],
     "definition": "Last SR: the middle 32 bits of the NTP timestamp from the most recent sender report, echoed back in a receiver report so the sender can compute round-trip time.",
-    "example": "If the sender report left at time T, LSR = T.",
+    "example": "A receiver echoes the middle 32 bits of the sender-report NTP timestamp; zero indicates that no sender report has yet been received.",
     "source": "https://www.rfc-editor.org/rfc/rfc3550#section-6.4.1"
   },
   {
@@ -6366,7 +6361,7 @@
       "picture loss indication"
     ],
     "definition": "Picture loss indication: an RTCP feedback message telling a video sender that the receiver lost picture data, prompting it to send recovery data such as an intra picture.",
-    "example": "After heavy loss, a receiver sends PLI and soon gets a fresh keyframe.",
+    "example": "A PLI reports picture loss and can prompt recovery, but does not guarantee an immediate keyframe.",
     "source": "https://www.rfc-editor.org/rfc/rfc4585"
   },
   {
@@ -6378,9 +6373,9 @@
       "keyframes",
       "I-frame"
     ],
-    "definition": "A video frame encoded without reference to other frames, so a decoder can start or recover from it. It is much larger than frames that encode only changes.",
-    "example": "A sender answers a PLI by sending a keyframe.",
-    "source": "https://en.wikipedia.org/wiki/Intra-frame_coding"
+    "definition": "A video picture encoded without inter-picture prediction. It can support recovery, but codec-specific random-access rules matter; intra pictures are often larger than predicted pictures rather than invariably so.",
+    "example": "A PLI may prompt an encoder to send recovery information such as an appropriate intra picture.",
+    "source": "https://www.rfc-editor.org/rfc/rfc4585"
   },
   {
     "id": "google-congestion-control",
@@ -6389,7 +6384,7 @@
       "GCC"
     ],
     "definition": "A WebRTC congestion-control algorithm that estimates available bandwidth from packet delay and loss and adjusts the encoder's bitrate.",
-    "example": "When delay starts rising, GCC lowers the video bitrate before packets are lost.",
+    "example": "Delay-based congestion feedback can cause an encoder to reduce its sending target; the response depends on the algorithm version, observations and implementation.",
     "source": "https://datatracker.ietf.org/doc/html/draft-ietf-rmcat-gcc-02"
   },
   {
@@ -6399,7 +6394,7 @@
       "transport-wide congestion control",
       "transport-cc"
     ],
-    "definition": "RTCP feedback reporting the arrival time of every packet across all streams of a connection, so the sender can run delay-based congestion control.",
+    "definition": "A congestion-feedback design reporting transport packet receipt and timing across media streams. Packet-status ranges can include missing packets; reports do not necessarily provide an arrival timestamp for every packet on the connection.",
     "example": "The receiver reports arrival times for 100 packets in one feedback message.",
     "source": "https://datatracker.ietf.org/doc/html/draft-holmer-rmcat-transport-wide-cc-extensions-01"
   },
@@ -6420,15 +6415,15 @@
       "jitter buffers"
     ],
     "definition": "A receiver-side queue that holds media packets briefly to reorder them and smooth variable delay before playback. A bigger buffer survives more jitter but adds latency.",
-    "example": "A 60 ms jitter buffer absorbs packets arriving up to 60 ms late.",
-    "source": "https://webrtcforthecurious.com/docs/06-media-communication/"
+    "example": "An illustrative 60 ms playout margin can absorb some delay variation, but its effectiveness depends on packet timing and the buffer's policy.",
+    "source": "https://www.w3.org/TR/webrtc-stats/#dom-rtcinboundrtpstreamstats-jitterbufferdelay"
   },
   {
     "id": "playout-deadline",
     "term": "Playout deadline",
     "aliases": [],
-    "definition": "The moment a media packet must be played; arriving after it makes the packet useless.",
-    "example": "A packet arriving after its playout deadline is discarded even though it was delivered.",
+    "definition": "The latest useful playback time for a media unit under an application's scheduling policy. A packet arriving later may be discarded for that unit, although a receiver can sometimes use late data for decoder state or other purposes.",
+    "example": "A late packet may miss current playout even though the transport eventually delivers it.",
     "source": "https://www.rfc-editor.org/rfc/rfc3550"
   },
   {
@@ -6460,14 +6455,12 @@
     ],
     "definition": "The Institute of Electrical and Electronics Engineers, a professional body that publishes engineering standards such as IEEE 802.11 (Wi-Fi) and IEEE 1588 (the Precision Time Protocol).",
     "example": "PTP is standardised as IEEE 1588.",
-    "source": "https://www.ieee.org/about/"
+    "source": "https://www.nist.gov/el/intelligent-systems-division-73500/introduction-ieee-1588"
   },
   {
     "id": "serialisation-delay",
     "term": "Serialisation delay",
     "aliases": [
-      "serialisation",
-      "serialization",
       "serialization delay",
       "serialisation time"
     ],
@@ -6489,8 +6482,8 @@
     "id": "server-processing-time",
     "term": "Processing time (server)",
     "aliases": [
-      "processing time",
-      "server processing time"
+      "server processing time",
+      "server handling time"
     ],
     "definition": "The time a server spends handling a request between receiving it and sending the reply. NTP measures it with two server timestamps and subtracts it from the round trip, so it is not mistaken for network delay.",
     "example": "A server that receives at 10.150 s and replies at 10.152 s has 2 ms of processing time.",
@@ -6556,7 +6549,7 @@
     "aliases": [
       "real-time media packets"
     ],
-    "definition": "Audio or video, such as a call, that must be played within a short deadline after capture. A packet that arrives after its playout time is useless, so such media usually runs over UDP and tolerates some loss rather than waiting for retransmission.",
+    "definition": "Audio or video with a playback schedule and limited delay budget. Data arriving after a unit’s playout deadline may be discarded for that unit, although late data can sometimes support decoder state or recovery; UDP and timely retransmission policies make different tradeoffs.",
     "example": "",
     "source": "https://www.rfc-editor.org/rfc/rfc3550"
   },
@@ -6568,8 +6561,45 @@
       "public addresses",
       "public IP"
     ],
-    "definition": "An IP address that is routable on the public internet, as opposed to a private address (such as 192.168.1.20) used only inside a local network behind NAT.",
-    "example": "A home router might map 192.168.1.20:54400 to the public address 203.0.113.5:61234.",
-    "source": "https://www.rfc-editor.org/rfc/rfc1918"
+    "definition": "An address intended for globally routable internet communication, unlike private or other special-purpose addresses. Actual reachability also depends on routing and policy; documentation address ranges used in examples are not live public destinations.",
+    "example": "The illustrative mapping 192.168.1.20:54400 to 203.0.113.5:61234 uses a documentation-only external address.",
+    "source": "https://www.rfc-editor.org/rfc/rfc5737"
+  },
+  {
+    "id": "app-h2-flow-control",
+    "term": "HTTP/2 flow control",
+    "aliases": [
+      "HTTP/2 credit",
+      "HTTP/2 flow-control window",
+      "HTTP/2 stream credit window"
+    ],
+    "definition": "HTTP/2 byte credit limiting DATA separately for each stream and the connection, on top of TCP receive credit and congestion control. Both available HTTP/2 windows must permit the DATA payload; stream settings and WINDOW_UPDATE have distinct roles.",
+    "example": "A receiver can stop granting one stream credit while continuing other streams if connection credit remains.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9113#section-5.2"
+  },
+  {
+    "id": "app-email-spf-policy",
+    "term": "Email SPF",
+    "aliases": [
+      "email SPF",
+      "Sender Policy Framework",
+      "SPF policy",
+      "SPF evaluation",
+      "SPF envelope checks"
+    ],
+    "definition": "Sender Policy Framework (RFC 7208): a domain publishes a TXT record listing the IP addresses allowed to send mail using it as envelope sender. Receivers check the connecting IP against it.",
+    "example": "v=spf1 ip4:192.0.2.0/24 -all allows only that /24 range.",
+    "source": "https://www.rfc-editor.org/rfc/rfc7208"
+  },
+  {
+    "id": "app-unpartitioned-cookie",
+    "term": "Unpartitioned cookie",
+    "aliases": [
+      "unpartitioned cookies",
+      "unpartitioned"
+    ],
+    "definition": "A cookie stored without a top-level-site partition key in the context being discussed. This is distinct from an explicitly Partitioned cookie; browser privacy policy can still block or partition storage in other contexts.",
+    "example": "Deleting the accepted unpartitioned cookie in the quiz requires matching its ordinary name, domain/host-only scope and path.",
+    "source": "https://privacysandbox.google.com/cookies/chips"
   }
 ]

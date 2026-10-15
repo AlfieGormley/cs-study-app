@@ -1,0 +1,66 @@
+[
+  {
+    "id": "app-http2-quic-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A phone on Wi-Fi has an active QUIC connection. It moves to 5G, and its next packet arrives from a new IP address with a new destination connection ID. What must the server do **before** sending large amounts of data to the new address?",
+    "options": [
+      {
+        "text": "Send PATH_CHALLENGE and wait for a matching PATH_RESPONSE, sending at most limited data meanwhile, then reset congestion state for the new path",
+        "explanation": "Correct. Path validation proves reachability at the new address; until then anti-amplification limits apply. The congestion controller starts afresh because the new path's capacity is unknown."
+      },
+      {
+        "text": "Nothing; the connection ID proves the packet is genuine, so it can send at full rate immediately",
+        "explanation": "A connection ID is visible routing information, not authentication. Successful packet authentication uses cryptographic keys, and still does not establish reachability at an unvalidated source address."
+      },
+      {
+        "text": "Perform a new TLS handshake to derive fresh keys",
+        "explanation": "Migration keeps the existing keys; no new handshake is needed. That is the whole point."
+      },
+      {
+        "text": "Reject the packet, because only the server may migrate",
+        "explanation": "It is the other way round: only the client can actively migrate under RFC 9000."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The packet decrypts with the connection's keys and uses a connection ID the server issued, so it belongs to the connection.\n2. But the source address could be spoofed: an on-path attacker could rewrite it to aim traffic at a victim.\n3. So the server sends PATH_CHALLENGE (8 random bytes) to the new address. An authenticated echo validates path reachability; a relay can also forward traffic, so this is not proof of physical location.\n4. Meanwhile it limits what it sends there:\n\n```formula\nB_sent ≤ 3 B_recv\nwhere\nB_sent: bytes the server sends to the unvalidated address\nB_recv: bytes it has received from that address\n≤: is at most\nIn words: until the path is validated, the server sends no more than three times what it received from the new address.\n```\n\n5. After validation it resets cwnd and RTT estimates, since 5G may differ wildly from Wi-Fi.",
+    "link": {
+      "title": "RFC 9000: QUIC — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9000"
+    }
+  },
+  {
+    "id": "app-http2-quic-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You run QUIC behind a layer-4 load balancer that hashes the UDP 4-tuple to pick a backend. Users report HTTP/3 connections dropping when they walk between Wi-Fi and cellular, or after NAT rebinding. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "After migration the 4-tuple changes, so the balancer likely sends packets to a backend with no state for the connection",
+        "explanation": "A changed hash input can select a different backend lacking state. It need not do so on every migration, so confirm the selected backend in logs."
+      },
+      {
+        "text": "A coordinated CID-aware routing design can retain the backend across migrations",
+        "explanation": "A mapping or routing information encoded in issued CIDs can keep established-connection packets at the correct backend. Initial packets and ID changes also need coordinated handling."
+      },
+      {
+        "text": "Setting `disable_active_migration` stops NAT rebinding from changing the client's address",
+        "explanation": "The parameter restricts deliberate migration under its specified conditions; it cannot stop a NAT rebinding. The resulting changed tuple may map to another backend."
+      },
+      {
+        "text": "Because the connection ID is in the clear in short headers, the balancer can read it without decryption keys",
+        "explanation": "Correct. The destination connection ID is not encrypted (it must be readable for routing), though the packet number and payload are protected."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A changed tuple may map to another backend without state; confirm this rather than treating it as inevitable. Connection IDs remain visible, so coordinated routing can use them without decrypting QUIC payloads. Nonzero issued IDs, Initial routing and lifecycle changes need handling. disable_active_migration does not stop NAT rebinding.",
+    "link": {
+      "title": "The Illustrated QUIC Connection",
+      "url": "https://quic.xargs.org/"
+    }
+  }
+]

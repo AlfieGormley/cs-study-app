@@ -1,0 +1,70 @@
+[
+  {
+    "id": "app-http2-quic-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An HTTP/2 client receiving a download advertises a 65,535-byte stream window. In an ideal model it returns credit promptly, with 80 ms round-trip feedback delay, negligible serialization, ample connection/TCP credit and no other bottleneck. Approximately what sustained rate does this stream window allow?",
+    "options": [
+      {
+        "text": "About 800 kbit/s",
+        "explanation": "This divides by 80 without converting bytes to bits and ms to seconds correctly. 65,535 B per 0.08 s is about 819 kilobytes per second, i.e. about 6.5 Mbit/s."
+      },
+      {
+        "text": "Unlimited, because TCP's window controls throughput, not HTTP/2's",
+        "explanation": "HTTP/2 stream and connection credit, TCP receive credit and congestion control all constrain sending; here the other constraints are stipulated not to be limiting."
+      },
+      {
+        "text": "About 52 Mbit/s",
+        "explanation": "That multiplies by 8 twice. 819 kilobytes per second × 8 bits ≈ 6.5 Mbit/s."
+      },
+      {
+        "text": "About 6.5 Mbit/s",
+        "explanation": "Correct. At most one window of data can be in flight per round trip: 65,535 B ÷ 0.08 s ≈ 819 kilobytes per second ≈ 6.5 Mbit/s."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The receiver for a download is the client. At most one window can be in flight per round trip, so under the stated ideal model:\n\n```formula\nT ≈ W / RTT\nT ≈ 65,535 B / 0.080 s\nT ≈ 819,187.5 B/s\nT ≈ 6,553,500 bit/s ≈ 6.55 Mbit/s\nwhere\nT: the highest sustained rate the stream window allows\nW: the stream flow-control window, 65,535 bytes (B)\nRTT: the round-trip feedback delay, 80 ms = 0.080 seconds (s)\nB: bytes; 1 byte is 8 bits\nbit: one binary digit\nMbit: megabit, one million bits\ns: seconds\n≈: approximately equal to\nIn words: one 64 KiB window every 80 ms is about 819 kilobytes, or 6.5 megabits, per second.\n```\n\nAdditional stream credit uses SETTINGS_INITIAL_WINDOW_SIZE or WINDOW_UPDATE; connection credit uses WINDOW_UPDATE. Slow credit return can reduce throughput further.",
+    "link": {
+      "title": "RFC 9113: HTTP/2 — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9113"
+    }
+  },
+  {
+    "id": "app-http2-quic-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are true of the HTTP/2 Rapid Reset attack (CVE-2023-44487)? Select all that apply.",
+    "options": [
+      {
+        "text": "The attacker sends HEADERS and immediately RST_STREAM, repeating at high rate",
+        "explanation": "Correct. Each stream is opened and cancelled at once."
+      },
+      {
+        "text": "It evades SETTINGS_MAX_CONCURRENT_STREAMS because reset streams stop counting as open",
+        "explanation": "Correct. The concurrency limit counts open streams; a stream reset straight away is closed, so the client can open another immediately."
+      },
+      {
+        "text": "It requires breaking TLS",
+        "explanation": "The attacker need not break TLS; it establishes its own legitimate encrypted connections and abuses HTTP/2 stream processing."
+      },
+      {
+        "text": "Servers mitigate it by limiting or counting client resets and closing abusive connections",
+        "explanation": "Such controls can help; exact patches and policies differ. Some implementations also budget stream creation and outstanding backend work."
+      },
+      {
+        "text": "It works because HPACK lets the attacker forge other users' stream IDs",
+        "explanation": "Stream IDs are per connection and HPACK only compresses headers. The attack stays within the attacker's own connections."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "A concurrent-stream cap alone does not bound the rate of stream creation and cancellation. Resets can close protocol streams while dispatched work remains expensive. This can exhaust finite server capacity across attacker connections; it does not imply infinite work or that a single connection produced the reported aggregate attack rate. Mitigations should account for creation/reset work and implementation-specific resource use.",
+    "link": {
+      "title": "HTTP/2 Rapid Reset: deconstructing the record-breaking attack — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/technical-breakdown-http2-rapid-reset-ddos-attack/"
+    }
+  }
+]

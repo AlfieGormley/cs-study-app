@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 33/76. Updated 2026-10-15.
+Verified modules: 34/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -38,8 +38,9 @@ The material is divided by concept while retaining substantive explanations, exa
 | os/I/O & Event-Driven Servers | 6 | 32 | 67 | 29 | 356 | 455 | 66 |
 | os/Virtualisation & Containers | 6 | 29 | 66 | 34 | 510 | 605 | 36 |
 | networks/Network Foundations & the Link Layer | 6 | 37 | 72 | 81 | 431 | 629 | 41 |
-| networks/IP, Addressing & Routing | 7 | 38 | 84 | 54 | 435 | 611 | 64 |
+| networks/IP, Addressing & Routing | 7 | 38 | 84 | 54 | 435 | 612 | 65 |
 | networks/Transport Layer: TCP & UDP in Depth | 7 | 43 | 81 | 89 | 319 | 532 | 48 |
+| networks/Application-Layer Protocols | 6 | 42 | 69 | 65 | 623 | 734 | 49 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3231,6 +3232,7 @@ Corrections and qualifications in this conversion:
 - An observed transport address need not be globally reachable or usable by a different peer.
 - Explained IPv6 Next Header extension headers and ICMPv4/ICMPv6 numbers, the zero-exponent power-of-two case and the /32 exception to the interesting-octet shortcut. Removed unsourced unicast prevalence.
 - Preserved and checked RFC 6691 MSS/option distinctions, ID-wrap dimensions, 4-to-3 modulo assumptions, scoped OSPF flooding, DHCP cookie/BOOTP overlap, qualified defaults/traversal/DAD/ARP guarantees, standalone prerequisites and explanatory code comments.
+- Earlier definition implied all NAT gateways use public Internet addresses; now distinguishes AWS public Internet-gateway paths from private NAT gateways without Elastic IP addresses, including private transit-gateway routing.
 
 Remaining gaps:
 
@@ -3300,6 +3302,61 @@ Low-confidence areas:
 - **medium** — tcp-socket-calls-backlogs: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
 - **medium** — tcp-length-prefixed-service: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
 - **medium** — tcp-readiness-asyncio: Versioned operating-system behaviour, deployment effects or bounded timing/congestion models.. Fetched primary specification/implementation supports the qualified teaching claim, but loopback/model checks do not establish arbitrary WAN behaviour, scale or future defaults.
+
+## networks: Application-Layer Protocols
+
+[Independent verification record](../content/networks/04-application/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Receiver DMARC pass still requires either aligned result, but RFC 9989 section 8 requires fully participating domain owners to send with both aligned SPF and DKIM and forbids relying solely on SPF with p=reject. Added this distinction to the lesson, glossary and rollout question, preserving the original answer index.
+- Clarified that gRPC framing is independent of protobuf serialization, and protobuf tags are varint-encoded integers rather than invariably one byte.
+- Corrected HPACK Huffman coding to optional, HTTP/2 versus HTTP/3 field-block framing, and Connection: close to close after the response rather than prematurely after a request.
+- Corrected owned glossary entries for publicly derivable QUIC Initial protection, handshake/token address validation, Karn timestamp exceptions and conditional spin-bit observation.
+- Qualified EOF to positive-size ordinary TCP reads, moved the bounce-address alias from notification-message to envelope sender, and qualified MX fallback and equal-preference selection.
+- Eliminated remaining bare email-context SPF wording, including formula definitions, so the actual dictionary opens Email SPF rather than shortest path first.
+- Qualified release-specific SSH/TOTP/NTP examples, cryptographic performance, NAT reachability, late-media usefulness and PLI/keyframe behaviour; retained historical Kademlia uptime rationale as source-specific.
+
+Remaining gaps:
+
+- Cookie revision is a live draft; browser enforcement, partitioning/eviction and restore behaviour remain implementation/policy dependent.
+- No production HTTP parser or current browser cookie matrix is claimed.
+- HTTP/2 and SFTP throughput examples are ideal feedback models, not measured benchmarks.
+- No live QUIC migration/load-balancer or HTTP/2 reset-exhaustion experiment; research attack rate is attributed historical reporting.
+- No resolver or DNSSEC validator interoperability lab; the ASCII encoder is explicitly restricted.
+- No present-day resolver entropy, DNSSEC prevalence, KeyTrap CPU duration or browser/device policy matrix.
+- Kademlia PDF required visual reading separately; SAD DNS text was extracted through native PDFKit and its rate-limit passages read.
+- Local STARTTLS SMTP exercises certificate/hostname checking, AUTH and actual message/envelope serialisation, but no external provider delivery is claimed.
+- Provider bulk policies and RFC 9989 deployment compatibility are time-sensitive; no rollout duration or inbox-delivery guarantee.
+- No clock-accuracy measurement, NTS exchange or SSH/SFTP interoperability session; wire dialogues are labelled abbreviated protocol fixtures.
+- OpenSSH defaults are release-specific, PTP accuracy requires engineered deployment, and gRPC library defaults/propagation/receive limits differ.
+- Kademlia original PDF has broken text extraction; native PDFKit rendered pages 2–6 and those images were read for metric, state, uptake assumptions and lookup. No every-page read is claimed.
+- No torrent swarm, DHT convergence, NAT traversal or WebRTC media benchmark; finite consistency checks are not live protocol proofs.
+- No current DHT population/typical rounds/TURN share or universal interactive-latency limit.
+- Receiver DMARC pass and RFC 9989 Domain Owner full-participation requirements are now distinguished; existing deployments based on RFC 7489 can differ.
+- Secondary glossary references are retained for background concepts; their entries are scored medium rather than presented as fresh deployment measurements.
+
+Low-confidence areas:
+
+- **medium** — app-cookie-scope-and-lifetime: Source-specific operational, product or deployment details. Cookie revision and browser storage behaviour are draft/policy dependent.
+- **medium** — app-cookie-cross-site-and-cost: Source-specific operational, product or deployment details. Cookie draft, prefixes, implementation policies and encoder choices can change.
+- **medium** — app-h2-credit-and-shutdown: Source-specific operational, product or deployment details. Rapid Reset and Chrome removal are attributed historical/product claims; throughput is an ideal feedback model.
+- **medium** — app-quic-migration-and-discovery: Source-specific operational, product or deployment details. Actual migration, routing and fallback require coordinated deployment; no live migration lab.
+- **medium** — app-dns-poisoning-defences: Source-specific operational, product or deployment details. Case preservation and side-channel feasibility are implementation-specific; historical research is attributed.
+- **medium** — app-dnssec-validation-chain: Source-specific operational, product or deployment details. Standards checked; KeyTrap behaviour and operational rollover failures depend on implementation and state.
+- **medium** — app-dns-encrypted-transports: Source-specific operational, product or deployment details. Browser/device encrypted-DNS policies are version- and configuration-dependent.
+- **medium** — app-email-dmarc-alignment: Source-specific operational, product or deployment details. New May 2026 RFC conformance requirements checked; deployment compatibility and provider policy remain time-sensitive.
+- **medium** — app-email-framing-and-tls-policy: Source-specific operational, product or deployment details. Smuggling outcome depends on the vulnerable parser pair and policy; no external relay experiment.
+- **medium** — app-ntp-asymmetry-and-clocks: Source-specific operational, product or deployment details. Clock discipline, chrony/ntpd options and future UTC policy are source-specific.
+- **medium** — app-ntp-wire-and-authentication: Source-specific operational, product or deployment details. Wire fields verified; no clock-accuracy, NTS or PTP interoperability measurement.
+- **medium** — app-ssh-transport-and-authentication: Source-specific operational, product or deployment details. Release-specific OpenSSH defaults and affected Terrapin modes are source-specific; no SSH interoperability session.
+- **medium** — app-ssh-channels-and-sftp: Source-specific operational, product or deployment details. OpenSSH request defaults and SFTP draft are version-specific; throughput is an ideal model.
+- **medium** — app-grpc-status-and-operations: Source-specific operational, product or deployment details. Library defaults, propagation/cancellation and balancing depend on implementation/configuration.
+- **medium** — app-kademlia-distance-and-buckets: Source-specific operational, product or deployment details. Historical uptime rationale and distribution assumptions are not present-day population guarantees.
+- **medium** — app-kademlia-lookup-and-threats: Source-specific operational, product or deployment details. Logarithmic progress relies on maintained routing and identifier assumptions; no convergence/latency lab.
+- **medium** — app-webrtc-signalling-and-ice: Source-specific operational, product or deployment details. Actual candidate reachability and traversal depend on NAT/filtering/network policy.
+- **medium** — app-webrtc-security-and-groups: Source-specific operational, product or deployment details. Group topologies and key access depend on deployment; no browser/media interoperability benchmark.
+- **medium** — app-rtcp-feedback-and-timing: Source-specific operational, product or deployment details. RFC timing checked; GCC/transport feedback references are drafts and implementation-specific.
 
 ## synth: Sound & Digital Audio
 

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "app-dns-wire-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your company moves `example.com` to a new DNS provider that re-signs the zone with a new KSK. You forget to update the DS record at the `.com` registry. Assume only the new key remains, the stale DS is the sole supported authenticated DS, checking is enabled (CD=0), no local exception applies, and old validated cached data is exhausted. What happens to fresh signed answers from that zone?",
+    "options": [
+      {
+        "text": "Nothing changes; the new signatures are valid",
+        "explanation": "The signatures are valid under the new key, but the chain of trust links `.com` to the *old* key via DS. The new key cannot be authenticated."
+      },
+      {
+        "text": "NXDOMAIN for every name",
+        "explanation": "NXDOMAIN means the name doesn't exist. A validation failure produces SERVFAIL."
+      },
+      {
+        "text": "Answers arrive but without the AD bit",
+        "explanation": "That would happen if the zone became unsigned *and* the DS were removed (an insecure delegation). A DS that points to a missing key makes the zone bogus, not insecure."
+      },
+      {
+        "text": "SERVFAIL when those answers cannot be authenticated through the stale DS",
+        "explanation": "Correct. The validator cannot match the new DNSKEY to the parent's DS, treats the zone as bogus and refuses to return answers."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The authenticated parent DS identifies the old child DNSKEY; under the assumptions, no remaining key matches it. The validator therefore classifies the fresh signed data as bogus and normally returns SERVFAIL with checking enabled. Non-validating clients or CD requests can behave differently. A real rollover must coordinate DNSKEYs, signatures and parent DS with overlap and cache-expiry timing; replacing the DS before its new key is available can also cause an outage. Follow a documented rollover method rather than treating one ordering rule as sufficient.",
+    "link": {
+      "title": "RFC 4033: DNS Security Introduction and Requirements — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc4033"
+    }
+  },
+  {
+    "id": "app-dns-wire-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A conventional static NSEC chain in example.com has adjacent names alpha.example.com and delta.example.com. Which signed interval covers the exact absent name charlie.example.com, and what information does following such a chain expose? A complete NXDOMAIN proof may additionally need wildcard denial.",
+    "options": [
+      {
+        "text": "alpha.example.com NSEC delta.example.com; it exposes adjacent names in the conventional chain",
+        "explanation": "Correct. Charlie sorts strictly between alpha and delta. A validated NSEC RRset covers that gap; additional proof can be required to exclude a wildcard answer."
+      },
+      {
+        "text": "`charlie NSEC delta`; it reveals nothing else",
+        "explanation": "In the stated static chain, charlie is absent and is not an existing chain owner. The relevant signed interval is bounded by alpha and delta."
+      },
+      {
+        "text": "`delta NSEC kilo`; it proves everything before kilo is absent",
+        "explanation": "That record covers the gap between delta and kilo. `charlie` sorts before delta."
+      },
+      {
+        "text": "No record; DNSSEC cannot prove non-existence",
+        "explanation": "Authenticated denial of existence is exactly what NSEC and NSEC3 are for."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "In the specified canonical interval, alpha<charlie<delta. The authenticated NSEC link covers the exact-name gap, while complete denial checks also account for wildcard applicability and delegation context. Following a conventional static NSEC chain exposes its represented names. NSEC3 replaces cleartext ordering with hashed names, which still permits offline dictionary guesses; it does not promise secrecy.",
+    "link": {
+      "title": "Domain Name System Security Extensions — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Domain_Name_System_Security_Extensions"
+    }
+  }
+]

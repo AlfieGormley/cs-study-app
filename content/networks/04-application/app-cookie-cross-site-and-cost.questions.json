@@ -1,0 +1,94 @@
+[
+  {
+    "id": "app-http-wire-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A bank authenticates this transfer solely with a session cookie explicitly set SameSite=Lax. In a browser enforcing that attribute, evil.example submits a top-level POST to https://bank.example/transfer, without redirects. Does this cross-site request include that cookie?",
+    "options": [
+      {
+        "text": "Yes, because form submissions are top-level navigations",
+        "explanation": "Lax allows top-level navigations only with safe methods such as GET. A cross-site POST is excluded, which is exactly the CSRF case Lax was designed to stop."
+      },
+      {
+        "text": "Yes, unless the cookie is also HttpOnly",
+        "explanation": "HttpOnly only hides the cookie from JavaScript. It has no effect on which requests carry the cookie."
+      },
+      {
+        "text": "No, because the request is a cross-site POST, which Lax excludes",
+        "explanation": "Correct. Lax sends cookies on cross-site top-level GET navigations (following a link) but not on cross-site POSTs, iframes, images or fetches."
+      },
+      {
+        "text": "No, because cookies are never sent to a different origin than the current page",
+        "explanation": "Cookie host matching uses the destination. SameSite=None;Secure could permit this request to carry a cookie, but other cookie and privacy policies can still block it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Is the request cross-site? Page site: `https://evil.example`; target site: `https://bank.example`. Different registrable domains, so yes.\n2. SameSite=Lax rule: attach on cross-site requests only if it is a top-level navigation **and** the method is safe (GET, HEAD).\n3. The method is POST, so the cookie is withheld.\n4. The bank receives an unauthenticated request and the CSRF fails.\n\nCaveat: if the bank changed state on a GET, a simple cross-site link could still trigger it under Lax.",
+    "link": {
+      "title": "SameSite cookies explained — web.dev",
+      "url": "https://web.dev/articles/samesite-cookies-explained"
+    }
+  },
+  {
+    "id": "app-http-wire-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A page causes 61 actual HTTP/1.1 network requests: 1 HTML and 60 images. Each sends 2,500 bytes of cookie values, with no header compression or retransmission. Approximately how many repeated cookie bytes are uploaded?",
+    "options": [
+      {
+        "text": "About 2.5 KB, because cookies are sent once per connection",
+        "explanation": "HTTP/1.1 cookies are sent on every request, not once per connection. (HTTP/2's HPACK can compress repeats, but this question is about the raw header bytes.)"
+      },
+      {
+        "text": "Nothing, because browsers don't send cookies on image requests",
+        "explanation": "The question explicitly states that all 61 requests carry the cookies. In general eligibility depends on attributes and browser policy, not merely whether the request is for an image."
+      },
+      {
+        "text": "About 15 MB",
+        "explanation": "That is 100 times too big: 61 × 2,500 B is about 152,500 bytes, not 15 million."
+      },
+      {
+        "text": "About 150 KB",
+        "explanation": "Correct. 61 requests (page plus 60 images) × 2,500 bytes ≈ 152 KB of upload, which matters on slow mobile uplinks."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```formula\nC = Nc\nC = 61 × 2,500 B = 152,500 B\nt = (8C) / R\nt = 1,220,000 bit / (10^6 bit/s)\nt = 1.22 s\nwhere\nC: the total repeated cookie bytes uploaded\nN: the number of requests carrying the cookies; 1 page plus 60 images = 61\nc: the cookie bytes per request; here 2,500\nt: the time those bytes take to send at rate R\nR: a hypothetical upload rate of 1 megabit per second, 10^6 bits per second\n^: \"to the power of\"; 10^6 is one million\nB: bytes; 1 byte is 8 bits\nbit: one binary digit\ns: seconds\nIn words: 61 requests of 2,500 cookie bytes upload about 150 kB, which takes about 1.2 seconds of sending on a 1 Mbit/s uplink.\n```\n\nThat is approximately 150 kB. Those bytes require 1.22 seconds of aggregate serialization, not necessarily 1.22 seconds added page latency. Smaller cookies or a host outside cookie scope reduce this traffic. HTTP/2/3 may compress repeated values, but savings depend on indexing policy and table state; sensitive cookies may be sent without indexing.",
+    "link": {
+      "title": "Using HTTP cookies — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Cookies"
+    }
+  },
+  {
+    "id": "app-http-wire-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your app runs at `https://www.example.com`. An old marketing microsite at `promo.example.com` is hosted by a third party and could be compromised. Which session-cookie choices stop the microsite from **overwriting or reading** your session cookie? Assume a browser that enforces cookie prefixes, HTTPS on both hosts, and no compromise of www itself. Select all that apply.",
+    "options": [
+      {
+        "text": "Name it `__Host-sid` and set `Path=/; Secure` with no `Domain`",
+        "explanation": "Correct. The browser only accepts a `__Host-` cookie that is host-only, Secure and Path=/, so `promo.example.com` cannot set one that would be sent to `www`, nor will it receive yours."
+      },
+      {
+        "text": "Set `Domain=example.com` so the scope is explicit",
+        "explanation": "This is the worst option: it sends your session cookie to `promo.example.com` too."
+      },
+      {
+        "text": "Set `HttpOnly`",
+        "explanation": "HttpOnly blocks non-HTTP script cookie access, but does not change Domain scope or stop a sibling server setting an ordinary parent-domain cookie with the same unprefixed name."
+      },
+      {
+        "text": "Set `SameSite=Strict`",
+        "explanation": "`promo.example.com` and `www.example.com` are the **same site** (same eTLD+1), so SameSite gives no protection between them."
+      }
+    ],
+    "answer": [
+      0
+    ],
+    "workedExample": "A parent-domain cookie may be sent to the sibling; a host-only cookie avoids that host match. A sibling can also set an ordinary parent-domain cookie with the same name, producing ambiguous same-name cookies at www. Server parsing varies. In the stated supporting browser, __Host-sid must be Secure, host-only and Path=/, so the sibling cannot set a parent-domain version. This is browser storage enforcement, not proof that an arbitrary client’s Cookie header is authentic. SameSite does not isolate these HTTPS sibling hosts; same-host ports are not isolated by cookie prefixes either.",
+    "link": {
+      "title": "Set-Cookie (cookie prefixes) — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie"
+    }
+  }
+]

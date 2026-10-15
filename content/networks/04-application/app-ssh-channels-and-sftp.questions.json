@@ -1,0 +1,62 @@
+[
+  {
+    "id": "app-ntp-ssh-grpc-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What is SFTP?",
+    "options": [
+      {
+        "text": "FTP with its control and data connections wrapped in TLS",
+        "explanation": "That is FTPS. SFTP shares only the name with FTP."
+      },
+      {
+        "text": "FTP tunnelled through an `ssh -L` port forward",
+        "explanation": "You can tunnel FTP that way, but that is not SFTP; FTP's separate data connections make it awkward anyway."
+      },
+      {
+        "text": "A binary file-access protocol that runs as a subsystem inside an SSH session channel",
+        "explanation": "Correct. SFTP sends requests like SSH_FXP_OPEN, SSH_FXP_READ and SSH_FXP_WRITE with IDs over one SSH channel, with no separate data connection."
+      },
+      {
+        "text": "Another name for `scp`'s original protocol",
+        "explanation": "The original scp protocol was a different, rcp-derived protocol. Since OpenSSH 9.0, `scp` uses SFTP by default."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. You run `sftp host`.\n2. SSH sets up its transport and authenticates you.\n3. The client opens a session channel and requests the `sftp` subsystem.\n4. Over that channel, binary packets flow: `SSH_FXP_INIT`, `OPEN`, `READ`, `DATA`, `CLOSE`.\n\nOne TCP connection, one port (22), and file-operation requests carry IDs; INIT/VERSION negotiation is an exception.",
+    "link": {
+      "title": "SSH File Transfer Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A simplified SFTP client downloads 1 GiB using one 32 KiB READ per 80 ms round trip, waiting for each complete response. Ignoring setup, serialisation, processing and link bandwidth, how long does it take?",
+    "options": [
+      {
+        "text": "About 8 seconds",
+        "explanation": "The model transfers 32 KiB per 0.08 seconds, or 400 KiB/s, far below the rate needed for eight seconds."
+      },
+      {
+        "text": "About 4 hours",
+        "explanation": "This overestimates by using a much smaller read size or larger RTT. 32,768 × 0.08 s ≈ 44 minutes."
+      },
+      {
+        "text": "About 1 minute, because SSH windows allow pipelining automatically",
+        "explanation": "Channel windows allow data to flow, but this client only ever has one request outstanding, so it waits a full RTT per block."
+      },
+      {
+        "text": "About 44 minutes",
+        "explanation": "1 GiB / 32 KiB = 32,768 exchanges; at 0.08 seconds each that is 2,621.44 seconds, or 43.69 minutes."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```formula\nN = F / b = (2^30 B) / (2^15 B)\nN = 32,768\nT = N RTT = 32,768 × 0.080 s\nT = 2,621.44 s ≈ 43.69 min\nR = b / RTT = 32 KiB / 0.080 s\nR = 400 KiB/s ≈ 3.2768 Mbit/s\nwhere\nN: the number of read round trips needed\nF: the file size, 1 GiB = 2^30 bytes\nb: the read size, 32 KiB = 2^15 = 32,768 bytes\nT: the total transfer time\nRTT: the round-trip time per read, 80 ms = 0.080 s\nR: the resulting throughput\n^: \"to the power of\"; 2^30 is 30 copies of 2 multiplied together\nB: bytes\nKiB: kibibyte, 1,024 bytes\nMbit: megabit, one million bits (400 × 1,024 × 8 = 3,276,800 bits)\ns: seconds\nmin: minutes\n≈: approximately equal to\nIn words: one 32 KiB read per 80 ms round trip needs 32,768 round trips for a gibibyte, about 44 minutes.\n```\n\nAn idealised batch of 64 outstanding reads transfers 2 MiB per RTT and takes 40.96 seconds for the same file. Real transfer time also depends on bandwidth, channel windows, processing and partial responses. OpenSSH documents a default maximum of 64 concurrent requests; that does not guarantee this ideal throughput.",
+    "link": {
+      "title": "SSH File Transfer Protocol — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/SSH_File_Transfer_Protocol"
+    }
+  }
+]

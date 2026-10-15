@@ -1,0 +1,62 @@
+[
+  {
+    "id": "app-http2-quic-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In HPACK, the static table has `:method: GET` at index 2 and `:path: /` at index 4. What single byte encodes `:path: /` as an indexed header field?",
+    "options": [
+      {
+        "text": "`0x84`",
+        "explanation": "Correct. Indexed fields are `1` followed by the index in 7 bits: `1 0000100` = 0x84."
+      },
+      {
+        "text": "`0x04`",
+        "explanation": "Without the leading 1 bit, `0x04` begins with `0000`, which means a literal field without indexing, not an indexed field."
+      },
+      {
+        "text": "`0x44`",
+        "explanation": "`0x44` = `01 000100`: a literal with incremental indexing whose *name* is from index 4. The value would follow as a string."
+      },
+      {
+        "text": "`0x82`",
+        "explanation": "`0x82` is index 2, `:method: GET`."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Indexed header field representation: top bit 1, then a 7-bit-prefix integer index.\n2. Index 4 in 7 bits: `0000100`.\n3. Prepend the 1: `10000100` = **0x84**.\n\n```formula\nx = 128 + i\nx = 128 + 4 = 132 = 0x84\nwhere\nx: the single byte encoding the indexed field; the leading 1 bit is worth 128. In hexadecimal (base 16, prefix 0x), 132 is 8 × 16 + 4, written 0x84\ni: the static-table index of :path: /, which is 4\nIn words: an indexed field is 128 plus its index, so index 4 becomes the byte 0x84.\n```\n\nSo a typical GET for `/` costs three bytes for method, scheme and path: `82 87 84` (with https).",
+    "link": {
+      "title": "RFC 7541: HPACK — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc7541"
+    }
+  },
+  {
+    "id": "app-http2-quic-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An HPACK encoder adds `user-agent: Mozilla/5.0 (X11)` (name 10 bytes, value 17 bytes) to a dynamic table that already holds 4,050 bytes. The table limit is 4,096. What happens?",
+    "options": [
+      {
+        "text": "The entry is rejected because it does not fit",
+        "explanation": "An entry is only rejected (with the whole table emptied) if it is larger than the entire table limit. Otherwise old entries are evicted to make room."
+      },
+      {
+        "text": "The new entry is added with a size of 27 bytes, so it fits without eviction",
+        "explanation": "This forgets the 32-byte per-entry overhead HPACK adds. 4,050 + 27 would fit, but the real size is 59."
+      },
+      {
+        "text": "The oldest entries are evicted until the new 59-byte entry fits within 4,096 bytes",
+        "explanation": "Correct. Entry size is 10 + 17 + 32 = 59 bytes. The table needs at least 13 bytes freed, so it evicts oldest entries (one or more) until the new entry fits."
+      },
+      {
+        "text": "The table grows beyond 4,096 until the peer sends a SETTINGS update",
+        "explanation": "The limit is a hard bound the encoder and decoder both enforce. Exceeding it would desynchronise the tables."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nE = n + v + 32 B\nE = 10 B + 17 B + 32 B = 59 B\nU = 4,050 B + 59 B = 4,109 B\nU − M = 4,109 B − 4,096 B = 13 B\nwhere\nE: the size the new entry counts against the table, in bytes (B)\nn: the name length, 10 bytes\nv: the value length, 17 bytes\nU: the table usage if nothing were evicted\nM: the table size limit, 4,096 bytes\nB: bytes\nIn words: the entry costs 59 bytes including HPACK's 32-byte overhead, which would overshoot the limit by 13 bytes.\n```\n\n1. Entry size is **59** bytes.\n2. 4,109 > 4,096, so 13 bytes too many.\n3. Evict from the oldest end (highest index) until the sum fits. Even a small old entry (min 33 bytes) frees enough.\n4. Insert the new entry at index 62; everything else shifts up.\n\nBoth sides run the same algorithm, so the decoder's table stays identical without any explicit eviction messages.",
+    "link": {
+      "title": "RFC 7541: HPACK — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc7541"
+    }
+  }
+]

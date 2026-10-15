@@ -1,0 +1,95 @@
+[
+  {
+    "id": "app-ntp-ssh-grpc-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your gRPC client logs `UNAVAILABLE`, while an HTTP access log on the proxy shows `:status 200` for the same call. How can both be true?",
+    "options": [
+      {
+        "text": "The proxy log is wrong",
+        "explanation": "It's normal: gRPC errors usually ride on HTTP 200."
+      },
+      {
+        "text": "UNAVAILABLE always comes from the client library and never from the server",
+        "explanation": "Clients do generate UNAVAILABLE for connection failures, but servers and proxies can send it too."
+      },
+      {
+        "text": "gRPC carries call status in trailers (`grpc-status`), so the HTTP status can be 200 while the call fails",
+        "explanation": "Correct. The HTTP response started successfully; the final trailers said `grpc-status: 14` (UNAVAILABLE)."
+      },
+      {
+        "text": "HTTP/2 doesn't have status codes",
+        "explanation": "HTTP/2 has `:status`. gRPC just doesn't use it for application status."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The server replies HEADERS `:status 200`, content-type application/grpc.\n2. Maybe some DATA.\n3. Final HEADERS (trailers) with END_STREAM: `grpc-status: 14`, `grpc-message: backend down`.\n4. HTTP-level logs record 200; the gRPC library reads the trailer.\n\nMonitor gRPC status codes, not HTTP codes, for gRPC services.",
+    "link": {
+      "title": "gRPC over HTTP2 protocol spec — GitHub",
+      "url": "https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Ten healthy gRPC backends sit behind a balancer that chooses a backend once per TCP connection. Four client instances each use exactly one persistent connection. The four connections land on four different backends, which receive all the traffic while six remain idle. What explains this?",
+    "options": [
+      {
+        "text": "Each client instance holds one long-lived HTTP/2 connection, so the L4 balancer assigned each instance to one backend and all its calls follow it",
+        "explanation": "Correct. 4 connections → at most 4 backends. Use an L7 proxy that balances per request (stream), or client-side balancing over connections to all backends."
+      },
+      {
+        "text": "The L4 balancer is using round robin per packet",
+        "explanation": "The stated balancer chooses once per connection. Changing the selected backend per packet without shared connection handling would disrupt an ordinary established TCP connection."
+      },
+      {
+        "text": "gRPC requires sticky sessions",
+        "explanation": "gRPC itself does not mandate session affinity. Application state can impose additional constraints, but the stated connection-oriented balancer already explains this distribution."
+      },
+      {
+        "text": "The 6 idle backends failed health checks",
+        "explanation": "The prompt states that all ten backends are healthy."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Under the stated one-connection-per-instance setup, four TCP connections landed on four backends. All streams on each connection follow its assigned backend. A gRPC channel is not inherently limited to one connection. Per-call load balancing can use an HTTP/2-aware proxy or a configured client-side policy across backend connections; each already-running stream still stays with its chosen backend.",
+    "link": {
+      "title": "gRPC Load Balancing — gRPC blog",
+      "url": "https://grpc.io/blog/grpc-load-balancing/"
+    }
+  },
+  {
+    "id": "app-ntp-ssh-grpc-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A gRPC service A has a 300 ms deadline from its caller. It spends 50 ms, then calls service B. Which behaviours are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "A should send B a `grpc-timeout` of about 250 ms (less if it needs time to finish afterwards)",
+        "explanation": "Correct. Deadline propagation passes the remaining budget downstream."
+      },
+      {
+        "text": "If the client deadline expires before completion, the call reports DEADLINE_EXCEEDED and cancellation can signal servers to stop; applications must cooperate",
+        "explanation": "Cancellation is not an instantaneous distributed stop. Transport delays and application behaviour matter, and effects already committed are not rolled back."
+      },
+      {
+        "text": "A should give B a fresh 300 ms timeout so B has enough time",
+        "explanation": "B would keep working after A's caller has given up. Fresh timeouts at each hop multiply wasted work during overload."
+      },
+      {
+        "text": "`grpc-timeout: 250m` means 250 minutes",
+        "explanation": "Lower-case `m` is milliseconds; minutes is upper-case `M`."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "A starts with 300 ms and has used 50 ms, leaving about 250 ms. It can give B that remaining budget, or reserve time for its own response. Deadline propagation support depends on the library and application configuration. A client deadline can cancel an HTTP/2 stream; server handlers should check cancellation and stop unnecessary work. Timers do not fire everywhere simultaneously, and cancellation cannot undo an already committed side effect. Units: H hours, M minutes, S seconds, m milliseconds, u microseconds, n nanoseconds.",
+    "link": {
+      "title": "gRPC and deadlines — gRPC blog",
+      "url": "https://grpc.io/blog/deadlines/"
+    }
+  }
+]

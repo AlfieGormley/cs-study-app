@@ -1,0 +1,62 @@
+[
+  {
+    "id": "app-http-wire-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You hand-write an HTTP/1.1 client that sends a `GET` without `Connection: close`, then loops on `recv()` until it returns no data. The response arrives quickly but your program hangs for a long time. Assume the response has a valid Content-Length and the server leaves the connection open. Why?",
+    "options": [
+      {
+        "text": "The server is waiting for you to send a request body",
+        "explanation": "A GET with no `Content-Length` or `Transfer-Encoding` has no body, so the server is not waiting for one. It has already responded."
+      },
+      {
+        "text": "You forgot the `Host` header, so the server never replies",
+        "explanation": "A conforming server must reject a missing Host with 400. That is not the described complete response followed by a blocked read; no universal response timing is guaranteed."
+      },
+      {
+        "text": "TCP buffers the last segment until the window fills",
+        "explanation": "The complete response bytes have already arrived. TCP is a byte stream; it does not require an application to wait for a whole receive window to fill before returning data."
+      },
+      {
+        "text": "The framed response is complete, but a persistent connection remains open, so another recv can block",
+        "explanation": "Correct. The server sent a complete, framed response and is waiting for your next request. You should use `Content-Length` or chunked framing to know when the response ends, not connection close."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "HTTP/1.1 permits persistence by default. After sending Content-Length: 1256 and 1,256 bytes, the server can wait for another request while a read-until-close client blocks. An eventual server close or client timeout may end the wait. HTTP/1.0 also supported Content-Length and some implementations used keep-alive; EOF was never a universal integrity check. Parse the response framing, or request close for this limited inspection pattern.",
+    "link": {
+      "title": "RFC 9112: HTTP/1.1 — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9112"
+    }
+  },
+  {
+    "id": "app-http-wire-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reverse proxy forwards a `HEAD /big.iso` response from the origin with header `Content-Length: 4700000000`. A hand-written client then waits to read 4.7 GB of body. What is the correct behaviour?",
+    "options": [
+      {
+        "text": "The response has no body; the client must know it sent HEAD and stop at the blank line",
+        "explanation": "Correct. Responses to HEAD (and all 1xx, 204 and 304 responses) never have a body, regardless of framing headers. The client must remember which method it sent."
+      },
+      {
+        "text": "The client should read 4.7 GB because Content-Length is authoritative",
+        "explanation": "Content-Length is overridden by the rule that HEAD responses never carry a body; it describes what a GET would return."
+      },
+      {
+        "text": "The proxy is wrong to forward Content-Length on a HEAD response",
+        "explanation": "Content-Length is permitted on HEAD if it equals the content length an equivalent GET would send. It need not be present; the value can describe an encoded representation rather than a raw file size."
+      },
+      {
+        "text": "The client should switch to reading until the connection closes",
+        "explanation": "Close-delimited reading would hang on a persistent connection and is unnecessary: the message already ended at the blank line."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "RFC 9112 applies the HEAD/bodyless-status rule first, so this message ends at the header terminator. The length does not make a HEAD body appear. For other responses, successful CONNECT creates a tunnel; transfer coding and framing-error rules precede ordinary valid Content-Length. The parser therefore needs the request method as well as the response headers.",
+    "link": {
+      "title": "RFC 9112: HTTP/1.1 — IETF",
+      "url": "https://www.rfc-editor.org/rfc/rfc9112"
+    }
+  }
+]

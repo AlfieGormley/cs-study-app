@@ -1,0 +1,70 @@
+[
+  {
+    "id": "app-http-wire-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A chunked response body arrives as:\n\n```\n4\\r\\nWiki\\r\\n\n6\\r\\npedia \\r\\n\nE\\r\\nin \\r\\n\\r\\nchunks.\\r\\n\n0\\r\\n\\r\\n\n```\n\nHow many bytes long is the decoded body?",
+    "options": [
+      {
+        "text": "14",
+        "explanation": "That treats `E` as 14 correctly but forgets to add the first two chunks. The body is the concatenation of every chunk."
+      },
+      {
+        "text": "24",
+        "explanation": "Correct. 4 + 6 + 14 = 24. The chunk size `E` is hexadecimal for 14, and the CRLFs after each chunk's data are framing, not content (but the CRLF *inside* the third chunk's data is content)."
+      },
+      {
+        "text": "20",
+        "explanation": "This misreads `E` as decimal-ish or drops the embedded CRLF. Chunk sizes are hex: `E` = 14, and the third chunk's 14 bytes include the `\\r\\n` in its data."
+      },
+      {
+        "text": "34",
+        "explanation": "Chunk-size lines and delimiting CRLFs are excluded from the decoded body. Sum the declared data lengths: 4 + 6 + 14."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Read each size line as **hex**:\n   - `4` = 4 bytes: `Wiki`\n   - `6` = 6 bytes: `pedia ` (with trailing space)\n   - `E` = 14 bytes: `in \\r\\n\\r\\nchunks.`\n2. Check the third chunk: `in ` (3) + `\\r\\n\\r\\n` (4) + `chunks.` (7) = 14. The CRLFs here are *data*.\n3. `0` ends the body.\n4. Total: 4 + 6 + 14 = **24 bytes**.\n\n```formula\nS_3 = 0xE = 14 B\nL = S_1 + S_2 + S_3\nL = 4 B + 6 B + 14 B = 24 B\nwhere\nS_1, S_2, S_3: the three chunk sizes, read from the size lines as hexadecimal (base 16, digits 0 to 9 then A to F for 10 to 15; the prefix 0x marks a hex number)\nL: the decoded body length\nB: bytes\nIn words: the hex size E is 14, and the three chunks' data add up to a 24-byte body; size lines and framing CRLFs are not counted.\n```\n\nThe decoder never confuses data CRLFs with framing because it reads exactly `size` bytes, then expects one CRLF.",
+    "link": {
+      "title": "Transfer-Encoding — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Transfer-Encoding"
+    }
+  },
+  {
+    "id": "app-http-wire-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are good reasons for an HTTP/1.1 server sending a response with content to use `Transfer-Encoding: chunked` rather than `Content-Length`? Select all that apply.",
+    "options": [
+      {
+        "text": "It is streaming a CSV export whose total size is not known when the first row is ready",
+        "explanation": "Correct. Content-Length must be sent before the body; chunked lets the server start sending immediately."
+      },
+      {
+        "text": "It wants to keep the connection persistent without buffering the whole response",
+        "explanation": "Correct. Without a length, the only other way to end the body is closing the connection, which loses persistence."
+      },
+      {
+        "text": "It wants to append a checksum header computed over the body after sending it",
+        "explanation": "Correct. Trailers after the final `0` chunk can carry values computed during streaming (though many clients ignore them)."
+      },
+      {
+        "text": "It is speaking HTTP/2 and wants to stream",
+        "explanation": "HTTP/2 forbids `Transfer-Encoding: chunked`. DATA frames carry their own lengths and END_STREAM flag, so streaming needs no extra encoding."
+      },
+      {
+        "text": "Chunked encoding compresses the body",
+        "explanation": "Chunking only delimits the body; it adds a few bytes of overhead per chunk. Compression is `Content-Encoding: gzip` (or `br`)."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Ask what problem chunking solves: **framing a body of unknown length on a persistent connection**.\n\n- Unknown size (CSV export): yes.\n- Persistence without buffering: yes, that is the core reason.\n- Trailers: yes, a feature of chunked framing.\n- HTTP/2: no, it has binary framing and bans the header.\n- Compression: no, that is Content-Encoding, a different layer.",
+    "link": {
+      "title": "Transfer-Encoding — MDN",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Transfer-Encoding"
+    }
+  }
+]

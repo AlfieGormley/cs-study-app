@@ -1,0 +1,62 @@
+[
+  {
+    "id": "app-dns-wire-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A resolver asks for the `TXT` records of a domain with many email SPF and verification strings. It sends no EDNS OPT record. The full answer would be 1,900 bytes. Assume the required answer RRset itself cannot fit 512 bytes, a conforming server, TCP connectivity and a resolver configured to retry truncation over TCP. What happens?",
+    "options": [
+      {
+        "text": "The server sends 1,900 bytes over UDP, fragmented by IP",
+        "explanation": "Without EDNS the client has not advertised a buffer bigger than 512 bytes, so the server must not exceed it."
+      },
+      {
+        "text": "The server sends what fits in 512 bytes with TC set, and the resolver retries over TCP",
+        "explanation": "Correct. TC signals truncation; the client repeats the query over TCP, where messages can be up to 65,535 bytes (2-byte length prefix)."
+      },
+      {
+        "text": "The server returns SERVFAIL",
+        "explanation": "Size is not a server failure; truncation plus TCP fallback is the designed mechanism."
+      },
+      {
+        "text": "The server silently drops records until it fits, with no indication",
+        "explanation": "That would make answers silently incomplete. The TC bit exists precisely to tell the client."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. No OPT record → classic DNS → 512-byte UDP limit.\n2. 1,900 > 512, so the server sets TC=1 and sends a partial (often empty) answer.\n3. The resolver opens TCP to port 53 and resends with a 2-byte length prefix.\n4. The full 1,900-byte answer arrives over TCP.\n\nWith EDNS advertising 1,232, it would still not fit, so TCP fallback happens either way. This is why blocking TCP 53 on firewalls breaks DNS.",
+    "link": {
+      "title": "DNS Flag Day 2020",
+      "url": "https://www.dnsflagday.net/2020/"
+    }
+  },
+  {
+    "id": "app-dns-wire-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why did DNS Flag Day 2020 recommend an EDNS UDP buffer size of 1,232 bytes rather than, say, 4,096?",
+    "options": [
+      {
+        "text": "1,232 is the largest message DNSSEC signatures allow",
+        "explanation": "DNSSEC answers can be much larger; the limit concerns transport, not signatures."
+      },
+      {
+        "text": "To reduce fragmentation risk: 1,232 + 40 bytes of basic IPv6 header + 8 bytes of UDP equals the 1,280-byte IPv6 minimum",
+        "explanation": "Correct. Fragments are often dropped by firewalls and can be spoofed for cache poisoning. Keeping UDP answers unfragmented and falling back to TCP for larger ones is more reliable."
+      },
+      {
+        "text": "Because the DNS header's length field is limited to 1,232",
+        "explanation": "The DNS header has no length field. Over TCP the 2-byte prefix allows up to 65,535 bytes."
+      },
+      {
+        "text": "To reduce amplification from 4,096 to 1,232, making DDoS impossible",
+        "explanation": "It does reduce amplification somewhat, but that is a side benefit; the stated aim was avoiding fragmentation, and amplification is not made impossible."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nD = M − H_IPv6 − H_UDP\nD = 1,280 B − 40 B − 8 B = 1,232 B\nwhere\nD: the DNS payload that fits in one unfragmented packet\nM: the IPv6 minimum MTU, 1,280 bytes, which every IPv6 link must carry\nH_IPv6: the basic IPv6 header, 40 bytes\nH_UDP: the UDP header, 8 bytes\nB: bytes\nIn words: subtracting the IPv6 and UDP headers from the smallest guaranteed IPv6 packet leaves 1,232 bytes for DNS.\n```\n\nExtension headers, encapsulation and IPv4 path constraints can require a different budget, so this is not a never-fragment guarantee. Larger required answers can use truncation and TCP fallback. Forged noninitial fragments can evade checks placed in the initial fragment, but successful injection also depends on reassembly identifiers, checksums, timing and cache rules.",
+    "link": {
+      "title": "DNS Flag Day 2020",
+      "url": "https://www.dnsflagday.net/2020/"
+    }
+  }
+]

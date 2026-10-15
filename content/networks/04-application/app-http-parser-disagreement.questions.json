@@ -1,0 +1,32 @@
+[
+  {
+    "id": "app-http-wire-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A front-end proxy uses `Content-Length` and ignores `Transfer-Encoding`; the back end honours chunked. An attacker sends:\n\n```\nPOST / HTTP/1.1\nHost: shop.example\nContent-Length: 13\nTransfer-Encoding: chunked\n\n0\n\nSMUGGLED\n```\n\n(Header/size lines end in CRLF; the final 8 SMUGGLED bytes have no trailing CRLF.) Assume the vulnerable back end accepts both fields, uses chunked, and improperly reuses the connection. What does the back end do?",
+    "options": [
+      {
+        "text": "Rejects the whole thing because chunked bodies cannot follow Content-Length",
+        "explanation": "Rejecting this ambiguity and closing is the recommended defence. The specified vulnerable back end instead processes chunks and leaves the connection reusable; a conforming server that processes both fields must close after its response."
+      },
+      {
+        "text": "Ends the first request's body at the `0` chunk and treats `SMUGGLED` as the start of the next request on the connection",
+        "explanation": "Correct. The back end sees an empty chunked body (5 bytes). The leftover 8 bytes become the start of whatever request comes next on the shared connection, possibly another user's."
+      },
+      {
+        "text": "Reads a 13-byte body and sees one request",
+        "explanation": "That is the front end's view. The back end uses chunked framing, so it disagrees about where the body ends."
+      },
+      {
+        "text": "Waits forever for more chunks",
+        "explanation": "The `0` chunk and final CRLF terminate a chunked body cleanly, so the back end does not wait."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Count the body bytes after the blank line:\n\n```\n0\\r\\n          3 bytes\n\\r\\n            2 bytes\nSMUGGLED       8 bytes\n               = 13\n```\n\n1. Front end: Content-Length 13, so all 13 bytes belong to this request. It forwards them.\n2. Back end: chunked. Reads `0\\r\\n` (last chunk) then `\\r\\n` (end of trailers). Body ends after **5** bytes.\n3. `SMUGGLED` sits in the back end's buffer and is parsed as the beginning of the next request.\n\nThe 8 leftover bytes demonstrate a framing disagreement; SMUGGLED alone is not a complete valid HTTP request. This is the boundary mechanism behind CL.TE smuggling. Fix: reject requests with both headers and close the connection on framing errors.",
+    "link": {
+      "title": "HTTP request smuggling — PortSwigger Web Security Academy",
+      "url": "https://portswigger.net/web-security/request-smuggling"
+    }
+  }
+]

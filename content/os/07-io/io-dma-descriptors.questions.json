@@ -1,0 +1,95 @@
+[
+  {
+    "id": "io-hardware-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the conventional kernel-mediated DMA model, what does DMA save the CPU from doing during a 1 MiB disk read?",
+    "options": [
+      {
+        "text": "Waiting for the disk, because DMA makes the disk faster",
+        "explanation": "DMA does not change the device's speed. Waiting is avoided by interrupts (sleeping the process); DMA removes the copying."
+      },
+      {
+        "text": "Executing the system call, because DMA lets user code talk to the disk directly",
+        "explanation": "The read still goes through the kernel and the driver; DMA is between the device and RAM, not between the user and the device."
+      },
+      {
+        "text": "Translating virtual addresses, because the device uses the process's page tables",
+        "explanation": "Conventional DMA uses device-visible mapped addresses, not an arbitrary process pointer. Shared Virtual Addressing is a separate supported-device feature; it does not make DMA eliminate CPU address translation."
+      },
+      {
+        "text": "Moving every byte between the device's data register and RAM itself",
+        "explanation": "Correct. At eight bytes per CPU-driven transfer, 1 MiB requires 131,072 transfers. DMA moves the payload between device and RAM; notification and setup costs are separate."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Count the CPU-driven transfers:\n\n```formula\nN = S / w\nN = 1,048,576 B / 8 B = 131,072\nwhere\nN: the number of CPU transfers (a count)\nS: the transfer size in bytes (B); 1 MiB = 1,048,576 B\nw: bytes moved per transfer, here 8 B\nB: byte, 8 bits\nMiB: mebibyte, 1,048,576 bytes\nIn words: moving 1 MiB eight bytes at a time takes 131,072 separate CPU transfers.\n```\n\n2. CPU-driven I/O must move those payload units itself.\n3. DMA lets hardware transfer the payload using appropriately mapped buffers and descriptors.\n4. The CPU still performs setup, synchronization and completion processing. Interrupts may be per operation, merged into coalesced interrupts, or replaced by polling.\n5. This comparison excludes additional buffered-I/O copies between kernel and application memory.",
+    "link": {
+      "title": "Direct memory access \u2014 Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Direct_memory_access"
+    }
+  },
+  {
+    "id": "io-hardware-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A driver programs a device to DMA into a buffer it allocated with `kmalloc`, passing the buffer's **kernel virtual address** directly to the device's address register. On many systems the data ends up in the wrong place. Why?",
+    "options": [
+      {
+        "text": "Devices see physical or IOMMU bus addresses, not CPU virtual addresses; the driver should map the buffer with the DMA API",
+        "explanation": "Correct. `dma_map_single()` returns the address the device should use (going through the IOMMU if there is one) and handles any cache maintenance needed."
+      },
+      {
+        "text": "`kmalloc` memory can't be used for DMA because it lives in swap",
+        "explanation": "Kernel `kmalloc` memory isn't swapped out. The problem is the type of address, not where the memory lives."
+      },
+      {
+        "text": "DMA only works for user-space buffers",
+        "explanation": "DMA can use appropriately mapped kernel buffers. Direct DMA involving user pages requires the relevant mapping, pinning and lifetime protocol; neither kind is excluded by DMA itself."
+      },
+      {
+        "text": "The device needs an interrupt before it can start DMA",
+        "explanation": "Devices raise interrupts to signal completion; they don't need one to start. The device simply wrote to the address it was given, which was the wrong kind of address."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In conventional DMA, CPU virtual and device-visible addresses are distinct address spaces.\n2. A driver must obtain a valid DMA address from the DMA API and check mapping errors.\n3. Passing a kernel virtual pointer directly can cause an IOMMU fault, device error or wrong-memory access, depending on configuration; it does not necessarily reach RAM at that number.\n4. Keep the buffer alive and obey streaming-map synchronization/unmapping rules. Coherent allocations still require appropriate ordering.",
+    "link": {
+      "title": "Direct memory access \u2014 Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Direct_memory_access"
+    }
+  },
+  {
+    "id": "io-hardware-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A cloud provider assigns an NVMe device to a VM using conventional guest-physical DMA addressing, isolated IOMMU groups and correctly configured translation. Which statements about the IOMMU are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It restricts the device's DMA to memory that has been mapped for it, so a malicious guest can't program the drive to overwrite the host kernel",
+        "explanation": "DMA access is checked against configured mappings. This is an important protection, assuming suitable hardware isolation, no bypass and correct configuration; it is not a complete proof of VM security."
+      },
+      {
+        "text": "It translates the guest's notion of physical addresses into real host physical addresses for the device",
+        "explanation": "Correct. The guest driver programs guest-physical addresses; the IOMMU (VT-d / AMD-Vi) maps them to host-physical addresses."
+      },
+      {
+        "text": "It removes the need for interrupts, because the device can write results straight into guest memory",
+        "explanation": "Incorrect. Address translation does not determine the completion-notification method. Interrupt remapping can isolate interrupt delivery when configured, while some I/O paths poll instead."
+      },
+      {
+        "text": "It makes DMA unnecessary, because the CPU can copy data through the IOMMU",
+        "explanation": "Incorrect. The IOMMU translates and polices DMA; it doesn't replace it or copy data."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "1. Device assignment must restrict DMA to authorized memory. Without a suitable isolation mechanism, a guest-controlled device may threaten host memory.\n2. In this conventional model, the IOMMU translates device DMA addresses corresponding to guest-physical addresses into mapped host memory.\n3. Unmapped access is blocked and reported as an IOMMU error, subject to platform and configuration. VFIO isolation groups and device topology matter.\n4. Interrupt isolation/remapping is a separate part of safe assignment; polling is also possible.\n5. The device still performs DMA; the IOMMU enforces translation and access control.",
+    "link": {
+      "title": "Direct memory access \u2014 Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Direct_memory_access"
+    }
+  }
+]

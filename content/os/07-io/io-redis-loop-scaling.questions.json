@@ -1,0 +1,74 @@
+[
+  {
+    "id": "io-event-loops-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "On one Redis instance with synchronous DEL behavior (lazyfree-lazy-user-del disabled), which choices explicitly request a whole-keyspace scan, freeing a large aggregate, or long script execution in one operation, rather than incremental scanning or a small lookup? Select all that apply.",
+    "options": [
+      {
+        "text": "`KEYS *` on a database with 10 million keys",
+        "explanation": "Correct. It walks the whole keyspace in one command on the single command thread."
+      },
+      {
+        "text": "`DEL` on a set with 5 million members",
+        "explanation": "Correct under the stated synchronous-free configuration. Freeing a large aggregate can require work proportional to its contents; UNLINK can defer expensive reclamation."
+      },
+      {
+        "text": "`SCAN 0 COUNT 100` repeated until the cursor returns 0",
+        "explanation": "SCAN spreads iteration across calls so other commands can interleave, but COUNT is a work hint, not a strict result or latency bound. Small encodings can return all members at once; no universal short-call guarantee follows."
+      },
+      {
+        "text": "A Lua script that loops for 3 seconds",
+        "explanation": "Correct. Scripts run atomically on the main thread; nothing else executes until they finish."
+      },
+      {
+        "text": "`GET` on a 100-byte string",
+        "explanation": "A small GET is normally short relative to full-keyspace/large-aggregate work, but no fixed microsecond latency is guaranteed."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "KEYS scans the keyspace in one call; synchronous deletion of a large aggregate and long Lua execution can also monopolize command execution. SCAN is incremental rather than a whole traversal in one command, but COUNT is only a hint and calls can vary in work. A small GET has constant lookup complexity in the ordinary model, not a guaranteed wall-clock latency.",
+    "link": {
+      "title": "Redis latency diagnosis — Redis docs",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/latency/"
+    }
+  },
+  {
+    "id": "io-event-loops-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For Redis 6.0 configured with multiple I/O threads and io-threads-do-reads yes, which statements describe the ordinary command/I/O split? Select all that apply.",
+    "options": [
+      {
+        "text": "I/O threads read requests from and write replies to sockets in parallel",
+        "explanation": "Correct in this configured model. Socket processing can be parallelized; benefits depend on measured workload bottlenecks."
+      },
+      {
+        "text": "Commands still execute one at a time on the main thread, so single-command atomicity is unchanged",
+        "explanation": "Correct for ordinary command execution in this version. It preserves serial command execution, not a guarantee that the entire server contains no locks."
+      },
+      {
+        "text": "A slow `KEYS *` no longer blocks other clients",
+        "explanation": "Command execution is still serial, so a slow command still blocks everyone."
+      },
+      {
+        "text": "It's mainly useful at high load with many connections, not for a lightly loaded instance",
+        "explanation": "Correct. If the main thread isn't saturated by socket work, extra threads add little."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "In the stated Redis 6.0 configuration, I/O threads can assist socket reads/parsing and reply writes, while ordinary commands execute on the main thread. Extra threads can help when that I/O work is the bottleneck; they do not make a long command execute in parallel with other normal commands. With the default io-threads-do-reads no in that version, threaded reads are not enabled merely by increasing io-threads.",
+    "link": {
+      "title": "Redis latency diagnosis — Redis docs",
+      "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/latency/"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "io-multiplexing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server adds socket fd 9 to an epoll instance, then calls `dup(9)`, getting fd 10, and hands fd 10 to a logging subsystem. Later it calls `close(9)` without `EPOLL_CTL_DEL`. What happens when data arrives on that socket?",
+    "options": [
+      {
+        "text": "Nothing; closing fd 9 removed it from the epoll set",
+        "explanation": "Registrations are removed automatically only when *all* descriptors referring to the open file description are closed. fd 10 still refers to it."
+      },
+      {
+        "text": "epoll reports fd 10, because the registration moved to the duplicate",
+        "explanation": "The registration key includes the original fd number and open file description. Its user-supplied data is stored separately and does not automatically change to the duplicate fd."
+      },
+      {
+        "text": "The kernel crashes",
+        "explanation": "No crash; this is documented, if surprising, behaviour."
+      },
+      {
+        "text": "epoll still reports an event carrying fd 9's registration data, even though fd 9 is closed (and may now be reused for another file)",
+        "explanation": "Correct. epoll tracks the open file description. Since fd 10 keeps it alive, events continue to fire with the old `data`, which may point to freed state or a reused fd number."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `epoll_ctl(ADD, 9)` creates an entry keyed by (file description F, fd 9).\n2. `dup(9)` → fd 10, also pointing to F.\n3. `close(9)` drops one reference; F stays open because of fd 10.\n4. epoll only auto-removes the entry when F is finally released, so the entry stays.\n5. Data arrives on F → epoll returns an event with the `data` you registered for fd 9.\n6. If fd 9 has since been reused for another socket, you'll act on the wrong one. Always `EPOLL_CTL_DEL` before `close`.",
+    "link": {
+      "title": "epoll(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/epoll.7.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Four worker threads all call `epoll_wait` on one shared epoll instance (level-triggered). Occasionally two threads process the same connection at once and its request is parsed out of order. Which change fixes this with the least redesign?",
+    "options": [
+      {
+        "text": "Switch to `EPOLLET`",
+        "explanation": "Edge-triggered reduces duplicate reports, but a new edge (more data arriving) can still wake a second thread while the first is mid-read. It doesn't guarantee exclusive ownership."
+      },
+      {
+        "text": "Add connections with `EPOLLONESHOT` and rearm with `EPOLL_CTL_MOD` after the handling thread finishes",
+        "explanation": "Correct when one registration and a proper ownership protocol cover the connection. Finish processing before rearming; other I/O paths and duplicate registrations still require coordination."
+      },
+      {
+        "text": "Use `EPOLLEXCLUSIVE` on every connection",
+        "explanation": "`EPOLLEXCLUSIVE` controls wake-ups across *multiple epoll instances* watching one fd. It isn't meant for this, and it doesn't stop a still-ready, level-triggered fd being handed to a second thread waiting on the same instance."
+      },
+      {
+        "text": "Call `epoll_wait` with `maxevents = 1`",
+        "explanation": "Each thread then gets one event at a time, but with level-triggered mode a still-readable fd can be handed to another thread straight away."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Thread A gets 'fd 42 readable' and starts reading.\n2. With LT, fd 42 is still readable, so thread B's `epoll_wait` can return fd 42 too.\n3. Both read different chunks: the request is split between threads.\n4. `EPOLLONESHOT`: after fd 42 is reported once, epoll disables it.\n5. A reads until done, then `EPOLL_CTL_MOD` re-enables fd 42 with `EPOLLIN | EPOLLONESHOT`.\n6. The cost is one extra `epoll_ctl` per event.",
+    "link": {
+      "title": "epoll_ctl(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A pre-fork server has 32 worker processes, each with its own epoll instance watching the same inherited listening socket. When one connection arrives, all 32 wake up, one wins `accept()`, and 31 get `EAGAIN`. Which fixes address this thundering herd? Pick the best answer.",
+    "options": [
+      {
+        "text": "Add the listening socket with `EPOLLEXCLUSIVE` in each worker, or give each worker its own `SO_REUSEPORT` listening socket so the kernel spreads connections",
+        "explanation": "Correct. `EPOLLEXCLUSIVE` (Linux 4.5) wakes one (or a few) of the waiting instances rather than all. `SO_REUSEPORT` (Linux 3.9) gives each worker a separate accept queue, so there's no shared wait at all. nginx supports both."
+      },
+      {
+        "text": "Make the listening socket blocking",
+        "explanation": "Blocking `accept()` in 32 processes would avoid busy failures, but those processes couldn't serve their other connections while blocked."
+      },
+      {
+        "text": "Switch every worker to `select`",
+        "explanation": "`select` has the same herd problem (and worse scaling)."
+      },
+      {
+        "text": "Use `EPOLLONESHOT` on the listening socket",
+        "explanation": "One-shot disables the fd per instance after one event, but all 32 instances still get the first event; it also means re-arming after every accept."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. In the stated scenario a completed connection makes the listening socket readable, waking multiple epoll instances.\n2. One worker accepts it; others can find no pending connection and get EAGAIN.\n3. EPOLLEXCLUSIVE reduces this herd but documents one or more exclusive waiters, not exactly one. Nonexclusive watchers can still be notified.\n4. SO_REUSEPORT gives workers separate listening sockets/queues and distributes flows; it does not guarantee equal application work per worker.\n5. Non-blocking accept and correct drain/error handling remain necessary.",
+    "link": {
+      "title": "epoll_ctl(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
+    }
+  }
+]

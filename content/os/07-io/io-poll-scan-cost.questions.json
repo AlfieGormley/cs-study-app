@@ -1,0 +1,32 @@
+[
+  {
+    "id": "io-multiplexing-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Use a simplified one-scan-per-wake model: 50,000 registered connections, 50 ready candidates per wake, 2,000 wakes per second. Ignoring rescans, contention and registration work, compare poll scan entries with epoll ready-candidate processing.",
+    "options": [
+      {
+        "text": "poll: 100,000; epoll: 100,000",
+        "explanation": "That treats both as scanning only ready descriptors. poll checks every entry on every call."
+      },
+      {
+        "text": "poll: 100 million; epoll: 100 million",
+        "explanation": "epoll doesn't scan the interest list on `epoll_wait`; it takes items off a ready list."
+      },
+      {
+        "text": "poll: 50,000; epoll: 50",
+        "explanation": "Those are per-call figures, not per-second. Multiply by 2,000 wake-ups."
+      },
+      {
+        "text": "poll: about 100 million; epoll: about 100,000",
+        "explanation": "Correct. poll: 50,000 × 2,000 = 10⁸. epoll: only ready entries, 50 × 2,000 = 10⁵, a thousand times less."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Entries handled per second in each model:\n\n```formula\nE_poll = Nr\nE_poll = 50,000 × 2,000 /s = 10^8 /s\nE_epoll = Rr\nE_epoll = 50 × 2,000 /s = 10^5 /s\nwhere\nE_poll: pollfd entries scanned per second\nE_epoll: ready candidates processed per second\nN: registered connections, here 50,000\nR: ready candidates per wake, here 50\nr: wake-ups (wait calls) per second, here 2,000\ns: second; \"/s\" means per second\nIn words: poll scans every connection on every wake, epoll handles only the ready ones, a thousand times fewer here.\n```\n\n2. The modeled entry-count ratio is 1,000; it is not a measured CPU-speedup ratio.\n3. Bytes copied by poll, assuming an 8-byte pollfd and Linux v6.12 copying behaviour:\n\n```formula\nD_in = N × 8 B × r\nD_in = 400,000 B × 2,000 /s\nD_in = 8 × 10^8 B/s = 800 MB/s\nD_out = N × 2 B × r = 200 MB/s\nwhere\nD_in: pollfd array bytes copied into the kernel per second\nD_out: revents bytes written back per second\nN: registered connections, here 50,000\nr: calls per second, here 2,000\nB: byte, 8 bits\nMB: megabyte, 10^6 bytes\ns: second; \"/s\" means per second\nIn words: the input array costs 800 MB/s of copying, and the 2-byte results 200 MB/s, not 800 MB/s each way.\n```",
+    "link": {
+      "title": "epoll(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/epoll.7.html"
+    }
+  }
+]

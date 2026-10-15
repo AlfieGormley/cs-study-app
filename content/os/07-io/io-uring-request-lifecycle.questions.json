@@ -1,0 +1,32 @@
+[
+  {
+    "id": "io-uring-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A completion arrives with `cqe->res == -2`. What does it mean?",
+    "options": [
+      {
+        "text": "2 bytes were transferred",
+        "explanation": "Byte counts are non-negative. A negative `res` always signals an error."
+      },
+      {
+        "text": "Check the global `errno` for the real error",
+        "explanation": "Per-operation failure is encoded directly in cqe->res. Many liburing APIs also return negative errno directly rather than setting the C errno variable; check the called function's contract."
+      },
+      {
+        "text": "The operation failed with errno 2 (`ENOENT`)",
+        "explanation": "Correct. io_uring reports errors as negative errno values in `res`, so -2 is `-ENOENT`, e.g. an `openat` on a missing path."
+      },
+      {
+        "text": "The CQ overflowed and 2 completions were lost",
+        "explanation": "Overflow is reported through ring flags and the kernel's backlog, not through a single CQE's `res`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `res` behaves like a syscall return value.\n2. Success: `res >= 0` (bytes read, new fd, etc.).\n3. Failure: the kernel stores the error number negated:\n\n```formula\nres = −e\n−2 = −e, so e = 2\nwhere\nres: the cqe->res field of the completion entry\ne: the errno value, a positive error number\nIn words: a negative res is an error number with its sign flipped, so −2 means error number 2.\n```\n\n4. errno 2 is `ENOENT` (no such file or directory).\n\nSo `report(r, -cqe->res)` turns it back into a positive errno for `strerror`.",
+    "link": {
+      "title": "io_uring(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
+    }
+  }
+]

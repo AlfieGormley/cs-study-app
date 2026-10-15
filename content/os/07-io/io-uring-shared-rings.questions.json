@@ -1,0 +1,62 @@
+[
+  {
+    "id": "io-uring-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In io_uring, which side writes entries into the **completion queue (CQ)**?",
+    "options": [
+      {
+        "text": "The kernel produces completion entries according to the operation and flags",
+        "explanation": "Correct. Normal CQEs are 16 bytes, with optional formats. Multishot operations can emit several CQEs, successful CQEs can sometimes be suppressed, and zero-copy sends can emit a later buffer-release notification."
+      },
+      {
+        "text": "The application, after it finishes processing a request",
+        "explanation": "The application only consumes the CQ (advancing its head). Writing results is the kernel's job; the application writes to the SQ."
+      },
+      {
+        "text": "liburing, by copying results out of the SQ",
+        "explanation": "liburing is a thin user-space wrapper. It does not produce completions; the SQ holds requests, not results."
+      },
+      {
+        "text": "Both sides, protected by a shared mutex",
+        "explanation": "The logical producer/consumer roles do not imply every execution context is a single thread. Application sharing requires synchronization, and the kernel coordinates completion production."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "SQ: application publishes requests, kernel consumes them. CQ: kernel publishes results, application consumes them. Publication uses defined memory ordering. Coordinate multiple userspace threads rather than assuming the entire subsystem is lock-free. CQE count and size depend on opcode and setup flags.",
+    "link": {
+      "title": "io_uring(7) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
+    }
+  },
+  {
+    "id": "io-uring-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does every SQE carry a 64-bit `user_data` field?",
+    "options": [
+      {
+        "text": "It tells the kernel which CPU to run the operation on",
+        "explanation": "CPU placement isn't controlled per SQE this way; `user_data` is opaque to the kernel."
+      },
+      {
+        "text": "It is a checksum the kernel uses to validate the entry",
+        "explanation": "It is not a checksum. The application chooses a tag that is returned with completions; some operations such as cancellation can also use user_data as an identifier to match pending work."
+      },
+      {
+        "text": "It sets the operation's priority in the queue",
+        "explanation": "Priority uses a separate `ioprio` field; `user_data` is purely for the application."
+      },
+      {
+        "text": "So the application can match each CQE to its request, because completions may arrive out of order",
+        "explanation": "Correct. The kernel copies `user_data` unchanged into the CQE. Typically it holds a pointer to your request struct."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Submit three reads A, B, C in order. A misses the page cache and goes to disk; B and C are already in the page cache.\n\n```\nCQ order: B, C, A\n```\n\nWithout a tag you couldn't tell which result belongs to which buffer. Set `user_data = (u64)req` on submit and read it back with `io_uring_cqe_get_data(cqe)`.",
+    "link": {
+      "title": "Lord of the io_uring (tutorial)",
+      "url": "https://unixism.net/loti/"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "io-models-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A positive-length blocking `read()` on an established TCP socket returns `0`, with no local receive-side shutdown. What does this indicate?",
+    "options": [
+      {
+        "text": "No data has arrived yet; try again later",
+        "explanation": "Absent EOF or errors, a blocking positive-length read can wait for data. In non-blocking mode an empty open stream normally reports EAGAIN/EWOULDBLOCK."
+      },
+      {
+        "text": "The peer has closed its side of the connection (end of file)",
+        "explanation": "Correct. A return of 0 means EOF: the other side has shut down writing and no more data will arrive."
+      },
+      {
+        "text": "An error occurred; check `errno`",
+        "explanation": "Errors are reported by a return of -1. A return of 0 is a normal, successful result meaning EOF."
+      },
+      {
+        "text": "The buffer passed in was too small",
+        "explanation": "A small buffer just means a short read of up to that many bytes; the remaining data stays in the kernel buffer for the next call."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "For the stated positive-length stream read, a positive return reports bytes, zero indicates receive EOF, and −1 reports an error. After buffered bytes are consumed, a peer FIN produces EOF; the peer may have half-closed only its sending direction. A zero-byte read request is a different case and need not mean EOF. Do not busy-retry EOF as though it were EAGAIN.",
+    "link": {
+      "title": "read(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/read.2.html"
+    }
+  },
+  {
+    "id": "io-models-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a Linux thread-per-connection server has 20,000 threads and explicitly configures an **8 MiB** stack reservation per thread. Ignoring guard pages and other mappings, what virtual stack reservation results, and must it all be resident?",
+    "options": [
+      {
+        "text": "About 160 MB, all of it resident",
+        "explanation": "20,000 × 8 MB is 160,000 MB, not 160 MB: off by a factor of 1,000."
+      },
+      {
+        "text": "156.25 GiB of virtual stack reservations; resident usage depends on touched/resident pages",
+        "explanation": "Correct. 20,000 × 8 MiB / 1024 = 156.25 GiB. This excludes guards and other memory. Thread creation can still hit process/resource limits; address-space arithmetic does not guarantee successful creation."
+      },
+      {
+        "text": "156.25 GiB, necessarily all resident immediately",
+        "explanation": "Linux reserves stack address space lazily; pages are only backed by RAM when first touched, so idle threads use much less."
+      },
+      {
+        "text": "Nothing; threads share the process's stack",
+        "explanation": "Each thread needs its own stack, because each has its own call chain."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Multiply the thread count by the stack reservation, then convert to GiB:\n\n```formula\nV = TS\nV = 20,000 × 8 MiB = 160,000 MiB\nV = 160,000 MiB / (1,024 MiB/GiB)\nV = 156.25 GiB\nwhere\nV: total virtual stack reservation, first in mebibytes (MiB), then converted to gibibytes (GiB)\nT: number of threads, here 20,000\nS: stack reservation per thread, here 8 MiB\nMiB: mebibyte, 1,048,576 bytes\nGiB: gibibyte, 1,024 MiB\nIn words: twenty thousand 8 MiB stacks reserve about 156 GiB of address space, which is not the same as using that much RAM.\n```\n\n2. Reserved virtual space and physical residency differ; neither this arithmetic nor the thread count determines actual resident memory.\n3. If one additionally assumes 32 KiB resident per stack, the model gives a much smaller figure:\n\n```formula\nM = T S_res\nM = 20,000 × 32 KiB = 640,000 KiB\nM = 640,000 KiB / (1,024 KiB/MiB)\nM = 625 MiB\nwhere\nM: modelled resident stack memory, first in kibibytes (KiB), then converted to MiB\nT: number of threads, here 20,000\nS_res: assumed resident (touched) stack per thread, here 32 KiB\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\nIn words: if each thread only touches 32 KiB of its stack, 20,000 threads hold about 625 MiB of RAM for stacks.\n```\n\nNo measured stack profile is supplied, so 32 KiB is an assumption.\n4. Thread limits, kernel metadata, guards and wakeup patterns add costs. Event loops reduce the need for a dedicated waiting thread per connection, not all scheduling/memory costs.",
+    "link": {
+      "title": "Asynchronous I/O — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
+    }
+  }
+]

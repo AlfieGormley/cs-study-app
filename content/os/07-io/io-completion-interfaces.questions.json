@@ -1,0 +1,70 @@
+[
+  {
+    "id": "io-models-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which interfaces can report completion separately from submitting an I/O request, regardless of whether the implementation uses kernel work or helper threads? Select all that apply.",
+    "options": [
+      {
+        "text": "Windows I/O completion ports (IOCP)",
+        "explanation": "Correct. You post an overlapped read with a buffer; the kernel fills it and queues a completion packet."
+      },
+      {
+        "text": "Linux `epoll`",
+        "explanation": "epoll is readiness-based: it tells you a descriptor can be read without blocking, then you call `read()` yourself."
+      },
+      {
+        "text": "Linux io_uring",
+        "explanation": "Correct for submitted read/write operations. io_uring also has readiness-poll operations; a CQE must be interpreted according to its opcode and result."
+      },
+      {
+        "text": "BSD/macOS `kqueue` with `EVFILT_READ`",
+        "explanation": "`EVFILT_READ` reports readiness (and how many bytes are available); you still perform the read."
+      },
+      {
+        "text": "POSIX `aio_read`",
+        "explanation": "Correct in its interface: you hand over a buffer and later collect the result. (On Linux glibc implements it with threads, but the model is completion.)"
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Ask of each API: do I give it a buffer up front and get told when the data is *in* the buffer?\n\n| API | Model |\n|---|---|\n| IOCP | completion |\n| epoll | readiness |\n| io_uring | completion |\n| kqueue READ | readiness |\n| aio_read | completion |\n\nReadiness APIs need a second call to do the I/O; completion APIs don't.",
+    "link": {
+      "title": "Asynchronous I/O — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
+    }
+  },
+  {
+    "id": "io-models-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux team submits many concurrent file reads through glibc POSIX aio_read, expecting no userspace worker threads. Profiling instead finds helper threads executing blocking reads. What explains this?",
+    "options": [
+      {
+        "text": "POSIX AIO requires `O_DIRECT`, without which it fails with `EINVAL`",
+        "explanation": "glibc POSIX AIO does not require O_DIRECT. Linux native AIO is a different interface, and direct I/O is not itself a guarantee that submission cannot block."
+      },
+      {
+        "text": "glibc implements POSIX AIO in user space with a pool of threads making ordinary blocking calls, so it is effectively a thread pool",
+        "explanation": "Correct. glibc uses helper threads for this interface. That explains the execution mechanism; performance relative to a custom pool still requires measurement."
+      },
+      {
+        "text": "POSIX AIO only works on sockets",
+        "explanation": "The interface is aimed primarily at files; sockets are usually handled with multiplexing."
+      },
+      {
+        "text": "The kernel serialises all AIO requests onto one queue",
+        "explanation": "There's no single kernel queue here at all, because the work is being done by glibc threads in user space."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. aio_read queues a request in the glibc implementation.\n2. A helper thread performs the underlying I/O; excess requests can wait for available workers.\n3. Completion status is collected separately through the POSIX AIO interface.\n4. aio_init documents a default maximum of 20 workers, adjustable by configuration; a claim of hundreds would require additional evidence.\n5. io_uring offers another completion interface but can also use workers. Compare supported operations and measured performance rather than labelling thread-based completion fake.",
+    "link": {
+      "title": "aio(7) — POSIX asynchronous I/O overview",
+      "url": "https://man7.org/linux/man-pages/man7/aio.7.html"
+    }
+  }
+]

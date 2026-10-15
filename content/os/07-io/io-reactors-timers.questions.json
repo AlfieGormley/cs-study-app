@@ -1,0 +1,62 @@
+[
+  {
+    "id": "io-event-loops-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which loop dispatches completed I/O operations in the **proactor** pattern, rather than asking a handler to perform a socket read after readiness?",
+    "options": [
+      {
+        "text": "A loop dispatching epoll socket-readability notifications",
+        "explanation": "This notification reports readiness. The handler still performs the read, giving the reactor pattern."
+      },
+      {
+        "text": "A loop dispatching kqueue EVFILT_READ socket-readability notifications",
+        "explanation": "EVFILT_READ reports readiness for the handler to read. Other kqueue filters, including FreeBSD EVFILT_AIO, can report different events; the specific operation matters."
+      },
+      {
+        "text": "A loop dispatching select socket-readability results",
+        "explanation": "select reports readiness, leaving the actual read to the handler: the reactor pattern."
+      },
+      {
+        "text": "A loop dispatching completed submitted reads through io_uring or Windows IOCP",
+        "explanation": "Correct. These handlers receive the completed operation result, giving the proactor pattern. An io_uring readiness-poll request would instead report readiness."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Classify the notification contract:\n\n| Event | Meaning | Pattern |\n|---|---|---|\n| select/poll/epoll socket readiness | ready to attempt I/O | reactor |\n| kqueue EVFILT_READ on a socket | ready to attempt a read | reactor |\n| Completed submitted read through IOCP or io_uring | operation finished | proactor |\n\nAn API name alone does not determine every use: io_uring also supports readiness polling, and FreeBSD kqueue has an AIO-completion filter.",
+    "link": {
+      "title": "Design overview \u2014 libuv documentation",
+      "url": "https://docs.libuv.org/en/v1.x/design.html"
+    }
+  },
+  {
+    "id": "io-event-loops-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An event loop has pending timers at 120 ms, 150 ms and 400 ms (absolute). It's now 100 ms and there's no I/O ready. What timeout should it pass to `epoll_wait`?",
+    "options": [
+      {
+        "text": "20 ms",
+        "explanation": "Correct. The earliest expiry is 120 ms (the min-heap's root), so sleep 120 \u2212 100 = 20 ms, waking sooner if I/O arrives."
+      },
+      {
+        "text": "0 ms, so it can check timers continuously",
+        "explanation": "That's busy-polling and burns a core for nothing."
+      },
+      {
+        "text": "300 ms, the time until the last timer",
+        "explanation": "Sleeping that long would fire the 120 ms and 150 ms timers far too late."
+      },
+      {
+        "text": "-1 (forever), since timers fire by signal",
+        "explanation": "In the illustrated timeout-driven loop, timer expiry is checked after the wait. Other loop designs can use timer descriptors or other mechanisms; the next deadline here is still 20 ms away."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The earliest modeled deadline is 120 ms (the min-heap root); the current time is 100 ms.\n\n```formula\nt_wait = t_next \u2212 t_now\nt_wait = 120 ms \u2212 100 ms = 20 ms\nwhere\nt_wait: the timeout passed to epoll_wait, in milliseconds (ms)\nt_next: the earliest timer expiry, here 120 ms\nt_now: the current time on the same clock, here 100 ms\nms: millisecond, one thousandth of a second\nIn words: sleep until the next timer is due, 20 ms from now, unless I/O arrives first.\n```\n\n2. Request a 20 ms wait (or less if other work requires it).\n3. epoll_wait can return earlier for I/O/signals or later because of scheduling or timer granularity.\n4. Read the clock again before computing the next timeout; it is 30 ms only if the new time is exactly 120 ms.",
+    "link": {
+      "title": "Design overview \u2014 libuv documentation",
+      "url": "https://docs.libuv.org/en/v1.x/design.html"
+    }
+  }
+]

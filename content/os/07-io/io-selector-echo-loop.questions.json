@@ -1,0 +1,92 @@
+[
+  {
+    "id": "io-event-loops-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "One Node.js event-loop thread owns 5,000 connections and runs a synchronous CPU task for two seconds without yielding. What happens to other callbacks on that same loop during that interval?",
+    "options": [
+      {
+        "text": "Their callbacks and timers wait for the running callback to return; the kernel and other threads may still process I/O",
+        "explanation": "Correct. The blocked dispatch thread cannot run another callback on that loop. Kernel networking, existing worker jobs and other event loops can still make progress."
+      },
+      {
+        "text": "They're served normally by other threads in the event loop",
+        "explanation": "There's only one event-loop thread. JavaScript callbacks all run on it."
+      },
+      {
+        "text": "The kernel preempts the handler and runs the other callbacks",
+        "explanation": "The kernel may preempt the *thread*, but it can't run another JavaScript callback on that loop; the loop is the only thread doing so."
+      },
+      {
+        "text": "Only connections that share the same remote IP stall",
+        "explanation": "The stall is process-wide; it has nothing to do with which client is sending."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The loop: `wait → run callbacks → wait`.\n2. The hash callback is running, so the loop is stuck in the 'run callbacks' step.\n3. Data from the 5,000 clients piles up in kernel socket buffers, unread.\n4. Timers due during the 2 s fire late.\n5. When the handler returns, the loop catches up.\n\nFix: move CPU work to a worker thread or another process.",
+    "link": {
+      "title": "The Node.js Event Loop — Node.js docs",
+      "url": "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
+    }
+  },
+  {
+    "id": "io-event-loops-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the buffered selectors echo loop, what does this dispatch do?\n\n```python\nfor key, mask in sel.select():\n    # Call the registered handler.\n    key.data(key.fileobj, mask)\n```",
+    "options": [
+      {
+        "text": "Reads data from every registered socket",
+        "explanation": "It only touches sockets that are ready, and it doesn't read: it calls whatever handler was registered."
+      },
+      {
+        "text": "Blocks until every socket has data",
+        "explanation": "`select()` returns as soon as at least one registered descriptor is ready (or the timeout expires)."
+      },
+      {
+        "text": "Calls the callback stored at registration (accept or echo) for each ready descriptor",
+        "explanation": "Correct. `key.data` is the object passed to `sel.register`, here a function, so this is the dispatch step."
+      },
+      {
+        "text": "Copies the received bytes into `key.data`",
+        "explanation": "`key.data` holds the handler, not received bytes. The handler calls `recv` itself."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Registration associates the listener with accept and each connection with its echo callback. select returns ready keys plus event masks; dispatch passes the socket and mask to the registered callback. The echo callback then performs appropriate non-blocking reads/writes, retaining any unsent data.",
+    "link": {
+      "title": "selectors — Python documentation",
+      "url": "https://docs.python.org/3/library/selectors.html"
+    }
+  },
+  {
+    "id": "io-event-loops-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A proxy built on an event loop reads from a fast upstream and writes to a slow mobile client. Memory grows until the process is OOM-killed. What's the correct fix?",
+    "options": [
+      {
+        "text": "Apply backpressure: stop reading from upstream (unregister read interest) while the client's outgoing buffer is above a high-water mark, and resume when it drains",
+        "explanation": "Correct for the described unbounded per-stream output queue. Pausing upstream reads propagates TCP flow control, while chunk limits and global admission/memory budgets are also needed to bound the whole process."
+      },
+      {
+        "text": "Make the upstream socket blocking so reads wait for the client",
+        "explanation": "A blocking socket on an event loop freezes every other connection."
+      },
+      {
+        "text": "Increase the kernel send buffer size",
+        "explanation": "That only moves the problem; a big enough response still outruns any buffer."
+      },
+      {
+        "text": "Run the garbage collector more often",
+        "explanation": "The memory is live (unsent data), not garbage."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Upstream sends 100 MB/s; the client drains 1 MB/s. Without backpressure the difference piles up:\n\n```formula\ng = r_in − r_out\ng = 100 MB/s − 1 MB/s = 99 MB/s\nwhere\ng: growth rate of the proxy's unsent buffer\nr_in: rate read from upstream, here 100 MB/s\nr_out: rate the client accepts, here 1 MB/s\nMB: megabyte, 10^6 bytes\ns: second; \"/s\" means per second\nIn words: the buffer grows by 99 MB every second, so about 6 GB of RAM is gone within a minute.\n```\n\n2. That backlog sits in the proxy's user-space buffer until the process is killed.\n3. Fix: when the pending output exceeds a high-water mark (say 1 MB), stop watching upstream for `EVENT_READ`.\n4. The kernel receive buffer fills, the TCP window shrinks, and the upstream slows.\n5. When the client's socket is writable and the pending output falls below a low-water mark, start reading again.\n\nNode streams do this with `highWaterMark` and `pipe()`.",
+    "link": {
+      "title": "selectors — Python documentation",
+      "url": "https://docs.python.org/3/library/selectors.html"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "io-multiplexing-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In an epoll-based server, which call adds a newly accepted connection to the set of descriptors being watched?",
+    "options": [
+      {
+        "text": "`epoll_wait(ep, evs, 64, -1)`",
+        "explanation": "`epoll_wait` waits for and returns events; it doesn't change what's being watched."
+      },
+      {
+        "text": "`epoll_create1(0)`",
+        "explanation": "That creates a new epoll instance. You do it once at start-up, not per connection."
+      },
+      {
+        "text": "`epoll_ctl(ep, EPOLL_CTL_ADD, fd, &ev)`",
+        "explanation": "Correct. `epoll_ctl` modifies the interest list; `EPOLL_CTL_ADD` inserts the fd with the events in `ev`."
+      },
+      {
+        "text": "`poll()` with the new fd appended to the array",
+        "explanation": "That's how you'd do it with `poll`, which keeps no kernel state. epoll's interest list lives in the kernel and is changed with `epoll_ctl`."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "epoll splits the job:\n\n1. `epoll_create1`: make the instance (once).\n2. `epoll_ctl(ADD/MOD/DEL)`: change the interest list (per connection or per interest change).\n3. `epoll_wait`: sleep until events, get the ready ones (in the loop).\n\nAfter `accept()` returns fd 12, set it non-blocking and call `epoll_ctl(ep, EPOLL_CTL_ADD, 12, &ev)`.",
+    "link": {
+      "title": "epoll_ctl(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the Linux implementation using a red-black-tree epoll interest index, what is the asymptotic cost of the index insertion/search component for N registrations (N is the number of registered descriptors), excluding allocation, locks and target-specific checks?",
+    "options": [
+      {
+        "text": "O(1), because it is appended to the ready list",
+        "explanation": "Adding to the interest set is not adding to the ready list. A newly added fd goes on the ready list only if it already has events. Here N is the number of registered descriptors."
+      },
+      {
+        "text": "O(N), because the kernel rescans all descriptors",
+        "explanation": "Rescanning is what `poll` does on every call; epoll exists to avoid that. Here N is the number of registered descriptors."
+      },
+      {
+        "text": "O(log N), because the interest list is a red-black tree keyed by file and fd",
+        "explanation": "Correct for the balanced-tree component. Registration can also perform target polling, wait-queue setup, allocation and locking, whose costs are not captured by this tree bound. Here N is the number of registered descriptors."
+      },
+      {
+        "text": "O(N log N), because the tree is re-sorted",
+        "explanation": "Balanced trees insert one element in O(log N) without re-sorting. Here N is the number of registered descriptors."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The interest index distinguishes the pair of open file description and descriptor number.\n2. Balanced red-black-tree search/insertion takes O(log N) comparisons.\n3. For scale:\n\n```formula\nh ≈ log_2(N)\nh ≈ log_2(1,000,000) ≈ 20\nwhere\nh: idealized binary-tree depth for an order-of-growth illustration; not the actual red-black-tree height or comparison count\nN: registered descriptors, here 1,000,000\nlog_2: logarithm base 2, how many times N can be halved before reaching 1\n≈: approximately equal to\nIn words: the base-two logarithm of one million is about twenty; red-black-tree height can be larger and operations have additional work.\n```\n\nThis indicates scale, not an exact count of comparisons or a bound on total syscall time.\n4. Registration includes additional work, and epoll_wait may inspect candidates that no longer produce returned events.",
+    "link": {
+      "title": "epoll_ctl(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
+    }
+  }
+]

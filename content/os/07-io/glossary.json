@@ -32,7 +32,7 @@
       "NVMe SSD controller",
       "SSD controller"
     ],
-    "definition": "The chip (often a small computer with its own firmware) that drives a device and presents registers the CPU reads and writes. The CPU never drives the flash chips or the radio directly; it gives commands to the controller.",
+    "definition": "Hardware that manages a device and presents a command/data interface to host software, often with firmware and its own processor. In the controller-based examples here, the driver commands the controller rather than directly driving the physical mechanism.",
     "source": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-devices.pdf"
   },
   {
@@ -72,8 +72,8 @@
       "Non-Volatile Memory Express",
       "NVM Express"
     ],
-    "definition": "Non-Volatile Memory Express: the standard interface for SSDs attached over PCIe. It uses many submission and completion queues in RAM plus doorbell registers, so one drive can handle very many requests in parallel.",
-    "source": "https://en.wikipedia.org/wiki/NVM_Express"
+    "definition": "Non-Volatile Memory Express: a family of interfaces and protocols for non-volatile storage. The PCIe transport uses memory-based submission/completion queues and doorbells; NVMe also has fabric transports such as TCP and RDMA.",
+    "source": "https://nvmexpress.org/specifications/"
   },
   {
     "id": "ssd",
@@ -83,7 +83,7 @@
       "solid-state drive",
       "solid-state drives"
     ],
-    "definition": "Solid-state drive: storage built from flash memory chips, with no moving parts. It is much faster than a spinning hard disk, with access times of tens of microseconds rather than milliseconds.",
+    "definition": "Solid-state drive: storage using electronic memory rather than moving read/write heads, commonly NAND flash. Latency depends on device, operation and workload; there is no universal read-time guarantee.",
     "source": "https://en.wikipedia.org/wiki/Solid-state_drive"
   },
   {
@@ -162,11 +162,9 @@
       "kernel virtual addresses",
       "kernel virtual memory",
       "CPU virtual address",
-      "CPU virtual addresses",
-      "virtual address",
-      "virtual addresses"
+      "CPU virtual addresses"
     ],
-    "definition": "An address the CPU uses after paging translation. Kernel code uses kernel virtual addresses; devices doing DMA cannot use them directly and need a DMA address from the DMA API instead.",
+    "definition": "An address used by kernel code before CPU virtual-memory translation. In conventional mapped DMA, a device uses an address supplied by the DMA API instead; supported shared virtual addressing is a separate mechanism.",
     "source": "https://docs.kernel.org/core-api/dma-api-howto.html"
   },
   {
@@ -177,8 +175,8 @@
       "writel",
       "ioremap"
     ],
-    "definition": "Linux kernel accessor functions that read (`readl`) or write (`writel`) a 32-bit device register through an MMIO mapping created with `ioremap`. They add the ordering guarantees that a plain pointer access would lack.",
-    "source": "https://docs.kernel.org/driver-api/device-io.html"
+    "definition": "Linux MMIO helpers: ioremap creates an appropriate mapping, while readl and writel read or write a 32-bit device register through it. Drivers must follow the accessor and ordering rules for their platform.",
+    "source": "https://docs.kernel.org/driver-api/io_ordering.html"
   },
   {
     "id": "bar",
@@ -228,7 +226,7 @@
       "busy wait",
       "busy waiting"
     ],
-    "definition": "Waiting by running a tight loop that keeps checking a condition, so the CPU stays fully occupied doing nothing useful. Worth it only when the wait is expected to be very short.",
+    "definition": "Waiting by repeatedly checking a condition while remaining runnable, consuming CPU time instead of sleeping. Whether it is appropriate depends on expected wait duration, notification cost and available CPU budget.",
     "source": "https://en.wikipedia.org/wiki/Busy_waiting"
   },
   {
@@ -289,8 +287,8 @@
     "aliases": [
       "interrupt vectors"
     ],
-    "definition": "A number identifying one interrupt source, used as an index into the table of handler addresses. MSI-X lets one device own many vectors, one per queue.",
-    "source": "https://en.wikipedia.org/wiki/Interrupt_vector_table"
+    "definition": "A number used to select an interrupt/exception handler entry. MSI-X permits multiple independently configured vectors; mapping a queue to a dedicated vector and CPU depends on device support, allocation and affinity.",
+    "source": "https://docs.kernel.org/PCI/msi-howto.html"
   },
   {
     "id": "idt",
@@ -520,8 +518,8 @@
       "IOMMUs",
       "input-output memory management unit"
     ],
-    "definition": "Input-output memory management unit: hardware that translates and checks the addresses devices use for DMA, like an MMU for devices. It confines each device to buffers mapped for it, which protects the kernel and enables safe device assignment to VMs.",
-    "source": "https://en.wikipedia.org/wiki/Input%E2%80%93output_memory_management_unit"
+    "definition": "Input-output memory management unit: hardware that translates and checks device DMA addresses against configured mappings. It contributes to device isolation; safe assignment also depends on hardware topology, interrupt isolation, reset behavior and configuration.",
+    "source": "https://docs.kernel.org/driver-api/vfio.html"
   },
   {
     "id": "vt-d",
@@ -542,7 +540,7 @@
       "device-assignment",
       "assigns an NVMe device"
     ],
-    "definition": "Giving a virtual machine direct control of a physical device, so the guest's driver programs it without the hypervisor in the data path. It needs an IOMMU and interrupt remapping so the device cannot reach host memory.",
+    "definition": "Assigning a physical device or supported device function to a VM so its guest driver controls the device interface. Safe direct assignment normally requires suitable DMA/interrupt isolation, device groups, reset behavior and correct configuration; an IOMMU alone is not a complete guarantee.",
     "source": "https://docs.kernel.org/driver-api/vfio.html"
   },
   {
@@ -650,7 +648,8 @@
       "top halves",
       "the top half",
       "its top half",
-      "driver's top half"
+      "driver's top half",
+      "top half"
     ],
     "definition": "The fast, first part of Linux interrupt handling: the hard IRQ handler that checks and acknowledges the device, grabs anything urgent and schedules the rest.",
     "source": "https://static.lwn.net/images/pdf/LDD3/ch10.pdf"
@@ -666,7 +665,8 @@
       "its bottom half",
       "driver's bottom half",
       "B's bottom half",
-      "fastest bottom half"
+      "fastest bottom half",
+      "bottom half"
     ],
     "definition": "The deferred part of Linux interrupt handling that does the slower processing after the top half returns, using a softirq, tasklet, workqueue or threaded IRQ.",
     "source": "https://static.lwn.net/images/pdf/LDD3/ch10.pdf"
@@ -677,15 +677,15 @@
     "aliases": [
       "interrupt context"
     ],
-    "definition": "Kernel code running where it must not sleep or block, such as a hard IRQ handler, a softirq or while holding a spinlock. There is no process context to put to sleep, so functions that may wait (mutexes, GFP_KERNEL allocation) are forbidden.",
-    "source": "https://docs.kernel.org/kernel-hacking/hacking.html"
+    "definition": "Kernel execution in which sleeping is forbidden, for example conventional hard IRQ or softirq handling or code holding a non-sleeping spinlock. A task may exist, but that does not make sleeping legal in such a region.",
+    "source": "https://docs.kernel.org/core-api/workqueue.html"
   },
   {
     "id": "process-context",
     "term": "Process context",
     "aliases": [],
-    "definition": "Kernel code running on behalf of a task (a system call or a kernel thread), which is allowed to sleep, for example to wait for a lock or I/O.",
-    "source": "https://docs.kernel.org/kernel-hacking/hacking.html"
+    "definition": "Kernel code executing in the context of a task, such as a system call or kernel thread. It may sleep only when its current locking, preemption and interrupt rules permit it.",
+    "source": "https://docs.kernel.org/core-api/workqueue.html"
   },
   {
     "id": "softirq",
@@ -759,8 +759,8 @@
       "kernel threads",
       "kthread"
     ],
-    "definition": "A thread that runs only kernel code and has no user address space, used for background work such as ksoftirqd, workqueue workers and io_uring's SQPOLL thread.",
-    "source": "https://en.wikipedia.org/wiki/Thread_(computing)#Kernel_threads"
+    "definition": "A task used for kernel work, such as ksoftirqd or worker handling. Conventional kernel threads do not have an ordinary userspace execution context; some kernel workers temporarily borrow a user memory context, so this is not an absolute no-address-space rule.",
+    "source": "https://docs.kernel.org/core-api/workqueue.html"
   },
   {
     "id": "preemption",
@@ -821,8 +821,8 @@
       "spinlocks",
       "spin lock"
     ],
-    "definition": "A lock that waits by busy-looping rather than sleeping, so it can be used in atomic context such as interrupt handlers. It must be held only briefly.",
-    "source": "https://docs.kernel.org/locking/spinlocks.html"
+    "definition": "A lock whose conventional non-RT implementation waits by spinning. Linux raw_spinlock_t remains a spinning lock; PREEMPT_RT changes spinlock_t into a sleeping-lock implementation, so the lock type and execution context determine permitted use.",
+    "source": "https://docs.kernel.org/locking/locktypes.html"
   },
   {
     "id": "gfp-flags",
@@ -832,7 +832,7 @@
       "GFP_ATOMIC",
       "kmalloc"
     ],
-    "definition": "Flags passed to Linux kernel memory allocation (`kmalloc`). `GFP_KERNEL` may sleep to free memory, so it is only for process context; `GFP_ATOMIC` never sleeps and is used in atomic context, but fails more often.",
+    "definition": "Linux kernel allocation flags: GFP_KERNEL permits reclaim that may sleep and requires a sleepable context. GFP_ATOMIC is non-sleeping and can access reserves, but allocation may still fail; callers must handle that failure.",
     "source": "https://docs.kernel.org/core-api/memory-allocation.html"
   },
   {
@@ -850,8 +850,8 @@
     "aliases": [
       "page-cache"
     ],
-    "definition": "The kernel's in-RAM cache of file contents. A read that hits it returns without touching the disk; a read that misses must wait for the device, which is why file reads can block an event loop.",
-    "source": "https://en.wikipedia.org/wiki/Page_cache"
+    "definition": "The kernel cache of file contents in RAM. A cache hit can avoid storage I/O; a miss may need storage work and block, although holes, end of file and other paths need not perform a device read.",
+    "source": "https://man7.org/linux/man-pages/man2/read.2.html"
   },
   {
     "id": "submission-completion-queue",
@@ -912,7 +912,7 @@
       "CPU cycle",
       "CPU cycles"
     ],
-    "definition": "One tick of the CPU clock. A 3 GHz core has three billion cycles per second; simple instructions take about one cycle, a DRAM access hundreds.",
+    "definition": "One tick of a CPU clock. At 3 GHz there are three billion ticks per second; instruction throughput and memory-access latency depend on architecture, memory state and workload.",
     "source": "https://en.wikipedia.org/wiki/Clock_rate"
   },
   {
@@ -934,7 +934,7 @@
       "ns",
       "nanoseconds"
     ],
-    "definition": "One billionth of a second (10^−9 s). At 10 Gbit/s a minimum Ethernet frame arrives every 67.2 ns.",
+    "definition": "One billionth of a second. In the stated back-to-back, minimum untagged Ethernet occupancy model, a 10 Gbit/s link has 67.2 nanoseconds per frame; actual arrival spacing depends on traffic and link rules.",
     "source": "https://en.wikipedia.org/wiki/Nanosecond"
   },
   {
@@ -944,7 +944,7 @@
       "µs",
       "microseconds"
     ],
-    "definition": "One millionth of a second (10^−6 s). Fast NVMe reads take tens of microseconds.",
+    "definition": "One millionth of a second. I/O latency is often measured in microseconds, but the unit alone implies no device performance.",
     "source": "https://en.wikipedia.org/wiki/Microsecond"
   },
   {
@@ -1024,7 +1024,7 @@
     "aliases": [
       "Universal Serial Bus"
     ],
-    "definition": "Universal Serial Bus: the common bus for keyboards, storage sticks and many peripherals. USB transfers can take milliseconds, so drivers wait for them in sleepable context.",
+    "definition": "Universal Serial Bus: a standard connecting peripherals such as keyboards and storage devices. A driver may wait for completion in a suitable sleepable context; hard IRQ context cannot sleep.",
     "source": "https://en.wikipedia.org/wiki/USB"
   },
   {
@@ -1069,7 +1069,7 @@
       "blocking reads",
       "blocking sockets"
     ],
-    "definition": "I/O in which the call puts the thread to sleep until it can return a result, for example a `read()` that waits until data arrives. Simple, but one thread can only wait on one thing at a time.",
+    "definition": "A socket mode in which a read may put the calling thread to sleep until data, end of stream or an error is available. Data already available may return immediately, and a successful read can be shorter than requested.",
     "source": "https://man7.org/linux/man-pages/man2/read.2.html"
   },
   {
@@ -1083,7 +1083,7 @@
       "non-blocking descriptor",
       "non-blocking descriptors"
     ],
-    "definition": "I/O in which a call that cannot make progress returns immediately with an error such as `EAGAIN` instead of sleeping. Enabled per descriptor with `O_NONBLOCK`; the basis of event loops.",
+    "definition": "A socket mode in which an operation that would have to wait for readiness instead reports a condition such as EAGAIN. On Linux O_NONBLOCK is an open-file-description status flag shared by duplicated descriptors; supported operations and descriptor types matter.",
     "source": "https://man7.org/linux/man-pages/man2/fcntl.2.html"
   },
   {
@@ -1185,7 +1185,7 @@
       "kernel socket buffers",
       "SO_SNDBUF"
     ],
-    "definition": "Kernel memory attached to a socket: the receive buffer holds data that has arrived but not been read, and the send buffer holds data accepted by `send()` but not yet acknowledged. Sizes are set with options such as `SO_SNDBUF`.",
+    "definition": "Kernel memory accounting and queued data associated with a socket. Receive queues hold unread input; send queues hold accepted output until protocol/ownership rules permit release. TCP acknowledgements and datagram transmission have different lifetimes; options such as SO_SNDBUF control limits.",
     "source": "https://man7.org/linux/man-pages/man7/socket.7.html"
   },
   {
@@ -1218,8 +1218,8 @@
       "recv",
       "ssize_t"
     ],
-    "definition": "The system calls that copy available data from a file or socket into a user buffer. They return the number of bytes read (type `ssize_t`), 0 at end of file, or −1 with `errno` set on error.",
-    "source": "https://man7.org/linux/man-pages/man2/read.2.html"
+    "definition": "read reads from a descriptor; recv reads from a socket with additional flags. They return a byte count of signed type ssize_t or −1 on error. For a positive-length stream read, zero indicates EOF; zero-length requests and zero-size datagrams need separate interpretation.",
+    "source": "https://man7.org/linux/man-pages/man2/recv.2.html"
   },
   {
     "id": "send-syscall",
@@ -1228,8 +1228,8 @@
       "sendall",
       "write()"
     ],
-    "definition": "System calls that copy data from a user buffer into a socket's send buffer (or a file). They may accept fewer bytes than requested, so callers must handle partial writes.",
-    "source": "https://man7.org/linux/man-pages/man2/send.2.html"
+    "definition": "write and send can accept fewer bytes than requested; retain and retry the unsent suffix as appropriate. Python socket.sendall instead attempts the whole payload and returns None on success; on failure it raises without reporting a usable partial count.",
+    "source": "https://docs.python.org/3/library/socket.html"
   },
   {
     "id": "io-short-read",
@@ -1254,8 +1254,8 @@
       "end-of-file",
       "receive EOF"
     ],
-    "definition": "End of file: for a socket, the peer has closed its sending side and no more data will come. `read()` signals it by returning 0.",
-    "source": "https://man7.org/linux/man-pages/man2/read.2.html"
+    "definition": "End of file. On a positive-length stream read, zero indicates receive EOF after preceding data is drained; the peer may have closed only its sending direction. Zero-length read requests and zero-size datagrams do not by themselves establish EOF.",
+    "source": "https://man7.org/linux/man-pages/man2/recv.2.html"
   },
   {
     "id": "fin-rst",
@@ -1283,8 +1283,8 @@
     "aliases": [
       "three-way handshake"
     ],
-    "definition": "The SYN, SYN-ACK, ACK exchange that opens a TCP connection before any data flows.",
-    "source": "https://en.wikipedia.org/wiki/Transmission_Control_Protocol#Connection_establishment"
+    "definition": "The usual SYN, SYN-ACK, ACK exchange that establishes a TCP connection. TCP can carry data in handshake segments under supported rules, so establishment is not universally completed before any data is sent.",
+    "source": "https://www.rfc-editor.org/rfc/rfc9293"
   },
   {
     "id": "io-errno",
@@ -1314,8 +1314,8 @@
     "id": "eintr",
     "term": "EINTR",
     "aliases": [],
-    "definition": "The error returned when a blocking system call is interrupted by a signal before it completes. Code usually just retries the call.",
-    "source": "https://man7.org/linux/man-pages/man3/errno.3.html"
+    "definition": "An error indicating interruption by a signal for an operation that reports it. Whether and how to retry depends on the call: preserve timeout/progress semantics, and do not blindly retry Linux close after EINTR.",
+    "source": "https://man7.org/linux/man-pages/man2/close.2.html"
   },
   {
     "id": "error-codes",
@@ -1374,7 +1374,7 @@
     "id": "fork",
     "term": "fork()",
     "aliases": [],
-    "definition": "The Unix system call that creates a child process as a copy of the parent, sharing its open file descriptions. Linux uses copy-on-write so the copy is cheap until pages are modified.",
+    "definition": "The Unix call that creates a child with its own process state and descriptors referring to the parent’s open file descriptions. Linux uses copy-on-write for suitable private mappings, but page-table duplication and other work still have a cost.",
     "source": "https://man7.org/linux/man-pages/man2/fork.2.html"
   },
   {
@@ -1384,8 +1384,8 @@
       "copy on write",
       "COW"
     ],
-    "definition": "Sharing memory pages between processes until one writes to a page, at which point that page alone is copied. It makes `fork()` cheap, which Redis relies on for snapshots.",
-    "source": "https://en.wikipedia.org/wiki/Copy-on-write"
+    "definition": "Sharing suitable memory pages until a write requires a private copy. Linux fork uses this for private mappings, reducing eager copying without eliminating fork’s page-table, allocation and bookkeeping costs.",
+    "source": "https://man7.org/linux/man-pages/man2/fork.2.html"
   },
   {
     "id": "thread-per-connection",
@@ -1421,7 +1421,7 @@
       "guard page",
       "guard pages"
     ],
-    "definition": "The memory a thread uses for its function calls and local variables. On Linux, glibc takes the default size from the RLIMIT_STACK soft limit (commonly 8 MiB) and reserves it as virtual address space, backed by RAM only when touched; a guard page below it catches overflows.",
+    "definition": "Memory for a thread’s call frames and local variables. Under Linux NPTL, a finite startup RLIMIT_STACK sets the default stack size; an unlimited limit uses an architecture-specific default. Attributes can override it. Virtual reservation, resident pages and guard size are distinct.",
     "source": "https://man7.org/linux/man-pages/man3/pthread_create.3.html"
   },
   {
@@ -1443,7 +1443,7 @@
       "address spaces",
       "reserved address space"
     ],
-    "definition": "The range of virtual addresses a process can use. Reserving address space does not use RAM until the pages are touched.",
+    "definition": "The range of virtual addresses available to a process. A reservation is distinct from resident RAM; demand allocation, existing shared mappings, page faults and mapping flags determine when physical memory is associated with it.",
     "source": "https://en.wikipedia.org/wiki/Virtual_address_space"
   },
   {
@@ -1462,7 +1462,7 @@
     "aliases": [
       "setblocking(False)"
     ],
-    "definition": "A file status flag that makes I/O on a descriptor non-blocking. It has no effect on regular files, whose reads block on the disk regardless.",
+    "definition": "An open-file-description status flag requesting non-blocking behavior for supported operations. Linux ignores it for ordinary regular-file and block-device I/O, so storage waits can still occur; this does not mean every read necessarily accesses storage.",
     "source": "https://man7.org/linux/man-pages/man2/open.2.html"
   },
   {
@@ -1498,7 +1498,8 @@
       "readiness model",
       "readiness models",
       "readiness notification",
-      "readiness notifications"
+      "readiness notifications",
+      "I/O readiness"
     ],
     "definition": "I/O where the kernel tells you when an operation can be done without blocking (a socket is readable) and you then perform it yourself. select, poll, epoll and kqueue work this way.",
     "source": "https://man7.org/linux/man-pages/man7/epoll.7.html"
@@ -1515,8 +1516,8 @@
       "completion model",
       "completion models"
     ],
-    "definition": "I/O where you hand the kernel the operation and buffer, it performs the whole thing, and it tells you when it has finished. IOCP, POSIX AIO and io_uring work this way.",
-    "source": "https://en.wikipedia.org/wiki/Asynchronous_I/O"
+    "definition": "An interface that separates submitting an operation from collecting its completed result. Implementations may use kernel machinery or helper threads, and completion can occur before or after submission returns.",
+    "source": "https://man7.org/linux/man-pages/man7/aio.7.html"
   },
   {
     "id": "io-select",
@@ -1534,7 +1535,7 @@
     "id": "fd-setsize",
     "term": "FD_SETSIZE",
     "aliases": [],
-    "definition": "The number of bits in an `fd_set`, fixed at 1024 on Linux glibc. Passing a descriptor of 1024 or above to `FD_SET` writes out of bounds.",
+    "definition": "The capacity of an fd_set bitmap, 1024 descriptor bits in Linux glibc. Using an out-of-range descriptor with FD_SET has undefined behavior; exact failure, including a fortify abort or memory overwrite, depends on implementation and build.",
     "source": "https://man7.org/linux/man-pages/man2/select.2.html"
   },
   {
@@ -1603,8 +1604,8 @@
     "id": "epolloneshot",
     "term": "EPOLLONESHOT",
     "aliases": [],
-    "definition": "An epoll flag that reports a descriptor once and then disables it until re-armed with `EPOLL_CTL_MOD`, so only one thread handles a connection at a time.",
-    "source": "https://man7.org/linux/man-pages/man2/epoll_ctl.2.html"
+    "definition": "An epoll flag that disables a watched registration after reporting an event until EPOLL_CTL_MOD rearms it. It supports a connection-ownership protocol; correct rearming and coordination of other access paths are still necessary.",
+    "source": "https://man7.org/linux/man-pages/man7/epoll.7.html"
   },
   {
     "id": "epollexclusive",
@@ -1669,8 +1670,8 @@
       "wait queues",
       "wait-queue"
     ],
-    "definition": "A Linux kernel list of tasks (or callbacks) waiting for an event on an object such as a socket. When the event happens the kernel wakes everything on the queue; epoll hooks a callback onto it.",
-    "source": "https://docs.kernel.org/kernel-hacking/hacking.html"
+    "definition": "A Linux mechanism for tasks or callbacks waiting for an object’s state to change. Wakeup rules, including exclusive waiters, determine which entries are notified; epoll attaches callbacks to relevant wait queues.",
+    "source": "https://man7.org/linux/man-pages/man7/epoll.7.html"
   },
   {
     "id": "callback",
@@ -1699,7 +1700,7 @@
       "writes past the end",
       "out-of-bounds"
     ],
-    "definition": "Writing beyond the end of a memory buffer, corrupting neighbouring data. `FD_SET` on a descriptor of 1024 or above is a classic example.",
+    "definition": "An access that writes outside a buffer’s valid range. In C this can cause undefined behavior; memory corruption is possible but not guaranteed. Out-of-range unchecked FD_SET use is one example.",
     "source": "https://en.wikipedia.org/wiki/Buffer_overflow"
   },
   {
@@ -1884,7 +1885,7 @@
       "SIGSEGV",
       "SIGIO signal"
     ],
-    "definition": "An asynchronous notification sent to a process: SIGHUP traditionally means reload configuration (nginx), SIGSEGV is an invalid memory access.",
+    "definition": "Notifications delivered to a process or thread. SIGHUP denotes a terminal/controlling-process hangup by default and is conventionally repurposed by nginx for reload; SIGSEGV reports an invalid memory reference.",
     "source": "https://man7.org/linux/man-pages/man7/signal.7.html"
   },
   {
@@ -1919,7 +1920,7 @@
       "GNU C Library"
     ],
     "definition": "The GNU C Library, the standard C library on most Linux distributions, providing wrappers for system calls and functions such as POSIX AIO.",
-    "source": "https://www.gnu.org/software/libc/"
+    "source": "https://sourceware.org/glibc/manual/latest/html_node/index.html"
   },
   {
     "id": "linux-native-aio",
@@ -1937,7 +1938,7 @@
     "aliases": [
       "direct I/O"
     ],
-    "definition": "An open flag that asks the kernel to transfer data directly between the device and the user buffer, bypassing the page cache. It needs aligned buffers and does not by itself make I/O asynchronous.",
+    "definition": "An open flag requesting a direct-I/O path that normally avoids the page cache. Alignment and support requirements depend on kernel/filesystem; unsupported or misaligned cases may fail or fall back to buffered I/O. The flag alone does not make I/O asynchronous.",
     "source": "https://man7.org/linux/man-pages/man2/open.2.html"
   },
   {
@@ -1978,8 +1979,8 @@
     "aliases": [
       "async and await"
     ],
-    "definition": "Language syntax that lets a function pause at `await` until a result is ready, while an event loop runs other tasks. It says nothing about which I/O mechanism the runtime uses underneath.",
-    "source": "https://en.wikipedia.org/wiki/Async/await"
+    "definition": "Language syntax allowing an asynchronous function to suspend while awaiting a result. Awaiting an already-complete result need not yield, and syntax alone does not specify an event loop or underlying I/O mechanism.",
+    "source": "https://docs.python.org/3/library/asyncio-task.html"
   },
   {
     "id": "coroutine",
@@ -2031,7 +2032,7 @@
       "MSG_PEEK",
       "MSG_ZEROCOPY"
     ],
-    "definition": "`recv` and `send` flags: `MSG_WAITALL` waits until the full requested length arrives, `MSG_PEEK` reads data without consuming it, and `MSG_ZEROCOPY` asks the kernel to send from the user buffer without copying.",
+    "definition": "Socket flags: MSG_WAITALL requests waiting for the requested receive length, but errors, signals or disconnects can still cause a short return. MSG_PEEK observes without consuming; supported MSG_ZEROCOPY sends have separate completion and buffer-lifetime rules.",
     "source": "https://man7.org/linux/man-pages/man2/recv.2.html"
   },
   {
@@ -2155,8 +2156,8 @@
     "aliases": [
       "lock free"
     ],
-    "definition": "Describes a concurrent algorithm that never makes threads wait for a lock; progress is guaranteed using atomic operations instead.",
-    "source": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
+    "definition": "A progress property of a concurrent algorithm: the system as a whole continues completing operations despite individual threads being delayed. It does not guarantee each thread completes promptly, and absence of an explicit mutex alone does not prove the property.",
+    "source": "https://docs.kernel.org/core-api/circular-buffers.html"
   },
   {
     "id": "mmap",
@@ -2175,7 +2176,7 @@
     "aliases": [
       "powers of two"
     ],
-    "definition": "A number of the form 2^k, such as 64, 256 or 4,096. Ring sizes are powers of two so an index can be wrapped with a fast bitwise AND instead of division.",
+    "definition": "A number obtainable by multiplying 2 by itself a whole number of times, including 1, 2, 64 and 256. The io_uring ring capacities discussed here are powers of two, so their slot calculation can use a bit mask; circular buffers in general need not have such a capacity.",
     "source": "https://en.wikipedia.org/wiki/Power_of_two"
   },
   {
@@ -2281,7 +2282,7 @@
       "registered files",
       "fixed file"
     ],
-    "definition": "Files registered with an io_uring ring via `io_uring_register`, then referred to by index, which avoids looking up and reference-counting the descriptor on every operation.",
+    "definition": "Files registered with an io_uring instance and referred to by a registered index. This avoids ordinary per-operation descriptor-table lookup while retaining resource registration, lifetime and internal bookkeeping.",
     "source": "https://man7.org/linux/man-pages/man2/io_uring_register.2.html"
   },
   {
@@ -2309,8 +2310,8 @@
       "tries the operation inline",
       "inline submission"
     ],
-    "definition": "io_uring first attempts an operation immediately in the submitting context; only if it would block does it arm a poll or hand it to io-wq.",
-    "source": "https://unixism.net/loti/"
+    "definition": "Performing an io_uring operation in the submitting context rather than first handing it to a worker. Whether an operation attempts this, arms polling or uses io-wq depends on opcode, flags and kernel implementation.",
+    "source": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
   },
   {
     "id": "multishot",
@@ -2320,8 +2321,8 @@
       "multishot receive",
       "multishot operations"
     ],
-    "definition": "io_uring operations where one SQE produces a stream of CQEs, one per accepted connection or received chunk, until cancelled or an error occurs (accept from 5.19, receive from 6.0).",
-    "source": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
+    "definition": "Supported io_uring operations where one request can produce multiple completions, such as accept since Linux 5.19 and receive since 6.0. Check IORING_CQE_F_MORE on every CQE; absence means the request ended, including normal termination and conditions such as buffer exhaustion.",
+    "source": "https://man7.org/linux/man-pages/man3/io_uring_prep_recv_multishot.3.html"
   },
   {
     "id": "provided-buffers",
@@ -2343,9 +2344,10 @@
     "aliases": [
       "linked SQE",
       "IOSQE_IO_LINK",
-      "soft links"
+      "soft-linked SQEs",
+      "soft-linked requests"
     ],
-    "definition": "SQEs flagged with `IOSQE_IO_LINK` so the next one starts only after this one completes; if one fails, the rest of the chain is cancelled.",
+    "definition": "SQEs joined by IOSQE_IO_LINK execute in dependency order. Documented failures can cancel later soft-linked requests; linking does not automatically set a later write length from an earlier read result.",
     "source": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
   },
   {
@@ -2358,15 +2360,13 @@
       "SEND_ZC",
       "sendfile"
     ],
-    "definition": "Sending or receiving data without the CPU copying it between user and kernel memory. io_uring's `IORING_OP_SEND_ZC` (6.0) sends straight from the user buffer and posts a second notification when the buffer may be reused; `sendfile` copies file to socket inside the kernel.",
-    "source": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
+    "definition": "Sending data while avoiding a particular ordinary payload copy. Supported io_uring zero-copy sends can require a later notification CQE before buffer reuse; copying fallbacks and completion flags matter. sendfile moves file data to another descriptor without passing it through an application buffer.",
+    "source": "https://man7.org/linux/man-pages/man3/io_uring_prep_send_zc.3.html"
   },
   {
     "id": "io-uring-cqe-more",
     "term": "IORING_CQE_F_MORE",
-    "aliases": [
-      "MORE"
-    ],
+    "aliases": [],
     "definition": "A CQE flag meaning more completions will follow for the same request, for example a later notification that a zero-copy send's buffer is free, or further results from a multishot operation.",
     "source": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
   },
@@ -2376,7 +2376,7 @@
     "aliases": [
       "buffer lifetimes"
     ],
-    "definition": "How long a buffer must stay valid. With completion-based I/O the buffer belongs to the kernel from submission until the matching completion is reaped; freeing or reusing it earlier corrupts memory.",
+    "definition": "The interval during which an I/O buffer must remain valid and must not be reused incompatibly. The operation’s documented ownership rules determine release: a normal completion, multishot use or a zero-copy-send notification can differ.",
     "source": "https://man7.org/linux/man-pages/man7/io_uring.7.html"
   },
   {
@@ -2404,8 +2404,8 @@
     "aliases": [
       "IORING_FEAT_SUBMIT_STABLE"
     ],
-    "definition": "An io_uring feature flag meaning data referenced by an SQE only needs to stay stable until submission returns, not until completion; payload buffers still need to live until completion.",
-    "source": "https://man7.org/linux/man-pages/man2/io_uring_setup.2.html"
+    "definition": "An io_uring feature describing when request metadata referenced by an SQE may be released. Follow opcode and submission-mode rules, especially SQPOLL consumption; payload buffers generally remain valid through operation completion.",
+    "source": "https://man7.org/linux/man-pages/man3/io_uring_submit.3.html"
   },
   {
     "id": "io-uring-restrictions",
@@ -2441,8 +2441,8 @@
       "seccomp profiles",
       "seccomp filter"
     ],
-    "definition": "Secure computing mode: a Linux feature that filters which system calls a process may make. Container runtimes apply a default seccomp profile, a list of allowed syscalls.",
-    "source": "https://docs.docker.com/engine/security/seccomp/"
+    "definition": "Secure computing mode: a Linux mechanism for restricting system calls. Container policy depends on runtime, version and configuration: Docker ordinarily supplies a default profile on supported setups, whereas a Kubernetes workload with no profile specified can run Unconfined when seccompDefault is disabled. Inspect effective workload and node settings rather than assuming RuntimeDefault.",
+    "source": "https://kubernetes.io/docs/tutorials/security/seccomp/"
   },
   {
     "id": "allowlist",
@@ -2548,8 +2548,8 @@
       "Spectre",
       "Meltdown"
     ],
-    "definition": "CPU vulnerabilities disclosed in 2018 that let code read memory through speculative execution. Their kernel mitigations made each system call more expensive, increasing the value of batching.",
-    "source": "https://en.wikipedia.org/wiki/Meltdown_(security_vulnerability)"
+    "definition": "Families of speculative-execution side-channel vulnerabilities disclosed in 2018. Mitigations can add overhead on affected systems, with costs depending on CPU, mitigation choice, kernel and workload; no universal syscall-cost increase is implied.",
+    "source": "https://docs.kernel.org/admin-guide/hw-vuln/spectre.html"
   },
   {
     "id": "postgres-io-method",
@@ -2599,8 +2599,8 @@
     "aliases": [
       "runs to completion"
     ],
-    "definition": "A callback on an event loop runs until it returns; nothing else on that loop runs in between. That removes the need for locks on loop-owned data but means a slow callback stalls everything.",
-    "source": "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
+    "definition": "A loop runs an ordinary callback until it returns before dispatching the next one on that loop. Exclusively owned state often needs no inter-thread lock, but re-entry and shared data require care.",
+    "source": "https://docs.libuv.org/en/v1.x/design.html"
   },
   {
     "id": "reentrant",
@@ -2629,8 +2629,8 @@
     "aliases": [
       "event loop lag"
     ],
-    "definition": "How late a periodic timer fires compared with when it was due; a direct measure of how long callbacks are blocking the loop.",
-    "source": "https://nodejs.org/api/perf_hooks.html#perf_hooksmonitoreventloopdelayoptions"
+    "definition": "Delay between a timer’s intended scheduling threshold and when its callback actually runs. It can reveal blocking or overloaded loops, but OS scheduling, runtime pauses and timer resolution also affect it.",
+    "source": "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
   },
   {
     "id": "callback-hell",
@@ -2657,8 +2657,8 @@
       "min-heaps",
       "binary min-heap"
     ],
-    "definition": "A tree-shaped priority queue in which every parent is smaller than its children, so the smallest item (the next timer to expire) is always at the root. Insert and remove cost O(log n); reading the root costs O(1).",
-    "source": "https://en.wikipedia.org/wiki/Binary_heap"
+    "definition": "A priority-queue structure in which each parent’s key is no greater than its children’s, so the root has a minimum key. For a binary min-heap with n items, insertion and removing the minimum take O(log n), and inspecting the root takes O(1).",
+    "source": "https://docs.python.org/3/library/heapq.html"
   },
   {
     "id": "timer-granularity",
@@ -2700,8 +2700,8 @@
     "aliases": [
       "Node 20"
     ],
-    "definition": "A JavaScript runtime built on V8 and libuv. JavaScript runs on one event-loop thread; file, DNS and some crypto work go to libuv's thread pool.",
-    "source": "https://nodejs.org/en/about"
+    "definition": "A JavaScript runtime built on V8 and libuv. Each event loop executes its callbacks on its owning thread; worker_threads can run additional JavaScript threads. Some asynchronous file, name-resolution, crypto and compression work uses libuv workers.",
+    "source": "https://nodejs.org/api/worker_threads.html"
   },
   {
     "id": "node-timers",
@@ -2711,7 +2711,7 @@
       "setImmediate",
       "setTimeout(f, 0)"
     ],
-    "definition": "Node.js scheduling functions: `setTimeout` runs a callback after at least a delay (in the timers phase), `setImmediate` runs it in the check phase of the current loop iteration.",
+    "definition": "Node.js functions scheduling callbacks: setTimeout requests a timer threshold, while setImmediate schedules the check phase. Neither guarantees exact timing; phase and scheduling context determine when callbacks can run.",
     "source": "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
   },
   {
@@ -2726,8 +2726,8 @@
       "promise microtask",
       "promise microtasks"
     ],
-    "definition": "Node.js queues that run before the event loop moves on: `process.nextTick` callbacks, then promise microtasks. Refilling them endlessly starves I/O.",
-    "source": "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
+    "definition": "Node.js nextTick callbacks and promise microtasks are serviced outside the ordinary event-loop phases. nextTick precedes promise microtasks in typical CommonJS callback contexts, while ES-module evaluation can differ; endlessly refilling either queue can starve I/O.",
+    "source": "https://nodejs.org/api/process.html#when-to-use-queuemicrotask-vs-processnexttick"
   },
   {
     "id": "commonjs",
@@ -2754,7 +2754,7 @@
       "worker thread",
       "helper thread"
     ],
-    "definition": "A fixed set of threads that take jobs from a queue, so blocking or CPU-heavy work runs off the main thread without creating a thread per job.",
+    "definition": "A collection of worker threads that take queued jobs, avoiding one new thread per job. Some pools have a configured fixed size (such as libuv’s), while other implementations resize dynamically.",
     "source": "https://en.wikipedia.org/wiki/Thread_pool"
   },
   {
@@ -2828,7 +2828,7 @@
     "aliases": [
       "graceful reloads"
     ],
-    "definition": "Applying new configuration by starting new workers while old workers finish their existing connections, so traffic is not cut off.",
+    "definition": "Starting workers with new configuration while old workers finish existing connections. This supports service continuity, but configuration errors, shutdown deadlines and failed connections mean zero loss is not an unconditional guarantee.",
     "source": "https://nginx.org/en/docs/control.html"
   },
   {
@@ -2840,8 +2840,8 @@
       "pinned to CPU",
       "worker affinity"
     ],
-    "definition": "Restricting a thread, process or interrupt to particular CPUs. Matching IRQ affinity with the threads that consume the data keeps it in one core's cache.",
-    "source": "https://docs.kernel.org/core-api/irq/irq-affinity.html"
+    "definition": "CPU affinity limits where tasks or interrupts may execute. Aligning queue interrupts and consuming workers can improve cache locality, but hardware and software flow steering are separate mappings and do not automatically align.",
+    "source": "https://docs.kernel.org/networking/scaling.html"
   },
   {
     "id": "cgroup",
@@ -2882,8 +2882,8 @@
       "GET",
       "COUNT"
     ],
-    "definition": "Redis commands mentioned here: `KEYS` scans the whole keyspace at once, `SCAN` iterates in small steps with a cursor (COUNT is a hint), `SMEMBERS` returns a whole set, `DEL` frees keys synchronously, `UNLINK` frees them in the background, `GET` reads one value.",
-    "source": "https://redis.io/docs/latest/commands/"
+    "definition": "Redis commands: KEYS scans the keyspace, SCAN iterates with a cursor and COUNT hint, and SMEMBERS returns an entire set. DEL freeing depends on lazy-free configuration; UNLINK detaches keys and can defer expensive freeing. GET reads a string value.",
+    "source": "https://redis.io/docs/latest/commands/unlink/"
   },
   {
     "id": "lua",
@@ -2933,8 +2933,8 @@
       "io-threads-do-reads",
       "I/O threads"
     ],
-    "definition": "Redis 6.0+ option to use extra threads for reading requests from and writing replies to sockets, while commands still execute one at a time on the main thread.",
-    "source": "https://redis.io/docs/latest/operate/oss_and_stack/management/config-file/"
+    "definition": "Redis 6.0 introduced configurable socket I/O threads while ordinary commands remained serial on the main thread. In that release, threaded reads additionally require io-threads-do-reads yes; inspect the deployed version rather than assuming identical later implementations.",
+    "source": "https://raw.githubusercontent.com/redis/redis/6.0/redis.conf"
   },
   {
     "id": "redis-cluster",
@@ -2970,7 +2970,7 @@
     "aliases": [
       "ScyllaDB"
     ],
-    "definition": "A C++ framework that runs one event loop per core with no shared state (shard-per-core); it underlies the ScyllaDB database.",
+    "definition": "A C++ framework organized around application shards and event loops, commonly one per core, that underlies ScyllaDB. Its shared-nothing application model reduces shared mutable data; it does not imply every runtime or OS component has no locks.",
     "source": "https://seastar.io/"
   },
   {
@@ -2979,7 +2979,7 @@
     "aliases": [
       "shard per core"
     ],
-    "definition": "A design where each CPU core owns its own slice of the data and its own event loop, and cores communicate only by message passing, avoiding locks.",
+    "definition": "A design giving each application shard a core and ownership of its data, with cross-shard work expressed through messages. It reduces shared mutable application state; implementation details can still use shared memory and synchronization.",
     "source": "https://seastar.io/shared-nothing/"
   },
   {
@@ -2993,10 +2993,9 @@
     "id": "catastrophic-backtracking",
     "term": "Catastrophic backtracking",
     "aliases": [
-      "regex",
-      "regular expression"
+      "catastrophic regex backtracking"
     ],
-    "definition": "A regular expression (regex) whose matcher tries exponentially many ways to match some inputs, taking seconds or longer and blocking the thread running it.",
+    "definition": "A regular-expression performance failure in which a backtracking matcher explores excessively many alternatives for certain inputs, potentially taking exponential time. Regular expressions in general do not all have this behavior.",
     "source": "https://en.wikipedia.org/wiki/ReDoS"
   },
   {
@@ -3007,7 +3006,7 @@
       "OOM",
       "out of memory"
     ],
-    "definition": "The Linux out-of-memory killer, which terminates a process to free memory when the system runs out.",
+    "definition": "Linux’s mechanism for selecting tasks to kill under qualifying out-of-memory conditions, including cgroup limits. Not every allocation failure invokes it, and the exact choice depends on policy and context.",
     "source": "https://docs.kernel.org/admin-guide/mm/concepts.html"
   },
   {
@@ -3067,8 +3066,8 @@
       "minimum frame",
       "Ethernet header"
     ],
-    "definition": "The unit sent on an Ethernet link: a 14-byte header, payload and a 4-byte FCS. The minimum frame is 64 bytes, and on the wire each also needs 8 bytes of preamble/SFD and a 12-byte gap.",
-    "source": "https://en.wikipedia.org/wiki/Ethernet_frame"
+    "definition": "The link-layer unit transmitted by Ethernet. An untagged Ethernet II frame has a 14-byte header, payload/padding and 4-byte FCS, with a minimum 64-byte frame. The lesson’s rate model adds 8 preamble/SFD byte-times and a 12-byte-time gap; tagging and physical-link rules need their own accounting.",
+    "source": "https://www.ciscopress.com/articles/article.asp?p=3089352&seqNum=4"
   },
   {
     "id": "fcs",
@@ -3098,8 +3097,8 @@
       "interpacket gap",
       "inter-frame"
     ],
-    "definition": "The mandatory idle time between Ethernet frames: 12 byte-times (96 bit-times).",
-    "source": "https://en.wikipedia.org/wiki/Interpacket_gap"
+    "definition": "The idle interval between Ethernet frames, commonly modeled as 12 byte-times (96 bit-times). Physical-interface rules and receive-side tolerances can differ; the worked minimum-frame rate uses the stated 12-byte-time assumption.",
+    "source": "https://www.cisco.com/c/en/us/support/docs/switches/catalyst-9600-series-switches/217413-understand-why-fcs-errors-input-errors.html"
   },
   {
     "id": "io-bit-time",
@@ -3143,7 +3142,7 @@
     "aliases": [
       "dynamic RAM"
     ],
-    "definition": "Dynamic random-access memory: the main memory of a computer. One access that misses every cache takes on the order of 100 ns.",
+    "definition": "Dynamic random-access memory, commonly used as a computer’s main memory. Access latency depends on hardware, cache state, locality, contention and overlap; no fixed latency is implied.",
     "source": "https://en.wikipedia.org/wiki/Dynamic_random-access_memory"
   },
   {
@@ -3164,7 +3163,7 @@
       "NAPI poll",
       "New API"
     ],
-    "definition": "Linux's network receive scheme: the first interrupt schedules a poll, the interrupt is masked, and the driver polls the RX ring in softirq context within a budget until it is empty, then re-enables interrupts. It prevents receive livelock.",
+    "definition": "Linux’s event-processing abstraction for network drivers. Conventional operation schedules budgeted receive polling after an interrupt, but busy polling, threaded modes and queue mappings vary by configuration.",
     "source": "https://docs.kernel.org/networking/napi.html"
   },
   {
@@ -3178,7 +3177,7 @@
       "per-driver weight",
       "poll budget"
     ],
-    "definition": "Limits on how much receive work one softirq round may do: a per-device weight (typically 64 packets) and the overall `netdev_budget` (packets) and `netdev_budget_usecs` (time).",
+    "definition": "Receive-work limits: a NAPI instance’s poll receives a budget, commonly related to its configured weight, while a conventional receive-softirq round also has overall packet/time limits through netdev_budget and netdev_budget_usecs. TX completions follow different budget rules.",
     "source": "https://docs.kernel.org/networking/napi.html"
   },
   {
@@ -3188,8 +3187,8 @@
       "time squeeze",
       "time squeezes"
     ],
-    "definition": "A per-CPU counter in `/proc/net/softnet_stat` that rises when receive processing stops because it ran out of budget or time while work remained.",
-    "source": "https://docs.kernel.org/networking/scaling.html"
+    "definition": "A per-CPU softnet counter incremented when a receive-processing budget or time condition triggers. It is a signal to correlate with load and drops, rather than proof of an exact remaining backlog or CPU-capacity limit.",
+    "source": "https://docs.kernel.org/admin-guide/sysctl/net.html"
   },
   {
     "id": "softnet-stat",
@@ -3222,7 +3221,7 @@
     "aliases": [
       "Generic Receive Offload"
     ],
-    "definition": "Generic Receive Offload: the kernel merges consecutive packets of the same flow into one large skb so the layers above process fewer, bigger units.",
+    "definition": "Generic Receive Offload combines eligible packets of a flow into larger skbs so later stack layers process fewer units. Protocol, kernel, driver and packet-layout restrictions determine what can merge.",
     "source": "https://docs.kernel.org/networking/segmentation-offloads.html"
   },
   {
@@ -3234,7 +3233,7 @@
       "TCP Segmentation Offload",
       "Generic Segmentation Offload"
     ],
-    "definition": "TCP Segmentation Offload (TSO) lets the stack hand the NIC one large chunk that the hardware splits into MTU-sized packets; Generic Segmentation Offload (GSO) does the split in software just before the driver.",
+    "definition": "TCP segmentation offload lets the stack hand a supporting NIC a larger TCP aggregate for hardware splitting into segments. Generic Segmentation Offload performs supported splitting in software before driver transmission; sizes and features depend on the device and kernel.",
     "source": "https://docs.kernel.org/networking/segmentation-offloads.html"
   },
   {
@@ -3279,8 +3278,8 @@
     "aliases": [
       "elephant flows"
     ],
-    "definition": "A single very large, long-lived flow, such as a backup transfer. RSS keeps it on one queue, so it cannot use more than one core.",
-    "source": "https://en.wikipedia.org/wiki/Elephant_flow"
+    "definition": "A large, long-lived network flow, for example a backup transfer. Under stable conventional Receive Side Scaling it generally maps to one RX queue, while IRQ affinity and software steering determine later CPU placement.",
+    "source": "https://docs.kernel.org/networking/scaling.html"
   },
   {
     "id": "tcp-ack",
@@ -3300,14 +3299,14 @@
       "Receive Side Scaling (RSS)",
       "receive-side scaling"
     ],
-    "definition": "Receive Side Scaling: the NIC hashes each packet's flow (often with the Toeplitz hash) and uses an indirection table to choose an RX queue, spreading flows across queues and CPUs while keeping each flow in order.",
+    "definition": "Receive Side Scaling: a NIC hashes supported packet fields and maps the hash through an indirection table to an RX queue. Stable per-flow mapping helps preserve order; interrupt affinity and software steering separately determine later CPU placement.",
     "source": "https://docs.kernel.org/networking/scaling.html"
   },
   {
     "id": "toeplitz-hash",
     "term": "Toeplitz hash",
     "aliases": [],
-    "definition": "The hash function commonly used by NICs for RSS, computed over the flow's addresses and ports with a configurable (often random) key.",
+    "definition": "The hash function commonly used by NICs for Receive Side Scaling, computed over the flow's addresses and ports with a configurable (often random) key.",
     "source": "https://learn.microsoft.com/en-us/windows-hardware/drivers/network/rss-hashing-functions"
   },
   {
@@ -3316,7 +3315,7 @@
     "aliases": [
       "RSS table"
     ],
-    "definition": "The table a NIC uses for RSS: the low bits of a packet's hash index it, and each entry names an RX queue.",
+    "definition": "The table a NIC uses for Receive Side Scaling: the low bits of a packet's hash index it, and each entry names an RX queue.",
     "source": "https://docs.kernel.org/networking/scaling.html"
   },
   {
@@ -3338,7 +3337,7 @@
     "id": "ethtool",
     "term": "ethtool",
     "aliases": [],
-    "definition": "The Linux command for viewing and setting NIC options, such as the number of queues (`ethtool -L`) and the RSS table (`ethtool -x`).",
+    "definition": "The Linux command for viewing and setting NIC options, such as the number of queues (`ethtool -L`) and the Receive Side Scaling table (`ethtool -x`).",
     "source": "https://man7.org/linux/man-pages/man8/ethtool.8.html"
   },
   {
@@ -3347,7 +3346,7 @@
     "aliases": [
       "Receive Packet Steering"
     ],
-    "definition": "Receive Packet Steering: RSS done in software. The kernel hashes a packet in softirq and queues it on another CPU's backlog, for NICs with too few queues.",
+    "definition": "Receive Packet Steering: Receive Side Scaling done in software. The kernel hashes a packet in softirq and queues it on another CPU's backlog, for NICs with too few queues.",
     "source": "https://docs.kernel.org/networking/scaling.html"
   },
   {
@@ -3393,8 +3392,8 @@
     "aliases": [
       "non-uniform memory access"
     ],
-    "definition": "Non-uniform memory access: on multi-socket machines each CPU has nearby memory and reaches other sockets' memory more slowly, so placing threads near their data and devices matters.",
-    "source": "https://en.wikipedia.org/wiki/Non-uniform_memory_access"
+    "definition": "Non-uniform memory access: memory-access cost depends on where processors and memory reside in the hardware topology. Nodes can exist within one socket as well as across sockets; placement of data, threads and devices can affect locality.",
+    "source": "https://docs.kernel.org/admin-guide/numastat.html"
   },
   {
     "id": "tcp-windows",
@@ -3436,8 +3435,8 @@
       "transmit completion",
       "TX completions"
     ],
-    "definition": "The NIC reporting that it has finished sending a frame, so the driver can free or reuse the buffer. It does not mean the remote side has received it.",
-    "source": "https://docs.kernel.org/networking/napi.html"
+    "definition": "A device/driver indication that transmit resources can be reclaimed under its ownership protocol. This can be distinct from final wire transmission and does not prove remote receipt or application processing.",
+    "source": "https://www.kernel.org/doc/html/latest/networking/kapi.html"
   },
   {
     "id": "io-network-stack",
@@ -3483,8 +3482,8 @@
     "aliases": [
       "bypass the kernel"
     ],
-    "definition": "Moving a device's data path out of the kernel into a user process (DPDK, SPDK, AF_XDP), avoiding per-packet syscalls and copies.",
-    "source": "https://www.dpdk.org/about/"
+    "definition": "Moving part of a device data path outside the ordinary kernel network or storage stack, for example with DPDK or SPDK. Kernel setup/control, copies and synchronization can remain; AF_XDP has supported copy and zero-copy modes.",
+    "source": "https://docs.kernel.org/networking/af_xdp.html"
   },
   {
     "id": "data-plane",
@@ -3504,7 +3503,7 @@
       "PMD",
       "PMDs"
     ],
-    "definition": "A DPDK driver that reads the NIC's RX ring in a busy loop from user space instead of using interrupts.",
+    "definition": "A DPDK driver interface commonly polled from userspace to receive/transmit packet bursts. Dedicated busy-poll use avoids waiting for a packet interrupt; supported interrupt/power-management modes and hardware/software PMDs vary.",
     "source": "https://doc.dpdk.org/guides/prog_guide/ethdev/ethdev.html"
   },
   {
@@ -3515,7 +3514,7 @@
       "huge pages",
       "huge page"
     ],
-    "definition": "Memory pages much larger than the normal 4 KiB (typically 2 MiB or 1 GiB), so one TLB entry covers more memory and TLB misses fall.",
+    "definition": "Pages larger than the architecture’s base page size, for example 2 MiB or 1 GiB on supporting x86 systems. Larger mappings can cover more memory per TLB entry; supported sizes and actual performance depend on platform and workload.",
     "source": "https://docs.kernel.org/admin-guide/mm/hugetlbpage.html"
   },
   {
@@ -3543,8 +3542,8 @@
     "aliases": [
       "ss"
     ],
-    "definition": "Standard Linux networking tools: `tcpdump` captures packets and `ss` lists sockets. They see only traffic handled by the kernel stack.",
-    "source": "https://www.tcpdump.org/"
+    "definition": "Linux networking tools: tcpdump captures traffic visible at supported capture points, while ss inspects sockets. An exclusive DPDK data path bypasses ordinary kernel-stack visibility; capture and integration mechanisms vary.",
+    "source": "https://doc.dpdk.org/guides/linux_gsg/linux_drivers.html"
   },
   {
     "id": "user-space-tcp",
@@ -3565,8 +3564,8 @@
       "BPF loader program",
       "BPF loader"
     ],
-    "definition": "A Linux facility for loading small verified programs into the kernel and attaching them to hooks (network, tracing, cgroups), where they run safely at kernel speed.",
-    "source": "https://ebpf.io/what-is-ebpf/"
+    "definition": "A facility for loading programs checked by a verifier and attaching them to supported hooks, including networking and tracing. Verification enforces documented safety rules but is not proof that kernel, JIT or program logic has no bugs.",
+    "source": "https://docs.kernel.org/bpf/verifier.html"
   },
   {
     "id": "bpf-verifier",
@@ -3621,11 +3620,10 @@
       "XDP_DROP",
       "XDP_TX",
       "XDP_REDIRECT",
-      "XDP_ABORTED",
-      "PASS"
+      "XDP_ABORTED"
     ],
-    "definition": "The verdicts an XDP program returns: `XDP_DROP` discard, `XDP_PASS` continue into the normal stack, `XDP_TX` send back out the same NIC, `XDP_REDIRECT` send to another NIC, CPU or AF_XDP socket, `XDP_ABORTED` drop with a trace event.",
-    "source": "https://docs.kernel.org/bpf/redirect.html"
+    "definition": "XDP return actions include DROP, PASS, TX, REDIRECT and ABORTED. They respectively discard, continue normally, transmit back through the interface, redirect through a supported target, or signal an aborted/drop path.",
+    "source": "https://docs.kernel.org/networking/af_xdp.html"
   },
   {
     "id": "af-xdp",
@@ -3635,7 +3633,7 @@
       "AF_XDP socket",
       "AF_XDP sockets"
     ],
-    "definition": "A socket type (XSK) that receives packets redirected by XDP directly into user-space memory, giving DPDK-like speed for selected traffic while the rest stays in the kernel.",
+    "definition": "Linux sockets for passing selected XDP traffic between kernel networking and application-managed UMEM buffers. Driver and mode determine copy or zero-copy support and performance; other traffic can remain on the ordinary stack.",
     "source": "https://docs.kernel.org/networking/af_xdp.html"
   },
   {
@@ -3691,8 +3689,8 @@
       "checksums",
       "checksum validation"
     ],
-    "definition": "A small value computed from data so that corruption can be detected; IP, UDP and TCP headers carry checksums.",
-    "source": "https://en.wikipedia.org/wiki/Checksum"
+    "definition": "A value calculated over selected data to help detect corruption. IPv4 has a header checksum; IPv6 has no corresponding base-header checksum. TCP and UDP have protocol-specific checksum rules.",
+    "source": "https://www.rfc-editor.org/rfc/rfc791"
   },
   {
     "id": "io-tcp-udp-port",
@@ -3756,7 +3754,7 @@
     "aliases": [
       "eBPF tracing"
     ],
-    "definition": "Being able to see what a system is doing from its outputs (metrics, logs, traces). eBPF tracing attaches programs to kernel and application events to collect this cheaply.",
+    "definition": "Understanding system behavior through outputs such as metrics, logs and traces. eBPF can instrument supported kernel/application events; overhead and completeness depend on the program, hook and workload.",
     "source": "https://ebpf.io/what-is-ebpf/"
   },
   {
@@ -3799,7 +3797,7 @@
       "segmentation offload",
       "segmentation offloads"
     ],
-    "definition": "Splitting a TCP byte stream into segments small enough to fit the link's MTU, each with its own TCP/IP headers. With segmentation offload the kernel passes a large chunk down and the NIC (TSO) or the kernel just before the driver (GSO) does the split.",
+    "definition": "Splitting a TCP byte stream into segments small enough to fit the link's MTU, each with its own TCP/IP headers. With segmentation offload the kernel passes a large chunk down and the NIC (TCP segmentation offload) or the kernel just before the driver (GSO) does the split.",
     "source": "https://docs.kernel.org/networking/segmentation-offloads.html"
   },
   {
@@ -3812,7 +3810,7 @@
       "masked interrupt",
       "masked interrupts"
     ],
-    "definition": "Temporarily stopping a particular interrupt from being delivered (or all interrupts on one CPU) without losing the device's request. NAPI masks a NIC's receive interrupt while it polls, then unmasks it when the queue is empty.",
+    "definition": "Temporarily preventing delivery of a device interrupt under a defined device/controller protocol. Masking does not itself prove events cannot be lost; the driver must coordinate acknowledgement, polling and unmasking to avoid races.",
     "source": "https://docs.kernel.org/core-api/genericirq.html"
   }
 ]

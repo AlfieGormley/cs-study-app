@@ -1,0 +1,92 @@
+[
+  {
+    "id": "io-hardware-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A thermometer chip updates its reading once a second. A driver checks its status register in a tight loop until a new reading arrives. What is the main problem?",
+    "options": [
+      {
+        "text": "Readings will be lost because polling is too slow to notice them",
+        "explanation": "The question supplies no evidence of lost readings. Continuous polling is frequent relative to one update per second, but its latency is not a universal nanosecond constant."
+      },
+      {
+        "text": "Polling requires DMA, which the chip doesn't support",
+        "explanation": "Polling and DMA are independent. Polling is the CPU reading a status register; DMA is the device moving data to RAM."
+      },
+      {
+        "text": "The CPU burns nearly a full second of cycles per reading doing nothing useful",
+        "explanation": "Correct. For a slow device, busy-waiting wastes the CPU; an interrupt (or polling on a timer) lets the CPU run other work in between."
+      },
+      {
+        "text": "The device will raise too many interrupts and cause livelock",
+        "explanation": "This driver is busy polling rather than requesting a per-reading interrupt. Receive livelock involves interrupt pressure preventing useful processing, not simply waiting for one reading per second."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The device produces one reading per second.\n2. A dedicated busy waiter can consume nearly one CPU-second waiting for the next update. The cycles wasted are the clock rate times the time spent spinning:\n\n```formula\nN = ft\nN = 3 \u00d7 10^9 Hz \u00d7 1 s\nN = 3 \u00d7 10^9\nwhere\nN: clock cycles spent spinning per reading (a count)\nf: the CPU clock frequency, in hertz (Hz); here 3 GHz = 3 \u00d7 10^9 Hz\nt: the time spent waiting, in seconds (s); here about 1 s\nHz: hertz, cycles per second\ns: second\nIn words: a 3 GHz core spinning for one second burns about three billion clock cycles that could have run other work.\n```\n\nThat is about three billion clock cycles, not necessarily three billion loop iterations, because each pass of the loop takes several cycles.\n3. Timer-based polling or interrupts can release the CPU between readings.\n4. Their real latency and overhead must be measured; polling can help selected latency-sensitive workloads but is not universally best.",
+    "link": {
+      "title": "I/O Devices \u2014 Operating Systems: Three Easy Pieces (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-devices.pdf"
+    }
+  },
+  {
+    "id": "io-hardware-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A NIC raises one interrupt per received packet. As the packet rate climbs past a million per second, throughput falls instead of levelling off. What is this called, and what is the standard Linux fix?",
+    "options": [
+      {
+        "text": "Thundering herd; fix it with `EPOLLEXCLUSIVE`",
+        "explanation": "Thundering herd is many waiters woken for one event. Here one CPU is overwhelmed by interrupt entry and exit, which is a different problem."
+      },
+      {
+        "text": "Receive livelock; fix it with NAPI, which disables the interrupt and polls the ring while packets keep arriving",
+        "explanation": "Correct for the conventional NAPI switch from interrupts to polling. Polling uses a budget; completion/unmasking rules and optional threaded or busy-poll modes depend on configuration."
+      },
+      {
+        "text": "Priority inversion; fix it by raising the priority of the receiving process",
+        "explanation": "Priority inversion is a low-priority task holding a lock a high-priority one needs. Raising the consumer\u2019s scheduling priority does not remove hard-IRQ entry/handler work. Kernel configuration, including threaded interrupts, affects scheduling, so the needed fix addresses notification and receive processing."
+      },
+      {
+        "text": "Cache thrashing; fix it by giving the NIC more memory",
+        "explanation": "Cache effects add to interrupt cost, but the defining problem is that the CPU spends all its time handling interrupts and never processes the packets. More NIC memory doesn't change that."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In a hypothetical model, the fraction of one CPU spent on interrupts is the interrupt rate times the cost of each:\n\n```formula\nU = r t_irq\nU = 10^6 /s \u00d7 10^\u22126 s = 1\nwhere\nU: the fraction of one CPU spent entering and leaving interrupt handlers (1 means 100 %)\nr: interrupts per second, one per packet, here 10^6 /s\nt_irq: the assumed cost of one interrupt, in seconds (s); here 1 \u00b5s = 10^\u22126 s\ns: second; \"/s\" means per second\n\u00b5s: microsecond, one millionth of a second\nIn words: a million one-microsecond interrupts a second use a whole CPU, leaving nothing for processing the packets.\n```\n\nThese are assumptions, not device measurements.\n2. If high-priority interrupt work prevents packets reaching their consumers, receive livelock can result.\n3. Conventional NAPI masks the relevant device interrupt while budgeted polling processes the queue, then re-enables notifications after completing the poll cycle.\n4. Poll budgets and scheduling depend on driver/kernel configuration; 64 is not a universal per-device budget.\n5. Batching reduces per-packet interrupt work, though packet-processing work remains.",
+    "link": {
+      "title": "NAPI \u2014 Linux kernel docs",
+      "url": "https://docs.kernel.org/networking/napi.html"
+    }
+  },
+  {
+    "id": "io-hardware-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In a hypothetical supported NVMe polling workload, assume device work takes 10 \u00b5s and interrupt/wakeup adds 5 \u00b5s. Ignore polling detection overhead for the comparison. What approach can remove that modeled notification cost, and what resource does it consume?",
+    "options": [
+      {
+        "text": "Use DMA instead of interrupts; costs nothing",
+        "explanation": "DMA and interrupts are complementary: DMA moves the data, interrupts signal completion. NVMe already uses DMA; the question is how to learn the I/O finished."
+      },
+      {
+        "text": "Add more interrupt vectors with MSI-X; costs more memory",
+        "explanation": "More interrupt vectors spread load across CPUs but don't remove the per-I/O interrupt and wake-up overhead."
+      },
+      {
+        "text": "Poll the completion queue instead of sleeping (e.g. Linux polled I/O, io_uring `IOPOLL`); it saves the interrupt and wake-up but keeps a CPU busy while waiting",
+        "explanation": "Correct under the model. Completion polling can avoid the modeled interrupt/wakeup cost, while using CPU time. Real benefit depends on support, scheduling and workload."
+      },
+      {
+        "text": "Switch to port-mapped I/O, which is faster than MMIO",
+        "explanation": "The access mechanism is unrelated to the modeled notification cost. Port I/O is not inherently guaranteed faster or slower in every comparison, and the device defines its register interface."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Model both code paths and the fraction saved:\n\n```formula\nt_int = t_dev + t_wake\nt_int = 10 \u00b5s + 5 \u00b5s = 15 \u00b5s\nt_poll = t_dev = 10 \u00b5s\nF = (t_int \u2212 t_poll) / t_int\nF = (15 \u00b5s \u2212 10 \u00b5s) / (15 \u00b5s) = 1/3\nwhere\nt_int: total time per I/O on the interrupt path, in microseconds (\u00b5s)\nt_poll: total time per I/O when polling, in \u00b5s\nt_dev: the device's own work, here 10 \u00b5s\nt_wake: the assumed interrupt and wake-up cost, here 5 \u00b5s\nF: the fraction of the interrupt path's time that polling saves (no unit)\n\u00b5s: microsecond, one millionth of a second\nIn words: polling removes the 5 \u00b5s notification cost, a third of the 15 \u00b5s interrupt-driven total.\n```\n\n2. Detection overhead is ignored here, so the polling path is just the device time.\n3. The reduction is one third of the per-I/O time.\n4. Polling consumes CPU time and may affect other work; interrupts and scheduling can still preempt a polling task.\n5. Linux IOPOLL requires supported operations/devices/configuration. These numbers are a teaching model, not a benchmark or universal recommendation.",
+    "link": {
+      "title": "I/O Devices \u2014 Operating Systems: Three Easy Pieces (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/file-devices.pdf"
+    }
+  }
+]

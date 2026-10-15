@@ -1,0 +1,62 @@
+[
+  {
+    "id": "io-uring-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a simplified successful batch, one epoll_wait returns 100 readable sockets and each needs one read. For io_uring, assume 100 receives fit in the ring and one enter call submits and waits for all 100 completions without interruption. Excluding setup and retries, compare syscall counts.",
+    "options": [
+      {
+        "text": "epoll: 2; io_uring: 100",
+        "explanation": "epoll needs one `read` per socket after the single `epoll_wait`, so it's far more than 2. And io_uring batches, so it's not 100."
+      },
+      {
+        "text": "epoll: 101; io_uring: about 1",
+        "explanation": "Correct. epoll: 1 `epoll_wait` + 100 `read`. io_uring: the 100 SQEs go in one `io_uring_enter`, which can also wait for completions."
+      },
+      {
+        "text": "Both about 101: io_uring still needs one syscall per operation",
+        "explanation": "That's the misconception io_uring was built to fix. Submissions are batched through the shared ring."
+      },
+      {
+        "text": "epoll: 100; io_uring: 0",
+        "explanation": "Without SQPOLL, io_uring still needs `io_uring_enter` to submit and/or wait. Zero syscalls requires a kernel polling thread."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Count the system calls in each design:\n\n```formula\nS_epoll = 1 + R = 1 + 100 = 101\nS_uring = 1\nwhere\nS_epoll: syscalls with epoll (one epoll_wait plus one read per socket)\nS_uring: syscalls with io_uring (one io_uring_enter)\nR: ready sockets in the batch, here 100\nIn words: epoll pays one system call per ready socket plus the wait; io_uring submits and waits for the whole batch in one call.\n```\n\n2. Stated io_uring path: publish 100 SQEs, then one io_uring_enter requesting submission and waiting for 100 completions.\n3. Collect the 100 CQEs from shared memory.\n4. Waiting for only one completion does not guarantee all 100 are ready; real paths may require more waits, handle partial submissions, interruptions or other progress work. This is a syscall-count model, not a benchmark.",
+    "link": {
+      "title": "Ringing in a new asynchronous I/O API — LWN.net",
+      "url": "https://lwn.net/Articles/776703/"
+    }
+  },
+  {
+    "id": "io-uring-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An SQPOLL ring has no pending work. After its poller exceeds the configured idle timeout and sleeps, an application publishes a new SQE but omits the documented wakeup check. Why may it remain unprocessed?",
+    "options": [
+      {
+        "text": "SQPOLL only works for files opened with `O_DIRECT`",
+        "explanation": "SQPOLL is submission polling, not the IOPOLL completion mode whose read/write paths require supported direct I/O. Opcode/setup restrictions still depend on kernel version."
+      },
+      {
+        "text": "The SQ is full and the entry was dropped",
+        "explanation": "An idle ring isn't full. And a full SQ means `io_uring_get_sqe` returns no free entry; it doesn't drop silently."
+      },
+      {
+        "text": "The kernel polling thread went to sleep after `sq_thread_idle`; the app must check `IORING_SQ_NEED_WAKEUP` and call `io_uring_enter` to wake it",
+        "explanation": "Correct. The poller sleeps when idle to stop burning a CPU. liburing's `io_uring_submit` checks the flag and wakes it for you."
+      },
+      {
+        "text": "SQPOLL requires a syscall for every SQE",
+        "explanation": "The point of SQPOLL is that steady-state submissions need no syscall at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "SQPOLL is a polling trade-off:\n\n1. Busy: a kernel thread spins on the SQ tail, picking up SQEs with no syscalls.\n2. Idle for `sq_thread_idle` ms: the thread sleeps and sets `IORING_SQ_NEED_WAKEUP` in the SQ flags.\n3. New work: the app must see the flag and call `io_uring_enter` with `IORING_ENTER_SQ_WAKEUP`.\n\nIf you hand-roll the ring and skip step 3, submissions sit there unprocessed.",
+    "link": {
+      "title": "io_uring_setup(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/io_uring_setup.2.html"
+    }
+  }
+]

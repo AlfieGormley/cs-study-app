@@ -1,0 +1,62 @@
+[
+  {
+    "id": "io-event-loops-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this Node.js program print?\n\n```js\nconst fs = require('fs');\nfs.readFile(__filename, () => {\n  // Schedule from an I/O callback.\n  setTimeout(() =>\n    console.log('timeout'), 0);\n  setImmediate(() =>\n    console.log('immediate'));\n});\n```",
+    "options": [
+      {
+        "text": "`timeout` then `immediate`, always",
+        "explanation": "A 0 ms timer is checked in the timers phase, which comes after check in the cycle from the poll phase."
+      },
+      {
+        "text": "`immediate` then `timeout`, always",
+        "explanation": "Correct. The readFile callback runs in the poll phase; the next phase is check (setImmediate), then the loop wraps to timers."
+      },
+      {
+        "text": "The order is random every time",
+        "explanation": "At top level the ordering is not guaranteed; that does not imply it is random on every run. In this I/O callback, Node documents that the immediate runs first."
+      },
+      {
+        "text": "Only `immediate`; the timeout is cancelled",
+        "explanation": "Both callbacks run; nothing cancels the timer."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Run this example as a CommonJS file so require and __filename exist.\n2. Both callbacks are scheduled from an I/O callback. Node documents that setImmediate runs before the zero-delay timeout in this context.\n3. The check phase handles the immediate; timer processing follows according to the current loop version. Since libuv 1.45/Node 20, recurring timer processing occurs after polling.\n4. The same ordering is not guaranteed when both are scheduled at top level. This is an ordering claim, not an exact elapsed-time guarantee.",
+    "link": {
+      "title": "The Node.js Event Loop \u2014 Node.js docs",
+      "url": "https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick"
+    }
+  },
+  {
+    "id": "io-event-loops-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Node.js service uses the default four-worker pool. During a spike of asynchronous crypto.pbkdf2 jobs, profiling shows new outbound requests waiting in dns.lookup before connecting. What best explains that delay?",
+    "options": [
+      {
+        "text": "pbkdf2 blocks the event loop thread",
+        "explanation": "Async `crypto.pbkdf2` runs on the libuv thread pool, not the loop thread. The loop is free; something else is queued."
+      },
+      {
+        "text": "Sockets are handled by the thread pool and it's full",
+        "explanation": "Ordinary asynchronous network I/O uses the runtime\u2019s platform backend, such as epoll on Linux or IOCP on Windows, rather than one blocked pool worker per socket. The queued dns.lookup is a separate pool user."
+      },
+      {
+        "text": "The 4-thread libuv pool is busy with pbkdf2, so `dns.lookup` (getaddrinfo, also on the pool) queues behind it",
+        "explanation": "Correct. Both use the pool. With the default 4 threads saturated, hostname resolution waits, delaying the connect."
+      },
+      {
+        "text": "TLS handshakes are limited to 4 at a time",
+        "explanation": "There's no such limit; the bottleneck is the DNS lookup before the connection even starts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A new https.request may need dns.lookup unless a connection or address is reused or lookup is customized.\n2. Async pbkdf2 and dns.lookup/getaddrinfo can share libuv worker capacity.\n3. Four busy workers can delay queued lookups in the default configuration.\n4. Validate worker utilization before changing the size; more threads can increase CPU contention. DNS caching or alternate resolution must respect TTLs and resolver semantics, and dns.resolve is not a drop-in substitute for every getaddrinfo behavior.",
+    "link": {
+      "title": "Thread pool work scheduling \u2014 libuv documentation",
+      "url": "https://docs.libuv.org/en/v1.x/threadpool.html"
+    }
+  }
+]

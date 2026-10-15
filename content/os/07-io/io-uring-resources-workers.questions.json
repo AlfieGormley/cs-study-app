@@ -1,0 +1,101 @@
+[
+  {
+    "id": "io-uring-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which mechanisms can reduce io_uring overhead for suitable workloads and supported configurations? Select all that apply.",
+    "options": [
+      {
+        "text": "Many operations submitted in one `io_uring_enter`",
+        "explanation": "Correct. Batching amortises syscall entry/exit cost. The impact of speculative-execution mitigations depends on architecture, kernel configuration and workload; no universal cost increase is implied."
+      },
+      {
+        "text": "Registered files avoid ordinary per-operation descriptor-table resolution",
+        "explanation": "Correct. Registration retains file resources and permits indexed use, reducing ordinary descriptor resolution/reference overhead; it does not eliminate all bookkeeping."
+      },
+      {
+        "text": "Registered buffers are page-pinned once rather than per operation",
+        "explanation": "Correct for supported fixed-buffer operations. Registration can amortize page-pinning and mapping work; ordinary buffered copies do not universally pin pages per operation."
+      },
+      {
+        "text": "The kernel skips the copy from kernel to user space for every read",
+        "explanation": "Ordinary io_uring reads still copy data into your buffer. Zero-copy needs specific features (e.g. `SEND_ZC` for sends); it isn't the default."
+      },
+      {
+        "text": "SQPOLL can remove syscalls entirely in steady state",
+        "explanation": "Correct for suitable operations while the SQ poller remains active and the application collects CQEs without a blocking wait. Polling consumes CPU; idle wakeups and other control operations can still require system calls."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Batching can amortize submission costs; registered resources can amortize appropriate lookup and page-pinning costs; SQPOLL can remove steady-state submission syscalls when its thread remains active. These are mechanisms, not guaranteed speedups. An ordinary buffered read still copies payload, whereas direct I/O or specific zero-copy features follow different code paths.",
+    "link": {
+      "title": "Ringing in a new asynchronous I/O API \u2014 LWN.net",
+      "url": "https://lwn.net/Articles/776703/"
+    }
+  },
+  {
+    "id": "io-uring-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why can io_uring expose a completion interface for supported buffered regular-file reads when epoll readiness does not report their storage completion?",
+    "options": [
+      {
+        "text": "epoll returns an error for regular files, but io_uring converts them to sockets",
+        "explanation": "Nothing is converted. (In fact epoll rejects regular files with `EPERM`.)"
+      },
+      {
+        "text": "io_uring reads files with `O_DIRECT` automatically",
+        "explanation": "io_uring supports both buffered and `O_DIRECT` I/O; it doesn't force `O_DIRECT`."
+      },
+      {
+        "text": "epoll is slower on files because of the 1024-fd limit",
+        "explanation": "The 1024 limit belongs to `select`, not epoll, and it's unrelated to files versus sockets."
+      },
+      {
+        "text": "Regular files are always 'ready' for readiness APIs, so epoll can't tell you a read would block; io_uring is completion-based and can hand blocking work to its io-wq workers",
+        "explanation": "Correct in principle. A completion request can finish inline, through supported asynchronous paths or through io-wq workers. The code path varies with opcode, flags, filesystem and kernel version."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Readiness model: 'tell me when a read won't block'. A disk file is always considered readable, even if the data isn't in the page cache, so the read can still block.\n2. Completion model: 'do this read and tell me when it's done'.\n3. io_uring's code path: try non-blocking inline \u2192 if it would block on a pollable fd, wait for readiness with a poll \u2192 otherwise queue to io-wq \u2192 post a CQE when done.\n\nThat's why Node.js historically needed a thread pool for files.",
+    "link": {
+      "title": "Lord of the io_uring (tutorial)",
+      "url": "https://unixism.net/loti/"
+    }
+  },
+  {
+    "id": "io-uring-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server hypothetically retains one **16 KiB** buffer for each of 50,000 pending receives, totaling 781.25 MiB of buffer capacity. Which feature can reduce per-connection retention by drawing from a smaller shared pool?",
+    "options": [
+      {
+        "text": "SQPOLL",
+        "explanation": "SQPOLL removes submission syscalls; it doesn't change how many buffers are committed."
+      },
+      {
+        "text": "Linked SQEs",
+        "explanation": "Links chain dependent operations; they don't reduce buffer memory."
+      },
+      {
+        "text": "Provided buffer rings, so the kernel picks a buffer from a shared pool only when data actually arrives",
+        "explanation": "Correct. Provided buffers decouple dedicated buffer ownership from every idle receive. Size the pool for outstanding data and processing lifetime, and handle exhaustion/replenishment; pending receives do not inherently mean every byte is physically page-pinned."
+      },
+      {
+        "text": "Registered files",
+        "explanation": "Fixed files save the fd lookup cost, not buffer memory."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Compare dedicated buffers with a shared pool:\n\n```formula\nM = Cb\nM = 50,000 \u00d7 16 KiB = 800,000 KiB\nM = 800,000 KiB / (1,024 KiB/MiB)\nM = 781.25 MiB\nM_pool = Pb\nM_pool = 1,024 \u00d7 16 KiB = 16,384 KiB\nM_pool = 16,384 KiB / (1,024 KiB/MiB)\nM_pool = 16 MiB\nwhere\nM: memory for one dedicated buffer per pending receive\nM_pool: memory for a shared provided-buffer pool\nC: pending receives, here 50,000\nP: buffers in the shared pool, here 1,024\nb: size of one buffer, here 16 KiB\nKiB: kibibyte, 1,024 bytes\nMiB: mebibyte, 1,024 KiB\nIn words: dedicated 16 KiB buffers for 50,000 idle receives need about 781 MiB, while a 1,024-buffer shared pool needs 16 MiB.\n```\n\n2. 781.25 MiB is 819,200,000 bytes of capacity, not necessarily the same resident memory.\n3. Receive completion flags identify selected buffers. Recycle only after application processing and kernel-use rules allow it.\n4. The smaller pool can run out during traffic spikes; handle ENOBUFS/termination behavior and replenish/rearm as the operation requires.",
+    "link": {
+      "title": "Lord of the io_uring (tutorial)",
+      "url": "https://unixism.net/loti/"
+    }
+  }
+]

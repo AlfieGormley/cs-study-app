@@ -1,0 +1,92 @@
+[
+  {
+    "id": "io-network-stack-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does the XDP program check `(void *)(eth + 1) > end` before reading `eth->h_proto`?",
+    "options": [
+      {
+        "text": "To make the program faster by skipping short packets",
+        "explanation": "The check isn't an optimisation; the program wouldn't load without it."
+      },
+      {
+        "text": "Because Ethernet headers are variable length",
+        "explanation": "The Ethernet header is a fixed 14 bytes (without VLAN tags); the check is about the packet's length, not the header's."
+      },
+      {
+        "text": "To detect VLAN tags",
+        "explanation": "VLAN detection means inspecting `h_proto` for 0x8100, which is a different check."
+      },
+      {
+        "text": "Because the eBPF verifier rejects any packet access it can't prove is within `data`..`data_end`",
+        "explanation": "Correct. Without the bounds check, a short packet would make the program read past the buffer, an out-of-bounds kernel read, so the verifier refuses to load it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `ctx->data` and `ctx->data_end` delimit the packet.\n2. `eth + 1` points just past a 14-byte Ethernet header.\n3. If that's beyond `end`, the packet is shorter than a header.\n4. The verifier tracks pointer ranges; any read not proven inside the range fails verification at load time.\n\nThe same pattern repeats for the IP and UDP headers.",
+    "link": {
+      "title": "What is eBPF? — ebpf.io",
+      "url": "https://ebpf.io/what-is-ebpf/"
+    }
+  },
+  {
+    "id": "io-network-stack-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A native-mode XDP program returns XDP_PASS for a packet. What happens next in the normal receive path?",
+    "options": [
+      {
+        "text": "The packet is dropped",
+        "explanation": "That's `XDP_DROP`."
+      },
+      {
+        "text": "The packet proceeds toward the normal kernel networking stack, subject to subsequent processing and possible drops",
+        "explanation": "Correct. PASS permits stack processing; it does not guarantee socket delivery or undo modifications the XDP program made."
+      },
+      {
+        "text": "The packet is transmitted back out of the same NIC",
+        "explanation": "That's `XDP_TX`, used e.g. by load balancers."
+      },
+      {
+        "text": "The packet is delivered to an AF_XDP socket",
+        "explanation": "That requires `XDP_REDIRECT` to an XSK map."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Verdicts:\n\n- `XDP_DROP`: free the buffer.\n- `XDP_PASS`: build an skb, continue the normal path.\n- `XDP_TX`: send back out the same port.\n- `XDP_REDIRECT`: another NIC, CPU or AF_XDP socket.\n- `XDP_ABORTED`: drop and fire a trace event (program error).",
+    "link": {
+      "title": "The eXpress Data Path (XDP paper and data)",
+      "url": "https://github.com/tohojo/xdp-paper"
+    }
+  },
+  {
+    "id": "io-network-stack-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Profiling shows costly normal-stack processing of unwanted UDP traffic. Assume native XDP support and a correct classifier, while HTTPS must remain on the normal kernel stack. Which option directly removes early per-packet work for the unwanted traffic?",
+    "options": [
+      {
+        "text": "Move the server to DPDK",
+        "explanation": "An exclusive VFIO DPDK design would remove that data path from the normal stack; bifurcated/coexistence designs also exist, so DPDK does not universally take an entire NIC away."
+      },
+      {
+        "text": "Generic-mode XDP",
+        "explanation": "Generic XDP retains skb allocation costs. It can still help some workloads; its benefit is not universally negligible or limited to testing."
+      },
+      {
+        "text": "Native-mode XDP program that drops the attack traffic and returns `XDP_PASS` for everything else",
+        "explanation": "Correct under the assumptions. Native XDP can reject before normal skb/stack processing, retaining a PASS path for legitimate packets. Classification and processing still cost CPU."
+      },
+      {
+        "text": "Increase `net.core.netdev_budget`",
+        "explanation": "That lets NAPI process more packets per cycle; it doesn't make each packet cheaper, and the CPUs are already saturated."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Normal netfilter drops occur later than native XDP receive classification. Native XDP can discard matched unwanted packets before normal skb/stack work while returning PASS for legitimate traffic. Benchmark the actual classifier, driver, packet mix and mode; this is an argument about per-packet cost, not proof of a particular packet rate or current vendor deployment.",
+    "link": {
+      "title": "How to drop 10 million packets per second — Cloudflare blog",
+      "url": "https://blog.cloudflare.com/how-to-drop-10-million-packets/"
+    }
+  }
+]

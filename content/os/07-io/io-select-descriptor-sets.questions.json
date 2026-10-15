@@ -1,0 +1,62 @@
+[
+  {
+    "id": "io-multiplexing-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A Linux glibc server built on select corrupts memory after descriptor numbers grow beyond 1023. Which API misuse best explains this?",
+    "options": [
+      {
+        "text": "`select` returns `EMFILE` above 1,024 descriptors",
+        "explanation": "`EMFILE` comes from the per-process open-file limit, raised by `accept()` or `open()`, not from `select`. And an error wouldn't corrupt memory."
+      },
+      {
+        "text": "FD_SET on a descriptor of 1024 or above accesses outside the valid fixed-size fd_set bitmap range, which has undefined behaviour",
+        "explanation": "Correct. On Linux glibc `FD_SETSIZE` is 1024. `FD_SET(1050, &set)` has undefined behavior; an unchecked implementation can write beyond the bitmap. Use poll or epoll."
+      },
+      {
+        "text": "The kernel's TCP/IP stack can't handle more than 1,024 connections",
+        "explanation": "The TCP/IP stack is not capped at 1024 sockets by this API; actual capacity depends on resources and configuration."
+      },
+      {
+        "text": "`select` scans too slowly and the kernel kills the process",
+        "explanation": "`select` gets slower with more descriptors, but slowness doesn't corrupt memory and the kernel doesn't kill slow processes."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Size the bitmap and illustrate a logical byte index for descriptor 1050. This byte-indexed model is not a promise about physical byte order in every fd_set implementation:\n\n```formula\nS = F / 8 = 1,024 / 8 = 128 B\nj = ⌊k / 8⌋ = ⌊1,050 / 8⌋ = 131\nwhere\nS: size of the fd_set bitmap, in bytes (B)\nF: FD_SETSIZE, the number of bits, 1,024 on Linux glibc\nk: the descriptor number passed to FD_SET, here 1,050\nj: logical byte index in this illustration; the 128-byte bitmap has indexes from zero through 127\n⌊ ⌋: floor, round down to a whole number\nB: byte, 8 bits\nIn words: the bitmap has 128 bytes, numbered 0 to 127, but the illustrative logical index is 131, beyond the valid bitmap range.\n```\n\n2. A descriptor number selects the bit with that same number, so valid descriptors are 0 to 1023.\n3. At about 1,100 connections, new sockets can get numbers above 1023, depending on the other descriptors and descriptor reuse.\n4. `FD_SET(1050, &s)` therefore accesses outside the valid bitmap range; exact implementation and hardening determine how undefined behavior manifests.\n5. That access has undefined behavior; a silent overflow is one possible outcome. glibc's fortify checks can catch it, but the real fix is `poll` or `epoll`.",
+    "link": {
+      "title": "select(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/select.2.html"
+    }
+  },
+  {
+    "id": "io-multiplexing-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why must a select loop restore its intended fd_set before each call, either rebuilding it or copying a saved master set?",
+    "options": [
+      {
+        "text": "Because `select` overwrites the sets on return, leaving only the descriptors that are ready",
+        "explanation": "Correct. The sets are in-out parameters. After the call, bits for non-ready descriptors are cleared, so reusing them would watch only the previously ready ones."
+      },
+      {
+        "text": "Because descriptors are renumbered after each call",
+        "explanation": "Descriptor numbers are stable until closed; nothing renumbers them."
+      },
+      {
+        "text": "Because `FD_ZERO` resets the kernel's internal list of watched descriptors",
+        "explanation": "`select` keeps no kernel state between calls; the bitmap you pass is the entire interest set every time."
+      },
+      {
+        "text": "It doesn't need to; that's only a performance optimisation",
+        "explanation": "Skipping the rebuild is a correctness bug: idle connections silently stop being watched."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Watching fds {4, 5, 6}:\n\n```\nbefore: bits 4,5,6 set\nselect: fd 5 readable\nafter:  only bit 5 set\n```\n\nIf you call `select` again with that same set, you only watch fd 5. Data on 4 or 6 would never be noticed. `poll` avoids this by putting results in a separate `revents` field.",
+    "link": {
+      "title": "select(2) — Linux manual page",
+      "url": "https://man7.org/linux/man-pages/man2/select.2.html"
+    }
+  }
+]

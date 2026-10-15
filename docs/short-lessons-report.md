@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 65/76. Updated 2026-10-15.
+Verified modules: 66/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -72,6 +72,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | theory/Probability for Computer Science | 6 | 41 | 70 | 177 | 217 | 708 | 32 |
 | theory/Automata & Regular Languages | 6 | 32 | 73 | 92 | 170 | 367 | 48 |
 | theory/Context-Free Languages & Computability | 6 | 32 | 67 | 87 | 175 | 361 | 34 |
+| theory/Complexity Theory | 6 | 47 | 77 | 174 | 254 | 378 | 12 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4827,6 +4828,38 @@ Remaining gaps:
 - The unspecified six-state Collatz-like machine claim is omitted; no concrete convention or machine was provided.
 - Reading-time metadata is an estimate; no timed learner trial was conducted.
 - Finite execution tests corroborate examples and never prove universal Goldbach, totality, pumping or asymptotic claims.
+
+Low-confidence areas:
+
+None newly recorded. Inherited glossary qualifications remain in the verification record.
+
+## theory: Complexity Theory
+
+[Independent verification record](../content/theory/06-complexity/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Independently reviewed all 47 active bodies, all 77 complete questions (every option, explanation, worked example and link), all254 own glossary entries, actual compiled meanings/donor contexts, and 314 substantive archival paragraph groups. Original12 archival files remain byte-identical; all72 original question IDs/types/levels/answer keys/option counts and conceptual order are preserved.
+- Kept original executable ASTs and verified all10 body and3 question snippets independently on Python3.14 and native Docker Python3.12, with exhaustive/seeded finite mathematical tests clearly distinguished from general proofs.
+- Corrected a surviving TSP answer explanation that called factorial enumeration exponential: it is super-polynomial and faster-growing than fixed-base exponential.
+- Corrected the polynomial-depth game memory derivation: arbitrary polynomial position/scratch space gives polynomial memory, while the illustrative fourth-power bound needs the additional quadratic-frame assumption.
+- Included quantifier-free formula evaluation in the TQBF space bound; distinguished ten halvings from eleven stack frames in the Savitch illustration and separated a quasi-polynomial upper-bound growth function from a lower-bound claim.
+- Used absolute approximation error for both minimisation and maximisation in the integer-objective/FPTAS argument; allowed size-dependent approximation factors.
+- Made Buss high-degree preprocessing explicitly repeat after every budget decrease, rejecting negative budgets; fixed at-most-k Set Cover wording and standard space-constructibility assumptions.
+- Qualified Schwartz–Zippel sample sets as distinct elements of a field/integral domain, using rational numbers in the example. Strengthened standalone Freivalds/PIT/domain definitions and fixed fixed-k Clique versus uniform FPT; hardness and completeness now explicitly differ.
+- Corrected sublinear-space, integral-domain and expander definitions, and removed blanket claims that heuristics/local search/metaheuristics cannot have any guarantees. Narrowed STRIPS completeness to explicitly encoded finite propositional plan existence.
+- Added precise generic Pseudorandomness, distinguishing tests/statistical appearance, PRNG and PRF; rejected leaving the earlier exact pseudorandom probe null. Added separate PSPACE-hardness to prevent its alias being donated to earlier Automata completeness-only definition.
+- Qualified RSA factoring as necessary rather than a security equivalence, expanded AES and key-length aliases, and made amplification require independent trials and a fixed two-sided success gap. Reviewed every actual earlier borrower of refined meanings on exact live65.
+- Replaced inline symbolic relations by equivalent prose, moved spectrum definitions before its symbolic table, kept all174 formula cards self-contained, and prevented non-negative substring from opening the negative-edge definition.
+- Omitted unsupported blanket million-variable runtime/throughput wording and an unsourced precise AKS exponent; mathematical content and examples remain, with benchmarking requirements explicit.
+- Corrected the unconditional secure-encryption/one-way-function claim: short reusable-key computational encryption has the standard necessity result, whereas one-time pads use information-theoretic assumptions and long fresh key material. Independently confirmed in Arora–Barak §10.2.
+
+Remaining gaps:
+
+- No new empirical solver benchmarks or hardware reliability claims. Finite implementation tests are not proofs of general complexity theorems.
+- Generalised games are stated for the cited growing-board rule families; no claim about all commercial rulesets.
+- Quantum resource costs are dated theoretical estimates under explicit assumptions, not current available hardware; real query/oracle implementation cost is separate.
+- The module remains introductory in full gadget construction for 3-colouring/Subsetsum and in full PCP/UGC/quantum proofs; all archived depth is retained.
 
 Low-confidence areas:
 

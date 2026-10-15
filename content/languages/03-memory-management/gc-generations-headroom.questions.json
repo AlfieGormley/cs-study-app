@@ -1,0 +1,62 @@
+[
+  {
+    "id": "gc-tracing-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a simplified model a service allocates 400 MB/s into 200 MB of available nursery allocation space, and 3% of those bytes survive each collection. Ignoring pause time and survivor-space overhead, roughly how often does it fill and how much is copied?",
+    "options": [
+      {
+        "text": "Every 2 s, copying about 60 MB",
+        "explanation": "200 MB at 400 MB/s fills in 0.5 s, not 2 s; and 3% of 200 MB is 6 MB."
+      },
+      {
+        "text": "Every 0.5 s, copying about 6 MB",
+        "explanation": "Correct. The nursery fills in half a second, and three percent of its 200 MB is 6 MB; root-scan, survivor and pause overhead are excluded by the model."
+      },
+      {
+        "text": "Every 0.5 s, copying about 194 MB",
+        "explanation": "194 MB is the *dead* data, which a copying young collection never touches."
+      },
+      {
+        "text": "Every 50 ms, copying about 12 MB",
+        "explanation": "The given space and allocation rate imply a half-second fill time, ten times longer than 50 ms."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Time to fill the young generation, then survivors per collection:\n\n```formula\nt = Y / A\nt = 200 MB / (400 MB/s) = 0.5 s\nC = f × Y\nC = 0.03 × 200 MB = 6 MB\nwhere\nt: the time between collections, in seconds (s)\nY: the nursery space available for new objects, in megabytes (MB)\nA: the allocation rate, in MB per second (MB/s)\nC: the bytes copied out by each collection, in MB\nf: the survival fraction: 3% = 0.03\nMB: megabyte, 1,000,000 bytes\ns: seconds\nIn words: the nursery fills every half-second, and each collection copies only the 3% that is still live, 6 MB.\n```\n\n2. The survivors are what get copied; everything else is dead.\n\n3. The other 194 MB (200 − 6) is reclaimed with no per-object work.\n\nThis is the generational bet paying off: you collect frequently, but each collection is small because almost everything is already dead.",
+    "link": {
+      "title": "HotSpot GC implementation — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-collector-implementation.html"
+    }
+  },
+  {
+    "id": "gc-tracing-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A tracing collector's cost per byte allocated follows roughly this model:\n\n```formula\nW ∝ L / (H − L)\nwhere\nW: GC work per byte allocated\n∝: \"is proportional to\"\nL: the live data, in gigabytes (GB)\nH: the total heap size, in GB\nGB: gigabyte, 1,000,000,000 bytes\nIn words: GC work per allocated byte is live data divided by spare heap room.\n```\n\nA service has 2 GB of live data and a 3 GB heap. You raise the heap to 6 GB. By about how much does GC work fall? Assume constant live size and per-byte scan cost; ignore sweep, root, fixed and concurrent-pacing overheads.",
+    "options": [
+      {
+        "text": "By half, because the heap doubled",
+        "explanation": "The ratio depends on the *spare* room (heap - live), which grows from 1 GB to 4 GB, not 2x."
+      },
+      {
+        "text": "Not at all; GC work depends only on live data",
+        "explanation": "Each collection costs about the live data, but a bigger heap means far fewer collections."
+      },
+      {
+        "text": "By about four times",
+        "explanation": "Correct under the model. Headroom rises from 1 GB to 4 GB with live data fixed, so work per allocated byte falls by a factor of four; the worked formula shows both substitutions."
+      },
+      {
+        "text": "By about eight times",
+        "explanation": "The worked values differ by a factor of four, not eight."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each collection does work roughly in proportion to the live data (2 GB here).\n2. Each collection frees roughly the heap size minus the live data, which is how much you can allocate before the next one.\n3. So work per byte allocated is about live data divided by headroom:\n\n```formula\nW_1 ≈ L / (H_1 − L) = 2 / (3 − 2) = 2.0\nW_2 ≈ L / (H_2 − L) = 2 / (6 − 2) = 0.5\nW_1 / W_2 = 2.0 / 0.5 = 4\nwhere\nW_1, W_2: GC work per byte allocated with the 3 GB and the 6 GB heap (a ratio, no unit)\nL: the live data, 2 GB\nH_1, H_2: the heap sizes before and after, 3 GB and 6 GB\nH − L: the headroom, the free space between collections: 1 GB before, 4 GB after\n≈: approximately equal to; a rough model\nIn words: the heap doubles but the headroom quadruples, so the collector does about a quarter of the work per allocated byte.\n```\n\n4. Doubling the heap quadrupled the headroom, so collections run four times less often.\n\nThis disproportionate effect is why small heaps near the live size make GC thrash, and why Go's `GOGC` and JVM heap sizing matter so much.",
+    "link": {
+      "title": "Tracing garbage collection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection"
+    }
+  }
+]

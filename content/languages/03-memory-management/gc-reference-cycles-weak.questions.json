@@ -1,0 +1,92 @@
+[
+  {
+    "id": "gc-refcounting-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why can't pure reference counting free two objects that refer only to each other?",
+    "options": [
+      {
+        "text": "Because their counts are both at least 1, held by each other, so neither ever reaches zero",
+        "explanation": "Correct. Each object's count includes the reference from the other. Without outside help, neither count can drop to zero."
+      },
+      {
+        "text": "Because reference counts can't go below 1",
+        "explanation": "Counts reach zero all the time; that is when objects are freed. The problem is specifically the references inside the cycle."
+      },
+      {
+        "text": "Because the objects are on the stack",
+        "explanation": "Reference-counted objects live on the heap. Placement is not the issue."
+      },
+      {
+        "text": "Because the counter overflows",
+        "explanation": "A two-object cycle has small counts. Overflow has nothing to do with it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `A.other = B` gives B a reference count of at least 1; `B.other = A` gives A a count of at least 1.\n2. Drop all outside references: each count falls by those, but the internal ones remain.\n\n```\n[A rc=1] --> [B rc=1]\n   ^------------'\n```\n\n3. Counting asks \"does anything point at me?\", not \"can the program reach me?\". For a cycle those questions have different answers.\n\nA tracing collector asks the second question, which is why it handles cycles naturally.\n\nIn the diagram, rc labels the number of strong references, one for each object after the outside owners are removed.",
+    "link": {
+      "title": "Reference counting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Reference_counting"
+    }
+  },
+  {
+    "id": "gc-refcounting-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A tree node holds a list of its children and a pointer to its parent. Which reference should be weak to avoid a reference cycle? Assume parents own their children and children may observe a missing parent.",
+    "options": [
+      {
+        "text": "The parent's references to its children",
+        "explanation": "If the children list were weak, children would be freed as soon as you stopped holding them elsewhere: the tree would fall apart. Parents own their children."
+      },
+      {
+        "text": "Both",
+        "explanation": "If both were weak, nothing would keep the children alive once you let go of them."
+      },
+      {
+        "text": "Neither: reference counting handles trees fine",
+        "explanation": "A parent pointer plus a child list is a cycle (parent → child → parent), which pure counting leaks."
+      },
+      {
+        "text": "The child's pointer to its parent",
+        "explanation": "Correct. Owners hold strong references; back-pointers are weak. When the root is dropped, the strong chain down the tree frees everything."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Draw the references:\n\n```\nparent --strong--> child\nchild  --?------> parent\n```\n\n2. If both are strong, that is a cycle of length 2.\n3. Ownership flows downward, so make the upward pointer weak.\n4. Dropping the root: the root's count falls to 0 and it is freed; it decrements each child to 0; they free their children, and so on.\n\nPython `weakref.ref`, Swift `weak`, C++ `weak_ptr` and Rust `Weak` all express this.\n\nDropping the root only destroys children that have no other strong owners. A child retained elsewhere can survive with an empty weak parent reference.",
+    "link": {
+      "title": "Rc and reference cycles — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch15-06-reference-cycles.html"
+    }
+  },
+  {
+    "id": "gc-refcounting-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Swift view controller stores a closure in a property: `self.onTap = { self.count += 1 }`. The controller is dismissed but never deinitialised. Why, and what is the usual fix?",
+    "options": [
+      {
+        "text": "The controller holds the closure strongly and the closure captures `self` strongly: a cycle. Capture `[weak self]`.",
+        "explanation": "Correct. Swift's ARC has no cycle collector, so this cycle leaks. `{ [weak self] in self?.count += 1 }` breaks it."
+      },
+      {
+        "text": "ARC doesn't track closures, so they're never freed; mark the property `static`",
+        "explanation": "ARC does count closures; a closure that captures `self` holds a strong reference to it. `static` would make it worse by making it global."
+      },
+      {
+        "text": "ARC frees objects only when memory runs low; wait for a memory warning",
+        "explanation": "ARC frees deterministically when the count hits zero, not under memory pressure."
+      },
+      {
+        "text": "Closures are on the stack; move it to the heap with `Box`",
+        "explanation": "That is Rust vocabulary. Escaping closures in Swift are heap objects already; the issue is the strong capture."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `self.onTap` → closure: strong.\n2. Closure captures `self`: strong.\n\n```\nVC --strong--> closure\n ^---strong------'\n```\n\n3. When the navigation stack lets go of the VC, both counts are still 1. ARC has no tracing backup, so it leaks.\n4. Fix with a capture list:\n\n```swift\nself.onTap = { [weak self] in\n    self?.count += 1\n}\n```\n\nInside, `self` is optional and becomes `nil` once the VC is freed.",
+    "link": {
+      "title": "Automatic Reference Counting — Swift",
+      "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/automaticreferencecounting/"
+    }
+  }
+]

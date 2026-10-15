@@ -1,0 +1,92 @@
+[
+  {
+    "id": "gc-rust-ownership-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Does this compile?\n\n```rust\nlet a = String::from(\"hi\");\n// Assign this non-Copy value to b.\nlet b = a;\nprintln!(\"{a} {b}\");\n```",
+    "options": [
+      {
+        "text": "No: `a` was moved into `b`, so using `a` is error E0382",
+        "explanation": "Correct. `String` owns a heap buffer and isn't `Copy`, so assignment moves it. Using a moved-from variable is rejected at compile time."
+      },
+      {
+        "text": "Yes, and it prints `hi hi`",
+        "explanation": "That would need `a` to still own its string. `let b = a;` moves ownership to `b`, so `a` can't be used."
+      },
+      {
+        "text": "Yes, but it double-frees at run time",
+        "explanation": "Rust prevents exactly this double free by refusing to compile the use of `a`."
+      },
+      {
+        "text": "No, because `println!` can't print two values",
+        "explanation": "`println!` happily formats several arguments. The problem is the moved variable."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `a` owns a heap buffer containing `hi`.\n2. `let b = a;` copies the pointer, length and capacity into `b` and marks `a` as moved.\n3. If both stayed valid, both would free its heap buffer at the end of scope.\n4. So the compiler rejects any later use of `a`:\n\n```\nerror[E0382]: borrow of moved\nvalue: `a`\n```\n\nFixes: `let b = a.clone();` (two separate heap copies) or `let b = &a;` (borrowing instead of moving).",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Does this compile, and if so what does it print?\n\n```rust\nlet x = 5;\n// Integer values implement Copy.\nlet y = x;\nprintln!(\"{x} {y}\");\n```",
+    "options": [
+      {
+        "text": "No: `x` was moved into `y`",
+        "explanation": "Integers implement Copy, allowing implicit duplication. They can be stored on the heap or in registers too; placement does not determine Copy."
+      },
+      {
+        "text": "Yes, it prints `5 5`",
+        "explanation": "Correct. `i32` implements `Copy`, so `let y = x;` duplicates the value instead of moving it."
+      },
+      {
+        "text": "Yes, it prints `5` then a blank",
+        "explanation": "Both variables hold 5; neither has been invalidated."
+      },
+      {
+        "text": "No: integers must be cloned explicitly",
+        "explanation": "`.clone()` would work, but it's unnecessary for `Copy` types."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Is the type `Copy`? `i32` is: no heap data, no destructor.\n2. For `Copy` types, assignment is a bitwise copy and the source stays usable.\n3. So `x = 5`, `y = 5`, and the output is `5 5`.\n\nCompare `String` (owns a heap buffer, not `Copy`): the same code would be a move and fail with E0382.",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Compared with C++'s `std::unique_ptr` and `std::move`, what is the key extra guarantee Rust's ownership system gives?",
+    "options": [
+      {
+        "text": "Rust frees memory at the end of scope, and C++ doesn't",
+        "explanation": "Both free at the end of scope via destructors (RAII); that part is the same."
+      },
+      {
+        "text": "Rust's moves deep-copy the heap data, so there is no aliasing",
+        "explanation": "A Rust move transfers a non-Copy value without invoking Clone. It need not involve a stack slot or a physical memory copy; C++ move behavior depends on the selected type operation."
+      },
+      {
+        "text": "Rust uses a garbage collector behind `Box`",
+        "explanation": "`Box` is single ownership with deterministic drop; no collector is involved."
+      },
+      {
+        "text": "Rust rejects reading an uninitialized moved value and statically restricts references from outliving referents",
+        "explanation": "Correct. Reinitialization and unmoved fields of a partially moved value can still be valid. C++ lacks equivalent general borrow checking; moving unique_ptr empties its source."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. What they share: both tie freeing to scope (destructors / `Drop`) and both support moves.\n2. C++:\n\n```cpp\nauto p = std::make_unique<W>();\nW *raw = p.get();\nauto q = std::move(p); // p null\np->f();    // compiles, UB\nq.reset(); // frees W\nraw->f();  // compiles, UB\n```\n\n3. Rust: using `p` after the move is E0382; holding a reference past the owner's drop is E0597 or E0505.\n4. So the difference isn't *when* memory is freed, it's that the compiler proves no one can touch it afterwards.\n\nstd::move itself is a cast enabling a move constructor/assignment; it does not itself transfer ownership. Physical memory-copy behavior can be optimized in either language.",
+    "link": {
+      "title": "References and borrowing — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html"
+    }
+  }
+]

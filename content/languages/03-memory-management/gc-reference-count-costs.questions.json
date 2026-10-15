@@ -1,0 +1,100 @@
+[
+  {
+    "id": "gc-refcounting-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these are genuine costs of reference counting compared with a tracing collector? Select all that apply.",
+    "options": [
+      {
+        "text": "Strong-reference creation/release can add memory writes throughout otherwise read-only code",
+        "explanation": "Correct. Borrowed references, moves, immortal objects and optimizations can avoid some updates."
+      },
+      {
+        "text": "Atomic increments and decrements when objects are shared between threads",
+        "explanation": "Correct for thread-safe counting designs such as Arc/shared_ptr; synchronization cost depends on contention and hardware."
+      },
+      {
+        "text": "It cannot free any object until the whole heap is scanned",
+        "explanation": "That describes a tracing collector's cycle. Reference counting frees each object as soon as its count hits zero."
+      },
+      {
+        "text": "Releasing the last owner of a huge exclusively owned acyclic structure can trigger a long release cascade",
+        "explanation": "Correct. When each released node removes the last owner of its children, destruction can cascade through the whole structure. Implementations need not use literal call-stack recursion."
+      },
+      {
+        "text": "It needs twice the heap, like a copying collector",
+        "explanation": "Reference counting adds a count per object, not a second semispace."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Counting adds traffic for strong ownership-reference creation and release, may need atomic synchronization across threads, and can trigger expensive release cascades. Borrowed references and optimizations can avoid updates. It does not intrinsically require a whole-heap scan or a spare semispace.",
+    "link": {
+      "title": "Reference counting — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Reference_counting"
+    }
+  },
+  {
+    "id": "gc-refcounting-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does Rust provide both `Rc<T>` and `Arc<T>`?",
+    "options": [
+      {
+        "text": "`Rc` is for the stack and `Arc` is for the heap",
+        "explanation": "Both allocate their value and counts on the heap. The difference is thread safety."
+      },
+      {
+        "text": "`Arc` can collect cycles and `Rc` cannot",
+        "explanation": "Neither collects cycles. Both need `Weak` to break them."
+      },
+      {
+        "text": "`Rc` counts references and `Arc` traces them",
+        "explanation": "Both are reference counted; the A stands for atomic."
+      },
+      {
+        "text": "`Rc` uses plain increments and is single-threaded only; `Arc` uses atomic counts so it can be shared between threads",
+        "explanation": "Correct under the required payload bounds. Rc uses non-atomic counts and is not Send or Sync; Arc uses atomic counts, but Arc<T> is Send/Sync only when T satisfies the corresponding bounds. Cost depends on hardware and contention."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A reference count is a shared counter.\n2. If two threads increment it with a plain `count += 1` at the same time, one update can be lost, leading to a premature free.\n3. Atomic instructions prevent that but cost more.\n4. Rust lets you choose:\n\n| Type | Count | Threads |\n|---|---|---|\n| `Rc` | plain | one |\n| `Arc` | atomic | many |\n\n5. The type system enforces the choice at compile time, so using `Rc` across threads is an error, not a race.\n\nArc makes reference counting thread-safe, not arbitrary payload access. Arc<T> is Send/Sync only under the corresponding T bounds; Arc<RefCell<T>> does not make RefCell thread-safe.",
+    "link": {
+      "title": "Rc and reference cycles — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch15-06-reference-cycles.html"
+    }
+  },
+  {
+    "id": "gc-refcounting-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A server using ordinary GIL-enabled CPython forks 32 workers after loading a dataset. Workers traverse non-immortal managed objects, acquiring strong references while treating the payload as read-only. Memory use approaches many private copies. Which mechanism could explain this pattern, and should be measured?",
+    "options": [
+      {
+        "text": "Strong-reference count updates and cyclic-GC bookkeeping can dirty otherwise shared private pages, triggering copy-on-write",
+        "explanation": "Count updates and cyclic-GC bookkeeping can both dirty shared pages. gc.freeze avoids the latter for frozen objects, but does not disable ordinary count updates."
+      },
+      {
+        "text": "`fork()` always copies all memory eagerly",
+        "explanation": "For ordinary private mappings Linux fork uses copy-on-write rather than eagerly copying every page. Shared or special mappings have different rules."
+      },
+      {
+        "text": "The dataset is on the stack, which is never shared",
+        "explanation": "Python objects live on the heap, and the stack is small anyway."
+      },
+      {
+        "text": "The workers leak memory through reference cycles",
+        "explanation": "Cycles or other allocations could also contribute to growth. The stated reference-acquisition pattern makes copy-on-write metadata writes a plausible mechanism to measure; symptoms alone do not establish the cause."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. For ordinary private mappings, Linux fork initially lets parent and child share physical pages through copy-on-write.\n2. Acquiring or releasing a strong reference to an ordinary counted CPython object can write reference-count metadata, even when the payload is read-only.\n3. A write can force a private copy of its page; the amount depends on which pages each worker actually touches.\n4. Cyclic-GC bookkeeping can also write collector metadata.\n\nUse measurements to distinguish these costs from allocations or leaks. gc.freeze before forking avoids later cyclic-collector traversal of frozen objects, but does not suppress ordinary count updates. Immortal objects avoid ordinary updates for selected CPython objects; they are not a general way to freeze arbitrary data.",
+    "link": {
+      "title": "PEP 683: Immortal objects",
+      "url": "https://peps.python.org/pep-0683/"
+    }
+  }
+]

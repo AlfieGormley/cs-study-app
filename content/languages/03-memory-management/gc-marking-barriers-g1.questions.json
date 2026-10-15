@@ -1,0 +1,62 @@
+[
+  {
+    "id": "gc-modern-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "During concurrent marking, the program does the following. Which step, combined with the others, would cause a live object to be freed if there were **no** barrier?\n\n1. `A` (black) is already scanned.\n2. `A.f = C`, where `C` is white.\n3. `B.g = null`, where `B` (grey) held the only other pointer to `C`.",
+    "options": [
+      {
+        "text": "Step 2 alone is enough",
+        "explanation": "A black-to-white pointer is harmless if a grey object still leads to C, because C will be found through it."
+      },
+      {
+        "text": "Step 3 alone is enough",
+        "explanation": "Removing B's pointer alone would make C genuinely unreachable (if A hadn't been given it), so freeing it would be correct."
+      },
+      {
+        "text": "Steps 2 and 3 together: a black object points at C and no grey path to it remains",
+        "explanation": "Correct. Both conditions must hold. The collector won't rescan black A, and it can no longer reach C through B, so C stays white and is freed while A still uses it."
+      },
+      {
+        "text": "None: tracing collectors can't free live objects",
+        "explanation": "Without barriers, a concurrent tracing collector certainly can. That's why barriers are a correctness requirement."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. After step 2, C is pointed to by black A and grey B.\n2. After step 3, only A points to C.\n3. The collector:\n   - won't revisit A (black)\n   - reaches B, finds `g` is null\n   - never reaches C\n4. C stays white and is swept, while A.f still points at it.\n\nBarriers break one of the two conditions:\n- insertion (Dijkstra): at step 2, grey C\n- deletion / SATB (Yuasa): at step 3, grey C (the overwritten value)",
+    "link": {
+      "title": "Tri-color marking — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection#Tri-color_marking"
+    }
+  },
+  {
+    "id": "gc-modern-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why is it called 'Garbage-First' (G1)?",
+    "options": [
+      {
+        "text": "It collects the youngest objects first because they are most likely to be garbage",
+        "explanation": "All generational collectors do that. G1's distinctive choice is about which *old* regions to collect."
+      },
+      {
+        "text": "After concurrent marking, mixed collections evacuate the old regions with the most garbage first, freeing the most space per unit of copying",
+        "explanation": "Correct as the design goal: marking estimates live bytes, and G1 prefers old regions predicted to reclaim space efficiently. Garbage amount, predicted cost, eligibility and pause planning all affect the actual selection."
+      },
+      {
+        "text": "It frees garbage before marking live objects",
+        "explanation": "A tracing collector must mark before it knows what's garbage."
+      },
+      {
+        "text": "It was the first garbage collector in Java",
+        "explanation": "Java has had collectors since 1.0; G1 arrived in JDK 7 and became the default in JDK 9."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. G1 splits the heap into regions.\n2. Concurrent marking records how many live bytes each old region has.\n3. Evacuating a region costs roughly in proportion to its live bytes; it frees the whole region.\n\n| Region | Live | Copy cost | Freed |\n|---|---|---|---|\n| R1 | 10% | low | 90% |\n| R2 | 80% | high | 20% |\n\n4. Pick R1 first. G1 adds regions to a mixed collection, cheapest first, until its pause-time budget is used.",
+    "link": {
+      "title": "HotSpot GC tuning guide: G1 — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-first-g1-garbage-collector1.html"
+    }
+  }
+]

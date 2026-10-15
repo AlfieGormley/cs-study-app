@@ -1,0 +1,70 @@
+[
+  {
+    "id": "gc-modern-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume requests otherwise take a fixed 4 ms, arrivals are uniform, a 200 ms pause starts every 8 seconds, and ignore requests already in progress and post-pause queueing. What fraction arrive during a pause and what happens to p99?",
+    "options": [
+      {
+        "text": "About 0.025%; the p99 is unaffected",
+        "explanation": "200 ms of every 8,000 ms is 2.5%, not 0.025%. Check the units."
+      },
+      {
+        "text": "About 25%; the median rises to 200 ms",
+        "explanation": "That would need 2 s of pause every 8 s."
+      },
+      {
+        "text": "None, because GC runs between requests",
+        "explanation": "A stop-the-world pause freezes every thread, including those mid-request."
+      },
+      {
+        "text": "About 2.5%; the p99 falls inside the delayed group, so it's tens to hundreds of milliseconds",
+        "explanation": "Correct in the stated model: 2.5% arrive during the pause; p99 is about 124 ms. A median alone would not determine that percentile."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Work out the fraction that hits a pause, then where the slowest 1% begins:\n\n```formula\nf = t_p / t_c = 200 ms / 8000 ms\nf = 0.025\nw = t_p × (1 − 0.01 / f)\nw = 200 ms × (1 − 0.01 / 0.025)\nw = 200 ms × 0.6 = 120 ms\np99 = t_r + w = 4 ms + 120 ms = 124 ms\nwhere\nf: the fraction of requests that arrive during a pause (2.5%)\nt_p: the pause length, 200 milliseconds (ms)\nt_c: the time from one pause start to the next, 8 s = 8000 ms\n0.01: the slowest 1% of all requests\nw: the extra wait at the 99th-percentile boundary; delayed requests wait anywhere from 0 to t_p, evenly spread\np99: the 99th-percentile latency: 99% of requests finish faster\nt_r: the normal request time, 4 ms\nms: milliseconds\nIn words: 2.5% of requests are delayed; the slowest 40% of those (1% of all) wait more than 120 ms, so p99 is about 124 ms.\n```\n The median remains 4 ms. In-flight work, other latency variation and queue draining change real results.",
+    "link": {
+      "title": "Getting to Go: Go's GC journey — go.dev",
+      "url": "https://go.dev/blog/ismmkeynote"
+    }
+  },
+  {
+    "id": "gc-modern-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are choosing a JVM collector. Which pairings of workload and collector are sensible? Select all that apply.",
+    "options": [
+      {
+        "text": "A nightly batch job that crunches data for an hour, where only total runtime matters: Parallel GC",
+        "explanation": "Correct as a reasonable collector candidate: HotSpot Parallel GC targets throughput with parallel stop-the-world collection. It does not guarantee the best measured throughput for every batch workload."
+      },
+      {
+        "text": "A typical web service with a 4 GB heap and a 200 ms latency budget: G1, the default",
+        "explanation": "G1 is a reasonable baseline to measure. Its 200 ms soft pause goal does not guarantee a 200 ms request latency budget."
+      },
+      {
+        "text": "A trading gateway with a 64 GB heap and a 2 ms p99.9 requirement: ZGC",
+        "explanation": "ZGC is a reasonable candidate because it targets low pause times with concurrent relocation. Benchmark it: the collector cannot guarantee a 2 ms p99.9 end-to-end latency."
+      },
+      {
+        "text": "A latency-critical service where the team wants zero GC overhead: Parallel GC, because it has no barriers",
+        "explanation": "Parallel GC still has barrier and collection work and uses stop-the-world pauses. It offers no zero-overhead or latency guarantee."
+      },
+      {
+        "text": "Any service: tune 30 flags from an old blog post rather than accepting defaults",
+        "explanation": "Modern collectors adapt automatically; stale flags often hurt. Measure with GC logs, then change one thing at a time."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Match the goal to the collector:\n\n| Goal | Collector |\n|---|---|\n| throughput | Parallel |\n| balanced | G1 |\n| low latency, big heap | ZGC / Shenandoah |\n\n1. Batch: throughput. Parallel. Sensible.\n2. Typical service: G1 default. Sensible.\n3. Strict latency, big heap: ZGC. Sensible.\n4. \"Zero overhead\": no collector has zero overhead, and Parallel GC has stop-the-world pauses whose lengths require measurement. Not sensible.\n5. Flag cargo-culting: not sensible.",
+    "link": {
+      "title": "HotSpot GC tuning guide: G1 — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-first-g1-garbage-collector1.html"
+    }
+  }
+]

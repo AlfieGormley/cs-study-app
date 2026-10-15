@@ -1,0 +1,101 @@
+[
+  {
+    "id": "gc-modern-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A team moves a JVM service with a 48 GB heap from G1 to ZGC. Which change in behaviour should they expect?",
+    "options": [
+      {
+        "text": "ZGC targets much shorter pauses through concurrent relocation, but CPU costs and required headroom must be measured",
+        "explanation": "This is a design trade-off, not a guarantee of sub-millisecond application latency or a fixed throughput penalty."
+      },
+      {
+        "text": "Throughput rises and pauses rise",
+        "explanation": "Neither higher throughput nor higher pauses follows from switching collectors. ZGC targets low pauses; the measured CPU and throughput result depends on workload, configuration and implementation."
+      },
+      {
+        "text": "Memory use halves because ZGC compacts better",
+        "explanation": "Concurrent collectors typically need *more* headroom, because garbage accumulates while they work."
+      },
+      {
+        "text": "Nothing changes because both are stop-the-world collectors",
+        "explanation": "G1 does young and mixed evacuation in pauses; ZGC does nearly everything concurrently. That's a big difference."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. G1 evacuates young and mixed collection sets during pauses.\n2. ZGC relocates concurrently and targets very short pauses.\n3. Generational ZGC uses load and store barriers.\n4. Measure CPU cost, allocation stalls and tail latency on the actual workload; a collector choice does not guarantee an SLO.",
+    "link": {
+      "title": "HotSpot GC tuning guide: ZGC — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/z-garbage-collector.html"
+    }
+  },
+  {
+    "id": "gc-modern-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about Go's garbage collector are true? Select all that apply.",
+    "options": [
+      {
+        "text": "It is a concurrent tri-colour mark-sweep collector",
+        "explanation": "Correct. Marking and sweeping happen alongside goroutines, with two short stop-the-world phases."
+      },
+      {
+        "text": "It is generational, with a young generation like the JVM's",
+        "explanation": "Go's collector is not generational. Escape analysis keeps many short-lived values on goroutine stacks instead."
+      },
+      {
+        "text": "It does not move heap objects",
+        "explanation": "Correct for the standard Go heap collector: it does not relocate heap objects. Goroutine stacks can move separately, and cgo retains strict pointer-passing and pinning rules."
+      },
+      {
+        "text": "A goroutine allocating heavily during marking may be made to help with marking",
+        "explanation": "Correct. These *mark assists* keep allocation from outrunning the collector."
+      },
+      {
+        "text": "Its main tuning knobs are GOGC and GOMEMLIMIT",
+        "explanation": "GOGC sets the heap growth goal; the pacer starts earlier. GOMEMLIMIT is a soft limit on memory managed by the Go runtime, not on all process memory."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3,
+      4
+    ],
+    "workedExample": "Check each against the design:\n\n1. Concurrent tri-colour mark-sweep: yes.\n2. Generational: no. Go relies on escape analysis and a fast allocator instead.\n3. Non-moving heap: yes.\n4. Mark assists: yes; the pacer charges allocating goroutines marking work.\n5. GOGC and GOMEMLIMIT: yes; the Go team deliberately exposes very few knobs.\n\nFour of five are true.",
+    "link": {
+      "title": "A Guide to the Go Garbage Collector — go.dev",
+      "url": "https://go.dev/doc/gc-guide"
+    }
+  },
+  {
+    "id": "gc-modern-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why does ZGC use a *load* barrier rather than relying only on a *write* barrier as G1 does?",
+    "options": [
+      {
+        "text": "Loads are rarer than stores, so a load barrier is cheaper",
+        "explanation": "Load/store frequency is workload-dependent; the reason for this barrier is safe use of potentially relocated references."
+      },
+      {
+        "text": "Because objects can be relocated while threads run, every reference a thread reads must be checked and, if stale, fixed before use",
+        "explanation": "Correct in the relocation model. Relevant loads need a protocol that prevents use of stale object locations; ZGC uses coloured references and load barriers, with optimisations able to eliminate redundant checks. Generational ZGC also uses store barriers."
+      },
+      {
+        "text": "Load barriers remove the need for marking",
+        "explanation": "ZGC still marks objects. Generational ZGC also uses store barriers; load barriers are not its only barrier mechanism."
+      },
+      {
+        "text": "Write barriers don't work on 64-bit machines",
+        "explanation": "G1, Go and others use write barriers on 64-bit hardware without trouble."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. G1 moves objects only inside stop-the-world pauses. After the pause, all references have been updated, so threads never see an old address. A write barrier (for SATB and remembered sets) is enough.\n2. ZGC moves objects **while threads run**. A thread could load a field still holding the old address.\n3. So every reference load checks the pointer's colour bits:\n   - good: use it (fast path, a few instructions)\n   - bad: slow path finds or completes the relocation, then writes the fixed pointer back\n4. Self-healing means each stale field is repaired once.\n\nThe trade: more barrier work on a frequent operation, in exchange for pauses that don't grow with heap size.\n\nThis explanation focuses on relocation. Modern generational ZGC also uses store barriers for marking and remembered-set work.\n\nA field can need healing again in a later GC phase/cycle. This describes the mechanism, not a promise that every machine-code load retains an independent barrier after optimization.",
+    "link": {
+      "title": "HotSpot GC tuning guide: ZGC — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/z-garbage-collector.html"
+    }
+  }
+]

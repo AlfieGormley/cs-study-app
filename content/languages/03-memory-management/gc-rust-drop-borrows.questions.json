@@ -1,0 +1,122 @@
+[
+  {
+    "id": "gc-rust-ownership-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which statement best summarises Rust's borrowing rule?",
+    "options": [
+      {
+        "text": "You may have any number of `&mut` references as long as you don't have a `&`",
+        "explanation": "Two `&mut` to the same value at once is forbidden (E0499); mutable borrows must be exclusive."
+      },
+      {
+        "text": "References are counted at run time and freed when the count hits zero",
+        "explanation": "That's `Rc`. Ordinary borrows are checked entirely at compile time and cost nothing at run time."
+      },
+      {
+        "text": "A value can only be borrowed once in its lifetime",
+        "explanation": "You can borrow as many times as you like, as long as the borrows that overlap obey the rule."
+      },
+      {
+        "text": "At any time you may have either many shared `&T` references or exactly one `&mut T`, but not both",
+        "explanation": "Correct. Aliasing XOR mutation: many readers or one writer."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Shared borrow `&T`: read-only; any number at once.\n2. Mutable borrow `&mut T`: read-write; exclusive while in use.\n3. Never both overlapping.\n\n```\n&v, &v, &v   ok\n&mut v       ok\n&v + &mut v  error E0502\n&mut, &mut   error E0499\n```\n\nThis prevents iterator invalidation and data races.\n\nThese are ordinary overlapping borrows of the same value. Shared references can provide mutation through interior-mutability abstractions such as Cell, RefCell or Mutex; their own rules preserve safety.",
+    "link": {
+      "title": "References and borrowing — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```rust\nstruct D(&'static str);\nimpl Drop for D {\n  fn drop(&mut self) {\n    println!(\"{}\", self.0);\n  }\n}\nfn main() {\n  let _x = D(\"x\");\n  let _y = D(\"y\");\n  { let _z = D(\"z\"); }\n  println!(\"main\");\n}\n```",
+    "options": [
+      {
+        "text": "`x`, `y`, `z`, `main`",
+        "explanation": "Values aren't dropped when they're created; they're dropped when their scope ends."
+      },
+      {
+        "text": "`z`, `main`, `x`, `y`",
+        "explanation": "Within a scope, values are dropped in *reverse* order of declaration, so `y` before `x`."
+      },
+      {
+        "text": "`z`, `main`, `y`, `x`",
+        "explanation": "Correct. `_z` is dropped at the end of its inner block. At the end of `main`, `_y` and `_x` drop in reverse declaration order."
+      },
+      {
+        "text": "`main`, `z`, `y`, `x`",
+        "explanation": "The inner block ends before `println!(\"main\")` runs, so `z` is dropped first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Inner block `{ let _z = ...; }` ends: drop `_z`, print `z`.\n2. `println!(\"main\")`.\n3. End of `main`: drop locals in reverse order of declaration: `_y` then `_x`.\n\n```\nz\nmain\ny\nx\n```\n\nReverse order matters: later values may borrow from earlier ones, so they must go first.",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why does this fail to compile, and what bug is it preventing?\n\n```rust\nlet mut v = vec![1, 2, 3];\nlet first = &v[0];\n// push may grow the buffer.\nv.push(4);\nprintln!(\"{first}\");\n```",
+    "options": [
+      {
+        "text": "`push` requires a `&mut v` while `first` still borrows `v`; `push` may reallocate, which would leave `first` dangling",
+        "explanation": "Correct. E0502. If the vector's capacity is full, `push` moves the elements to a new heap buffer and frees the old one. `first` would then point at freed memory: a use-after-free."
+      },
+      {
+        "text": "Vectors in Rust are immutable",
+        "explanation": "`v` is declared `mut`, and `push` is the normal way to grow a `Vec`."
+      },
+      {
+        "text": "`&v[0]` copies the integer, so `first` is not a reference",
+        "explanation": "`&v[0]` is a reference into the vector's heap buffer. `let first = v[0];` would copy it."
+      },
+      {
+        "text": "`println!` can't print references",
+        "explanation": "It prints through references fine; the conflict is between the borrows."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "first borrows an element and is used after push. push requires an exclusive borrow of v, so the overlap is rejected. If growth requires reallocation, element addresses may be invalidated; the borrow rule is enforced whether or not this particular allocator could grow in place. Removing the later use lets non-lexical lifetimes end the borrow before push.",
+    "link": {
+      "title": "References and borrowing — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html"
+    }
+  },
+  {
+    "id": "gc-rust-ownership-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In this code, when is the `Guard` dropped?\n\n```rust\nfn main() {\n  let _ = Guard::new(\"a\");\n  let _g = Guard::new(\"b\");\n  // Compare the two bindings at work().\n  work();\n}\n```",
+    "options": [
+      {
+        "text": "Both at the end of `main`, `b` then `a`",
+        "explanation": "`let _ = expr;` doesn't bind the value to anything, so it isn't kept until the end of the scope."
+      },
+      {
+        "text": "`a` immediately at the end of its statement, before `work()`; `b` at the end of `main`",
+        "explanation": "Correct. The `_` pattern discards the value, so the temporary is dropped at the end of the `let` statement. `_g` is a real binding (just one the compiler won't warn about), so it lives until the end of `main`."
+      },
+      {
+        "text": "Neither is ever dropped, because they're unused",
+        "explanation": "In this normal scope-exit example both initialized temporary/binding values are dropped. Rust does permit intentional leaks and does not guarantee destructors on abort/process exit."
+      },
+      {
+        "text": "Both immediately, because names starting with `_` are discarded",
+        "explanation": "`_g` is an ordinary variable; only the bare `_` pattern discards. The prefix just silences the unused-variable warning."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Guard::new(\"a\") creates a temporary not retained by the wildcard, so it is dropped at the statement end. _g is a binding retaining its guard until main ends. Thus the order is drop a, work(), drop b. A wildcard applied to an existing variable does not necessarily move/drop it. Current rustc denies let _ = mutex.lock() by default via let_underscore_lock; use a named guard binding.",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  }
+]

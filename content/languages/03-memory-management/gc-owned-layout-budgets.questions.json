@@ -1,0 +1,96 @@
+[
+  {
+    "id": "gc-stack-heap-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Assume a recursive C call consumes 128 bytes with no tail-call elimination, and its thread has an 8 MiB stack budget. Roughly how many frames fit, ignoring existing stack use?",
+    "options": [
+      {
+        "text": "About 6,500 calls",
+        "explanation": "That is 8 MB divided by roughly 1,280 bytes, ten times the frame size given."
+      },
+      {
+        "text": "About 65,000 calls",
+        "explanation": "Correct. 8 MiB is 8,388,608 bytes; divided by 128 bytes per frame that is 65,536 frames, minus a little for `main` and the C runtime."
+      },
+      {
+        "text": "About 8 million calls",
+        "explanation": "That treats each call as using 1 byte. A frame holds the return address, saved registers and locals, so it is tens to hundreds of bytes."
+      },
+      {
+        "text": "Unlimited, because the stack grows into the heap as needed",
+        "explanation": "The premise gives a finite 8 MiB budget. Runtime growth policies and failure modes vary; C guarantees no particular stack-overflow exception or segmentation fault."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Divide the stack budget by the size of one frame:\n\n```formula\nS_stack = 8 MiB = 8 × 1,048,576 B\nS_stack = 8,388,608 B\nN = S_stack / S_frame\nN = 8,388,608 B / 128 B = 65,536\nwhere\nS_stack: the thread's stack budget, in bytes (B)\nMiB: mebibyte, 2^20 = 1,048,576 bytes (binary prefix)\nB: bytes; one byte is 8 bits\nN: the number of frames (nested calls) that fit\nS_frame: the stack space one call uses, in bytes; 128 B here (return address, saved registers and locals)\nIn words: an 8 MiB stack holds 65,536 frames of 128 bytes each.\n```\n\nSo the answer is about 65,000 calls. Real available depth is lower because of existing frames, guards and implementation overhead; actual frame and stack sizes must be measured.",
+    "link": {
+      "title": "Stack-based memory allocation — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Stack-based_memory_allocation"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "For a sizing model, assume 100,000 goroutines each start with a 2 KiB stack, versus 100,000 Java platform threads each reserving a configured 1 MiB stack. Roughly how much initial stack space is involved, ignoring all other overhead?",
+    "options": [
+      {
+        "text": "Go about 200 MB; Java about 100 GB reserved",
+        "explanation": "Correct to coarse rounding: the stated sizes give about 205 MB of initial goroutine stacks and 105 GB of platform-thread stack reservations. Reservation is distinct from committed resident pages, and other runtime/OS costs are excluded."
+      },
+      {
+        "text": "Both about 100 GB, because stacks are the same everywhere",
+        "explanation": "Goroutine stacks are managed by the Go runtime, not the OS. They start at a few kilobytes and grow by copying, so they are far smaller than OS thread stacks."
+      },
+      {
+        "text": "Go about 200 KB; Java about 100 MB",
+        "explanation": "Off by a factor of 1,000 in both cases: 100,000 × 2 KB is 200,000 KB, about 200 MB."
+      },
+      {
+        "text": "Go 0, because goroutines have no stack",
+        "explanation": "Every goroutine has its own stack; it is just small and growable."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Multiply the number of stacks by the size of each:\n\n```formula\nM_go = 100,000 × 2,048 B\nM_go = 204,800,000 B ≈ 205 MB\nM_java = 100,000 × 1,048,576 B\nM_java = 104,857,600,000 B ≈ 105 GB\nwhere\nM_go: total initial stack memory for the goroutines, in bytes (B)\nM_java: total stack address space reserved for the Java platform threads, in bytes\n100,000: the number of goroutines, or of threads\n2,048: a 2 KiB goroutine starting stack, in bytes (1 KiB = 1,024 bytes)\n1,048,576: a 1 MiB thread stack reservation, in bytes (1 MiB = 1,048,576 bytes)\nB: bytes\nMB: megabyte, 1,000,000 bytes\nGB: gigabyte, 1,000,000,000 bytes\n≈: approximately equal to (rounded)\nIn words: the goroutines start with about 205 MB of stack in total, while the threads reserve about 105 GB, roughly 500 times more.\n```\n The rounded answer is about 200 MB versus 100 GB. These are assumed sizes, not universal defaults or predictions of resident memory.",
+    "link": {
+      "title": "A Guide to the Go Garbage Collector — go.dev",
+      "url": "https://go.dev/doc/gc-guide"
+    }
+  },
+  {
+    "id": "gc-stack-heap-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For a materialized local Vec<i32> on a conventional target with 8-byte pointers and usize, use the standard pointer/length/capacity model. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The Vec value has pointer, length and capacity metadata: 24 bytes in this model",
+        "explanation": "The default-allocator Vec guarantees this triplet; field order is not promised and optimized locals need not occupy physical stack slots."
+      },
+      {
+        "text": "The three `i32` elements (12 bytes) live in a heap buffer owned by `v`",
+        "explanation": "True. `vec!` allocates a heap buffer and the `Vec` owns it."
+      },
+      {
+        "text": "The vector's heap buffer is freed when the garbage collector next runs",
+        "explanation": "False. This Vec owns its buffer and normally releases it when dropped; it does not await a tracing collector. Intentional leaks and abort paths need not run Drop."
+      },
+      {
+        "text": "`let w = v;` copies the 24-byte header, not its heap buffer, and `v` can no longer be used",
+        "explanation": "True. This is a move: the pointer, length and capacity are copied into `w`, ownership transfers, and the compiler rejects later uses of `v` so its heap buffer is never freed twice."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Draw the layout:\n\n```\n stack (v)        heap\n +-----------+    +---+---+---+\n | ptr  -----+--> | 1 | 2 | 3 |\n | len = 3   |    +---+---+---+\n | cap = 3   |     12 bytes\n +-----------+\n  3 x 8 = 24 bytes\n```\n\n1. Three words on the stack: 24 bytes.\n2. Three 4-byte integers on the heap: 12 bytes.\n3. Freeing happens when the owner's scope ends, with no GC.\n4. `let w = v;` copies the three words and marks `v` as moved. Only `w` will free its heap buffer.\n\nThe two sizes, as a calculation:\n\n```formula\nS_header = 3 × 8 B = 24 B\nS_buffer = 3 × 4 B = 12 B\nwhere\nS_header: the size of the Vec value itself (pointer, length, capacity), in bytes (B)\nS_buffer: the size of its heap buffer holding the elements, in bytes\n3: three header fields in the first line; three elements in the second\n8: the size of a pointer or usize on a 64-bit target, in bytes\n4: the size of one i32 (a 32-bit integer), in bytes\nB: bytes\nIn words: the Vec's header is three 8-byte words, 24 bytes, while the three 4-byte integers it owns take 12 bytes on the heap.\n```\n\nThis describes the ownership/layout model; the compiler can eliminate physical copies or allocations when observable behavior is preserved.",
+    "link": {
+      "title": "What is ownership? — The Rust Book",
+      "url": "https://doc.rust-lang.org/book/ch04-01-what-is-ownership.html"
+    }
+  }
+]

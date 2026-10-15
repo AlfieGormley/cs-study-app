@@ -1,0 +1,100 @@
+[
+  {
+    "id": "gc-tracing-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why do generational collectors need a write barrier?",
+    "options": [
+      {
+        "text": "To stop two threads writing the same field at once",
+        "explanation": "That is a lock or atomic operation. Write barriers exist for the collector's bookkeeping, not mutual exclusion."
+      },
+      {
+        "text": "To prevent writes to objects in the old generation",
+        "explanation": "Old objects are written to constantly; the barrier just notes those writes."
+      },
+      {
+        "text": "To count references to each object, like reference counting",
+        "explanation": "Card marking records *where* a pointer was written, not how many references each object has."
+      },
+      {
+        "text": "To record old-to-young pointers, so a minor GC can treat them as roots without scanning the whole old generation",
+        "explanation": "Correct. A young object referenced only from an old object would otherwise be freed by a minor GC that ignores the old generation."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. A minor GC traces only the young generation.\n2. Problem: `oldMap.put(k, new Value())`. The new `Value` is young and reachable only from `oldMap`, which is old.\n3. Without help, the minor GC would miss it and free a live object.\n4. Scanning the whole old generation each minor GC would make it as slow as a full GC.\n5. The write barrier marks the affected card (512 bytes in a common HotSpot configuration) containing the updated field. The minor GC scans only dirty cards as extra roots.\n\nCost: barrier work on relevant stores; costs and elimination depend on the collector and compiler.",
+    "link": {
+      "title": "HotSpot GC implementation — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-collector-implementation.html"
+    }
+  },
+  {
+    "id": "gc-tracing-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A JVM application keeps a 20 GB in-memory cache of long-lived objects. Its minor GCs are getting slower even though the young generation size hasn't changed. Which explanation fits best?",
+    "options": [
+      {
+        "text": "The cache is constantly updated with references to new objects, dirtying many cards that each minor GC must scan as roots",
+        "explanation": "Correct. Every old-to-young pointer store marks a card. A large, churning old-generation structure means many dirty cards, and scanning them adds to every minor pause."
+      },
+      {
+        "text": "The young generation is copying the 20 GB cache every time",
+        "explanation": "Long-lived cache entries were promoted to the old generation long ago and aren't copied by minor GCs."
+      },
+      {
+        "text": "Minor GCs always scan the entire heap",
+        "explanation": "Avoiding that is the whole point of generations and card tables."
+      },
+      {
+        "text": "The write barrier has been disabled",
+        "explanation": "Write barriers can't be turned off in a generational collector; they are what makes it correct."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A minor GC's work is tracing the young survivors plus scanning the **dirty cards** in the old generation.\n2. A cache that keeps storing fresh young objects into old structures dirties cards across the 20 GB.\n\n```formula\nN_cards = M_old / c\nN_cards = 20 GB / 512 B ≈ 40,000,000\nN_dirty = d × N_cards\nN_dirty = 0.01 × 40,000,000 = 400,000\nwhere\nN_cards: the number of cards covering the old generation\nM_old: the old generation's size, 20 GB\nc: the card size, 512 bytes (B) in a common HotSpot configuration\nN_dirty: the number of dirty cards a minor GC must scan\nd: the fraction of cards dirtied since the last minor GC; 1% = 0.01 here\nGB: gigabyte, 1,000,000,000 bytes (20 GB ÷ 512 B is 39 million; with 2^30-byte gigabytes it is 42 million, so \"about 40 million\" either way)\nB: bytes\n≈: approximately equal to\nIn words: a 20 GB old generation is about 40 million cards, so even if only 1% are dirty, every minor GC has about 400,000 cards to scan.\n```\n\n3. Each dirty card must be scanned for pointers into the young generation, so pause time grows with cache churn, not just young size.\n\nRemedies: store values off-heap or in primitive arrays, reduce churn, or use a collector designed for big heaps (the later ZGC relocation and Go marking unit).\n\nThe card calculation assumes 512-byte granularity; collector settings and remembered-set refinement can change the actual work. This is one plausible cause, not a diagnosis established from heap size alone.",
+    "link": {
+      "title": "HotSpot GC implementation — Oracle",
+      "url": "https://docs.oracle.com/en/java/javase/21/gctuning/garbage-collector-implementation.html"
+    }
+  },
+  {
+    "id": "gc-tracing-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of the following correctly describe why classic tracing collectors stop the world, and at safepoints specifically? Select all that apply.",
+    "options": [
+      {
+        "text": "If the program changes pointers while the collector traces, a live object could be missed and freed",
+        "explanation": "Correct. A mutator could move the only pointer to a not-yet-visited object into an already-visited one. Concurrent collectors need extra barriers to prevent this (explained in the later marking-barriers unit)."
+      },
+      {
+        "text": "Moving collectors must update every pointer to a moved object, including those in stacks and registers",
+        "explanation": "Correct. If threads kept running they could use stale addresses mid-move."
+      },
+      {
+        "text": "At a safepoint, the compiler has recorded which stack slots and registers hold pointers",
+        "explanation": "Correct. Stack maps exist only at specific points (calls, loop back-edges), so threads are brought to one before the collector reads their stacks."
+      },
+      {
+        "text": "Safepoints are needed only for reference counting",
+        "explanation": "Safepoints are not exclusive to reference counting. Simple eager counting need not scan stacks, while deferred-counting implementations can reconcile stack references at safe points; tracing and JIT runtimes also use them."
+      },
+      {
+        "text": "Stop-the-world pauses are always shorter than 1 ms",
+        "explanation": "Full compactions of large old generations can take seconds. Short pauses are what concurrent collectors are for."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "1. Correctness: tracing assumes the graph doesn't change under it. A concurrent change can hide a live object. True.\n2. Moving: every reference must be rewritten; running threads would see half-moved state. True.\n3. Safepoints: the JIT emits pointer maps at chosen points; threads poll and park there. True.\n4. Reference counting: no. False.\n5. Always under 1 ms: no. False.\n\nSo the classic design pays for simplicity with pauses that grow with the work.",
+    "link": {
+      "title": "Tracing garbage collection — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Tracing_garbage_collection"
+    }
+  }
+]

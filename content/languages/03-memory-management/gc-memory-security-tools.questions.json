@@ -1,0 +1,100 @@
+[
+  {
+    "id": "gc-manual-memory-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your team runs its C test suite under AddressSanitizer and it reports no errors. Which conclusions are justified? Select all that apply.",
+    "options": [
+      {
+        "text": "The code paths the tests executed had no detected overflows or use-after-free bugs",
+        "explanation": "Correct. ASan checks the accesses that actually happen while it runs."
+      },
+      {
+        "text": "The program is now free of memory-safety bugs",
+        "explanation": "Sanitizers are dynamic: they only see the paths you exercise. Bugs in untested branches or on unusual inputs remain."
+      },
+      {
+        "text": "Fuzzing the parser under ASan is a sensible next step",
+        "explanation": "Correct. Fuzzers generate the odd inputs that reach untested paths, and ASan turns silent corruption into a crash with a stack trace."
+      },
+      {
+        "text": "Running under ASan in production is free, so you should leave it on",
+        "explanation": "ASan typically roughly doubles run time and uses noticeably more memory. Most teams use it in testing and fuzzing, not production."
+      },
+      {
+        "text": "Sound memory-safe abstractions can prevent these bug classes through static and/or runtime enforcement",
+        "explanation": "Correct, subject to their safe-subset and implementation assumptions. Java/Go bounds checks and Rust static borrows are different mechanisms; not all prevention is static."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. ASan instruments relevant memory accesses and uses poisoned redzones and other metadata to detect supported failures in exercised code.\n2. A clean run means no error was detected on those inputs and instrumented paths; incomplete coverage can still hide defects.\n3. Fuzzing can explore additional inputs while a sanitizer makes detected corruption visible.\n4. Clang documents a typical slowdown around twofold; actual CPU and memory overhead depend on the program and configuration.\n5. Sound safe-language abstractions enforce defined classes of validity rules statically or at run time, subject to their safe-subset and implementation assumptions.",
+    "link": {
+      "title": "AddressSanitizer — Clang documentation",
+      "url": "https://clang.llvm.org/docs/AddressSanitizer.html"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An attacker can make a server free an object containing a function pointer while a dangling pointer to it survives, and can then send a packet whose payload is copied into a newly allocated block of the same size. Why is this so dangerous?",
+    "options": [
+      {
+        "text": "It only causes a crash, because freed memory is unmapped from the process",
+        "explanation": "Small freed blocks stay mapped and are recycled by the allocator. They are not unmapped, so they can be reused with new contents."
+      },
+      {
+        "text": "It leaks the old object's memory, eventually exhausting the heap",
+        "explanation": "The memory is reused, not leaked. The problem is aliasing, not growth."
+      },
+      {
+        "text": "It is harmless if the server uses `calloc`, which zeroes memory",
+        "explanation": "`calloc` zeroes the new block at allocation, but the attacker then fills it with their payload. Zeroing does not stop the aliasing."
+      },
+      {
+        "text": "The new block can occupy the freed slot, so the next call through the dangling pointer jumps to an address the attacker chose",
+        "explanation": "Correct. This is the classic use-after-free exploitation pattern: reclaim the slot with controlled bytes, then let the program use its stale pointer to call or write somewhere useful to the attacker."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "If the allocator reuses the freed slot, attacker-controlled bytes can replace a stored callback address. A later call through the dangling pointer can then redirect control flow unless mitigations stop it. Neither slot reuse nor successful code execution is guaranteed by C. Chromium’s cited historical analysis covered 912 high/critical bugs since 2015: about 70% involved memory unsafety, and about half of those were use-after-free.",
+    "link": {
+      "title": "Memory safety — Chromium security",
+      "url": "https://www.chromium.org/Home/chromium-security/memory-safety/"
+    }
+  },
+  {
+    "id": "gc-manual-memory-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You must choose a tool to find a suspected use-after-free in a third-party Linux binary for which you have no source code. Which is the better first choice?",
+    "options": [
+      {
+        "text": "Valgrind Memcheck, because it runs unmodified binaries on a simulated CPU",
+        "explanation": "Correct for a supported Linux binary and platform. Memcheck instruments the machine code dynamically, tracking memory accesses and allocation state without rebuilding; the documentation quotes a typical slowdown of roughly 20–30 times."
+      },
+      {
+        "text": "AddressSanitizer, because it is faster",
+        "explanation": "ASan normally needs compiler instrumentation and its runtime for general access checking. Runtime interposition can detect some external-library errors, but it does not comprehensively instrument an arbitrary existing binary; Memcheck fits this constraint better."
+      },
+      {
+        "text": "LeakSanitizer, because use-after-free is a kind of leak",
+        "explanation": "A use-after-free accesses storage after deallocation; a leak leaves an allocation unreclaimed. Standalone LeakSanitizer can work by linking its runtime without compiler access instrumentation, but it is a leak detector, not this use-after-free tool."
+      },
+      {
+        "text": "Neither; use-after-free can only be found by code review",
+        "explanation": "Dynamic tools find these routinely, with stack traces of the allocation, the free and the bad access."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Constraint: no source, so you cannot recompile with `-fsanitize=address`.\n2. Valgrind translates the binary's machine code as it runs, adding checks to each memory access.\n3. Trade-off table:\n\n| | ASan | Memcheck |\n|---|---|---|\n| Rebuild | yes | no |\n| Slowdown | ~2x | ~20-30x |\n\n4. So Memcheck is the pragmatic first choice here. If you could rebuild, ASan's speed lets you run far more tests and fuzzing.",
+    "link": {
+      "title": "Valgrind quick start guide",
+      "url": "https://valgrind.org/docs/manual/quick-start.html"
+    }
+  }
+]

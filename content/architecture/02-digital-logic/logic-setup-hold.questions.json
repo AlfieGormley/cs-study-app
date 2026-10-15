@@ -1,0 +1,92 @@
+[
+  {
+    "id": "logic-sequential-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two flip-flops have combinational logic between them. The maximum clock-to-Q delay is 40 ps, the slowest logic path is 560 ps, setup time is 25 ps and hold time is 20 ps. Assume hold is independently satisfied. Ignoring skew and jitter, what is the maximum frequency allowed by setup?",
+    "options": [
+      {
+        "text": "About 1.60 GHz",
+        "explanation": "Correct. The period must be at least 40 + 560 + 25 = 625 ps, and one cycle per 625 ps is 1.6 GHz."
+      },
+      {
+        "text": "About 1.67 GHz",
+        "explanation": "That is 1 / 600 ps, which forgets the setup time. The data must arrive t_su before the capturing edge, not just at it."
+      },
+      {
+        "text": "About 1.55 GHz",
+        "explanation": "That is 1 / 645 ps, which wrongly adds the hold time. Hold time appears in the separate hold constraint, not the setup (clock period) constraint."
+      },
+      {
+        "text": "About 1.74 GHz",
+        "explanation": "That is 1 / 575 ps, which leaves out the clock-to-Q delay. Data does not leave FF1 until t_cq after the edge."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Setup constraint:\n\n```formula\nT ≥ t_cq + t_{pd,max} + t_su\nT ≥ 40 ps + 560 ps + 25 ps = 625 ps\nf_max = 1 / T_min\nf_max = 1 / (625 × 10^{-12} s) = 1.6 GHz\nwhere\nT: the clock period\nT_min: the smallest allowed period, 625 ps\nt_cq: the clock-to-Q delay of the launching flip-flop, 40 ps\nt_{pd,max}: the slowest logic path, 560 ps\nt_su: the setup time of the capturing flip-flop, 25 ps\nf_max: the highest allowed clock frequency\n≥: greater than or equal to\nps: picoseconds, 10^-12 seconds\ns: seconds\nGHz: gigahertz, 10^9 cycles per second\nIn words: one period must fit launch, the slowest logic and setup, which is 625 ps, so the clock can run at up to 1.6 GHz.\n```\n\nHold time does not appear: it constrains the *fastest* path (the hold constraint), and has nothing to do with the period.",
+    "link": {
+      "title": "Static timing analysis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_timing_analysis"
+    }
+  },
+  {
+    "id": "logic-sequential-q6",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A new chip fails intermittently at every clock frequency, even at 1 MHz. Static timing analysis flags one path: the minimum clock-to-Q delay is 20 ps, the shortest logic delay is 5 ps, and the capturing flip-flop's hold time is 40 ps. Ignore clock skew and jitter. What is the right fix?",
+    "options": [
+      {
+        "text": "Lower the clock frequency further until the failures stop",
+        "explanation": "The clock period does not appear in the hold constraint, so no frequency fixes a hold violation. That is why it fails even at 1 MHz."
+      },
+      {
+        "text": "Use a faster flip-flop with a smaller clock-to-Q delay",
+        "explanation": "Reducing t_cq makes the new data arrive even sooner, which makes the hold violation worse, not better."
+      },
+      {
+        "text": "Insert delay buffers on the short path so that t_cq + t_pd(min) is at least 40 ps",
+        "explanation": "Correct. 20 + 5 = 25 ps < 40 ps. Adding at least 15 ps of delay on that path means the new value cannot reach FF2 before its hold window closes."
+      },
+      {
+        "text": "Add a two-flip-flop synchroniser",
+        "explanation": "Synchronisers deal with signals from another clock domain. This path is synchronous; the problem is a deterministic race, not metastability from an unrelated clock."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Check the hold constraint:\n\n```formula\nt_cq + t_{pd,min} ≥ t_h\n20 ps + 5 ps = 25 ps < 40 ps\nt_buf ≥ 40 ps − 25 ps = 15 ps\nwhere\nt_cq: the clock-to-Q delay of the launching flip-flop, 20 ps\nt_{pd,min}: the shortest logic delay, 5 ps\nt_h: the hold time of the capturing flip-flop, 40 ps\nt_buf: the extra delay that buffers must add to the short path\n≥: greater than or equal to; <: less than\nps: picoseconds, 10^-12 seconds\nIn words: the new data arrives 25 ps after the edge but must never arrive before 40 ps, so the path fails by 15 ps and needs at least 15 ps of added delay.\n```\n\n2. Meaning: on a clock edge, FF1's new output reaches FF2 25 ps later, while FF2 is still trying to hold its input steady (for 40 ps). FF2 may capture the new value instead of the old one.\n3. The clock period does not appear anywhere, so changing frequency cannot help.\n4. Fix: lengthen the short path with buffers (at least 15 ps), as place-and-route tools do automatically during hold fixing.\n\nAfter adding delay, recheck setup across operating corners and all affected paths; setup slack was not given in the question.",
+    "link": {
+      "title": "Static timing analysis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_timing_analysis"
+    }
+  },
+  {
+    "id": "logic-sequential-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "FF1 launches data to FF2 through logic. Because of wire delay in the clock tree, the clock edge reaches FF2 30 ps **later** than it reaches FF1. What does this skew do to the setup and hold constraints on this path?",
+    "options": [
+      {
+        "text": "It hurts both: the period must grow by 30 ps and the hold margin shrinks by 30 ps",
+        "explanation": "Late capture gives the data more time, so it helps setup. Only hold is hurt."
+      },
+      {
+        "text": "It has no effect, because both flip-flops see the same clock frequency",
+        "explanation": "Frequency is the same, but timing is measured edge to edge between the two flip-flops, and their edges are now 30 ps apart."
+      },
+      {
+        "text": "It helps setup (the data gets an extra 30 ps) but hurts hold (new data must now be held off for an extra 30 ps)",
+        "explanation": "Correct. The capturing edge moves later, so the slow path has more time, but the fast path's new data must never arrive until 30 ps further into the cycle."
+      },
+      {
+        "text": "It helps hold and hurts setup",
+        "explanation": "That is the effect of the opposite skew, where FF2's clock arrives earlier than FF1's."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Measure time from FF1's edge, with FF2's edge arriving s = 30 ps later.\n\n```formula\nt_cq + t_{pd,max} + t_su ≤ T + s\nt_cq + t_{pd,min} ≥ t_h + s\nwhere\nt_cq: the clock-to-Q delay of FF1\nt_{pd,max}, t_{pd,min}: the slowest and fastest logic delays between FF1 and FF2\nt_su, t_h: FF2's setup and hold times\nT: the clock period\ns: the skew: how much later the edge reaches FF2 than FF1, here +30 ps\n≤, ≥: less than or equal to; greater than or equal to\nIn words: the capturing edge is s later, so slow data has s more time (setup), but fast new data must also be held off s longer (hold).\n```\n\n1. Setup: data must arrive t_su before FF2's *next* edge, which is at T + s. A positive s loosens it by 30 ps.\n2. Hold: new data must never arrive before FF2's *current* edge (at s) plus t_h. A positive s tightens it by 30 ps.\n3. So late capture trades hold margin for setup margin. Tools sometimes skew clocks on purpose (\"useful skew\") to borrow time for a slow path, then fix hold with buffers.",
+    "link": {
+      "title": "Static timing analysis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Static_timing_analysis"
+    }
+  }
+]

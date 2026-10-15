@@ -1,0 +1,100 @@
+[
+  {
+    "id": "logic-datapath-memory-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Registers `a` and `b` start at a = 1, b = 2. After one rising clock edge, what do they hold?\n\n```verilog\nalways @(posedge clk) begin\n  // Run statements in source order.\n  a = b;\n  b = a;\nend\n```",
+    "options": [
+      {
+        "text": "a holds two and b holds one: they swap",
+        "explanation": "That is what the non-blocking assignment version (`<=`) does. With blocking `=`, the second line sees the already-updated `a`."
+      },
+      {
+        "text": "a = 1, b = 1",
+        "explanation": "This would happen if the lines ran in reverse order (`b = a` first). They run top to bottom, so `a` is updated first."
+      },
+      {
+        "text": "a = 2, b = 2",
+        "explanation": "Correct. `a = b` sets a to 2 immediately; `b = a` then copies the new a, so b stays 2. Both end up holding the old b."
+      },
+      {
+        "text": "a holds one and b holds two: no change until the next edge",
+        "explanation": "Assignments in a clocked block take effect at this edge. The only question is whether later lines see earlier updates."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Blocking `=` updates immediately, like a software variable:\n\n```\nstart:     a = 1, b = 2\na = b;  -> a = 2\nb = a;  -> b = 2  (reads new a)\n```\n\nIn this race-free swap fragment, each non-blocking `<=` evaluates its right-hand side when the statement runs; both updates occur in the later non-blocking-assignment region:\n\n```\nRHS: b = 2, a = 1\nthen: a <= 2, b <= 1   (swap)\n```\n\nReal flip-flops behave like `<=`: each samples its input from before the edge. That is why clocked blocks use `<=`.",
+    "link": {
+      "title": "Verilog — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Verilog"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A designer writes this to describe a simple mux-like block. What does synthesis build for `y`?\n\n```verilog\n// Each branch chooses a data input.\nalways @(*)\n  if (sel == 2'b00)      y = a;\n  else if (sel == 2'b01) y = b;\n  else if (sel == 2'b10) y = c;\n```",
+    "options": [
+      {
+        "text": "A 3-to-1 mux, with `y` = 0 when sel = 11",
+        "explanation": "Verilog does not default an unassigned output to 0. If no branch assigns `y`, it must keep its previous value."
+      },
+      {
+        "text": "A 4-to-1 mux with the fourth input left floating",
+        "explanation": "Synthesis does not leave inputs floating. To keep `y` unchanged for sel = 11 it needs storage."
+      },
+      {
+        "text": "A mux plus a transparent latch, because `y` must remember its old value when sel = 11",
+        "explanation": "Correct. With no assignment on that path, the code describes memory, and in a combinational block that means an inferred latch, with the timing problems latches bring."
+      },
+      {
+        "text": "A D flip-flop clocked by `sel`",
+        "explanation": "Nothing in the code refers to a clock edge, so no flip-flop is inferred. The storage is level-sensitive: a latch."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. In `always @(*)`, the block describes what `y` is for every input combination.\n2. List the paths: sel = 00, 01, 10 assign `y`. sel = 11 does not.\n3. Verilog semantics: an unassigned variable keeps its old value. Hardware that keeps an old value is memory.\n4. Synthesis therefore infers a latch enabled when sel ≠ 11. Tools usually warn (\"inferred latch for y\"), and the warning is easy to miss.\n\nFix by covering every path:\n\n```verilog\nelse y = 1'b0;   // or\n// defined default for valid inputs\n```",
+    "link": {
+      "title": "Logic synthesis — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Logic_synthesis"
+    }
+  },
+  {
+    "id": "logic-datapath-memory-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Look at the `two_ones` FSM module from the lesson (a clocked block for `state`, an `always @(*)` case statement for `next`, and `assign z = (state == S2)`). Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The two `always` blocks and the `assign` describe hardware that operates simultaneously, not code run in order",
+        "explanation": "True. Each describes a separate piece of hardware, all active at once. Their order in the file does not matter."
+      },
+      {
+        "text": "`next` becomes a register, because it is declared with `reg`",
+        "explanation": "False. `reg` is just a Verilog variable type. `next` is assigned in an `always @(*)` block on every path, so it synthesises to combinational logic. Only `state`, assigned on `posedge clk`, becomes flip-flops."
+      },
+      {
+        "text": "Without the default branch, RTL simulation at state 11 leaves next unassigned, creating unintended retention semantics",
+        "explanation": "True for RTL simulation: next retains its previous value on that path. Generic synthesis can infer a latch, but FSM extraction and unreachable-state optimization may transform it. A default supplies RTL recovery; physical recovery requires checking the synthesized FSM."
+      },
+      {
+        "text": "`z` is a Moore output",
+        "explanation": "True. It depends only on `state`, not on `x`, so it is Moore. Decoding state bits can glitch during transitions; the definition alone does not guarantee a glitch-free physical output."
+      },
+      {
+        "text": "The `case` statement is evaluated only at the rising edge of `clk`",
+        "explanation": "False. `always @(*)` re-evaluates whenever any signal it reads (`state` or `x`) changes. It is combinational logic that is always computing; only the `state` register waits for the edge."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Map the code to the FSM block diagram:\n\n```\nalways @(posedge clk) -> state reg\nalways @(*) case      -> next-state\nassign z              -> output\n```\n\n1. All three are concurrent hardware (A true).\n2. Whether something becomes a flip-flop depends on *how* it is assigned (on a clock edge), not on the keyword `reg` (B false).\n3. Every combinational output must be assigned on every path; `default` guarantees it (C true).\n4. `z = (state == S2)` uses only state: Moore (D true).\n5. The case block has no clock in its sensitivity list, so it responds to every change of `state` or `x` (E false).",
+    "link": {
+      "title": "Verilog — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Verilog"
+    }
+  }
+]

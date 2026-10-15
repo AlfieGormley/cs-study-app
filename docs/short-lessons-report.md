@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 37/76. Updated 2026-10-15.
+Verified modules: 38/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -44,6 +44,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | networks/Network Security | 6 | 36 | 67 | 40 | 371 | 514 | 46 |
 | networks/Wireless, Mobile & Modern Networks | 6 | 37 | 74 | 73 | 531 | 715 | 28 |
 | architecture/Data Representation | 6 | 37 | 76 | 60 | 393 | 566 | 52 |
+| architecture/Digital Logic | 6 | 34 | 74 | 233 | 261 | 602 | 14 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -3516,6 +3517,48 @@ Low-confidence areas:
 - **medium** — rep-struct-layout: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
 - **medium** — rep-packed-struct-risks: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
 - **medium** — rep-native-layout-performance: Platform, product, historical or performance-specific context. Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+
+## architecture: Digital Logic
+
+[Independent verification record](../content/architecture/02-digital-logic/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Fixed the lesson and original subtraction question: retained four-bit arithmetic is reduced modulo sixteen; an unreduced eighteen is no longer equated with two, nor fifteen with negative one.
+- Fixed three adder cards whose plus sign was wrongly defined as Boolean OR; their operands now use ordinary binary addition.
+- Bracketed both quiz timing substitutions before the picosecond unit, keeping the full arithmetic sum within that unit.
+- Replaced 113 generic formula-card readings with readings of the actual expression or proposed identity. Repaired sentences, bullet emphasis and punctuation split around mathematical cards; removed mathematical multi-bit products disguised as inline code.
+- Clarified Brent–Kung counting: eleven scheduled rows in the original buffered sixty-four-bit layout include forwarding; the longest unbuffered path contains ten combining cells. Independently checked the graph.
+- Qualified same-phase latch versus flip-flop shifting, asynchronous-reset deassertion, synchroniser reliability and statement-specific non-blocking scheduling; no fixed MTBF or universal hardware guarantee is implied.
+- Corrected a maxterm distractor label to row one while retaining the original answer key; the expression is still a distractor for the minterm question.
+- Clarified that unused instruction encodings are not automatically allowed don’t-cares: required illegal-instruction behaviour must still be implemented.
+- Corrected inherited dictionary meanings for active-low assertion, active-high decoder assumptions, general latches, combinational settling, feedback, hardware counters, programme-counter instruction address and finite-width two’s-complement negation.
+- Narrowed ordinary consensus and latch-transparent/opaque aliases; open-drain now reuses the existing output definition rather than opening wired-OR wiring. Added a precise open-collector output entry.
+- Qualified activity factors, capacitive versus other dynamic power, drive strength, multiported-register costs, row-buffer latency, FPGA configuration, VHDL/Verilog event sensitivity and topology assumptions.
+- Used the independently fetched original Shannon paper’s confirmed 1938 publication date rather than repeating an uncorroborated exact thesis year; retained the switching-circuit connection. Boole’s publication dates and Karnaugh’s 1953 Bell Labs attribution were independently corroborated.
+- Corrected RISC-V source labels that claimed to be MIT notes; added directly relevant primary Boole, Karnaugh and BOOM references.
+- Coordinated with the different Data Representation verifier to broaden the earlier-owned winning register definition and prevent hardware-register phrases from opening a device-controller status-register entry.
+
+Remaining gaps:
+
+- No substantive original concept, worked example or drawing omitted; all twelve original archive files, seventy-two question contracts, four Python ASTs, four HDL token sequences and thirty-seven drawing/table/trace bodies are preserved.
+- No transistor SPICE model, cell library, actual silicon timing, static timing closure, device-specific synchroniser MTBF, FPGA synthesis/place-and-route or physical SRAM/DRAM/Rowhammer experiment. Numerical gate, power and refresh examples remain explicitly illustrative.
+- Original-paper scanned figures were inspected visually where automatic extraction was empty; structural/model execution proves bounded functional examples rather than analog behaviour or universal synthesis recovery.
+
+Low-confidence areas:
+
+- **medium** — logic-universal-gates: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-cmos-networks: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-gate-delay-power: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-shared-bus-safety: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-prefix-carrysave: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-cdc-metastability: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-fsm-design: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-register-file: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-single-cycle-control: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-sram-array: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-dram-refresh: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- **medium** — logic-verilog-fsm-scheduling: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications.. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
 
 ## synth: Sound & Digital Audio
 

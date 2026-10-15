@@ -1,0 +1,130 @@
+[
+  {
+    "id": "dl-fundamentals-q4",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these can deadlock? Select all that apply.",
+    "options": [
+      {
+        "text": "A single thread calls `acquire()` twice on the same `threading.Lock`",
+        "explanation": "Correct. `Lock` is not reentrant: the second `acquire()` waits for the lock to be released, but in this single-thread scenario nobody else releases it. That is self-deadlock."
+      },
+      {
+        "text": "A single thread calls `acquire()` twice on the same `threading.RLock`",
+        "explanation": "An `RLock` is reentrant: it records its owner and a count, so the owner can acquire it again. It must release it twice, but it does not block."
+      },
+      {
+        "text": "Tasks on a `ThreadPoolExecutor(max_workers=2)` each submit a sub-task to the same pool and wait for its result",
+        "explanation": "Correct. If both workers are running outer tasks that wait on sub-tasks, the sub-tasks sit in the queue with no free worker to run them. The workers are the scarce resource."
+      },
+      {
+        "text": "Four threads read a shared dictionary that is never modified, with no locks",
+        "explanation": "Reading immutable data needs no exclusion, so mutual exclusion does not hold and nothing waits. No deadlock is possible."
+      },
+      {
+        "text": "A parent writes a large input to a child's stdin before reading any of its stdout",
+        "explanation": "Correct. Once the child's stdout pipe buffer fills, the child blocks writing and stops reading stdin. The parent then blocks writing to the full stdin pipe. Each waits for the other."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Check each case for a wait cycle.\n\n1. `Lock` twice: thread T waits for the lock, held by T. A cycle of length one. Deadlock.\n2. `RLock` twice: the lock sees T is the owner and increments a counter. No wait. Safe.\n3. Pool of 2: both workers wait on futures; the futures wait for a worker. Cycle: workers → queued tasks → workers. Deadlock (once both workers are busy with outer tasks).\n4. Immutable reads: nobody waits for anything. Safe.\n5. Pipes: parent waits for space in the stdin pipe (needs the child to read); child waits for space in the stdout pipe (needs the parent to read). Deadlock. Python's `Popen.communicate()` avoids it by reading and writing concurrently.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this program do?\n\n```python\nfrom concurrent.futures import (\n    ThreadPoolExecutor)\n\nfrom threading import Barrier\n\npool = ThreadPoolExecutor(max_workers=2)\nready = Barrier(2)\n\ndef inner(x):\n    return x * 2\n\ndef outer(x):\n    ready.wait()\n    f = pool.submit(inner, x)\n    # This worker waits for queued pool\n    # work.\n    return f.result()\n\na = pool.submit(outer, 1)\nb = pool.submit(outer, 2)\nprint(a.result() + b.result())\n```",
+    "options": [
+      {
+        "text": "Prints 6",
+        "explanation": "That would be the answer if a third worker were free to run the `inner` tasks. Both workers are busy running `outer`."
+      },
+      {
+        "text": "Hangs: both workers wait for inner jobs with no free worker",
+        "explanation": "Correct. Both workers pick up an `outer` task and block in `f.result()`. The two `inner` tasks wait in the queue for a free worker, which never comes."
+      },
+      {
+        "text": "Raises `RuntimeError` because you cannot submit from inside a pool",
+        "explanation": "Submitting from a worker is allowed. The problem is waiting on the result while occupying a worker."
+      },
+      {
+        "text": "Prints 6, because `f.result()` runs `inner` inline on the calling thread",
+        "explanation": "`Future.result()` only waits; it never runs the task itself. (Some frameworks have work-stealing pools that do help in this case, but `ThreadPoolExecutor` doesn't.)"
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The barrier ensures both workers enter outer before either submits inner work. Both then submit children and wait for results, still occupying the only two workers. No worker is free to execute either child. Separate executors or a nonblocking composition avoids this dependency cycle; extra capacity only helps if nesting and concurrency remain bounded.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A shutdown routine does this:\n\n```python\ndef shutdown():\n    with state_lock:\n        state.closing = True\n        # Worker exit may need this held\n        # lock.\n        worker.join()\n\ndef worker_loop():\n    while True:\n        job = q.get()\n        if job is None:\n            with state_lock:\n                log_final(state)\n            return\n        run(job)\n```\n\nShutdown puts `None` on `q` before calling `shutdown()`. Assume shutdown acquires state_lock before the worker handles the sentinel. Why does this execution hang?",
+    "options": [
+      {
+        "text": "`q.get()` blocks forever because `None` is not a valid queue item",
+        "explanation": "`queue.Queue` accepts any object, including `None`; using `None` as a sentinel is a common pattern."
+      },
+      {
+        "text": "`state_lock` is not reentrant, so `shutdown` deadlocks with itself",
+        "explanation": "`shutdown` takes `state_lock` only once. The second acquisition is by a different thread, the worker."
+      },
+      {
+        "text": "The main thread holds `state_lock` while waiting for the worker to exit, and the worker needs `state_lock` to exit",
+        "explanation": "Correct. `join()` waits for the worker; the worker waits for `state_lock`, held by the thread calling `join()`. The thread's exit is the second 'resource' in the cycle."
+      },
+      {
+        "text": "Only one lock is involved, so it can't be a deadlock; the worker is just slow",
+        "explanation": "A deadlock needs a cycle of waits, not two locks. Here one edge is a lock and the other is a `join()`. Neither side can ever proceed."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. List the waits:\n   - Main holds `state_lock` and blocks in `worker.join()`, waiting for the worker to finish.\n   - Worker reads the sentinel and blocks in `with state_lock`, waiting for main to release it.\n2. Cycle: main → (worker's exit) → worker → (`state_lock`) → main.\n3. Waiting on a thread's exit behaves like requesting a resource the thread will \"release\" when it finishes.\n4. Fix: release the lock before joining:\n\n```python\ndef shutdown():\n    with state_lock:\n        state.closing = True\n    # Join after leaving the protected\n    # state.\n    worker.join()\n```\n\n5. General rule: never block on anything (join, a future, a queue, I/O) while holding a lock that the thing you're waiting for might need.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A Linux Python parent sends 10 MB to cat through stdin=PIPE and stdout=PIPE, writing all input before reading output. Assume the combined finite pipe and cat buffers hold less than 10 MB, with no other readers or failures. What happens?",
+    "options": [
+      {
+        "text": "It works: the kernel buffers the full 10 MB in the pipe",
+        "explanation": "The question assumes total buffering below the payload size. Linux pipe capacity varies with page size, limits and tuning; do not hard-code 64 KiB."
+      },
+      {
+        "text": "It works, but slowly, because `cat` writes in small chunks",
+        "explanation": "The issue is not speed. Nobody reads `cat`'s stdout until the write finishes, so `cat` eventually stops reading."
+      },
+      {
+        "text": "It raises `BrokenPipeError` when the buffer fills",
+        "explanation": "`BrokenPipeError` happens when the reader has *closed* its end. Here `cat` is alive and still has the pipe open; it is just not reading."
+      },
+      {
+        "text": "It hangs once the pipes and `cat`'s own buffer are full, long before 10 MB is sent",
+        "explanation": "Correct. `cat` copies stdin to stdout. Once the stdout pipe fills, `cat` blocks writing and stops reading stdin; that pipe fills and the parent's `write` blocks. Each waits for the other."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The parent fills stdin while cat copies to stdout. Once stdout buffering fills, cat stops reading; stdin then fills and the parent stops writing. Neither reaches the read/release the other needs. communicate(data) coordinates input and output, avoiding this ordinary pipe cycle. Actual capacity and the byte count at which blocking occurs are platform-dependent.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dl-prevention-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In this function, what does `b.acquire(blocking=False)` do if another thread holds `b`?\n\n```python\ndef lock_both(a, b):\n    while True:\n        a.acquire()\n        if b.acquire(blocking=False):\n            return\n        # Release before another\n        # acquisition try.\n        a.release()\n        time.sleep(random.random()/100)\n```",
+    "options": [
+      {
+        "text": "Blocks until `b` is free, then returns `True`",
+        "explanation": "That is what `acquire()` does with the default `blocking=True`. With `blocking=False` it never waits."
+      },
+      {
+        "text": "Returns `False` immediately, so the thread releases `a` and retries",
+        "explanation": "Correct. A non-blocking acquire returns at once with `False` when the lock is held. The thread gives back `a`, sleeps briefly, and starts again, so it never waits while holding a lock."
+      },
+      {
+        "text": "Raises a `RuntimeError` because the lock is owned by another thread",
+        "explanation": "A failed try-acquire returns False. Python Lock.release raises RuntimeError if the lock is unlocked, not merely because another thread acquired it: primitive Lock has no owner."
+      },
+      {
+        "text": "Steals `b` from the other thread",
+        "explanation": "A try-acquire never releases another acquisition. For primitive Python Lock a different thread can call release, but doing so here would violate the coordination protocol."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "The try-acquire returns False without waiting, then a is released before retry. Under the assumption of no other held locks, this removes blocking hold-and-wait for the pair. It does not forcibly take a resource from another holder. Random delay reduces lockstep retries but guarantees neither bounded waiting nor success.",
+    "link": {
+      "title": "pthread_mutex_trylock — man7.org",
+      "url": "https://man7.org/linux/man-pages/man3/pthread_mutex_trylock.3p.html"
+    }
+  },
+  {
+    "id": "dl-prevention-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two threads call try-lock code **without** the random sleep:\n\n```python\ndef lock_both(x, y):\n    while True:\n        x.acquire()\n        if y.acquire(blocking=False):\n            return\n        # No sleep: retries can stay in\n        # step.\n        x.release()\n```\n\nThread 1 calls `lock_both(a, b)` and thread 2 calls `lock_both(b, a)`. On a multicore machine, what is the main risk?",
+    "options": [
+      {
+        "text": "Livelock: both threads repeatedly take one lock, fail on the other, release and retry, without progress",
+        "explanation": "Correct. If the threads run in step on two cores, each keeps finding the other's lock taken. They burn CPU but get nowhere. Random back-off breaks the symmetry."
+      },
+      {
+        "text": "Deadlock, because both threads may hold one lock each",
+        "explanation": "Each thread may hold one lock briefly, but it never *waits* while holding it: a failed try-lock releases it at once. Deadlock is impossible."
+      },
+      {
+        "text": "A `RuntimeError` from releasing a lock twice",
+        "explanation": "Each `release()` follows its own successful `acquire()`, so nothing is released twice."
+      },
+      {
+        "text": "No risk: try-lock code is always correct",
+        "explanation": "It is safe from deadlock, but not from livelock. That's why real implementations add randomised back-off."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Picture both threads on separate cores, perfectly in step:\n\n```\nT1: take a     T2: take b\nT1: try b: no  T2: try a: no\nT1: drop a     T2: drop b\nT1: take a     T2: take b\n... repeat ...\n```\n\n2. Neither thread ever *waits* while holding a lock, so this isn't deadlock.\n3. But neither makes progress either: that is **livelock**, and CPU use is high.\n4. Timing variation may break this pattern, but it does not guarantee eventual progress.\n5. Mitigations: random back-off (`time.sleep(random.uniform(0, d))`, growing `d` on repeated failure), or just use lock ordering where possible.",
+    "link": {
+      "title": "pthread_mutex_trylock — man7.org",
+      "url": "https://man7.org/linux/man-pages/man3/pthread_mutex_trylock.3p.html"
+    }
+  }
+]

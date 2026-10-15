@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dl-fundamentals-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Two threads run this code, with `t1` calling `transfer(a, b)` and `t2` calling `transfer(b, a)`:\n\n```python\ndef transfer(src, dst):\n    # Opposite transfers choose opposite\n    # locks.\n    with src.lock:\n        with dst.lock:\n            move_money(src, dst)\n```\n\nThe scheduler runs: t1 locks `a`; t2 locks `b`; t1 tries to lock `b`; t2 tries to lock `a`. What happens?",
+    "options": [
+      {
+        "text": "Both threads block forever: a deadlock",
+        "explanation": "Correct. t1 holds a and waits for b; t2 holds b and waits for a. Each waits for the other to release, which never happens because each release is at the end of a `with` block that cannot be reached."
+      },
+      {
+        "text": "t1 wins because it started first, and t2 proceeds after it",
+        "explanation": "Starting first gives no priority. t1 is blocked on b, which t2 holds; t1 cannot finish, so it never releases a for t2. Order of arrival does not break the cycle."
+      },
+      {
+        "text": "Python raises a `DeadlockError` in one of the threads",
+        "explanation": "Python's `threading.Lock` has no deadlock detection. A plain `acquire()` with no timeout waits forever; nothing is raised."
+      },
+      {
+        "text": "The GIL serialises the threads, so the deadlock cannot happen",
+        "explanation": "The GIL protects interpreter internals, not your locks. A thread blocked in `acquire()` releases the GIL, and the other thread runs and blocks too. The interleaving described is entirely possible."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Write down what each thread holds and wants after the four steps:\n\n| Thread | Holds | Wants |\n|---|---|---|\n| t1 | a | b |\n| t2 | b | a |\n\n2. t1 can only release `a` by leaving the outer `with`, which needs the inner `with` (lock `b`) to finish first.\n3. Likewise t2 can only release `b` after it gets `a`.\n4. Each is waiting on the other: a cycle t1 → t2 → t1. With single-instance locks, a cycle is a deadlock.\n5. Primitive Lock supplies no deadlock detector. These two blocked threads consume little CPU while waiting; other threads in the process may still run.",
+    "link": {
+      "title": "OSTEP: Common Concurrency Problems (PDF)",
+      "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/threads-bugs.pdf"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A system requires each thread to request **every** lock it will ever need in one atomic call before it starts work, and it is granted all of them or none. Which Coffman condition does this rule remove?",
+    "options": [
+      {
+        "text": "Mutual exclusion",
+        "explanation": "Each lock is still held by one thread at a time; the rule does not make resources shareable."
+      },
+      {
+        "text": "No preemption",
+        "explanation": "Nothing is taken away from a holder by force. The rule changes how locks are requested, not whether they can be revoked."
+      },
+      {
+        "text": "Hold and wait",
+        "explanation": "Correct. A thread never holds some locks while waiting for others: it waits while holding nothing, then gets everything at once."
+      },
+      {
+        "text": "Circular wait only, because the locks are taken in a fixed order",
+        "explanation": "The rule says nothing about order. It removes circular wait indirectly, but the condition it directly breaks is hold and wait: no thread is ever holding while waiting."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Recall the four conditions: mutual exclusion, hold and wait, no preemption, circular wait.\n2. Ask, for each, whether the rule changes it:\n   - Locks are still exclusive: mutual exclusion holds.\n   - Locks are never forcibly removed: no preemption holds.\n   - A waiting thread holds *nothing*, because it gets all its locks in one go or none: hold and wait is gone.\n3. Since all four are necessary, breaking hold and wait is enough to make deadlock impossible.\n4. The cost: threads must know all their locks up front and hold them longer than needed, which hurts concurrency.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  }
+]

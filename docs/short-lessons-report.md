@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 24/76. Updated 2026-10-15.
+Verified modules: 25/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -30,7 +30,8 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Problem-Solving Patterns | 8 | 42 | 89 | 77 | 105 | 313 | 189 |
 | dsa/Advanced Structures & Algorithms | 7 | 49 | 84 | 124 | 144 | 476 | 70 |
 | os/OS Basics & Processes | 6 | 29 | 68 | 25 | 467 | 611 | 171 |
-| os/Threads & Scheduling | 6 | 31 | 67 | 55 | 232 | 404 | 45 |
+| os/Threads & Scheduling | 6 | 31 | 67 | 55 | 232 | 411 | 48 |
+| os/Deadlock & Liveness | 6 | 32 | 66 | 32 | 167 | 514 | 47 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -2916,6 +2917,9 @@ The audio request therefore has the earlier deadline in that comparison. At late
 - In the preceding feedback-trace unit, B uses 2 ms per burst.
 - | 2.4 | O(n): scan runnable tasks |
 - summary: N:1 cannot
+- Identify POSIX immediate protection separately from the original system-ceiling admission protocol.
+- The unchanged option statements test immediate ceiling semantics; make that context explicit.
+- POSIX specifies immediate maximum priority, including owned mutex ceilings, independent of waiters; no universal reduction in priority changes follows.
 
 Remaining gaps:
 
@@ -2945,6 +2949,91 @@ Low-confidence areas:
 - **medium** — sched-container-weights-quotas: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
 - **medium** — sched-container-throttle-latency: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
 - **medium** — sched-container-runtime-cpu-count: Version/configuration-sensitive scheduler/runtime behaviour or workload-dependent performance; ideal model and measurement limits are stated.. Pinned source checks support mechanisms; deployment versions, tunables, topology and workload can differ.
+
+## os: Deadlock & Liveness
+
+[Independent verification record](../content/os/04-deadlock/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Remove a duplicate expression introduced by implicit-product conversion.
+- POSIX PROTECT uses the maximum across owned protected mutexes and the thread priority, not an unconditional assignment to one mutex ceiling.
+- The Go threshold is assessed by a waking waiter; it is not an independent wall-clock timer.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Independent question precision, formula/fence and prerequisite review; details in review log.
+- Place the question after its resource-graph or strict-order prerequisites.
+- Place the question after its resource-graph or strict-order prerequisites.
+- Place the question after its resource-graph or strict-order prerequisites.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Independent glossary claim, scope or alias correction against fetched primary sources.
+- Precise code-path wording and eating utensils avoid filesystem-path and process-fork dictionary senses.
+- Keep execution paths and application-cache graph labels linked to the right dictionary meaning.
+- Precise code-path wording and eating utensils avoid filesystem-path and process-fork dictionary senses.
+- Keep execution paths and application-cache graph labels linked to the right dictionary meaning.
+- Keep execution paths and application-cache graph labels linked to the right dictionary meaning.
+- DFS path must not open the filesystem pathname definition.
+- Local names, dictionary precision or version-dependent wording.
+- Local names, dictionary precision or version-dependent wording.
+- Local names, dictionary precision or version-dependent wording.
+- Local names, dictionary precision or version-dependent wording.
+- Remove unsupported universals about prevalence, feasibility and runtime cost; retain the design trade-off.
+- Remove unsupported universals about prevalence, feasibility and runtime cost; retain the design trade-off.
+- Do not imply that configuring POSIX immediate protection installs the original priority-ceiling admission protocol.
+
+Remaining gaps:
+
+- No production contention, fairness, lock-handoff timing, physical Ethernet or spacecraft measurements are supplied. Numeric timing diagrams are specified model schedules, not measured latency.
+- No live privileged kernel lockdep/hung-task/SysRq operation or arbitrary process inspection was performed. Diagnostic dumps and command examples are illustrative/abridged; host-global settings were unchanged.
+- All 35 actual native fragments ran with explicit fixtures. PostgreSQL 18 was exercised, while MySQL 8.4 and SQL Server policies were verified in fetched official documentation/source rather than live servers. Java/Go tool statements are sourced rather than presented as executions of absent Java/Go code.
+- Finite exhaustive/random state checks validate the teaching algorithms and demonstrated boundary cases; they do not prove general production lock implementations or progress under arbitrary scheduling.
+- No reproducible Banker runtime benchmark or production adoption survey is supplied; the explicit content-gap notes and complexity-versus-measurement distinction remain.
+- Three additional exploratory verification URLs returned 404 and were not used as evidence: guessed OS10 slides, obsolete vm/overcommit path and an AWS blog path. Working primary replacements were fetched. All 135 current content source URLs and all 45 reading/question links load.
+- Whole-app phone rendering, date migrations, PWA/offline and publication remain root integration tasks.
+
+Low-confidence areas:
+
+- **medium** — dl-avoidance-bankers-limits: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-debugging-lockdep: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-debugging-managed-dumps: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-debugging-native-dumps: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-debugging-tools-design: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-detection-recovery-engine-policy: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-detection-recovery-timestamp-order: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-detection-recovery-victim-policy: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-detection-recovery-whole-retry: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-fundamentals-database-symptoms: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-fundamentals-dependencies: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-livelock-starvation-fairness: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-livelock-starvation-priority-ceilings: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-livelock-starvation-priority-inheritance: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-livelock-starvation-retry-storms: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-prevention-hierarchy: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — dl-prevention-ordering: Version-, platform- or scheduling-dependent runtime behaviour and diagnostic/tool limits. Primary documentation/source and bounded native examples checked. Text states configuration, scheduling, release and tool-support assumptions; no complete production implementation proof or universal wall-clock bound is implied.
+- **medium** — glossary: Version-sensitive Go mutex thresholds, database defaults, kernel diagnostics, Apple donation and Abseil build-mode behaviour. Fetched official documentation/source supports current and named-version behaviour. Deployment version and configuration must still be checked; prior valid medium confidence retained.
 
 ## synth: Sound & Digital Audio
 

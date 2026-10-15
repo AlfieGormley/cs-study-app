@@ -1,0 +1,62 @@
+[
+  {
+    "id": "dl-fundamentals-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An on-call engineer finds a Java service has stopped responding. CPU use is near 0%, there are no errors in the log, and a thread dump shows 40 request threads all `BLOCKED` waiting to enter `synchronized` blocks. What is the most likely diagnosis?",
+    "options": [
+      {
+        "text": "A livelock",
+        "explanation": "Livelock involves repeated state changes without useful progress, but retries can include sleeping/backoff. High CPU is common, not required. Inspect the wait graph."
+      },
+      {
+        "text": "The garbage collector is running a long pause",
+        "explanation": "A GC pause and lock contention require different evidence. CPU level alone does not rule GC in or out; the monitor ownership and wait relationships are the relevant clues here."
+      },
+      {
+        "text": "A deadlock (or a thread holding a lock while stuck)",
+        "explanation": "Correct. Blocked threads sleep without using CPU. Many threads blocked on monitors with no progress points at a lock cycle, or at a lock holder stuck forever. The dump will show who holds each monitor."
+      },
+      {
+        "text": "Starvation of low-priority threads",
+        "explanation": "Starvation means some threads make no progress while others do. Here nothing is progressing at all."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Near-zero CPU and blocked stacks suggest persistent waiting, not proof of a cycle. Inspect a thread dump and determine who holds each needed resource. Java tools can report supported monitor/ownable-synchronizer cycles among platform threads. If no cycle is found, investigate slow holders, I/O and lost wakeups. Spinning deadlocks can instead use high CPU.",
+    "link": {
+      "title": "Deadlock (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Deadlock_(computer_science)"
+    }
+  },
+  {
+    "id": "dl-fundamentals-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Two PostgreSQL sessions, using default settings, interleave:\n\n```sql\n-- Fragment: use the stated session\n-- setup.\n-- S1\nUPDATE t SET v=1 WHERE id=1;\n-- S2\nUPDATE t SET v=2 WHERE id=2;\n-- S1\nUPDATE t SET v=1 WHERE id=2;\n-- S2\nUPDATE t SET v=2 WHERE id=1;\n```\n\nBoth are inside open transactions. What happens?",
+    "options": [
+      {
+        "text": "Both sessions hang until an administrator kills one",
+        "explanation": "PostgreSQL detects deadlocks itself. Waiting forever is what would happen with plain application mutexes, not with database row locks."
+      },
+      {
+        "text": "S2's second UPDATE fails immediately with a serialisation error",
+        "explanation": "PostgreSQL doesn't check for deadlock the instant a session blocks; it waits for `deadlock_timeout` first. And the error is a deadlock error (40P01), not a serialisation failure."
+      },
+      {
+        "text": "PostgreSQL silently merges the updates so both commit",
+        "explanation": "Each UPDATE needs a row lock held until commit. The database cannot merge two transactions' locks; one of them must give way."
+      },
+      {
+        "text": "After about a second, PostgreSQL aborts one transaction with `deadlock detected`; the other proceeds",
+        "explanation": "Correct. A blocked session waits `deadlock_timeout` (1 s by default), then runs the deadlock check, finds the cycle and aborts one transaction. The docs say which one is aborted is hard to predict."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. S1 locks row 1, S2 locks row 2.\n2. S1 wants row 2 (held by S2) and blocks. S2 wants row 1 (held by S1) and blocks. Cycle.\n3. PostgreSQL doesn't check for deadlock on every wait because the check is relatively expensive. Each blocked backend sets a timer for `deadlock_timeout` (default `1s`).\n4. When the timer fires, the backend checks the wait-for graph, finds the cycle and aborts a transaction with `ERROR: deadlock detected` (SQLSTATE `40P01`).\n5. The surviving transaction gets its row lock and continues. The application must handle the error; a safe bounded retry restarts the whole logical transaction.",
+    "link": {
+      "title": "PostgreSQL docs: Explicit Locking",
+      "url": "https://www.postgresql.org/docs/current/explicit-locking.html"
+    }
+  }
+]

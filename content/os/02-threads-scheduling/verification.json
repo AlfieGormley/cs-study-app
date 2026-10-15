@@ -144,13 +144,16 @@
       "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf",
       "https://www.postgresql.org/docs/18/runtime-config-resource.html",
       "https://www.usenix.org/legacy/event/bsdcon03/tech/full_papers/roberson/roberson.pdf",
-      "https://www.kernel.org/doc/html/v6.11/mm/numa.html"
+      "https://www.kernel.org/doc/html/v6.11/mm/numa.html",
+      "https://pubs.opengroup.org/onlinepubs/9799919799/functions/pthread_mutexattr_getprotocol.html",
+      "https://www.math.unipd.it/~tullio/RTS/2009/SRL-1990.pdf",
+      "https://docs.kernel.org/locking/rt-mutex-design.html"
     ]
   },
   "summary": {
-    "claimsChecked": 404,
-    "errorsCorrected": 45,
-    "hedgedOrRemoved": 7,
+    "claimsChecked": 411,
+    "errorsCorrected": 48,
+    "hedgedOrRemoved": 8,
     "formulaBlocks": 55,
     "glossaryTerms": 232
   },
@@ -442,6 +445,50 @@
       "file": "sched-thread-kernel-mappings.md",
       "before": "summary: N —1 cannot",
       "after": "summary: N:1 cannot"
+    },
+    {
+      "file": "content/os/02-threads-scheduling/glossary.json",
+      "before": {
+        "id": "priority-ceiling",
+        "term": "Priority ceiling protocol",
+        "aliases": [
+          "priority ceiling",
+          "priority ceilings",
+          "immediate priority ceiling",
+          "ceiling protocol"
+        ],
+        "definition": "A fix for priority inversion: each lock has a ceiling equal to the highest priority of any thread that may take it, and any holder runs at that ceiling straight away. The ceiling must be worked out in advance.",
+        "example": "A lock used by priority 10 and priority 50 threads gets ceiling 50.",
+        "source": "https://en.wikipedia.org/wiki/Priority_ceiling_protocol"
+      },
+      "after": {
+        "id": "priority-ceiling",
+        "term": "Immediate priority ceiling",
+        "aliases": [
+          "priority ceiling",
+          "priority ceilings",
+          "immediate priority ceilings",
+          "immediate ceiling protocol",
+          "PTHREAD_PRIO_PROTECT"
+        ],
+        "definition": "A mutex priority-protection protocol that immediately runs a holder at the higher of its own priority and the highest ceiling of its held protected mutexes, even when nobody is waiting. POSIX PTHREAD_PRIO_PROTECT specifies this behaviour; ceilings must be assigned from intended thread usage. This differs from the original priority ceiling protocol’s additional system-ceiling admission rule.",
+        "example": "A lock used by priority 10 and priority 50 threads gets ceiling 50.",
+        "source": "https://pubs.opengroup.org/onlinepubs/9799919799/functions/pthread_mutexattr_getprotocol.html"
+      },
+      "reason": "Identify POSIX immediate protection separately from the original system-ceiling admission protocol."
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-inversion-inheritance.questions.json",
+      "question": "sched-priority-mlfq-q10",
+      "before": "Which statements about **priority inheritance** and **priority ceiling** are true? Select all that apply.",
+      "after": "Which statements about **priority inheritance** and **immediate priority ceiling** are true? Select all that apply.",
+      "reason": "The unchanged option statements test immediate ceiling semantics; make that context explicit."
+    },
+    {
+      "file": "content/os/02-threads-scheduling/sched-priority-inversion-inheritance.md",
+      "before": "An alternative is an **immediate priority ceiling** protocol: each mutex gets a ceiling equal to the highest priority of any thread that may lock it, and whoever holds it runs at the ceiling straight away. It needs the ceiling worked out in advance, but avoids repeated priority changes.",
+      "after": "An alternative is an **immediate priority ceiling** protocol: each mutex gets a ceiling based on the highest priority of any thread that may lock it. With POSIX `PTHREAD_PRIO_PROTECT`, a holder immediately runs at the higher of its own priority and the highest ceiling of its owned protected mutexes, even when nobody is waiting. Ceilings must be assigned in advance. Acquiring or releasing a protected mutex can still change effective priority; this is precomputed boosting, rather than a guarantee of fewer priority changes.",
+      "reason": "POSIX specifies immediate maximum priority, including owned mutex ceilings, independent of waiters; no universal reduction in priority changes follows."
     }
   ],
   "authorCorrectionsIndependentlyReviewed": [
@@ -660,7 +707,7 @@
     "sched-priority-inversion-inheritance": {
       "confidence": "high",
       "review": "Independent primary-source, numerical, prerequisite, local-question and format review.",
-      "hash": "a9c73581dbf36eb4"
+      "hash": "79ddc1de2eee8244"
     },
     "sched-linux-history-classes": {
       "confidence": "medium",
@@ -1297,7 +1344,7 @@
     },
     "priority-ceiling": {
       "confidence": "high",
-      "hash": "cd44f63892053b82"
+      "hash": "4431eca4873e4ab6"
     },
     "transitive": {
       "confidence": "high",
@@ -1956,5 +2003,39 @@
     "links": "/tmp/os-scheduling-short-verify/links.txt",
     "dictionaryProbes": "/tmp/os-scheduling-short-verify/dictionary-probes.json",
     "diagramPreservation": "/tmp/os-scheduling-short-verify/diagram-preservation.json"
-  }
+  },
+  "followupReviews": [
+    {
+      "date": "2026-10-15",
+      "author": "/root/deadlock_short_author",
+      "verifier": "/root/deadlock_short_verify",
+      "scope": [
+        "content/os/02-threads-scheduling/glossary.json: priority-ceiling only",
+        "content/os/02-threads-scheduling/sched-priority-inversion-inheritance.questions.json: sched-priority-mlfq-q10 prompt only",
+        "content/os/02-threads-scheduling/sched-priority-inversion-inheritance.md: immediate-ceiling paragraph only"
+      ],
+      "summary": {
+        "claimsChecked": 7,
+        "errorsCorrected": 3,
+        "hedgedOrRemoved": 1
+      },
+      "sources": [
+        "https://pubs.opengroup.org/onlinepubs/9799919799/functions/pthread_mutexattr_getprotocol.html",
+        "https://www.math.unipd.it/~tullio/RTS/2009/SRL-1990.pdf",
+        "https://docs.kernel.org/locking/rt-mutex-design.html"
+      ],
+      "findings": [
+        "POSIX INHERIT propagates boosts through blocked owners.",
+        "PROTECT runs at the maximum of own priority and owned protected-mutex ceilings regardless of waiters.",
+        "The original Sha–Rajkumar–Lehoczky protocol also tests the system ceiling before admitting an acquisition.",
+        "The source gives no universal reduction in priority changes; acquisitions/releases may change effective priority.",
+        "All answer indices, question IDs, options, native statements and original long archives remain unchanged."
+      ],
+      "gaps": [
+        "No privileged real-time scheduling policy was configured for this wording-only follow-up. Native statements are unchanged; semantics checked directly against fetched POSIX text and the original publication."
+      ],
+      "lowConfidence": [],
+      "independent": true
+    }
+  ]
 }

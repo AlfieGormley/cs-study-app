@@ -1,0 +1,100 @@
+[
+  {
+    "id": "dl-livelock-starvation-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A service uses a reader-preferring readers-writer lock. Readers arrive every 10 ms and each holds the lock for 50 ms. A writer arrives and waits. What happens to the writer, and what is the standard fix?",
+    "options": [
+      {
+        "text": "It gets the lock within 50 ms, when the current reader finishes",
+        "explanation": "A new reader arrives every 10 ms and joins while others still hold the lock, so the lock never becomes free. 'The current reader' is always replaced."
+      },
+      {
+        "text": "It deadlocks with the readers; the fix is lock ordering",
+        "explanation": "There's no cycle: readers don't wait for the writer. The readers keep making progress; only the writer doesn't. That's starvation."
+      },
+      {
+        "text": "It may wait forever; once a writer is waiting, block new readers until it has run",
+        "explanation": "Correct in the stated idealized arrival/holding schedule. Blocking new readers lets existing readers drain; scheduler fairness and finite holding times are still required."
+      },
+      {
+        "text": "It gets the lock immediately, because writers have priority",
+        "explanation": "Writer preference still has to wait for existing readers to release; it cannot give an exclusive writer ownership immediately. Reader preference can keep admitting new readers ahead of the writer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each reader holds for 50 ms, and one arrives every 10 ms:\n\n```formula\nN = t_hold / t_gap\nN = 50 ms / 10 ms = 5\nwhere\nN: the average number of readers holding the lock once the regular arrival pattern reaches steady state\nt_hold: how long each reader holds the lock: 50 milliseconds (ms)\nt_gap: the time between reader arrivals: 10 ms\nms: milliseconds\nIn words: a new reader arrives five times during each reader's hold, so about five overlap at once and the count never reaches zero.\n```\n\n2. A reader-preferring lock admits a new reader whenever readers already hold it.\n3. The reader count therefore never drops to zero, and the writer, which needs zero readers, waits indefinitely.\n4. The system is progressing (readers are served), so this is **starvation**, not deadlock.\n5. Fix: once a writer is waiting, queue new readers behind it. Readers already inside finish within 50 ms, then the writer runs, then the queued readers.",
+    "link": {
+      "title": "Readers–writer lock — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Readers%E2%80%93writer_lock"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Go service has one heavily contended `sync.Mutex`. Most of the time, a goroutine that has just unlocked it can grab it again before a woken waiter runs. What stops a waiting goroutine from being overtaken indefinitely?",
+    "options": [
+      {
+        "text": "Nothing; Go mutexes are unfair, so waiters can starve",
+        "explanation": "Go's mutex is unfair in normal mode, but it has a defence: it switches mode when a waiter has waited too long."
+      },
+      {
+        "text": "The mutex always hands ownership to waiters in FIFO order",
+        "explanation": "That's only starvation mode. In normal mode new arrivals compete with the woken waiter and often win, which is good for throughput."
+      },
+      {
+        "text": "The Go scheduler raises the waiting goroutine's priority",
+        "explanation": "Goroutines have no priorities that the mutex manipulates. The fix is in the mutex's hand-off policy."
+      },
+      {
+        "text": "If a waiter fails to get the lock for more than 1 ms, the mutex enters starvation mode and hands ownership directly to the waiter at the front of the queue",
+        "explanation": "Correct. In starvation mode newcomers don't spin or barge; they queue at the tail. The mutex returns to normal mode once the queue drains or a waiter's wait was short."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Go's current implementation permits barging in normal mode. A waiter that wakes and has failed for over 1 ms can switch a still-locked mutex into starvation mode; this is not a timer that guarantees service at 1 ms. Starvation mode hands ownership to the queue head, then returns to normal when the recipient is last or its wait was short. This mitigates pathological tail latency but does not bound scheduler delays or critical-section length.",
+    "link": {
+      "title": "Go source: sync mutex fairness",
+      "url": "https://go.dev/src/internal/sync/mutex.go"
+    }
+  },
+  {
+    "id": "dl-livelock-starvation-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're choosing between a fair (FIFO hand-off) and an unfair (barging) mutex for a lock acquired millions of times per second by 32 threads. Which statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Fair hand-off to a sleeping waiter can incur wake-up and scheduling delays, reducing throughput in a lock convoy",
+        "explanation": "Correct. The designated waiter may not yet be runnable on a CPU, leaving the lock unused even though other threads could acquire it. CPUs can do unrelated work."
+      },
+      {
+        "text": "Barging can let a running thread reacquire a cache-hot lock and improve throughput in some workloads",
+        "explanation": "Correct. This is one motivation for default-unfair policies, but the workload determines throughput and latency."
+      },
+      {
+        "text": "An unfair lock can let one waiter be overtaken for a long time, hurting tail latency",
+        "explanation": "Correct. Barging trades fairness for throughput; the cost shows up in p99 and p99.9 latency for unlucky threads."
+      },
+      {
+        "text": "A fair lock prevents priority inversion",
+        "explanation": "FIFO order ignores priority entirely, so a high-priority thread can queue behind low-priority ones. Inversion needs inheritance or ceilings."
+      },
+      {
+        "text": "An unfair lock can deadlock in cases where a fair lock can't",
+        "explanation": "Fairness doesn't affect the Coffman conditions. Both kinds deadlock under the same lock-order mistakes, and both are deadlock-free with correct ordering."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Strict hand-off can delay the next critical section until its designated waiter runs. Barging can improve reuse while allowing an unlucky waiter to be repeatedly overtaken. Neither policy alone prevents priority inversion or cycles involving multiple locks. Adaptive policies mitigate starvation, without a universal wall-clock bound. Reducing shared contention can help both policies.",
+    "link": {
+      "title": "Starvation (computer science) — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Starvation_(computer_science)"
+    }
+  }
+]

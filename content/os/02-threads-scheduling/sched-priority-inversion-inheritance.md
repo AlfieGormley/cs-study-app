@@ -46,7 +46,7 @@ The fix is **priority inheritance**: while a thread holds a lock that a higher-p
 
 In this isolated three-thread example, H waits for L's remaining critical section plus scheduling overhead. General bounds must include nesting, higher-priority interference and any blocking by the holder. Inheritance must be **transitive**: if L is itself blocked on a lock held by another thread, that thread is boosted too.
 
-An alternative is an **immediate priority ceiling** protocol: each mutex gets a ceiling equal to the highest priority of any thread that may lock it, and whoever holds it runs at the ceiling straight away. It needs the ceiling worked out in advance, but avoids repeated priority changes.
+An alternative is an **immediate priority ceiling** protocol: each mutex gets a ceiling based on the highest priority of any thread that may lock it. With POSIX `PTHREAD_PRIO_PROTECT`, a holder immediately runs at the higher of its own priority and the highest ceiling of its owned protected mutexes, even when nobody is waiting. Ceilings must be assigned in advance. Acquiring or releasing a protected mutex can still change effective priority; this is precomputed boosting, rather than a guarantee of fewer priority changes.
 
 POSIX exposes both as mutex attributes. This configuration fragment assumes m is a declared mutex; production code must check the return values and destroy the attribute object when finished:
 

@@ -1,0 +1,130 @@
+[
+  {
+    "id": "prob-statistics-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A dashboard using the empirical nearest-rank convention says the 99th-percentile (p99) latency is 420 ms. Which interpretation is correct, allowing ties?",
+    "options": [
+      {
+        "text": "99 requests took 420 ms",
+        "explanation": "Percentiles are about fractions of all requests, not a count of 99."
+      },
+      {
+        "text": "The average latency of the slowest 1% is 420 ms",
+        "explanation": "That would be a tail conditional mean, not a percentile threshold; a trimmed mean conventionally discards tail observations."
+      },
+      {
+        "text": "At least 99% of recorded requests took 420 ms or less; no more than 1% were slower",
+        "explanation": "Correct for nearest rank. Ties and finite sample ranks can make the fraction at or below the threshold greater than 99%."
+      },
+      {
+        "text": "Latency is 420 ms with 99% confidence",
+        "explanation": "A percentile describes the spread of the data, not the uncertainty of an estimate."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The nearest-rank p99 is read off at this position in the sorted list:\n\n```formula\nr = ⌈0.99 × n⌉\nwhere\nr: the rank (position, counting from the smallest) of the reported value\nn: the number of observations\n⌈ ⌉: ceiling, round up to the next whole number\n0.99: 99%, the percentile as a fraction\nIn words: go 99% of the way along the sorted latencies, rounding up, and report the value there.\n```\n\nAt least r observations are at or below it; ties can put still more there. The percentile says nothing about how slow the remaining observations are.",
+    "link": {
+      "title": "Percentile — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Percentile"
+    }
+  },
+  {
+    "id": "prob-statistics-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A search page fans out to 100 backend shards and must wait for all of them. Each shard independently exceeds its own 99th-percentile latency 1% of the time. What fraction of page loads see at least one slow shard?",
+    "options": [
+      {
+        "text": "About 63%",
+        "explanation": "Correct. 1 − 0.99¹⁰⁰ ≈ 0.634. A per-shard tail event becomes the common case for users."
+      },
+      {
+        "text": "1%",
+        "explanation": "Each shard is slow 1% of the time, but the page waits on 100 of them. The chance at least one is slow is much higher."
+      },
+      {
+        "text": "100%",
+        "explanation": "100 × 1% = 100% is the union bound, which overestimates. Sometimes all 100 shards are fast (about 37% of the time)."
+      },
+      {
+        "text": "About 10%",
+        "explanation": "Scaling a probability by the square root of the call count is not the rule for a union. Use the complement of all 100 calls being fast."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nP(F) = 0.99^100 ≈ 0.366\nP(¬F) = 1 − 0.366 ≈ 0.634\nwhere\nF: the event \"all 100 shards are fast\"\n¬F: \"not F\", at least one shard is slow\n0.99: the chance one shard is fast\n0.99^100: 100 copies of 0.99 multiplied together, using independence\nP: probability; probabilities are dimensionless and apply to measurable events\n≈: approximately equal to\nIn words: all 100 shards are fast only about 37% of the time, so about 63% of page loads wait on a slow shard.\n```\n\nThis is the central argument of *The Tail at Scale*: in fan-out systems, user latency is governed by backend tail latency. Mitigations include hedged requests (send a backup after a chosen delay; the 95th percentile is one possible policy, subject to extra load and request semantics) and reducing fan-out.",
+    "link": {
+      "title": "The Tail at Scale — Dean and Barroso, CACM 2013",
+      "url": "https://research.google/pubs/the-tail-at-scale/"
+    }
+  },
+  {
+    "id": "prob-statistics-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this print?\n\n```python\nimport math\n\ndef pct(xs, p):\n    s = sorted(xs)\n    # Convert percentile to sorted rank.\n    k = math.ceil(p / 100 * len(s))\n    return s[max(k - 1, 0)]\n\nlat = [12, 15, 11, 240, 14,\n       13, 16, 12, 900, 14]\nprint(pct(lat, 90))\n```",
+    "options": [
+      {
+        "text": "900",
+        "explanation": "900 is the maximum, i.e. the 100th percentile. The nearest-rank 90th percentile of 10 values is the 9th smallest."
+      },
+      {
+        "text": "16",
+        "explanation": "16 is the 8th smallest value. Rounding 0.9 × 10 = 9 up gives 9, so the 9th is chosen."
+      },
+      {
+        "text": "240",
+        "explanation": "Correct. The sorted observations are 11, 12, 12, 13, 14, 14, 15, 16, 240 and 900. The requested rank is nine, so the code returns the element at Python index eight: 240."
+      },
+      {
+        "text": "128",
+        "explanation": "128 might come from averaging 16 and 240. Nearest rank returns an actual observation, without interpolation."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Sort: `[11, 12, 12, 13, 14, 14, 15, 16, 240, 900]`.\n2. Find the rank:\n\n```formula\nk = ⌈90 / 100 × 10⌉ = ⌈9.0⌉ = 9\nwhere\nk: the rank to read (the variable k in the code)\n90: the percentile asked for (p in the code)\n10: the number of values, len(s)\n⌈ ⌉: ceiling, round up to a whole number (math.ceil in the code)\nIn words: the 90th percentile of 10 values is the 9th smallest.\n```\n\n3. Python lists count from 0, so index k − 1 = 8 gives 240.\n\nNote how two outliers dominate: the 50th percentile is 14 ms, the 90th is 240 ms. With only 10 samples, these tail estimates are very noisy.",
+    "link": {
+      "title": "Percentile — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Percentile"
+    }
+  },
+  {
+    "id": "prob-statistics-q8",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You run 4 API servers. Each reports its own 99th-percentile (p99) latency every minute. Which approaches give a fleet-wide p99 calculation or an explicitly approximate estimate from combined data over the same time window? Select all that apply.",
+    "options": [
+      {
+        "text": "Average the four servers' p99 values",
+        "explanation": "Percentiles don't average. If one server handles most traffic or has a very different distribution, the mean of p99s can be far from the true fleet p99."
+      },
+      {
+        "text": "Have each server export a latency histogram with shared bucket boundaries, sum the histograms, and compute p99 from the merged histogram",
+        "explanation": "Correct. Histograms with the same buckets merge by adding counts, and the percentile is then computed from the combined distribution (to bucket precision)."
+      },
+      {
+        "text": "Take the maximum of the four p99 values",
+        "explanation": "Under nearest rank, the maximum is an upper bound on the fleet p99, but need not equal it and can be badly wrong when traffic is uneven."
+      },
+      {
+        "text": "Send every raw latency to a central store and compute p99 over all of them",
+        "explanation": "Correct, if expensive: with all observations, you can compute the exact percentile."
+      },
+      {
+        "text": "Use compatible t-digest sketches or compatible HdrHistogram histograms, and merge them over the same time window",
+        "explanation": "Correct. Both representations support merging compatible summaries of the observations. Their quantiles are estimates with representation error; they do not arise by averaging individual percentile values."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Percentiles are not linear: the p99 of two servers' combined requests is not a function of the two servers' p99 values alone.\n\nCounterexample: server A has 1,000 requests all at 10 ms (p99 of 10 milliseconds). Server B has 10 requests all at 1,000 ms (p99 of 1,000 milliseconds). Combined, 10 of 1,010 requests (about 1%) are slow, so the nearest-rank fleet p99 is 10 ms, not the average 505 ms or the max 1,000 ms.\n\n```formula\nr = ⌈0.99 × 1010⌉ = ⌈999.9⌉ = 1000\nwhere\nr: the nearest-rank position of the fleet p99 in the sorted combined list\n1010: the total number of requests, 1,000 + 10\n⌈ ⌉: ceiling, round up to a whole number\nIn words: the fleet p99 is the 1,000th fastest of 1,010 requests, which is still one of server A's 10 ms requests.\n```\n\nCorrect approaches keep enough of each distribution to combine: raw data, histograms with shared buckets (Prometheus), or mergeable sketches.",
+    "link": {
+      "title": "Percentile — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Percentile"
+    }
+  }
+]

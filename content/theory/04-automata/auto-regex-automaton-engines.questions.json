@@ -1,0 +1,62 @@
+[
+  {
+    "id": "auto-regex-engines-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why does RE2 reject the pattern `(\\w+) \\1`?",
+    "options": [
+      {
+        "text": "It is a syntax error in every engine",
+        "explanation": "Perl, PCRE, Python and Java all accept it. It is a deliberate omission in RE2."
+      },
+      {
+        "text": "This particular backreference pattern describes a non-regular language outside RE2’s supported syntax",
+        "explanation": "Correct. Arbitrarily long word-copy matching here exceeds finite-automaton expressiveness. Not every pattern containing a backreference is non-regular."
+      },
+      {
+        "text": "RE2 does not support capture groups",
+        "explanation": "RE2 supports captures through its Pike VM. It refuses only references back to them."
+      },
+      {
+        "text": "The pattern is vulnerable to ReDoS",
+        "explanation": "RE2 accepts many regular patterns that would cause excessive backtracking elsewhere. It excludes backreference syntax; its matching guarantee does not remove all resource-exhaustion risks."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A finite automaton can only remember a bounded amount.\n2. `(\\w+) \\1` must remember an arbitrarily long word to compare it later, like ww from the pumping-lemma units, which is not regular.\n3. Ordinary finite automata cannot recognize this language, and RE2 excludes this syntax. Lookaround is excluded too.\n\nFun fact: `^(..+)\\1+$` on a string of a's matches exactly when the length is composite. This pattern recognises runs of a single repeated character with composite length, not primes; rejecting it does not by itself classify 0 and 1 as prime. A finite automaton cannot recognize the unbounded composite-length language.",
+    "link": {
+      "title": "Regular Expression Matching in the Wild — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp3.html"
+    }
+  },
+  {
+    "id": "auto-regex-engines-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An automaton-based engine like RE2 builds a lazy DFA, caching states as it meets them. Write m for the compiled pattern size (roughly the number of NFA states) and n for the input length. What happens when an adversarial input makes it discover huge numbers of distinct DFA states?",
+    "options": [
+      {
+        "text": "It fails because its DFA cache grows without a bound",
+        "explanation": "A bounded cache prevents unlimited DFA-cache growth. It does not guarantee that the entire application can never exhaust memory."
+      },
+      {
+        "text": "It falls back to unrestricted, unmemoized backtracking",
+        "explanation": "That would lose the guarantee. Bounded memoized backtracking is a different technique that RE2 can use for suitable searches."
+      },
+      {
+        "text": "It clears the cache and, if that keeps happening, falls back to slower NFA simulation, staying linear time",
+        "explanation": "Correct. Throughput drops, but the O(m · n) bound holds."
+      },
+      {
+        "text": "It precomputes the full DFA first to avoid this",
+        "explanation": "Full determinisation can need 2ᵐ states (m copies of 2 multiplied together), which is exactly the blow-up the lazy approach exists to avoid."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Each lazy-DFA state is a set of NFA states, computed on demand in O(m).\n2. Cached transitions are cheap when reused; distinct-set count depends on the pattern and input.\n3. An adversarial input can keep producing new sets. The cache reaches its configured capacity.\n4. RE2 then flushes the cache and carries on; if it is flushing too often to be useful, it falls back to NFA simulation.\n5. Worst case per character is still O(m), so the whole match stays linear in input length for a fixed compiled pattern.",
+    "link": {
+      "title": "Regular Expression Matching in the Wild — Russ Cox",
+      "url": "https://swtch.com/~rsc/regexp/regexp3.html"
+    }
+  }
+]

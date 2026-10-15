@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 62/76. Updated 2026-10-15.
+Verified modules: 64/76. Updated 2026-10-15.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -68,7 +68,9 @@ The material is divided by concept while retaining substantive explanations, exa
 | software-engineering/Software Architecture at the Code Level | 6 | 25 | 67 | 10 | 171 | 1143 | 24 |
 | software-engineering/Engineering Practices | 6 | 24 | 66 | 26 | 235 | 483 | 62 |
 | theory/Logic & Proofs | 6 | 37 | 74 | 171 | 277 | 388 | 31 |
-| theory/Discrete Structures | 6 | 40 | 75 | 229 | 342 | 686 | 64 |
+| theory/Discrete Structures | 6 | 40 | 75 | 229 | 343 | 686 | 64 |
+| theory/Probability for Computer Science | 6 | 41 | 70 | 177 | 217 | 708 | 32 |
+| theory/Automata & Regular Languages | 6 | 32 | 73 | 92 | 170 | 367 | 48 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4698,6 +4700,7 @@ Corrections and qualifications in this conversion:
 - Qualified historical/format claims using independently fetched primary evidence; replaced the universal JPEG visual-quality implication with an image/encoder-dependent example.
 - Removed incorrect real dictionary senses for graph degree sum, mathematical domain/codomain, intermediate generated states and order-theory lower bounds. Reviewed every complete glossary popup context and corrected additional parity, waveform, neighbour, Java/C int, negative-edge and key-wrapping captures.
 - Preserved all original keys and option order; repaired wording at existing answer indices. No artificial prompt carveouts.
+- A separate independent follow-up checks the precise convex-polygon example, gives fault-tolerant hardware a distinct qualified identity and adds the first-use Qubit definition; all40 lessons and340 other original entries are preserved. Current popovers show plain text; glossary-field rendering is diagnostic coverage.
 
 Remaining gaps:
 
@@ -4707,6 +4710,101 @@ Remaining gaps:
 Low-confidence areas:
 
 None newly recorded. Inherited glossary qualifications remain in the verification record.
+
+## theory: Probability for Computer Science
+
+[Independent verification record](../content/theory/03-probability/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Restored prerequisite order by placing the original heads-indicator question after linearity; all original question IDs/types/levels/keys/option ordering/counts/conceptual answers preserved.
+- Corrected collision-chain insertion comparisons, rounded exponent equalities, harmonic precision, p-value statistic semantics and rare-effect interpretation.
+- Every formula reviewed for local symbols/operators/functions, grouping, units, finite moments, measurable events, positive conditioning probability and model domains.
+- Separated probability-zero from impossibility; independence from disjointness; iid LLN/CLT assumptions; exact versus approximate Bloom and normal/tail statements.
+- Differentiated multinomial token likelihoods from document presence in naive Bayes, and verified smoothing/log computation against official implementation.
+- Corrected wrong dictionary senses throughout all actual body/question and own popup fields; added event-space, natural-exponential and statistical-hypothesis-test definitions.
+- Corrected dictionary definitions for LLN, additive smoothing, quantile sketches, Student t, fanout, storage, bits per key and classification accuracy.
+
+Remaining gaps:
+
+- No measure-theoretic conditioning on null events is taught; elementary conditioning explicitly requires positive probability.
+- No exact finite-filter Bloom false-positive derivation, exact A/B power calculation or unrestricted sequential-testing procedure is taught; approximation/model limits are explicit.
+- Real operational independence, traffic intensities, detector rates and latency distributions require measurement; supplied numerical scenarios are hypothetical models.
+- Historical attribution and original unreplicable simulations remain omitted with explicit evidence-gap notes; no unsupported population or hardware-failure comparisons restored.
+
+Low-confidence areas:
+
+None newly recorded. Inherited glossary qualifications remain in the verification record.
+
+## theory: Automata & Regular Languages
+
+[Independent verification record](../content/theory/04-automata/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- A transition need not visit a previously unseen state.
+- The nth-from-end position must be positive.
+- The nth-from-end position must be positive.
+- Retain the initial epsilon-closure cost for empty input.
+- The two-state count includes empty-string and empty-language base cases.
+- The two-state count includes every base case.
+- Count empty-string/empty-language base cases consistently.
+- Keep card paraphrase consistent.
+- Remove obsolete whole-course lesson numbers.
+- Remove obsolete lesson-number reference.
+- Make the explanation independent of a table introduced in the next unit.
+- Make explanation local to its unit.
+- Retain the concept without requiring the later transition table.
+- The prose had assigned the justifications to the wrong factors.
+- Exclude one explicitly from the prime definition.
+- Do not imply that Java necessarily shares Python’s exact nested-pattern exponential behaviour.
+- The original automaton-wide equivalence fails for epsilon-NFAs.
+- Unicode character-class semantics depend on engine; RE2’s shorthand is ASCII-only.
+- RE2 can use bounded memoised backtracking; the guarantee is per supported search.
+- Thompson implementations such as Cox’s use dangling exits, so qualify this invariant to the taught version.
+- DFA uniqueness is up to isomorphism, not identical arbitrary state names.
+- Minimality requires the coarsest acceptance-respecting stable partition.
+- Remove the unsupported retained outage attribution while the historical postmortem remains unavailable.
+- Avoid unsupported attribution of crate maintenance to the Rust project.
+- Do not overattribute sole authorship of Go’s regexp package.
+- Separate a language standard from implementation algorithms.
+- Actual compiler context revealed BitTorrent piece-length definition on a pumping substring; use precise pumped-substring length.
+- Replace a literal substring-search glossary capture in regex restarted-search explanation with precise regex-scan wording.
+- Recall opened Probability true-positive-rate in ordinary prose.
+- The integer prime-factorisation definition was too narrow for this product witness.
+- The phrase recursion limit opened a RecursionError exception definition.
+- Qualify regex operator precedence in questions to avoid an unrelated Logic precedence example.
+- Use regex precedence so the actual link opens the local regex convention rather than Logic operator examples.
+- Qualify regex operator precedence in questions to avoid an unrelated Logic precedence example.
+- Keep Brzozowski derivatives in one inline phrase so the renderer links the derivative definition rather than the double-reversal minimisation algorithm.
+- V8 article describes runtime command-line feature options, not compiler build flags; prevents wrong compiler-flag popup.
+- Nested regex module opened the third-party Python regex library; precisely identify the standard re library.
+- Local exponential-growth alias prevents foreign search-growth popup whose nested Exponential searches incorrectly opens the unrelated sorted-sequence exponential-search algorithm.
+- Precise local bracket-depth term avoids linking mathematical DFA depth to a recursive-parser stack-limit popup.
+- Use the precise local bracket-depth term in complete question fields.
+- Use precise bracket-depth or executed-CPU-instruction wording to avoid misleading nested glossary senses.
+- Correct actual nested popup sense or literal-pattern annotation; retain formal automata semantics.
+- Reuse local full formal-regex definition, including empty-language and empty-string base cases, for the full phrase.
+- Correct actual nested popup sense or literal-pattern annotation; retain formal automata semantics.
+- Correct actual nested popup sense or literal-pattern annotation; retain formal automata semantics.
+- Correct actual nested popup sense or literal-pattern annotation; retain formal automata semantics.
+- Avoid the inherited The stack alias, whose nested PDA alphabet was linked to a Turing-tape alphabet.
+- Final released-donor replay: explicit memory/time caps avoid the broad resource-limit popup and its unrelated nesting-depth/time-complexity nested meanings.
+
+Remaining gaps:
+
+- The original fixed grep throughput figure, exact incomplete backtracker call counts/laptop timing, and detailed unavailable Stack Overflow postmortem claims remain explicitly omitted. No replacement performance measurement was invented.
+- Native code checks run all5lesson programs and4question snippets with supplied fixtures on Python3.14 and Docker Python3.12. No Go,Rust,JavaScript,.NET,PCRE2,RE2 or Ruby runtime integrations were needed by the Python-only executable examples. Product claims were checked against official documentation.
+- Bounded exhaustive tests support worked examples only. DFA invariants, subset correctness, pumping quantifier order and all legal split cases, arithmetic witness inequalities, lower bounds and coarsest acceptance-respecting refinement were separately reviewed mathematically.
+
+Low-confidence areas:
+
+- **medium** — auto-nfa-lazy-tradeoffs: Current regex implementation composition, supported syntax or documented API guarantees.. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- **medium** — auto-regex-automaton-engines: Current regex implementation composition, supported syntax or documented API guarantees.. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- **medium** — auto-regex-backtracking: Current regex implementation composition, supported syntax or documented API guarantees.. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- **medium** — auto-regex-defences: Current regex implementation composition, supported syntax or documented API guarantees.. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- **medium** — auto-regex-growth-outages: Current regex implementation composition, supported syntax or documented API guarantees.. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- **medium** — auto-thompson-practice: Current regex implementation composition, supported syntax or documented API guarantees.. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
 
 ## synth: Sound & Digital Audio
 

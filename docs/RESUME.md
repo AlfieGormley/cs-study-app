@@ -1,15 +1,15 @@
-# Short lessons and code comments: ACTIVE (2026-10-16)
+# Short lessons and code comments: COMPLETE (2026-10-16)
 
-Continue until the whole course is converted. The user chose actual short lessons with separate completion
-dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
-to run to completion without further approval questions. Published batches are milestones, not completion.
+All 76 modules are converted, independently reviewed and published. Every short unit has its own
+completion date and focused questions; explanatory code comments and the original course depth are retained.
+The final whole-course audit, mobile flows, saved progress, offline behaviour and navigation profile pass.
 
 - Independently verified: 76/76 modules; 482 originals → 2638 short lessons with 5652 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `9ef7d3b`, version `c391d3ced273`, 2417 short lessons/5226 focused questions
-  across 71 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Latest confirmed live release: `0013c3a`, version `e82d0763bea6`, 2638 short lessons/5652 focused questions
+  across 76 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
 - Current generated candidate: `e82d0763bea6`, 76 modules/2638 units/5652 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
@@ -23,8 +23,13 @@ to run to completion without further approval questions. Published batches are m
 - All six security modules are converted and published: 155 short units/310 questions.
 - All six software-engineering modules are converted and published: 151 short units/405 questions.
 
-Current allocations:
+Final validation:
 
+- All 482 original lesson mappings and all 5,565 original question contracts pass the final audit without `--partial`.
+- Successive-release migration preserves exact completion dates, deliberate unmarks and saved quizzes.
+- Navigation profile: initial 518 ms; largest measured lesson render 57 ms.
+  Measured in desktop Chrome with a 390 px viewport and sixfold CPU throttling; this is not a physical-phone benchmark.
+- Detailed evidence: `/tmp/cs-study-short-lessons/qa-e82d0763bea6`; per-module corrections, confidence and scope gaps: `docs/short-lessons-report.md`.
 
 Verification and integration:
 

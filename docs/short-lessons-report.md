@@ -113,6 +113,8 @@ Navigation measured in desktop Chrome at 390 pixels with sixfold CPU throttling:
 
 Evidence: `/tmp/cs-study-short-lessons/qa-e82d0763bea6`, version `e82d0763bea6`.
 
+[Published app](https://alfiegormley.github.io/cs-study-app/) — GitHub Pages succeeded for [0013c3a](https://github.com/AlfieGormley/cs-study-app/commit/0013c3a7b8ec8353813009609fe8d80e6daa84c6); the app, asset manifest, progress logic, glossary logic and course index match the tested commit.
+
 ## system-design: Fundamentals
 
 [Independent verification record](../content/system-design/01-fundamentals/verification.json)

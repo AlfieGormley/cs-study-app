@@ -1,0 +1,32 @@
+[
+  {
+    "id": "qp-execution-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A table occupies 10 GiB on disk in 8 KiB pages. Ignoring CPU costs, what does a full sequential scan cost in Postgres planner units with the default `seq_page_cost = 1`?",
+    "options": [
+      {
+        "text": "About 10,240",
+        "explanation": "That's the size in MiB (10 x 1,024). Pages are 8 KiB, so there are eight times fewer pages than KiB, not a thousand times fewer."
+      },
+      {
+        "text": "About 1,310,720",
+        "explanation": "Correct. 10 GiB = 10,485,760 KiB; divide by 8 KiB per page gives 1,310,720 pages, each costing 1.0 to read sequentially."
+      },
+      {
+        "text": "About 5,242,880",
+        "explanation": "That uses `random_page_cost = 4` per page. A sequential scan is charged `seq_page_cost`, which is 1."
+      },
+      {
+        "text": "About 10,000,000,000",
+        "explanation": "That counts bytes. The planner charges per page, because pages are the unit of I/O."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Convert the size to pages, then charge one unit per page:\n\n```formula\nP = V / v_page\nP = 10,485,760 KiB / 8 KiB\nP = 1,310,720\nC = P × c_page\nC = 1,310,720 × 1.0 = 1,310,720\nwhere\nP: the number of pages in the table\nV: the table's size: 10 GiB = 10 × 1,048,576 KiB = 10,485,760 KiB\nv_page: the size of one page, 8 KiB\nC: the page-reading part of the scan's estimated cost, in planner cost units\nc_page: `seq_page_cost`, default 1.0 per page read in order\nKiB: kibibyte, 1,024 bytes; 1 GiB (gibibyte) is 1,048,576 KiB\nIn words: 10 GiB of 8 KiB pages is about 1.3 million pages, and a sequential scan charges one unit per page.\n```\n\nThe real Seq Scan cost also adds `cpu_tuple_cost` (0.01) per row, plus `cpu_operator_cost` (0.0025) per row per filter condition. For our `orders` table with no filter:\n\n```formula\nC_seq = P × c_page + n × c_tuple\nC_seq = 7,353 × 1.0 + 1,000,000 × 0.01\nC_seq = 7,353 + 10,000 = 17,353\nwhere\nC_seq: the estimated total cost of the sequential scan, in planner cost units\nP: the number of pages in orders, 7,353\nc_page: `seq_page_cost`, 1.0 per page\nn: the number of rows in orders, 1,000,000\nc_tuple: `cpu_tuple_cost`, 0.01 per row\nIn words: 7,353 pages plus a million rows at 0.01 each gives 17,353, exactly what EXPLAIN shows.\n```",
+    "link": {
+      "title": "Query planning configuration — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-query.html"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "qp-index-tuning-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`customers` has a B-tree index on `email`. The login query is `WHERE lower(email) = lower($1)` and EXPLAIN shows a Seq Scan. What's the right fix?",
+    "options": [
+      {
+        "text": "Create an index on the expression: `CREATE INDEX ON customers (lower(email))`",
+        "explanation": "Correct. The index then stores `lower(email)` values, so the condition matches it exactly. In the illustrative comparison the lookup goes from 17 ms to 0.02 ms."
+      },
+      {
+        "text": "Run ANALYZE so the planner notices the existing index",
+        "explanation": "The planner already knows the index exists. It lacks a selective lower-case search bound because the index stores `email`, not `lower(email)`. A full covering scan remains possible in a different plan."
+      },
+      {
+        "text": "Add `/*+ INDEX(email) */` as a hint",
+        "explanation": "Core Postgres has no optimiser hints, and no hint can make an index of `email` answer a question about `lower(email)`."
+      },
+      {
+        "text": "Make the index UNIQUE",
+        "explanation": "Uniqueness doesn't change which expression is indexed, so it still can't be used."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "For a selective search using this equality condition, the indexed expression must match (or have a supported equivalent):\n\n| Indexed | Query uses | Usable? |\n|---|---|---|\n| `email` | `email = ...` | Yes |\n| `email` | `lower(email) = ...` | No |\n| `lower(email)` | `lower(email) = ...` | Yes |\n\nBonus: ANALYZE then collects statistics on `lower(email)`, so the estimate changes from the 0.5% default (500 rows) to 1.\n\n**Content gap \u2014 benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Indexes on expressions \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-expressional.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your database uses the `en_US.UTF-8` collation. A plain B-tree index on `customers(email)` isn't used for `WHERE email LIKE 'c42@%'`. What will let an index serve this query?",
+    "options": [
+      {
+        "text": "Nothing; B-trees can never serve LIKE",
+        "explanation": "B-trees can serve prefix LIKE patterns when the operator class compares byte-wise (the `C` collation or `text_pattern_ops`)."
+      },
+      {
+        "text": "A B-tree index with the `text_pattern_ops` operator class",
+        "explanation": "Correct. It orders values byte by byte, so a prefix becomes a range (`>= 'c42@'` and `< 'c42A'`). This supports the illustrated Index Cond; actual runtime must be measured."
+      },
+      {
+        "text": "A hash index on `email`",
+        "explanation": "Hash indexes support only equality. They have no notion of prefixes or ranges."
+      },
+      {
+        "text": "Rewriting the pattern as `LIKE '%c42@%'`",
+        "explanation": "A leading wildcard supplies no useful prefix range for an ordinary B-tree, though a covering index can still be scanned. A pg_trgm GIN or GiST index can support selective substring searches."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Locale collations like `en_US` sort with linguistic rules (case and punctuation handled specially), so strings sharing a byte prefix aren't guaranteed to be contiguous in the index.\n2. `text_pattern_ops` sorts by raw bytes, so all strings starting `c42@` are contiguous.\n3. Postgres turns the LIKE into a range:\n\n```\nIndex Cond:\n  ((email ~>=~ 'c42@'::text)\n   AND (email ~<~ 'c42A'::text))\nFilter: (email ~~ 'c42@%'::text)\n```\n\n(`A` is the byte after `@`.) It then rechecks the LIKE as a filter.",
+    "link": {
+      "title": "Operator classes and families \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-opclass.html"
+    }
+  }
+]

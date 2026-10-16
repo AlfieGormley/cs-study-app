@@ -1,0 +1,62 @@
+[
+  {
+    "id": "qp-index-tuning-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "There is an index on `orders(ordered_on)`, but `SELECT * FROM orders WHERE ordered_on >= '2021-01-01'` uses a Seq Scan. The filter matches 847,258 of 1,000,000 rows. Why?",
+    "options": [
+      {
+        "text": "The index is corrupt and needs REINDEX",
+        "explanation": "The same index was used for narrower date ranges. The planner simply chose not to use it for this one."
+      },
+      {
+        "text": "Postgres can't use B-tree indexes for `>=`",
+        "explanation": "B-trees support range comparisons; the index served a one-quarter range in the same lesson."
+      },
+      {
+        "text": "Statistics are stale",
+        "explanation": "The estimate was 846,113 rows against 847,258 actual, which is very accurate. The planner estimated the matching count closely."
+      },
+      {
+        "text": "With 85% of rows matching, reading the whole table sequentially is cheaper than an index walk plus heap fetches",
+        "explanation": "Correct. An index would read most of the index and then nearly every heap page anyway, at higher cost per page. The seq scan reads 7,353 pages once, in order."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Matching rows: 85%.\n2. An index scan would read ~85% of the index entries and fetch rows from virtually every heap page (each page holds ~136 rows).\n3. A seq scan reads every page once, sequentially, at `seq_page_cost = 1` instead of `random_page_cost = 4`.\n\nFor this illustrative wide-row range query, the estimated sequential scan is cheaper. Indexes can also help broad queries by supplying order or covering their output columns.",
+    "link": {
+      "title": "Combining multiple indexes \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-bitmap-scans.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Each heap page holds about 136 rows, and the rows matching a filter are spread randomly through the table. The filter matches 3.7% of rows. Roughly what fraction of pages contain at least one matching row?",
+    "options": [
+      {
+        "text": "About 3.7%",
+        "explanation": "That would be true only if matching rows were clustered together on the same pages, i.e. high correlation. Randomly spread, they land on most pages."
+      },
+      {
+        "text": "About 37%",
+        "explanation": "That's off by a factor of ten in the wrong direction. With 136 rows per page, a typical page holds about 5 matches."
+      },
+      {
+        "text": "About 50%",
+        "explanation": "There's no reason for a half. Compute the probability that a page has no matches: 0.963 to the power 136."
+      },
+      {
+        "text": "About 99%",
+        "explanation": "Correct. The chance that a page has no match is 136 copies of 0.963 multiplied together, about 0.006, so about 99.4% of pages have at least one. For illustration, 7,306 of 7,353 pages would be about 99.4%."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```formula\np_miss = 1 \u2212 s = 1 \u2212 0.037 = 0.963\np_none = p_miss^{r_page} = 0.963^{136}\np_none = e^{136 \u00d7 ln(0.963)}\np_none = e^{\u22125.13} \u2248 0.006\np_hit = 1 \u2212 p_none \u2248 0.994\nwhere\np_miss: the probability that one row does not match\ns: the selectivity: the fraction of rows matching, 0.037\np_none: the probability that none of a page's rows match, assuming each row matches independently at random\nr_page: the number of rows per page, 136\ne: Euler's number, about 2.718, the base of natural logarithms\nln: the natural logarithm (logarithm to base e); ln(0.963) \u2248 \u22120.0377\np_hit: the probability that a page holds at least one match, which is the fraction of pages the scan visits\n\u2248: approximately equal to\nIn words: a page escapes only if all 136 of its rows miss, and that happens to only about 1 page in 170.\n```\n\nEach page has on average 136 \u00d7 0.037 \u2248 5 matches. This is why `correlation` matters so much to the cost of an index scan: with data clustered by the filtered column, the same 3.7% of rows would occupy about 3.7% of the pages.",
+    "link": {
+      "title": "Statistics used by the planner \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/planner-stats.html"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "qp-index-tuning-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The \"recent orders\" widget runs this query thousands of times a minute:\n\n```sql\nSELECT * FROM orders\nWHERE customer_id = $1\nORDER BY ordered_on DESC\nLIMIT 5;\n```\n\nWhich single index serves it best?",
+    "options": [
+      {
+        "text": "`(ordered_on, customer_id)`",
+        "explanation": "With the date first, one customer's entries are scattered across every date. The illustrative example uses 1,031 index descents via skip scan and was about 100x slower."
+      },
+      {
+        "text": "`(customer_id, ordered_on)`",
+        "explanation": "Correct. The customer's entries sit together, already sorted by date, so Postgres descends once, reads backwards and stops after 5. No Sort node is needed."
+      },
+      {
+        "text": "Separate indexes on `customer_id` and on `ordered_on`",
+        "explanation": "Postgres could combine them with a bitmap, but bitmaps lose index order, so it would still need to sort. One composite index does both jobs."
+      },
+      {
+        "text": "`(ordered_on)` alone",
+        "explanation": "Postgres would walk the whole table's orders newest first, checking each for customer 42, until it found 5. For an infrequent customer that's most of the index."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Apply the rule: equality columns first, then the sort column.\n\n1. Equality: `customer_id = $1` -> first column.\n2. Sort: `ordered_on DESC` -> second column (a B-tree can be read backwards).\n3. LIMIT 5: with rows already in order, the scan stops early.\n\nAn illustrative plan:\n\n```\nLimit\n-> Index Scan Backward using\n     orders_cust_date_idx\n     Index Cond: (customer_id = 42)\n     Index Searches: 1\nExecution Time: 0.032 ms\n```\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Multicolumn indexes — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-multicolumn.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A dashboard runs `WHERE status = 'cancelled' AND ordered_on >= now() - interval '7 days'`. Which composite index puts these conditions into a single contiguous B-tree range, without relying on skip scan?",
+    "options": [
+      {
+        "text": "`(ordered_on, status)`",
+        "explanation": "With the range column first, the scan reads every order of the last week and checks `status` entry by entry. Without skip scan, status does not reduce the initial contiguous date range. PostgreSQL 18 may use skip scan to avoid some irrelevant entries."
+      },
+      {
+        "text": "Either order is identical; B-trees treat columns symmetrically",
+        "explanation": "A B-tree sorts by the first column, then the second within ties. The order decides which conditions bound the scan."
+      },
+      {
+        "text": "`(status, ordered_on)`",
+        "explanation": "Correct. Equality first: all cancelled orders are together, sorted by date, so the scan starts at the first cancelled order from 7 days ago and stops at the last. Both conditions bound it."
+      },
+      {
+        "text": "`(status)` alone",
+        "explanation": "That finds all ~70,000 cancelled orders and checks each date. The date range doesn't narrow the scan."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Picture the sorted index entries:\n\n```\n(status, ordered_on):\n cancelled 2020-01-01\n ...\n cancelled 2026-07-20  <- start\n cancelled 2026-07-27  <- stop\n pending   2020-01-01\n ...\n```\n\nOne contiguous slice. With `(ordered_on, status)` the last 7 days are contiguous, but cancelled, pending and shipped entries are interleaved within them, so about 90% of the slice is skipped entry by entry. Rule: equality, then sort, then range.",
+    "link": {
+      "title": "Use The Index, Luke: ranges and access predicates",
+      "url": "https://use-the-index-luke.com/sql/where-clause/searching-for-ranges/greater-less-between-tuning-sql-access-filter-predicates"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On Postgres 18, with only an index on `(ordered_on, customer_id)`, `WHERE customer_id = 42` shows:\n\n```\nIndex Scan using\n  orders_date_cust_idx\n  Index Cond: (customer_id = 42)\n  Index Searches: 2400\nExecution Time: 6.351 ms\n```\n\nThe table has 2,400 distinct dates. What happened?",
+    "options": [
+      {
+        "text": "Skip scan: PostgreSQL repeatedly searched across distinct ordered_on groups, looking for customer 42 within those groups",
+        "explanation": "Correct. The missing leading date key can be generated internally for repeated searches using the later customer condition. The plan reports 2,400 searches in this illustrative scenario; search count need not equal global distinct count in general."
+      },
+      {
+        "text": "The index was scanned 2,400 times because the query ran in a loop",
+        "explanation": "There's no outer loop here; `Index Searches` counts descents within a single execution of the node."
+      },
+      {
+        "text": "Postgres read the whole table 2,400 times",
+        "explanation": "It's an Index Scan, not a Seq Scan, and each search touches only a few index pages."
+      },
+      {
+        "text": "It's a bug: an index whose first column isn't in the WHERE clause can never be used",
+        "explanation": "Earlier PostgreSQL versions could use non-leading index conditions, but often inspected a much larger index range. PostgreSQL 18 adds skip scan searches when worthwhile."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The index is sorted by date, then customer. Customer 42 may have zero, one or multiple orders within each date.\n2. Skip scan: repeatedly search date groups using the customer condition and read matching entries.\n3. Cost grows with the number of distinct leading values: 2,400 descents, 6.4 ms.\n4. With `(customer_id, ordered_on)` it's one descent and about 0.03 ms.\n\nMany distinct leading values can make repeated searches unattractive. The planner compares candidate costs rather than applying a fixed distinct-count limit. Design the index for the query.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "PostgreSQL 18 release notes",
+      "url": "https://www.postgresql.org/docs/18/release-18.html"
+    }
+  }
+]

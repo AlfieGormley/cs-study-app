@@ -1,0 +1,62 @@
+[
+  {
+    "id": "qp-statistics-optimiser-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`pg_stats` for `orders.status` (1,000,000 rows) shows:\n\n```\nmost_common_vals:\n  {shipped,cancelled,pending}\nmost_common_freqs:\n  {0.8976,0.0716,0.0308}\n```\n\nHow many rows will the planner estimate for `WHERE status = 'cancelled'`?",
+    "options": [
+      {
+        "text": "333,333",
+        "explanation": "That's 1/3, treating the three values as equally common. The MCV list exists precisely so the planner doesn't have to assume that."
+      },
+      {
+        "text": "71,600",
+        "explanation": "Correct. 'cancelled' is in the MCV list, so the planner uses its measured frequency: 0.0716 x 1,000,000."
+      },
+      {
+        "text": "5,000",
+        "explanation": "That's the 0.5% default for equality when there are no usable statistics. Here there are."
+      },
+      {
+        "text": "1",
+        "explanation": "A 1-row estimate happens when a value appears to be absent from the sample. 'cancelled' is clearly present."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Is the value in `most_common_vals`? Yes, in position 2.\n2. Take the matching frequency: 0.0716.\n3. Multiply by the table's row count:\n\n```formula\nn_est = f_MCV × n_table\nn_est = 0.0716 × 1,000,000\nn_est = 71,600\nwhere\nn_est: the estimated number of matching rows\nf_MCV: the value's frequency from `most_common_freqs`, 0.0716 for 'cancelled'\nn_table: the number of rows in the table, 1,000,000\nIn words: 7.16% of the sampled rows were 'cancelled', so the planner expects 7.16% of the table to be.\n```\n\nThe illustrative estimate is `rows=71600`. ANALYZE samples large tables (typically about 30,000 rows with the default target for built-in scalar types), so sampled frequency need not equal the true frequency.",
+    "link": {
+      "title": "Row estimation examples — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/row-estimation-examples.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "For `orders.customer_id`, `pg_stats` shows `n_distinct = 91709` and no most-common values. The table has 1,000,000 rows and no NULL customer IDs. What does the planner estimate for `WHERE customer_id = 42`?",
+    "options": [
+      {
+        "text": "About 91,709",
+        "explanation": "That's the number of distinct values, not the rows per value. It inverts the calculation."
+      },
+      {
+        "text": "Exactly 14, the real count",
+        "explanation": "The planner doesn't count rows at plan time; that would require running the query. It estimates from statistics."
+      },
+      {
+        "text": "About 11",
+        "explanation": "Correct. With no MCVs, it assumes the rows are spread evenly over the distinct values: 1,000,000 / 91,709 = 10.9, rounded to 11."
+      },
+      {
+        "text": "About 5,000",
+        "explanation": "That's the 0.5% default for an expression with no statistics. A plain column with stats gets a proper estimate."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\ns = 1 / n_distinct\ns = 1 / 91,709\nn_est = n_table × s\nn_est = 1,000,000 / 91,709\nn_est ≈ 10.9 ≈ 11\nwhere\ns: the selectivity: the fraction of rows expected to match\nn_distinct: the estimated number of distinct values in the column, 91,709\nn_est: the estimated number of matching rows, rounded to a whole number\nn_table: the number of rows in the table, 1,000,000\n≈: approximately equal to\nIn words: a million rows shared evenly among about 92,000 values gives about 11 rows per value.\n```\n\n(If there were MCVs, the planner would first subtract their total frequency and divide the rest among the remaining distinct values.) The real count for customer 42 is 14, so the estimate is close. Good enough to pick an index scan.",
+    "link": {
+      "title": "Row estimation examples — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/row-estimation-examples.html"
+    }
+  }
+]

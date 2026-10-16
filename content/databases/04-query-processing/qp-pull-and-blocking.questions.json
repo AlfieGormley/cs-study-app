@@ -1,0 +1,130 @@
+[
+  {
+    "id": "qp-execution-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Start with `reads = 0` and the unit's `seq_scan`, `filter_rows` and `limit` generator definitions. Then, what does this print?\n\n```python\norders = [\n  {\"id\": 1, \"status\": \"shipped\"},\n  {\"id\": 2, \"status\": \"shipped\"},\n  {\"id\": 3, \"status\": \"pending\"},\n  {\"id\": 4, \"status\": \"shipped\"},\n  {\"id\": 5, \"status\": \"pending\"},\n]\nplan = limit(filter_rows(\n    seq_scan(orders),\n    lambda r: r[\"status\"] == \"pending\"),\n  1)\nprint([r[\"id\"] for r in plan])\nprint(reads)\n```",
+    "options": [
+      {
+        "text": "`[3]` then `5`",
+        "explanation": "That would imply the scan ran to the end. The limit returns as soon as it has one row, so the scan never gets asked for rows 4 and 5."
+      },
+      {
+        "text": "`[3]` then `3`",
+        "explanation": "Correct. Rows 1 and 2 are read and rejected, row 3 passes and reaches `limit`, which has its one row and returns. Nothing pulls row 4."
+      },
+      {
+        "text": "`[3, 5]` then `5`",
+        "explanation": "The limit is 1, so only one row can be returned. This answer ignores the `limit` operator."
+      },
+      {
+        "text": "`[3]` then `1`",
+        "explanation": "`reads` counts every row the scan produced, including the two the filter threw away, not just rows that reached the top."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace the pulls:\n\n```\nlimit asks filter for a row\n filter asks scan  -> id 1 (reads=1)\n   shipped, rejected\n filter asks scan  -> id 2 (reads=2)\n   shipped, rejected\n filter asks scan  -> id 3 (reads=3)\n   pending, passed up\nlimit yields id 3; i == 1, return\n```\n\nThe list is `[3]` and `reads` is 3. This is the iterator model's big advantage: a LIMIT can stop a streaming subtree early; blocking operators may already have consumed their entire inputs.",
+    "link": {
+      "title": "The PostgreSQL executor",
+      "url": "https://www.postgresql.org/docs/current/executor.html"
+    }
+  },
+  {
+    "id": "qp-execution-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of these operators are **blocking**, meaning they must consume all of their input before they can return their first row? Select all that apply.",
+    "options": [
+      {
+        "text": "Sort",
+        "explanation": "Correct. The row that sorts first could be the last one read, so a full sort can't emit anything until it has seen every input row."
+      },
+      {
+        "text": "Seq Scan with a Filter",
+        "explanation": "Not blocking. Each row is checked and passed up immediately; that's why a LIMIT over a filtered scan finishes early."
+      },
+      {
+        "text": "The Hash node (build side of a hash join)",
+        "explanation": "Correct. The hash table must hold every build row before probing starts, otherwise a probe that misses might be wrong."
+      },
+      {
+        "text": "HashAggregate",
+        "explanation": "Correct. A group's `count(*)` or `sum` isn't final until every input row has been seen, so no group can be emitted early."
+      },
+      {
+        "text": "Limit",
+        "explanation": "Not blocking. Limit passes rows straight through and simply stops after N."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Ask of each operator: could it ever be correct to emit a row before reading the last input row?\n\n| Operator | Emit early? |\n|---|---|\n| Sort | No: last row may sort first |\n| Filter | Yes: decide row by row |\n| Hash build | No: table must be complete |\n| HashAggregate | No: totals not final |\n| Limit | Yes: pass-through |\n\nBlocking operators show a high **startup cost** in EXPLAIN (the first number in `cost=a..b`). The probe side of a hash join does stream, but only after the build has finished.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-execution-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A plan line reads:\n\n```\nSort\n  (cost=140936.84..143436.84\n   rows=1000000 width=26)\n-> Seq Scan on orders\n  (cost=0.00..17353.00 ...)\n```\n\nWhat does the Sort's `140936.84` represent?",
+    "options": [
+      {
+        "text": "The estimated cost before the Sort can return its first row (startup cost)",
+        "explanation": "Correct. A sort must read all its input and sort it before returning anything, so most of its total cost is startup cost."
+      },
+      {
+        "text": "The estimated time in milliseconds",
+        "explanation": "Costs are in arbitrary planner units (one sequential page read = 1.0 by default), not milliseconds."
+      },
+      {
+        "text": "The cost of the Sort node alone, excluding the scan below it",
+        "explanation": "Costs are cumulative: a node's cost includes all its children. The scan's 17,353 is included in the sort's figure."
+      },
+      {
+        "text": "The cost of returning half the rows",
+        "explanation": "There's no such figure. The two numbers are startup cost and total cost."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "The two numbers in `cost=140936.84..143436.84` are:\n\n- the **startup cost**: work done before the first row comes out;\n- the **total cost**: work to return every row.\n\nFor the Seq Scan the startup cost is 0: it can return a row immediately. For the Sort it is 140,936.84, which already includes the scan's full 17,353 plus the comparison work of sorting. Returning the sorted rows adds the rest:\n\n```formula\nC_run = C_total − C_start\nC_run = 143,436.84 − 140,936.84\nC_run = 2,500\nwhere\nC_run: the cost of handing the sorted rows up once sorting is finished, in planner cost units\nC_total: the Sort's total cost, the second number, 143,436.84\nC_start: the Sort's startup cost, the first number, 140,936.84\nIn words: almost all of a sort's cost is paid before its first row; emitting the million sorted rows adds only 2,500 units (0.0025 per row, the default `cpu_operator_cost`).\n```\n\nUnder a `LIMIT`, the planner weighs startup cost heavily, which is why it often prefers an index that is already in order.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-execution-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "With no index on `total`, you run `SELECT * FROM orders ORDER BY total DESC LIMIT 10;` on the 1,000,000-row table. The plan is `Limit -> Sort (top-N heapsort, Memory: 26kB) -> Seq Scan`. How many rows does the Seq Scan return?",
+    "options": [
+      {
+        "text": "10, because the Limit stops the scan early",
+        "explanation": "The Limit can only stop its child early if that child streams. Sort is blocking: the 10 largest totals could be anywhere, so every row must be seen."
+      },
+      {
+        "text": "About 10% of the table, from sampling",
+        "explanation": "This query does not request sampling: ORDER BY ... LIMIT must identify the exact top rows."
+      },
+      {
+        "text": "All 1,000,000, but the sort keeps only the best 10 in a small bounded heap",
+        "explanation": "Correct. A top-N heapsort reads every row but holds only a 10-element bounded heap, which is why memory is 26 kB rather than tens of megabytes. Content gap: no reproducible timing record is available for this illustrative plan."
+      },
+      {
+        "text": "All 1,000,000, and they are all fully sorted before the top 10 are returned",
+        "explanation": "All rows are read, but a full sort isn't needed. The planner knows about the LIMIT and uses a bounded heap: O(n log 10) work instead of O(n log n), where n is the number of input rows (1,000,000) and log is the logarithm, which grows slowly."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Is any operator under the Limit blocking? Yes, the Sort.\n2. So the Limit can't save the scan: the Seq Scan returns all 1,000,000 rows (`actual rows=1000000.00`).\n3. But the Sort is *bounded*. It keeps a bounded heap of the 10 best rows and discards anything smaller, so it needs about 26 kB.\n4. Cost: each row is compared against a bounded heap of 10 rows instead of being sorted among a million:\n\n```formula\nC_top ≈ n × log_2(k)\nC_top ≈ 1,000,000 × 3.3 ≈ 3,300,000\nC_full ≈ n × log_2(n)\nC_full ≈ 1,000,000 × 20 ≈ 20,000,000\nwhere\nC_top: the rough number of comparisons a top-N heapsort makes\nC_full: the rough number of comparisons a full sort makes\nn: the number of input rows, 1,000,000\nk: the number of rows kept, set by the LIMIT, here 10\nlog_2: the logarithm to base 2: how many times you can halve a number before reaching 1; log_2(10) ≈ 3.3 and log_2(1,000,000) ≈ 20\n≈: approximately equal to\nIn words: keeping only the best 10 rows costs each row about 3 comparisons instead of about 20, and needs only a bounded heap of 10 rows in memory.\n```\n\nTo make the LIMIT truly early-exit, give it an index on `total`: an Index Scan Backward returns rows already in order, so it can stop after 10.",
+    "link": {
+      "title": "LIMIT and OFFSET — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/queries-limit.html"
+    }
+  }
+]

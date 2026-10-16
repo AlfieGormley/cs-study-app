@@ -1,0 +1,62 @@
+[
+  {
+    "id": "qp-anti-patterns-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An API pages through orders with `ORDER BY id LIMIT 20 OFFSET :n`, using an index on `id`. When a client requests page 5,000 (`OFFSET 99980`), roughly how many index entries does Postgres walk?",
+    "options": [
+      {
+        "text": "20",
+        "explanation": "That's what keyset pagination would do. With OFFSET, Postgres can't jump to the 99,981st entry; it must count its way there."
+      },
+      {
+        "text": "99,980",
+        "explanation": "Close, but it also has to produce the 20 rows it returns."
+      },
+      {
+        "text": "100,000",
+        "explanation": "Correct. It produces 99,980 rows to skip plus 20 to return. In the lesson OFFSET 900,000 walked 900,020 entries and took 67 ms."
+      },
+      {
+        "text": "The whole table, 1,000,000",
+        "explanation": "The index is ordered by `id`, so once it has produced 100,000 rows the LIMIT stops it."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nn_read = n_off + n_lim\nn_read = 99,980 + 20 = 100,000\nwhere\nn_read: the index entries walked (and rows fetched) to answer the request\nn_off: the OFFSET value, the rows skipped, 99,980\nn_lim: the LIMIT value, the rows returned, 20\nIn words: OFFSET pagination does the work of every earlier page plus the page you asked for.\n```\n\nThe work grows linearly with the page number. Keyset pagination remembers the last `id` and asks for `WHERE id > :last_id ORDER BY id LIMIT 20`: an index seek followed by the next visible rows, without scanning earlier pages. In the lesson that was 0.014 ms against 67 ms.",
+    "link": {
+      "title": "Use The Index, Luke: paging without OFFSET",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You replace OFFSET pagination for a feed sorted by `ordered_on DESC`. Assume `ordered_on` is NOT NULL, `id` is the primary key, and every page orders by `ordered_on DESC, id DESC`. Many orders share the same date. The last row of the previous page had `ordered_on = '2026-05-01'` and `id = 7001`. Which next-page query is correct and index-friendly, given an index on `(ordered_on, id)`?",
+    "options": [
+      {
+        "text": "`WHERE ordered_on < '2026-05-01' ORDER BY ordered_on DESC LIMIT 20`",
+        "explanation": "This skips every remaining order on 2026-05-01 that came after id 7001 in the ordering. With a non-unique sort key you need a tie-breaker."
+      },
+      {
+        "text": "`WHERE ordered_on <= '2026-05-01' ORDER BY ordered_on DESC LIMIT 20`",
+        "explanation": "This repeats rows already shown on the previous page (everything on 2026-05-01 again)."
+      },
+      {
+        "text": "`ORDER BY ordered_on DESC LIMIT 20 OFFSET 20`",
+        "explanation": "That's OFFSET pagination again, with its linear cost and drifting pages when new rows arrive."
+      },
+      {
+        "text": "`WHERE (ordered_on, id) < ('2026-05-01', 7001) ORDER BY ordered_on DESC, id DESC LIMIT 20`",
+        "explanation": "Correct. The row comparison continues exactly after the last row seen, including ties on the date, and the index on `(ordered_on, id)` can be read backwards from that point."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Keyset pagination needs a **unique** ordering, so add the primary key as a tie-breaker:\n\nThe previous cursor contains the date 1 May 2026 and ID 7001. This query fragment continues after it in the same descending order:\n\n```sql\nWHERE (ordered_on, id)\n  < ('2026-05-01', 7001)\nORDER BY ordered_on DESC, id DESC\nLIMIT 20;\n```\n\nThe row-value comparison means \"earlier date, or same date and smaller id\". Postgres can turn it into a single index range on `(ordered_on, id)`, so the scan starts at the cursor instead of counting past earlier pages; visibility checks and other filters may require extra work.",
+    "link": {
+      "title": "Use The Index, Luke: paging without OFFSET",
+      "url": "https://use-the-index-luke.com/no-offset"
+    }
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "id": "qp-reading-explain-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A colleague wants to see why a cleanup statement is slow and runs `EXPLAIN ANALYZE DELETE FROM orders WHERE ordered_on < '2021-01-01';` on production. What happens?",
+    "options": [
+      {
+        "text": "Nothing is deleted; EXPLAIN never modifies data",
+        "explanation": "Plain EXPLAIN doesn't, but `ANALYZE` makes it actually execute the statement in order to measure it."
+      },
+      {
+        "text": "The rows are really deleted, and the plan with actual timings is shown",
+        "explanation": "Correct. EXPLAIN ANALYZE runs the statement for real. To undo transactional changes after measuring, wrap it: `BEGIN; EXPLAIN ANALYZE DELETE ...; ROLLBACK;`. Sequence advances and external trigger effects are not necessarily undone."
+      },
+      {
+        "text": "Postgres refuses: EXPLAIN ANALYZE only works on SELECT",
+        "explanation": "It works on INSERT, UPDATE, DELETE, MERGE and more. That's what makes it both useful and dangerous."
+      },
+      {
+        "text": "The rows are deleted but automatically restored after the EXPLAIN finishes",
+        "explanation": "There's no automatic rollback. Outside an explicit transaction, the change is committed as normal."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "`ANALYZE` in EXPLAIN means \"execute and measure\". So:\n\n```sql\nBEGIN;\nEXPLAIN ANALYZE\n  DELETE FROM orders\n  WHERE ordered_on < '2021-01-01';\nROLLBACK;\n```\n\nThe delete runs inside the transaction, measuring its actual writes and triggers, then ROLLBACK undoes transactional changes. Obsolete index entries can be reclaimed later by VACUUM rather than during the DELETE. Sequence advances and external side effects are not necessarily undone. Locks are still taken while it runs, so be careful on a busy table.",
+    "link": {
+      "title": "EXPLAIN \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A node reads:\n\n```\nSeq Scan on customers\n  (cost=0.00..2529.00 rows=500\n   width=49)\n  (actual time=0.109..16.982\n   rows=1.00 loops=1)\n```\n\nWhich statement is right?",
+    "options": [
+      {
+        "text": "The scan returned 500 rows and took 2,529 ms",
+        "explanation": "500 is the planner's estimate and 2,529 is an estimated cost in planner units. Neither is a measurement."
+      },
+      {
+        "text": "The planner estimated 500 rows; the scan actually returned 1 row and finished after about 17 ms",
+        "explanation": "Correct. The first parentheses are estimates; the `actual` ones are measurements. A 500x overestimate is worth investigating."
+      },
+      {
+        "text": "The scan returned 1 row 500 times",
+        "explanation": "`loops=1`, so the node ran once. `rows=500` in the first group is an estimate, not a loop count."
+      },
+      {
+        "text": "The rows are 49 KB wide on average",
+        "explanation": "`width` is in bytes: about 49 bytes per row."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Split the node into its two groups:\n\n| Group | Figures |\n|---|---|\n| Estimate | cost 0..2529, 500 rows, 49 B wide |\n| Actual | 0.109 ms to first row, 16.982 ms to last, 1 row, 1 loop |\n\nThis came from `WHERE lower(email) = '...'`. The 500 is the default 0.5% guess for an expression without statistics (0.005 x 100,000).",
+    "link": {
+      "title": "Using EXPLAIN \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about EXPLAIN output in **PostgreSQL 18** are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`EXPLAIN ANALYZE` includes buffer counts without needing the BUFFERS option",
+        "explanation": "Correct. Postgres 18 made BUFFERS the default when ANALYZE is used."
+      },
+      {
+        "text": "Actual row counts are shown with decimals, such as `rows=2.50`, because they are averages per loop",
+        "explanation": "Correct. Earlier versions rounded the per-loop average to an integer, which could hide fractional averages (e.g. 0.4 rows per loop shown as 0)."
+      },
+      {
+        "text": "Index scans report `Index Searches`, the number of index descents, which skip scan can make larger than the number of loops",
+        "explanation": "Correct. In the lesson, a skip scan made 1,031 descents in one loop."
+      },
+      {
+        "text": "Costs are now shown in milliseconds",
+        "explanation": "Costs are still in planner units anchored on `seq_page_cost = 1.0`. Only `actual time` is in milliseconds."
+      },
+      {
+        "text": "Plain `EXPLAIN` (without ANALYZE) also shows actual row counts",
+        "explanation": "Without ANALYZE the query isn't executed, so there's nothing actual to report. Only estimates are shown."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Postgres 18 changed EXPLAIN in several visible ways:\n\n1. `ANALYZE` implies `BUFFERS`. True.\n2. Fractional actual rows: `rows=10.01 loops=12500` shows on average just over 10 rows per lookup. True.\n3. `Index Searches: N` per index node. True.\n4. Costs remain unitless planner estimates. False.\n5. Plain EXPLAIN does not report actual row counts. The option claiming it does is false. Planning can still evaluate immutable expressions, so do not treat EXPLAIN as a sandbox for arbitrary functions.",
+    "link": {
+      "title": "PostgreSQL 18 release notes",
+      "url": "https://www.postgresql.org/docs/18/release-18.html"
+    }
+  }
+]

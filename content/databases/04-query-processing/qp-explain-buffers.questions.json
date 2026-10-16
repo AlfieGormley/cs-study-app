@@ -1,0 +1,70 @@
+[
+  {
+    "id": "qp-reading-explain-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which statements about the `Buffers:` line in EXPLAIN (ANALYZE, BUFFERS) are true? Select all that apply.",
+    "options": [
+      {
+        "text": "`shared hit` counts pages found in Postgres's shared buffer cache",
+        "explanation": "Correct. Hits are served from Postgres's own memory without asking the operating system."
+      },
+      {
+        "text": "`shared read` always means the page came from disk",
+        "explanation": "Not necessarily. A read means Postgres asked the OS, and the OS may have it in its page cache. Turn on `track_io_timing` to see actual I/O time."
+      },
+      {
+        "text": "`temp read` and `temp written` come from sorts or hashes that spilled",
+        "explanation": "Correct. Temp buffers are temporary-file traffic, typically from `work_mem` being too small for a sort or hash."
+      },
+      {
+        "text": "With the usual 8 KiB block size, `hit=12800` represents 100 MiB of buffer accesses, possibly revisiting pages",
+        "explanation": "Correct. 12,800 × 8 KiB = 100 MiB of accesses; this is not necessarily 100 MiB of distinct data."
+      },
+      {
+        "text": "A node's buffer counts are per loop, so multiply by `loops`",
+        "explanation": "Buffer counts are totals across all loops, unlike `rows` and `actual time`, which are per-loop averages."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. hit = Postgres shared buffers. True.\n2. read = from the OS, which could be its cache or the disk. False as stated.\n3. temp = spill files. True.\n4. At the usual block size, 12,800 accesses of 8 KiB each represent 100 MiB of accesses, not necessarily distinct data. True.\n5. In the lesson, an inner index scan with `loops=200` showed `Buffers: shared hit=1191 read=9`: 1,200 in total, i.e. 6 per lookup. That's a total, not a per-loop figure. False.",
+    "link": {
+      "title": "EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You test two plans for a batch join on a warm-cache test server. Plan A (nested loop) took 575 ms with `Buffers: shared hit=3589400 read=13260`. Plan B (hash join) took 527 ms with about 19,000 buffers and some temp I/O. Production has far less RAM than the working set. Which plan should you expect to hold up better in production, and why?",
+    "options": [
+      {
+        "text": "Plan A, because it was nearly as fast and uses no temp files",
+        "explanation": "Nearly all its 3.6 million accesses were shared-buffer hits, with 13,260 reads that might still hit the OS cache. With a cold or small cache, many become random disk reads."
+      },
+      {
+        "text": "They are equivalent because their times are within 10%",
+        "explanation": "Times measured on a warm cache hide I/O cost. The work done differs by about 190x."
+      },
+      {
+        "text": "Plan B is a promising candidate because it makes far fewer buffer accesses; validate with representative cache and I/O conditions",
+        "explanation": "Correct. Total buffer accesses help measure work, but the hit/read split depends on cache state and accesses may revisit the same page. Plan B reads each table once in order; Plan A does 600,000 index descents."
+      },
+      {
+        "text": "Neither: you can only decide by running them both in production",
+        "explanation": "Measuring in production is ideal, but buffer counts guide investigation but do not guarantee performance across machines and cache states."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nB_A = 3,589,400 + 13,260 = 3,602,660\nr = B_A / B_B\nr ≈ 3,602,660 / 19,000 ≈ 190\nwhere\nB_A: Plan A's buffer accesses: shared hits plus shared reads\nB_B: Plan B's buffer accesses, about 19,000\nr: how many times more page accesses Plan A makes\n≈: approximately equal to\nIn words: Plan A touches pages about 190 times as often as Plan B.\n```\n\nOn the staging box nearly all of A's accesses were hits, so they avoided OS read requests; their individual latency was not measured. Suppose instead some became random SSD reads:\n\n```formula\nt_extra ≈ f × B_A × t_read\nt_extra ≈ 0.1 × 3,602,660 × 0.1 ms\nt_extra ≈ 36,000 ms = 36 s\nwhere\nt_extra: the extra time if that fraction of Plan A's accesses became real reads\nf: the fraction of accesses assumed to miss every cache, here 0.1 (10%)\nB_A: Plan A's buffer accesses, 3,602,660\nt_read: the assumed time for one random SSD read, about 0.1 ms\nms: millisecond, a thousandth of a second\ns: second\n≈: approximately equal to\nIn words: if one access in ten went to the SSD, Plan A would gain about 36 seconds.\n```\n\nThis is a hypothetical calculation, not a measured hardware prediction. Compare buffer accesses and measured timings under representative conditions.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  }
+]

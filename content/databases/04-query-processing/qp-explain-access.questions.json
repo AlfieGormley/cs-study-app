@@ -1,0 +1,92 @@
+[
+  {
+    "id": "qp-reading-explain-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "```\nSeq Scan on orders\n  (actual time=2.224..19.154\n   rows=14.00 loops=1)\n  Filter: (customer_id = 42)\n  Rows Removed by Filter: 999986\n  Buffers: shared read=7353\n```\n\nWhat does this most strongly suggest?",
+    "options": [
+      {
+        "text": "The statistics are stale",
+        "explanation": "Statistics and cost settings could influence the chosen access path. Without estimated rows or the table's size details, this excerpt cannot establish whether statistics are stale."
+      },
+      {
+        "text": "`work_mem` is too low",
+        "explanation": "A plain scan with a filter uses almost no memory. `work_mem` matters for sorts and hashes."
+      },
+      {
+        "text": "A selective lookup is scanning the whole table; investigate whether a usable index on `customer_id` is missing or not chosen",
+        "explanation": "Correct. Rejecting 999,986 rows to keep 14 suggests checking the index and cost estimates. A usable index can greatly reduce heap access, but this plan alone does not establish why a scan was chosen."
+      },
+      {
+        "text": "The table is bloated and needs VACUUM FULL",
+        "explanation": "Page count alone does not establish bloat; use table size, row-width and dead-space measurements before considering VACUUM FULL."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The scan retains 14 of 1,000,000 rows (0.0014%). A suitable index could locate those rows directly, though the selected plan depends on estimates and costs. `shared read=7353` counts shared-buffer reads, which may be served by the operating-system cache.\n\nContent gap: no reproducible benchmark record is available for the previously asserted 75-fold speedup; measure any proposed index with a representative workload.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An admin page runs `SELECT * FROM orders ORDER BY total DESC LIMIT 50 OFFSET 0` and the plan shows `Sort Method: top-N heapsort  Memory: 30kB`. A separate CSV export runs the same query without LIMIT and shows `Sort Method: external merge  Disk: 36344kB`. Which statement is correct?",
+    "options": [
+      {
+        "text": "Both sorts read the same number of rows, but the export sorts everything and spills 36 MB to temp files; a chosen ordered index path or sufficient memory for that operation can avoid the sort spill",
+        "explanation": "Correct. Both read all 1,000,000 rows, but top-N keeps only 50 in a small bounded heap. The full sort exceeds the 4 MB `work_mem` and does an external merge sort on disk."
+      },
+      {
+        "text": "The export's sort is broken; external merge only happens when the disk is full",
+        "explanation": "External merge is the normal fallback whenever a sort doesn't fit in `work_mem`. It's not an error."
+      },
+      {
+        "text": "Raising `work_mem` to 40MB guarantees an in-memory sort, because the data is 36 MB",
+        "explanation": "The in-memory sort needs more than the on-disk size. The lesson uses illustrative sizes; actual memory requirements depend on stored rows and executor overhead."
+      },
+      {
+        "text": "The admin page's query reads only 50 rows",
+        "explanation": "Without an index on `total`, any of the million rows might be among the top 50, so all are read. Only the memory is saved."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Top-N heapsort: reads all rows, keeps a bounded heap of 50 rows. Memory is tiny.\n2. Full sort of 1,000,000 rows: needs far more than 4 MB, so it writes sorted runs to temp files and merges them (`temp read=9084 written=9101` in the lesson).\n3. Options for the export:\n   - `SET work_mem = '128MB'` for that session (an illustrative trial setting, not a guaranteed requirement);\n   - or an index on `total`, so rows come out already in order;\n   - or accept the spill: 36 MB of sequential temp I/O is fine for a nightly job.",
+    "link": {
+      "title": "Resource consumption — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-resource.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "```\nIndex Scan using orders_cust_date_idx\n  on orders\n  Index Cond: (customer_id = 42)\n  Filter: (status = 'pending'::text)\n  Rows Removed by Filter: 13\n```\n\nThe index is on `(customer_id, ordered_on)`. What does the split between Index Cond and Filter tell you?",
+    "options": [
+      {
+        "text": "Both conditions were used to search the index",
+        "explanation": "Index Cond lists access-method conditions; not every later-key condition necessarily bounds a contiguous B-tree search. `status` isn't in the index, so it can't be."
+      },
+      {
+        "text": "The index found all of customer 42's orders; each was fetched from the heap and then checked for `status`, rejecting 13",
+        "explanation": "Correct. Index Cond limits which index entries are read; Filter is evaluated after fetching each row. Cheap here, but for a customer with 100,000 orders it would need 100,000 heap fetches to find a few pending ones."
+      },
+      {
+        "text": "The Filter means the index is corrupt and Postgres is double-checking",
+        "explanation": "That's not what Filter means. (Postgres does recheck in bitmap scans, shown as `Recheck Cond`, for a different reason.)"
+      },
+      {
+        "text": "Postgres ignored the index and scanned the table",
+        "explanation": "The node is an Index Scan with an Index Cond, so the index was used to find customer 42's rows."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Index Cond `customer_id = 42`: descend the B-tree to customer 42 and read their entries (14 in our data).\n2. For each entry, fetch the row from the heap.\n3. Apply Filter `status = 'pending'`: 13 rejected, 1 kept.\n\nSo the heap work grows with *all* of the customer's orders, not to the result. If this query is hot and customers can have many orders, consider an index that puts `status` in the key, or a partial index `WHERE status = 'pending'`.",
+    "link": {
+      "title": "Multicolumn indexes — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-multicolumn.html"
+    }
+  }
+]

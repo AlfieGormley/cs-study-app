@@ -4,13 +4,13 @@ Continue until the whole course is converted. The user chose actual short lesson
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 69/76 modules; 438 originals → 2371 short lessons with 5144 focused questions.
+- Independently verified: 70/76 modules; 444 originals → 2404 short lessons with 5211 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `4d697f0`, version `9cb6432259e8`, 2336 short lessons/5072 focused questions
-  across 68 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
-- Current generated candidate: `b5de0457edf3`, 69 modules/2371 units/5144 questions.
+- Latest confirmed live release: `0675a33`, version `b5de0457edf3`, 2371 short lessons/5144 focused questions
+  across 69 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Current generated candidate: `2063e9328271`, 70 modules/2404 units/5211 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -25,8 +25,8 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- databases/postgresql: verifying; database_postgresql_short_verify.
 - synth/synth-dsp: authoring; synth_dsp_short_author.
+- synth/synth-electronics: authoring; synth_electronics_short_author.
 
 Verification and integration:
 

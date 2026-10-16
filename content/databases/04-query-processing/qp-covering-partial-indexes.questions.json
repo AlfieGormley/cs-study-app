@@ -1,0 +1,69 @@
+[
+  {
+    "id": "qp-index-tuning-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A reporting query uses a covering index and normally shows `Index Only Scan ... Heap Fetches: 0` in about 1 ms. Right after a nightly job updates 2% of the table, the same plan shows `Heap Fetches: 20592` and takes 27 ms. What's going on?",
+    "options": [
+      {
+        "text": "The index became bloated and needs REINDEX",
+        "explanation": "Bloat would make the index bigger, but it doesn't explain heap fetches. Those come from visibility checks."
+      },
+      {
+        "text": "The updates cleared all-visible bits in the visibility map, so Postgres must check the heap for row visibility until VACUUM runs",
+        "explanation": "Correct. An index-only scan skips the heap only for pages marked all-visible. The scattered updates touched nearly every page, so nearly every row needed a heap check. After VACUUM it was back to 0 heap fetches and 1.1 ms."
+      },
+      {
+        "text": "The planner switched to a different plan",
+        "explanation": "It's the same Index Only Scan. The node type didn't change; the amount of heap work did."
+      },
+      {
+        "text": "The INCLUDE columns were dropped from the index",
+        "explanation": "Updates don't change an index's definition. If columns were missing, it couldn't be an index-only scan at all."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Index entries don't record transaction visibility; the heap does.\n2. The visibility map has a bit per heap page: \"every row here is visible to everyone\".\n3. An UPDATE writes a new row version and clears that bit for the page.\n4. 20,000 updated rows over 7,353 pages (~136 rows each) clears the bit on nearly every page.\n5. So the index-only scan fetches the heap for almost every row: 20,592 heap fetches, 20,661 buffers.\n6. VACUUM can set all-visible bits when every relevant row version is visible to all transactions; long-running snapshots can delay this.\n\nFix: let autovacuum run sooner on that table, or run `VACUUM` straight after the nightly job.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Index-only scans and covering indexes — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-index-only-scans.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Given `CREATE INDEX orders_pending_idx ON orders (ordered_on) WHERE status = 'pending';`, which queries are eligible to use it, assuming suitable surrounding SELECT statements? Select all that apply.",
+    "options": [
+      {
+        "text": "`WHERE status = 'pending' ORDER BY ordered_on LIMIT 20`",
+        "explanation": "Correct. The WHERE matches the index predicate, and the index supplies `ordered_on` order. An illustrative runtime is 0.049 ms."
+      },
+      {
+        "text": "`WHERE status = 'pending' AND ordered_on < '2021-01-01'`",
+        "explanation": "Correct. The predicate is implied, and the date range is an index condition on the key column."
+      },
+      {
+        "text": "`WHERE ordered_on < '2021-01-01'` (any status)",
+        "explanation": "No. The index only contains pending orders, so using it would miss shipped and cancelled ones."
+      },
+      {
+        "text": "`WHERE status IN ('pending', 'cancelled')`",
+        "explanation": "No. The query asks for cancelled orders too, which aren't in the index."
+      },
+      {
+        "text": "A prepared statement `WHERE status = $1` executed with a generic plan",
+        "explanation": "No. With a generic plan, the planner can't prove `$1` equals 'pending', so it can't assume every row the query needs is in the index."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "The test is: does the query's WHERE clause *logically imply* `status = 'pending'`?\n\n| Query condition | Implies it? |\n|---|---|\n| status = 'pending' AND ... | Yes |\n| ordered_on < ... only | No |\n| status IN (pending, cancelled) | No |\n| status = $1 (generic) | Can't prove |\n\nOnly when it's implied can the planner be sure every row the query needs is in the index.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Partial indexes — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-partial.html"
+    }
+  }
+]

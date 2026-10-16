@@ -1,0 +1,62 @@
+[
+  {
+    "id": "qp-join-algorithms-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A hash join combines `orders` (1,000,000 rows) with `customers` (100,000 rows) on `customer_id`. Assuming comparable projected row widths and no other plan constraints, which input is usually preferable as the **build** side?",
+    "options": [
+      {
+        "text": "`customers`, because the smaller input makes a smaller hash table that is more likely to fit in memory",
+        "explanation": "Correct. The build side must be held in memory (or split into batches). Hashing 100,000 rows needs about a tenth of the memory, and the larger side just streams past."
+      },
+      {
+        "text": "`orders`, because the larger side should be indexed in memory",
+        "explanation": "Building on the larger side wastes memory and is much more likely to spill into multiple batches on disk. Expected work is O(n + m + z), where n and m are input row counts and z is the number of output rows with effective hashing, so you want the cheap-to-hold side in memory."
+      },
+      {
+        "text": "It doesn't matter; the cost is identical either way",
+        "explanation": "The number of rows touched is the same, but memory use and spilling are not. If the build side exceeds the product of `work_mem` and `hash_mem_multiplier`, the join goes multi-batch and writes temporary files."
+      },
+      {
+        "text": "Whichever table appears first in the FROM clause",
+        "explanation": "SQL text order doesn't decide this. The planner picks the build side from its row and width estimates."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "In this illustrative plan the `Hash` node sits over `Seq Scan on customers`:\n\n```\nHash\n  Buckets: 131072  Batches: 1\n  Memory Usage: 4540kB\n-> Seq Scan on customers c\n```\n\nThe illustrative 100,000-key hash table occupies 4,540 kB, about 4.4 MB. The default limit for one hash table is:\n\n```formula\nL_hash = M_work × k_hash\nL_hash = 4 MB × 2 = 8 MB\nwhere\nL_hash: the nominal memory budget for one hash operation before batching, rather than a strict cap on all executor memory, in megabytes (MB)\nM_work: the `work_mem` setting, the memory budget for one sort or hash operation\nk_hash: the `hash_mem_multiplier` setting, default 2.0 since PostgreSQL 15\nMB: megabyte; in PostgreSQL settings 1 MB = 1,024 kB\nIn words: by default a hash table may use twice `work_mem`, 8 MB, so the customers table fits in one batch.\n```\n A hash table of 1,000,000 orders would need roughly ten times that and would spill.",
+    "link": {
+      "title": "Hash join — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Hash_join"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A nightly report's hash join shows:\n\n```\nHash  Buckets: 65536  Batches: 4\n      Memory Usage: 1392kB\nBuffers: temp read=2421\n         written=2421\n```\n\nThe server has `work_mem = 1MB`. What is happening, and what's the most direct fix?",
+    "options": [
+      {
+        "text": "The hash table didn't fit in memory, so the join split into 4 batches with temporary files; raise `work_mem` for this session or query",
+        "explanation": "Correct. More than one batch means spilling. With `work_mem = 1MB` the hash limit is 2 MB (x `hash_mem_multiplier` 2). A sufficiently high per-session setting may let it fit in one batch; confirm memory demand and concurrency."
+      },
+      {
+        "text": "There are hash collisions; increase the number of buckets",
+        "explanation": "Buckets are sized automatically. `Batches` counts partitions written to disk, which is about memory, not collisions."
+      },
+      {
+        "text": "The planner should have used a nested loop instead",
+        "explanation": "With hundreds of thousands of rows on both sides and no selective filter, a nested loop would do far more work. Spilling alone does not prove that the join algorithm is wrong."
+      },
+      {
+        "text": "Four batches mean four parallel workers, which is good",
+        "explanation": "Parallel workers show up as `Workers Launched` under a Gather node. Batches are sequential partitions spilled to temporary files."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `Batches: 4` means Postgres used a hybrid hash join: it kept one partition in memory and wrote three to temp files.\n2. `temp read/written` confirm the disk traffic.\n3. Content gap: no reproducible timing record is available for this comparison; measure the effect of reducing batches on your workload.\n4. Fix: `SET work_mem = '16MB'` in the report's session, or `SET LOCAL` inside its transaction. Avoid raising it globally without thought: `work_mem` applies **per sort or hash operation, per process**, so a big global value can exhaust RAM under concurrency.\n\nThe limit that was exceeded:\n\n```formula\nL_hash = M_work × k_hash\nL_hash = 1 MB × 2 = 2 MB\nwhere\nL_hash: the nominal memory budget for one hash operation before batching, rather than a strict cap on all executor memory, in megabytes (MB)\nM_work: the `work_mem` setting, the memory budget for one sort or hash operation\nk_hash: the `hash_mem_multiplier` setting, default 2.0 since PostgreSQL 15\nMB: megabyte; in PostgreSQL settings 1 MB = 1,024 kB\nIn words: with `work_mem` at 1 MB a hash table may use only 2 MB, so a build side needing more is split into batches.\n```\n\nThe `Memory Usage` shown (1,392 kB) is the peak memory used for one batch after the split, which is why it is under the limit.",
+    "link": {
+      "title": "Resource consumption — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-resource.html"
+    }
+  }
+]

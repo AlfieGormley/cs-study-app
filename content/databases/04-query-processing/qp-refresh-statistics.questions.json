@@ -1,0 +1,62 @@
+[
+  {
+    "id": "qp-statistics-optimiser-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An ETL job creates a temporary table, inserts 2,000,000 rows (all with `batch = 1`), then immediately runs a join filtered on `WHERE t.batch = 1`. EXPLAIN shows the temp table scan estimated at `rows=10000` (actual 2,000,000), and the plan sorts that \"small\" input for a merge join. Why is the estimate wrong, and what is the fix?",
+    "options": [
+      {
+        "text": "The planner doesn't know how big the temp table is; use a real table",
+        "explanation": "It does know the size: without a filter, the same scan was estimated at about 2,000,100 rows from the table's page count. What it lacks is column statistics. A real table has the same problem until autovacuum analyses it."
+      },
+      {
+        "text": "Autovacuum never analyses temporary tables, so there are no column statistics and `batch = 1` gets the default 0.5% selectivity; run `ANALYZE` on the temp table after loading it",
+        "explanation": "Correct. 0.5% of 2,000,000 is 10,000. Autovacuum can't access temp tables, so they only get stats if you ANALYZE them. With stats, the planner sees that every row matches and picks a hash join."
+      },
+      {
+        "text": "`work_mem` is too low; increase it",
+        "explanation": "`work_mem` affects whether a sort or hash spills, not the row estimate. The plan shape came from believing only 10,000 rows match."
+      },
+      {
+        "text": "The join needs an index on the temp table",
+        "explanation": "An index won't fix the misestimate. With accurate stats a hash join is right for 2,000,000 rows, and it doesn't need an index."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Unfiltered, the scan estimate is about 2,000,100 rows: Postgres measures the table's current pages and estimates rows from them.\n2. But `pg_stats` has nothing for `batch`: no ANALYZE has run, and autovacuum skips temp tables (it can't see another session's temporary data).\n3. So `batch = 1` gets the default equality selectivity:\n\n```formula\nn_est = s_def \u00d7 n_table\nn_est = 0.005 \u00d7 2,000,000\nn_est = 10,000\nwhere\nn_est: the estimated number of matching rows\ns_def: the default selectivity for an equality condition with no usable statistics, 0.005 (0.5%), a constant in PostgreSQL's source code\nn_table: the number of rows in the table, 2,000,000\nIn words: with no statistics on `batch`, the planner guesses that half a percent of the rows match.\n```\n\n4. The true selectivity is 100%, so the estimate is 200x too low and the join is planned for a small input.\n5. Fix:\n\n```sql\nINSERT INTO tmp_load ...;\nANALYZE tmp_load;\nSELECT ... JOIN orders ...;\n```\n\nAfter ANALYZE, the same query became a hash join estimated at the right size.",
+    "link": {
+      "title": "Routine vacuuming \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/routine-vacuuming.html"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A staging table was loaded with 600,000 new rows after its last ANALYZE. The join plan shows:\n\n```\nNested Loop (rows=3)\n  (actual rows=1800000.00)\n-> Seq Scan on imports m\n     (rows=1) (actual\n     rows=600000.00)\n-> Index Scan on order_items\n     (actual loops=600000)\nBuffers: shared hit=3589400\n```\n\nAfter `ANALYZE`, the planner picks a hash join that touches about 19,000 buffers. What went wrong?",
+    "options": [
+      {
+        "text": "The index on `order_items` is corrupt",
+        "explanation": "The index worked: it returned 3 rows per lookup, exactly as expected. The problem is how many lookups were made."
+      },
+      {
+        "text": "Nested loops are always worse than hash joins",
+        "explanation": "With 99 outer rows the nested loop was the right choice (0.4 ms). The algorithm isn't bad; it was picked for the wrong input size."
+      },
+      {
+        "text": "The planner estimated 1 outer row from stale statistics, so a nested loop with one index probe looked cheapest; in reality it made 600,000 probes",
+        "explanation": "Correct. A 1-row estimate makes index nested loop look nearly free. The actual 600,000 loops touched 3.6 million buffers, about 190 times more than the hash join."
+      },
+      {
+        "text": "`work_mem` was too small for a hash join",
+        "explanation": "After ANALYZE the hash join ran fine with the same `work_mem`. The planner never considered hashing worthwhile because it believed there was only 1 row."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Compare estimate with actual on the outer side: `rows=1` vs `600000`. That's a 600,000x misestimate.\n2. Cost model with 1 outer row: one index probe, about 16 cost units. Nothing beats that.\n3. Reality: 600,000 probes x ~6 buffers each ~ 3.6 million buffer accesses.\n4. After ANALYZE: the planner sees 600,000 rows and hashes them instead (~19,000 buffers).\n\nThe counts here are illustrative, not audited laptop measurements. Repeated buffer visits are not necessarily distinct disk reads, even on an initially cold cache. The unit on stale statistics explains why the estimate was 1.",
+    "link": {
+      "title": "Statistics used by the planner \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/planner-stats.html"
+    }
+  }
+]

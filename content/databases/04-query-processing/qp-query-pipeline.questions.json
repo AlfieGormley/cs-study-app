@@ -1,0 +1,62 @@
+[
+  {
+    "id": "qp-execution-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You run `SELECT stauts FROM orders;` (note the typo) and PostgreSQL replies `ERROR: column \"stauts\" does not exist`. Which stage of query processing raised the error?",
+    "options": [
+      {
+        "text": "The parser",
+        "explanation": "The parser only checks grammar. `SELECT stauts FROM orders` is grammatically valid SQL; the parser has no idea which columns exist."
+      },
+      {
+        "text": "The analyser (binder), when resolving names against the catalog",
+        "explanation": "Correct. The analyser looks every table and column name up in the system catalog and assigns types. An unknown name fails here, before any planning or execution."
+      },
+      {
+        "text": "The planner, when estimating the cost of reading the column",
+        "explanation": "The planner only ever sees a query tree whose names have already been resolved. It never meets an unknown column."
+      },
+      {
+        "text": "The executor, when it reads the first row and can't find the column",
+        "explanation": "Execution never starts. Rows are not read to discover the schema; the schema is checked from the catalog first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Walk the pipeline:\n\n1. **Parser**: is this valid SQL grammar? `SELECT <identifier> FROM <identifier>` is fine, so it passes.\n2. **Analyser**: look up `orders` in the catalog (found), then look up a column called `stauts` in it (not found). Error.\n3. Rewriter, planner and executor never run.\n\nA rule of thumb: syntax errors come from the parser (`syntax error at or near ...`); \"does not exist\" and type errors come from the analyser.",
+    "link": {
+      "title": "The path of a query — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/query-path.html"
+    }
+  },
+  {
+    "id": "qp-execution-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You define `CREATE VIEW pending_orders AS SELECT * FROM orders WHERE status = 'pending';` and then run `SELECT * FROM pending_orders WHERE customer_id = 42;`. There is an index on `orders(customer_id)`. What does the planner see?",
+    "options": [
+      {
+        "text": "It must materialise the whole view (30,000 rows) first, then filter for customer 42",
+        "explanation": "Simple views aren't materialised. That only happens for materialised views (which are real tables) or some constructs that block inlining."
+      },
+      {
+        "text": "A single query on `orders` with both conditions, so it can use the `customer_id` index",
+        "explanation": "Correct. The rewriter replaces the view with its definition, giving `WHERE status = 'pending' AND customer_id = 42` against `orders`, and the planner optimises it as one query."
+      },
+      {
+        "text": "It can't use any index because views have no indexes",
+        "explanation": "The view itself has no indexes, but after rewriting the query runs against the base table, whose indexes are all available."
+      },
+      {
+        "text": "It plans the view once when it is created and reuses that plan",
+        "explanation": "Views store a query definition, not a plan. Each query using the view is planned afresh."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The **rewriter** sees `pending_orders` and substitutes its definition.\n2. The query becomes, in effect:\n\n```sql\nSELECT * FROM orders\nWHERE status = 'pending'\n  AND customer_id = 42;\n```\n\n3. The **planner** sees both predicates on `orders` and can use the `customer_id` index (about 11 matching rows), then check `status` on each.\n\nThis simple view can be expanded and optimised with the outer query without a separate materialisation step. Its underlying query still has an execution cost; complex views can also restrict optimisation.",
+    "link": {
+      "title": "The path of a query — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/query-path.html"
+    }
+  }
+]

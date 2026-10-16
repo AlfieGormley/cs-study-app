@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 69/76. Updated 2026-10-16.
+Verified modules: 70/76. Updated 2026-10-16.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -76,6 +76,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | databases/SQL Fundamentals | 6 | 40 | 74 | 31 | 269 | 414 | 43 |
 | databases/Advanced SQL | 6 | 41 | 71 | 52 | 148 | 260 | 54 |
 | databases/Relational Theory & Normalisation | 6 | 35 | 72 | 151 | 190 | 448 | 47 |
+| databases/Query Processing & Optimisation | 6 | 33 | 67 | 65 | 192 | 357 | 53 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4984,9 +4985,78 @@ Low-confidence areas:
 - **medium** — rel-th-enumerate-keys: Prime-attribute decision is NP-complete for a schema with an FD basis.. Primary Lucchesi/Osborn publisher abstract explicitly states the theorem. Full proof was not retrieved; numerical key enumeration was independently checked.
 - **medium** — rel-th-anomalies-and-1nf: Atomicity and 1NF under the explicitly chosen classical flat convention.. Textbook-author source supports flat domains; relational domain conventions vary. The lesson and array question explicitly declare their flat convention.
 
+## databases: Query Processing & Optimisation
+
+[Independent verification record](../content/databases/04-query-processing/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Disabling one method does not force a different remaining method.
+- The SQL Fundamentals fixture has several English cities; no need to invent eight equally frequent countries.
+- Keep milliseconds explicit through substitution.
+- Account for rescanned parent as well as rescanned children.
+- A conservatively cleared visibility bit is correct, not an out-of-date map.
+- Avoid equating shared-buffer reads with physical storage misses.
+- Clarify which search needs a trigram index.
+- Separate selective index lookup from every possible index use.
+- Full-text word matching does not preserve arbitrary substring semantics.
+- Transformation depends on query form; semantics are intentional, not universally interchangeable.
+- Tests stale ANALYZE cardinalities, taught after the join-variants unit; question ID, type, answer and options retained.
+- Keep units explicit through substitution.
+- A close estimate is not exact knowledge.
+- Indexes also serve ordered/covering scans of many rows.
+- Do not confuse no selective bound with impossible covering scans.
+- The distractor must not reintroduce the body correction.
+- Qualify selective search versus index use.
+- Remove unsupported relative cost and impossible-index generalisation.
+- Keep correct option precise while preserving its index.
+- Qualify ordinary integer search bound.
+- Calendar-day arithmetic and mixed timestamp/time-zone comparisons need semantic care.
+- Preserve semantic qualification.
+- Avoid universally quantifying every scalar subquery form.
+- Scope implementation claim to the taught form/version.
+- Independent primary-source correction of an overbroad or mismatched meaning.
+- Independent primary-source correction of an overbroad or mismatched meaning.
+- Independent primary-source correction of an overbroad or mismatched meaning.
+- Independent primary-source correction of an overbroad or mismatched meaning.
+- Independent primary-source correction of an overbroad or mismatched meaning.
+- Independent primary-source correction of an overbroad or mismatched meaning.
+- Explain non-obvious filtering/repeated iteration/duplicate handling/batching without changing executable statements.
+- Explain non-obvious filtering/repeated iteration/duplicate handling/batching without changing executable statements.
+- Explain non-obvious filtering/repeated iteration/duplicate handling/batching without changing executable statements.
+- Explain non-obvious filtering/repeated iteration/duplicate handling/batching without changing executable statements.
+- Cover bold jargon with a qualified database meaning; avoid a generic index lookup alias capturing array-index access elsewhere.
+- Actual compiled push-based opened message-broker push delivery, a different mechanism. Use a precise query-execution phrase.
+- Actual warm caches link described an application cache sending misses to a database, whereas this unit means database/OS page caches. Own cache-warmth entry supplies the correct layer-aware meaning.
+- Actual earlier language/protocol/JIT/Elasticsearch contexts need a generic first meaning with explicitly scoped PostgreSQL details; sources and read-only context decisions recorded separately.
+- REJECT unqualified build phase alias: actual earlier DSA heapsort construction is not hash-join building. Keep precise build/probe-side aliases.
+- Actual earlier language/protocol/JIT/Elasticsearch contexts need a generic first meaning with explicitly scoped PostgreSQL details; sources and read-only context decisions recorded separately.
+- Actual earlier language/protocol/JIT/Elasticsearch contexts need a generic first meaning with explicitly scoped PostgreSQL details; sources and read-only context decisions recorded separately.
+- Actual earlier contexts include physical data independence, contiguous memory scans and ordinary SQL sorting. Remove the false bare-independence alias and give general meanings before scoped PostgreSQL details.
+- Actual earlier contexts include physical data independence, contiguous memory scans and ordinary SQL sorting. Remove the false bare-independence alias and give general meanings before scoped PostgreSQL details.
+- Actual earlier contexts include physical data independence, contiguous memory scans and ordinary SQL sorting. Remove the false bare-independence alias and give general meanings before scoped PostgreSQL details.
+- REJECT bare plan/plans alias donation: actual earlier consistency-maintenance plan and planning recovery changes mean an ordinary intention, not a database query plan. Qualified query/physical plan aliases remain.
+- Allow a full five-minute reading estimate for the densest SQL-semantics unit.
+- State the generator limit domain explicitly.
+- Python dictionary keys need to be hashable.
+- Consolidate the first-use physical table-storage entry under the existing later-owner source ID. Correct default/build-time page size and conditional heap checks; retain separation from bounded priority-queue heaps. Root explicitly assigned this first-use ownership; no foreign source edited.
+- Root assigned precise first-use ownership to Query04. Correct old later-module every-write generalisation with HOT, partial-predicate and deferred-cleanup qualifications.
+- Do not imply every PostgreSQL DELETE immediately maintains index entries; distinguish actual statement costs from later reclamation.
+- Make clear that the unit anchor is a configurable default rather than an immutable constant.
+- Actual generic heap-fetch contexts also describe ordinary Index Scans, not only the named Index Only Scan metric; define physical accesses first and qualify the EXPLAIN field.
+
+Remaining gaps:
+
+- Original laptop timing provenance is unavailable. Existing active notes label plan numbers as hypothetical teaching inputs, not measured performance promises.
+- Vendor behaviour is verified at the explicit PostgreSQL18/17, MySQL8.0 and cited documentation versions; illustrative cost and cardinality models intentionally state simplifying assumptions. This short-lesson split retains the original scope rather than adding a complete DBMS implementation.
+
+Low-confidence areas:
+
+None newly recorded. Inherited glossary qualifications remain in the verification record.
+
 ## synth: Sound & Digital Audio
 
-[Independent verification record](https://github.com/AlfieGormley/cs-study-app/blob/4d697f0b380f20fbbf9da2589b0cad63c6426c5f/content/synth/01-sound-sampling/verification.json)
+[Independent verification record](https://github.com/AlfieGormley/cs-study-app/blob/0675a331fc718ce186564dec26480a5ef924ef2a/content/synth/01-sound-sampling/verification.json)
 
 A scoped follow-up is underway. This section describes the previously published version.
 

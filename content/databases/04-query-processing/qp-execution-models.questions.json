@@ -1,0 +1,32 @@
+[
+  {
+    "id": "qp-execution-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why do analytical engines like DuckDB and ClickHouse use **vectorised** execution instead of the classic one-row-at-a-time iterator model?",
+    "options": [
+      {
+        "text": "The iterator model can't express joins or aggregates",
+        "explanation": "It can express everything; Postgres runs every SQL query with it. The problem is per-row overhead, not expressiveness."
+      },
+      {
+        "text": "Vectorised engines read fewer pages from disk for the same query",
+        "explanation": "Batching changes CPU work, not which pages are read. (Columnar storage does reduce I/O, but that is a separate design choice.)"
+      },
+      {
+        "text": "Vectorised execution lets the planner skip cost estimation",
+        "explanation": "Vectorised engines still have optimisers that estimate costs. Execution model and planning are separate concerns."
+      },
+      {
+        "text": "Processing a batch of values per `next()` call spreads the function-call overhead and gives tight, cache-friendly loops",
+        "explanation": "Correct. One call per row per operator is a big fraction of CPU time when scanning billions of rows. Batches of around a thousand values amortise that and let the CPU use SIMD and its caches well."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Count the calls for a scan, filter and sum over 1 billion rows:\n\n```formula\nN_row ≈ k × n\nN_row ≈ 3 × 10^9\nN_batch ≈ (k × n) / b\nN_batch ≈ (3 × 10^9) / 1,024\nN_batch ≈ 2.9 × 10^6\nwhere\nN_row: the number of `next()` calls when each call returns one row\nN_batch: the number of `next()` calls when each call returns a batch of rows\nk: the number of operators each row passes through, about 3 here (scan, filter, sum)\nn: the number of rows, 10^9\n10^9: ten to the power 9, one billion\nb: the number of rows in each batch, here 1,024\n≈: approximately equal to\nIn words: batching 1,024 rows per call cuts about 3 billion calls to about 3 million.\n```\n\nEach call also has branches and pointer chasing. With batches, the inner loop is something like `for i in range(1024): out[i] = a[i] > 5`, which compilers and CPUs execute very fast. For OLTP queries touching a few rows, batching can offer less benefit; per-row overhead is only one factor in an engine's execution-model design.",
+    "link": {
+      "title": "Query plan — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Query_plan"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "qp-reading-explain-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "```\nHash Join  (actual time=31.0..80.0\n            rows=50000.00 loops=1)\n-> Seq Scan on a\n     (actual time=0.01..50.0 loops=1)\n-> Hash  (actual time=20.0..20.0\n          loops=1)\n```\n\nHow much time was spent in the Hash Join node itself (its exclusive time)?",
+    "options": [
+      {
+        "text": "80 ms",
+        "explanation": "80 ms is the inclusive time: it covers the children too. Times in EXPLAIN ANALYZE are cumulative."
+      },
+      {
+        "text": "49 ms",
+        "explanation": "That's 80 - 31, the gap between first and last row. Part of that is the scan of `a` streaming rows in."
+      },
+      {
+        "text": "30 ms",
+        "explanation": "That only subtracts the Seq Scan. The Hash child's 20 ms is also included in the join's 80 ms."
+      },
+      {
+        "text": "About 10 ms",
+        "explanation": "Correct. 80 ms total, minus 50 ms in the probe-side scan, minus 20 ms building the hash, leaves about 10 ms for probing and joining."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```formula\nt_excl = t_node \u2212 \u03a3 t_child\nt_excl = (80.0 \u2212 50.0 \u2212 20.0) ms\nt_excl = 10.0 ms\nwhere\nt_excl: the exclusive time: time spent in the Hash Join itself, in milliseconds (ms)\nt_node: the node's inclusive time, the second number of its `actual time`, 80.0 ms\nt_child: a child's inclusive time: 50.0 ms for the scan of a, 20.0 ms for the Hash\n\u03a3: sum: add up the term for every child\nms: millisecond, a thousandth of a second\nIn words: subtract the children's durations from the node's total, and 10 ms is left for probing and joining.\n```\n\nBoth children ran once, so no loop multiplication is needed. The real bottleneck is the scan of `a` (50 ms), so that's where to look first: is it reading far more rows than it returns?",
+    "link": {
+      "title": "Using EXPLAIN \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The inner side of a nested loop shows:\n\n```\nIndex Scan using items_order_idx\n  (actual time=0.010..0.012\n   rows=2.50 loops=4000)\n```\n\nHow many rows did this node return in total, and roughly how long did it take altogether?",
+    "options": [
+      {
+        "text": "10,000 rows in about 48 ms",
+        "explanation": "Correct. Figures are per loop: 2.5 rows x 4,000 loops = 10,000 rows, and 0.012 ms x 4,000 = 48 ms."
+      },
+      {
+        "text": "2.5 rows in 0.012 ms",
+        "explanation": "Those are per-loop averages. The node ran 4,000 times."
+      },
+      {
+        "text": "4,000 rows in 0.012 ms",
+        "explanation": "4,000 is the number of executions, not rows; and the time must be multiplied by loops too."
+      },
+      {
+        "text": "It can't return half a row, so the plan is corrupt",
+        "explanation": "2.50 is an average over 4,000 loops: some lookups found 2 rows, others 3. Postgres 18 prints the decimals for exactly this reason."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nn_total = n_loop \u00d7 L\nn_total = 2.50 \u00d7 4,000 = 10,000\nt_total \u2248 t_loop \u00d7 L\nt_total \u2248 0.012 ms \u00d7 4,000 = 48 ms\nwhere\nn_total: the total rows the node returned across all executions\nn_loop: the `rows` figure, the average rows per execution, 2.50\nL: the `loops` figure, the number of executions, 4,000\nt_total: the total time spent in the node, in milliseconds (ms)\nt_loop: the per-execution time to the last row, the second number of `actual time`, 0.012 ms\n\u2248: approximately equal to\nms: millisecond, a thousandth of a second\nIn words: 4,000 lookups of 2.5 rows each is 10,000 rows, and 4,000 lookups of 0.012 ms is 48 ms.\n```\n\nA 0.012 ms node looks harmless until you multiply it by its loops. That's how a nested loop with a very cheap inner side can still dominate a query.",
+    "link": {
+      "title": "Using EXPLAIN \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-reading-explain-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Which node is the most likely **root cause** of this bad plan?\n\n```\nHash Join (rows=484)\n  (actual rows=3686.00)\n-> Seq Scan on orders o\n     (rows=30767)\n     (actual rows=30066.00)\n-> Hash (rows=1573)\n     (actual rows=12500.00)\n   -> Seq Scan on customers c\n        (rows=1573)\n        (actual rows=12500.00)\n        Filter: city = 'Glasgow'\n          AND country = 'Scotland'\n```",
+    "options": [
+      {
+        "text": "The Hash Join, because its estimate (484) is furthest from the actual (3,686)",
+        "explanation": "The join's error is inherited: it multiplies its inputs' estimates. Fix the input and the join estimate improves."
+      },
+      {
+        "text": "The Seq Scan on `orders`, because it reads the most rows",
+        "explanation": "Its estimate (30,767) is within 3% of the actual (30,066). Big isn't the same as wrong."
+      },
+      {
+        "text": "There's no problem; the estimates are all close",
+        "explanation": "The customers estimate is 8x too low and the join is 7.6x too low. That's enough to change plan choices in a bigger query."
+      },
+      {
+        "text": "The Seq Scan on `customers`, where correlated city and country conditions are underestimated by 8x",
+        "explanation": "Correct. It's the lowest node with a big error. The planner multiplied 1/8 x 1/8 as if the columns were independent, but city determines country."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Walk up from the leaves:\n\n| Node | Est | Actual | Ratio |\n|---|---|---|---|\n| Scan orders | 30,767 | 30,066 | 1.0x |\n| Scan customers | 1,573 | 12,500 | 8x |\n| Hash Join | 484 | 3,686 | 7.6x |\n\nThe first big error is on `customers`, and the join inherits it. Fix: `CREATE STATISTICS ... (dependencies) ON city, country`, then ANALYZE.",
+    "link": {
+      "title": "Multivariate statistics examples \u2014 PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/multivariate-statistics-examples.html"
+    }
+  }
+]

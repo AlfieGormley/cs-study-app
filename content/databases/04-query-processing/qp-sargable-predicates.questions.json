@@ -1,0 +1,99 @@
+[
+  {
+    "id": "qp-anti-patterns-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`events.created_at` is a `timestamp` with a B-tree index. Which rewrite of `WHERE date(created_at) = '2026-03-01'` lets the index be used?",
+    "options": [
+      {
+        "text": "`WHERE created_at::date = '2026-03-01'`",
+        "explanation": "That's the same function in different syntax: a cast applied to the column. The ordinary index on `created_at` still lacks a selective search bound for that expression."
+      },
+      {
+        "text": "`WHERE created_at >= '2026-03-01' AND created_at < '2026-03-02'`",
+        "explanation": "Correct. The bare column is compared with constants, so the condition becomes an index range scan over exactly one day. A half-open range also avoids missing times like 23:59:59.5."
+      },
+      {
+        "text": "`WHERE created_at BETWEEN '2026-03-01' AND '2026-03-01'`",
+        "explanation": "It's sargable, but it's wrong: it only matches the instant 2026-03-01 00:00:00, not the whole day."
+      },
+      {
+        "text": "`WHERE to_char(created_at, 'YYYY-MM-DD') = '2026-03-01'`",
+        "explanation": "This formats each column value as text; the ordinary timestamp index supplies no selective bound for that expression. It is a different indexed expression."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "An index on `created_at` is sorted by `created_at`. It can find a contiguous range of values, but it knows nothing about `date(created_at)`.\n\n1. Ask: which raw values does the condition accept? All timestamps from midnight on 1 March up to, not including, midnight on 2 March.\n2. Write that as a half-open range on the bare column.\n\nIn the lesson, the same rewrite for a whole year went from a 66 ms Seq Scan to an 8.7 ms Index Only Scan.",
+    "link": {
+      "title": "Use The Index, Luke: functions in WHERE",
+      "url": "https://use-the-index-luke.com/sql/where-clause/functions"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A slow endpoint's plan shows:\n\n```\nSeq Scan on orders  (rows=5000)\n  Filter: ((id)::numeric = 42.0)\n```\n\n`orders.id` is an `integer` primary key. What is the cause?",
+    "options": [
+      {
+        "text": "The parameter was sent as `numeric`, so Postgres casts every `id` to numeric to compare, which removes a selective bound from the ordinary integer index",
+        "explanation": "Correct. The `::numeric` cast is on the column side. That expression does not supply a selective bound on the primary key's ordinary integer B-tree; this plan tests it row by row. Send an integer parameter."
+      },
+      {
+        "text": "The primary key index is missing",
+        "explanation": "Primary keys always have a unique index. The plan doesn't use it because of the cast, not because it's missing."
+      },
+      {
+        "text": "Statistics are stale",
+        "explanation": "`rows=5000` is the 0.5% default for an expression, which results from the cast. ANALYZE won't help."
+      },
+      {
+        "text": "Postgres always scans for numeric comparisons",
+        "explanation": "A numeric column with a numeric index would be searched normally. The problem is comparing *different* types."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Look at which side of the comparison has the cast: `(id)::numeric`. The column is being converted.\n2. Why? Integer = numeric has no direct integer index operator, so Postgres promotes the integer to numeric.\n3. A function on the column is non-sargable, and the estimate falls back to 0.5% of 1,000,000 = 5,000.\n4. Fix in the application: bind the parameter as an integer. (`WHERE id = '42'` works, because an untyped literal takes the column's type.)",
+    "link": {
+      "title": "Sargable \u2014 Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sargable"
+    }
+  },
+  {
+    "id": "qp-anti-patterns-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "With a B-tree index on `events.created_at` (a `timestamp`), which conditions are **sargable**, i.e. able to use the index directly? Select all that apply.",
+    "options": [
+      {
+        "text": "`created_at >= now() - interval '1 day'`",
+        "explanation": "Sargable. The function is on the constant side: `now() - interval '1 day'` is computed once, and the bare column is compared with it."
+      },
+      {
+        "text": "`date_trunc('day', created_at) = '2026-03-01'`",
+        "explanation": "Not sargable. The function is applied to the column, so the index on `created_at` can't be searched."
+      },
+      {
+        "text": "`created_at + interval '1 day' > now()`",
+        "explanation": "Not sargable. Arithmetic on the column is still a function of the column. A bare-column bound such as `created_at > now() - interval '1 day'` can search the index. Check type conversions and daylight-saving semantics before assuming an interval rewrite is equivalent."
+      },
+      {
+        "text": "`created_at BETWEEN $1 AND $2`",
+        "explanation": "Sargable. A range on the bare column, with parameters as bounds."
+      },
+      {
+        "text": "`extract(hour FROM created_at) = 9`",
+        "explanation": "Not sargable on this index. \"9 am on any day\" isn't a contiguous range of timestamps; you would need an expression index on the extract."
+      }
+    ],
+    "answer": [
+      0,
+      3
+    ],
+    "workedExample": "The test: is the indexed column alone on one side of the comparison, with everything else on the other side computable before the scan?\n\n| Condition | Column bare? |\n|---|---|\n| `created_at >= now() - ...` | Yes |\n| `date_trunc(.., created_at)` | No |\n| `created_at + interval` | No |\n| `created_at BETWEEN $1 AND $2` | Yes |\n| `extract(hour FROM ..)` | No |\n\nAlgebra often rescues the third case, subject to types and time-zone semantics; the fifth needs a matching expression index for selective searching.",
+    "link": {
+      "title": "Sargable \u2014 Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sargable"
+    }
+  }
+]

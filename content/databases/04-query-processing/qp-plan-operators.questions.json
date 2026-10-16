@@ -1,0 +1,100 @@
+[
+  {
+    "id": "qp-execution-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Here is a simplified plan:\n\n```\nAggregate\n-> Hash Join\n   -> Seq Scan on orders\n   -> Hash\n      -> Seq Scan on customers\n```\n\nWhich way do rows flow through this tree?",
+    "options": [
+      {
+        "text": "Top-down: the Aggregate produces rows and hands them to the scans",
+        "explanation": "Control (the `next()` calls) starts at the top, but data moves the other way. The Aggregate can't produce anything until rows reach it."
+      },
+      {
+        "text": "In the order the lines are printed: Aggregate first, then Hash Join, and so on",
+        "explanation": "Plans are printed root first, but that's display order, not the order in which work happens. Reading a plan top to bottom like a script is a common beginner mistake."
+      },
+      {
+        "text": "Bottom-up: the scans read rows from tables and each parent consumes its children's output",
+        "explanation": "Correct. The leaves are scans; their rows flow up into the Hash and Hash Join, and the join's output flows into the Aggregate at the root."
+      },
+      {
+        "text": "All nodes run independently and the results are merged at the end",
+        "explanation": "The operators are chained: each one consumes another's output. They are not independent jobs whose results get combined."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The root (`Aggregate`) asks its child for a row.\n2. The `Hash Join` must first build its hash table, so it pulls *every* row from `Hash`, which pulls from `Seq Scan on customers`.\n3. Then it pulls `orders` rows one at a time, probes the hash table and passes matches up.\n4. The `Aggregate` counts them and emits one row at the end.\n\nSo control starts at the top, but rows travel from the leaves up. Read plans from the most indented lines outwards.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  },
+  {
+    "id": "qp-execution-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You write `... FROM orders o JOIN customers c ON ... WHERE o.status = 'pending'`. The plan shows `Filter: (status = 'pending')` inside the `Seq Scan on orders` node, *below* the join. Why?",
+    "options": [
+      {
+        "text": "Postgres ignores the order of clauses and always filters last",
+        "explanation": "The filter has clearly been applied first here, not last. The order of clauses doesn't fix the order in which work happens, but \"always last\" would be the worst choice."
+      },
+      {
+        "text": "It's a display quirk; the filter really runs after the join",
+        "explanation": "It's not a quirk. The scan node reported 969,934 rows removed by the filter, so the join only ever saw the 30,066 matching rows."
+      },
+      {
+        "text": "The WHERE clause is always evaluated before FROM in SQL",
+        "explanation": "In SQL's logical order FROM (including joins) comes before WHERE. The plan is allowed to differ from that logical order, but the logical order isn't WHERE first."
+      },
+      {
+        "text": "Predicate pushdown: the planner moves the filter as early as possible so the join processes fewer rows",
+        "explanation": "Correct. Filtering on a column of `orders` gives the same answer before or after the join, so the planner does it during the scan and the join handles 30,066 rows instead of 1,000,000."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "SQL's logical order (FROM, then WHERE, then GROUP BY...) defines what the result *means*. The planner may compute it any way that produces the same result.\n\nFor this inner join, applying the orders-only filter before joining preserves the result. Outer joins and NULL-sensitive conditions need separate reasoning. Doing it first:\n\n```formula\nr = n_all / n_kept\nr = 1,000,000 / 30,066 ≈ 33\nwhere\nr: how many times fewer order rows reach the join when the filter is pushed down into the scan\nn_all: the order rows the join would receive without pushdown: every order, 1,000,000\nn_kept: the order rows that survive the status filter in the scan, 30,066 pending orders\n≈: approximately equal to\nIn words: filtering first means the join handles about 33 times fewer order rows.\n```\n\nThat's about 33 times fewer probe-side input rows; total join work also includes building the hash table and producing matches.",
+    "link": {
+      "title": "Planner/optimiser — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/planner-optimizer.html"
+    }
+  },
+  {
+    "id": "qp-execution-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "For the lesson's \"top three cities by pending orders\" query, the plan was:\n\n```\nLimit\n-> Sort [count DESC, top-N]\n   -> HashAggregate [by city]\n      -> Hash Join\n         -> Seq Scan orders\n              Filter: pending\n         -> Hash\n            -> Seq Scan customers\n```\n\nWhich statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "The hash table is built from `customers`, and `orders` rows probe it",
+        "explanation": "Correct. The child under the `Hash` node is the build side; the other child of the Hash Join streams through and probes."
+      },
+      {
+        "text": "The Sort node sorts about 30,000 rows",
+        "explanation": "No. The Sort sits above the HashAggregate, which outputs one row per city: 8 rows. Grouping before sorting is what makes this cheap."
+      },
+      {
+        "text": "The `Limit` lets the Seq Scan on `orders` stop after a few rows",
+        "explanation": "No. Blocking operators (Sort, HashAggregate) sit between Limit and the scan, so every pending order must be counted first."
+      },
+      {
+        "text": "Each `orders` row is filtered on `status` before it probes the join hash table",
+        "explanation": "Correct. The filter is inside the scan node (predicate pushdown), so only the 30,066 pending orders reach the join."
+      },
+      {
+        "text": "The whole `customers` table is read even though only 8 cities appear in the output",
+        "explanation": "Correct. The build side scans all 100,000 customers to build the hash table, because any of them might match a pending order."
+      }
+    ],
+    "answer": [
+      0,
+      3,
+      4
+    ],
+    "workedExample": "Work up from the leaves:\n\n1. `Seq Scan customers` returns 100,000 rows into `Hash` (build side).\n2. `Seq Scan orders` filters in place: 30,066 pass, 969,934 removed.\n3. `Hash Join` probes with each pending order: 30,066 joined rows.\n4. `HashAggregate` groups by city: 8 rows.\n5. `Sort` (top-N) sorts those 8 and `Limit` takes 3.\n\nThe Limit is above two blocking operators, so it saves nothing below them. Content gap: no reproducible benchmark record is available for the illustrative plan; no measured page-I/O or runtime claim is made.",
+    "link": {
+      "title": "Using EXPLAIN — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+    }
+  }
+]

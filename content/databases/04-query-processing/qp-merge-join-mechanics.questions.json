@@ -1,0 +1,65 @@
+[
+  {
+    "id": "qp-join-algorithms-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In which situations is a **merge join** a good choice? Select all that apply.",
+    "options": [
+      {
+        "text": "Both inputs can be read in join-key order from existing B-tree indexes",
+        "explanation": "Correct. With no sorting needed, the merge can be efficient; duplicate-key groups may require rescanning or retaining those groups, and producing many matches adds work."
+      },
+      {
+        "text": "The query has `ORDER BY` on the join key, so the result must be sorted anyway",
+        "explanation": "Correct when the merge path provides ordering compatible with that ORDER BY. The planner may then avoid a final sort; join type, direction and NULL ordering still matter."
+      },
+      {
+        "text": "The join condition is `a.ts BETWEEN b.start AND b.finish` with no equality",
+        "explanation": "Postgres merge join requires an equality condition. A pure range condition gets a nested loop."
+      },
+      {
+        "text": "Both inputs are huge and unsorted, and there is plenty of memory for hashing",
+        "explanation": "Sorting both huge inputs costs O(n log n) for n rows and may spill; hashing is linear, O(n): its work grows in proportion to n. Content gap: no reproducible timing record is available for the lesson's illustrative comparison."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "Merge join's cost is the merge (linear) plus any sorts needed. So ask: is the input already sorted?\n\n- Indexes in key order: no sort, cheap.\n- Output needed in key order: the sort would be needed anyway.\n- Unsorted, large: the sort dominates; hash join is usually better.\n- No equality condition: not eligible in Postgres.\n\nIn the lesson, the forced merge join for pending orders read `customers` via its primary key in order and sorted only 30,066 orders in memory, illustrating how preordered input can reduce sorting work; no measured runtime equivalence is claimed.",
+    "link": {
+      "title": "Sort-merge join — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sort-merge_join"
+    }
+  },
+  {
+    "id": "qp-join-algorithms-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the lesson's `merge_join` (left keys unique, both inputs sorted), what does this print?\n\n```python\nleft = [1, 3, 5]\nright = [3, 3, 4, 5]\nk = lambda x: x\nprint(list(merge_join(left, right, k)))\n```",
+    "options": [
+      {
+        "text": "`[(3, 3), (5, 5)]`",
+        "explanation": "After a match, the code advances `j` but not `i`, so the left 3 is compared with the second right 3 as well. Duplicates on the right each produce a pair."
+      },
+      {
+        "text": "`[(3, 3), (3, 3), (5, 5)]`",
+        "explanation": "Correct. Left 3 matches both right 3s; then 3 < 4 advances left to 5, 5 > 4 advances right to 5, and they match."
+      },
+      {
+        "text": "`[(1, 3), (3, 3), (5, 5)]`",
+        "explanation": "Only equal keys are emitted. 1 < 3, so the code simply advances past the left 1."
+      },
+      {
+        "text": "`[(3, 3), (3, 3), (4, 5), (5, 5)]`",
+        "explanation": "4 never matches anything: there's no 4 on the left. When `a > b` the code just advances the right side."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace `(i, j)` and the keys:\n\n```\ni j  a b\n0 0  1 3  a<b  i=1\n1 0  3 3  emit (3,3)  j=1\n1 1  3 3  emit (3,3)  j=2\n1 2  3 4  a<b  i=2\n2 2  5 4  a>b  j=3\n2 3  5 5  emit (5,5)  j=4\nj = len(right): stop\n```\n\nEach step advances one pointer, so the loop runs at most `len(left) + len(right)` times: linear.",
+    "link": {
+      "title": "Sort-merge join — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Sort-merge_join"
+    }
+  }
+]

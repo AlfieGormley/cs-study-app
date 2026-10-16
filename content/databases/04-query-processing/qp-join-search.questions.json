@@ -1,0 +1,70 @@
+[
+  {
+    "id": "qp-statistics-optimiser-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A query becomes much slower after a plan change. Which diagnostic checks the cardinality-estimation problem highlighted by the cited optimiser study?",
+    "options": [
+      {
+        "text": "The cost constants (like `random_page_cost`) are wrong",
+        "explanation": "Cost constants matter, but they rarely change on their own, and studies found they cause far smaller errors than wrong row counts."
+      },
+      {
+        "text": "The search strategy missed the best join order",
+        "explanation": "Below the default GEQO threshold, PostgreSQL uses a dynamic-programming search subject to join restrictions and pruning; it does not guarantee the globally fastest real execution plan."
+      },
+      {
+        "text": "Compare estimated and actual row counts throughout the plan",
+        "explanation": "Correct. Row estimates feed every cost calculation. A large error, from stale stats or correlated columns, can flip the choice of join algorithm or access path."
+      },
+      {
+        "text": "The parser chose a different interpretation of the SQL",
+        "explanation": "With the same input text and parser settings, parsing follows the same grammar. Plan choices can change with statistics, settings and available paths after analysis."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The optimiser has three parts: estimation, cost model, search. Leis et al. (VLDB 2015) tested several real systems and found:\n\n1. Cardinality estimates were often wrong by orders of magnitude, especially after several joins.\n2. Those errors, not the cost model, caused most of the slow plans.\n\nSo when a plan suddenly changes, compare `rows=` (estimated) with `actual rows=` at each node and look for the first big gap.",
+    "link": {
+      "title": "How Good Are Query Optimizers, Really? (VLDB 2015)",
+      "url": "https://www.vldb.org/pvldb/vol9/p204-leis.pdf"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements about how PostgreSQL searches for a join order are true? Select all that apply.",
+    "options": [
+      {
+        "text": "Below `geqo_threshold` (default 12) FROM items, it uses dynamic programming over subsets of tables",
+        "explanation": "Correct. It builds the best plan for each subset from the best plans of smaller subsets, System R style."
+      },
+      {
+        "text": "It tries every possible join tree, which for 10 tables is over 17 billion shapes",
+        "explanation": "There are that many trees, which is exactly why it doesn't enumerate them. Dynamic programming reuses the best plan for each subset (1,024 subsets for 10 tables)."
+      },
+      {
+        "text": "At or above the threshold (with GEQO enabled) it uses a genetic algorithm (GEQO) that finds a good plan but not necessarily the best",
+        "explanation": "Correct. GEQO trades optimality for planning time on very large joins."
+      },
+      {
+        "text": "It may keep a more expensive path for a subset if that path produces a sort order useful later",
+        "explanation": "Correct. These \"interesting orders\" (pathkeys in Postgres) can avoid a later sort, for a merge join or an ORDER BY."
+      },
+      {
+        "text": "Explicit `JOIN` syntax always fixes the join order exactly as written",
+        "explanation": "Explicit inner JOINs can be reordered when flattened. `join_collapse_limit` limits flattening, but exceeding it does not freeze every join inside the retained subtrees. Outer joins also constrain legal reordering."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "Count the space for 10 tables:\n\n```formula\nL(n) = n!\nL(10) = 10! = 3,628,800\nT(n) = (2 × n − 2)! / (n − 1)!\nT(10) = 18! / 9! ≈ 1.76 × 10^10\nN_sub = 2^n = 2^10 = 1,024\nwhere\nL(n): the number of left-deep join orders for n tables\nT(n): the number of join trees of any shape for n tables\nN_sub: the number of subsets of the n tables\nn: the number of tables, 10\n!: factorial: multiply all whole numbers from 1 up to the number, so 3! = 6\n10^10: ten to the power 10; 1.76 × 10^10 is about 17.6 billion\n≈: approximately equal to\nIn words: there are 17.6 billion possible trees but only 1,024 subsets, which is why the planner works over subsets.\n```\n\nDynamic programming avoids that:\n\n1. Best plan for each single table.\n2. Best plan for each pair, using step 1.\n3. Best for each triple, using step 2. And so on.\n\nThe number of subsets doubles with each extra table, but search work also includes candidate partitions and physical paths, so the subset count is not a general time-complexity bound. It also keeps paths with useful sort orders. At 12 or more FROM items, GEQO is used by default to limit search time. `join_collapse_limit = 8` stops explicit JOIN lists longer than 8 being flattened for reordering.",
+    "link": {
+      "title": "Controlling the planner with explicit JOINs — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/explicit-joins.html"
+    }
+  }
+]

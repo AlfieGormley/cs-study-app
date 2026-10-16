@@ -1,0 +1,62 @@
+[
+  {
+    "id": "qp-statistics-optimiser-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A table has 5,000 pages and 400,000 rows. In the simplified nonparallel model with default costs, integer comparisons and no additional projection costs, what total cost does a Seq Scan have with **two** filter conditions (`WHERE a = 1 AND b = 2`)?",
+    "options": [
+      {
+        "text": "9,000",
+        "explanation": "That's pages plus `cpu_tuple_cost` per row, but it forgets the `cpu_operator_cost` for evaluating the two conditions on each row."
+      },
+      {
+        "text": "10,000",
+        "explanation": "That counts only one condition (400,000 x 0.0025 = 1,000). Each condition is charged separately."
+      },
+      {
+        "text": "25,000",
+        "explanation": "That charges `random_page_cost` (4) for 5,000 pages. A sequential scan uses `seq_page_cost` (1)."
+      },
+      {
+        "text": "11,000",
+        "explanation": "Correct. 5,000 x 1.0 for pages, 400,000 x 0.01 for rows, and 400,000 x 2 x 0.0025 for the two comparisons: 5,000 + 4,000 + 2,000."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```formula\nC_seq = P × c_page + n × c_tuple\n      + n × q × c_op\nC_seq = 5,000 × 1.0 + 400,000 × 0.01\n      + 400,000 × 2 × 0.0025\nC_seq = 5,000 + 4,000 + 2,000\nC_seq = 11,000\nwhere\nC_seq: the estimated total cost of the sequential scan, in planner cost units\nP: the number of pages, 5,000\nc_page: `seq_page_cost`, 1.0 per page\nn: the number of rows, 400,000\nc_tuple: `cpu_tuple_cost`, 0.01 per row processed\nq: the number of filter conditions evaluated on each row, 2\nc_op: `cpu_operator_cost`, 0.0025 per condition per row\nIn words: pages cost 5,000, processing rows 4,000 and testing two conditions on every row 2,000.\n```\n\nApply the same model to the illustrative plan: `orders` has 7,353 pages and 1,000,000 rows. With one condition: 7,353 + 10,000 + 2,500 = 19,853. With two: 22,353. These match the illustrative costs in the lesson.",
+    "link": {
+      "title": "Query planning configuration — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/runtime-config-query.html"
+    }
+  },
+  {
+    "id": "qp-statistics-optimiser-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A `users` table has 2,000,000 rows with distinct lowercase, non-NULL emails, including `ann@example.com`. EXPLAIN for `WHERE lower(email) = 'ann@example.com'` estimates `rows=10000`. Where does 10,000 come from, and what improves it?",
+    "options": [
+      {
+        "text": "It's 1/200 of the table: the default 0.5% selectivity for equality on an expression without statistics; an expression index on `lower(email)` gives ANALYZE something to measure",
+        "explanation": "Correct. Postgres has stats on `email` but not on `lower(email)`. An expression index makes ANALYZE gather stats on the expression, and also lets the query use the index."
+      },
+      {
+        "text": "It's from the histogram for `email`",
+        "explanation": "The histogram describes `email` values, not `lower(email)`. The planner can't see through the function to use them."
+      },
+      {
+        "text": "It's 2,000,000 / n_distinct; running ANALYZE will fix it",
+        "explanation": "Emails are unique, so 1/n_distinct would give 1 row. ANALYZE alone doesn't collect stats on arbitrary expressions."
+      },
+      {
+        "text": "It's a sign the table needs VACUUM FULL",
+        "explanation": "Table bloat changes page counts and costs, not this selectivity. 10,000 is a fixed default fraction."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nn_est = s_def × n_table\nn_est = 0.005 × 2,000,000\nn_est = 10,000\nwhere\nn_est: the estimated number of matching rows\ns_def: the default selectivity for an equality condition with no usable statistics, 0.005 (0.5%), a constant in PostgreSQL's source code\nn_table: the number of rows in the table, 2,000,000\nIn words: with nothing to go on, the planner guesses that half a percent of the rows match.\n```\n\nThe true answer is 1, so the estimate is 10,000 times too high. That could push the planner away from an index in a join. In the lesson, the same default gave 500 for 100,000 customers. After\n\n```sql\nCREATE INDEX ON users (lower(email));\nANALYZE users;\n```\n\nthe statistics can support an estimate near 1 and make an Index Scan attractive; exact plans depend on the data and cost settings.",
+    "link": {
+      "title": "Indexes on expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/indexes-expressional.html"
+    }
+  }
+]

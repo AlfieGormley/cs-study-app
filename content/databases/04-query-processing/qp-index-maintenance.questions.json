@@ -1,0 +1,70 @@
+[
+  {
+    "id": "qp-index-tuning-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`orders.total` is updated frequently as items are added. To make a report index-only, someone changes the index on `customer_id` to `(customer_id) INCLUDE (ordered_on, total)`. Write latency on `orders` rises noticeably. What's the most likely mechanism?",
+    "options": [
+      {
+        "text": "INCLUDE columns are sorted, so every update re-sorts the index",
+        "explanation": "INCLUDE columns aren't part of the key and aren't sorted. That's what distinguishes them from key columns."
+      },
+      {
+        "text": "The index is now larger than the table, so writes go to disk",
+        "explanation": "The covering index (30 MB) is still smaller than the table (59 MB). Size alone isn't the main mechanism here."
+      },
+      {
+        "text": "Updates to `total` can no longer use HOT because this B-tree INCLUDE column changed, increasing index maintenance",
+        "explanation": "Correct for the ordinary B-tree indexes in this example. Changing an INCLUDE column prevents HOT and requires index maintenance. In general, BRIN summarising indexes are an exception, and partial indexes only hold matching rows."
+      },
+      {
+        "text": "The planner now uses the index for the UPDATE's WHERE clause, which is slower",
+        "explanation": "The excerpt concerns increased index-maintenance work. A plan used to locate UPDATE targets can also affect runtime, so inspect both aspects rather than assuming an index always makes target lookup faster."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "How a HOT update works:\n\n1. If no indexed column changes and the page has free space, the new row version goes on the same page, chained from the old one.\n2. Indexes still point to the old version and follow the chain. No index writes.\n\nOnce `total` is in an index (even as INCLUDE), changing it means:\n\n1. Not HOT-eligible.\n2. New entries in applicable ordinary indexes, plus more WAL; partial indexes omit nonmatching rows and summarising indexes such as BRIN behave differently.\n\nCheck `n_tup_hot_upd` vs `n_tup_upd` in `pg_stat_user_tables` before and after. Only cover columns that rarely change.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "Heap-only tuples (HOT) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/storage-hot.html"
+    }
+  },
+  {
+    "id": "qp-index-tuning-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're auditing the indexes on a busy table. Which of these statements are true? Select all that apply.",
+    "options": [
+      {
+        "text": "An index on `(customer_id)` is usually redundant if there's also one on `(customer_id, ordered_on)`",
+        "explanation": "Correct. The composite index serves any lookup on `customer_id` alone, because it's the leading column. The single-column one adds write cost for little gain (it may be slightly smaller and faster to scan)."
+      },
+      {
+        "text": "`idx_scan = 0` in `pg_stat_user_indexes` on the primary proves an index is safe to drop",
+        "explanation": "Not on its own. Statistics are per server, so replicas may use it. It may serve a monthly job, or enforce a UNIQUE constraint without ever being scanned."
+      },
+      {
+        "text": "If `CREATE INDEX CONCURRENTLY` fails, it can leave an INVALID index that can still add write overhead and needs cleanup or rebuilding",
+        "explanation": "Correct. Depending on the failure stage, an INVALID index may still be maintained on writes while being ignored for queries. Drop it and retry, or recreate it with `REINDEX INDEX CONCURRENTLY`."
+      },
+      {
+        "text": "Adding more indexes always makes reads faster and has no effect on reads that don't use them",
+        "explanation": "Indexes compete for cache memory and add planning work. Writes slow down too, which can hurt reads through locks and I/O contention."
+      },
+      {
+        "text": "A B-tree on a low-cardinality column can be much smaller than one on a unique column, thanks to B-tree deduplication",
+        "explanation": "Correct. Since Postgres 13, duplicates are stored once with a list of row pointers. In the lesson the date index (2,400 values) was 6.9 MB against 21 MB for the unique primary key."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "1. Leftmost prefix: `(customer_id, ordered_on)` answers `customer_id = ?`. True.\n2. Index usage stats are per instance and reset on stats reset; unique indexes enforce constraints without scans. False.\n3. Concurrent builds can fail on deadlocks or uniqueness violations and leave `INVALID` indexes. True.\n4. Indexes cost cache, planning and write time. False.\n5. B-tree deduplication shrinks indexes with many repeated keys. True.\n\n**Content gap — benchmark evidence:** plan and timing figures here are illustrative scenarios, not independently reproduced measurements. The original dataset and run record are unavailable; actual timings, memory use and plan choices require testing on a representative system.",
+    "link": {
+      "title": "CREATE INDEX — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/current/sql-createindex.html"
+    }
+  }
+]

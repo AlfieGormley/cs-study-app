@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 70/76. Updated 2026-10-16.
+Verified modules: 71/76. Updated 2026-10-16.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -74,9 +74,10 @@ The material is divided by concept while retaining substantive explanations, exa
 | theory/Context-Free Languages & Computability | 6 | 32 | 67 | 87 | 175 | 361 | 34 |
 | theory/Complexity Theory | 6 | 47 | 77 | 174 | 254 | 378 | 12 |
 | databases/SQL Fundamentals | 6 | 40 | 74 | 31 | 269 | 414 | 43 |
-| databases/Advanced SQL | 6 | 41 | 71 | 52 | 148 | 260 | 54 |
-| databases/Relational Theory & Normalisation | 6 | 35 | 72 | 151 | 190 | 448 | 47 |
+| databases/Advanced SQL | 6 | 41 | 71 | 52 | 148 | 262 | 55 |
+| databases/Relational Theory & Normalisation | 6 | 35 | 72 | 151 | 190 | 449 | 48 |
 | databases/Query Processing & Optimisation | 6 | 33 | 67 | 65 | 192 | 357 | 53 |
+| databases/PostgreSQL | 1 | 13 | 15 | 5 | 92 | 125 | 24 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -2783,6 +2784,13 @@ The audio request therefore has the earlier deadline in that comparison. At late
 - The unchanged option statements test immediate ceiling semantics; make that context explicit.
 - POSIX specifies immediate maximum priority, including owned mutex ceilings, independent of waiters; no universal reduction in priority changes follows.
 
+Additional independent scoped reviews:
+
+- ["content/os/02-threads-scheduling/glossary.json: priority-ceiling only","content/os/02-threads-scheduling/sched-priority-inversion-inheritance.questions.json: sched-priority-mlfq-q10 prompt only","content/os/02-threads-scheduling/sched-priority-inversion-inheritance.md: immediate-ceiling paragraph only"] Evidence: `/tmp/os-scheduling-ceiling-followup-verify/report.json`.
+- Identify POSIX immediate protection separately from the original system-ceiling admission protocol.
+- The unchanged option statements test immediate ceiling semantics; make that context explicit.
+- POSIX specifies immediate maximum priority, including owned mutex ceilings, independent of waiters; no universal reduction in priority changes follows.
+
 Remaining gaps:
 
 - No universal benchmark is supplied for thread creation, switching, false sharing, NUMA penalties, maximum thread count, pool speed-up or physical-phone performance. Examples distinguish models and observed timings.
@@ -4885,6 +4893,14 @@ Corrections and qualifications in this conversion:
 - Independent follow-up: cursor pagination avoids growing OFFSET traversal with an appropriate index/plan; equal latency at all page depths is not guaranteed. The glossary and related correct-option explanation/worked example now state the plan, filtering and row-visibility limits.
 - Independent supplemental review: CHECK reliably maintains row-local conditions; PostgreSQL functions can read other rows but cannot make CHECK a maintained cross-row guarantee. The related question now makes this distinction. Surrogate identifiers can remain stable when business attributes change, but are not automatically immutable.
 
+Additional independent scoped reviews:
+
+- {"kind":"Narrow follow-up to an immutable full independent review","glossaryEntry":"keyset-pagination","question":"sql-select-basics-q12","authoredFields":["glossary definition/example/source","question option1 explanation","question workedExample"],"reviewedGroups":2,"reviewedMeaning":"Complete glossary entry/aliases/example/source and complete one question/options/explanations/workedExample/link, plus all current active keyset borrower contexts and all original560 compiled probes.","notRepeated":"Full factual review of the other268 glossary entries,73 questions or40 unchanged bodies was not repeated; exact original independent verification retained."} Evidence: `/tmp/db-sql-keyset-followup-verify/report.json`.
+- Removed universal equal per-page latency; specified unique cursor order, compatible index/plan and filter/visibility/layout caveats.
+- Same index1 remains correct; removed equal-cost/50-entry promises and clarified ordered result rows versus underlying scans. Full arithmetic and example were independently verified.
+- Independent supplemental review of exactly two root-authored glossary definitions/source fields and one workedExample opening sentence; previous full and keyset reviews retained unchanged. Evidence: `/tmp/db-sql-constraints-followup-verify/report.json`.
+- Follow-up scope: 2 changed glossary terms; 1 changed question fields. These counts are separate from the original full-module review.
+
 Remaining gaps:
 
 - Advanced SQL subqueries, CTEs, windows, upserts and recursive queries receive brief previews and remain assigned to the following module; this preserves the original module boundary.
@@ -4906,6 +4922,11 @@ Corrections and qualifications in this conversion:
 - Added non-deferrable conflict-arbiter prerequisite, genuine local fixture/schema/type prerequisites and precise code comments; verified SQL/math results.
 - Removed or qualified wrong global aliases; scoped Advanced SQL fixture and recursive self-reference; independently rejected integer-array and ordinary not-distinct capture.
 - Refined borrowed generic moving average/deduplication/quantified comparison/tied-row/uncorrelated/side-effect meanings against all actual earlier contexts.
+
+Additional independent scoped reviews:
+
+- Independent narrow review of two root-authored owner glossary definitions and one same-index Advanced q8 workedExample sentence. Original full reviews/freezes retained; no other substantive source edits. Evidence: `/tmp/db-memory-cleanup-followup-verify/report.json`.
+- Follow-up scope: 2 changed glossary terms; 1 changed question fields; 24 actual borrower fields. These counts are separate from the original full-module review.
 
 Remaining gaps:
 
@@ -4972,6 +4993,12 @@ Corrections and qualifications in this conversion:
 - Bare lossy falsely captured bitmap approximation diagnostic, distinct from relational decomposition.
 - Qualify relational domain-constraint concept after precise alias correction.
 - Freshness is not identical to time since refresh; distinguish source snapshot, elapsed time and subsequent changes.
+- Dead-version cleanup can use eligible heap-page pruning before VACUUM.
+
+Additional independent scoped reviews:
+
+- Independent narrow review of two root-authored owner glossary definitions and one same-index Advanced q8 workedExample sentence. Original full reviews/freezes retained; no other substantive source edits. Evidence: `/tmp/db-memory-cleanup-followup-verify/report.json`.
+- Follow-up scope: 2 changed glossary terms; 1 changed question fields; 24 actual borrower fields. These counts are separate from the original full-module review.
 
 Remaining gaps:
 
@@ -5054,9 +5081,51 @@ Low-confidence areas:
 
 None newly recorded. Inherited glossary qualifications remain in the verification record.
 
+## databases: PostgreSQL
+
+[Independent verification record](../content/databases/05-postgresql/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Consolidate the later local canonical label with the exact independently reviewed Query owner; qualify actual own prose as table heap or OS page cache, preserving the precise storage concept and avoiding algorithmic heaps/generic caches.
+- Consolidate the later local canonical label with the exact independently reviewed Query owner; qualify actual own prose as table heap or OS page cache, preserving the precise storage concept and avoiding algorithmic heaps/generic caches.
+- {"id":"dead-tuple","before":{"id":"dead-tuple","term":"Dead tuple","aliases":["dead tuples","dead row version","dead row versions","dead versions","dead rows"],"definition":"A row version that has been replaced or deleted and that no running snapshot can still see. It wastes space until VACUUM marks its space reusable.","example":"pg_stat_user_tables.n_dead_tup shows roughly how many dead tuples each table holds.","source":"https://www.postgresql.org/docs/18/routine-vacuuming.html"},"after":{"id":"dead-tuple","term":"Dead tuple","aliases":["dead tuples","dead row version","dead row versions","dead versions","dead rows"],"definition":"An obsolete row version that is no longer visible to any snapshot the server must preserve. Its storage can be reclaimed by vacuum or, where applicable, page pruning; an old version still needed by a snapshot is not yet removable.","example":"pg_stat_user_tables.n_dead_tup is an estimate of dead row versions; it is not an exact count of distinct deleted logical rows.","source":"https://www.postgresql.org/docs/18/routine-vacuuming.html"}}
+- {"id":"append-heavy","before":{"id":"append-heavy","term":"Append-heavy workload","aliases":["append-heavy","append-only"],"definition":"A workload dominated by adding rows rather than changing older rows. Increasing values such as timestamps may correlate with storage location, which can make BRIN useful; append-heavy alone does not guarantee physical ordering.","example":"An append-heavy sensor log may suit BRIN when its time values stay correlated with heap position.","source":"https://www.postgresql.org/docs/18/brin.html"},"after":{"id":"append-heavy","term":"Append-heavy workload","aliases":["append-heavy"],"definition":"A workload dominated by adding rows rather than changing older rows. Increasing values such as timestamps may correlate with storage location, which can make BRIN useful; append-heavy alone does not guarantee physical ordering. An append-only workload specifically forbids changes to existing records.","example":"An append-heavy sensor log may suit BRIN when its time values stay correlated with heap position.","source":"https://www.postgresql.org/docs/18/brin.html"}}
+- {"id":"sort-hash-operation","before":{"id":"sort-hash-operation","term":"Sort and hash operations","aliases":["sort and hash operations","sort or hash operation","hash-based operations"],"definition":"Query plan steps such as sorts, hash joins and hash aggregation that need working memory. A sort has a work_mem base allowance; hash operations use work_mem times hash_mem_multiplier, and multiple operations or parallel workers can multiply consumption.","example":"A query that hash-joins two tables and then sorts the result runs two such operations at once.","source":"https://www.postgresql.org/docs/18/runtime-config-resource.html"},"after":{"id":"sort-hash-operation","term":"Sort and hash operations","aliases":["sort and hash operations","sort or hash operation","hash-based operations"],"definition":"Query plan steps such as sorts, hash joins and hash aggregation that need working memory. A sort has a work_mem base allowance; hash operations use work_mem times hash_mem_multiplier, and multiple operations or parallel workers can multiply consumption.","example":"A hash join followed by a sort uses working-memory plan operations; which allocations overlap and their sizes depend on the execution plan.","source":"https://www.postgresql.org/docs/18/runtime-config-resource.html"}}
+- {"id":"autovacuum-freeze-max-age","before":{"id":"autovacuum-freeze-max-age","term":"Maximum XID age for autovacuum","aliases":["autovacuum_freeze_max_age"],"definition":"The XID age at which PostgreSQL forces an anti-wraparound vacuum of a table, even if autovacuum is disabled. Default 200 million transactions.","example":"200 million is under a tenth of the roughly 2.1 billion XID comparison horizon.","source":"https://www.postgresql.org/docs/18/runtime-config-vacuum.html"},"after":{"id":"autovacuum-freeze-max-age","term":"Maximum XID age for autovacuum","aliases":["autovacuum_freeze_max_age"],"definition":"The allocated-XID age that a table's oldest-unfrozen-XID boundary can reach before PostgreSQL forces an anti-wraparound vacuum, even if ordinary autovacuum is disabled. The PostgreSQL 18 default is 200 million allocated transaction IDs; this is not elapsed time or a count of committed top-level transactions.","example":"200 million is under a tenth of the roughly 2.1 billion XID comparison horizon.","source":"https://www.postgresql.org/docs/18/runtime-config-vacuum.html"}}
+- {"id":"xid-wraparound","before":{"id":"xid-wraparound","term":"Transaction ID wraparound","aliases":["wraparound","XID wraparound","wraparound risk"],"definition":"The failure that would occur when the 32-bit XID counter cycles around: old rows would appear to be in the future and vanish. VACUUM prevents it by freezing old row versions before they are about 2 billion transactions old.","example":"A server doing 1,000 writing transactions a second uses 2 billion XIDs in about 23 days.","source":"https://www.postgresql.org/docs/18/routine-vacuuming.html"},"after":{"id":"xid-wraparound","term":"Transaction ID wraparound","aliases":["wraparound","XID wraparound","wraparound risk"],"definition":"The visibility failure that old unfrozen committed insertions could suffer when normal 32-bit XIDs advance beyond their approximately half-range safe ordering window. Freezing protects those old insertions before they become too old for normal comparisons.","example":"At exactly 1,000 allocated normal XIDs per second, two billion IDs take about 23 days; subtransactions can increase ID consumption beyond a top-level transaction rate.","source":"https://www.postgresql.org/docs/18/routine-vacuuming.html"}}
+- {"id":"connection-limit","before":{"id":"connection-limit","term":"Connection limit","aliases":["connection limits","max_connections"],"definition":"The maximum number of concurrent connections allowed. In PostgreSQL the server's limit on client connections is set by max_connections (default 100); each connection costs a backend process and memory, so raising it is not free.","example":"With max_connections = 100, a 101st simultaneous connection is refused; ordinary roles are refused a few slots earlier, because superuser_reserved_connections (default 3) keeps some for superusers.","source":"https://www.postgresql.org/docs/18/runtime-config-connection.html"},"after":{"id":"connection-limit","term":"Connection limit","aliases":["connection limits","max_connections"],"definition":"A configured maximum number of simultaneous connections to a service. PostgreSQL's max_connections controls its client-connection cap (typically 100 by default); each connection normally needs a backend process and memory, and reserved slots reduce the capacity available to ordinary roles.","example":"With max_connections set to 100, no more than 100 client connections fit. The default three superuser-reserved slots and any additional reserved_connections slots reduce the number available to an ordinary role.","source":"https://www.postgresql.org/docs/18/runtime-config-connection.html"}}
+- {"id":"database-privilege","before":{"id":"database-privilege","term":"Database privilege","aliases":["database privileges"],"definition":"A permission granted to a role on an object, such as SELECT, INSERT, UPDATE or DELETE on a table. Without the privilege the operation fails.","example":"GRANT SELECT ON events TO reporting gives the reporting role read access only.","source":"https://www.postgresql.org/docs/18/ddl-priv.html"},"after":{"id":"database-privilege","term":"Database privilege","aliases":["database privileges"],"definition":"A permission granted to a role on an object, such as SELECT, INSERT, UPDATE or DELETE on a table. Without the privilege the operation fails.","example":"GRANT SELECT ON events TO reporting grants table-read access; the role still needs applicable database and schema access, and its other grants determine what else it can do.","source":"https://www.postgresql.org/docs/18/ddl-priv.html"}}
+- {"id":"shared-buffers","before":{"id":"shared-buffers","term":"Shared buffers","aliases":["shared buffer","shared-buffer","shared_buffers"],"definition":"PostgreSQL's own cache of table and index pages in shared memory, used by every backend. Its size is set by shared_buffers, typically 128 MB by default; a page not found there is requested from the operating system.","example":"Production servers often set shared_buffers to around a quarter of RAM.","source":"https://www.postgresql.org/docs/18/runtime-config-resource.html"},"after":{"id":"shared-buffers","term":"Shared buffers","aliases":["shared buffer","shared-buffer","shared_buffers"],"definition":"PostgreSQL's own cache of table and index pages in shared memory, used by every backend. Its size is set by shared_buffers, typically 128 MB by default; a page not found there is requested from the operating system.","example":"For a dedicated database server with at least 1 GB of RAM, the PostgreSQL manual suggests 25% of RAM as a starting value, followed by workload-specific measurement.","source":"https://www.postgresql.org/docs/18/runtime-config-resource.html"}}
+- {"id":"base-backup","before":{"id":"base-backup","term":"Base backup","aliases":["base backups","physical base backup","physical backup"],"definition":"A copy of the whole cluster's data files taken while it runs, usually with pg_basebackup. Combined with archived WAL it is the starting point for point-in-time recovery.","example":"pg_basebackup -D /backups/base copies the data directory from a running server.","source":"https://www.postgresql.org/docs/18/continuous-archiving.html"},"after":{"id":"base-backup","term":"Base backup","aliases":["base backups","physical base backup","physical backup"],"definition":"A physical copy of a PostgreSQL cluster's data files. pg_basebackup can produce one while the server runs; together with the WAL needed to make it consistent and reach a target, a suitable base backup is the starting point for point-in-time recovery.","example":"pg_basebackup -D /backups/base copies the data directory from a running server.","source":"https://www.postgresql.org/docs/18/continuous-archiving.html"}}
+- A non-superuser is not an alias for the opposite privilege status.
+- Precise namespace/negative-role meaning avoids wrong donor sense.
+- Precise namespace/negative-role meaning avoids wrong donor sense.
+- off skips commit WAL-flush wait; it does not remove all work or all waits.
+- Stemming and ranking are configured capabilities, not universal mandatory behaviour.
+- 8kB is the default, not the only possible PostgreSQL block size.
+- pg_locks does not normally expose every held row-level lock as a tuple record.
+- A read replica is not automatically proved ready for correct failover.
+- Correct unconditional speed and chronology claims to acknowledgement-independent PostgreSQL semantics. Use a qualified canonical label to retain the precise local entry rather than merging it with an earlier broad same-name owner; valid local aliases cover the unchanged body and q11 prompt.
+- Recovery cannot stop within the base-backup interval; include end-of-backup prerequisite in body and original q12 workedExample.
+- Automated failover is deployment-dependent, not a guarantee of every managed database.
+- Clarified the fixed dead-version component, estimated size fraction and cap as eligibility criteria, and labelled the billion-row uncapped count as approximate; these do not promise a worker start time.
+- The normal XID ordering window must not open the signed SQL INTEGER definition through the bare 32-bit alias. The precise 32-bit XID alias names the correct concept.
+
+Remaining gaps:
+
+- Practical survey retained; not a production provisioning, permission/pool configuration, payment workflow or least-privilege deployment runbook.
+- Logical restore, physical backup manifest, live disposable streaming standby replay/pause/promotion were tested. No full end-to-end physical PITR target replay, disaster failover, storage power-loss simulation or production performance benchmark is claimed.
+- No billion-ID wraparound experiment or promised autovacuum worker-start timing. Circular-order mathematics and actual freeze flags/continued row mutability were checked.
+- Optional pg_stat_statements requires configuration; unconfigured native access fails as expected.
+
+Low-confidence areas:
+
+- **medium** — pg-backups-point-in-time-recovery: Amazon RDS DB-instance automated-backup retention0–35days, explicitly datedOctober2026, with deployment-dependent cluster/failover support.. Fresh official AWS source supports current policy and deployment distinctions, but a service choice should recheck time-sensitive retention/recovery terms.
+
 ## synth: Sound & Digital Audio
 
-[Independent verification record](https://github.com/AlfieGormley/cs-study-app/blob/0675a331fc718ce186564dec26480a5ef924ef2a/content/synth/01-sound-sampling/verification.json)
+[Independent verification record](https://github.com/AlfieGormley/cs-study-app/blob/af9e91cd29ba790780489a8f1d6a2da6f4151119/content/synth/01-sound-sampling/verification.json)
 
 A scoped follow-up is underway. This section describes the previously published version.
 
@@ -5088,6 +5157,9 @@ Corrections and qualifications in this conversion:
 - Rejected new bare phase alias because it would capture envelope “release phase” in another Synth module; used existing precise wave-phase phrase locally.
 - Fractional/negative powers no longer described as fractional numbers of repeated copies; roots and reciprocals made explicit.
 - Replaced obsolete original lesson-number cross-references with relevant short-unit names.
+- Bounded phase avoids growing-accumulator resolution loss but floating-point arithmetic still rounds.
+- The 100-cent equal-ratio semitone is explicitly 12-TET; other tunings have other semitone sizes and smaller intervals.
+- Wavetable is a general stored waveform; spectral restriction is deliberate, and interpolation/playback affect aliasing. Old Band-limited wavetable title retained as alias.
 
 Remaining gaps:
 

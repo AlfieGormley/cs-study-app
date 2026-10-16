@@ -1,0 +1,32 @@
+[
+  {
+    "id": "rel-th-er-modelling-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You are modelling payments with three disjoint subtypes (card, bank transfer, wallet), each with around 10 subtype-specific columns that must be `NOT NULL` for that subtype. Finance often queries \"all payments over £1,000 this month\" across subtypes. Which mapping fits best?",
+    "options": [
+      {
+        "text": "Single-table inheritance",
+        "explanation": "One table makes cross-subtype queries trivial, but around 30 subtype columns would all be nullable, enforced only by large `CHECK` expressions. Workable, but the weakest fit for strong per-subtype `NOT NULL` rules."
+      },
+      {
+        "text": "Class-table inheritance: `payment(payment_id, amount, created_at, kind)` plus one table per subtype sharing `payment_id`",
+        "explanation": "Correct. Shared attributes (amount, date) live in one table, so the finance query needs no join, and each subtype table declares real `NOT NULL` columns. Loading a full payment costs one join."
+      },
+      {
+        "text": "Concrete-table inheritance",
+        "explanation": "The finance query would need a `UNION ALL` over three tables, and nothing guarantees ids are unique across them."
+      },
+      {
+        "text": "EAV: `payment_attr(payment_id, name, value)`",
+        "explanation": "A generic untyped EAV table makes per-attribute types and required fields difficult to enforce. A deliberately typed EAV design can add constraints, but the proposed generic shape is a poor fit for fixed, mandatory subtype fields."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Score the requirements against each mapping:\n\n| Need | Single | Class | Concrete |\n|---|---|---|---|\n| subtype NOT NULL | CHECKs | native | native |\n| query across all | easy | easy | UNION |\n| unique id overall | yes | yes | no |\n\nClass-table inheritance meets all three. Add `kind` with a `CHECK`, and optionally a composite foreign key `(payment_id, kind)` so a card row can only attach to a payment of kind 'card'.\n\nA parent foreign key alone does not enforce that every payment has exactly one subtype. Disjoint membership can use a checked discriminator and matching composite references; total membership additionally needs a suitable transaction protocol or deferred constraint triggers.",
+    "link": {
+      "title": "Fowler: Class Table Inheritance",
+      "url": "https://martinfowler.com/eaaCatalog/classTableInheritance.html"
+    }
+  }
+]

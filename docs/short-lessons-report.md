@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 68/76. Updated 2026-10-16.
+Verified modules: 69/76. Updated 2026-10-16.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -75,6 +75,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | theory/Complexity Theory | 6 | 47 | 77 | 174 | 254 | 378 | 12 |
 | databases/SQL Fundamentals | 6 | 40 | 74 | 31 | 269 | 414 | 43 |
 | databases/Advanced SQL | 6 | 41 | 71 | 52 | 148 | 260 | 54 |
+| databases/Relational Theory & Normalisation | 6 | 35 | 72 | 151 | 190 | 448 | 47 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4917,9 +4918,77 @@ Low-confidence areas:
 - **medium** — asql-top-group-strategies: Relative production performance and physical I/O of the conditional plan/index strategy.. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
 - **medium** — asql-window-last-value: Relative production performance and physical I/O of the conditional plan/index strategy.. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
 
+## databases: Relational Theory & Normalisation
+
+[Independent verification record](../content/databases/03-relational-theory/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Pure algebra cannot express unbounded reachability or all SQL extensions
+- A physical execution plan is not literally ordinary relational algebra
+- Avoid unsupported categorical history about every navigational system
+- State operator typing assumptions locally
+- Bare natural outer/semijoin symbols require shared heading matches, not disjoint headings that would force a product
+- Lossless decomposition quantifies every legal instance, not one accidental rejoin
+- Closure card states its FD basis locally
+- Do not claim a possible physical storage problem must affect every key uniformly
+- PostgreSQL CREATE TRIGGER supports multiple events joined by OR
+- Exclude rollbacks and specify counter initialisation for arithmetic
+- An artist.album_ids array would contain album IDs
+- A whole-value foreign key can be declared but cannot choose table per row
+- Whole-array foreign keys are possible; ordinary FKs do not check individual array elements
+- Remove duplicate further-reading link
+- Old example falsely made searchability sufficient to violate atomicity
+- Align general partial dependence with precise 2NF including empty determinant
+- Canonical-cover extraneous attributes can occur on either side, not only determinant
+- Kimball distinguishes transaction, snapshot and factless fact grains
+- Scope join claim to native API
+- Do not conflate SQLite integer table keys with PostgreSQL physical tuple locations
+- State actual same-page/free-space and summarising-index exception with checked versions
+- NOT NULL cannot generally enforce total participation at either end
+- Diagram alone does not prove normal form or enforce all participation constraints
+- Replace secondary source with primary textbook author slides
+- Replace secondary source with original paper
+- Distinguish decoding from replication instead of treating the two as interchangeable
+- Remove alias for distinct lower-level decoding concept
+- A partial key can contain multiple attributes
+- Avoid actual compiler core closure alias for captured programming environment; qualify FD versus attribute closure precisely
+- Question further-reading source must explain the actual tested concept
+- Add precise fetched primary sources supporting the unit’s specific concepts
+- Scope prime-attribute complexity to its precise FD-basis decision problem, attribute theorem and replace unsupported universal practical assurance
+- Explain row granularity and factless cases without new undefined jargon
+- A stored PostgreSQL MVCC version is distinct from relational tuple; old versions can remain visible, unlike current later-owner row-version dictionary claim. Qualify exact live body/fullQ references.
+- Use directly fetched author criticism; remove unsupported specific Codd criticism attribution
+- Avoid implying an unverified chronology of Codd introducing missing information and SQL adoption
+- Distinguish out-of-order incoming updates from age of a cached copy; restore precise real Advanced borrowed context without aliasing ordinary bare stale or relabelling exact lookup.
+- Actual compiler earlier-context review found a different concept captured by generic cross-subject fallback or same-subject bare heap; qualify this owned concept and preserve its ID.
+- Greek-letter names also denote summation/constants/density outside relational algebra, so cannot be aliases of SQL algebra operators.
+- Use precise names of owned FD, ER, relational-atomicity and relational-key concepts in actual active bodies/full questions. Original question identities and semantics unchanged.
+- Independent all-earlier-context review found bare tuple in live physical PostgreSQL executor/vacuum contexts; qualify owned named typed logical model concept and all active prose, keep original source ID, no stored-row aliases. Earlier unqualified physical contexts honestly unlinked until owner workflow.
+- Replace illustrative timestamp ellipsis with an actual reproducible timestamp literal in the duplicate DELETE example; same operation/concept, stable answer key.
+- Remove categorical overclaim while preserving false distractor, stable index and tested concept.
+- Generic domain constraint falsely captured Ethernet collision-domain constraint. Keep qualified relational aliases.
+- Bare lossy falsely captured bitmap approximation diagnostic, distinct from relational decomposition.
+- Qualify relational domain-constraint concept after precise alias correction.
+- Freshness is not identical to time since refresh; distinguish source snapshot, elapsed time and subsequent changes.
+
+Remaining gaps:
+
+- Full prime-attribute NP-completeness proof was not retrieved; primary publisher abstract checked.
+- Flat 1NF and atomicity are explicitly chosen modeling conventions; no universal SQL array prohibition is asserted.
+- Finite native and mathematical cases corroborate examples, while general algebra, normal-form and inference theorems rely on primary definitions and proofs.
+- Workload latency and ratio examples are illustrative calculations rather than measured performance promises. Higher-normal-form unit introduces predicates and counterexamples, not a full chase implementation.
+
+Low-confidence areas:
+
+- **medium** — rel-th-enumerate-keys: Prime-attribute decision is NP-complete for a schema with an FD basis.. Primary Lucchesi/Osborn publisher abstract explicitly states the theorem. Full proof was not retrieved; numerical key enumeration was independently checked.
+- **medium** — rel-th-anomalies-and-1nf: Atomicity and 1NF under the explicitly chosen classical flat convention.. Textbook-author source supports flat domains; relational domain conventions vary. The lesson and array question explicitly declare their flat convention.
+
 ## synth: Sound & Digital Audio
 
-[Independent verification record](../content/synth/01-sound-sampling/verification.json)
+[Independent verification record](https://github.com/AlfieGormley/cs-study-app/blob/4d697f0b380f20fbbf9da2589b0cad63c6426c5f/content/synth/01-sound-sampling/verification.json)
+
+A scoped follow-up is underway. This section describes the previously published version.
 
 Corrections and qualifications in this conversion:
 

@@ -1,0 +1,95 @@
+[
+  {
+    "id": "rel-th-er-modelling-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`comment(id, body, commentable_type, commentable_id)` attaches comments to photos or videos. After a year, analysts find thousands of comments pointing at deleted photos. What is the root cause, and which change fixes it in the schema?",
+    "options": [
+      {
+        "text": "A missing index on `commentable_id`; add one",
+        "explanation": "An index speeds lookups but does not enforce anything; orphans would still be allowed."
+      },
+      {
+        "text": "Use `ON DELETE CASCADE` on `commentable_id`",
+        "explanation": "There is no foreign key to attach `ON DELETE` to; that is the whole problem."
+      },
+      {
+        "text": "`commentable_id` can refer to different tables, so a single ordinary foreign key cannot validate both targets; replace it with `photo_id REFERENCES photo` and `video_id REFERENCES video` plus `CHECK (num_nonnulls(photo_id, video_id) = 1)`",
+        "explanation": "Correct. A polymorphic association defeats referential integrity. An exclusive arc gives each target a real foreign key, and the check ensures exactly one is set."
+      },
+      {
+        "text": "Store comments inside a `jsonb` column on each photo and video",
+        "explanation": "Embedding avoids a separate reference to an absent database row, but querying and constraining comments across photos and videos becomes more complex. JSON remains queryable; each comment change updates its containing document and can contend on that row."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. A foreign key must reference one specific table. `commentable_id` refers to `photo` or `video` depending on another column, so Postgres cannot check it.\n2. Deleting a photo therefore leaves its comments behind.\n3. Exclusive arc:\n\nPostgreSQL column declarations (inside a CREATE TABLE statement):\n\n```sql\nphoto_id INT REFERENCES photo\n  ON DELETE CASCADE,\nvideo_id INT REFERENCES video\n  ON DELETE CASCADE,\nCHECK (num_nonnulls(\n  photo_id, video_id) = 1)\n```\n\n4. Alternative: a `commentable` supertype table that photos and videos share a key with (class-table inheritance).",
+    "link": {
+      "title": "PostgreSQL 18: foreign keys and CHECK constraints",
+      "url": "https://www.postgresql.org/docs/18/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After launch you learn that albums can have several artists (collaborations), each with a role such as 'primary' or 'featured'. The schema has `album.artist_id NOT NULL`. What is the correct new design?",
+    "options": [
+      {
+        "text": "Create `album_artist(album_id, artist_id, role)` with primary key `(album_id, artist_id)`, migrate existing rows into it, then drop `album.artist_id`",
+        "explanation": "Correct. The relationship is now many-to-many with an attribute (role), so it becomes a junction table holding the role."
+      },
+      {
+        "text": "Make `album.artist_id` an array of ids",
+        "explanation": "An ordinary PostgreSQL foreign key does not validate each artist-id array element against artist rows, and the per-artist role still needs a representation."
+      },
+      {
+        "text": "Add `artist2_id` and `artist3_id` columns to `album`",
+        "explanation": "A repeating group across columns: it caps the number of artists, makes every query check several columns, and has nowhere to put the role."
+      },
+      {
+        "text": "Keep `album.artist_id` for the primary artist and put featured artists in a text column",
+        "explanation": "Featured artists would have no foreign keys and could not be queried reliably, and there would be two different representations of the same relationship."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. New relationship cardinality: Album >o----|< Artist (many-to-many), with a relationship attribute `role`.\n2. A many-to-many relationship with its own attributes becomes a junction table:\n\n```sql\nCREATE TABLE album_artist (\n  album_id  INT REFERENCES album,\n  artist_id INT REFERENCES artist,\n  role      TEXT NOT NULL,\n  PRIMARY KEY (album_id, artist_id));\n```\n\n3. Migrate: `INSERT INTO album_artist SELECT album_id, artist_id, 'primary' FROM album;`\n4. For an online schema migration, deploy dual writes and wait until all writers use them, then backfill and verify existing rows. Switch reads to album_artist while retaining dual writes; only after all old readers and writers are retired should you drop album.artist_id. If every album must retain an artist, add an enforcement strategy for that minimum participation too.\n5. Lesson: ask for counterexamples before launch; a change of relationship cardinality is a data migration.",
+    "link": {
+      "title": "Chen: The Entity-Relationship Model (1976)",
+      "url": "https://openlib.org/home/krichel/courses/lis512/readings/chen76theentity-relationship.pdf"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A `customer` table could use `email` as its primary key, or a generated `customer_id`. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "Emails change, and with `email` as primary key every referencing foreign key must change too",
+        "explanation": "Correct. Natural keys that change force cascading key updates across every referencing table."
+      },
+      {
+        "text": "Using a surrogate `customer_id` means you no longer need a constraint on `email`",
+        "explanation": "If emails must be unique for login, you still need `UNIQUE (email)`. A surrogate key adds identity; it does not replace the business rule."
+      },
+      {
+        "text": "A common design is a surrogate primary key plus `UNIQUE` on the natural key",
+        "explanation": "Correct. You get stable, compact references and still enforce the real-world uniqueness rule."
+      },
+      {
+        "text": "Natural keys are always wrong",
+        "explanation": "Stable natural keys such as ISO country codes or ISBNs make good keys, and they can save joins."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Weigh each key type:\n\n| | Natural (email) | Surrogate (id) |\n|---|---|---|\n| stable | no | yes |\n| meaningful | yes | no |\n| size | long text | 8 bytes for BIGINT |\n\n1. `email` changes, so changing it can make references costly: an update must update referencing values when they exist, using ON UPDATE CASCADE or a coordinated protocol.\n2. A surrogate key avoids that, but the business rule \"one account per email\" still needs `UNIQUE (email)`.\n3. Standard codes that fit the required identity semantics (country code GB and currency code GBP) are fine natural keys.",
+    "link": {
+      "title": "PostgreSQL 18: keys and referential actions",
+      "url": "https://www.postgresql.org/docs/18/ddl-constraints.html"
+    }
+  }
+]

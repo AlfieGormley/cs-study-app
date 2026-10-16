@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel-th-functional-deps-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In Postgres, `customer(id PRIMARY KEY, name)` and `orders(id, customer_id)`. Which query fails with \"column must appear in the GROUP BY clause\"?\n\n```sql\n-- Q1\nSELECT c.id, c.name, COUNT(*)\nFROM customer c JOIN orders o\n  ON o.customer_id = c.id\nGROUP BY c.id;\n\n-- Q2\nSELECT o.customer_id, c.name,\n       COUNT(*)\nFROM customer c JOIN orders o\n  ON o.customer_id = c.id\nGROUP BY o.customer_id;\n```",
+    "options": [
+      {
+        "text": "Q1 only",
+        "explanation": "Q1 groups by customer's primary key, so Postgres knows c.name is functionally dependent on it and allows it."
+      },
+      {
+        "text": "Q2 only",
+        "explanation": "Correct. Postgres only recognises the FD from a table's primary key to the other columns of the same table. o.customer_id equals c.id in every row, but Postgres does not reason through the join condition, so c.name is rejected."
+      },
+      {
+        "text": "Both",
+        "explanation": "Q1 is accepted thanks to Postgres's functional-dependency rule for primary keys."
+      },
+      {
+        "text": "Neither",
+        "explanation": "Q2 is rejected; Postgres does not infer FDs through join equalities."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. PostgreSQL 16–18 rule for these base tables: an ungrouped column is allowed if the grouped columns include the **primary key of that column's table**.\n2. Q1: groups by c.id, the PK of customer, so c.name is allowed.\n3. Q2: groups by o.customer_id. It is equal to c.id in every joined row, so logically c.name is determined, but Postgres does not use that inference.\n4. Fix Q2: keep o.customer_id grouped and add c.id, or add c.name: `GROUP BY o.customer_id, c.id` / `GROUP BY o.customer_id, c.name`.",
+    "link": {
+      "title": "PostgreSQL 18: SELECT and functional dependencies",
+      "url": "https://www.postgresql.org/docs/18/sql-select.html"
+    }
+  },
+  {
+    "id": "rel-th-functional-deps-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You suspect `sheet(cid, ctitle, ...)` violates the functional dependency below. Assume cid and ctitle are NOT NULL. Which query lists the offending course codes?\n\n```formula\ncid → ctitle\nwhere\ncid: the course code\nctitle: the course title\n→: functionally determines: rows that agree on cid must agree on ctitle\nIn words: each course code should have exactly one title.\n```",
+    "options": [
+      {
+        "text": "`SELECT cid FROM sheet GROUP BY cid HAVING COUNT(*) > 1`",
+        "explanation": "This finds codes that appear more than once, which is normal: many students take the same course. Repetition is not a violation; disagreement is."
+      },
+      {
+        "text": "`SELECT cid FROM sheet GROUP BY cid HAVING COUNT(DISTINCT ctitle) > 1`",
+        "explanation": "Correct. It finds codes associated with more than one distinct title, which is exactly two relational tuples equal on cid but different on ctitle."
+      },
+      {
+        "text": "`SELECT DISTINCT cid, ctitle FROM sheet`",
+        "explanation": "This lists the pairs, but you would still have to inspect them by eye to find codes appearing with two titles."
+      },
+      {
+        "text": "`SELECT ctitle FROM sheet GROUP BY ctitle HAVING COUNT(DISTINCT cid) > 1`",
+        "explanation": "That tests whether a title fixes the course code, reversing the required direction. Two course codes sharing a title do not violate the original rule."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A violation has equal course codes associated with different titles.\n2. Group by X (`cid`) and count distinct Y (`ctitle`).\n3. Any group with `COUNT(DISTINCT ctitle) > 1` is a violation.\n4. Note: `COUNT(DISTINCT ...)` ignores NULLs, so a code with one title and some NULL titles will not show up. Add `OR COUNT(*) FILTER (WHERE ctitle IS NULL) > 0` if NULLs matter.",
+    "link": {
+      "title": "PostgreSQL 18: SELECT, grouping and HAVING",
+      "url": "https://www.postgresql.org/docs/18/sql-select.html"
+    }
+  }
+]

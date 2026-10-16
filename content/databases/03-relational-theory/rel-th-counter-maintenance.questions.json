@@ -1,0 +1,62 @@
+[
+  {
+    "id": "rel-th-denormalisation-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A trigger increments `post.comment_count` on each comment insert. When a post goes viral, comment inserts on that post slow dramatically, while inserts on other posts are fine. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The `comment` table's index is fragmented",
+        "explanation": "Fragmentation alone does not explain why inserts for one parent row queue while other parents are unaffected; the shared counter row is the direct contention point."
+      },
+      {
+        "text": "The trigger runs `COUNT(*)` on every insert",
+        "explanation": "The trigger shown in the lesson increments; it does not count. The slowdown is specific to one post's row."
+      },
+      {
+        "text": "Every insert updates the same `post` row, and each transaction holds that row's lock until commit, so the inserts queue behind each other",
+        "explanation": "Correct. A hot counter row serialises its writers. Shard the counter across N rows and sum on read, or buffer increments and apply them in batches."
+      },
+      {
+        "text": "Postgres limits each table to one trigger execution at a time",
+        "explanation": "Triggers run in each transaction concurrently. The bottleneck is the row lock, not the trigger mechanism."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `UPDATE post SET comment_count = comment_count + 1 WHERE id = 42` takes a row-level lock on post 42.\n2. The lock is held until the inserting transaction commits.\n3. Concurrent comment inserts on post 42 must wait for each other: throughput on that post drops to one transaction at a time.\n4. Sharded counter:\n\nIllustrative design, not executable SQL:\n\n```text\npost_counter(post_id, shard, n)\nwrite: choose one of sixteen shard rows\nread: sum n for the requested post\n```\n\nSixteen rows provide up to sixteen distinct row-lock targets. Random choices still collide, and actual throughput is bounded by transaction duration and other shared work; this is not a promise of sixteenfold speed.",
+    "link": {
+      "title": "PostgreSQL 18: row-level locking",
+      "url": "https://www.postgresql.org/docs/18/explicit-locking.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`post.comment_count` is maintained by an `AFTER INSERT` trigger only. Moderators delete spam comments directly in the database. Six months later, which symptom do you expect, and how do you find affected posts?",
+    "options": [
+      {
+        "text": "Counts are too low; find them with `WHERE comment_count < 0`",
+        "explanation": "Deletes do not decrement anything, so counts only ever go up. They will be too high, never negative."
+      },
+      {
+        "text": "Counts are too high; compare the counter with the real count, for example `WHERE p.comment_count <> (SELECT COUNT(*) FROM comment c WHERE c.post_id = p.id)`",
+        "explanation": "Correct. Every deleted comment leaves the counter one too high. A reconciliation query comparing the copy with its source finds the drift; then add an `AFTER DELETE` trigger and backfill."
+      },
+      {
+        "text": "Counts are correct, because Postgres runs `AFTER INSERT` triggers in reverse on delete",
+        "explanation": "There is no such reversal. A trigger fires only for its declared events; one PostgreSQL trigger can handle several events if its function handles each correctly. An INSERT-only trigger does not run on DELETE."
+      },
+      {
+        "text": "The deletes fail, because the trigger depends on the comments",
+        "explanation": "An insert trigger does not stop deletes. The deletes succeed and the counter silently drifts."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Inserts add 1; deletes change nothing:\n\n```formula\nc_stored = N_ins\nc_real = N_ins − N_del\nc_stored ≥ c_real\nwhere\nc_stored: the value in post.comment_count\nN_ins: committed comment insertions since the counter was correctly initialised to zero; assume no moves between posts\nN_del: committed comment deletions in that same interval\nc_real: the true number of comments, COUNT(*)\n≥: is greater than or equal to\nIn words: the stored count is too high by exactly the number of deleted comments.\n```\n2. Reconcile:\n\n```sql\nSELECT p.id, p.comment_count,\n  (SELECT COUNT(*) FROM comment c\n   WHERE c.post_id = p.id) AS real\nFROM post p\nWHERE p.comment_count <> (\n  SELECT COUNT(*) FROM comment c\n  WHERE c.post_id = p.id);\n```\n\n3. Fix the cause (an `AFTER DELETE` trigger, and handle `UPDATE` of `post_id`), then backfill with an `UPDATE` from the real counts.\n4. Keep the reconciliation as a scheduled check, because manual fixes and restores cause drift too.",
+    "link": {
+      "title": "PostgreSQL 18: CREATE TRIGGER events",
+      "url": "https://www.postgresql.org/docs/18/sql-createtrigger.html"
+    }
+  }
+]

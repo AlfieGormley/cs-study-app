@@ -1,0 +1,95 @@
+[
+  {
+    "id": "rel-th-denormalisation-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An e-commerce site keeps a search index (Elasticsearch) of product data held in Postgres. Product writes must stay fast, and the search results may lag by a few seconds. Which way of keeping the copy in sync fits best?",
+    "options": [
+      {
+        "text": "Update Elasticsearch synchronously inside the same request, before committing the Postgres transaction",
+        "explanation": "This couples write latency to the search cluster, and if the commit fails after the index call, the two disagree anyway. It is not atomic across systems."
+      },
+      {
+        "text": "A nightly batch rebuild",
+        "explanation": "Seconds of lag are acceptable; a day is not."
+      },
+      {
+        "text": "Change data capture or a transactional outbox that streams committed changes to an indexer",
+        "explanation": "Correct. CDC or an outbox decouples remote indexing from the transaction. Meeting a seconds-level lag target still requires capacity, monitoring, retained events, retries, ordering and idempotent consumers; it is not an automatic latency or no-loss guarantee."
+      },
+      {
+        "text": "A Postgres trigger that calls Elasticsearch over HTTP",
+        "explanation": "A trigger making network calls runs inside the transaction: it slows every write, can fail it, and still cannot undo the external call on rollback."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Match the mechanism to the requirements:\n\n| Need | Implication |\n|---|---|\n| fast writes | no sync remote call |\n| lag of seconds OK | async is fine |\n| recoverable delivery | capture durable committed events |\n\n1. CDC (for example Debezium reading Postgres's logical replication stream) or an outbox table written in the same transaction captures committed changes when correctly configured with sufficient retention and an intact relay protocol.\n2. A consumer applies them to Elasticsearch, retrying on failure.\n3. Add a periodic reconciliation to catch any drift.",
+    "link": {
+      "title": "AWS: transactional outbox",
+      "url": "https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which of these are good candidates for denormalisation? Select all that apply.",
+    "options": [
+      {
+        "text": "A product page showing `average_rating`, read 5,000 times a second, with about 2 new reviews a second",
+        "explanation": "Correct. Reads outnumber writes by thousands to one, the value changes slowly, and slight staleness is harmless."
+      },
+      {
+        "text": "A bank account balance copied onto every transaction row for display",
+        "explanation": "Balances change constantly and a stale or drifted balance causes real harm. Compute it, or keep one authoritative balance row updated transactionally."
+      },
+      {
+        "text": "A monthly revenue report that scans 400 million order lines and is viewed each morning",
+        "explanation": "Correct. A summary table or materialised view refreshed overnight turns a huge scan into a small read, and next-morning freshness is all that is needed."
+      },
+      {
+        "text": "A user's current email address copied into every row of an audit log",
+        "explanation": "The email changes, and the copies would either need mass updates or go stale. Audit logs should store the application account identifier plus whatever was true at the time, as a snapshot."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Score each by read/write ratio, how often the source changes, and the cost of staleness:\n\n| Case | Read-heavy | Changes rarely | Stale OK |\n|---|---|---|---|\n| rating | yes | yes | yes |\n| balance | - | no | no |\n| report | yes | batch | yes |\n| email | - | no | no |\n\nDenormalise where all three line up.",
+    "link": {
+      "title": "PostgreSQL 18: materialised views",
+      "url": "https://www.postgresql.org/docs/18/rules-materializedviews.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The checkout page reads stock levels from a materialised view refreshed every 15 minutes, to avoid summing a large movements table. Customers sometimes buy items that are already out of stock. What is the best fix?",
+    "options": [
+      {
+        "text": "Refresh the view every minute",
+        "explanation": "This narrows the window but never closes it, and refreshing a large view every minute may be expensive. Two customers can still buy the last item between refreshes."
+      },
+      {
+        "text": "Keep a stock row per product that is decremented in the same transaction as the order, with a `CHECK (on_hand >= 0)` constraint",
+        "explanation": "Correct when on_hand is NOT NULL, every stock mutation follows this transaction protocol, and the application requires exactly one stock row to be updated before committing the order. The atomic decrement and CHECK prevent negative stock; a missing stock row must also fail the order."
+      },
+      {
+        "text": "Use `REFRESH MATERIALIZED VIEW CONCURRENTLY daily_sales` so reads are not blocked",
+        "explanation": "Concurrency of the refresh is not the problem; staleness is. The data is still up to 15 minutes old."
+      },
+      {
+        "text": "Cache the view in Redis for faster reads",
+        "explanation": "That adds a second layer of staleness without fixing the first."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. The requirement is **no oversell**: a correctness rule, not a reporting need.\n2. A periodically refreshed copy is always potentially stale, so it can never enforce that rule.\n3. Require on_hand NOT NULL, a unique product_id, and maintain the value in the same transaction as the order:\n\n```sql\nUPDATE stock\n   SET on_hand = on_hand - 1\n WHERE product_id = 7;\n-- CHECK (on_hand >= 0) fails\n-- if none left: roll back order\n```\n\n4. Require exactly one updated row; zero affected rows means missing stock and must roll back the order. All inventory writes must preserve this protocol.\n5. Keep the materialised view for reports, where 15 minutes of staleness is fine.",
+    "link": {
+      "title": "PostgreSQL 18: refresh materialised views",
+      "url": "https://www.postgresql.org/docs/18/sql-refreshmaterializedview.html"
+    }
+  }
+]

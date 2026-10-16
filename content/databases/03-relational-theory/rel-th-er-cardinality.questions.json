@@ -1,0 +1,125 @@
+[
+  {
+    "id": "rel-th-er-modelling-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Each album belongs to exactly one artist, and an artist can have many albums. How do you map this relationship to tables?",
+    "options": [
+      {
+        "text": "Add `album_ids` (an array) to `artist`",
+        "explanation": "A PostgreSQL array is a valid SQL value, but an ordinary foreign key does not check each array element against album ids. This also puts references on the wrong side for one artist with many albums. Use the album’s single artist reference."
+      },
+      {
+        "text": "Add `artist_id NOT NULL REFERENCES artist` to `album`",
+        "explanation": "Correct. In a one-to-many relationship the foreign key goes on the 'many' side. Total participation (every album has an artist) makes it `NOT NULL`."
+      },
+      {
+        "text": "Create a junction table `artist_album(artist_id, album_id)`",
+        "explanation": "A junction table is for many-to-many. With a composite key it would allow one album to have several artists, which this rule forbids."
+      },
+      {
+        "text": "Add `album_id` to `artist`",
+        "explanation": "One column on the 'one' side can hold only one album, but an artist can have many."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Identify the ends: Artist (one) ||----o< Album (many). In crow's-foot notation, `||` means exactly one and `o<` means zero or many.\n2. Rule: put the foreign key on the **many** side, since each album references exactly one artist.\n3. Each album must have an artist (total participation), so `NOT NULL`.\n\nPostgreSQL column declarations (inside a CREATE TABLE statement):\n\n```sql\nartist_id INT NOT NULL\n  REFERENCES artist\n```",
+    "link": {
+      "title": "Chen: The Entity-Relationship Model (1976)",
+      "url": "https://openlib.org/home/krichel/courses/lis512/readings/chen76theentity-relationship.pdf"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An artist can be tagged with several genres, and users filter artists by genre. How should the multivalued attribute `genres` be stored?",
+    "options": [
+      {
+        "text": "A table `artist_genre(artist_id, genre)` with primary key `(artist_id, genre)`",
+        "explanation": "Correct. A multivalued attribute becomes its own table keyed by owner plus value. It can be indexed by genre and constrained (for example with a foreign key to a `genre` table)."
+      },
+      {
+        "text": "Columns `genre1`, `genre2`, `genre3`",
+        "explanation": "This caps the number of genres, and every filter must check three columns. It is a repeating group spread across columns."
+      },
+      {
+        "text": "A text column `'rock,indie,folk'`",
+        "explanation": "A delimited string makes per-genre references and ordinary per-value constraints awkward. Under the flat convention taught here, use one owner/genre relational tuple per membership. Do not treat all searchable SQL text as automatically violating 1NF."
+      },
+      {
+        "text": "A new row in `artist` per genre",
+        "explanation": "That duplicates every other artist attribute once per genre, creating update anomalies."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Mapping rule: represent a multivalued attribute in a separate table keyed by its owner and value.\n2. Key: `(artist_id, genre)`, so the same genre cannot be added twice.\n3. Query: `SELECT artist_id FROM artist_genre WHERE genre = 'folk'`, which an index on `(genre)` speeds up.\n4. Optional: `genre REFERENCES genre(name)` so only known genres are allowed.",
+    "link": {
+      "title": "Chen: The Entity-Relationship Model (1976)",
+      "url": "https://openlib.org/home/krichel/courses/lis512/readings/chen76theentity-relationship.pdf"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Every employee must belong to exactly one department, and a newly created department may have no employees yet. Which DDL captures **both** the relationship cardinality and the participation?",
+    "options": [
+      {
+        "text": "`department.employee_id REFERENCES employee`",
+        "explanation": "The foreign key is on the wrong side: one column on department can name only one employee."
+      },
+      {
+        "text": "`employee.dept_id REFERENCES department` (nullable)",
+        "explanation": "Right side, but nullable lets an employee have no department, so total participation on the employee side is lost."
+      },
+      {
+        "text": "`employee.dept_id INT NOT NULL REFERENCES department`",
+        "explanation": "Correct. The foreign key on the many side gives 'each employee has at most one department'; `NOT NULL` makes it exactly one. Departments with no employees are allowed automatically."
+      },
+      {
+        "text": "A junction table `emp_dept(emp_id, dept_id)` with primary key `(emp_id, dept_id)`",
+        "explanation": "That allows an employee in several departments, and does not force every employee to have one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Read the constraints from each end:\n\n| End | Min | Max |\n|---|---|---|\n| employee to department | 1 | 1 |\n| department to employees | 0 | many |\n\n1. Max 1 department per employee: foreign key on employee.\n2. Min 1: `NOT NULL`.\n3. Min 0 employees per department: nothing to add; a department row with no referencing employees is fine.\n\nNote: enforcing \"a department must have at least one employee\" is much harder in SQL; it needs deferred constraints or triggers.",
+    "link": {
+      "title": "Chen: The Entity-Relationship Model (1976)",
+      "url": "https://openlib.org/home/krichel/courses/lis512/readings/chen76theentity-relationship.pdf"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PostgreSQL, each user has at most one profile, and each profile belongs to exactly one user. Which designs enforce this? Select all that apply.",
+    "options": [
+      {
+        "text": "`profile.user_id INT NOT NULL UNIQUE REFERENCES users`",
+        "explanation": "Correct. The foreign key ties each profile to exactly one user, and `UNIQUE` stops a second profile for the same user."
+      },
+      {
+        "text": "`profile.user_id INT PRIMARY KEY REFERENCES users`",
+        "explanation": "Correct. Sharing the primary key makes it unique and not null, so this is the same one-to-one constraint in a compact form."
+      },
+      {
+        "text": "`profile.user_id INT NOT NULL REFERENCES users` with no unique constraint",
+        "explanation": "Without `UNIQUE`, one user could have many profiles; that is one-to-many, not one-to-one."
+      },
+      {
+        "text": "A junction table `user_profile(user_id, profile_id)` with primary key `(user_id, profile_id)`",
+        "explanation": "A composite key allows many profiles per user and many users per profile: that is many-to-many."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "one-to-one with total participation on the profile side:\n\n1. Put the foreign key on the side that must participate (profile), so it can be `NOT NULL`.\n2. Add uniqueness on the foreign key to cap it at one profile per user.\n3. Use NOT NULL together with UNIQUE, or a PostgreSQL PRIMARY KEY, which supplies both properties.\n4. If both sides were total and always created together, merging the tables would be simplest.",
+    "link": {
+      "title": "Chen: The Entity-Relationship Model (1976)",
+      "url": "https://openlib.org/home/krichel/courses/lis512/readings/chen76theentity-relationship.pdf"
+    }
+  }
+]

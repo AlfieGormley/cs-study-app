@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rel-th-denormalisation-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "An `invoice` table stores the customer's shipping address at the time of sale. A reviewer says it is \"denormalised, because the address is already in `customer`\" and wants it removed. What is the right response?",
+    "options": [
+      {
+        "text": "Agree; the invoice should join to `customer` for the address",
+        "explanation": "Then old invoices would show the customer's new address after they move, altering historical records. The two addresses are different facts."
+      },
+      {
+        "text": "Keep it: the address on the invoice is a historical fact about that sale, not a copy of the current address, so storing it is correct normalised design",
+        "explanation": "Correct. The invoice id determines the shipping address: that is its own functional dependency. It must not follow later changes to the customer, so it is not redundant."
+      },
+      {
+        "text": "Keep it, but add a trigger that updates it when the customer's address changes",
+        "explanation": "That turns a historical record into a cache, which is exactly the bug to avoid: invoices would silently change."
+      },
+      {
+        "text": "Agree, and store the address only in the invoice instead",
+        "explanation": "The customer's current address is a separate fact needed for future orders; it belongs on `customer` too."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Ask: should this value change when the source changes?\n2. Invoice shipping address: **no**. It records where that order went.\n3. So it depends on the invoice, not on the customer's current state:\n\n```formula\ninvoice_id → ship_address\nwhere\ninvoice_id: the invoice's key\nship_address: the address the order was shipped to\n→: functionally determines: each invoice has exactly one shipping address\nIn words: the address is a fact about this invoice, fixed when it was issued. It is a different fact from the customer's current address, not a duplicate of it.\n```\n\n4. A true denormalised copy would be something like `orders.customer_display_name`, meant to track the current name.",
+    "link": {
+      "title": "Silberschatz, Korth and Sudarshan: relational design and temporal facts",
+      "url": "https://www.db-book.com/slides-dir/PDF-dir/ch7.pdf"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A query joining `orders` to `customer` on orders.customer_id = customer.id is slow when fetching orders for a few customers. Assume customer.id is the primary key. A teammate proposes copying `customer.name` onto `orders` to avoid the join. In Postgres, what should you check first?",
+    "options": [
+      {
+        "text": "Whether `orders.customer_id` has an index, since Postgres does not create indexes on foreign-key columns automatically",
+        "explanation": "Correct to investigate. PostgreSQL does not automatically index the referencing column. An index may help this selective lookup or parent deletes; confirm with EXPLAIN rather than assuming it fixes every slow join."
+      },
+      {
+        "text": "Whether `customer.id` has an index",
+        "explanation": "A primary key always gets a unique index in Postgres, so this is already in place."
+      },
+      {
+        "text": "Whether the join should be rewritten as a subquery",
+        "explanation": "An equivalent subquery usually gets the same plan. The access path, not the syntax, is the likely issue."
+      },
+      {
+        "text": "Nothing; joins are always slow, so denormalising is the standard fix",
+        "explanation": "Indexed joins can be efficient, but cost depends on input sizes, selectivity, cache state and the chosen algorithm. Denormalising should follow measurement."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. PostgreSQL creates backing indexes for primary and unique constraints, but does not automatically index the referencing foreign-key columns.\n2. Inspect `EXPLAIN (ANALYZE, BUFFERS)` on a safe read to see the actual plan and work. A sequential scan is not automatically a mistake; scanning much of a table can be appropriate.\n3. For a selective customer lookup, test `CREATE INDEX ON orders (customer_id);`. Compare measured execution and write overhead.\n4. Consider a copied name only after query and index fixes, with an explicit maintenance plan.",
+    "link": {
+      "title": "PostgreSQL 18: constraints",
+      "url": "https://www.postgresql.org/docs/18/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In a chat app, `message` rows copy the sender's `display_name`. A user with 2,000,000 messages changes their display name, and the app updates all copies in one transaction. Which problem is most likely?",
+    "options": [
+      {
+        "text": "None; Postgres updates 2 million rows as cheaply as one",
+        "explanation": "Each update creates a PostgreSQL row version and WAL; index work depends on whether a HOT update is possible. Millions of row updates can be costly even without new index entries."
+      },
+      {
+        "text": "The new name will be visible in some messages before others",
+        "explanation": "Within one query snapshot on the primary, a transaction’s changes are observed atomically. Separate Read Committed statements can straddle the commit, and asynchronous replicas may still lag. A single transaction does not expose partially committed copies."
+      },
+      {
+        "text": "The transaction will violate a foreign key",
+        "explanation": "Copying a name does not involve a foreign key; nothing references `display_name`."
+      },
+      {
+        "text": "A large, long transaction that writes millions of PostgreSQL row versions and substantial WAL, retains locks, can increase replica lag, and leaves obsolete versions to reclaim",
+        "explanation": "Correct. Copied-value update fan-out is the price of copying a frequently changed value widely. Better: store `sender_id` and join, or treat old messages as historical snapshots that keep the old name."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Rows touched: 2,000,000 messages, each a new PostgreSQL row version in Postgres's MVCC.\n2. Each also writes WAL and, unless the update qualifies as a HOT update, new index entries.\n3. Locks on all 2 million rows are held until commit; concurrent edits to those messages block.\n4. Streaming replicas must replay all that WAL, so this can increase lag; the amount depends on replay capacity.\n5. Lesson: denormalise values that are read a lot **and change rarely**. Display names change; `sender_id` does not, so join on it, or cache names outside the database.",
+    "link": {
+      "title": "PostgreSQL 18: heap-only tuple updates",
+      "url": "https://www.postgresql.org/docs/18/storage-hot.html"
+    }
+  }
+]

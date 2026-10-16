@@ -1,0 +1,100 @@
+[
+  {
+    "id": "rel-th-relational-model-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A query `SELECT * FROM orders LIMIT 10` returned rows in insertion order every time during testing. In production it suddenly returns a different set of 10 rows. What is the best explanation?",
+    "options": [
+      {
+        "text": "Relations have no relational tuple order, so without `ORDER BY` the database may return rows in any order it finds convenient",
+        "explanation": "Correct. Insertion order was an accident of the physical layout. Updates, vacuuming, a new index or a parallel database scan can all change it. Only `ORDER BY` guarantees order."
+      },
+      {
+        "text": "Production has a bug in its storage engine",
+        "explanation": "Nothing is wrong. Without `ORDER BY`, any order is a correct answer, so a different order is not a bug."
+      },
+      {
+        "text": "`LIMIT` always returns the most recently inserted rows",
+        "explanation": "`LIMIT` takes the first N rows of whatever order the plan produces. It has no notion of recency."
+      },
+      {
+        "text": "Rows were deleted, which renumbered the table",
+        "explanation": "Tables have no row numbers to renumber. References are by key value, not by position."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A relation has no inherent row order. SQL results without `ORDER BY` likewise have unspecified order.\n2. A convenient result sequence in testing is no guarantee. PostgreSQL may choose a different index, concurrent table-reading plan or storage access sequence.\n3. An update can create a new PostgreSQL row version on the same page or another page; it need not move every updated row elsewhere.\n4. Use `SELECT * FROM orders ORDER BY created_at, id LIMIT 10`, where `id` is unique, to break timestamp ties and select a determinate prefix.",
+    "link": {
+      "title": "PostgreSQL 18: constraints",
+      "url": "https://www.postgresql.org/docs/18/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A `page_views(user_id, url, viewed_at)` table has no primary key or unique constraint. A retry bug inserts one row twice, exactly identical. What can you say about this table in relational terms?",
+    "options": [
+      {
+        "text": "It is still a relation; the two rows are different relational tuples because they were inserted at different times",
+        "explanation": "Insertion time is not an attribute here. Two relational tuples with identical values for every attribute are the same relational tuple."
+      },
+      {
+        "text": "Nothing changes; queries automatically remove duplicates",
+        "explanation": "Only `DISTINCT`, `UNION` (without `ALL`) and similar operators remove duplicates. `SELECT COUNT(*)` will count both rows."
+      },
+      {
+        "text": "The database will reject the second insert, because relations cannot hold duplicates",
+        "explanation": "SQL permits duplicates unless a declared uniqueness rule or another explicit enforcement mechanism rejects them; it does not reject a retry merely because relational theory uses sets."
+      },
+      {
+        "text": "It is a bag, not a relation: it now contains a duplicate, which a set cannot, and with no key you cannot target just one copy with an ordinary `DELETE ... WHERE`",
+        "explanation": "Correct. With no uniqueness constraint, exact duplicates can be stored. A value predicate matches both copies. PostgreSQL can distinguish current PostgreSQL row versions with its physical `ctid` column during cleanup, but that location is not a stable application identifier."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Theory: a relation is a set of relational tuples, so a duplicate is impossible.\n2. SQL tables are **bags**. With no key, nothing stops a duplicate.\n3. `DELETE FROM page_views WHERE user_id = 7 AND url = '/a' AND viewed_at = '2026-03-03 09:00:00+00'` deletes **both** copies, because they are indistinguishable by value.\n4. Remedies: add a key (for example a surrogate `id`, or `UNIQUE (user_id, url, viewed_at)` if that is a real rule), and make the insert idempotent with `ON CONFLICT DO NOTHING`.",
+    "link": {
+      "title": "PostgreSQL 18: constraints",
+      "url": "https://www.postgresql.org/docs/18/ddl-constraints.html"
+    }
+  },
+  {
+    "id": "rel-th-relational-model-q5",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which of the following are ways that SQL tables differ from relations as defined in the relational model? Select all that apply.",
+    "options": [
+      {
+        "text": "A table can contain duplicate rows",
+        "explanation": "Correct. SQL tables and results are bags (multisets) unless a key or `DISTINCT` prevents duplicates."
+      },
+      {
+        "text": "Columns have an ordinal position that `SELECT *` and `INSERT ... VALUES` rely on",
+        "explanation": "Correct. In the model, the heading is a set of named attributes, with no order."
+      },
+      {
+        "text": "A column can hold NULL, giving three-valued logic",
+        "explanation": "Correct. The 1970 model had no NULL; SQL's NULL means a comparison can be *unknown*, not just true or false."
+      },
+      {
+        "text": "Every table must have a primary key",
+        "explanation": "Wrong way round. The model requires every relation to have at least one candidate key; SQL does *not* require a key, which is exactly why duplicates are possible."
+      },
+      {
+        "text": "A table's attributes each have a type (domain)",
+        "explanation": "This is shared, not a difference: the model's attributes each draw values from a domain, which SQL calls a type."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Go through each property and ask \"does the model allow this?\"\n\n1. Duplicates: a set cannot have them; a SQL table can. **Difference.**\n2. Column order: a heading is a set; SQL columns are positional. **Difference.**\n3. NULL: not in Codd's 1970 model; SQL has it. **Difference.**\n4. Mandatory keys: the model implies every relation has a key (at worst all attributes). SQL lets you omit one. So this statement describes the model, not SQL.\n5. Domains/types: present in both. **Not a difference.**",
+    "link": {
+      "title": "PostgreSQL 18: constraints",
+      "url": "https://www.postgresql.org/docs/18/ddl-constraints.html"
+    }
+  }
+]

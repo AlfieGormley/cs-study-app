@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rel-th-er-modelling-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Students take many courses and each course has many students. Each enrolment has a grade. Where does `grade` go?",
+    "options": [
+      {
+        "text": "On `student`",
+        "explanation": "A student has many grades, one per course, so a single column on student cannot hold them."
+      },
+      {
+        "text": "On `course`",
+        "explanation": "A course has a grade per student, not one grade, so it does not belong here either."
+      },
+      {
+        "text": "In a separate `grade` table with its own id and no foreign keys",
+        "explanation": "Without the student and course keys the grade is not connected to anything."
+      },
+      {
+        "text": "On a junction table `enrolment(student_id, course_id, grade)`",
+        "explanation": "Correct. many-to-many relationships become a junction table, and attributes of the relationship itself (the grade for *this* student on *this* course) live on it."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Student–Course is many-to-many, so map it to a junction (associative) table.\n2. Ask what `grade` depends on:\n\n```formula\n{student_id, course_id} → grade\nwhere\nstudent_id, course_id: the two foreign keys\ngrade: the grade for that enrolment\n→: functionally determines\n{ }: a set of attributes: the two together\nIn words: the student and course together fix the grade. Neither entity alone determines it.\n```\n3. So it is a relationship attribute and lives on the junction table:\n\n```sql\nCREATE TABLE enrolment (\n  student_id INT REFERENCES student,\n  course_id  INT REFERENCES course,\n  grade      TEXT,\n  PRIMARY KEY (student_id, course_id));\n```",
+    "link": {
+      "title": "Chen: The Entity-Relationship Model (1976)",
+      "url": "https://openlib.org/home/krichel/courses/lis512/readings/chen76theentity-relationship.pdf"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Playlists must allow the same track more than once, in a user-chosen order. Which primary key for `playlist_entry(playlist_id, track_id, position, added_at)` fits?",
+    "options": [
+      {
+        "text": "`(playlist_id, track_id)`",
+        "explanation": "This forbids adding the same track twice to one playlist, which the requirement allows."
+      },
+      {
+        "text": "`(playlist_id, position)`",
+        "explanation": "Correct. Each slot in a playlist holds one entry, and the same track can occupy several slots."
+      },
+      {
+        "text": "`(track_id)`",
+        "explanation": "That would let each track appear on only one playlist in the whole system."
+      },
+      {
+        "text": "`(playlist_id, track_id, added_at)`",
+        "explanation": "This allows duplicates, but it does not stop two entries claiming the same position, and timestamps are a fragile part of a key."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. What uniquely identifies an entry? \"The song in slot N of playlist P\".\n2. So the slot determines everything else in the row, which makes it the key:\n\n```formula\n{playlist_id, position}\n  → track_id, added_at\nwhere\nplaylist_id: the playlist\nposition: the slot number within the playlist\ntrack_id: the track in that slot\nadded_at: when it was added\n→: functionally determines\n{ }: a set of attributes: the two together\nIn words: knowing the playlist and the slot fixes which track is there and when it was added.\n```\n3. Check the requirement: two rows (P, 3, T9) and (P, 7, T9) are both allowed. Two rows for (P, 3) are not.\n4. Lesson: a junction table's key comes from the rule you want, not automatically from both foreign keys.",
+    "link": {
+      "title": "Chen: The Entity-Relationship Model (1976)",
+      "url": "https://openlib.org/home/krichel/courses/lis512/readings/chen76theentity-relationship.pdf"
+    }
+  },
+  {
+    "id": "rel-th-er-modelling-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Room numbers are unique only within a building (both Main and Annex have a room 101). Rooms cannot exist without their building. How should `room` be defined?",
+    "options": [
+      {
+        "text": "Primary key `(building_id, room_no)`, with `building_id REFERENCES building ON DELETE CASCADE`",
+        "explanation": "Correct. Room is a weak entity: its key is the owner's key plus the partial key `room_no`, and cascade reflects that it cannot exist without its building."
+      },
+      {
+        "text": "`room_no INT PRIMARY KEY`, `building_id INT`",
+        "explanation": "Room 101 exists in two buildings, so `room_no` alone cannot be a key."
+      },
+      {
+        "text": "Primary key `(building_id, room_no)` with no foreign key",
+        "explanation": "The key is right, but without the foreign key a room can reference a building that does not exist."
+      },
+      {
+        "text": "Store rooms as an array column on `building`",
+        "explanation": "Rooms need their own identity and booking references. Ordinary PostgreSQL foreign keys cannot validate or reference individual elements inside an array; a room table expresses those rules directly."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Room is identified only relative to its building: a **weak entity**.\n2. Partial key: `room_no`. The full key combines building id with room number.\n3. Existence dependency: deleting a building deletes its rooms, expressed by `ON DELETE CASCADE`.\n\n```sql\nCREATE TABLE room (\n  building_id INT REFERENCES building\n    ON DELETE CASCADE,\n  room_no INT,\n  PRIMARY KEY (building_id, room_no));\n```",
+    "link": {
+      "title": "Chen: The Entity-Relationship Model (1976)",
+      "url": "https://openlib.org/home/krichel/courses/lis512/readings/chen76theentity-relationship.pdf"
+    }
+  }
+]

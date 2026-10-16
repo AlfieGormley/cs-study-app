@@ -1,0 +1,92 @@
+[
+  {
+    "id": "rel-th-denormalisation-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You create `CREATE MATERIALIZED VIEW daily_sales AS SELECT ...` in Postgres at 09:00. New orders arrive all morning. What does `SELECT * FROM daily_sales` show at 11:00?",
+    "options": [
+      {
+        "text": "An error, because the view is stale",
+        "explanation": "Stale data is returned without warning; Postgres does not track staleness for you."
+      },
+      {
+        "text": "Live results, because a view always re-runs its query",
+        "explanation": "That describes an ordinary view. A *materialised view* stores the result instead of re-running the query."
+      },
+      {
+        "text": "Results updated incrementally after each new order",
+        "explanation": "Some databases offer this (Oracle fast refresh, SQL Server indexed views), but core Postgres does not."
+      },
+      {
+        "text": "The results as of 09:00, because a materialised view stores its result and changes only when you run `REFRESH MATERIALIZED VIEW`",
+        "explanation": "Correct. It is a snapshot. Core Postgres never refreshes it automatically or incrementally."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `CREATE MATERIALIZED VIEW` runs the query once and stores the rows.\n2. Later inserts into the base tables do not touch it.\n3. `REFRESH MATERIALIZED VIEW daily_sales` re-runs the entire query and replaces the contents.\n4. So at 11:00 you see the 09:00 data. Schedule refreshes (for example with `pg_cron`) at whatever staleness the report can tolerate.",
+    "link": {
+      "title": "PostgreSQL 18: refresh materialised views",
+      "url": "https://www.postgresql.org/docs/18/sql-refreshmaterializedview.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You run `REFRESH MATERIALIZED VIEW CONCURRENTLY daily_sales;` and Postgres rejects it. The view has an index on `(day)` only, and several products share each day. What is the fix?",
+    "options": [
+      {
+        "text": "Drop concurrent refresh; it is not supported for views with aggregates",
+        "explanation": "concurrent refresh works with aggregates. Dropping it would block readers during the refresh, which is what you wanted to avoid."
+      },
+      {
+        "text": "Create a unique index on the view, on plain columns that identify every row, such as `(day, product_id)`",
+        "explanation": "Correct. Concurrent refresh needs a `UNIQUE` index using only column names, with no `WHERE` clause, so it can match old and new rows and apply the differences."
+      },
+      {
+        "text": "Make the index on `(day)` unique",
+        "explanation": "Several products share a day, so `(day)` is not unique; creating that index would fail."
+      },
+      {
+        "text": "Add a partial unique index `WHERE day > now() - interval '30 days'`",
+        "explanation": "Partial and expression indexes do not qualify. The index must cover all rows."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Concurrent refresh builds the new result, then diffs it against the old one, deleting obsolete rows and inserting new rows while readers continue.\n2. To match rows it needs a key: at least one `UNIQUE` index on plain column names, with no `WHERE` clause.\n3. The view's natural key is (day, product_id):\n\n```sql\nCREATE UNIQUE INDEX\n  ON daily_sales (day, product_id);\n```\n\n4. Now `REFRESH MATERIALIZED VIEW CONCURRENTLY daily_sales` succeeds. It allows SELECTs to continue. Relative speed depends on how much changed; also ensure the materialized view has already been populated.",
+    "link": {
+      "title": "PostgreSQL 18: refresh materialised views",
+      "url": "https://www.postgresql.org/docs/18/sql-refreshmaterializedview.html"
+    }
+  },
+  {
+    "id": "rel-th-denormalisation-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Which of these can be implemented as a Postgres generated column on the `line(order_id, qty, price_paid, ...)` table?",
+    "options": [
+      {
+        "text": "A generated age_days column using `current_date - order_date`",
+        "explanation": "The expression must be immutable. `current_date` changes daily, so it is rejected (and a stored value would be wrong tomorrow anyway)."
+      },
+      {
+        "text": "A generated order_total using `SUM(qty * price_paid)` over every line of the order",
+        "explanation": "Generated columns cannot use aggregates or look at other rows. Use a trigger-maintained column, or compute it in a view."
+      },
+      {
+        "text": "A generated amount column using `qty * price_paid`",
+        "explanation": "Correct. It uses only columns of the same row and an immutable expression, which is exactly what generated columns support."
+      },
+      {
+        "text": "`customer_name` looked up from the `customer` table",
+        "explanation": "Generated columns cannot query other tables. That is a copied column, which needs a trigger or application logic."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Rules for a generated column's expression:\n\n1. It can reference only columns **of the same row**.\n2. It must be **immutable** (same inputs, same output, forever).\n3. No subqueries, aggregates or other tables.\n\nSo only `qty * price_paid` qualifies:\n\n```sql\nALTER TABLE line ADD COLUMN amount\n  NUMERIC GENERATED ALWAYS AS\n  (qty * price_paid) STORED;\n```\n\nSame-row derived values are the safest denormalisation: no fan-out and no drift.",
+    "link": {
+      "title": "PostgreSQL 18: generated columns",
+      "url": "https://www.postgresql.org/docs/18/ddl-generated-columns.html"
+    }
+  }
+]

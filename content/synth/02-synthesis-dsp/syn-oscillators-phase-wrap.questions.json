@@ -1,0 +1,92 @@
+[
+  {
+    "id": "syn-oscillators-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An oscillator at 44.1 kHz wraps with `if p >= 1: p = 0.0` instead of subtracting 1. You ask it for 1000 Hz. What frequency does it actually produce?",
+    "options": [
+      {
+        "text": "1000 Hz exactly",
+        "explanation": "Resetting to 0 discards the overshoot, so the cycle length is rounded up to a whole number of samples."
+      },
+      {
+        "text": "About 1023 Hz (sharp)",
+        "explanation": "The overshoot is thrown away, which *lengthens* cycles, so the error is flat, not sharp."
+      },
+      {
+        "text": "980 Hz, about 35 cents flat",
+        "explanation": "Correct. 1 / 0.022676 = 44.1 samples per cycle, but with reset-to-zero each cycle is rounded up to 45 samples: 44,100 / 45 = 980 Hz."
+      },
+      {
+        "text": "It cannot be predicted, because it depends on floating-point rounding",
+        "explanation": "The rounding up to a whole number of samples is systematic and easy to predict."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The increment is 1000 / 44,100 = 0.022676 cycles per sample, so an ideal cycle is 44.1 samples. The wrap fires on the first sample where the phase reaches 1, and resetting to 0 throws away the overshoot, so every cycle is rounded **up** to a whole number of samples:\n\n```formula\nN = ⌈f_s / f⌉ = ⌈44.1⌉ = 45\nf_out = f_s / N\nf_out = 44100 Hz / 45 = 980 Hz\ne = 1200 log_2(f_out / f)\ne = 1200 log_2(980 / 1000) ≈ −35\nwhere\nN: the length of each cycle, in samples, with reset-to-zero\n⌈x⌉: the ceiling of x: rounded up to the next whole number\nf_s: the sample rate, 44,100 samples per second\nf: the frequency asked for, 1000 Hz\nf_out: the frequency actually produced, in hertz (Hz)\ne: the tuning error, in cents (hundredths of a semitone); negative means flat\nlog_2: the base-2 logarithm: the power you raise 2 to to get the number\n1200: cents in an octave (12 semitones × 100)\nHz: hertz, per second\n≈: approximately equal to\nIn words: rounding each cycle up from 44.1 to 45 samples makes the note 980 Hz, about 35 cents flat, clearly out of tune.\n```\n\nSubtracting 1 keeps the 0.1-sample remainder, so cycles are 44 or 45 samples and average to 44.1.",
+    "link": {
+      "title": "Digital sinusoid generators — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/pasp/Digital_Sinusoid_Generators.html"
+    }
+  },
+  {
+    "id": "syn-oscillators-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Trace this accumulator. What is `p` after the loop (to 2 decimal places)?\n\n```\np = 0.9\ninc = 0.25\nfor _ in range(3):\n    p += inc\n    if p >= 1.0:\n        p -= 1.0\n```",
+    "options": [
+      {
+        "text": "0.65",
+        "explanation": "Correct. 0.9 → 1.15 → wrap to 0.15 → 0.40 → 0.65."
+      },
+      {
+        "text": "1.65",
+        "explanation": "The wrap subtracts 1 when the phase passes 1, so it never stays above 1."
+      },
+      {
+        "text": "0.75",
+        "explanation": "That would be 3 × 0.25 from zero, ignoring the starting phase of 0.9."
+      },
+      {
+        "text": "0.50",
+        "explanation": "That would happen if the first wrap reset to 0 instead of keeping the 0.15 remainder."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```\nstart   0.90\n+0.25   1.15 -> wrap -> 0.15\n+0.25   0.40\n+0.25   0.65\n```\n\nPython prints 0.6499999999999999 because of binary floating point, which rounds to 0.65. The key point is that the 0.15 overshoot is kept.",
+    "link": {
+      "title": "Digital sinusoid generators — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/pasp/Digital_Sinusoid_Generators.html"
+    }
+  },
+  {
+    "id": "syn-oscillators-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your oscillator is used for through-zero FM, so its increment can be negative (as low as −0.3) and occasionally above 1 (up to 2.4). Which wrap is correct in every case?",
+    "options": [
+      {
+        "text": "`if p >= 1: p -= 1`",
+        "explanation": "This fails for negative phases (never wraps up) and for increments above 1 (one subtraction leaves p above 1)."
+      },
+      {
+        "text": "`if p >= 1: p = 0`",
+        "explanation": "This detunes even in the normal case and also ignores negative phase."
+      },
+      {
+        "text": "`p = fmod(p, 1.0)` in C",
+        "explanation": "C's `fmod` keeps the sign of its first argument, so −0.3 stays −0.3 rather than becoming 0.7."
+      },
+      {
+        "text": "`p = p - floor(p)`",
+        "explanation": "Correct. `floor` rounds towards minus infinity, so the result is always in [0, 1): 2.4 → 0.4 and −0.3 → 0.7."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Test each candidate on a phase of 2.4 and a phase of −0.3. First the floor version:\n\n```formula\np_w = p − floor(p)\np_w = 2.4 − 2 = 0.4\np_w = −0.3 − (−1) = 0.7\nwhere\np_w: the wrapped phase, in cycles\np: the phase before wrapping, in cycles\nfloor: rounds down towards minus infinity, so floor(2.4) = 2 and floor(−0.3) = −1\nIn words: subtract the whole cycles, rounding down, which leaves a fraction from 0 up to 1 for any input.\n```\n\nThen the other two, as code traces:\n\n```text-output\nfmod(p, 1.0):\n  2.4 -> 0.4\n -0.3 -> -0.3   wrong\nif p >= 1: p -= 1\n  2.4 -> 1.4    wrong\n -0.3 -> -0.3   wrong\n```\n\nOnly `p - floor(p)` maps everything into [0, 1).",
+    "link": {
+      "title": "Digital sinusoid generators — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/pasp/Digital_Sinusoid_Generators.html"
+    }
+  }
+]

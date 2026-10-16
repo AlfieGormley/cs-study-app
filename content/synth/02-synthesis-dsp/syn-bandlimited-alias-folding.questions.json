@@ -1,0 +1,122 @@
+[
+  {
+    "id": "syn-bandlimited-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What feature of a naive sawtooth (`2*p - 1`) is the root cause of its aliasing?",
+    "options": [
+      {
+        "text": "Its straight rising segment",
+        "explanation": "A straight ramp on its own is smooth; it's the reset at the end of each ramp that causes trouble."
+      },
+      {
+        "text": "Its instantaneous jump from +1 to −1, requiring harmonics extending to arbitrarily high frequencies",
+        "explanation": "Correct. A periodic discontinuity needs infinitely many high harmonics. Sampling it directly folds above-Nyquist contributions back down; they can add or cancel at coincident sampled frequencies."
+      },
+      {
+        "text": "Its amplitude of ±1",
+        "explanation": "Scaling the wave changes the level of the aliases, not whether they exist."
+      },
+      {
+        "text": "Using floating point instead of integers",
+        "explanation": "An integer implementation of the same naive wave aliases identically. It's a sampling problem, not a number-format one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Lesson 3: sharp features need many high harmonics; an ideal saw jump requires arbitrarily high harmonics, with inverse-harmonic-number amplitudes.\n2. Anything above half the sample rate (the Nyquist frequency) cannot be represented, so it folds back (module 1).\n3. The ramp is harmless; correct the jump (BLEP) or never create it (additive, wavetables) and unwanted folding can be prevented or reduced, depending on the algorithm. A short PolyBLEP is approximate, and a time-varying waveform needs separate sideband analysis.",
+    "link": {
+      "title": "Aliasing — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/mdft/Aliasing_Sampled_Signals.html"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "A naive saw plays at 2,500 Hz with a 48 kHz sample rate. Where does its ideal 19th-harmonic contribution fold, and what is that source harmonic’s level relative to the ideal fundamental?",
+    "options": [
+      {
+        "text": "47,500 Hz at −25.6 dB",
+        "explanation": "47.5 kHz can't exist at a 48 kHz sample rate; it must fold below 24 kHz."
+      },
+      {
+        "text": "It is simply removed because it is above Nyquist",
+        "explanation": "Nothing removes it: a naive oscillator samples the ideal wave, so the harmonic folds back instead of disappearing."
+      },
+      {
+        "text": "500 Hz at about −25.6 dB",
+        "explanation": "Correct. The ideal 19th harmonic is 47,500 Hz, which folds to 500 Hz. Its source amplitude is one nineteenth of the ideal fundamental, about minus 25.6 dB. Other harmonics can fold to the same bin, so this is not a prediction of the total sampled FFT-bin level."
+      },
+      {
+        "text": "23,500 Hz at about −25.6 dB",
+        "explanation": "That would be reflecting around Nyquist from 24,500 Hz. Measure the distance to the nearest multiple of the sample rate instead: 47,500 is close to 48,000, so it lands near 0 Hz."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nf_h = h f_0\nf_h = 19 × 2500 Hz = 47500 Hz\nf_a = |f_h − k f_s|\nf_a = |47500 − 48000| = 500 Hz\nL = 20 log_10(1 / h)\nL = 20 log_10(1 / 19) ≈ −25.6 dB\nwhere\nf_h: the harmonic's frequency, in hertz (Hz)\nh: the harmonic number\nf_0: the note's fundamental frequency, in Hz\nf_a: the alias: where the harmonic actually appears after sampling, in Hz\n|x|: absolute value: x without its sign\nk: the whole number that puts k × f_s nearest to f_h\nf_s: the sample rate, 48,000 Hz\nL: the level relative to the fundamental, in decibels (dB), from the saw's 1/h amplitude rule\nlog_10: the base-10 logarithm\n≈: approximately equal to\ndB: decibels\nHz: hertz, per second\nIn words: the 19th harmonic folds to 500 Hz, about 26 dB below the fundamental.\n```\n\nA 500 Hz tone under a 2.5 kHz note is not a multiple of it, so it sounds like a clashing low whistle.\n\nThis tracks one ideal source harmonic. Other folded harmonics can coincide and add or cancel, so measure the combined sampled FFT-bin amplitude separately.",
+    "link": {
+      "title": "Aliasing — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/mdft/Aliasing_Sampled_Signals.html"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Why are aliased components from a naive oscillator so much more objectionable than the same amount of extra brightness?",
+    "options": [
+      {
+        "text": "They are louder than the fundamental",
+        "explanation": "Usually they are well below it (around −26 to −32 dB in the lesson's example). Level isn't the main issue."
+      },
+      {
+        "text": "They only occur in square waves",
+        "explanation": "Other naive sharp waveforms alias too. A fixed sine below Nyquist has no upper harmonics to fold; above-Nyquist or modulated sines need separate checks."
+      },
+      {
+        "text": "They can be inharmonic and can move in the opposite direction when the pitch changes",
+        "explanation": "Correct. Folded components aren't multiples of the fundamental, so they clash, and on a pitch sweep some fall while the note rises."
+      },
+      {
+        "text": "They increase the DC offset",
+        "explanation": "Aliases can land at DC as well as other frequencies. A DC shift alone does not explain the characteristic moving inharmonic whistles in the question."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nf_h = k f_0\nf_a = |k f_0 − m f_s|\nwhere\nf_h: a real harmonic's frequency, in hertz (Hz)\nk: the harmonic number\nf_0: the note's fundamental frequency, in Hz\nf_a: the alias frequency, in Hz\n|x|: absolute value: x without its sign\nm: the whole number that puts m × f_s nearest to the harmonic\nf_s: the sample rate, in Hz\nHz: hertz, per second\nIn words: real harmonics rise with the note, but when a harmonic sits just below a multiple of the sample rate, raising the note shrinks the gap, so the alias falls.\n```\n\nSo a sweep up produces whistles sweeping down ('birdies'). That motion and inharmonicity can make aliases at −30 dB audible when masking and playback conditions permit; the number is not a universal hearing threshold.",
+    "link": {
+      "title": "Aliasing — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/mdft/Aliasing_Sampled_Signals.html"
+    }
+  },
+  {
+    "id": "syn-bandlimited-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A naive saw at 2,000 Hz (48 kHz sample rate) is bent up to 2,010 Hz. Its 20th harmonic folds back. What happens to that alias?",
+    "options": [
+      {
+        "text": "It rises by 10 Hz",
+        "explanation": "That treats the alias like the fundamental. The 20th harmonic moves 20 times as far, and the folding reverses its direction."
+      },
+      {
+        "text": "It falls by 200 Hz, from 8,000 to 7,800 Hz",
+        "explanation": "Correct. 20 × 2000 = 40,000 → 48,000 − 40,000 = 8,000 Hz. 20 × 2010 = 40,200 → 7,800 Hz. The note goes up while the alias goes down."
+      },
+      {
+        "text": "It rises by 200 Hz, from 8,000 to 8,200 Hz",
+        "explanation": "The harmonic rises by 200 Hz, but because it's folded around 48 kHz, its alias falls."
+      },
+      {
+        "text": "It stays at 8,000 Hz",
+        "explanation": "Every component moves when the pitch changes; only the direction differs."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nf_a = |h f_0 − k f_s|\nf_0 = 2000 Hz: |40000 − 48000| = 8000 Hz\nf_0 = 2010 Hz: |40200 − 48000| = 7800 Hz\nwhere\nh: the harmonic number\nf_0: the note's fundamental frequency, in Hz\nf_a: the alias: where the harmonic actually appears after sampling, in Hz\n|x|: absolute value: x without its sign\nk: the whole number that puts k × f_s nearest to the harmonic's frequency (here 1)\nf_s: the sample rate, 48,000 Hz\nHz: hertz, per second\nIn words: the 20th harmonic rises from 40,000 to 40,200 Hz, closer to 48,000 Hz, so its alias falls from 8,000 to 7,800 Hz.\n```\n\nHarmonic +200 Hz, alias −200 Hz. This counter-motion is why pitch sweeps on naive oscillators sound so wrong.",
+    "link": {
+      "title": "Aliasing — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/mdft/Aliasing_Sampled_Signals.html"
+    }
+  }
+]

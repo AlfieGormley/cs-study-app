@@ -1,0 +1,78 @@
+---
+id: aud-microphones-placement
+title: Control leakage and comb filtering
+level: intermediate
+minutes: 4
+summary: Distance changes direct-to-room balance and leakage.
+sourceLesson: aud-microphones
+---
+
+## Placement basics
+
+- **Distance controls the direct-to-room balance.** Close placement gives more direct sound, less room, more proximity effect and more level variation as the performer moves. Further away captures more of the room.
+- **Angle controls tone.** On a guitar cab, the centre of the cone is brighter; towards the edge it's darker. Small moves matter.
+- Use **acoustic nulls**. Aim the null of a directional mic at what you *don't* want (a monitor, a neighbouring drum).
+- Mind **sound reflections**. A music stand or desk near the mic adds a reflection a few milliseconds late, which comb-filters the sound.
+
+### The 3:1 rule
+
+When several mics are open at once, a source reaches its own mic and, more weakly and later, its neighbours. When the signals are mixed, the delayed copy comb-filters the direct one. The **3:1 rule** says the distance *between* mics should be at least **three times** the distance from each mic to its source.
+
+Why it works: by the inverse square law, sound pressure falls in proportion to distance, so the leakage level drops by:
+
+```formula
+L_leak = 20 log_10(d_far / d_near)
+L_leak = 20 log_10(3d / d)
+L_leak = 20 log_10(3) ≈ 9.5 dB
+where
+L_leak: how far the leaked copy is below the direct sound, in decibels (dB)
+d_far: the distance from the source to the neighbouring mic, in metres (m)
+d_near: the distance from the source to its own mic, in metres (m)
+d: the source-to-own-mic distance; the 3:1 rule makes d_far at least 3 × d
+log_10: the base-10 logarithm; 20 × log_10 because pressure is an amplitude
+dB: decibel
+m: metre
+≈: approximately equal to (the result is rounded)
+In words: three times further away means about a third of the pressure, which is about 9.5 dB quieter.
+```
+
+When a copy that much quieter is mixed with the direct sound, it can only nudge the sum up or down a little:
+
+```formula
+g = 10^{−L_leak/20} = 10^{−9.5/20} ≈ 0.335
+L_peak = 20 log_10(1 + g) ≈ +2.5 dB
+L_notch = 20 log_10(1 − g) ≈ −3.5 dB
+where
+g: the leaked copy's amplitude as a fraction of the direct sound, a pure number
+L_leak: how far the leak is below the direct sound, in decibels (dB); here 9.5 dB
+L_peak: the biggest boost, at frequencies where the copy arrives in phase, in dB
+L_notch: the deepest cut, at frequencies where the copy arrives out of phase, in dB
+log_10: the base-10 logarithm
+dB: decibel
+≈: approximately equal to (the result is rounded)
+In words: convert the 9.5 dB gap back to an amplitude fraction, then add or subtract it from 1 to find the worst peak and notch.
+```
+
+That is about +2.5 dB at a peak and −3.5 dB at a notch, rather than the +6 dB peaks and perfect notches of equal-amplitude delayed copies.
+
+```diagram
+  src A      src B
+   |          |
+  0.3 m      0.3 m
+   |          |
+  mic A ---- mic B
+     >= 0.9 m apart
+```
+
+It's a rule of thumb that assumes omni-like pickup and similar levels. Directional mics aimed well, or very different source levels, change the numbers.
+
+## Key takeaways
+- Distance changes direct-to-room balance and leakage.
+- The three-to-one spacing rule is a practical starting estimate.
+- Leakage ripple also depends on source geometry, microphone response and channel gains.
+
+## Further reading
+- [Microphone technology — DPA](https://www.dpamicrophones.com/mic-university/technology/microphone-technology-the-essentials/)
+- [U 87 Ai technical data — Neumann](https://www.neumann.com/en-en/products/microphones/u-87-ai/)
+- [Phantom power — Schoeps](https://schoeps.de/en/knowledge/knowledge-base/technical-basics/phantom-power-p48p12.html)
+- [Three-to-one rule — DPA](https://www.dpamicrophones.com/dict/3-1-rule/)

@@ -8,7 +8,7 @@
       "multi-core",
       "quad-core"
     ],
-    "definition": "One independent unit inside a processor that fetches and executes instructions. Most microcontrollers have a single core, so only one piece of code runs at any instant; a multi-core chip such as the Raspberry Pi 5's runs several threads truly at the same time.",
+    "definition": "One processor execution unit that runs an instruction stream. A single-core MCU runs one such stream at a time, while peripherals such as DMA can operate concurrently; multiple cores can execute separate threads simultaneously.",
     "example": "The Raspberry Pi 5 has four Cortex-A76 cores; the Daisy Seed's STM32H750 has one Cortex-M7 core.",
     "source": "https://en.wikipedia.org/wiki/Central_processing_unit"
   },
@@ -27,7 +27,7 @@
       "Cortex-M boards",
       "Cortex-M parts"
     ],
-    "definition": "Arm's family of 32-bit processor cores designed for microcontrollers. The Cortex-M7, used by both the Daisy Seed and Teensy 4.x, is a high-performance member with a hardware floating-point unit; small members such as the M0 and M0+ leave out features like the cycle counter.",
+    "definition": "Arm's family of 32-bit processor cores for microcontrollers. The Cortex-M7 implementations on Daisy Seed and Teensy 4.x include hardware floating-point support; optional core features and debug facilities depend on the exact implementation.",
     "example": "The Daisy Seed's Cortex-M7 runs at 480 MHz; the Teensy 4.1's at 600 MHz.",
     "source": "https://en.wikipedia.org/wiki/ARM_Cortex-M"
   },
@@ -79,8 +79,8 @@
       "GB",
       "gigabytes"
     ],
-    "definition": "A unit of memory size: about a thousand megabytes. It is used for the RAM of computers such as the Raspberry Pi, not microcontrollers.",
-    "example": "The Raspberry Pi 5 comes with 1 to 16 GB of RAM.",
+    "definition": "A decimal unit of data size equal to one billion bytes; hardware documentation sometimes uses memory-size labels inconsistently. Check whether a source means decimal GB or binary GiB instead of inferring capacity from the label alone.",
+    "example": "The Pi 5 product brief lists RAM configurations in GB.",
     "source": "https://en.wikipedia.org/wiki/Gigabyte"
   },
   {
@@ -126,7 +126,8 @@
       "internal flash",
       "external flash",
       "flash chip",
-      "program flash"
+      "program flash",
+      "QSPI flash devices"
     ],
     "definition": "Non-volatile memory that keeps its contents with the power off. On a microcontroller it stores the program and constant data; SSDs and SD cards are built from it too. It is fast to read but slow to erase and rewrite, and writing firmware into it is called 'flashing'.",
     "example": "The Daisy Seed has 128 KB of internal flash plus an 8 MB external QSPI flash chip.",
@@ -176,9 +177,9 @@
       "data tightly coupled memory",
       "tightly coupled memory"
     ],
-    "definition": "Data tightly coupled memory: a block of RAM wired directly to a Cortex-M7 core so it can be accessed every cycle without going through the cache or the main bus. It is ideal for time-critical buffers and variables.",
-    "example": "The Daisy Seed's build report lists 128 KB of DTCM RAM; Teensy 4.1 has 512 KB of tightly coupled memory.",
-    "source": "https://en.wikipedia.org/wiki/ARM_Cortex-M#Cortex-M7"
+    "definition": "Data tightly coupled memory: RAM connected through a dedicated processor interface rather than the ordinary cache path. It can provide predictable low-latency CPU access, but DMA accessibility and placement rules are target-specific.",
+    "example": "The Daisy build memory map lists 128 KB of DTCM; do not assume a DMA peripheral can use every CPU-accessible region.",
+    "source": "https://www.st.com/resource/en/datasheet/stm32h750ib.pdf"
   },
   {
     "id": "sdram",
@@ -208,7 +209,7 @@
       "QSPIFLASH",
       "QSPI flash"
     ],
-    "definition": "Quad SPI: a faster form of the SPI bus that moves four bits per clock instead of one, mostly used to connect external flash memory. Code run from QSPI flash is slower than code in internal memory.",
+    "definition": "Quad SPI: a serial-memory interface using four data lines during supported transfer phases, increasing data throughput relative to a one-line phase. Execution speed depends on clocks, caches, placement and workload; the Daisy bootloader guide describes its QSPI-hosted programs as slower than its SRAM-hosted programs.",
     "example": "The Daisy Seed's 8 MB program flash is a QSPI chip; the libDaisy guide says BOOT_QSPI programs run 'a fair bit slower'.",
     "source": "https://en.wikipedia.org/wiki/Serial_Peripheral_Interface#Quad_SPI"
   },
@@ -218,8 +219,8 @@
     "aliases": [
       "read-only memory"
     ],
-    "definition": "Read-only memory: memory whose contents are fixed when the chip is made. Because nothing can overwrite it, it is a safe home for a factory bootloader.",
-    "example": "STM32 chips keep their system bootloader in ROM, so a broken program can always be replaced over DFU.",
+    "definition": "Read-only memory: storage intended to be read rather than rewritten during ordinary operation. Factory system bootloaders can reside in mask ROM that application flash programming cannot erase.",
+    "example": "The STM32H750 system bootloader resides separately from application flash; access still depends on the documented boot and protection configuration.",
     "source": "https://en.wikipedia.org/wiki/Read-only_memory"
   },
   {
@@ -239,7 +240,7 @@
       "stacked registers",
       "in a register"
     ],
-    "definition": "One of a handful of small, very fast storage slots inside the CPU core, which instructions work on directly. Registers are volatile and hold only a few words, so they are working space, not program storage.",
+    "definition": "A small, fast storage location within a processor core, used directly by instructions for operands, addresses or state. These registers are volatile working storage, distinct from the persistent firmware image.",
     "example": "A compiler may keep a variable in a register inside a loop, which is why a plain variable can miss another side's update.",
     "source": "https://en.wikipedia.org/wiki/Processor_register"
   },
@@ -285,19 +286,25 @@
       "firmware image",
       "firmware images"
     ],
-    "definition": "The program that runs directly on a device's hardware, usually from flash memory. On a microcontroller it starts at reset, never exits, and has no operating system to fall back on.",
+    "definition": "Software closely tied to a device and its hardware, commonly stored in non-volatile memory. Bare-metal MCU firmware normally starts through reset/start-up code and keeps running; firmware can also use an RTOS.",
     "example": "Your synth's firmware sets up the codec, starts the audio callback and then loops forever reading controls.",
-    "source": "https://en.wikipedia.org/wiki/Firmware"
+    "source": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
   },
   {
     "id": "bare-metal",
-    "term": "Bare metal",
+    "term": "Bare-metal MCU execution",
     "aliases": [
-      "bare-metal"
+      "bare-metal microcontroller",
+      "bare-metal firmware",
+      "bare-metal program",
+      "bare-metal code",
+      "bare-metal system",
+      "bare-metal main loop",
+      "bare-metal single-core MCU"
     ],
-    "definition": "Running firmware directly on the hardware with no operating system: just your code, interrupts and the main loop. It gives deterministic timing and instant start-up, at the cost of OS conveniences.",
+    "definition": "Running directly on hardware without an operating system. Timing and startup depend on the firmware, interrupt design, peripherals and boot path; removing an OS does not itself prove deadlines or instant readiness.",
     "example": "A Daisy Seed running libDaisy is a bare-metal system.",
-    "source": "https://en.wikipedia.org/wiki/Bare_machine"
+    "source": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
   },
   {
     "id": "rtos",
@@ -306,9 +313,9 @@
       "real-time operating system",
       "RTOSes"
     ],
-    "definition": "Real-time operating system: a small operating system for microcontrollers that runs several tasks with priorities and guarantees how quickly a high-priority task gets the CPU. FreeRTOS and Zephyr are common examples.",
+    "definition": "Real-time operating system: an OS designed to support priority-based tasks and timing requirements. A system meets its deadlines only when task priorities, execution times, blocking and hardware behavior are correctly designed and analysed.",
     "example": "On an RTOS, a high-priority audio task blocked on a lock held by a low-priority task suffers priority inversion.",
-    "source": "https://en.wikipedia.org/wiki/Real-time_operating_system"
+    "source": "https://www.freertos.org/Documentation/02-Kernel/02-Kernel-features/01-Tasks-and-co-routines/04-Task-scheduling"
   },
   {
     "id": "operating-system",
@@ -318,7 +325,7 @@
       "operating systems"
     ],
     "definition": "The software that manages a computer's hardware and runs programs on top of it, handling memory, files, devices and scheduling. A Raspberry Pi runs one (Linux); a bare-metal microcontroller does not.",
-    "example": "On a desktop, the OS catches a crashed program; on bare-metal firmware nothing does.",
+    "example": "A desktop OS can terminate a failed application; bare-metal firmware needs its own fault handling or watchdog recovery.",
     "source": "https://en.wikipedia.org/wiki/Operating_system"
   },
   {
@@ -328,7 +335,7 @@
       "OS scheduler",
       "schedulers"
     ],
-    "definition": "The part of an operating system that decides which thread runs on each CPU core and when. On Linux the audio thread's timing depends on it, which is why bare-metal audio is more deterministic.",
+    "definition": "The part of an operating system that selects runnable tasks or threads for CPU execution. Priorities, scheduling policy and other system work affect audio timing; having or omitting an OS alone does not prove deadline reliability.",
     "source": "https://en.wikipedia.org/wiki/Scheduling_(computing)"
   },
   {
@@ -338,8 +345,8 @@
       "watchdog",
       "watchdogs"
     ],
-    "definition": "A hardware timer that resets the microcontroller if the firmware stops 'feeding' it within a set time, so a hung program restarts instead of staying stuck.",
-    "example": "A watchdog with a 500 ms timeout resets the synth if the main loop freezes.",
+    "definition": "A timer that can raise a fault or reset action if firmware does not service it as specified. In the described MCU design it can restart hung firmware; the exact timeout, reset scope and recovery behavior depend on configuration.",
+    "example": "If only the main loop services a watchdog configured for a 500 ms timeout, a long enough main-loop freeze can trigger its configured reset action.",
     "source": "https://en.wikipedia.org/wiki/Watchdog_timer"
   },
   {
@@ -348,7 +355,7 @@
     "aliases": [
       "RESET"
     ],
-    "definition": "A button (or signal) that restarts the microcontroller from the beginning of its program, as if power had just been applied. On the Daisy Seed, pressing RESET while holding BOOT enters the ROM bootloader.",
+    "definition": "A button or signal that invokes a documented processor/system reset path. Reset is not necessarily identical to removing power: retained memory and peripheral reset scope depend on the hardware. On Daisy Seed, holding BOOT while pressing RESET selects the ROM bootloader.",
     "source": "https://docs.daisy.audio/tutorials/cpp-dev-env/"
   },
   {
@@ -376,8 +383,9 @@
       "boot up",
       "booting"
     ],
-    "definition": "How long a device takes from power-on until it is ready. Bare-metal firmware starts in milliseconds; a Linux computer such as a Raspberry Pi takes seconds.",
-    "source": "https://en.wikipedia.org/wiki/Booting"
+    "definition": "The interval from power-on or reset until a specified state is ready, such as audio output. Bootloaders, peripheral initialisation and the application affect it; measure the complete configuration.",
+    "source": "https://en.wikipedia.org/wiki/Booting",
+    "example": "An application with a 2.5-second bootloader grace period is not instantly ready."
   },
   {
     "id": "bootloader",
@@ -386,8 +394,8 @@
       "bootloaders",
       "second-stage bootloader"
     ],
-    "definition": "A small program that runs at start-up and can receive new firmware and write it to memory, so you can update a board over USB without a debug probe. Recovery is safest when the bootloader lives where your program cannot overwrite it.",
-    "example": "Teensy 4.x keeps its bootloader on a separate chip; STM32 chips keep theirs in ROM.",
+    "definition": "A program that prepares or launches application firmware, often also providing an update path. Whether it runs at every power-up, supports USB programming or is protected from application writes depends on the platform.",
+    "example": "STM32 system recovery can use ROM code; Teensy has a separate programming chip, while its ordinary application can start directly.",
     "source": "https://en.wikipedia.org/wiki/Bootloader"
   },
   {
@@ -400,7 +408,7 @@
       "ROM loader",
       "ROM DFU"
     ],
-    "definition": "A bootloader built into a chip's read-only memory at the factory. STMicroelectronics' STM32 parts have one that can appear as a USB DFU device, so a board can always be reflashed however broken its firmware is.",
+    "definition": "A loader supplied in a chip’s read-only memory. On supported STM32 parts and configurations it provides recovery independently of broken application flash; hardware failure, protection settings and unavailable interfaces can still prevent recovery.",
     "example": "On the Daisy Seed, hold BOOT and press RESET to start the ST system bootloader.",
     "source": "https://docs.daisy.audio/tutorials/cpp-dev-env/"
   },
@@ -416,7 +424,7 @@
     "aliases": [
       "bootloader chip"
     ],
-    "definition": "A small separate microcontroller on Teensy 4.x boards that handles programming the main chip's flash. Because it is physically separate, flashing your program can never erase it, and the Program button always reaches it.",
+    "definition": "A separate processor on Teensy 4.x that controls programming of the main processor. Ordinary application flashing cannot overwrite that loader, providing a recovery route independent of the application; hardware and security conditions still apply.",
     "source": "https://www.pjrc.com/store/ic_mkl02_t4.html"
   },
   {
@@ -459,7 +467,8 @@
     "id": "program-button",
     "term": "Program button",
     "definition": "The pushbutton on a Teensy that puts it into programming mode through the bootloader chip. It is not a reset button. PJRC states that holding it for 13–17 seconds erases the flash and restores a simple LED-blink program.",
-    "source": "https://www.pjrc.com/store/teensy41.html"
+    "source": "https://www.pjrc.com/store/ic_mkl02_t4.html",
+    "example": "PJRC documents a 13–17-second erase/restore. Its loader page says the blink restore copy is created on a prior normal short press."
   },
   {
     "id": "bricked",
@@ -497,7 +506,7 @@
     "aliases": [
       "Serial Wire Debug"
     ],
-    "definition": "Serial Wire Debug: Arm's two-signal debug interface (a clock and a bidirectional data line, plus ground) used by Cortex-M chips. It does everything JTAG does for debugging with fewer pins.",
+    "definition": "Serial Wire Debug: Arm's debug-access interface using a clock and bidirectional data signal, with an appropriate ground reference. It provides processor debug access with fewer signal pins than JTAG, but does not replace JTAG boundary-scan testing.",
     "source": "https://en.wikipedia.org/wiki/JTAG#Serial_Wire_Debug"
   },
   {
@@ -507,7 +516,7 @@
       "Joint Test Action Group",
       "IEEE 1149.1"
     ],
-    "definition": "A standard debug and test interface (IEEE 1149.1), named after the Joint Test Action Group, using four or five signals. Arm cores support it alongside the smaller SWD interface.",
+    "definition": "The IEEE 1149.1 test-access interface, named after the Joint Test Action Group, commonly using four main signals plus optional reset. Chips may also expose processor debugging through it; supported ports depend on the chip and board.",
     "source": "https://en.wikipedia.org/wiki/JTAG"
   },
   {
@@ -575,7 +584,7 @@
       "hard faults",
       "HardFault"
     ],
-    "definition": "The Cortex-M exception raised when the CPU hits a serious error it cannot continue from, such as an invalid memory access. A debugger can read the registers saved at that moment to show where the crash happened.",
+    "definition": "A Cortex-M fault exception used for certain serious errors and faults escalated from other handlers. Its cause and saved exception state can help locate the failure, although not every fault supplies an exact address for the offending instruction.",
     "source": "https://en.wikipedia.org/wiki/ARM_Cortex-M"
   },
   {
@@ -670,7 +679,7 @@
       "ELF files",
       "Executable and Linkable Format"
     ],
-    "definition": "Executable and Linkable Format: the standard output of the GNU toolchain. Besides the program itself it carries debug symbols, so a debugger can map addresses back to your source.",
+    "definition": "Executable and Linkable Format: a format for object files and program images used by the GNU embedded toolchain. An ELF can include debug symbols when built with them; stripped or non-debug images need not contain those symbols.",
     "source": "https://en.wikipedia.org/wiki/Executable_and_Linkable_Format"
   },
   {
@@ -689,7 +698,7 @@
       "exit code",
       "exit codes"
     ],
-    "definition": "The number a desktop program returns to the operating system when it finishes, 0 usually meaning success. Firmware has no operating system to return one to.",
+    "definition": "A value a process reports to its hosting environment when it exits, commonly zero for success. A bare-metal firmware main function has no desktop operating system receiving an exit status; its runtime determines what returning does.",
     "source": "https://en.wikipedia.org/wiki/Exit_status"
   },
   {
@@ -820,10 +829,10 @@
     "term": "Digital output",
     "aliases": [
       "digital outputs",
-      "output pin",
-      "output pins"
+      "GPIO output pin",
+      "GPIO output pins"
     ],
-    "definition": "A pin configured to drive its voltage to 0 V or the supply voltage, able to source or sink a small current, for example to light an LED.",
+    "definition": "A pin configured to drive a logic-low or logic-high voltage while sourcing or sinking a limited current. Real output voltages depend on loading and the datasheet guarantees; they are not necessarily exactly ground or supply.",
     "example": "PJRC recommends no more than 4 mA from each Teensy 4.1 output pin.",
     "source": "https://en.wikipedia.org/wiki/General-purpose_input/output"
   },
@@ -842,7 +851,7 @@
       "5 V-tolerant",
       "not 5 V tolerant"
     ],
-    "definition": "Describes an input pin that can safely receive 5 V signals even though the chip runs at 3.3 V. Pins that are not 5 V tolerant can be damaged by them.",
+    "definition": "An input rating allowing a specified 5 V signal under documented supply, pin and operating-mode conditions. It is not permission to apply 5 V in an unsupported analogue mode or while unpowered; check the exact pin limits.",
     "example": "Teensy 4.1 pins are not 5 V tolerant; most Daisy Seed Rev 7 pins are.",
     "source": "https://www.pjrc.com/store/teensy41.html"
   },
@@ -973,8 +982,8 @@
       "shared ground",
       "ground connection"
     ],
-    "definition": "The common 0 V reference point that all voltages in a circuit are measured from. Boards that exchange signals need a solid shared ground.",
-    "source": "https://en.wikipedia.org/wiki/Ground_(electricity)"
+    "definition": "A chosen voltage reference and current-return network for a circuit; it need not be connected to protective earth. Direct non-isolated single-ended logic usually needs a suitable shared reference, while an isolated interface such as DIN MIDI deliberately avoids a galvanic signal-ground connection.",
+    "source": "https://www.ti.com/lit/an/slyt441/slyt441.pdf"
   },
   {
     "id": "ground-loop",
@@ -1025,7 +1034,7 @@
       "stable-for-5"
     ],
     "definition": "A debouncing method that accepts a new state only after the input has disagreed with the current state for N consecutive readings; any bounce back resets the count.",
-    "example": "With 1 ms ticks and N = 5, a press is accepted 5 ms after the last bounce.",
+    "example": "With one reading per millisecond and a five-reading threshold, acceptance occurs on the fifth agreeing reading; delay from a physical edge also depends on its position between samples.",
     "source": "https://www.ganssle.com/debouncing-pt2.htm"
   },
   {
@@ -1043,7 +1052,9 @@
     "id": "integrator-debouncer",
     "term": "Integrator debouncer",
     "aliases": [
-      "integrator method"
+      "integrator method",
+      "integrator debouncing",
+      "integrator debounce algorithm"
     ],
     "definition": "A debouncing method that keeps a counter between 0 and a top value: add one for each pressed reading, subtract one for each released reading. Its state changes only at the ends, so occasional wrong readings slow it down without resetting it.",
     "source": "https://www.ganssle.com/debouncing-pt2.htm"
@@ -1101,8 +1112,8 @@
     "aliases": [
       "forward voltages"
     ],
-    "definition": "The roughly fixed voltage across a diode or LED while it conducts. It depends on the LED's colour, about 1.8–2.2 V for red and up to about 3 V for blue or white.",
-    "example": "With a 3.3 V supply and a 2.0 V red LED, 1.3 V is left across the series resistor.",
+    "definition": "The voltage across a diode or LED while forward current flows. It depends on current, temperature and the selected part; use specified minimum/maximum limits at the intended conditions for design, rather than treating it as an exact fixed drop.",
+    "example": "A nominal 2.0 V LED at the chosen current leaves nominally 1.3 V for a resistor from 3.3 V.",
     "source": "https://en.wikipedia.org/wiki/Light-emitting_diode#Electrical_polarity"
   },
   {
@@ -1113,8 +1124,8 @@
       "current-limiting resistor",
       "current-limiting resistors"
     ],
-    "definition": "A resistor placed in line with a component, such as an LED, so the same current flows through both. It limits the current to a safe value.",
-    "example": "330 Ω in series with a red LED on a 3.3 V pin gives about 3.9 mA.",
+    "definition": "A resistor in the same branch as a component, so the same branch current flows through both. A suitable value can limit current; safety still depends on supply, component behavior, tolerance and ratings.",
+    "example": "With an assumed 3.3 V source and 2.0 V LED drop, 330 Ω gives a nominal current of about 3.9 mA; this is not a worst-case rating check.",
     "source": "https://en.wikipedia.org/wiki/Series_and_parallel_circuits"
   },
   {
@@ -1177,8 +1188,8 @@
       "standard resistor value",
       "E12"
     ],
-    "definition": "The standard sets of values resistors and capacitors are sold in, spaced evenly on a logarithmic scale. When a calculation gives 325 Ω, you pick the next standard value, 330 Ω.",
-    "example": "The E12 series per decade is 10, 12, 15, 18, 22, 27, 33, 39, 47, 56, 68, 82.",
+    "definition": "Preferred component-value series arranged approximately logarithmically within each decade. A calculated nominal lower resistance bound of 325 ohms suggests 330 ohms in E12, but current limits still require tolerance, supply and LED-voltage checks.",
+    "example": "E12 uses 10, 12, 15, 18, 22, 27, 33, 39, 47, 56, 68 and 82 within a decade.",
     "source": "https://en.wikipedia.org/wiki/E_series_of_preferred_numbers"
   },
   {
@@ -1218,8 +1229,8 @@
     "aliases": [
       "capacitors"
     ],
-    "definition": "A component that stores charge between two plates. It blocks steady (DC) voltage but passes changes, which makes it useful for filtering and coupling.",
-    "source": "https://en.wikipedia.org/wiki/Capacitor"
+    "definition": "A component that stores charge with a voltage difference between its terminals. An ideal capacitor carries current when that voltage changes and blocks steady DC current after settling; a real part has leakage and voltage/polarity limits. It can still hold a steady voltage.",
+    "source": "https://www.ti.com/content/dam/videos/external-videos/en-us/4/3816841626001/6119033637001.mp4/subassets/passive_components_and_circuits_1.pdf"
   },
   {
     "id": "cmos",
@@ -1270,7 +1281,7 @@
       "μV"
     ],
     "definition": "One millionth of a volt (symbol µV).",
-    "example": "One 16-bit ADC step over 3.3 V is about 50 µV, smaller than ordinary supply noise.",
+    "example": "An ideal 16-bit converter spanning 3.3 V has a code spacing of about 50 µV; useful resolution also depends on actual noise and errors.",
     "source": "https://en.wikipedia.org/wiki/Volt"
   },
   {
@@ -1334,9 +1345,9 @@
       "clock rates",
       "CPU clock"
     ],
-    "definition": "How many ticks per second a processor's (or bus's) clock makes. A CPU does roughly one simple step per tick, but clock speed alone does not tell you how much audio work a board can do.",
+    "definition": "How many clock cycles occur per second. Instruction throughput, memory waits, peripherals and implementation affect how much useful work fits within those cycles; clock-rate ratios alone do not predict synth voice counts.",
     "example": "600 MHz versus 480 MHz is a ratio of clocks, not of synth voices.",
-    "source": "https://en.wikipedia.org/wiki/Clock_rate"
+    "source": "https://www.pjrc.com/store/teensy41.html"
   },
   {
     "id": "breadboard",
@@ -1417,7 +1428,7 @@
     "aliases": [
       "pin-compatible"
     ],
-    "definition": "Describes boards or chips with the same pinout, so one can replace the other without rewiring.",
+    "definition": "Having matching pin positions and intended signal functions. Replacement still needs voltage, timing, power and software compatibility checks; matching pin locations alone does not establish complete interchangeability.",
     "example": "Daisy Seed revisions 5 and 7 are pin compatible.",
     "source": "https://en.wikipedia.org/wiki/Pin_compatibility"
   },
@@ -1448,7 +1459,7 @@
       "logic analysers",
       "logic analyzers"
     ],
-    "definition": "An instrument that records many digital signals at once and can decode buses such as I2C, SPI and UART. Cheap USB models are enough for timing a callback.",
+    "definition": "An instrument that samples digital logic levels against time, often on several channels, and may decode buses such as I2C, SPI and UART. Timing resolution, voltage limits and channel bandwidth must suit the measurement.",
     "source": "https://en.wikipedia.org/wiki/Logic_analyzer"
   },
   {
@@ -1585,7 +1596,7 @@
     "aliases": [
       "voltage dividers"
     ],
-    "definition": "Two resistances in series across a voltage, with the output taken from the join. The output is a fixed fraction of the input; a potentiometer is an adjustable one.",
+    "definition": "A series network with output measured at a junction relative to a reference node. For two resistors with negligible loading, the ratio is set by their resistances; connecting a load changes that ratio.",
     "source": "https://en.wikipedia.org/wiki/Voltage_divider"
   },
   {
@@ -1614,7 +1625,7 @@
     "id": "settling-time",
     "term": "Settling time",
     "aliases": [],
-    "definition": "The time a signal takes to reach and stay at its new value after a change. After a multiplexer switches channels, the ADC must wait for it.",
+    "definition": "Time after a change until a signal enters and remains within a specified error band around its final value. Multiplexed ADC acquisition must allow the required settling and sampling time; exact mathematical equality is not the practical criterion.",
     "source": "https://en.wikipedia.org/wiki/Settling_time"
   },
   {
@@ -1687,7 +1698,7 @@
       "moving-average",
       "4-point average"
     ],
-    "definition": "A smoothing filter that outputs the average of the last N readings. It reduces random noise but lags behind real changes by about half the window.",
+    "definition": "A filter that outputs the average of a recent window of readings. Averaging uncorrelated zero-mean noise reduces its variance; correlated noise can remain. A full fixed window has a delay of half one less than its length, measured in reading intervals, away from response zeros.",
     "source": "https://en.wikipedia.org/wiki/Moving_average"
   },
   {
@@ -1701,18 +1712,20 @@
       "exponential smoothing",
       "one-pole smoothing"
     ],
-    "definition": "The simplest recursive low-pass filter: each step moves the output a fixed fraction of the way towards the input. It smooths knob readings and parameter changes with a single stored value.",
+    "definition": "A filter with one pole and one feedback-state value. A first-order low-pass smoother with a coefficient between zero and one moves a fraction of the remaining gap toward each input; other one-pole designs and coefficient ranges have different behavior.",
     "example": "With a coefficient of about 0.095 at 1,000 readings a second, it covers 63% of a step in 10 ms.",
     "source": "https://ccrma.stanford.edu/~jos/filters/One_Pole.html"
   },
   {
     "id": "time-constant",
-    "term": "Time constant",
+    "term": "Exponential time constant",
     "aliases": [
       "time constants",
-      "tau"
+      "tau",
+      "smoothing time constant",
+      "RC time constant"
     ],
-    "definition": "For a one-pole smoother or RC circuit, the time to cover about 63% of a sudden step (written τ, tau). After three time constants it has covered about 95%.",
+    "definition": "For the specified first-order exponential response, the duration after which about 63.2 percent of a step has been covered. Discrete updates sample that response and a library’s differently defined slew-time setting need not equal this time constant.",
     "source": "https://en.wikipedia.org/wiki/Time_constant"
   },
   {
@@ -1745,7 +1758,7 @@
       "exponential maps",
       "exponentially mapped"
     ],
-    "definition": "Converting a 0–1 control value so equal knob movements give equal ratios, suitable for frequency, times and gain, which we hear logarithmically.",
+    "definition": "A mapping for which equal input increments give equal positive output ratios. It spreads a wide frequency, time or gain range across a control; equal perceived changes are not guaranteed for every sound or parameter.",
     "example": "Mapping 20 Hz–20 kHz exponentially puts 632 Hz at the knob's centre.",
     "source": "https://en.wikipedia.org/wiki/Exponential_function"
   },
@@ -1765,14 +1778,15 @@
       "power-of-two",
       "powers of two"
     ],
-    "definition": "A number made by multiplying some number of 2s together (2 raised to a whole-number power): 1, 2, 4, 8, 16, 64 and so on. Ring buffers with power-of-two sizes can wrap indices with a fast bit mask.",
+    "definition": "For non-negative integer exponents, one or repeated products of two: 1, 2, 4, 8, 16 and so on. A power-of-two ring capacity permits slot wrapping with a bit mask; the counter-width and occupancy invariants still need checking.",
     "source": "https://en.wikipedia.org/wiki/Power_of_two"
   },
   {
     "id": "pan-law",
     "term": "Pan law",
     "aliases": [
-      "pan position"
+      "pan law",
+      "panning law"
     ],
     "definition": "The rule for how a mixer sets the left and right gains as a sound is panned, chosen so its loudness stays roughly even across the stereo field.",
     "source": "https://en.wikipedia.org/wiki/Panning_law"
@@ -1783,7 +1797,7 @@
     "aliases": [
       "voice steal"
     ],
-    "definition": "Reusing a sounding voice for a new note when all voices are busy. The search for which voice to steal is a rare, slower path in the audio callback.",
+    "definition": "Reassigning an occupied synthesis voice to a new note when no free voice is available. The selection and transition must stay within the callback budget, and abrupt replacement can click; it need not be an unbounded or slow operation.",
     "source": "https://en.wikipedia.org/wiki/Polyphony_and_monophony_in_instruments"
   },
   {
@@ -1864,7 +1878,7 @@
     "aliases": [
       "control ports"
     ],
-    "definition": "The digital interface (usually I2C or SPI) through which firmware writes a codec's configuration registers. A codec with one powers up mostly switched off until it is configured.",
+    "definition": "A digital interface through which firmware reads or writes configuration registers, commonly I2C or SPI on an audio codec. Required startup programming depends on the exact chip, reset defaults and hardware mode.",
     "source": "https://www.pjrc.com/store/teensy3_audio.html"
   },
   {
@@ -1918,7 +1932,7 @@
       "frame sync"
     ],
     "definition": "Left/right clock (also word select or frame sync): the I2S signal that marks which channel's word is being sent. It completes one cycle per frame, so it runs at the sample rate.",
-    "example": "At 48 kHz, LRCLK is 48 kHz whether the link is mono or stereo.",
+    "example": "In a standard two-channel I2S frame at 48 kHz, one LRCLK cycle carries the left and right words.",
     "source": "https://en.wikipedia.org/wiki/I%C2%B2S"
   },
   {
@@ -1967,7 +1981,8 @@
       "sample frames",
       "stereo sample frame",
       "audio frame",
-      "I2S frame"
+      "I2S frame",
+      "stereo sample frames"
     ],
     "definition": "One sample for every channel at a single instant: for stereo, a left and a right sample. In I2S, one word-clock cycle carries one frame.",
     "example": "At 48 kHz there are 48,000 stereo frames a second.",
@@ -2061,7 +2076,7 @@
     "aliases": [
       "coupling capacitors"
     ],
-    "definition": "A capacitor in the signal path that passes audio but blocks any steady DC voltage.",
+    "definition": "A series capacitor used with the surrounding impedances to pass changing signal components while rejecting steady DC transfer after settling. Its stored voltage can be nonzero; its capacitance and load set a high-pass response.",
     "source": "https://en.wikipedia.org/wiki/Capacitive_coupling"
   },
   {
@@ -2078,7 +2093,7 @@
   {
     "id": "dc",
     "term": "DC",
-    "definition": "Direct current: a steady voltage or current that does not change direction. In audio, an unwanted DC offset is usually blocked by a coupling capacitor.",
+    "definition": "Direct current: current with one direction, though its magnitude can vary. In audio discussion, a DC component means the constant or mean signal offset; a coupling capacitor rejects steady transfer after settling.",
     "source": "https://en.wikipedia.org/wiki/Direct_current"
   },
   {
@@ -2087,7 +2102,7 @@
     "aliases": [
       "alternating current"
     ],
-    "definition": "Alternating current: a voltage or current that reverses direction repeatedly. Audio signals are AC.",
+    "definition": "Alternating current: current that repeatedly changes direction. In audio discussion AC also refers to a changing voltage component; actual equipment signals can include a DC offset.",
     "source": "https://en.wikipedia.org/wiki/Alternating_current"
   },
   {
@@ -2123,7 +2138,7 @@
       "mic inputs",
       "mic in"
     ],
-    "definition": "An input with high gain for the very small signals microphones make. A line-level source overloads it.",
+    "definition": "An input with gain suited to small microphone signals. A line-level source may overload it unless the specific interface offers a suitable pad or line mode; check its manual and disable inappropriate phantom power.",
     "source": "https://en.wikipedia.org/wiki/Microphone_preamplifier"
   },
   {
@@ -2139,7 +2154,7 @@
   {
     "id": "phantom-power",
     "term": "Phantom power",
-    "definition": "A DC voltage (usually 48 V) sent up a microphone cable to power condenser microphones. It is meant only for microphones and is not wanted on a line source.",
+    "definition": "DC power supplied through microphone signal conductors, commonly 48 V on balanced microphone connections. It can power compatible microphones or other designed equipment; disable it when connecting an incompatible line source and follow the equipment manuals.",
     "source": "https://en.wikipedia.org/wiki/Phantom_power"
   },
   {
@@ -2178,9 +2193,9 @@
       "group delays",
       "converter delay"
     ],
-    "definition": "The time a filter delays a signal passing through it. A codec's digital filters add a few tens of samples of group delay.",
-    "example": "The PCM3060's DAC filter delays the signal by 20 samples, about 0.42 ms at 48 kHz.",
-    "source": "https://en.wikipedia.org/wiki/Group_delay_and_phase_delay"
+    "definition": "The negative slope of a filter’s phase response with angular frequency, expressing frequency-dependent envelope delay. Constant group delay within a band aligns those components in time; magnitude filtering can still alter waveform shape.",
+    "example": "The PCM3060 datasheet specifies DAC digital-filter group delay as 20 sample periods.",
+    "source": "https://www.ti.com/lit/ds/symlink/pcm3060.pdf"
   },
   {
     "id": "serial-communication",
@@ -2292,7 +2307,7 @@
     "aliases": [
       "8N1"
     ],
-    "definition": "The commonest UART setting: 8 data bits, no parity bit and 1 stop bit, so 10 bits on the wire per byte including the start bit.",
+    "definition": "A UART framing setting with eight data bits, no parity and one stop bit. Including the start bit, a byte occupies ten bit times on the wire.",
     "source": "https://en.wikipedia.org/wiki/8-N-1"
   },
   {
@@ -2355,7 +2370,7 @@
       "acknowledge bit",
       "ACKs"
     ],
-    "definition": "Acknowledge: in I2C, the receiver pulls SDA low during a ninth clock after each byte to say it received it. (Networking uses 'ACK' for a similar idea.)",
+    "definition": "Acknowledge: the receiver pulls SDA low during the ninth I2C clock to indicate acceptance. During a read the controller deliberately leaves this slot high (NACK) after its final requested data byte.",
     "source": "https://www.ti.com/lit/an/sbaa565/sbaa565.pdf"
   },
   {
@@ -2364,7 +2379,7 @@
     "aliases": [
       "NAK"
     ],
-    "definition": "Not acknowledge: SDA left high where an ACK should be. After an address byte it means no device answered: wrong address, wiring, power or missing pull-ups.",
+    "definition": "Not acknowledge: SDA remains high in an I2C ninth-clock slot. On an ordinary target-address attempt no target acknowledged; wrong address, wiring, power or a busy target are possible causes. A controller deliberately NACKs its final received byte.",
     "source": "https://www.ti.com/lit/an/sbaa565/sbaa565.pdf"
   },
   {
@@ -2475,7 +2490,7 @@
       "chip-select",
       "slave select"
     ],
-    "definition": "The SPI line, usually active-low, that the controller pulls low to choose which device it is talking to. Each device needs its own.",
+    "definition": "The selection signal used by an SPI peripheral, commonly active low. Independently selected peripherals usually have separate signals; daisy-chained parts and interfaces without selection are documented exceptions.",
     "source": "https://en.wikipedia.org/wiki/Serial_Peripheral_Interface"
   },
   {
@@ -2567,10 +2582,10 @@
     "id": "midi-in",
     "term": "MIDI IN",
     "aliases": [
-      "MIDI IN jack",
-      "MIDI OUT"
+      "MIDI IN",
+      "MIDI IN jack"
     ],
-    "definition": "The MIDI port that receives data. The specification requires an opto-isolator there so the two devices share no ground. MIDI OUT is the sending port.",
+    "definition": "The receiving MIDI port. Traditional DIN MIDI IN uses the specified opto-isolated circuit so that this data connection does not require the two equipment grounds to be galvanically joined; MIDI OUT is the transmitting port.",
     "source": "https://midi.org/5-pin-din-electrical-specs"
   },
   {
@@ -2589,7 +2604,7 @@
       "note-on message",
       "note-ons"
     ],
-    "definition": "The MIDI message that starts a note: a status byte, a note number and a velocity. Over DIN it takes 960 µs.",
+    "definition": "A MIDI channel message carrying a note number and velocity; nonzero velocity starts a note, while velocity zero means note off. A complete three-byte message takes 960 microseconds on DIN MIDI; running status can omit repeated status bytes.",
     "source": "https://midi.org/summary-of-midi-1-0-messages"
   },
   {
@@ -2613,8 +2628,8 @@
       "CC messages",
       "MIDI CCs"
     ],
-    "definition": "Control change: the MIDI message that sends a controller's value, such as a knob position, with 7-bit resolution (128 steps, 0 to 127).",
-    "source": "https://midi.org/summary-of-midi-1-0-messages"
+    "definition": "MIDI Control Change. In MIDI 1.0, a channel message carries a controller number and a seven-bit value; paired controls can provide fourteen-bit resolution. MIDI 2.0 Channel Voice Control Change uses a thirty-two-bit value.",
+    "source": "https://midi.org/details-about-midi-2-0-midi-ci-profiles-and-property-exchange-updated-june-2023"
   },
   {
     "id": "status-byte",
@@ -2622,7 +2637,7 @@
     "aliases": [
       "status bytes"
     ],
-    "definition": "The first byte of a MIDI message, saying what kind of message it is (note-on, CC and so on) and on which channel. Its top bit is always 1.",
+    "definition": "A MIDI message-type byte whose most significant bit is one. Channel-message status also contains a channel number; system-message status does not. Running status may omit repeated channel status on the wire.",
     "source": "https://midi.org/summary-of-midi-1-0-messages"
   },
   {
@@ -2631,7 +2646,7 @@
     "aliases": [
       "running-status"
     ],
-    "definition": "A MIDI shortcut: when several messages in a row share a status byte, the sender may omit the repeats, so each note message takes two bytes instead of three.",
+    "definition": "A MIDI 1.0 channel-message shortcut that can omit repeated channel status bytes. Repeated note messages then need two data bytes after the initial status; System Common messages clear running status, while System Real-Time bytes can interleave without clearing it.",
     "example": "Four note-ons with running status take 9 bytes instead of 12.",
     "source": "https://en.wikipedia.org/wiki/MIDI#Messages"
   },
@@ -2685,7 +2700,7 @@
       "optocoupler",
       "opto-isolated"
     ],
-    "definition": "A component with an LED and a light sensor in one package, so a signal crosses as light with no electrical connection. It keeps MIDI devices' grounds separate.",
+    "definition": "A component that transfers a signal using light between electrically isolated input and output circuits. DIN MIDI uses it to isolate its data path; other cables or connections may still join the equipment grounds.",
     "source": "https://en.wikipedia.org/wiki/Opto-isolator"
   },
   {
@@ -2712,18 +2727,23 @@
   },
   {
     "id": "interrupt",
-    "term": "Interrupt",
+    "term": "Processor interrupt",
     "aliases": [
-      "interrupts",
       "hardware interrupt",
       "hardware interrupts",
       "IRQ",
       "IRQs",
       "interrupt request",
-      "DMA interrupt"
+      "DMA interrupt",
+      "processor interrupts",
+      "CPU interrupt",
+      "CPU interrupts",
+      "UART interrupt",
+      "UART receive interrupt",
+      "DMA interrupts"
     ],
-    "definition": "A hardware signal that makes the CPU pause what it is doing, save its place, run a short handler (an interrupt service routine), then resume. Audio callbacks on microcontrollers run from the DMA interrupt.",
-    "source": "https://en.wikipedia.org/wiki/Interrupt"
+    "definition": "A hardware or software request handled through a processor exception/interrupt mechanism. Eligible enabled requests can preempt lower-priority work; masking, priorities and processor state determine when a handler actually executes.",
+    "source": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
   },
   {
     "id": "isr",
@@ -2760,8 +2780,8 @@
       "preempted",
       "preempting"
     ],
-    "definition": "Interrupting a running piece of code to run something more urgent, then resuming it. Any interrupt preempts the main loop; a higher-priority interrupt preempts a lower one.",
-    "source": "https://en.wikipedia.org/wiki/Preemption_(computing)"
+    "definition": "Suspending current execution so higher-priority eligible work can run, then resuming it. Enabled, unmasked interrupts can preempt a bare-metal main loop; priority and masking determine which handlers can preempt each other.",
+    "source": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
   },
   {
     "id": "software-interrupt",
@@ -2835,14 +2855,14 @@
   },
   {
     "id": "audio-deadline",
-    "term": "Audio deadline",
+    "term": "Audio callback deadline",
     "aliases": [
-      "audio deadlines",
+      "audio callback deadlines",
       "processing deadline",
       "callback deadline"
     ],
-    "definition": "The moment by which the callback must have filled its buffer half, one block period after it was handed over. Missing it plays stale or partial data, heard as a click.",
-    "source": "https://en.wikipedia.org/wiki/Real-time_computing"
+    "definition": "The latest time by which the required audio work must finish before hardware reuses its buffer. A missed deadline may produce stale/partial samples, a dropout or another data-dependent audible fault.",
+    "source": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
   },
   {
     "id": "real-time",
@@ -2851,7 +2871,7 @@
       "real-time audio",
       "real-time code"
     ],
-    "definition": "A system whose correctness depends on finishing work by a deadline, not just on the result. Audio is real-time: a late block is a click, however correct its samples.",
+    "definition": "A system whose correctness includes meeting specified time constraints. Audio work must deliver the needed samples by its deadline; missing it risks stale or incomplete data and an audible fault, whose form depends on the signal and buffering.",
     "source": "https://en.wikipedia.org/wiki/Real-time_computing"
   },
   {
@@ -2861,27 +2881,27 @@
       "deterministic audio timing",
       "bare-metal determinism"
     ],
-    "definition": "Timing that is predictable and repeatable because nothing unexpected (such as an OS scheduler) can delay the code. Bare-metal firmware has it; a general-purpose OS does not guarantee it.",
-    "source": "https://en.wikipedia.org/wiki/Deterministic_system"
+    "definition": "Timing with known, repeatable limits under specified assumptions. Bare-metal firmware makes some scheduling factors explicit, but interrupt interference, memory behavior and work bounds still need analysis; an OS can also provide real-time scheduling facilities.",
+    "source": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
   },
   {
     "id": "bounded-execution-time",
     "term": "Bounded execution time",
     "aliases": [
+      "bounded execution time",
       "bounded run time",
       "worst-case execution time",
-      "WCET",
-      "bounded, predictable"
+      "WCET"
     ],
-    "definition": "Code whose longest possible run time is known and limited. Audio callbacks must have it, which rules out allocation, locks, waits, logging and unbounded loops.",
-    "source": "https://en.wikipedia.org/wiki/Worst-case_execution_time"
+    "definition": "Execution whose worst-case duration is limited under explicit platform and input assumptions. Audio work needs sufficient timing margin; observed maxima from a finite benchmark alone do not establish a universal worst-case bound.",
+    "source": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
   },
   {
     "id": "end-to-end-latency",
     "term": "End-to-end latency",
     "aliases": [],
     "definition": "The total delay from an action to its visible or audible result, counting every stage in between rather than just one. For a synth, from pressing a key to hearing the sound, it adds MIDI transmission, waiting for a block, buffering and converter delay, then the audio interface and DAW.",
-    "example": "The synth's own part on a 48-sample, 48 kHz setup is about 3.4 ms worst case.",
+    "example": "A simplified 48-sample, 48 kHz model gives about 3.4 ms including a full three-byte DIN message, next-block adoption, one output block and the assumed DAC delay. It excludes extra parsing, interface and host buffering.",
     "source": "https://en.wikipedia.org/wiki/Latency_(audio)"
   },
   {
@@ -2890,7 +2910,7 @@
     "aliases": [
       "callback overrun"
     ],
-    "definition": "When the audio callback takes longer than its block period, so the next block is late and audio glitches.",
+    "definition": "Audio callback work exceeding the available deadline interval. Hardware may then consume stale or partly updated samples; actual audible effects depend on data and buffering.",
     "example": "A callback taking 3.1 ms of a 2.9 ms budget overruns.",
     "source": "https://en.wikipedia.org/wiki/Buffer_underrun"
   },
@@ -2954,7 +2974,7 @@
   {
     "id": "analogcontrol",
     "term": "AnalogControl",
-    "definition": "libDaisy's class for a knob: it reads an ADC channel and applies one-pole smoothing, with a default slew time of 0.002 s.",
+    "definition": "libDaisy's control class that normalises an ADC value and applies a one-state smoother. Its checked source defaults the slew setting to 0.002 s and uses a coefficient rule different from the lesson's exponential time-constant rule; rate and configuration matter.",
     "source": "https://github.com/electro-smith/libDaisy"
   },
   {
@@ -2963,11 +2983,11 @@
     "aliases": [
       "dynamic allocation",
       "malloc",
-      "allocator",
-      "allocators",
-      "general-purpose allocator"
+      "general-purpose allocator",
+      "memory allocator",
+      "memory allocators"
     ],
-    "definition": "Requesting memory at run time, for example with malloc or new. Its run time is unbounded, it can fail or fragment memory, and it may take a lock, so it is forbidden in the audio callback.",
+    "definition": "Requesting memory at runtime, for example with malloc or new. General-purpose allocators do not usually provide the bounded, nonblocking timing contract needed by an audio callback and may fail or take locks; preallocate the required callback storage.",
     "source": "https://en.wikipedia.org/wiki/C_dynamic_memory_allocation"
   },
   {
@@ -3045,9 +3065,9 @@
       "lock-free techniques",
       "lock-free design"
     ],
-    "definition": "Describes shared-data code that never makes one side wait for a lock, using atomic operations instead. Some side always makes progress, which suits audio callbacks and interrupts.",
+    "definition": "A concurrency progress property: system-wide progress does not depend on acquiring a lock. It does not guarantee a fixed completion time for every operation or thread; an audio callback needs an appropriate bounded implementation, such as verified SPSC loads/stores.",
     "example": "A single-producer/single-consumer ring buffer is lock-free.",
-    "source": "https://en.wikipedia.org/wiki/Non-blocking_algorithm"
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "atomic-operation",
@@ -3060,8 +3080,8 @@
       "atomic operations"
     ],
     "definition": "An operation that happens as one indivisible step, so no other code can see it half-done. Atomic types in C++ also provide memory-ordering guarantees.",
-    "example": "On 32-bit Cortex-M parts, 32-bit atomics (including float) are normally lock-free; 64-bit ones usually are not.",
-    "source": "https://en.cppreference.com/w/cpp/atomic/atomic"
+    "example": "Verify the exact atomic type and operation on the selected compiler/target; neither width nor the absence of an OS automatically proves lock-free or bounded execution.",
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "atomic-fetch-add",
@@ -3071,7 +3091,7 @@
       "fetch-add"
     ],
     "definition": "An atomic read-modify-write that adds to a variable and returns the old value in one indivisible step, so no update is lost.",
-    "source": "https://en.cppreference.com/w/cpp/atomic/atomic/fetch_add"
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "exclusive-load-store",
@@ -3081,7 +3101,7 @@
       "LDREX",
       "STREX"
     ],
-    "definition": "Arm instructions (LDREX and STREX) that read a value and write it back only if nothing else wrote in between. Cortex-M atomics are built from them; Armv7-M has 8-, 16- and 32-bit versions but no 64-bit one.",
+    "definition": "Arm instructions that mark an exclusive access and then conditionally attempt a store. The store can fail if the exclusive monitor was cleared, including by intervening writes or exception behavior; read-modify-write implementations may need retries. Armv7-M has byte, halfword and word forms, without a 64-bit exclusive pair.",
     "source": "https://en.wikipedia.org/wiki/ARM_Cortex-M"
   },
   {
@@ -3092,7 +3112,7 @@
       "memory_order"
     ],
     "definition": "The rules for when one thread's or interrupt's writes become visible to another, and in what order. Without explicit ordering, compilers and CPUs may reorder memory accesses.",
-    "source": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "release-acquire",
@@ -3111,7 +3131,7 @@
     ],
     "definition": "A memory-ordering pairing: a release store makes all earlier writes visible before it, and an acquire load that sees that store also sees those writes. It is how one side safely publishes data to the other.",
     "example": "The ring-buffer producer writes the item, then release-stores head; the consumer acquire-loads head, then reads the item.",
-    "source": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "relaxed-ordering",
@@ -3122,7 +3142,7 @@
       "memory_order_relaxed"
     ],
     "definition": "The weakest atomic memory ordering: the operation itself is indivisible, but it orders no other memory accesses. It is enough for a lone value nothing else depends on.",
-    "source": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "memory-barrier",
@@ -3131,8 +3151,8 @@
       "memory barriers",
       "memory fence"
     ],
-    "definition": "An instruction that stops the CPU (and compiler) moving memory accesses across it. Multi-core processors need them for one core's writes to appear in order to another; atomics insert them as needed.",
-    "source": "https://en.wikipedia.org/wiki/Memory_barrier"
+    "definition": "A compiler or processor ordering mechanism that constrains specified memory accesses. The exact ordering and visibility depend on the architecture and barrier; correctly chosen atomics express the required language-level synchronization.",
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "memory-reordering",
@@ -3184,8 +3204,8 @@
     "aliases": [
       "RMW"
     ],
-    "definition": "An operation that reads a value, changes it and writes it back, such as count = count + 1. It is three steps unless done atomically.",
-    "source": "https://en.wikipedia.org/wiki/Read%E2%80%93modify%E2%80%93write"
+    "definition": "An operation that obtains a value, computes a replacement and stores it. A plain increment can lose concurrent updates; a language atomic read-modify-write supplies indivisibility, while its implementation and progress still depend on the target.",
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "hoisting",
@@ -3204,11 +3224,12 @@
       "single-producer, single-consumer",
       "SPSC queue",
       "SPSC queues",
-      "SPSC ring buffer"
+      "SPSC ring buffer",
+      "SPSC arrangement"
     ],
     "definition": "Single-producer/single-consumer: a queue with exactly one writer (the producer) and one reader (the consumer). Each index has one writer, so it can be built lock-free with atomic loads and stores.",
     "example": "A MIDI parser in the main loop pushing note events to the audio callback is an SPSC arrangement.",
-    "source": "https://en.wikipedia.org/wiki/Circular_buffer"
+    "source": "https://eel.is/c++draft/atomics.order"
   },
   {
     "id": "fifo",
@@ -3226,18 +3247,18 @@
     "aliases": [
       "event queues"
     ],
-    "definition": "A queue that carries discrete events, such as note-on and note-off, so every one is delivered in order, unlike a polled value which only shows the latest state.",
-    "source": "https://en.wikipedia.org/wiki/Message_queue"
+    "definition": "A queue carrying discrete events such as note transitions. Accepted items can be delivered in order; finite capacity and consumption limits mean overflow requires an explicit detection and recovery policy.",
+    "source": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
   },
   {
     "id": "unsigned-integer",
     "term": "Unsigned integer",
     "aliases": [
-      "unsigned integers",
-      "unsigned"
+      "unsigned integer",
+      "unsigned integers"
     ],
-    "definition": "An integer type with no sign, holding only zero and positive values. Its arithmetic wraps around, so subtracting two wrapped counters still gives the right difference.",
-    "source": "https://en.wikipedia.org/wiki/Integer_(computer_science)"
+    "definition": "An integer type representing non-negative values. Fixed-width unsigned arithmetic wraps modulo its range; elapsed-counter subtraction is valid only with the intended width and a known interval below one wrap.",
+    "source": "https://eel.is/c++draft/basic.fundamental"
   },
   {
     "id": "struct",
@@ -3292,7 +3313,7 @@
   {
     "id": "pjrc",
     "term": "PJRC",
-    "definition": "The company, run by Paul Stoffregen, that designs Teensy boards, the Teensy Audio Library and the audio adaptor.",
+    "definition": "The organisation behind the Teensy hardware design and software, including the Teensy Audio Library and audio adaptor. Check the product page for current manufacturing and distribution details.",
     "source": "https://www.pjrc.com/"
   },
   {
@@ -3449,8 +3470,8 @@
       "USB hosts"
     ],
     "definition": "The side of a USB link that controls the bus, usually a computer. Two USB devices cannot talk to each other without a host.",
-    "example": "Teensy 4.1 has a separate USB host port, so it can read a USB MIDI keyboard directly.",
-    "source": "https://en.wikipedia.org/wiki/USB#Host"
+    "example": "Teensy 4.1 has a host interface; a supported host stack, suitable cable, power budget and compatible USB MIDI device are still required.",
+    "source": "https://www.pjrc.com/store/teensy41.html"
   },
   {
     "id": "usb-device",
@@ -3480,8 +3501,8 @@
       "USB class",
       "class-compliant"
     ],
-    "definition": "A standard way a type of USB device behaves, such as audio, MIDI or DFU, so the computer can use it with built-in drivers. Class-compliant devices need no special drivers.",
-    "source": "https://en.wikipedia.org/wiki/USB#Device_classes"
+    "definition": "A standardised USB behavior for a device category, such as audio, MIDI or DFU. A matching OS class driver can avoid a vendor-specific driver, but class version, OS support and required features still determine compatibility.",
+    "source": "https://www.usb.org/document-library/usb-midi-devices-10"
   },
   {
     "id": "usb-c",
@@ -3568,7 +3589,7 @@
     "aliases": [
       "personal computer"
     ],
-    "definition": "Personal computer. 'Standard PC rates' are the serial baud rates PCs traditionally use, such as 28,800 or 115,200, which do not include MIDI's 31,250.",
+    "definition": "Personal computer: a general-purpose computer intended for individual use. Traditional serial interfaces expose selected standard baud rates, but support for a particular rate depends on the interface and driver.",
     "source": "https://en.wikipedia.org/wiki/Personal_computer"
   },
   {
@@ -3638,14 +3659,16 @@
     "id": "parameter-ramp",
     "term": "Parameter ramp",
     "aliases": [
-      "linear ramp",
+      "parameter ramp",
+      "parameter ramps",
+      "linear parameter ramp",
       "block ramp",
       "per-block ramp",
       "linear ramp per block"
     ],
-    "definition": "Changing a parameter from its old value to its new one in equal steps across a block of samples, so it arrives exactly at the block's end without an audible jump.",
-    "example": "A 480 Hz cutoff change ramped over a 48-sample block moves 10 Hz per sample.",
-    "source": "https://en.wikipedia.org/wiki/Linear_interpolation"
+    "definition": "A controlled transition of a parameter through intermediate values over a chosen sample duration. A linear parameter ramp uses equal increments; it may span blocks, and endpoint conventions and floating-point rounding depend on the implementation. Smoothing can reduce clicks or zipper noise but does not guarantee inaudibility.",
+    "example": "A nominal 480 Hz cutoff change over 48 increments uses 10 Hz per increment, with explicit endpoint handling.",
+    "source": "https://docs.juce.com/master/classSmoothedValue.html"
   },
   {
     "id": "url",
@@ -3665,7 +3688,7 @@
       "supply voltage",
       "supply rail"
     ],
-    "definition": "The source of the steady voltage a circuit or device runs from, such as 3.3 V for a microcontroller or a computer's mains power supply unit. Noise on it leaks into ADC readings and audio.",
+    "definition": "A source of electrical power at specified voltage/current limits for a circuit, such as a documented low-voltage USB supply. Supply variations can couple into ADC readings and audio, depending on the circuit and filtering.",
     "source": "https://en.wikipedia.org/wiki/Power_supply"
   },
   {
@@ -3677,5 +3700,115 @@
     "definition": "Sending the least significant bit (the bit worth the least) of each byte first on a serial line. UARTs, and so MIDI, send data LSB first, the opposite of I2S's MSB-first audio words.",
     "example": "The byte 0x01 sent LSB first puts its single 1 bit straight after the start bit.",
     "source": "https://en.wikipedia.org/wiki/Bit_numbering"
+  },
+  {
+    "id": "bootloader-waiting-interval",
+    "term": "Bootloader waiting interval",
+    "aliases": [
+      "bootloader waiting interval",
+      "bootloader waiting intervals"
+    ],
+    "definition": "A startup interval during which a bootloader looks for an update or programming request before launching application firmware. The fetched Daisy bootloader guide documents 2.5 seconds; this is not an OS shutdown interval.",
+    "source": "https://github.com/electro-smith/libDaisy/blob/master/doc/md/_a7_Getting-Started-Daisy-Bootloader.md"
+  },
+  {
+    "id": "callback-dispatch-overhead",
+    "term": "Callback dispatch overhead",
+    "aliases": [
+      "per-callback dispatch overhead",
+      "callback dispatch overhead"
+    ],
+    "definition": "Work paid once per audio invocation, such as interrupt entry, buffer bookkeeping and function dispatch. Smaller blocks pay it more times per second, leaving a smaller fraction of the budget for sample processing.",
+    "source": "https://github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.h"
+  },
+  {
+    "id": "cpu-cycles-audio-frame",
+    "term": "CPU clock cycles per audio frame",
+    "aliases": [
+      "CPU clock cycles per audio frame"
+    ],
+    "definition": "Processor clock ticks consumed or available while computing one sample for every audio channel. These are CPU cycles, not oscillator waveform cycles; memory and interrupts also consume time.",
+    "source": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
+  },
+  {
+    "id": "instrument-housing",
+    "term": "Instrument housing",
+    "aliases": [
+      "instrument housing"
+    ],
+    "definition": "The physical case holding the synth electronics, controls, connectors and display. It needs appropriate mechanical fit and protection; it is a different concept from a tuned loudspeaker enclosure.",
+    "source": "https://docs.daisy.audio/hardware/Seed/"
+  },
+  {
+    "id": "percent",
+    "term": "Percent",
+    "aliases": [
+      "percent",
+      "percentage"
+    ],
+    "definition": "A proportion expressed in hundredths. A CPU-load measurement of 60 percent uses sixty hundredths of the stated block budget.",
+    "source": "https://www.pjrc.com/teensy/td_libs_AudioProcessorUsage.html"
+  },
+  {
+    "id": "i2c-transaction",
+    "term": "I2C transaction",
+    "aliases": [
+      "I2C transactions",
+      "I2C transfer",
+      "I2C transfers"
+    ],
+    "definition": "A bus exchange beginning with START, followed by addressing and data clocked with acknowledgement slots, and ending with STOP or continuing through a repeated START. The controller and addressed target follow the I2C protocol; this is a different meaning from a database transaction.",
+    "source": "https://www.ti.com/lit/an/sbaa565/sbaa565.pdf"
+  },
+  {
+    "id": "sample-buffer",
+    "term": "Sample buffer",
+    "aliases": [
+      "sample buffers",
+      "DMA sample buffer",
+      "DMA sample buffers"
+    ],
+    "definition": "Memory that stores a sequence of sample values for processing or transfer. Its capacity, channel layout, current contents and ownership matter; the buffer is storage, while buffer size is the count of values it holds.",
+    "example": "In the described stereo double-buffered DMA output, each released half stores one block that the CPU refills before DMA reuses it.",
+    "source": "https://raw.githubusercontent.com/electro-smith/libDaisy/master/src/hid/audio.cpp"
+  },
+  {
+    "id": "audio-clock-master",
+    "term": "Audio clock master",
+    "aliases": [
+      "audio clock masters",
+      "I2S clock master"
+    ],
+    "definition": "The side of a serial audio link that generates the bit clock and frame/word clock. The other side follows those clocks; the codec or MCU role must match the selected hardware configuration.",
+    "source": "https://www.ti.com/lit/ds/symlink/pcm3060.pdf"
+  },
+  {
+    "id": "audio-clock-follower",
+    "term": "Audio clock follower",
+    "aliases": [
+      "audio clock followers",
+      "I2S clock follower"
+    ],
+    "definition": "The side of a serial audio link that accepts the bit and word/frame clocks from another device. Manufacturer documentation commonly calls this slave mode; it must be configured to match the generating device and sample format.",
+    "source": "https://www.ti.com/lit/ds/symlink/pcm3060.pdf"
+  },
+  {
+    "id": "preset-generation",
+    "term": "Preset generation",
+    "aliases": [
+      "preset generation number",
+      "publication generation"
+    ],
+    "definition": "A version number identifying one complete published parameter set. The producer and consumer use it with the buffer index and an acknowledgement to coordinate ownership; the combined representation must use suitable target-supported atomic operations.",
+    "source": "https://eel.is/c++draft/atomics.order"
+  },
+  {
+    "id": "midi-out",
+    "term": "MIDI OUT",
+    "aliases": [
+      "MIDI OUT jack"
+    ],
+    "definition": "The MIDI port that transmits messages to another device. A traditional DIN MIDI OUT drives the specified current-loop circuit; the destination MIDI IN provides the receiving opto-isolated circuit.",
+    "source": "https://midi.org/5-pin-din-electrical-specs"
   }
 ]

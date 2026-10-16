@@ -1,0 +1,100 @@
+[
+  {
+    "id": "syn-filters-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In the one-pole low-pass `y += a * (x - y)`, what is `y` between calls, and what does that imply for a polyphonic synth?",
+    "options": [
+      {
+        "text": "A temporary; it can be a local variable recreated each sample",
+        "explanation": "If y were reset each sample, the filter would have no memory and would just scale the input by a."
+      },
+      {
+        "text": "A constant derived from the cutoff",
+        "explanation": "That's `a`. `y` changes every sample."
+      },
+      {
+        "text": "The input sample, stored for convenience",
+        "explanation": "y is the previous *output*, which is what makes this a feedback (IIR) filter."
+      },
+      {
+        "text": "The filter's state (previous output); each voice needs its own copy, preserved across blocks",
+        "explanation": "Correct. Sharing one state between voices would mix their histories; resetting it per block would cause clicks."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The equation is:\n\n```formula\ny[n] = y[n−1] + a(x[n] − y[n−1])\nwhere\ny[n]: the output at sample n; y[n−1] is the previous output\nx[n]: the input at sample n\nn: the sample index\na: the filter coefficient, between 0 and 1\nIn words: each output moves a fraction a of the way from the previous output towards the new input.\n```\n\nThe previous output y[n−1] is memory.\n\n- Lose it between blocks → discontinuities.\n- Share it between voices → each voice's output depends on the others.\n\nSame rule as oscillator phase: state lives in a per-voice object.",
+    "link": {
+      "title": "One-pole filter — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/filters/One_Pole.html"
+    }
+  },
+  {
+    "id": "syn-filters-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A one-pole low-pass has coefficient a = 0.1227 (a 1 kHz cutoff at 48 kHz) and starts with state 0. You feed it a step: input x = 1 from now on.\n\n```formula\ny[n] = y[n−1] + a(x[n] − y[n−1])\nwhere\ny[n]: the output at sample n; y[n−1] is the previous output\nx[n]: the input at sample n\nn: the sample index\na: the filter coefficient, between 0 and 1\nIn words: each output moves a fraction a of the way from the previous output towards the new input.\n```\n\nWhat is y after the **second** sample?",
+    "options": [
+      {
+        "text": "About 0.230",
+        "explanation": "Correct. The first output is 0 + 0.1227 × (1 − 0) = 0.1227; the second is 0.1227 + 0.1227 × (1 − 0.1227) ≈ 0.230."
+      },
+      {
+        "text": "About 0.245",
+        "explanation": "That's 2 × 0.1227, which assumes each step moves by a fixed amount. Each step moves a *fraction of the remaining* distance."
+      },
+      {
+        "text": "0.1227",
+        "explanation": "That's after the first sample."
+      },
+      {
+        "text": "1.0",
+        "explanation": "A low-pass can't jump straight to the new value; that would be a filter with a = 1 (no filtering)."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\ny_0 = 0\ny_1 = 0 + 0.1227 × (1 − 0) = 0.1227\ny_2 = 0.1227 + 0.1227 × (1 − 0.1227)\ny_2 = 0.1227 + 0.1076 = 0.2303\nwhere\ny_0, y_1, y_2: the filter's output (its state) at the start, after one sample and after two samples\nIn words: each sample closes 12.27% of the remaining gap to 1, so the second step is a little smaller than the first.\n```\n\nThe step response rises exponentially towards 1, like the envelope segments from the previous lesson.",
+    "link": {
+      "title": "One-pole filter — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/filters/One_Pole.html"
+    }
+  },
+  {
+    "id": "syn-filters-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Your 4-voice synth uses one `OnePoleLP` object shared by all voices. Which statements describe consequences or correct fixes? Select all that apply.",
+    "options": [
+      {
+        "text": "Give each voice its own filter object (state and, if cutoff tracks per voice, its own coefficient)",
+        "explanation": "Correct. Per-voice state is the fix; per-voice coefficients allow keyboard tracking or per-voice envelopes."
+      },
+      {
+        "text": "Resetting the shared state to 0 each block fixes it",
+        "explanation": "That adds discontinuities at every block boundary and still mixes voices within a block."
+      },
+      {
+        "text": "Filtering the summed mix with one filter is a valid alternative if all voices should share the same cutoff",
+        "explanation": "Correct. That's the paraphonic arrangement: one filter on the sum. It's cheaper but can't give each note its own filter envelope."
+      },
+      {
+        "text": "Sharing is fine because a low-pass is linear",
+        "explanation": "Linearity lets you filter the *sum* once; it doesn't make interleaving different voices' samples through one state valid."
+      },
+      {
+        "text": "Each voice's output depends on the other voices' samples through the shared state, so voices smear into each other",
+        "explanation": "Correct. The single stored previous output is updated by every voice's samples in turn."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      4
+    ],
+    "workedExample": "Two valid architectures:\n\n```\nper-voice:  osc -> LP -> amp  (x4)\n            then sum\nparaphonic: sum of oscs -> one LP\n```\n\nWhat's invalid is feeding voice 1's sample, then voice 2's, then voice 3's through *one* state as if they were one signal: the filter then sees a meaningless interleaved stream.",
+    "link": {
+      "title": "One-pole filter — Julius O. Smith",
+      "url": "https://ccrma.stanford.edu/~jos/filters/One_Pole.html"
+    }
+  }
+]

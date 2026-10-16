@@ -1,0 +1,100 @@
+[
+  {
+    "id": "syn-envelopes-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "While you turn a volume knob (sent as MIDI CC, applied once per 32-sample audio block), you hear a gritty buzzing that stops when the knob stops. What is this and what fixes it?",
+    "options": [
+      {
+        "text": "Aliasing from the oscillator; switch to PolyBLEP",
+        "explanation": "Aliasing doesn't depend on whether a knob is moving. This noise appears only during the change."
+      },
+      {
+        "text": "Clipping; reduce the output gain",
+        "explanation": "Clipping would happen at high levels regardless of motion, and would persist while the knob is still."
+      },
+      {
+        "text": "Zipper noise from stepwise gain changes; set a target and smooth the gain per sample",
+        "explanation": "Correct. 128 CC steps applied at block boundaries make a staircase of small discontinuities. A per-sample smoother turns it into a smooth curve."
+      },
+      {
+        "text": "A stuck note; send all-notes-off",
+        "explanation": "Stuck notes keep sounding; they don't produce a buzz that follows knob movement."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The noise exists only while the parameter moves, so it's caused by the parameter *changing*.\n2. The gain changes in steps: CC resolution (128 values) and block-rate updates.\n3. Each step is a tiny discontinuity in level; many in a row buzz.\n4. Fix: the control sets a target; the audio code moves towards it each sample (one-pole or linear ramp).",
+    "link": {
+      "title": "SmoothedValue — JUCE",
+      "url": "https://docs.juce.com/master/classSmoothedValue.html"
+    }
+  },
+  {
+    "id": "syn-envelopes-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your synth applies the cutoff knob value once per audio block of 64 samples at 48 kHz, with no smoothing. At what rate do the parameter steps occur?",
+    "options": [
+      {
+        "text": "48,000 per second",
+        "explanation": "That's the per-sample rate. The value only changes at block boundaries."
+      },
+      {
+        "text": "750 per second",
+        "explanation": "Correct. 48,000 / 64 = 750 updates per second, so there are up to 750 block-boundary opportunities to apply a new value per second. If the target is unchanged, there is no actual parameter step."
+      },
+      {
+        "text": "64 per second",
+        "explanation": "64 is samples per block, not blocks per second."
+      },
+      {
+        "text": "128 per second, one per CC value",
+        "explanation": "The CC resolution limits the size of steps, but how often they're applied depends on the block rate."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nr_b = f_s / B\nr_b = 48000 Hz / 64 = 750 Hz\nwhere\nr_b: the block rate: blocks (and so parameter updates) per second, in hertz (Hz)\nf_s: the sample rate, 48,000 samples per second\nB: the block size, 64 samples\nHz: hertz, per second\nIn words: 48,000 samples a second in blocks of 64 is 750 blocks, so up to 750 boundary updates, a second.\n```\n\nEach step is a small discontinuity, so a moving control produces disturbances related to 750 Hz. Per-sample smoothing (even with block-rate targets) removes the staircase.",
+    "link": {
+      "title": "SmoothedValue — JUCE",
+      "url": "https://docs.juce.com/master/classSmoothedValue.html"
+    }
+  },
+  {
+    "id": "syn-envelopes-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're designing control handling for a hardware synth. Which choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Use the longest smoothing time possible everywhere to eliminate all artefacts",
+        "explanation": "Too long makes controls feel laggy and blurs deliberate fast changes. Choose per parameter by ear."
+      },
+      {
+        "text": "Use a fixed-length linear ramp for the voice-steal fade so it is guaranteed to finish in N samples",
+        "explanation": "Correct. A counted ramp has a fixed duration. Assign the target on its last sample to guarantee the stored endpoint despite floating-point rounding; an ideal one-pole approaches zero asymptotically."
+      },
+      {
+        "text": "Smooth once per block in the control code, then hold the value for the whole block",
+        "explanation": "That still produces a staircase at the block rate. The smoothing must run per sample (or interpolate within the block)."
+      },
+      {
+        "text": "Add a small dead-band or hysteresis on noisy ADC knobs in addition to smoothing",
+        "explanation": "Correct. Smoothing alone still lets a stationary but noisy knob wobble the parameter slightly."
+      },
+      {
+        "text": "Control code (knobs, MIDI) writes target values; the audio callback runs per-sample smoothers towards them",
+        "explanation": "Correct. This keeps slow, irregular work out of the audio path while the audio stays continuous."
+      }
+    ],
+    "answer": [
+      1,
+      3,
+      4
+    ],
+    "workedExample": "Assess each against two goals: continuous audio, responsive controls.\n\n- Targets + per-sample smoothers: continuous and responsive. ✓\n- Linear ramp for steal fade: known end time. ✓\n- Hysteresis for noisy knobs: stops jitter. ✓\n- Per-block hold: staircase remains. ✗\n- Maximum smoothing: sluggish. ✗",
+    "link": {
+      "title": "SmoothedValue — JUCE",
+      "url": "https://docs.juce.com/master/classSmoothedValue.html"
+    }
+  }
+]

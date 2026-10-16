@@ -1,0 +1,96 @@
+[
+  {
+    "id": "emb-adc-knobs-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want to multiplex all 16 knobs onto just two ADC inputs of a Daisy Seed using CD4051 8-channel analogue multiplexers. Which hardware arrangement does that?",
+    "options": [
+      {
+        "text": "Two CD4051s on two ADC pins, sharing three select lines",
+        "explanation": "Correct. Each CD4051 selects 1 of 8 inputs via 3 select bits; two give 16 knobs, and the select lines can be shared because both muxes switch together."
+      },
+      {
+        "text": "Sixteen CD4051s, one per knob",
+        "explanation": "Each mux handles eight inputs; one per knob wastes seven channels each."
+      },
+      {
+        "text": "One CD4051 on one ADC pin with four select lines",
+        "explanation": "A CD4051 is an 8-to-1 mux with three select inputs; it cannot address 16 channels."
+      },
+      {
+        "text": "None; the 12 ADC pins can each read two knobs at once",
+        "explanation": "An ADC input measures one voltage at a time. Two pots on one pin would just combine."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Each mux handles eight knobs, and its select lines must count to eight:\n\n```formula\nm = k / c = 16 / 8 = 2\ns = log_2(c) = log_2(8) = 3\nwhere\nm: the number of multiplexers needed\nk: the number of knobs, here 16\nc: channels per CD4051, here 8\ns: select lines per mux\nlog_2: base-2 logarithm: how many doublings of 1 reach the number; log_2(8) = 3\nIn words: two 8-channel muxes cover 16 knobs, and 3 select lines choose among 8 channels.\n```\n\nThat uses 2 ADC pins. Set the 3 select lines, wait to settle, read both ADC pins, repeat for channels 0–7. You could also mix: 10 direct knobs plus one mux.",
+    "link": {
+      "title": "Getting started: ADCs — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/_a4_Getting-Started-ADCs/"
+    }
+  },
+  {
+    "id": "emb-adc-knobs-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "After adding a multiplexer, turning knob 3 makes knob 4's reading move slightly too. Each knob reads correctly when the others are at the same position. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The ADC resolution is too low",
+        "explanation": "Low resolution makes readings coarse, not dependent on a neighbouring knob."
+      },
+      {
+        "text": "The pots are logarithmic",
+        "explanation": "Taper changes how one knob's voltage follows its rotation; it does not couple two knobs."
+      },
+      {
+        "text": "The firmware samples too soon after switching channels, so the input has not settled from the previous knob's voltage",
+        "explanation": "Correct. The mux output and ADC sampling capacitor retain some of the previous channel's voltage. Allow sufficient documented settling/acquisition time; discarding an initial conversion only helps if that supplies enough time."
+      },
+      {
+        "text": "Switch bounce on the select lines",
+        "explanation": "Select lines are driven by GPIO outputs, which do not bounce like mechanical contacts."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "The symptom is crosstalk between consecutive channels, scaled by how different their voltages are. That fingerprint points to settling:\n\n1. Mux switches from knob 3 to knob 4.\n2. The ADC samples immediately; its node still holds part of knob 3's voltage.\n3. The error is proportional to the difference between knobs.\n\nFix: allow the required settling/acquisition time or lower source impedance. If discarding a first conversion, verify that the next acquisition actually meets the error requirement.",
+    "link": {
+      "title": "Analog-to-digital converter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Analog-to-digital_converter"
+    }
+  },
+  {
+    "id": "emb-adc-knobs-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are designing the control-reading code for 16 multiplexed knobs. Which choices are sound? Select all that apply.",
+    "options": [
+      {
+        "text": "Scan the knobs from the main loop or a timer, not inside the audio callback",
+        "explanation": "Correct. Mux switching and settling waits would add variable time to the callback's deadline."
+      },
+      {
+        "text": "Scan each knob a few hundred to a thousand times per second",
+        "explanation": "Correct. Hand movements are slow; this rate is responsive and cheap. 16 knobs at 1 kHz is 16,000 conversions a second."
+      },
+      {
+        "text": "Apply hysteresis to the value sent to the audio engine, so the sound only changes in steps",
+        "explanation": "Hysteresis on the audio parameter would make it jump in steps (zipper noise). Use it for change detection; send the smoothed value to the audio engine."
+      },
+      {
+        "text": "Smooth each knob's 0–1 value, then map to the parameter's range",
+        "explanation": "Correct. Smoothing before mapping keeps response even across exponential ranges."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Build the pipeline:\n\n```\nscan -> smooth\n  branch 1: hysteresis -> change events\n  branch 2: map -> audio parameter\n```\n\nHysteresis belongs on the event branch (MIDI CC, display), not on the value that the audio code ramps.",
+    "link": {
+      "title": "Getting started: ADCs — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/_a4_Getting-Started-ADCs/"
+    }
+  }
+]

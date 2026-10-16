@@ -1,0 +1,92 @@
+[
+  {
+    "id": "emb-codecs-i2s-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In an I2S link running at a 48 kHz sample rate, what is the frequency of the LRCLK (word select) signal?",
+    "options": [
+      {
+        "text": "96 kHz, because there are two channels",
+        "explanation": "Two channels share one LRCLK period: left in one half, right in the other. The clock itself runs at the sample rate."
+      },
+      {
+        "text": "48 kHz",
+        "explanation": "Correct. One LRCLK period is one frame containing one left and one right sample."
+      },
+      {
+        "text": "3.072 MHz",
+        "explanation": "That is a typical BCLK for 48 kHz with 64 bits per frame (64 × 48,000), not LRCLK."
+      },
+      {
+        "text": "12.288 MHz",
+        "explanation": "That is 256 × 48 kHz, a common MCLK frequency."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Per sample period, I2S sends a left word while LRCLK is in one state and a right word in the other. So LRCLK completes one cycle per sample period: 48 kHz.\n\n```formula\nLRCLK = f_s = 48 kHz\nBCLK = 64 × f_s = 3.072 MHz\nMCLK = 256 × f_s = 12.288 MHz\nwhere\nLRCLK: the word (left/right) clock, in hertz (Hz)\nBCLK: the bit clock, in hertz (Hz), for 64 bits per frame\nMCLK: a typical master clock, in hertz (Hz)\nf_s: the sample rate, here 48 kHz\nkHz: kilohertz, one thousand hertz\nMHz: megahertz, one million hertz\nIn words: the word clock runs at the sample rate; the bit and master clocks are fixed multiples of it.\n```",
+    "link": {
+      "title": "I²S — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/I%C2%B2S"
+    }
+  },
+  {
+    "id": "emb-codecs-i2s-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "PJRC states the Teensy audio adaptor runs LRCLK at 44.1 kHz and BCLK at 2.82 MHz. How many bit clocks are there per LRCLK cycle, and what does that imply about the 16-bit samples?",
+    "options": [
+      {
+        "text": "32 bit clocks: two 16-bit words exactly fill the frame",
+        "explanation": "That gives 1.41 MHz, the alternative 32-bits-per-LRCLK mode PJRC mentions, not 2.82 MHz."
+      },
+      {
+        "text": "16 bit clocks: one sample per frame",
+        "explanation": "16 × 44.1 kHz = 0.71 MHz and would not carry stereo."
+      },
+      {
+        "text": "128 bit clocks: four channels",
+        "explanation": "128 × 44.1 kHz = 5.64 MHz, double the stated BCLK."
+      },
+      {
+        "text": "64 bit clocks: two 32-bit slots, with the 16-bit sample in the upper half of each and the lower 16 bits ignored",
+        "explanation": "Correct. 2,822,400 / 44,100 = 64. PJRC says the upper 16 bits of each 32-bit word carry data."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Divide the bit clock by the word clock to get bits per frame:\n\n```formula\nb = BCLK / LRCLK\nb = 2822400 Hz / 44100 Hz\nb = 64 = 2 × 32\nwhere\nb: bit clocks per frame (one left and one right word)\nBCLK: the bit clock, in hertz (Hz)\nLRCLK: the word clock, in hertz (Hz)\nHz: hertz, cycles per second\nIn words: 64 bit clocks per frame is two 32-bit slots, one per channel.\n```\n\nWith 16-bit samples, each 32-bit slot holds the sample MSB-first in its upper 16 bits; the rest is padding.",
+    "link": {
+      "title": "Audio adaptor boards for Teensy — PJRC",
+      "url": "https://www.pjrc.com/store/teensy3_audio.html"
+    }
+  },
+  {
+    "id": "emb-codecs-i2s-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You connect a codec configured for standard I2S to an MCU peripheral configured for left-justified format, 24-bit. What will you most likely hear?",
+    "options": [
+      {
+        "text": "Perfect audio; the formats are identical",
+        "explanation": "They differ in where the MSB sits relative to the LRCLK edge, so the bit alignment is wrong."
+      },
+      {
+        "text": "Audio at half speed",
+        "explanation": "The sample rate is set by LRCLK, which is unchanged. Format mismatch misaligns bits, not timing."
+      },
+      {
+        "text": "Badly distorted or wrong-level audio, because every word is misread shifted by one bit clock",
+        "explanation": "Correct. Standard I2S delays the MSB by one BCLK after the LRCLK edge; left-justified does not. Each word is read off by one bit, which changes values and can flip signs."
+      },
+      {
+        "text": "Left and right swapped, but otherwise fine",
+        "explanation": "A one-bit shift corrupts the sample values; it does more than swap channels."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "In two's complement the MSB is the sign bit.\n\n1. Left-justified sender: MSB on the LRCLK edge.\n2. I2S receiver: expects MSB one BCLK later, so it takes bit 2 as the sign bit.\n3. Every value is effectively doubled and wrapped, flipping signs: harsh distortion.\n\nThe Daisy Rev 7 datasheet specifies left-justified for its PCM3060, which is why you read the format rather than assume 'I2S'.",
+    "link": {
+      "title": "PCM3060 datasheet — Texas Instruments",
+      "url": "https://www.ti.com/lit/ds/symlink/pcm3060.pdf"
+    }
+  }
+]

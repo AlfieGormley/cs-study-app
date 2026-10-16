@@ -1,0 +1,101 @@
+[
+  {
+    "id": "midi-synth-handling-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Notes from your sequencer occasionally hang until you power-cycle the synth. Which bug would most directly cause this?",
+    "options": [
+      {
+        "text": "The parser treats Note On with velocity 0 as a new note",
+        "explanation": "Correct. Any transmitter that ends notes with `9n kk 00` will then never end a note, which is a stuck note every time."
+      },
+      {
+        "text": "The synth maps CC 74 linearly instead of exponentially",
+        "explanation": "A poor curve affects how the cutoff knob feels; it doesn't stop notes ending."
+      },
+      {
+        "text": "The synth ignores Program Change",
+        "explanation": "Ignoring a message type silently is allowed and harmless for note endings."
+      },
+      {
+        "text": "The UART is set to 31,250 baud",
+        "explanation": "31,250 baud is the correct MIDI rate. A wrong rate would garble everything, not just note offs."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A stuck note is a voice whose note off is never recognised.\n2. Transmitters can end notes with `8n kk vv` or `9n kk 00`, and the spec requires receivers to accept both.\n3. If velocity 0 is handled as a note on, every note ended that way will hang.\n4. Fix it in the parser's normalisation step, then test with both styles.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The synth is in Omni-Off mode on Basic Channel 1 and supports All Notes Off and sustain. It receives, in order: `B0 40 7F`, `90 3C 64`, `90 3C 00`, `B0 7B 00`, `B0 40 00`. Following the MIDI specification, when should key 60 enter its release stage?",
+    "options": [
+      {
+        "text": "At `90 3C 00`",
+        "explanation": "The sustain pedal (CC 64) is on at this point, so the note off is remembered but not acted on."
+      },
+      {
+        "text": "At `B0 7B 00` (All Notes Off)",
+        "explanation": "The spec says sustain also takes priority over All Notes Off until the pedal is released."
+      },
+      {
+        "text": "At `B0 40 00` (sustain released)",
+        "explanation": "Correct. With the pedal down, both the note off and All Notes Off are deferred. When the pedal is released, the note is released."
+      },
+      {
+        "text": "Never: the note off was lost",
+        "explanation": "It wasn't lost. It is held pending because of the sustain pedal."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nB0 40 7F  sustain on\n90 3C 64  key 60 on\n90 3C 00  key 60 off -> deferred\nB0 7B 00  All Notes Off -> deferred\nB0 40 00  sustain off -> release\n```\n\nThe spec's appendix states that a sustain-on takes priority over Note Off and All Notes Off until it is released, and that All Notes Off should send voices into their release stage rather than cutting them.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which design choices reduce the risk of stuck notes in a MIDI-driven mono synth? Select all that apply.",
+    "options": [
+      {
+        "text": "Keeping a stack of held keys per channel instead of only the current note",
+        "explanation": "Correct. Tracking held keys per channel gives note offs an explicit target; repeated starts still need a documented allocation/matching policy."
+      },
+      {
+        "text": "Releasing all notes when the receive channel is changed in the menu",
+        "explanation": "Correct. Otherwise the matching note offs arrive on the old channel and are ignored."
+      },
+      {
+        "text": "Implementing All Notes Off (CC 123) and a panic button",
+        "explanation": "Correct. These are safety nets for when note offs really are lost."
+      },
+      {
+        "text": "Ignoring Note Off messages and relying on All Notes Off",
+        "explanation": "Receivers aren't required to recognise All Notes Off, and transmitters only send it occasionally. Note offs are the primary mechanism."
+      },
+      {
+        "text": "Counting receive-buffer overflows",
+        "explanation": "Correct. A dropped note-off byte is a future stuck note. The counter shows whether the buffer is too small."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2,
+      4
+    ],
+    "workedExample": "Work through each failure path:\n\n1. Misapplied offs → track held keys (note stack).\n2. Offs on the wrong channel → release everything when the channel changes.\n3. Offs never received (unplugged cable, overflow) → All Notes Off, Active Sensing, a panic action, and an overflow counter to find the cause.\n4. Relying on All Notes Off instead of note offs is backwards: the spec says it should not be used in lieu of note offs.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  }
+]

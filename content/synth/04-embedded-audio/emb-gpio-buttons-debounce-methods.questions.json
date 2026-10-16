@@ -1,0 +1,122 @@
+[
+  {
+    "id": "emb-gpio-buttons-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A shift-register debouncer runs every 1 ms: `reg = ((reg << 1) | raw) & 0xFF`, and reports a press when `reg == 0x7F`. The button's last bounce (a 0) arrives at 6 ms and it reads 1 from 7 ms onward. When is the press reported?",
+    "options": [
+      {
+        "text": "At 7 ms",
+        "explanation": "At 7 ms the register holds only one 1 after the final 0. It needs seven."
+      },
+      {
+        "text": "At 14 ms",
+        "explanation": "Off by one. Count the ones: the readings at 7 ms through 13 ms are already seven."
+      },
+      {
+        "text": "At 8 ms",
+        "explanation": "Two ones after the 0 gives a pattern ending ...011, not 0x7F."
+      },
+      {
+        "text": "At 13 ms",
+        "explanation": "Correct. 0x7F is 01111111: a 0 followed by seven 1s. The 0 arrives at 6 ms and the ones at 7…13 ms, so the pattern completes at 13 ms."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "0x7F (hexadecimal) in binary is `0111 1111`: the oldest bit (a 0) then seven 1s.\n\n```\n 6 ms  last 0 shifted in\n 7 ms  ...0 1\n13 ms  0111 1111 = 0x7F\n```\n\nCount 7, 8, 9, 10, 11, 12, 13: seven readings. libDaisy's Switch class uses this pattern, so a press is reported about 7 ms after the bouncing stops.",
+    "link": {
+      "title": "A Guide to Debouncing, part 2 — Jack Ganssle",
+      "url": "https://www.ganssle.com/debouncing-pt2.htm"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Your synth has a \"tap tempo\" button. Players complain it occasionally registers a tap when nobody touched it, especially when a nearby relay clicks. You use a lockout debouncer (accept the first edge, ignore 30 ms). What change best addresses this?",
+    "options": [
+      {
+        "text": "Increase the lockout to 100 ms",
+        "explanation": "Lockout accepts the *first* edge, so a single glitch still counts. A longer window only blocks later edges."
+      },
+      {
+        "text": "Switch to a method that needs the new state to persist, such as stable-for-N or an integrator debouncer",
+        "explanation": "Correct. Those methods require several consecutive (or net) agreeing readings, so a brief noise spike is rejected, at the cost of a few ms of latency."
+      },
+      {
+        "text": "Move the button to an interrupt pin so it is read faster",
+        "explanation": "Interrupts react to even shorter glitches, making the problem worse; Ganssle advises against undebounced switches on interrupts."
+      },
+      {
+        "text": "Remove the pull-up so the line is more sensitive",
+        "explanation": "Removing the pull-up makes the input float and far more noise-prone."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Diagnose the failure: the false taps are single short spikes from interference.\n\n- Lockout: 1 spike leads to an accepted press. Bad.\n- Stable-for-N: a spike lasts < N ticks, the count resets, so it is rejected.\n- Integrator debouncer: a spike nudges the counter up by 1, then it decays. Rejected.\n\nA stronger external pull-up and shorter wiring also help the hardware side.",
+    "link": {
+      "title": "A Guide to Debouncing, part 2 — Jack Ganssle",
+      "url": "https://www.ganssle.com/debouncing-pt2.htm"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "An integrator debouncer with `TOP = 4` is ticked every 1 ms. Starting from released (`acc = 0`), it receives `1,0,1,1,0,1,1,1`. At which reading (1-based) does it first report pressed?",
+    "options": [
+      {
+        "text": "4th",
+        "explanation": "After four readings acc is 1, 0, 1, 2. It has not reached 4."
+      },
+      {
+        "text": "8th",
+        "explanation": "Correct. acc goes 1, 0, 1, 2, 1, 2, 3, 4. It reaches TOP on the 8th reading."
+      },
+      {
+        "text": "Never; the 0s reset it",
+        "explanation": "An integrator debouncer does not reset on a contrary reading; it only steps down by one. That is what distinguishes it from stable-for-N."
+      },
+      {
+        "text": "6th",
+        "explanation": "At the 6th reading acc is 2: two steps short of TOP."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "Trace acc (clamped 0..4):\n\n```\nread  1 0 1 1 0 1 1 1\nacc   1 0 1 2 1 2 3 4\n```\n\nacc hits TOP = 4 on reading 8, so the state becomes pressed then. It will become released only when acc falls all the way back to 0.",
+    "link": {
+      "title": "A Guide to Debouncing, part 2 — Jack Ganssle",
+      "url": "https://www.ganssle.com/debouncing-pt2.htm"
+    }
+  },
+  {
+    "id": "emb-gpio-buttons-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague attaches a mechanical button directly to a pin-change interrupt and increments a counter in the interrupt handler. One press often counts as 3–6. They propose adding a 20 ms busy-wait delay inside the handler. What is the better design?",
+    "options": [
+      {
+        "text": "Keep the interrupt and add the delay; 20 ms is short",
+        "explanation": "Busy-waiting 20 ms inside an interrupt blocks everything at its priority or lower. If that includes the audio interrupt, then with 1 ms blocks that is up to 20 missed deadlines; even if not, the main loop stalls."
+      },
+      {
+        "text": "Use a faster interrupt priority so the bounces are processed first",
+        "explanation": "Priority does not remove the bounces; it just processes them more eagerly."
+      },
+      {
+        "text": "Poll the button from a regular timer tick (about 1 ms) and debounce in that code, leaving interrupts for clean signals",
+        "explanation": "Correct. Ganssle recommends regular sampling for switches, and PJRC's Teensy page says interrupts should only be used for clean signals and recommends the Bounce library for switches."
+      },
+      {
+        "text": "Replace the button with a smaller one that bounces less",
+        "explanation": "Smaller switches still bounce, and Ganssle's measurements show bounce varies unpredictably even within one switch."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Root cause: each bounce edge fires the interrupt.\n2. Busy-waiting in an ISR wastes CPU and delays other interrupts, which an audio system cannot afford.\n3. A bounded debouncer on a 1 ms polling tick rejects the tested bounce/glitch patterns. Measure its actual cost and test the physical switch.\n4. Reserve interrupts for clean digital signals (for example a UART receiving MIDI).",
+    "link": {
+      "title": "A Guide to Debouncing, part 2 — Jack Ganssle",
+      "url": "https://www.ganssle.com/debouncing-pt2.htm"
+    }
+  }
+]

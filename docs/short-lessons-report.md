@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 71/76. Updated 2026-10-16.
+Verified modules: 76/76. Updated 2026-10-16.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -79,12 +79,39 @@ The material is divided by concept while retaining substantive explanations, exa
 | databases/Query Processing & Optimisation | 6 | 33 | 67 | 65 | 192 | 357 | 53 |
 | databases/PostgreSQL | 1 | 13 | 15 | 5 | 92 | 125 | 24 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
+| synth/Synthesis & DSP | 7 | 44 | 82 | 116 | 112 | 354 | 74 |
+| synth/Electronics for Synth Builders | 7 | 39 | 80 | 71 | 192 | 174 | 112 |
+| synth/Embedded Audio & Interfaces | 8 | 44 | 90 | 67 | 373 | 594 | 12 |
+| synth/MIDI & Studio Integration | 6 | 44 | 74 | 64 | 172 | 354 | 14 |
+| synth/Audio Engineering | 9 | 50 | 100 | 168 | 446 | 764 | 177 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
 
 A module with an ongoing follow-up is represented by its last published, verified version; draft content is excluded from these counts and findings.
 
-Validation includes independent source and answer-key review, maths and code checks, verification stamps, compiler validation, original-question preservation, mobile rendering, progress migration, saved quizzes, completion-age controls and offline practice. Remaining modules are being converted in subsequent batches.
+Validation includes independent source and answer-key review, maths and code checks, verification stamps, compiler validation, original-question preservation, mobile rendering, progress migration, saved quizzes, completion-age controls and offline practice. All active modules have been converted.
+
+## Final course validation
+
+All 76 modules and 482 original lesson mappings pass the full audit without partial mode. All 5,565 original question IDs, types, answer keys and option counts remain compatible. All 964 original lesson/question files are preserved byte-for-byte.
+
+Successive-release browser checks preserve exact completion dates, deliberate unmarks, saved quizzes and completion-age practice eligibility. The full integration run also checks installed-app updates, offline behaviour and every short lesson/question at phone width.
+
+Navigation measured in desktop Chrome at 390 pixels with sixfold CPU throttling: initial view 518 ms; largest measured lesson render 57 ms. This is browser emulation, not a physical-phone benchmark.
+
+| Route | Measured navigation (ms) |
+|---|---:|
+| #/s/system-design | 6 |
+| #/m/system-design/fundamentals | 4 |
+| #/l/system-design/fundamentals/fund-requirements-targets | 133 |
+| #/l/system-design/fundamentals/fund-latency-bandwidth | 26 |
+| #/practice | 46 |
+| #/review | 3 |
+| #/dictionary | 116 |
+| #/settings | 10 |
+| #/ | 9 |
+
+Evidence: `/tmp/cs-study-short-lessons/qa-e82d0763bea6`, version `e82d0763bea6`.
 
 ## system-design: Fundamentals
 
@@ -2658,6 +2685,12 @@ The ratio describes this deliberately busy workload; it is not a universal optim
 - Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
 - Match highlighted technical concepts to precise existing glossary aliases; ordinary emphasis remains prose.
 
+Additional independent scoped reviews:
+
+- Only active proc-syscalls-q9 workedExample plus correctoption1/text wording. Independent fullQ/actual popover meanings review; unchanged bodies/code/otherquestions/glossary not newly recertified. Evidence: `/tmp/os-return-wording-followup-verify/report.json`.
+- Root replaced suitable return path with suitable conditions for returning to user mode and return instruction pointer with user-space resume address.
+- Different verifier corrected same-index correctoption1 user return address to user-space resume address, explicitly authorised within same-Q scope after full actual popup inventory.
+
 Remaining gaps:
 
 - No substantive source topic, native program or diagram/output fence was removed. Six archived lesson/question pairs remain byte-identical to the fixed baseline; all original 67 question IDs, types, difficulty levels, answer keys and option counts are preserved.
@@ -5125,9 +5158,7 @@ Low-confidence areas:
 
 ## synth: Sound & Digital Audio
 
-[Independent verification record](https://github.com/AlfieGormley/cs-study-app/blob/af9e91cd29ba790780489a8f1d6a2da6f4151119/content/synth/01-sound-sampling/verification.json)
-
-A scoped follow-up is underway. This section describes the previously published version.
+[Independent verification record](../content/synth/01-sound-sampling/verification.json)
 
 Corrections and qualifications in this conversion:
 
@@ -5160,6 +5191,29 @@ Corrections and qualifications in this conversion:
 - Bounded phase avoids growing-accumulator resolution loss but floating-point arithmetic still rounds.
 - The 100-cent equal-ratio semitone is explicitly 12-TET; other tunings have other semitone sizes and smaller intervals.
 - Wavetable is a general stored waveform; spectral restriction is deliberate, and interpolation/playback affect aliasing. Old Band-limited wavetable title retained as alias.
+- Correct pitch/frequency exponential direction; define fundamental by shortest period with missing-fundamental qualification; allow finite phase error; qualify FFT amplitude scaling and jump audibility.
+- Remove f0 alias from musical fundamental because hexadecimal MIDI F0 and RBJ design frequency are different senses.
+- Repair repeated-block spectrum and continuous-phase versus sampled-playback wording; preserve IDs,keys,option ordering,all executable code and equation lines.
+- Verifier combined first2discontinuity sentences without removing any fact to retain mandatory3sentence definition limit.
+
+Additional independent scoped reviews:
+
+- Narrow independent follow-up of phase-wrap, semitone and wavetable entries only. Existing full review and all lesson, question, archive and other-term stamps preserved. Actual active body/full-question borrowers independently read; no unrelated facts re-certified. Evidence: `/tmp/synth-sound-followup-verify/report.json`.
+- Bounded phase avoids growing-accumulator resolution loss but floating-point arithmetic still rounds.
+- The 100-cent equal-ratio semitone is explicitly 12-TET; other tunings have other semitone sizes and smaller intervals.
+- Wavetable is a general stored waveform; spectral restriction is deliberate, and interpolation/playback affect aliasing. Old Band-limited wavetable title retained as alias.
+- Follow-up scope: 3 glossary entries reviewed. These counts are separate from the original full-module review.
+- Five glossary definition/source refinements,2examples, ambiguous f0 alias removal,2wrapped-phase body passages and3full-question strings in that one unit. No unrelated recertification. Evidence: `/tmp/synth-sound-five-followup-verify/report.json`.
+- Correct pitch/frequency exponential direction; define fundamental by shortest period with missing-fundamental qualification; allow finite phase error; qualify FFT amplitude scaling and jump audibility.
+- Remove f0 alias from musical fundamental because hexadecimal MIDI F0 and RBJ design frequency are different senses.
+- Repair repeated-block spectrum and continuous-phase versus sampled-playback wording; preserve IDs,keys,option ordering,all executable code and equation lines.
+- Verifier combined first2discontinuity sentences without removing any fact to retain mandatory3sentence definition limit.
+- Exactly four existing glossary entries and scoped verification revision. No Sound body/question/code/formula/archive changes; prior original full review and earlier supplements remain immutable. Evidence: `/tmp/synth-sound-electrical-four-followup-verify/report.json`.
+- Retire voltage/voltages as unit aliases so electrical quantity gets its precise existing Electronics definition; volt/volts remain unit aliases.
+- Separate one-direction varying DC current, DC supply polarity/ripple, and constant0Hz audio component.
+- Define analogue/digital RMS over an interval; restrict heating to fixed resistor, remove universal loudness prediction; pure-sine identity explicitly continuous, zero-mean, whole-cycle.
+- Explain analogue/digital audio channel counts and qualify PCM/delay storage by equal per-channel sample rate/format/duration.
+- Verifier added continuous to RMS definition AND example after independent Nyquist sampled-cosine counterexample.
 
 Remaining gaps:
 
@@ -5195,3 +5249,384 @@ Low-confidence areas:
 - **medium** — snd-dither-converter-noise: Finished-board dynamic range and noise-only ENOB estimate. Chip figures verified with datasheet configurations and A-weighting; finished-board noise and SINAD were not measured. Dynamic-range substitution remains an explicitly approximate noise-only estimate.
 - **medium** — snd-peak-rms-dbfs: AES17 convention and typical music crest-factor ranges. AES authoritative reference and indexed Audio Precision primary-manual excerpt support the conventions; full normative AES17 text not obtained. Music range is programme- and averaging-dependent and is hedged.
 - **medium** — snd-wav-write-readback: PCM flooring/clipping and library conversion behaviour. Confirmed in independent experiments with soundfile 0.14.0/libsndfile 1.2.2 and inspected versioned source. Behaviour can depend on library/platform/rounding configuration; text ties it to this runtime.
+
+## synth: Synthesis & DSP
+
+[Independent verification record](../content/synth/02-synthesis-dsp/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Recursive and physical-model oscillators need no explicit phase accumulator; no unsupported prevalence claim.
+- Align full-question reset explanation with actual repeated-block spectrum and ordinary-audio numerical scope.
+- Remove a retained absolute IIR phase claim from the distractor explanation/table; state the causal stable exact-response assumptions.
+- A sampled naive waveform bin can combine multiple folded harmonics; distinguish the isolated ideal source amplitude.
+- Qualify ideal-source contribution levels and remove awkward duplicate article.
+- Different harmonic sets do not imply identical alias error.
+- A periodic discontinuity has a harmonic line spectrum, not energy at every unrelated frequency.
+- Correct periodic spectrum wording without changing the discontinuity concept/key.
+- PolyBLEP still stores oscillator phase; it avoids a correction lookup table, not all memory.
+- Short PolyBLEP reduces aliasing, rather than producing ideal strict band-limiting.
+- Keep approximate PolyBLEP limitations consistent in complete question fields.
+- Update frequency differs from actual changing-value frequency.
+- Preserve original executable statements while documenting accumulated floating-point endpoint rounding.
+- Do not guarantee an audible click at an exact waveform zero crossing.
+- A product of independent peak magnitudes is a bound; make the clipping example explicitly coincident.
+- Propagate individual-stage-vs-composite cutoff qualification into standalone question.
+- Phase wrapping bugs need not detune every note at all times; eliminate false distractor explanation.
+- Bound stability claims to the proved structure and valid parameter domain.
+- Pin checked library-source references to exact reviewed commits, preserving executable statements.
+- Pin checked library-source references to exact reviewed commits, preserving executable statements.
+- Pin checked library-source references to exact reviewed commits, preserving executable statements.
+- Pin checked library-source references to exact reviewed commits, preserving executable statements.
+- Pin checked library-source references to exact reviewed commits, preserving executable statements.
+- Pin checked library-source references to exact reviewed commits, preserving executable statements.
+- Pin checked library-source references to exact reviewed commits, preserving executable statements.
+- Pin checked library-source references to exact reviewed commits, preserving executable statements.
+- Pin checked library-source references to exact reviewed commits, preserving executable statements.
+- Independent primary-source review: scope, role, phase-alignment or source precision.
+- Independent primary-source review: scope, role, phase-alignment or source precision.
+- Independent primary-source review: scope, role, phase-alignment or source precision.
+- Independent primary-source review: scope, role, phase-alignment or source precision.
+- Independent primary-source review: scope, role, phase-alignment or source precision.
+- Independent primary-source review: scope, role, phase-alignment or source precision.
+- Independent primary-source review: scope, role, phase-alignment or source precision.
+- Independent primary-source review: scope, role, phase-alignment or source precision.
+- Independent primary-source review: scope, role, phase-alignment or source precision.
+- Align formula index with preserved native C, which advances phase before indexing.
+- Define precisely the advanced phase used for the index.
+- Every formula-card symbol stands alone.
+- Keep sine argument dimensional meaning explicit in substitution.
+- State the implicit hertz unit of the numeric modulation-rate substitution in the standalone card.
+- Do not label half-power numerical oracle values as a literal minus3.000dB crossing.
+- Use primary music-rhythm source and explicitly state tempo-beat convention in example.
+- Avoid cache read-through glossary alias in a wavetable history context.
+- Avoid testing-method boundary-case alias for a mathematical equality.
+- Avoid boundary-testing glossary donor in filter stability mathematics.
+- The integer-only arithmetic-overflow donor does not cover floating FIR execution; use precise representability wording.
+- A polynomial requires non-negative integer exponents, and a small fixed degree is what makes this implementation cheap.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent full-context review: distinguish modulation frequency from sample-update rate; qualify implementation and audibility.
+- Independent actual glossary borrower and full-answer review: a phase jump need not change output value; avoid wrong-sense fundamental alias for filter frequency.
+- Independent actual glossary borrower and full-answer review: a phase jump need not change output value; avoid wrong-sense fundamental alias for filter frequency.
+- Independent actual glossary borrower and full-answer review: a phase jump need not change output value; avoid wrong-sense fundamental alias for filter frequency.
+- Independent actual glossary borrower and full-answer review: a phase jump need not change output value; avoid wrong-sense fundamental alias for filter frequency.
+- Independent actual glossary borrower and full-answer review: a phase jump need not change output value; avoid wrong-sense fundamental alias for filter frequency.
+- Independent actual glossary borrower and full-answer review: a phase jump need not change output value; avoid wrong-sense fundamental alias for filter frequency.
+- Independent actual glossary borrower and full-answer review: a phase jump need not change output value; avoid wrong-sense fundamental alias for filter frequency.
+- Independent earlier active borrower review: CPU clock cycles differ from waveform cycles; unwrapped phase exceeds one turn; octave sweep is a useful mapping rather than a universal requirement.
+- Independent earlier active borrower review: CPU clock cycles differ from waveform cycles; unwrapped phase exceeds one turn; octave sweep is a useful mapping rather than a universal requirement.
+- Independent earlier active borrower review: CPU clock cycles differ from waveform cycles; unwrapped phase exceeds one turn; octave sweep is a useful mapping rather than a universal requirement.
+- Root explicitly requested a first-use owned definition to prevent circular dependence on unverified Electronics/Embedded drafts. Independently fetched primary TI RC charging material and checked ideal i=Cdv/dt/steady DC behavior.
+- Avoid broad procedure wording incorrectly linking to the narrower analogue anti-aliasing-filter definition.
+
+Remaining gaps:
+
+- Code is an offline Python learning bridge. Original C/DDS semantics preserved and natively exercised; no new C++ teaching introduced.
+- Host compilation of pinned libraries verifies shown algorithms and source claims, not firmware integration, hardware capacity, real-time deadlines or acoustic measurements.
+- Advanced anti-aliasing, loop-filter tuning, arbitrary time-varying filters and extreme modulation require further design analysis; approximate PolyBLEP is not certified alias-free.
+- Source dependency follow-ups have separately scoped independent records: Sound3, Soundfive/body/Q, and Audio06 linear-phase. Audio06 remains unsplit.
+- The original full review's 24 pending donor occurrences were subsequently checked and closed by the separate independent review in `/tmp/synth-sound-electrical-four-followup-verify/report.json`. The immutable full report retains its original historical scope.
+
+Low-confidence areas:
+
+- **medium** — syn-harmonics-phase-headroom: Audibility of phase changes in harmonic complexes.. Primary human study supports conditional sensitivity; no personal listening or universal perceptual guarantee is claimed.
+- **medium** — syn-bandlimited-pulse-libraries: Relative implementation cost and suitability for a target board.. Actual pinned DaisySP/PJRC native code executed, but host execution does not establish board CPU budgets, firmware integration or listener thresholds.
+- **medium** — syn-modulation-control-rate: Audibility of block-rate stairs and fast-envelope artefacts.. Bandwidth and step counts independently checked; playback conditions and masking determine audibility.
+
+## synth: Electronics for Synth Builders
+
+[Independent verification record](../content/synth/03-electronics/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Nonlinear static V/I is not meaningless, but is not constant or a predictive Ohmic model; no example below after split.
+- Correct arithmetic explanation for retained distractor.
+- Zero current is not zero voltage everywhere.
+- Forward voltage is a condition-dependent characteristic, not its voltage rating.
+- Remove malformed preferred-value wording.
+- Not every synth knob is an analogue potentiometer.
+- Half the series sum is never the two-resistor parallel value; correct equal-resistor special case.
+- Group the full dimensionless quotient before multiplying by the output unit.
+- Avoid a universal loading criterion or confusing one resistor with Thevenin resistance.
+- Explicitly group numerical quotient before output unit.
+- Dummy resistive load is not a board startup prediction.
+- Remove retained fixed-resistance board claim.
+- Remove unsupported frequency/ranking of beginner failures.
+- Explicit current versus voltage distinction in the body as well as glossary.
+- Time-reversing charging produces exponential growth; discharging is an exponential decay.
+- Qualify polarised type; deliberately bipolar parts also exist.
+- Avoid claiming every electrolytic is polarised.
+- Remove fixed diode turn-on threshold model.
+- Remove malformed wording while preserving target-selection criterion.
+- Remove malformed wording.
+- Remove malformed wording.
+- Remove malformed wording.
+- A real diode does not block all reverse current or unlimited reverse voltage.
+- Diode provides recirculating current path rather than absorbing voltage as energy.
+- Momentary action alone does not determine poles/throws; an unspecified button could itself be SPDT.
+- Give idle-level and normally-open prerequisites explicitly.
+- The worked example uses 0.4 V, so the standalone question must supply it.
+- Using a separate 5 V HCT output into a 4.5 V HC input can violate the recommended receiving voltage range.
+- Threshold compatibility does not imply safe output stress across different supply rails.
+- Receiver input voltage stress needs separate check.
+- Maximum output, not minimum divider fraction, sets upper-voltage stress.
+- Distinguish sustained cable-fed current from residual capacitor charge.
+- Finite capacitors can keep LEDs glowing for a while; qualify the distractor rather than denying this.
+- Avoid unqualified claim that ground currents can never feed an unintended path.
+- A bypassed resistor may still be connected to the rest of the net.
+- Same-net placement does not imply disconnection from every other component.
+- AC mode is not necessarily true RMS for arbitrary waveforms.
+- Negative voltages are not necessarily operator errors.
+- Burden voltage includes more than the measuring shunt.
+- Keep equation identity but define total effective series resistance for the model.
+- Loading error depends on useful headroom and error budget, not only total supply voltage.
+- Standalone measurement instructions must start unpowered.
+- A high range switch cannot protect a jack with a lower current rating.
+- Preserve meter RMS qualification in scope introduction.
+- Two-channel subtraction is not isolation and retains individual input limits.
+- Use the explicit scenario rather than a universal PC grounding assumption.
+- Not literally every scope supports the full audio band.
+- Keep standalone continuity check unpowered and do not equate flex/beep with joint reliability.
+- Alloy/process compatibility can affect wetting; avoid saying alloy never matters.
+- Remove duplicate phrase.
+- Sentence capitalisation.
+- Remove split-lesson reference grammar artifact.
+- Qualify fixed resistance and preserve useful non-Ohmic operating-point meaning.
+- LDO is a subtype of linear regulator, not a synonym for every one.
+- Distinguish differential signalling from impedance balance.
+- Full-wave rectifier does not universally draw only peaks; state capacitor-input condition.
+- Use primary manufacturer example and avoid contrasting Schottky with silicon as if Schottky cannot use silicon.
+- Describe current/energy rather than absorption of voltage.
+- A generic push button can be latching; do not force its actuator name into the momentary action sense.
+- A generic toggle switch can be momentary; narrow alias sense.
+- Separate actuator from action; first-use beginner definitions.
+- AC measurement is not automatically true RMS.
+- Include fuse/current path and current change, not shunt alone.
+- Remove unsupported universal claim that an electric iron/process can never produce CO.
+- Correct supporting source and use prose for a plain-text popover.
+- Do not imply all electronics or hobby uses have identical legal scope.
+- Remove absolute claim that the whole electric soldering process cannot produce CO.
+- Actual renderer linked allowed circuit error to SRE availability budget; state precise quantity.
+- Actual renderer linked towards-zero voltage decay to integer truncation; use explicit electrical quantity.
+- Avoid signal-bipolar dictionary meaning for component construction.
+- Capitalise bullet label.
+- Capitalise callout title.
+- State capacitor field bias rather than link to audio DC-offset interpretation.
+- Correct grammar after lesson split.
+- Correct grammar after lesson split.
+- Correct grammar after lesson split.
+- Correct grammar after lesson split.
+- Correct grammar after lesson split.
+- Precise first-use definitions replace misleading later donors while retaining their conceptual IDs; all actual borrower meanings will be independently reviewed.
+- Retire broad mathematical graph-potential phrase while retaining canonical voltage/voltages/electrical potential difference; independent Sound4 actual DSA contexts reveal inherited wrong sense.
+- Avoid loudspeaker cone excursion popup for electrical flyback voltage.
+- Use precise electrical voltage language consistently; popup body is plain escaped text.
+- Use precise electrical voltage language consistently; popup body is plain escaped text.
+- ActualMIDI two full explanation fields describe passive resistor current limiting; they must not open a definition restricted to active supply controls. A precise general electrical entry distinguishes both mechanisms.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Qualify introduced technical label to its precise existing electrical glossary meaning; do not add broad ambiguous aliases.
+- Precise technical coverage for active labels/material without adding generic ambiguous words.
+- Precise technical coverage for active labels/material without adding generic ambiguous words.
+- Precise technical coverage for active labels/material without adding generic ambiguous words.
+- Precise technical coverage for active labels/material without adding generic ambiguous words.
+- Precise technical coverage for active labels/material without adding generic ambiguous words.
+- Precise technical coverage for active labels/material without adding generic ambiguous words.
+- Precise technical coverage for active labels/material without adding generic ambiguous words.
+- Plain popup prose retains correct grouping without an unexplained variable formula in escaped dictionary text.
+- Express numerical popup example in words instead of an unrendered symbolic equality; sourced thresholds/RC arithmetic unchanged.
+- Express numerical popup example in words instead of an unrendered symbolic equality; sourced thresholds/RC arithmetic unchanged.
+- Express numerical popup example in words instead of an unrendered symbolic equality; sourced thresholds/RC arithmetic unchanged.
+- Independently reviewed Bourns taper specification distinguishes track ratio from circuit loading; general first-use concept needs precise glossary coverage.
+- Independently read Tek P2220 manual 071146400 pp1/4/5: matched scope requirement,10X10MΩvs1X1MΩ,capacitive loading/bandwidth are probe/scope-specific; avoid universal bandwidth comparison.
+- Remove repeated identical alias while preserving first position and actual compiled meaning.
+- Powered-off-path TI primary tutorial supports conditional risk, not unavoidable damage; glowing LED is an example mechanism rather than a diagnostic proof.
+- Use already defined precise circuit-ground phrase for the bold introduction; no ambiguous bare ground alias.
+
+Additional independent scoped reviews:
+
+- Only3 physical probe-attachment verbs: active elec-scope-voltage-time.md Clipping it→Connecting it; associated active q10 options/3/explanation so clipping→so connecting; workedExample step3 Clipping→Connecting. All question identity/type/key/optioncount/order/otherfields/code/formulas and all archives/glossary/stamps unchanged. No root stamp. Evidence: `/tmp/electronics-clip-followup-verify/report.json`.
+- Qualify three physical probe-attachment phrases as connecting: the lesson body and two associated question explanations. Canonical signal clipping and the answer key remain unchanged.
+- Narrow review: 1 existing claim group, 3 wording occurrences; practical confidence remains medium. Earlier full-module counts are inherited, not claimed as newly repeated checks.
+
+Remaining gaps:
+
+- No physical circuit was powered, wired, measured or safety-certified. Exact board revision and equipment/part limits govern any build.
+- Manufacturer documents describe specified parts and conditions; moving URLs may change. Generic diode/LED drops, shunt examples and resistor-load board models are explicitly illustrative.
+- Original14archives and prior verification are immutable evidence; archived inaccuracies are retained there while active teaching has independently corrected wording.
+- Original Keysight PDF URL returns an asset landing page to direct retrieval; official indexed primary excerpt corroborates output-capacitor transient current. ADI/CDC/C&K local fetch limitations were independently cross-checked with official web primary evidence.
+
+Low-confidence areas:
+
+- **medium** — elec-breadboard-net-wiring: Physical execution/applicability. Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- **medium** — elec-first-power-checks: Physical execution/applicability. Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- **medium** — elec-meter-series-current: Physical execution/applicability. Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- **medium** — elec-scope-voltage-time: Physical execution/applicability. Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- **medium** — elec-solder-alloys-safety: Physical execution/applicability. Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- **medium** — elec-solder-joint-technique: Physical execution/applicability. Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- **medium** — elec-studio-ground-loops: Physical execution/applicability. Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- **medium** — elec-supply-noise-hunt: Physical execution/applicability. Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- **medium** — elec-unpowered-meter-tests: Physical execution/applicability. Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+
+## synth: Embedded Audio & Interfaces
+
+[Independent verification record](../content/synth/04-embedded-audio/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Correct actual libDaisy float-to-signed24/16 saturation margins and distinguish nominal two’s-complement scale from asymmetric integer code endpoints; ±1 maps to ±8388482 in the pinned24bit helper.
+- Correct Rev7 detection: DAISY_SEED_1_2 is distinguished by PD5 before sharing Rev4-compatible audio setup; do not claim it is detected as Rev4.
+- Qualify the linker question as loadable internal-flash image size excluding debug-only data and runtime-only RAM; preserve the original answer index.
+- Qualify model-specific codec startup, converter delay/nominal level/peak behavior, MCU boot/recovery and target optional features rather than infer universal physical behavior.
+- Clarify ADC noise/averaging/settling, actual libDaisy AnalogControl coefficient, debounce traces, LED drop/current/rating and clock/bus transfer assumptions.
+- Separate observed maximum from proven WCET, lock-free progress from per-operation time bounds, and C++ thread ordering from target/ISR implementation contracts.
+- Move the two complete preset-publication/SPSC questions after their prerequisites; preserve all IDs, original keys/types/answer indices/option counts.
+- Clarify one-outstanding-publication buffer ownership, preset generation, exact acknowledgement before reuse, wrapping ring capacity, bounded draining and parameter-ramp endpoints.
+- Remove universal click/buzz/inaudibility/perceptual-equality promises and correct rounded numerical explanations; preserve all original executable ASTs and stated stdout.
+- Correct semantic glossary definitions/aliases across firmware/memory/interrupts/ADC/protocols/timing/atomicity and add six precise entries for I2C transaction, sample buffer, audio clock roles, preset generation and MIDI OUT.
+- Fix actual wrong-sense dictionary links in owned wording and narrow aliases that misannotated earlier voice allocators, Node loops, OS switch-time/virtual-deadline, unvirtualised bare metal, protocol interrupt verbs and connector pins.
+- Explicitly version MIDI CC for MIDI1 seven-bit/paired fourteen-bit and MIDI2 thirty-two-bit; isolate MIDI IN/OUT roles and optical data-path isolation from other ground connections.
+
+Remaining gaps:
+
+- No target platform selected: no verified project-specific wiring/BOM, complete interface/USB-role compatibility or physical build is claimed.
+- No board cross-build/flash/recovery, oscilloscope/logic-analyser/ADC/button/audio-loopback measurements or proven target WCET; these remain practical exercises.
+- Host atomic/native wrappers and finite models do not establish MCU ISR support, instruction lowering, bounded exclusive-access retries or physical concurrency.
+- Display waveform-type requirement is included, but screen/model/bus/driver and measured update cost remain configuration choices.
+- Target linker/cache/DMA implementation, advanced RTOS/USB/codec drivers and C++ teaching remain beyond this foundation module; low-voltage work only.
+
+Low-confidence areas:
+
+- **medium** — emb-codecs-i2s-control-registers: Manufacturer product/revision, platform configuration or hardware experiment specifics. Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- **medium** — emb-gpio-buttons-pin-limits: Manufacturer product/revision, platform configuration or hardware experiment specifics. Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- **medium** — emb-mcu-firmware-boot-recovery: Manufacturer product/revision, platform configuration or hardware experiment specifics. Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- **medium** — emb-mcu-firmware-chip-memory: Manufacturer product/revision, platform configuration or hardware experiment specifics. Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- **medium** — emb-platform-comparison-compare-gaps: Manufacturer product/revision, platform configuration or hardware experiment specifics. Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- **medium** — emb-platform-comparison-criteria-configurations: Manufacturer product/revision, platform configuration or hardware experiment specifics. Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- **medium** — emb-platform-comparison-experiment-record: Manufacturer product/revision, platform configuration or hardware experiment specifics. Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- **medium** — emb-platform-comparison-official-evidence: Manufacturer product/revision, platform configuration or hardware experiment specifics. Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- **medium** — emb-platform-comparison-score-sensitivity: Manufacturer product/revision, platform configuration or hardware experiment specifics. Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- **medium** — emb-control-to-audio-atomic-latest: Target atomic/interrupt timing and measured worst-case performance. Language-level primary sources, exact host compiled helper and finite state/arithmetic models checked. Selected MCU compiler/ABI, ISR contracts, atomic retry/progress bounds, DMA/cache behavior and physical WCET still require target evidence; lesson explicitly requires those checks.
+- **medium** — emb-control-to-audio-preset-ownership: Target atomic/interrupt timing and measured worst-case performance. Language-level primary sources, exact host compiled helper and finite state/arithmetic models checked. Selected MCU compiler/ABI, ISR contracts, atomic retry/progress bounds, DMA/cache behavior and physical WCET still require target evidence; lesson explicitly requires those checks.
+- **medium** — emb-control-to-audio-spsc-ring: Target atomic/interrupt timing and measured worst-case performance. Language-level primary sources, exact host compiled helper and finite state/arithmetic models checked. Selected MCU compiler/ABI, ISR contracts, atomic retry/progress bounds, DMA/cache behavior and physical WCET still require target evidence; lesson explicitly requires those checks.
+- **medium** — emb-realtime-audio-measure-load: Target atomic/interrupt timing and measured worst-case performance. Language-level primary sources, exact host compiled helper and finite state/arithmetic models checked. Selected MCU compiler/ABI, ISR contracts, atomic retry/progress bounds, DMA/cache behavior and physical WCET still require target evidence; lesson explicitly requires those checks.
+- **medium** — emb-codecs-i2s-converter-revisions: Codec fitted to board revision and SDK configuration. Manufacturer revision snapshots and exact pinned source checked; recheck actual board and installed SDK before wiring/configuring.
+
+## synth: MIDI & Studio Integration
+
+[Independent verification record](../content/synth/05-midi-studio/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Correct channel-only fixed lengths and variable-length SysEx, Basic Channel/Omni voice modes, optional CC123/sustain and Active Sensing timing margins.
+- Correct bare-phototransistor assumption for general optical receivers including PC900V and preserve physical measurement-before-connection order.
+- Clarify TRS documented conventions, USB isolation exceptions and manufacturer-specific product/driver evidence.
+- Correct universal two-buffer monitoring lower bound and qualify remaining direct-monitor delay.
+- Make borrowed meanings precise: protocol interleaving, tuning anchors, arrival alignment, MIDI status hex prefixes, USB packet unused bytes and model names.
+- Qualify audio voltage references, resistor heat ratings, logic relationships and ideal circuit models to prevent wrong-sense popovers.
+- Use Jensen primary evidence for balance/differential inputs and Lehle for passive pickup loading.
+- Provide precise owned MIDI monophonic/polyphonic and pickup/line level concepts with beginner-appropriate scope.
+- Narrow generic overflow-counter and connector-pin aliases, explicitly review earlier full fields, retain wrong Audio fallback as a pending separate gate.
+- Independently approve F0/0xF0 SysEx aliases against all-course actual source contexts without relabelling old probes.
+- Correct same-index factual question details while retaining every original question ID/type/key/option count.
+- Remove altered source quotation and paraphrase controller-reset rule accurately.
+- Retain all14 original executable ASTs and comments; independently validate parser boundaries and numeric/state examples.
+- Add precise audio level reference voltage to avoid ADC-only meaning in four actual fields.
+
+Remaining gaps:
+
+- No physical MIDI receiver compliance/fault margin, measured complete-path latency, auditory threshold or device compatibility certification.
+- Final platform/interface/BOM/full firmware/patch-dump decoder and final integrated demonstration remain unselected/unimplemented planning tasks.
+- Manufacturer dBu peak convention is ambiguous; faithfully quoted, not converted to unspecified RMS/peak voltages.
+- Old foreign Audio XLR fallback field is excluded from approval; root publication requires DIFFERENT full Audio verifier closure.
+
+Low-confidence areas:
+
+- **medium** — midi-fundamentals-note-frequency: Dated product/OS/driver or hardware-specific measurement convention. Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- **medium** — midi-studio-integration-connection-plan: Dated product/OS/driver or hardware-specific measurement convention. Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- **medium** — midi-studio-integration-digitakt-sequence: Dated product/OS/driver or hardware-specific measurement convention. Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- **medium** — midi-studio-integration-ableton-record-sync: Dated product/OS/driver or hardware-specific measurement convention. Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- **medium** — midi-studio-integration-monitor-latency: Dated product/OS/driver or hardware-specific measurement convention. Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- **medium** — midi-studio-integration-gain-chain: Dated product/OS/driver or hardware-specific measurement convention. Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- **medium** — midi-studio-integration-hum-test-session: Dated product/OS/driver or hardware-specific measurement convention. Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- **medium** — midi-hardware-usb-host-roles: Dated manufacturer/platform or ambiguous maximum-level convention. Primary snapshot checked on2026-10-16; product revisions/driver support can change. No physical compliance or unspecified dBu peak conversion inferred.
+- **medium** — midi-hardware-usb-event-packets: Dated manufacturer/platform or ambiguous maximum-level convention. Primary snapshot checked on2026-10-16; product revisions/driver support can change. No physical compliance or unspecified dBu peak conversion inferred.
+- **medium** — midi-audio-levels-first-interface-check: Dated manufacturer/platform or ambiguous maximum-level convention. Primary snapshot checked on2026-10-16; product revisions/driver support can change. No physical compliance or unspecified dBu peak conversion inferred.
+- **medium** — midi-audio-levels-sine-headroom: Dated manufacturer/platform or ambiguous maximum-level convention. Primary snapshot checked on2026-10-16; product revisions/driver support can change. No physical compliance or unspecified dBu peak conversion inferred.
+
+## synth: Audio Engineering
+
+[Independent verification record](../content/synth/06-audio-engineering/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Recomputed music40W average/10dB crest factor:200W ideal continuous sine rating for the same clean peak voltage, rather than400W; retained the load/thermal/protection caveats.
+- Rejected mislabeled SM58 PDF that actually served an SM7B. Used exact SM58 guide6.4(2024-F):−56dBV/Pa,1.6mV/Pa; comparison24.9dB, singer47.8dB gain; original keys/indices/concepts retained.
+- Moved complete sealed-box Qtc/compliance question into the unit teaching that prerequisite.
+- Qualified propagation, single-tone interference versus comb filtering, pressure/RMS, directivity, latency difference sign, passive-ribbon phantom faults and transients.
+- Corrected ambiguous glossary senses for crossover Fc, physical clips, amplifier amps, capsule bias, monitor hardware versus monitor mix, average power versus continuous rating, room-mode families, and resonant bass absorbers.
+- Added precise acoustic compression, sound reflection and acoustic line-source definitions; used existing canonical names in41 introduced spans.
+- Replaced broad unrelated source assignments with fetched relevant manufacturer/university/regulator/original research.
+
+Additional independent scoped reviews:
+
+- Exactly existing linear-phase entry definition/example/source. Independent actual borrower, native symmetric three-tap example and primary-source review; all lesson/question/other-term stamps preserved. This is not the later full Audio06 short-lesson conversion. Evidence: `/tmp/synth-linear-phase-followup-verify/report.json`.
+- Constant group delay does not promise waveform-shape preservation when magnitude changes. Symmetric FIR is a common implementation, not a blanket necessity claim, and delay depends on design.
+
+Remaining gaps:
+
+- No physical loudspeaker, room, hearing, microphone, amplifier, or exposure measurements were made. Python and model results are offline illustrations, not production calibration or a hardware design sign-off.
+- Full paid IEC 61938, IEC 60268-5, IEC 61672-1 and ISO 226 normative texts were not obtained. Manufacturer wiring/rating evidence, original weighting research and standards-body scope were checked; no claim of clause-by-clause standards conformance.
+- No claim of medical safety for every listener or legal compliance for a workplace. WHO and NIOSH reference doses and GB action/limit values are distinguished and qualified; current equipment, conditions and competent assessments still matter.
+- Read times are source estimates (1–5 minutes), not a timed learner trial. Real-world box alignment, crossover optimisation, transducer nonlinearities, coverage design and acoustical measurement remain introductions.
+- This review counts 50 complete lesson bodies, 100 full question objects, 168 full formula cards and 446 glossary objects as 764 overlapping review groups, not 764 atomic independent factual assertions. There is no sentence-level automated entailment proof.
+- Audio glossary changes affect prior modules. Exact before/after borrower approval and the independently verified E physical-clip wording follow-up are separate evidence; root must bind these at final integration.
+
+Low-confidence areas:
+
+- **medium** — aud-amplifiers-classes: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-amplifiers-headphones: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-amplifiers-loads: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-amplifiers-ratings: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-drivers-impedance: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-drivers-power-and-distance: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-drivers-response-and-limits: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-enclosures-cabinet: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-enclosures-port-tuning: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-enclosures-small-signal: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-hearing-listening-dose: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-hearing-loudness: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-hearing-weighting: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-hearing-workplace-noise: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-microphones-phantom: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-microphones-polar-patterns: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-microphones-specifications: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-microphones-transducers: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-room-acoustics-boundary-measurement: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-room-acoustics-mode-position: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-room-acoustics-monitor-layout: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-room-acoustics-reverberation: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-room-acoustics-treatment: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-sound-systems-coverage-and-delay: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.
+- **medium** — aud-sound-systems-gain-plan: Qualified empirical ranges, model assumptions, dated products/guidance or standard attributions in this unit. Core model and calculations checked independently. Real equipment/listeners/rooms vary; current manuals/regulators were fetched. Full paid normative texts and hardware measurements are outside this evidence. Specific limitations are retained in active prose and final report.

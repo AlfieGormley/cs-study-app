@@ -1,0 +1,62 @@
+[
+  {
+    "id": "emb-control-to-audio-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A preset change must update ten parameters together so the callback never renders a block with a mix of old and new values. Which approach is safe and never makes the callback wait?",
+    "options": [
+      {
+        "text": "Ten separate atomics written in sequence by the main loop",
+        "explanation": "Each is safe individually, but the callback can run between writes and see five new and five old."
+      },
+      {
+        "text": "Wrap the ten writes in a mutex that the callback also locks",
+        "explanation": "The callback would wait if the main loop held the lock: forbidden in real-time code."
+      },
+      {
+        "text": "Write the ten values into a plain struct and set a volatile flag",
+        "explanation": "volatile does not order the struct writes before the flag (see the reordering problem)."
+      },
+      {
+        "text": "Send the whole preset as one queued message, or use double buffering with atomic publication and an acknowledgement before reusing the old buffer",
+        "explanation": "Correct. Complete sets stay immutable while the callback reads them; publication alone does not make reuse safe."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Prefer a bounded SPSC queue for the whole preset. For double buffering, permit only one unacknowledged publication. Publish index plus preset generation with release ordering. The callback acquire-loads that publication and, after its last read of the old set, release-stores the adopted preset generation as acknowledgement. Only after acquiring that exact acknowledgement may the producer refill the old set. A block-start counter can change before adoption, so it is insufficient. The callback never waits.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The main loop fills a 4-field preset struct and then sets `volatile bool preset_ready = true`. The callback checks the flag and copies the struct. Very occasionally a preset loads with one field from the previous preset. What is the most likely cause?",
+    "options": [
+      {
+        "text": "The flag should be an int instead of a bool",
+        "explanation": "The type of the flag is irrelevant; the problem is ordering between the struct writes and the flag write."
+      },
+      {
+        "text": "The struct is too large for the callback to copy",
+        "explanation": "Copying four fields is trivial work; size is not the cause."
+      },
+      {
+        "text": "Switch bounce on the preset button",
+        "explanation": "Bounce would load presets twice, not mix fields from two presets."
+      },
+      {
+        "text": "The struct writes are ordinary accesses that may be reordered after the volatile flag write, so the callback can see the flag before all fields are stored; use a release store on the flag (and acquire load), or send the preset as a queued message",
+        "explanation": "Correct for publication when the acquire load observes the release store. The producer must also wait for acknowledgement before overwriting the struct; release/acquire alone does not protect reuse."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Intended order:\n\n```\nwrite a, b, c, d\nready = true\n```\n\nAllowed order with only volatile on the flag:\n\n```\nwrite a, b, c\nready = true   <- callback runs\nwrite d        <- too late\n```\n\nA release store on `ready` forbids moving the field writes after it; an acquire load in the callback forbids reading fields before it.\n\nDo not modify the published struct again until the reader acknowledges its completed copy. A queue provides this ownership protocol.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  }
+]

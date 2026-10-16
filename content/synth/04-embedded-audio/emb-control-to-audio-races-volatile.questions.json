@@ -1,0 +1,62 @@
+[
+  {
+    "id": "emb-control-to-audio-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What does the `volatile` keyword actually guarantee for a variable shared between the main loop and an interrupt?",
+    "options": [
+      {
+        "text": "That the compiler performs every access to that variable rather than caching it or removing reads and writes",
+        "explanation": "Correct. That is its purpose, which is why it suits hardware registers. It says nothing about atomicity or ordering of other memory."
+      },
+      {
+        "text": "That reads and writes of the variable are atomic, so `x = x + 1` cannot be interrupted",
+        "explanation": "The read, add and write remain separate operations; an interrupt can land between them."
+      },
+      {
+        "text": "That all memory writes before it are visible to the other side first",
+        "explanation": "volatile does not order non-volatile accesses around it. That needs release/acquire atomics or barriers."
+      },
+      {
+        "text": "That the variable is stored in flash",
+        "explanation": "volatile is unrelated to which memory a variable lives in."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Volatile preserves volatile accesses but supplies neither inter-thread synchronisation nor indivisible compound operations. Atomic loads/stores prevent tearing. An explicit atomic RMW such as fetch_add is indivisible; x = x + 1 remains a separate load and store even when x is atomic. Ordering other data requires suitable release/acquire (or stronger) operations; relaxed atomics alone do not publish a payload.",
+    "link": {
+      "title": "Why volatile should not be used — Linux kernel docs",
+      "url": "https://github.com/torvalds/linux/blob/master/Documentation/process/volatile-considered-harmful.rst"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "On a single-core MCU, the main loop does `count = count + 1` and the audio callback (an interrupt) does `count = count - 1` on the same `volatile int count`. Over time the count drifts. Why?",
+    "options": [
+      {
+        "text": "Integer overflow",
+        "explanation": "The shown interleaving loses an update without any overflow. Signed C/C++ integer overflow would itself be undefined behavior, not a reliable wraparound explanation."
+      },
+      {
+        "text": "The compiler caches `count` in a register",
+        "explanation": "volatile prevents caching, so this is not the cause here."
+      },
+      {
+        "text": "Read-modify-write is three steps; if the callback interrupts between the main loop's read and write, the main loop then writes back a stale value and erases the callback's decrement",
+        "explanation": "Correct. That is a lost update. volatile does not make the sequence indivisible; use an atomic fetch-add, or have each side own its own counter."
+      },
+      {
+        "text": "The callback runs twice per block",
+        "explanation": "It runs once per block; frequency is not the issue."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nmain: r = count      (r = 5)\n  -- interrupt --\ncb:   count = count-1 (now 4)\n  -- return --\nmain: count = r + 1  (6!)\n```\n\nExpected 5, got 6: the decrement vanished. A design with one writer per variable avoids the problem entirely.",
+    "link": {
+      "title": "Why volatile should not be used — Linux kernel docs",
+      "url": "https://github.com/torvalds/linux/blob/master/Documentation/process/volatile-considered-harmful.rst"
+    }
+  }
+]

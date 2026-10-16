@@ -1,0 +1,96 @@
+[
+  {
+    "id": "emb-serial-buses-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Roughly how long does a full redraw of a 128×64 monochrome display (1,024 bytes) take over I2C at 400 kHz, ignoring protocol overhead?",
+    "options": [
+      {
+        "text": "2.6 ms",
+        "explanation": "That forgets that I2C sends 9 clocks per byte and treats 400 kHz as bytes per second scaled wrongly."
+      },
+      {
+        "text": "92 ms",
+        "explanation": "That is the 100 kHz Standard-mode figure."
+      },
+      {
+        "text": "23 ms",
+        "explanation": "Correct. 1,024 bytes × 9 clocks is 9,216 clocks, and 9,216 clocks at 400,000 per second take 23 ms."
+      },
+      {
+        "text": "1 ms",
+        "explanation": "That is the SPI figure at 8 MHz, which is much faster than I2C."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nc = n × 9 = 1024 × 9 = 9216\nt = c / f_SCL\nt = 9216 / 400000 Hz ≈ 0.023 s\nt ≈ 23 ms\nwhere\nc: the total number of clock pulses\nn: bytes in the frame, here 1,024\n9: clocks per byte: 8 data bits plus ACK\nt: the transfer time, in seconds (s)\nf_SCL: the I2C clock rate, here 400 kHz\nHz: hertz, cycles per second\ns: second\nms: millisecond\n≈: approximately equal to\nIn words: 9,216 clock pulses at 400,000 a second take about 23 ms.\n```\n\nThe ninth clock per byte is the ACK. Real transfers add address and command bytes, so slightly longer.",
+    "link": {
+      "title": "A Basic Guide to I2C — Texas Instruments",
+      "url": "https://www.ti.com/lit/an/sbaa565/sbaa565.pdf"
+    }
+  },
+  {
+    "id": "emb-serial-buses-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A colleague updates a 128×64 OLED over 400 kHz I2C by calling a blocking `display.update()` at the end of the audio callback, to keep the screen \"in sync\". The audio block is 1 ms. What happens?",
+    "options": [
+      {
+        "text": "Nothing bad; I2C is handled by hardware",
+        "explanation": "The peripheral clocks bits out, but a blocking call waits for the whole transfer, about 23 ms, inside the callback."
+      },
+      {
+        "text": "The audio callback overruns its 1 ms deadline by about 22 ms on every redraw, causing dropouts; move the display update to the main loop (or DMA)",
+        "explanation": "Correct. Bus I/O that blocks for milliseconds must never run in the callback; the display can update at a relaxed rate from the foreground."
+      },
+      {
+        "text": "The display flickers but audio is unaffected",
+        "explanation": "The callback cannot produce the next block while it is blocked, so audio is directly affected."
+      },
+      {
+        "text": "The I2C clock speeds up to keep pace",
+        "explanation": "The bus speed is configured; it does not adapt to deadlines."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```formula\nt_late = t_draw − T_block\nt_late ≈ 23 ms − 1 ms = 22 ms\nwhere\nt_late: how far past its deadline the callback finishes\nt_draw: the blocking display redraw time, about 23 ms (lesson figure)\nT_block: the audio block period, the deadline, 1 ms\nms: millisecond\n≈: approximately equal to\nIn words: a 23 ms redraw inside a 1 ms callback overruns by about 22 ms.\n```\n\nAbout 22 blocks are missed each time: audible dropouts. Schedule display updates in the foreground at an appropriate supported rate. Budget the transfer and other foreground work. Interrupt masking, competition for memory bandwidth and driver behavior still require measurement.",
+    "link": {
+      "title": "A Basic Guide to I2C — Texas Instruments",
+      "url": "https://www.ti.com/lit/an/sbaa565/sbaa565.pdf"
+    }
+  },
+  {
+    "id": "emb-serial-buses-q10",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You are choosing buses for a synth with: DIN MIDI in, a codec with I2C control, a colour TFT display, and 32 extra LEDs. Which pairings are sensible? Select all that apply.",
+    "options": [
+      {
+        "text": "DIN MIDI on a hardware UART at 31,250 baud, through the spec's opto-isolated input circuit",
+        "explanation": "Correct. MIDI over DIN is defined as an asynchronous serial interface at this rate."
+      },
+      {
+        "text": "Colour TFT on SPI",
+        "explanation": "Correct. A colour frame is far larger than a monochrome one; SPI's higher clock rates suit it."
+      },
+      {
+        "text": "Codec audio samples over I2C",
+        "explanation": "I2C configures the codec; the sample stream needs the continuous, clocked I2S/SAI link."
+      },
+      {
+        "text": "LEDs through an I2C or SPI LED driver/expander chip",
+        "explanation": "Correct. A driver chip saves pins and moves LED current off the MCU."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Match each job to the bus's strengths:\n\n| Job | Bus |\n|---|---|\n| MIDI | UART |\n| Codec control | I2C |\n| Codec audio | I2S/SAI |\n| TFT | SPI |\n| LEDs | I2C/SPI driver |\n\nThe audio stream alone needs this many bits per second:\n\n```formula\nR = f_s × ch × B\nR = 48000 Hz × 2 × 24 bit\nR = 2304000 bit/s ≈ 2.3 Mbit/s\nwhere\nR: the audio payload rate, in bits per second\nf_s: the sample rate, 48 kHz\nch: the number of channels, 2 for stereo\nB: bits per sample, 24\nHz: hertz, samples per second\nbit: one binary digit\nMbit/s: megabits (millions of bits) per second\n≈: approximately equal to\nIn words: 48 kHz stereo 24-bit audio needs about 2.3 Mbit/s, beyond Fast-mode I2C's 400 kbit/s.\n```\n\nSo I2C could not carry the stream even if it were designed for audio, which it is not.",
+    "link": {
+      "title": "Serial Peripheral Interface — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Serial_Peripheral_Interface"
+    }
+  }
+]

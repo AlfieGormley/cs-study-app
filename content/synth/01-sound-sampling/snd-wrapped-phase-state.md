@@ -50,14 +50,14 @@ print(f"{before:.3f} -> {after:.3f}")
 0.000 -> 1.000
 ```
 
-The output leaps from 0 to full scale in one sample: a click. With an accumulator, you just change `inc` and the phase carries on from where it was. Vibrato, pitch bends and glides can use this. An abrupt increment change can still make a transient by changing the waveform’s slope; ramping the increment makes the transition gentler.
+At the switch time, the two formulas give values of 0 and full scale. Switching directly between them can introduce an abrupt waveform jump and an audible click; the exact adjacent samples and audibility depend on the switch and playback conditions. With an accumulator, you just change `inc` and the phase carries on from where it was. Vibrato, pitch bends and glides can use this. An abrupt increment change can still make a transient by changing the waveform’s slope; ramping the increment makes the transition gentler.
 
 **2. Precision stays bounded.** The phase is always between 0 and 1, so its spacing stays bounded instead of getting coarser with elapsed time. Rounding of the increment and additions can still introduce a small frequency error. A sample counter n only grows. A 32-bit float (common on embedded chips) represents integers exactly only up to 2²⁴ = 16,777,216. At 48 kHz that's about 349.5 seconds, under six minutes. After that, `n + 1 == n` in float32, and an oscillator that computes from n starts to drift and distort.
 
 **3. It's cheap.** One add and a compare per sample, then a waveform lookup. The waveform part can be `sin`, a table, or simple arithmetic for a sawtooth (the phase itself, rescaled, *is* a naive saw).
 
 > [!warning] Keep the state between blocks
-> Audio is processed in blocks (say 48 samples at a time). The phase must persist from one block to the next. If you reset it to zero each block, you get a click every block: at 48 samples per block and 48 kHz, that's a 1 kHz buzz.
+> Audio is processed in blocks (say 48 samples at a time). The phase must persist from one block to the next. Resetting it to zero each block repeats the same 48-sample segment. At 48 kHz, that repeated segment has a 1 kHz repetition rate, with spectral components on a 1 kHz grid, rather than the intended 440 Hz sine. Boundaries can jump and the result can buzz or click; the exact spectrum and audibility depend on the waveform, reset timing and playback conditions.
 
 ## Why absolute-time glides go wrong
 

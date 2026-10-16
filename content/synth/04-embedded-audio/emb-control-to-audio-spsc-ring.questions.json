@@ -1,0 +1,126 @@
+[
+  {
+    "id": "emb-control-to-audio-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In an SPSC ring buffer, which side writes the `head` index and which writes `tail`?",
+    "options": [
+      {
+        "text": "Both sides write both indices, protected by a lock",
+        "explanation": "That defeats the point. The design is lock-free precisely because each index has one writer."
+      },
+      {
+        "text": "The producer writes only `head`; the consumer writes only `tail`; each only reads the other's index",
+        "explanation": "Correct. One writer per index means no two sides ever write the same variable, so atomic loads and stores with release/acquire are enough."
+      },
+      {
+        "text": "The consumer writes `head`; the producer writes `tail`",
+        "explanation": "Convention aside, the essential property is one writer per index; here the roles are reversed relative to the lesson's definitions."
+      },
+      {
+        "text": "Neither; the indices are constants",
+        "explanation": "They advance as items are pushed and popped."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nproducer: writes buf[head],\n          then head += 1 (release)\nconsumer: reads head (acquire),\n          reads buf[tail],\n          then tail += 1 (release)\n```\n\nNo variable has two writers, so there is no lost update.",
+    "link": {
+      "title": "Circular buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circular_buffer"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A ring buffer has capacity 4. Starting empty, the producer pushes items 0–5, then the consumer pops twice, then the producer pushes 6 and 7. What does draining the buffer return?",
+    "options": [
+      {
+        "text": "2, 3, 4, 5",
+        "explanation": "Pushes of 4 and 5 failed because the buffer was full; they were dropped, not stored."
+      },
+      {
+        "text": "0, 1, 2, 3, 6, 7",
+        "explanation": "0 and 1 were already popped before the drain."
+      },
+      {
+        "text": "2, 3, 6, 7",
+        "explanation": "Correct. 0–3 fill it, 4 and 5 are refused, popping 0 and 1 frees two slots, 6 and 7 fill them. The drain returns the remaining four in order."
+      },
+      {
+        "text": "6, 7, 2, 3",
+        "explanation": "A ring buffer is FIFO: older items 2 and 3 come out before 6 and 7, even though 6 and 7 occupy lower array slots."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\npush 0..3  -> [0 1 2 3] full\npush 4,5   -> refused\npop, pop   -> 0, 1\npush 6,7   -> slots 0,1\ndrain      -> 2 3 6 7\n```\n\nThe lesson's Python run prints `drain [2, 3, 6, 7, None]`; the final None is the empty result.",
+    "link": {
+      "title": "Circular buffer — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Circular_buffer"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q7",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The MIDI event queue is full when the UART parser wants to push a new note-on. What should the parser (running in the foreground or UART interrupt) do?",
+    "options": [
+      {
+        "text": "Refuse the push without blocking, count the overflow, and request a defined recovery action for lost note events",
+        "explanation": "Correct. Use a separately published panic/reset flag if event loss invalidates held-note state; do not rely on silent drops."
+      },
+      {
+        "text": "Spin until the callback frees a slot",
+        "explanation": "If the parser runs at higher priority than the callback (as a UART interrupt may), waiting can deadlock; in any case it blocks other work."
+      },
+      {
+        "text": "Overwrite the oldest event",
+        "explanation": "Overwriting can discard a note-off, causing a stuck note. For event data, losing silently is worse than dropping visibly."
+      },
+      {
+        "text": "Allocate a bigger buffer on the fly",
+        "explanation": "Allocation at runtime is unbounded and can fail; buffers are fixed at start-up."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "DIN MIDI is limited to 3,125 bytes/s, but running status uses two bytes per note event and realtime events use one. USB bursts can be larger. Size for worst-case bursts and drain delays, bound callback work, count overflow and provide recovery. A full queue can indicate insufficient capacity or workload, not necessarily a programming bug.",
+    "link": {
+      "title": "Real-time audio programming 101 — Ross Bencina",
+      "url": "http://www.rossbencina.com/code/real-time-audio-programming-101-time-waits-for-nothing"
+    }
+  },
+  {
+    "id": "emb-control-to-audio-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You port your synth from a single-core MCU to a multi-core Raspberry Pi, where the control thread and audio thread run simultaneously. Which statements hold? Select all that apply.",
+    "options": [
+      {
+        "text": "Atomics with release/acquire ordering remain correct, because they also provide the memory barriers multi-core CPUs need",
+        "explanation": "Correct. That is one reason to write atomics even on a single-core MCU."
+      },
+      {
+        "text": "Code relying on 'an aligned 32-bit store is one instruction' plus volatile, without atomics, may now fail through hardware reordering between cores",
+        "explanation": "Correct. Multi-core processors can make writes visible to other cores in a different order unless barriers are used."
+      },
+      {
+        "text": "Disabling interrupts in the control thread is a valid way to stop the audio thread running",
+        "explanation": "On a multi-core OS, the audio thread may be on another core; disabling local interrupts (if even permitted) does not stop it."
+      },
+      {
+        "text": "A lock-free SPSC ring buffer with correct orderings still works between the two threads",
+        "explanation": "Correct. SPSC queues are a standard real-time inter-thread mechanism on desktop and Linux audio too."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "What changes on multi-core:\n\n1. True parallelism: both sides run at once.\n2. Each core may see the other's writes in a different order without barriers.\n3. Interrupt masking is per-core and usually unavailable to user programs.\n\nPatterns built on atomics with explicit ordering survive the port; patterns built on single-core assumptions do not.",
+    "link": {
+      "title": "std::memory_order — cppreference",
+      "url": "https://en.cppreference.com/w/cpp/atomic/memory_order"
+    }
+  }
+]

@@ -5,9 +5,9 @@
     "aliases": [
       "MIDI messages"
     ],
-    "definition": "One complete MIDI instruction: a status byte saying what kind of message it is, followed by the fixed number of data bytes that message type needs (none, one or two for most messages; any number for SysEx).",
+    "definition": "A complete protocol instruction. In the MIDI 1.0 byte-stream format it has a status and the data bytes required by that message type; running status can omit a repeated channel status on the wire, and real-time bytes can interrupt other messages.",
     "example": "A Program Change is two bytes in total (Cn pp); a Note On is three (9n kk vv).",
-    "source": "https://midi.org/summary-of-midi-1-0-messages"
+    "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
   {
     "id": "data-byte",
@@ -30,7 +30,7 @@
       "bottom nibble",
       "channel nibble"
     ],
-    "definition": "Half a byte: four bits, which is exactly one hexadecimal digit (0 to F). MIDI status bytes put the message type in the high nibble and the channel in the low nibble.",
+    "definition": "Half a byte: four bits, represented by one hexadecimal digit (0 to F). In MIDI 1.0 channel messages, the status byte’s high nibble identifies the message type and its low nibble identifies the channel; system statuses use the low nibble differently.",
     "example": "In the status byte 0x93, the high nibble 9 means Note On and the low nibble 3 means channel 4.",
     "source": "https://en.wikipedia.org/wiki/Nibble"
   },
@@ -42,14 +42,14 @@
       "channel message",
       "channel messages"
     ],
-    "definition": "One of 16 independent streams a single MIDI connection can carry, so one cable can address up to 16 instruments or parts. People number them 1–16, but on the wire they are 0–15 in the status byte's low nibble.",
+    "definition": "One of sixteen addressed MIDI 1.0 parts on a connection. Channel voice and mode messages encode the selected channel in the status byte’s low nibble: zero through fifteen on the wire correspond to displayed channels one through sixteen.",
     "example": "A synth set to receive on channel 10 listens for status bytes ending in 9, such as 0x99.",
     "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
   {
     "id": "omni-mode",
     "term": "Omni mode",
-    "definition": "A receiver setting in which an instrument responds to channel messages on all 16 MIDI channels instead of just one.",
+    "definition": "A MIDI receiver mode in which Channel Voice messages are accepted from all sixteen channels. Channel Mode messages still use the configured Basic Channel; Omni does not turn every channel-addressed message into a global command.",
     "example": "With omni on, a synth plays notes sent on channel 1 and channel 10 alike.",
     "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
@@ -66,7 +66,7 @@
   {
     "id": "release-velocity",
     "term": "Release velocity",
-    "definition": "The second data byte of a Note Off: how quickly the key was let go. Few instruments use it; a device that does not measure it should send 64.",
+    "definition": "The performance value in a MIDI 1.0 Note Off, commonly representing how fast a key was released. A transmitter without release-velocity sensing should send 64; a zero-velocity Note On is the equivalent note ending with a default release velocity.",
     "example": "80 3C 40 is a note off with release velocity 64 (0x40).",
     "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
@@ -75,7 +75,8 @@
     "term": "Channel Voice message",
     "aliases": [
       "Channel Voice messages",
-      "channel voice and mode messages"
+      "channel voice message",
+      "channel voice messages"
     ],
     "definition": "The MIDI messages that control the sound on one channel: Note On, Note Off, Poly Key Pressure, Control Change, Program Change, Channel Pressure and Pitch Bend.",
     "example": "B0 4A 50 (CC 74 = 80 on channel 1) is a channel voice message.",
@@ -89,7 +90,7 @@
       "mode messages",
       "mode message"
     ],
-    "definition": "Control Change numbers 120–127, which do not set a sound parameter but change how the receiver behaves on that channel, such as All Sound Off, All Notes Off, Local Control and omni/mono/poly mode.",
+    "definition": "MIDI Control Change numbers 120–127, which affect channel-wide behaviour such as silence, controller reset, Local Control and MIDI omni, monophonic or polyphonic modes. The mode changes also cause All Notes Off.",
     "example": "B0 7B 00 is All Notes Off (CC 123) on channel 1.",
     "source": "https://midi.org/summary-of-midi-1-0-messages"
   },
@@ -128,7 +129,7 @@
       "channel aftertouch",
       "mono aftertouch"
     ],
-    "definition": "A MIDI aftertouch message (status 0xDn) with a single pressure value, 0–127, for the whole channel. It is far more common than per-key pressure.",
+    "definition": "A MIDI 1.0 pressure message with one data byte for the whole channel, unlike Poly Key Pressure which includes a key number. The MIDI message summary describes the greatest pressure among the depressed keys as its source value.",
     "example": "D0 50 sends a pressure of 80 on channel 1.",
     "source": "https://midi.org/summary-of-midi-1-0-messages"
   },
@@ -157,7 +158,7 @@
       "14-bit value",
       "14-bit values"
     ],
-    "definition": "A MIDI value split over two 7-bit data bytes, an MSB and an LSB, giving 16,384 steps instead of 128. Control Changes 0–31 pair with 32–63 this way, and pitch bend is always 14-bit.",
+    "definition": "A MIDI 1.0 value assembled from two seven-bit parts, giving 16,384 possible values. Controllers zero through thirty-one have corresponding fine controllers thirty-two higher; pitch bend also has fourteen-bit resolution but uses its own message.",
     "example": "MSB 64 and LSB 32 combine to 64 × 128 + 32 = 8,224.",
     "source": "https://midi.org/midi-1-0-control-change-messages"
   },
@@ -246,7 +247,7 @@
   {
     "id": "all-notes-off",
     "term": "All Notes Off",
-    "definition": "Channel Mode message CC 123: tells a receiver to release every note it started from MIDI on that channel, letting them fade through their release stage. Receivers need not support it, so it is a safety net, not a replacement for note offs.",
+    "definition": "MIDI Channel Mode CC 123 requests release of MIDI-started notes, normally through their release envelopes. Sustain can defer release; the specification says to ignore it while Omni is on. Support is optional, so transmitters still send individual note endings.",
     "example": "B0 7B 00 sends All Notes Off on channel 1.",
     "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
@@ -280,9 +281,11 @@
       "SysEx",
       "System Exclusive message",
       "System Exclusive messages",
-      "exclusive message"
+      "exclusive message",
+      "F0",
+      "0xF0"
     ],
-    "definition": "A MIDI message for manufacturer-specific data such as patch dumps or firmware: F0, a manufacturer ID, any number of data bytes (each 0–127), then F7. Only real-time bytes may appear inside it.",
+    "definition": "A MIDI message containing manufacturer-defined or standard Universal SysEx data. In the MIDI 1.0 byte stream it begins with F0, has seven-bit ID/data bytes, and normally ends with F7; another status outside the real-time class also terminates it, while real-time messages can interleave.",
     "example": "F0 7D 01 02 F7 is a short SysEx message using the non-commercial ID 7D.",
     "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
@@ -295,7 +298,7 @@
     ],
     "definition": "The byte (or three bytes beginning 00) after F0 in a SysEx message that says whose format the data is in. IDs are assigned by the MIDI Association; 7D is for non-commercial use and 7E/7F are Universal.",
     "example": "A private DIY experiment can use ID 7D.",
-    "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    "source": "https://midi.org/new-midi-association-sysex-id-policies-as-of-oct-15-2025"
   },
   {
     "id": "eox",
@@ -337,7 +340,13 @@
       "System Real-Time messages",
       "System Real-Time",
       "real-time byte",
-      "real-time bytes"
+      "real-time bytes",
+      "MIDI real-time class",
+      "MIDI real-time status",
+      "MIDI real-time bytes",
+      "MIDI real-time statuses",
+      "MIDI real-time message",
+      "MIDI real-time messages"
     ],
     "definition": "A one-byte MIDI system message, F8 to FF, used for timing and transport: Timing Clock (F8), Start (FA), Continue (FB), Stop (FC), Active Sensing (FE) and System Reset (FF); F9 and FD are undefined. It may be sent at any time, even between the bytes of another message, and it does not cancel running status.",
     "example": "A receiver that sees 90 3C F8 64 handles the clock byte F8 and still reads 90 3C 64 as one Note On.",
@@ -349,7 +358,7 @@
     "aliases": [
       "Timing Clock"
     ],
-    "definition": "The System Real-Time byte F8, sent 24 times per quarter note while a sequencer runs so that other devices can follow its tempo.",
+    "definition": "The System Real-Time Timing Clock message, hexadecimal F8, sent twenty-four times per quarter note when synchronisation is needed. Clocks may continue while transport is stopped so a receiver can track tempo.",
     "example": "At 120 BPM, F8 arrives about every 20.8 ms.",
     "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
@@ -393,7 +402,7 @@
       "semiquaver",
       "semiquavers"
     ],
-    "definition": "A note a quarter of a beat long; sixteen fit in a 4/4 bar. Step sequencers such as the Digitakt usually use one step per sixteenth.",
+    "definition": "A note lasting one quarter of a quarter note, also called a semiquaver. Sixteen fit in a 4/4 bar, and one corresponds to six MIDI Timing Clocks; the musical beat need not be a quarter note in every metre.",
     "example": "With MIDI clock, one sixteenth note is six F8 clocks.",
     "source": "https://en.wikipedia.org/wiki/Sixteenth_note"
   },
@@ -421,7 +430,7 @@
   {
     "id": "active-sensing",
     "term": "Active Sensing",
-    "definition": "The optional real-time byte FE. Once a receiver has seen it, it expects some message at least every 300 ms; if traffic stops, it assumes the cable was unplugged and silences its voices.",
+    "definition": "The optional MIDI real-time message FE enables a receive-activity timeout. If no MIDI activity arrives for the specified approximately 300 ms interval after activation, the receiver silences its notes and returns to operation without Active Sensing; this protects against a lost connection.",
     "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
   {
@@ -469,7 +478,7 @@
     "aliases": [
       "JR timestamps"
     ],
-    "definition": "Optional MIDI 2.0 messages that attach a timestamp to events so a receiver can undo timing variation (jitter) introduced on the way.",
+    "definition": "Optional UMP timing messages that let a sender describe event timing so a receiver can schedule playback with less transport-induced timing variation. Support and buffering determine the result; timestamps do not eliminate every source of delay.",
     "source": "https://midi.org/details-about-midi-2-0-midi-ci-profiles-and-property-exchange-updated-june-2023"
   },
   {
@@ -478,8 +487,9 @@
     "aliases": [
       "MIDI monitors"
     ],
-    "definition": "Software (or a small hardware box) that shows every MIDI message arriving on a port, usually as hex bytes and decoded descriptions. It is the first tool for debugging MIDI.",
-    "example": "A MIDI monitor showing 92 40 5A proves the sequencer sent a note on channel 3."
+    "definition": "A diagnostic tool displaying received MIDI messages or bytes, often decoded into channels, notes and controllers. Its output is evidence about the monitored point, not proof that every later stage received or rendered the events.",
+    "example": "A MIDI monitor showing 92 40 5A proves the sequencer sent a note on channel 3.",
+    "source": "https://midi.org/summary-of-midi-1-0-messages"
   },
   {
     "id": "midi-timecode",
@@ -578,11 +588,9 @@
   {
     "id": "1n914",
     "term": "1N914",
-    "aliases": [
-      "1N4148"
-    ],
-    "definition": "A common small-signal silicon diode (very similar to the 1N4148), named in the MIDI reference input circuit as the reverse-protection diode D1.",
-    "source": "https://en.wikipedia.org/wiki/1N4148_signal_diode"
+    "aliases": [],
+    "definition": "A small-signal switching diode named as D1 in the CA-033 reference MIDI input. It is connected antiparallel to the optocoupler LED to limit reverse voltage; confirm the actual diode’s ratings and wiring.",
+    "source": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
   },
   {
     "id": "pc900v",
@@ -593,7 +601,7 @@
   {
     "id": "6n138",
     "term": "6N138",
-    "definition": "A widely used high-gain optocoupler with an open-collector output, named in the MIDI electrical specification as suitable for MIDI inputs. Its datasheet characterises it at a 4.5 V supply.",
+    "definition": "An optocoupler named as acceptable in the MIDI electrical specification. Use the actual manufacturer’s datasheet to check supply, pull-up, timing and current requirements; its part number alone does not establish compatibility with a 3.3 V receiver.",
     "source": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
   },
   {
@@ -611,8 +619,8 @@
     "aliases": [
       "ferrite beads"
     ],
-    "definition": "A small ring or block of magnetic ferrite on a wire that blocks high-frequency (radio) interference while passing low-frequency signals.",
-    "source": "https://en.wikipedia.org/wiki/Ferrite_bead"
+    "definition": "A magnetic component whose impedance is deliberately high over a selected interference-frequency range. It can reduce RF currents but is not an ideal blocker, and its rated current and frequency behaviour must match the circuit.",
+    "source": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
   },
   {
     "id": "rise-time",
@@ -630,6 +638,7 @@
     "id": "short-circuit",
     "term": "Short circuit",
     "aliases": [
+      "short-circuit",
       "short-circuit current",
       "short circuits"
     ],
@@ -645,8 +654,8 @@
       "jack shield",
       "shield conductor"
     ],
-    "definition": "A conductive braid or foil wrapped around a cable's signal wires to catch interference. In MIDI it connects to pin 2 and is grounded only at the transmitting end.",
-    "source": "https://en.wikipedia.org/wiki/Shielded_cable"
+    "definition": "A conductive screen around signal wires that helps control interference. In standard DIN MIDI the cable screen connects to pin 2 at both plugs, and MIDI IN has no DC ground path; optional RF capacitive connections are allowed by CA-033.",
+    "source": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
   },
   {
     "id": "trs",
@@ -673,13 +682,13 @@
       "TRS MIDI Type A"
     ],
     "definition": "MIDI carried on a small TRS jack plus an adapter to 5-pin DIN. The standard (RP-054, 2018) is Type A: tip to DIN pin 5, ring to pin 4, sleeve to pin 2. Type B swaps tip and ring, so the wrong adapter passes no data.",
-    "source": "https://midi.org/updated-how-to-make-your-own-3-5mm-mini-stereo-trs-to-midi-5-pin-din-cables"
+    "source": "https://midi.org/specification-for-use-of-trs-connectors-with-midi-devices"
   },
   {
     "id": "rp-054",
     "term": "RP-054",
-    "definition": "The MIDI Association's 2018 recommended practice that standardised MIDI over TRS minijacks as Type A wiring.",
-    "source": "https://midi.org/updated-how-to-make-your-own-3-5mm-mini-stereo-trs-to-midi-5-pin-din-cables"
+    "definition": "The MIDI recommended practice approved in 2018 defining TRS MIDI pin wiring and cable requirements. It recommends 2.5 mm connectors but applies the same wiring rules to other sizes; Type A maps tip to DIN pin 5, ring to pin 4 and sleeve to pin 2.",
+    "source": "https://midi.org/specification-for-use-of-trs-connectors-with-midi-devices"
   },
   {
     "id": "usb-b",
@@ -704,19 +713,17 @@
       "USB audio",
       "USB audio device"
     ],
-    "definition": "The USB device class for sound devices; MIDI is defined as a subclass of it. A class-compliant audio device works with an operating system's built-in driver.",
+    "definition": "USB standards for devices carrying audio-related functionality. The USB MIDI 1.0 specification defines MIDI Streaming as an Audio-class subclass, while audio sample streaming uses other interfaces; driver support depends on the host and class version.",
     "source": "https://www.usb.org/sites/default/files/midi10.pdf"
   },
   {
     "id": "class-driver",
     "term": "Class driver",
     "aliases": [
-      "USB MIDI class driver",
-      "vendor driver",
-      "vendor drivers"
+      "USB MIDI class driver"
     ],
-    "definition": "A driver built into an operating system that handles every device of a standard class (such as USB MIDI). A vendor driver is one a manufacturer supplies for its own product.",
-    "source": "https://en.wikipedia.org/wiki/Device_driver"
+    "definition": "Software implementing a standard device class such as USB MIDI. Systems that provide a compatible class driver can communicate with conforming devices without a device-specific vendor driver; availability and supported class versions depend on the operating system.",
+    "source": "https://www.usb.org/sites/default/files/midi10.pdf"
   },
   {
     "id": "usb-if",
@@ -735,7 +742,7 @@
       "event packet",
       "event packets"
     ],
-    "definition": "The fixed 32-bit unit USB MIDI 1.0 uses: one header byte (cable number and Code Index Number) followed by three MIDI bytes, zero-padded if the message is shorter.",
+    "definition": "The four-byte USB MIDI 1.0 event format: a header containing Cable Number and Code Index Number, followed by up to three MIDI bytes and zero padding where needed. SysEx can span multiple packets, so not every packet is one complete MIDI message.",
     "example": "09 90 3C 64 is a Note On on cable 0.",
     "source": "https://www.usb.org/sites/default/files/midi10.pdf"
   },
@@ -778,8 +785,8 @@
       "USB isolators",
       "powered USB isolator"
     ],
-    "definition": "An inline device that passes USB data while galvanically isolating the two sides' grounds, used to break ground loops through USB cables.",
-    "source": "https://en.wikipedia.org/wiki/Galvanic_isolation"
+    "definition": "A device that transfers USB data across an electrical isolation barrier. Breaking the ground path also requires an appropriate isolated power arrangement; check speed, device class, current and power limits rather than assuming every isolator supports an audio device.",
+    "source": "https://www.ranecommercial.com/legacy/note151.html"
   },
   {
     "id": "usbhost-t36",
@@ -801,12 +808,12 @@
     "term": "Receive-buffer overflow",
     "aliases": [
       "receive-buffer overflows",
-      "overflow counter",
-      "overflow count"
+      "UART overflow counter",
+      "receive-overflow count"
     ],
-    "definition": "What happens when bytes arrive faster than the code empties the receive buffer and there is no room left: new bytes are lost. Counting overflows shows when the buffer is too small.",
+    "definition": "Arrival at a receive buffer that has no free storage. Depending on the implementation, new or older data is discarded or an error is raised; a bounded MIDI receiver should count loss and recover without blocking the audio work.",
     "example": "A lost note-off byte from an overflow becomes a stuck note.",
-    "source": "https://en.wikipedia.org/wiki/Circular_buffer"
+    "source": "https://docs.python.org/3/library/collections.html"
   },
   {
     "id": "state-machine",
@@ -867,7 +874,8 @@
       "panic action",
       "MIDI panic"
     ],
-    "definition": "A control that immediately silences everything: clears held notes, closes the gate and resets controllers such as pitch bend. Many sequencers send All Notes Off and note offs for every key."
+    "definition": "A deliberately provided recovery control for stuck or unwanted notes. Define whether it cuts sound immediately or releases envelopes, and make it clear held and sustain-deferred note state and any chosen controller state.",
+    "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
   {
     "id": "retrigger",
@@ -882,7 +890,7 @@
   {
     "id": "legato",
     "term": "Legato",
-    "definition": "Smoothly connected notes. On a mono synth, legato mode changes pitch without restarting the envelopes when a new key is pressed while another is held.",
+    "definition": "Smoothly connected notes. A typical monophonic synth legato mode changes pitch between overlapping held keys without restarting the envelope; exact retrigger and glide behaviour is an instrument design choice.",
     "source": "https://en.wikipedia.org/wiki/Legato"
   },
   {
@@ -943,8 +951,8 @@
       "patch dump",
       "patch dumps"
     ],
-    "definition": "A stored set of synth settings that makes one particular sound, recalled by Program Change. Also called a preset or program.",
-    "source": "https://en.wikipedia.org/wiki/Synthesizer"
+    "definition": "A collection of synthesis settings making a sound; many instruments store and recall patches as presets or programs. Whether Program Change recalls one, and the associated bank numbering, depends on the receiving instrument.",
+    "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
   },
   {
     "id": "passive-speaker",
@@ -984,7 +992,7 @@
       "impedance-matched",
       "matched impedances"
     ],
-    "definition": "Making a load's impedance equal to the source's, which transfers maximum power but halves the voltage (a 6 dB loss). It is used in radio and power transfer, not for audio line connections.",
+    "definition": "Choosing a load and source impedance for a transfer objective. For a resistive source, an equal resistive load maximises delivered power and receives half the open-circuit voltage; with reactive impedances the maximum-power condition instead uses complex-conjugate matching. Audio line inputs usually use voltage bridging.",
     "source": "https://en.wikipedia.org/wiki/Impedance_matching"
   },
   {
@@ -998,8 +1006,8 @@
       "unbalanced stereo",
       "unbalanced source"
     ],
-    "definition": "A connection with one signal conductor and a ground that doubles as the shield. Noise picked up on the signal wire, or differences between the devices' grounds, adds straight to the audio.",
-    "source": "https://en.wikipedia.org/wiki/Unbalanced_line"
+    "definition": "An audio connection where each signal is referenced to a shared return conductor, commonly also the shield. Ground-voltage differences or interference on that reference can enter the received signal; a stereo headphone cable carries two such signal channels with a shared return.",
+    "source": "https://www.ranecommercial.com/legacy/note110.html"
   },
   {
     "id": "balanced-connection",
@@ -1007,9 +1015,9 @@
     "aliases": [
       "balanced connections"
     ],
-    "definition": "An audio connection with two signal conductors (hot and cold) that have equal impedances to ground, plus a shield. Interference lands almost equally on both, and the differential input at the receiving end amplifies only the difference between them, so the noise cancels.",
+    "definition": "An audio interconnection whose signal conductors have matched impedances to the reference environment and feed a differential receiver. Interference can then appear predominantly as common mode and be rejected; rejection is finite and depends on the complete interconnection.",
     "example": "A 1/4-inch TRS cable from the Digitakt's impedance-balanced outputs into an interface's balanced line input rejects hum picked up along the cable.",
-    "source": "https://en.wikipedia.org/wiki/Balanced_audio"
+    "source": "https://www.jensen-transformers.com/wp-content/uploads/2014/08/an003.pdf"
   },
   {
     "id": "impedance-balanced",
@@ -1018,9 +1026,9 @@
       "impedance balanced",
       "impedance-balanced"
     ],
-    "definition": "A balanced output that drives signal on the hot leg only, with the cold leg tied to ground through a matching impedance. It still rejects common-mode noise at a balanced input.",
+    "definition": "A balanced output arrangement that sends signal on one conductor and provides a matched impedance on the other. It can provide common-mode rejection into a suitable balanced receiver without requiring equal and opposite signal voltages.",
     "example": "Elektron describes the Digitakt's main outputs as impedance balanced.",
-    "source": "https://en.wikipedia.org/wiki/Balanced_audio"
+    "source": "https://www.jensen-transformers.com/wp-content/uploads/2014/08/an003.pdf"
   },
   {
     "id": "hot-and-cold",
@@ -1039,8 +1047,8 @@
       "differential receiver",
       "differential amplifier"
     ],
-    "definition": "An input that measures the difference between two conductors rather than each against ground, so voltages common to both cancel.",
-    "source": "https://en.wikipedia.org/wiki/Differential_amplifier"
+    "definition": "An input that responds primarily to the voltage difference between two conductors. Rejection of the voltage common to both is finite and limited by the circuit’s common-mode range and rejection ratio.",
+    "source": "https://www.jensen-transformers.com/wp-content/uploads/2014/08/an003.pdf"
   },
   {
     "id": "reactance",
@@ -1048,9 +1056,9 @@
     "aliases": [
       "capacitive reactance"
     ],
-    "definition": "The opposition a capacitor (or inductor) offers to AC, in ohms. A capacitor's reactance falls as frequency rises.",
+    "definition": "The reactive part of impedance, caused by energy storage in capacitance or inductance. For an ideal capacitor its magnitude decreases as frequency rises; the numerical examples here use that magnitude rather than the signed complex impedance.",
     "example": "A 0.1 µF capacitor is about 26.5 kΩ at 60 Hz but only about 0.16 Ω at 10 MHz.",
-    "source": "https://en.wikipedia.org/wiki/Electrical_reactance"
+    "source": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
   },
   {
     "id": "electrolytic-capacitor",
@@ -1060,7 +1068,7 @@
       "polarised electrolytic",
       "electrolytic capacitors"
     ],
-    "definition": "A capacitor type that packs large values into a small size but is polarised: its positive lead must sit at the higher DC voltage.",
+    "definition": "A capacitor construction offering substantial capacitance in a compact package. Common aluminium electrolytics are polarised and have voltage, ripple-current, temperature and lifetime limits; bipolar versions also exist, so check the actual part.",
     "source": "https://en.wikipedia.org/wiki/Electrolytic_capacitor"
   },
   {
@@ -1088,7 +1096,7 @@
     "aliases": [
       "single-supply"
     ],
-    "definition": "Powering a circuit from one positive supply and 0 V instead of positive and negative supplies; audio signals then need biasing to mid-supply.",
+    "definition": "Operating a circuit from a positive supply and a zero-volt reference rather than separate positive and negative rails. Many analogue stages then use a DC bias for bipolar audio, while other architectures such as a charge-pump output can produce ground-centred signals.",
     "source": "https://www.ti.com/lit/an/sloa030a/sloa030a.pdf"
   },
   {
@@ -1165,8 +1173,8 @@
       "protective earth",
       "earth pin"
     ],
-    "definition": "The earth wire in a mains plug that connects a device's metal case to ground so a fault blows the fuse instead of making the case live. Never remove it to cure hum.",
-    "source": "https://en.wikipedia.org/wiki/Ground_(electricity)"
+    "definition": "Protective earth connects exposed conductive parts of appropriate equipment to a protective conductor, helping fault protection disconnect the supply. It must never be disconnected to treat audio hum; signal-reference ground and protective earth serve different roles.",
+    "source": "https://www.ranecommercial.com/legacy/note110.html"
   },
   {
     "id": "rf",
@@ -1175,25 +1183,25 @@
       "radio frequency",
       "radio frequencies"
     ],
-    "definition": "Radio frequency: frequencies from roughly tens of kilohertz to gigahertz, far above audio. RF interference can be picked up by cables.",
-    "source": "https://en.wikipedia.org/wiki/Radio_frequency"
+    "definition": "Radio frequency: electrical variations associated with radio signals and interference. The MIDI examples here concern megahertz-frequency interference, where shielding and real component behaviour matter; radio frequency is not simply a synonym for all frequencies above hearing.",
+    "source": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
   },
   {
     "id": "direct-monitoring",
     "term": "Direct monitoring",
-    "definition": "Routing an input straight to the headphones or monitors inside the audio interface, bypassing the computer, so you hear yourself with almost no delay.",
+    "definition": "Routing an input to monitoring outputs inside an audio interface while bypassing the computer’s audio processing and buffers. The remaining delay depends on the interface’s analogue or digital monitoring design.",
     "source": "https://www.ableton.com/en/live-manual/12/routing-and-i-o/"
   },
   {
     "id": "audio-buffer-size",
     "term": "Buffer size (audio)",
     "aliases": [
-      "buffer size",
-      "buffer sizes",
+      "audio buffer size",
+      "audio buffer sizes",
       "audio buffer",
       "audio buffers"
     ],
-    "definition": "The number of samples an audio driver or interface hands over in each chunk. Each buffer adds its own length in time (buffer size divided by sample rate) to the latency, so smaller buffers feel more immediate but give the computer less time to finish each chunk.",
+    "definition": "The number of audio samples processed or transferred in a chunk. Dividing by sample rate gives the chunk duration and helps establish processing budgets; the actual latency depends on the buffering, driver and hardware architecture.",
     "example": "A 128-sample buffer at 48 kHz holds about 2.7 ms of audio; 256 samples holds about 5.3 ms.",
     "source": "https://www.ableton.com/en/live-manual/12/audio-fact-sheet/"
   },
@@ -1205,7 +1213,7 @@
       "monitoring modes",
       "track monitoring"
     ],
-    "definition": "Hearing an input signal as it is being recorded. In Ableton Live a track's monitoring can be In, Auto (only while armed) or Off.",
+    "definition": "Passing a track’s incoming signal to its output for listening. Live’s In setting monitors continuously; Auto monitors an armed track except while it plays clips; Off disables that software monitoring and can be used with an interface’s direct monitoring.",
     "source": "https://www.ableton.com/en/live-manual/12/routing-and-i-o/"
   },
   {
@@ -1264,11 +1272,10 @@
     "id": "clock-master",
     "term": "Clock master",
     "aliases": [
-      "clock follower",
-      "clock host",
-      "sync source"
+      "tempo sender",
+      "clock host"
     ],
-    "definition": "In tempo sync, the one device that sends clock (the master or host) while the others follow it. Two masters give conflicting tempos.",
+    "definition": "The selected source of tempo clock in a synchronised setup. Receivers follow it; choose a defined direction so devices do not send competing clocks back to one another.",
     "example": "With the Digitakt as clock master, Live follows it via EXT sync.",
     "source": "https://www.ableton.com/en/live-manual/12/synchronizing-with-link-tempo-follower-and-midi/"
   },
@@ -1290,8 +1297,8 @@
     "aliases": [
       "MIDI tracks"
     ],
-    "definition": "A sequencer track that makes no sound itself but sends MIDI notes and controller data to an external instrument.",
-    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+    "definition": "A track whose recorded or sequenced material is MIDI events. A Digitakt MIDI track controls an external instrument; in a DAW, a software instrument on a MIDI track can turn those events into audio.",
+    "source": "https://www.ableton.com/en/live-manual/12/routing-and-i-o/"
   },
   {
     "id": "midi-machine",
@@ -1411,13 +1418,14 @@
     "id": "midi-din-pins",
     "term": "MIDI DIN pins",
     "aliases": [
-      "pin 4",
-      "pin 5",
-      "pin 2",
-      "pins 4 and 5"
+      "MIDI DIN pin 4",
+      "MIDI DIN pin 5",
+      "MIDI DIN pin 2",
+      "MIDI DIN pins",
+      "DIN contact 1"
     ],
     "definition": "MIDI uses three pins of the 5-pin DIN connector: pin 4 is the current source, pin 5 the current sink (data line) and pin 2 the shield, grounded at the transmitter only. Pins 1 and 3 are unconnected.",
-    "source": "https://midi.org/5-pin-din-electrical-specs"
+    "source": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
   },
   {
     "id": "octave-numbering",
@@ -1425,7 +1433,11 @@
     "aliases": [
       "octave number",
       "octave numbers",
-      "octave names"
+      "octave names",
+      "Digitakt C5",
+      "Digitakt C0",
+      "Digitakt G10",
+      "Live C3"
     ],
     "definition": "Naming a note with its letter plus an octave number. The numbering differs between products: middle C (MIDI note 60) is C4 in scientific pitch notation, C3 in Ableton Live and C5 in the original Digitakt manual.",
     "source": "https://en.wikipedia.org/wiki/Scientific_pitch_notation"
@@ -1459,7 +1471,234 @@
   {
     "id": "sysex-dump",
     "term": "SYSEX DUMP",
-    "definition": "The Digitakt menu for sending and receiving projects, patterns and sounds as SysEx data, which is handy for backups.",
+    "definition": "A Digitakt menu for transferring supported project, pattern and sound/preset data through SysEx. The available categories and procedures depend on whether the unit is an original Digitakt or Digitakt II and on its firmware.",
     "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "midi-mono-mode",
+    "term": "MIDI monophonic mode",
+    "aliases": [
+      "MIDI monophonic modes"
+    ],
+    "definition": "A MIDI channel mode for monophonic voice allocation. With Omni off, separate received MIDI channels can control separate monophonic voices; with Omni on, received channels control one monophonic voice. It does not specify the number of audio output channels.",
+    "source": "https://midi.org/summary-of-midi-1-0-messages"
+  },
+  {
+    "id": "midi-poly-mode",
+    "term": "MIDI polyphonic mode",
+    "aliases": [
+      "MIDI polyphonic modes"
+    ],
+    "definition": "A MIDI channel mode assigning simultaneous note messages to multiple voices up to the receiver’s capacity, on the channels selected by Omni and Basic Channel settings. It describes note allocation rather than mono or stereo audio outputs.",
+    "source": "https://midi.org/summary-of-midi-1-0-messages"
+  },
+  {
+    "id": "midi-seven-bit-parts",
+    "term": "MIDI seven-bit parts",
+    "aliases": [
+      "coarse seven-bit part",
+      "fine seven-bit part",
+      "MIDI MSB",
+      "MIDI LSB",
+      "MIDI coarse parts",
+      "MIDI fine parts"
+    ],
+    "definition": "The coarse and fine seven-bit quantities used to assemble some MIDI 1.0 fourteen-bit values. Although often called MSB and LSB in MIDI, each part contributes seven value bits rather than eight.",
+    "source": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+  },
+  {
+    "id": "midi-byte-time",
+    "term": "DIN framed-byte duration",
+    "aliases": [
+      "DIN byte duration",
+      "framed-byte duration"
+    ],
+    "definition": "The time occupied by one complete MIDI UART frame, including start and stop bits. At the nominal 31,250-bit-per-second rate this is 320 microseconds, so line time counts ten bits for each eight-bit byte.",
+    "source": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
+  },
+  {
+    "id": "midi-bitwise-right-shift",
+    "term": "Bitwise right shift",
+    "aliases": [
+      "bitwise right shift",
+      "bitwise right shifts"
+    ],
+    "definition": "An integer operation that moves bits towards the lower-value positions. For the non-negative MIDI integers here, shifting right by seven discards the low seven bits and keeps the coarse part.",
+    "source": "https://docs.python.org/3/library/stdtypes.html"
+  },
+  {
+    "id": "midi-bitwise-left-shift",
+    "term": "Bitwise left shift",
+    "aliases": [
+      "bitwise left shift",
+      "bitwise left shifts"
+    ],
+    "definition": "An integer operation that moves bits towards higher-value positions and fills the low positions with zeros. The MIDI examples use sufficiently wide non-negative integers so no required bits are lost.",
+    "source": "https://docs.python.org/3/library/stdtypes.html"
+  },
+  {
+    "id": "midi-audio-signal-route",
+    "term": "Audio signal route",
+    "aliases": [
+      "audio signal routes"
+    ],
+    "definition": "The connected path followed by the sound waveform, from the synthesiser output through an interface or mixer to monitoring or recording. It is distinct from the MIDI messages instructing a synth what to play.",
+    "source": "https://www.ableton.com/en/live-manual/12/routing-and-i-o/"
+  },
+  {
+    "id": "pickup-output-level",
+    "term": "Passive-pickup output",
+    "aliases": [
+      "passive-pickup outputs",
+      "pickup signal level",
+      "passive-pickup signal"
+    ],
+    "definition": "The analogue electrical signal from an unbuffered instrument pickup, such as a guitar pickup. Its voltage and frequency-dependent source impedance vary with the instrument and playing, so it needs an appropriately high-impedance input.",
+    "source": "https://manuals.lehle.com/web/1015/Lehle-P-Split-II_Manual_EN.pdf"
+  },
+  {
+    "id": "midi-audio-monitoring-latency",
+    "term": "Audio monitoring latency",
+    "aliases": [
+      "audio monitoring delay"
+    ],
+    "definition": "The elapsed time from an audio input change to hearing the corresponding output through the selected monitoring path. Software monitoring includes driver, buffering, processing and converter delays; direct monitoring bypasses the computer path.",
+    "source": "https://www.ableton.com/en/live-manual/12/routing-and-i-o/"
+  },
+  {
+    "id": "balanced-line",
+    "term": "Balanced line",
+    "aliases": [
+      "balanced lines",
+      "balanced cable",
+      "balanced input",
+      "balanced output"
+    ],
+    "definition": "An audio line with signal-conductor impedances matched to the reference environment, feeding a differential input. Equal interference is rejected according to the receiver’s finite common-mode rejection; a shield helps but is not the defining feature of balance.",
+    "source": "https://www.jensen-transformers.com/wp-content/uploads/2014/08/an003.pdf"
+  },
+  {
+    "id": "usb-vendor-driver",
+    "term": "Vendor driver",
+    "aliases": [
+      "vendor drivers"
+    ],
+    "definition": "Device-specific software supplied for a manufacturer’s hardware, in contrast with a driver implementing a standard USB device class. Whether one is needed depends on the supported class and features.",
+    "source": "https://www.usb.org/sites/default/files/midi10.pdf"
+  },
+  {
+    "id": "midi-tempo-follower",
+    "term": "Tempo follower",
+    "aliases": [
+      "clock follower"
+    ],
+    "definition": "A device configured to use an external tempo source rather than generate the governing clock itself. Live can follow MIDI Clock from the selected input; this role differs from a computer’s USB host role.",
+    "source": "https://www.ableton.com/en/live-manual/12/synchronizing-with-link-tempo-follower-and-midi/"
+  },
+  {
+    "id": "midi-electrical-current-limiting",
+    "term": "MIDI current limiting",
+    "aliases": [
+      "MIDI output current limiting"
+    ],
+    "definition": "Resistance or other protective circuitry in a DIN MIDI output that limits loop and fault current. CA-033 requires current limiting on both output pins; the circuit must also respect resistor power and driver current ratings.",
+    "source": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
+  },
+  {
+    "id": "digitakt-midi-config",
+    "term": "Digitakt MIDI CONFIG menu",
+    "aliases": [
+      "MIDI CONFIG"
+    ],
+    "definition": "The Digitakt settings menu for MIDI synchronisation, ports and channel configuration. Use the exact model/OS manual because the available options and labels can change.",
+    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "digitakt-port-config",
+    "term": "Digitakt PORT CONFIG menu",
+    "aliases": [
+      "PORT CONFIG"
+    ],
+    "definition": "The Digitakt MIDI settings section controlling port functions and output routes. In particular a port configured for DIN synchronisation pulses does not send MIDI note data.",
+    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "digitakt-output-to",
+    "term": "Digitakt OUTPUT TO setting",
+    "aliases": [
+      "OUTPUT TO"
+    ],
+    "definition": "The port configuration setting selecting where MIDI output is sent, such as the DIN MIDI port, USB, or both. This is separate from choosing a track’s MIDI channel.",
+    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "digitakt-expression-controls",
+    "term": "Digitakt expression controls",
+    "aliases": [
+      "PB",
+      "AT",
+      "MW",
+      "BC"
+    ],
+    "definition": "MIDI source-page controls: PB sends pitch bend, AT aftertouch, MW the modulation wheel controller and BC the breath controller. The receiving synth decides how the supported messages affect its sound.",
+    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "digitakt-filter-page",
+    "term": "Digitakt FLTR page",
+    "aliases": [
+      "Digitakt FLTR page"
+    ],
+    "definition": "The Digitakt filter-button parameter page. On MIDI tracks it provides CC controls rather than an audio filter: the exact layout and number of pages depend on the model.",
+    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "digitakt-amplitude-page",
+    "term": "Digitakt AMP page",
+    "aliases": [
+      "Digitakt AMP page"
+    ],
+    "definition": "The Digitakt amplitude-button parameter page. On MIDI tracks it provides assignable CC controls rather than processing audio; consult the model’s MIDI machine/track pages.",
+    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "digitakt-bank-program",
+    "term": "Digitakt bank/program controls",
+    "aliases": [
+      "BANK",
+      "SBNK",
+      "PROG"
+    ],
+    "definition": "MIDI track controls for bank selection and program change. BANK and SBNK supply bank-related control values and PROG selects the program; the receiving instrument must support the chosen numbering and bank convention.",
+    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "digitakt-function-key",
+    "term": "Digitakt FUNC key",
+    "aliases": [
+      "FUNC"
+    ],
+    "definition": "A modifier key on the Digitakt used with other keys to select alternate functions. For example the Digitakt II OS 1.17 manual uses FUNC with SRC to open the machine menu.",
+    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "digitakt-track-key",
+    "term": "Digitakt TRK key",
+    "aliases": [
+      "TRK"
+    ],
+    "definition": "The Digitakt track-selection key used with a numbered trig key to select a track. Original Digitakt MIDI tracks occupy nine through sixteen; Digitakt II tracks can be assigned a MIDI machine.",
+    "source": "https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf"
+  },
+  {
+    "id": "audio-level-reference-voltage",
+    "term": "Audio level reference voltage",
+    "aliases": [
+      "level reference voltage",
+      "level reference voltages"
+    ],
+    "definition": "The stated RMS voltage used as the zero point for a logarithmic audio level. The dBu reference is approximately 0.7746 V RMS and the dBV reference is 1 V RMS; compare levels using the same reference rather than subtracting unlike scales.",
+    "example": "A signal of 1 V RMS is 0 dBV, or approximately +2.2 dBu.",
+    "source": "https://www.ranecommercial.com/legacy/pdf/ranenotes/No_Such_Thing_as_Peak_Volts_dBu.pdf"
   }
 ]

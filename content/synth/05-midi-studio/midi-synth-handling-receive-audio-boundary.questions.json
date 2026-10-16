@@ -1,0 +1,62 @@
+[
+  {
+    "id": "midi-synth-handling-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Which part must deliver each audio block by a fixed deadline and must therefore never wait for MIDI input?",
+    "options": [
+      {
+        "text": "The UART receive interrupt",
+        "explanation": "The interrupt runs because a byte has arrived; it pushes it into a buffer and returns. It doesn't wait either, but it isn't the component the question is about."
+      },
+      {
+        "text": "The parser in the main loop",
+        "explanation": "The main loop polls the ring buffer and processes whatever is there, but it isn't the one with the hard audio deadline."
+      },
+      {
+        "text": "None: all parts may block briefly because MIDI is slow",
+        "explanation": "No. Waiting for input has no finite guaranteed completion time, however slow MIDI is."
+      },
+      {
+        "text": "The audio callback",
+        "explanation": "Correct. Consume ordered note events from fixed-size ordered event storage and read latest control targets without waiting; a latest-note mailbox can lose transitions."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "DIN bytes can be 320 µs apart, and an incomplete message can stall indefinitely. The audio callback has a hard deadline: it must finish each block before the converter needs the next one.\n\n```formula\nt_block = N / f_s\nt_block = 48 / (48000 Hz)\nt_block = 0.001 s = 1 ms\nwhere\nt_block: the duration of one block, in seconds (s); processing must finish with margin inside the actual platform deadline\nN: the number of samples per audio block; 48 in this example\nf_s: the sample rate, in samples per second (hertz, Hz); 48,000 here\nHz: hertz, here samples per second\ns: seconds\nms: milliseconds, thousandths of a second\nIn words: a 48-sample block at 48 kHz lasts 1 ms, so the available processing budget is at most that duration and also has to leave room for interrupt and scheduling overhead, whatever MIDI is doing.\n```\n\nSo it consumes only available queued events with a bounded budget and reads latest control targets. Neither the UART ISR nor callback should block; parsing belongs outside the callback.",
+    "link": {
+      "title": "Writing a real-time PortAudio callback — PortAudio",
+      "url": "https://portaudio.com/docs/v19-doxydocs/writing_a_callback.html"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q12",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "At the nominal DIN rate, successive byte completions are 320 µs apart. An initially empty UART byte buffer may go 10 ms without a drain. How many usable byte slots cover that gap, and what is a sensible allocation?",
+    "options": [
+      {
+        "text": "4 bytes, because MIDI messages are at most 3 bytes",
+        "explanation": "Between two runs of the control loop many messages can arrive, not just one."
+      },
+      {
+        "text": "31,250 bytes, one second of data",
+        "explanation": "Far more than needed. The buffer only has to cover the longest gap between drains."
+      },
+      {
+        "text": "No buffer is needed if the UART has a hardware FIFO",
+        "explanation": "Typical UART hardware FIFOs hold only a few bytes, much less than 10 ms of data."
+      },
+      {
+        "text": "32 usable slots cover the stated gap; choose 64 or more and check the ring’s reserved slot",
+        "explanation": "Correct. Depending on arrival phase, up to 32 byte completions fit in that gap. Add margin for longer service gaps. A ring that reserves one storage slot needs an allocation larger than its usable capacity."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "```formula\nr_max = R / N_bits\nr_max = (31250 bit/s) / (10 bit)\nr_max = 3125 B/s\nn = t_gap r_max\nn = 0.010 s × 3125 B/s\nn = 31.25 B\nwhere\nr_max: the most bytes per second DIN MIDI can deliver, in bytes per second (B/s)\nR: the DIN MIDI bit rate, 31,250 bits per second (bit/s)\nN_bits: bits per framed byte: 1 start + 8 data + 1 stop = 10\nbit: one binary digit\nB: byte\nt_gap: the longest time between two runs of the control loop, 10 ms = 0.010 s\ns: seconds\nn: the continuous-rate occupancy estimate in bytes, not an integer upper bound on arrival completions\nIn words: DIN MIDI delivers at most 3,125 bytes a second (one every 0.32 ms), so in a 10 ms gap up to 32 complete bytes may accumulate depending on the starting alignment.\n```\n\nSo provide at least 32 usable byte slots. A circular buffer implementation may reserve one extra slot to distinguish full from empty. Add margin for occasional longer gaps (and delayed servicing; DIN SysEx does not exceed the same line rate), and pick a power of two: 64 or 128 bytes costs almost nothing. Keep counting overflows to confirm it is enough.",
+    "link": {
+      "title": "MIDI 1.0 Electrical Specification Update CA-033 — MIDI Association",
+      "url": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
+    }
+  }
+]

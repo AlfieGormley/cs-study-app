@@ -1,0 +1,100 @@
+[
+  {
+    "id": "midi-messages-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Trace this byte stream using running status: `90 3C 64 40 64 43 00`. What does the receiver do?",
+    "options": [
+      {
+        "text": "Note on 60; then ignores `40 64 43 00` because they have no status bytes",
+        "explanation": "Under running status, data bytes after a complete channel message reuse the last status. They are not orphans."
+      },
+      {
+        "text": "Note on 60, note on 64, note on 67 at velocity 0, which it plays very quietly",
+        "explanation": "Velocity 0 in a Note On means Note Off. Playing it quietly would leave a stuck note."
+      },
+      {
+        "text": "Note on 60, note on 64, and note on 67 at velocity 0, which it treats as note off 67",
+        "explanation": "Correct. All three messages reuse status `90`; the last has velocity 0, so it is a note off."
+      },
+      {
+        "text": "Note on 60 at velocity 64, then note on 100 at velocity 67",
+        "explanation": "This misaligns the pairs. Each Note On takes exactly two data bytes, starting after the status byte."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Group the bytes, carrying the status forward:\n\n```\n90 3C 64 -> on  key 60 vel 100\n   40 64 -> on  key 64 vel 100\n   43 00 -> on  key 67 vel 0\n            = off key 67\n```\n\nRunning status saves two bytes here (seven instead of nine), and the velocity-0 convention lets note offs share the same status.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-messages-q9",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "The receiver sees `90 3C F8 64`. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "The `F8` is a Timing Clock and should be acted on (or ignored) immediately",
+        "explanation": "Correct. Real-time messages can appear anywhere, even between the data bytes of another message."
+      },
+      {
+        "text": "The `F8` aborts the Note On, so `64` is an orphan data byte",
+        "explanation": "Only a new channel, System Common or SysEx status cancels an incomplete message. The interleaved timing byte leaves it intact."
+      },
+      {
+        "text": "After the `F8`, the parser resumes the Note On and completes it with velocity `64` (100)",
+        "explanation": "Correct. The receiver returns to the previous status and completes `90 3C 64`."
+      },
+      {
+        "text": "The running status buffer is unchanged by the `F8`",
+        "explanation": "Correct. The spec says MIDI real-time messages should not affect running status."
+      },
+      {
+        "text": "The receiver should now treat `F8` as the running status",
+        "explanation": "Real-time messages are never stored as running status."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. `90 3C`: Note On started; one data byte still needed.\n2. `F8`: a real-time byte. Handle it on its own (tick the clock, or ignore it if clock isn't used). Do **not** touch the partial message or the running status.\n3. `64`: the missing velocity. Emit Note On key 60 velocity 100.\n\nThe spec allows MIDI real-time bytes \"between Status and Data bytes of any other MIDI messages\" precisely so clock timing isn't delayed by long messages.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-messages-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A receiver gets `B0 4A 50 F0 7D 01 F7 4A 60`. What happens to the final `4A 60`?",
+    "options": [
+      {
+        "text": "It is applied as CC 74 = 96 using running status from `B0`",
+        "explanation": "The intervening SysEx cleared the running status buffer, so there is no status to reuse."
+      },
+      {
+        "text": "It is treated as more SysEx data",
+        "explanation": "`F7` ended the SysEx. Bytes after it are not part of the exclusive message."
+      },
+      {
+        "text": "It is ignored, because SysEx cleared the running status",
+        "explanation": "Correct. The spec's appendix: the running status buffer is cleared when a System Exclusive or System Common status is received, and data bytes are ignored while the buffer is empty."
+      },
+      {
+        "text": "It is applied as Note On key 74 velocity 96",
+        "explanation": "There is no Note On status anywhere in the stream."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```\nB0 4A 50 -> CC 74 = 80, ch1\n           (buffer = B0)\nF0       -> SysEx start\n           (buffer cleared)\n7D 01    -> SysEx data\nF7       -> End of Exclusive\n4A 60    -> no status: ignore\n```\n\nA transmitter that wants this second CC to be received must resend `B0`. Good transmitters refresh the status byte after SysEx or System Common; System Real-Time preserves running status.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  }
+]

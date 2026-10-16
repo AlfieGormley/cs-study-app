@@ -1,0 +1,95 @@
+[
+  {
+    "id": "midi-fundamentals-q2",
+    "level": "basic",
+    "type": "multi",
+    "prompt": "Which of these bytes are **status bytes** in MIDI 1.0? Select all that apply.",
+    "options": [
+      {
+        "text": "`0x90`",
+        "explanation": "Correct. Bit 7 is set (1001 0000), so it is a status byte: Note On, channel 1."
+      },
+      {
+        "text": "`0x7F`",
+        "explanation": "Bit 7 is clear (0111 1111), so this is a data byte with value 127, the largest possible data value."
+      },
+      {
+        "text": "`0xF8`",
+        "explanation": "Correct. Bit 7 is set. 0xF8 is the Timing Clock MIDI real-time status byte."
+      },
+      {
+        "text": "`0x3C`",
+        "explanation": "Bit 7 is clear (0011 1100), so this is a data byte, value 60 (often a key number for middle C)."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "The rule is a single bit test: status bytes have the most significant bit set, data bytes have it clear.\n\n```\n0x90 = 1001 0000 -> status\n0x7F = 0111 1111 -> data (127)\n0xF8 = 1111 1000 -> status\n0x3C = 0011 1100 -> data (60)\n```\n\nEquivalently, anything from 0x80 to 0xFF is a status byte and anything from 0x00 to 0x7F is data. This is why every MIDI 1.0 data value is limited to 0–127.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-fundamentals-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Why are MIDI 1.0 data values limited to 0–127 rather than 0–255?",
+    "options": [
+      {
+        "text": "Because the UART only sends 7 data bits per frame",
+        "explanation": "The MIDI UART sends 8 data bits per byte (8-N-1). The limit comes from how those bits are used."
+      },
+      {
+        "text": "Because 128 velocity levels are all the human ear can distinguish",
+        "explanation": "The limit isn't perceptual; it follows from the byte format. Controllers that need more resolution use 14-bit pairs."
+      },
+      {
+        "text": "Because values above 127 are reserved for SysEx data",
+        "explanation": "SysEx data bytes are also 0–127. Values 0x80 and above are always status bytes, including F0/F7."
+      },
+      {
+        "text": "Because bit 7 of every byte marks it as status (1) or data (0), leaving 7 bits for a data value",
+        "explanation": "Correct. The top bit distinguishes status from data. A channel or System Common status establishes a new message boundary; MIDI real-time bytes may interleave without replacing the partial message."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Each MIDI byte has 8 bits.\n2. The format spends the most significant bit to say what kind of byte it is: 1 = status, 0 = data.\n3. That leaves 7 bits for a data value:\n\n```formula\nN = 2^b\nN = 2^7 = 128\nwhere\nN: the number of distinct values the bits can hold\nb: the number of bits available for the value; 7 here\nIn words: each bit doubles the number of patterns, so 7 bits give 128 values, numbered 0 to 127.\n```\n\n4. The payoff is robustness: if bytes are lost or a device connects mid-stream, a status byte outside the MIDI real-time class establishes a new message boundary. These one-byte statuses can arrive inside an unfinished message and must preserve its parser state.\n5. Where 128 steps are too coarse, MIDI combines two data bytes (14 bits: pitch bend, CC MIDI MSB/MIDI LSB pairs), covered in the next lesson.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-fundamentals-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You plug your synth into a running sequencer and the first bytes it sees are `3C 64 90 40 7F`. Nothing was received earlier. What should a specification-compliant receiver do?",
+    "options": [
+      {
+        "text": "Discard `3C 64`, then play key 64 at velocity 127 on channel 1",
+        "explanation": "Correct. Data bytes not preceded by a valid status byte are ignored; `90 40 7F` is a complete Note On."
+      },
+      {
+        "text": "Play key 60 at velocity 100, then key 64 at velocity 127",
+        "explanation": "Without a preceding status byte, the receiver doesn't know what `3C 64` means. The spec says to ignore such data bytes."
+      },
+      {
+        "text": "Treat `3C` as a status byte because it is the first byte received",
+        "explanation": "0x3C has bit 7 clear, so it can never be a status byte, whatever its position."
+      },
+      {
+        "text": "Reset the parser and ignore everything until a System Reset (FF) arrives",
+        "explanation": "Too drastic. The receiver resynchronises at the very next status byte, 0x90."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `3C`: bit 7 clear, a data byte. No status has been received yet, so there is no context. Ignore.\n2. `64`: also data, also ignored.\n3. `90`: status byte, Note On, channel 1. Now the parser expects two data bytes.\n4. `40 7F`: key 64, velocity 127. The message is complete, so start the note.\n\nThe spec: \"Receivers should ignore Data bytes which have not been properly preceded by a valid Status byte\" (except under running status, which needs a status byte to have been seen at some point).",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  }
+]

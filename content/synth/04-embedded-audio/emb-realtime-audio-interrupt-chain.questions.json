@@ -1,0 +1,62 @@
+[
+  {
+    "id": "emb-realtime-audio-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What runs during the gaps between audio callbacks on a bare-metal MCU synth?",
+    "options": [
+      {
+        "text": "Nothing; the CPU sleeps until the next callback",
+        "explanation": "It may idle if there is nothing to do, but the main loop runs whenever no interrupt is active."
+      },
+      {
+        "text": "The main (foreground) loop and any other lower-priority work, such as reading knobs, parsing MIDI and updating displays",
+        "explanation": "Correct. The callback preempts the main loop; when it returns, the main loop resumes."
+      },
+      {
+        "text": "The operating system's scheduler",
+        "explanation": "Bare-metal firmware has no OS scheduler; there is just the main loop and interrupts."
+      },
+      {
+        "text": "Another copy of the audio callback, in parallel",
+        "explanation": "On a single-core MCU, one callback runs at a time, once per block."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "```\nmain  ===   =====   ====\ncb       ##      ##     ##\n```\n\nThe DMA interrupt triggers the callback (##). Everything else (===) is the main loop: controls, MIDI, display, logging.",
+    "link": {
+      "title": "Getting started: audio — Electro-Smith",
+      "url": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
+    }
+  },
+  {
+    "id": "emb-realtime-audio-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In the Teensy Audio Library source, the I2S DMA interrupt calls `update_all()`, which only sets a software interrupt pending; the software interrupt (priority 208, where 255 is lowest) runs all audio objects. Why structure it this way?",
+    "options": [
+      {
+        "text": "To keep the DMA interrupt very short, while the long DSP work runs at a lower priority that other urgent interrupts can preempt",
+        "explanation": "Correct. Data-moving and other time-critical interrupts stay responsive; the heavy update runs at low priority but still preempts the main loop."
+      },
+      {
+        "text": "Because DMA interrupts cannot call functions",
+        "explanation": "ISRs can call functions; this is a design choice about priorities, not a limitation."
+      },
+      {
+        "text": "So the audio update runs in the main loop",
+        "explanation": "A software interrupt is still an interrupt: it preempts the main loop, which is essential for meeting deadlines."
+      },
+      {
+        "text": "To make the audio update run twice per block",
+        "explanation": "It runs once per block; the indirection changes priority, not frequency."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Two goals conflict: DMA servicing must be prompt, and DSP takes a long time.\n\n1. The DMA ISR does minimal work, then pends the software IRQ.\n2. When it exits, the software IRQ runs (it outranks the main loop).\n3. Interrupts with a higher priority (for example serial MIDI data) can still preempt the DSP.\n\nThe update still has to finish within the block period.",
+    "link": {
+      "title": "Teensy 4 AudioStream.cpp — PJRC",
+      "url": "https://github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.cpp"
+    }
+  }
+]

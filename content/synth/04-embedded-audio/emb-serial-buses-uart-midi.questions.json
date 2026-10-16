@@ -1,0 +1,122 @@
+[
+  {
+    "id": "emb-serial-buses-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "According to the MIDI 1.0 electrical specification, how long does one MIDI byte take to send over a 5-pin DIN connection?",
+    "options": [
+      {
+        "text": "256 µs",
+        "explanation": "That counts only the 8 data bits (8 / 31,250). The start and stop bits add two more bit times."
+      },
+      {
+        "text": "32 µs",
+        "explanation": "That is the duration of a single bit (1 / 31,250), not a whole byte."
+      },
+      {
+        "text": "320 µs",
+        "explanation": "Correct. 10 bits (start + 8 data + stop) at 31,250 baud is 320 µs, as the specification states."
+      },
+      {
+        "text": "1 ms",
+        "explanation": "That is roughly a three-byte note-on message (960 µs), not one byte."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "```formula\nt_bit = 1 / R_baud\nt_bit = 1 / 31250 Bd = 32 µs\nt_byte = b × t_bit\nt_byte = 10 × 32 µs = 320 µs\nwhere\nt_bit: the time one bit takes, in seconds\nR_baud: the baud rate, here 31,250\nBd: baud, symbols (here bits) per second\nt_byte: the time one byte takes\nb: bits per byte on the wire: 1 start + 8 data + 1 stop = 10\nµs: microsecond, one millionth of a second\nIn words: each bit lasts 32 µs, and ten of them make a 320 µs byte.\n```\n\nThe spec spells this out: 'a total of 10 bits for a period of 320 microseconds per serial byte'.",
+    "link": {
+      "title": "MIDI 1.0 Electrical Specification Update (CA-033) — MIDI Association",
+      "url": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
+    }
+  },
+  {
+    "id": "emb-serial-buses-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A keyboard sends a four-note chord as four separate three-byte note-on messages over DIN MIDI (no running status). How long after the first byte starts does the last note-on finish arriving?",
+    "options": [
+      {
+        "text": "3.84 ms",
+        "explanation": "Correct. 4 × 3 = 12 bytes, and 12 × 320 µs = 3,840 µs."
+      },
+      {
+        "text": "0.96 ms",
+        "explanation": "That is one note-on. MIDI is serial, so the four messages arrive one after another."
+      },
+      {
+        "text": "1.28 ms",
+        "explanation": "That is four bytes. Each note-on has three bytes: status, note number, velocity."
+      },
+      {
+        "text": "0 ms; MIDI sends chords simultaneously",
+        "explanation": "A UART sends one bit at a time on one wire, so simultaneous notes are serialised."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nn = 4 × 3 = 12 bytes\nt = n × t_byte\nt = 12 × 320 µs = 3840 µs = 3.84 ms\nwhere\nn: the number of bytes sent (4 notes × 3 bytes)\nt: the total time on the wire\nt_byte: the time per MIDI byte, 320 µs\nbytes: the unit: 8 data bits each\nµs: microsecond\nms: millisecond\nIn words: twelve bytes at 320 µs each take 3.84 ms.\n```\n\nRunning status (omitting repeated status bytes) would cut this to 1 + 4 × 2 = 9 bytes, or 2.88 ms.",
+    "link": {
+      "title": "MIDI 1.0 Electrical Specification Update (CA-033) — MIDI Association",
+      "url": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
+    }
+  },
+  {
+    "id": "emb-serial-buses-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Why can't you connect a 5-pin DIN MIDI IN jack straight to a microcontroller's UART RX pin?",
+    "options": [
+      {
+        "text": "MIDI uses 9 data bits, which MCU UARTs cannot receive",
+        "explanation": "MIDI uses eight data bits with 8-N-1 framing. Select a UART that supports that documented configuration; nine-bit framing is not the reason for the isolation circuit."
+      },
+      {
+        "text": "MIDI is a 5 mA current loop and the spec requires an opto-isolator at MIDI IN, so this MIDI data connection does not require a galvanic signal-ground connection",
+        "explanation": "Correct. The receiver must use an opto-isolator, and the MIDI IN jack's pin 2 must have no DC path to the receiver's ground. A direct wire breaks that isolation."
+      },
+      {
+        "text": "The MIDI baud rate is too fast for an MCU UART",
+        "explanation": "Select a UART that supports 31,250 baud within tolerance. Baud rate is not the reason DIN MIDI needs its specified isolation/interface circuit."
+      },
+      {
+        "text": "MIDI signals are analogue audio",
+        "explanation": "MIDI carries digital event data, not audio."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "From CA-033:\n\n1. 'The MIDI circuit is a 5mA current loop.'\n2. Transmitter and receiver are 'separated by an opto-isolator' to avoid ground loops.\n3. MIDI IN pin 2 'shall not have any DC path to the receiver's ground'.\n\nSo the RX pin connects to the opto-isolator's output, not to the jack.",
+    "link": {
+      "title": "MIDI 1.0 Electrical Specification Update (CA-033) — MIDI Association",
+      "url": "https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf"
+    }
+  },
+  {
+    "id": "emb-serial-buses-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A home-made MIDI receiver decodes the first bits of each byte correctly but gets the last bits wrong and reports framing errors. Its UART was set to 28,800 baud (a standard PC rate) instead of 31,250. Why do the errors concentrate at the end of each byte?",
+    "options": [
+      {
+        "text": "MIDI requires parity, which was disabled",
+        "explanation": "MIDI is 8-N-1: no parity. Parity is not the issue."
+      },
+      {
+        "text": "28,800 baud is too slow for the opto-isolator",
+        "explanation": "The opto-isolator sees the sender's 31.25 kbaud edges regardless of the receiver's setting; the problem is where the receiver samples."
+      },
+      {
+        "text": "The bytes arrive in the wrong order",
+        "explanation": "A UART cannot reorder bytes; it misreads bits within a byte."
+      },
+      {
+        "text": "With no clock wire, the receiver times every bit from the start edge; its bit period is about 8.5% too long, so the error accumulates and by the last bits it samples in the wrong bit",
+        "explanation": "Correct. Each bit's sample point drifts a little further. Near the start the drift is tiny; by the stop bit it approaches a whole bit, so late bits and the stop bit are misread (framing error)."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Each side's bit period is one over its baud rate:\n\n```formula\nT_tx = 1 / 31250 Bd = 32.0 µs\nT_rx = 1 / 28800 Bd ≈ 34.7 µs\nk = T_rx / T_tx ≈ 1.085\nwhere\nT_tx: the sender's bit period\nT_rx: the receiver's assumed bit period\nk: how much longer the receiver's bits are\nBd: baud, bits per second here\nµs: microsecond\n≈: approximately equal to\nIn words: the receiver thinks each bit lasts about 8.5% longer than it really does.\n```\n\nCount bit slots from the start edge: the start bit is slot 0, D0…D7 are slots 1…8 and the stop bit is slot 9. The receiver aims for the middle of each slot, so it samples slot m half a slot in, using its own (too long) bit period. The drift from the true middle, in sender bit times, grows with the slot number:\n\n```formula\nd = (m + 0.5) × (k − 1)\nd_0 = 0.5 × 0.085 ≈ 0.04\nd_5 = 5.5 × 0.085 ≈ 0.47\nd_6 = 6.5 × 0.085 ≈ 0.55\nd_9 = 9.5 × 0.085 ≈ 0.81\nwhere\nd: the drift of the sampling point, in sender bit times\nm: the slot number, 0 (start) to 9 (stop)\nk: the bit-period ratio, about 1.085\nd_0: the drift at the start bit (slot 0)\nd_5: the drift at data bit D4 (slot 5)\nd_6: the drift at data bit D5 (slot 6)\nd_9: the drift at the stop bit (slot 9)\n≈: approximately equal to\nIn words: by data bit 5 the sampling point has drifted more than half a bit, into the neighbouring bit.\n```\n\nA drift past 0.5 means the sample lands in the next slot, so from D5 onwards each bit is read from its neighbour's slot, and the stop bit is sampled after its slot has ended (in the next byte's start bit if bytes are back to back), giving a framing error. The spec allows the transmitter ±1%, so always configure exactly 31,250.",
+    "link": {
+      "title": "Universal asynchronous receiver-transmitter — Wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Universal_asynchronous_receiver-transmitter"
+    }
+  }
+]

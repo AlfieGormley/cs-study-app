@@ -1,0 +1,92 @@
+[
+  {
+    "id": "midi-synth-handling-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "The parser receives `C0 05 07`. What should it emit?",
+    "options": [
+      {
+        "text": "Program Change 5, then ignore `07` as an orphan",
+        "explanation": "Running status applies to all channel voice messages, including Program Change. `07` reuses `C0`."
+      },
+      {
+        "text": "A single Program Change with data 5 and 7",
+        "explanation": "Program Change has exactly one data byte, so `05` completes the first message."
+      },
+      {
+        "text": "Program Change 5, then Program Change 7",
+        "explanation": "Correct. `C0 05` is complete after one data byte; `07` then uses running status `C0`."
+      },
+      {
+        "text": "Nothing until a second data byte for `07` arrives",
+        "explanation": "That would be true only if Program Change had two data bytes. It has one."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. `C0`: Program Change, channel 1. It needs **one** data byte.\n2. `05`: message complete: program 5.\n3. `07`: a data byte with running status `C0` still set, so it forms a new Program Change: program 7.\n\nThis is why the parser looks up the data length per status. Assuming two bytes for everything would mis-parse this stream.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A buggy parser assumes every channel message has two data bytes, but correctly restarts an incomplete message on a new channel or System Common status. What happens on `C0 05 90 3C 64`?",
+    "options": [
+      {
+        "text": "Both messages are applied correctly",
+        "explanation": "The bug changes how `C0 05` is handled: the parser keeps waiting for a second data byte that never arrives."
+      },
+      {
+        "text": "It emits Program Change 5 with second byte `90`",
+        "explanation": "`90` is a status byte (bit 7 set), so it can never be used as data."
+      },
+      {
+        "text": "The Note On is lost and the program changes to 60",
+        "explanation": "The new status byte resets the parser, so the Note On is intact."
+      },
+      {
+        "text": "The Program Change is lost, then the Note On is parsed correctly",
+        "explanation": "Correct. After `05` the parser waits for one more byte; `90` is a status byte that discards the incomplete message, then `90 3C 64` parses normally."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. `C0 05`: the buggy parser wants two data bytes, so it waits.\n2. `90`: a status byte. The spec says a new status byte outside the MIDI real-time class makes the receiver adopt the new status, even if the last message wasn't completed. The half-built Program Change is dropped.\n3. `3C 64`: completes Note On key 60.\n\nThe symptom (\"program changes from the Digitakt sometimes don't work\") would be easy to misdiagnose without a unit test for one-data-byte messages.",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  },
+  {
+    "id": "midi-synth-handling-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "The parser receives `F0 7D 01 90 3C 64 F7`. Following the specification, what happens?",
+    "options": [
+      {
+        "text": "The SysEx is ended by `90`, Note On key 60 plays, and the stray `F7` is ignored",
+        "explanation": "Correct. `90` is a status byte outside the MIDI real-time class, so it terminates the exclusive message. `3C 64` completes the Note On. `F7` then has nothing to end."
+      },
+      {
+        "text": "Everything up to `F7` is SysEx data, so no note plays",
+        "explanation": "A SysEx message can be terminated by any status byte except statuses in the System Real-Time class. `90` ends the SysEx."
+      },
+      {
+        "text": "The parser should crash or reset because SysEx was malformed",
+        "explanation": "Robust receivers never fail on bad input. The spec explicitly defines how SysEx can be terminated."
+      },
+      {
+        "text": "`90` is stored as SysEx data because it follows F0",
+        "explanation": "SysEx data bytes must be 0–127. `90` has bit 7 set, so it is a status byte."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. `F0`: SysEx starts; running status cleared.\n2. `7D 01`: SysEx data (non-commercial ID, then payload).\n3. `90`: a status byte. The spec says exclusive messages are terminated by EOX *or any other status byte except statuses in the System Real-Time class*. Note On begins.\n4. `3C 64`: Note On key 60, velocity 100.\n5. `F7`: End of Exclusive with no open SysEx; ignore it (it also leaves running status cleared).",
+    "link": {
+      "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
+      "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"
+    }
+  }
+]

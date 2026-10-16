@@ -1,0 +1,100 @@
+[
+  {
+    "id": "asql-set-ops-pivot-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "February's order lines are: Kettle x2 (30 each), Rug x2 (90), Mug x2 (10), Toaster x1 (25), Mug x2 (10). Kitchen covers Kettle, Toaster and Mug. What is the `kitchen` value for February?\n\n```sql\n-- Sum only Kitchen line revenue.\nSUM(CASE WHEN p.category = 'Kitchen'\n    THEN i.qty * p.price\n    ELSE 0 END) AS kitchen\n```",
+    "options": [
+      {
+        "text": "105",
+        "explanation": "That leaves out one of the two Mug lines (20). Both Mug lines are Kitchen."
+      },
+      {
+        "text": "305",
+        "explanation": "305 is February's whole revenue, including 180 of Rugs in Home."
+      },
+      {
+        "text": "180",
+        "explanation": "180 is the Home column: two Rugs at 90."
+      },
+      {
+        "text": "125",
+        "explanation": "Correct. Kettle 60 + Mug 20 + Toaster 25 + Mug 20 = 125. The Rug line contributes 0 through the ELSE branch."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Apply the CASE to each February line:\n\n| line | category | adds |\n|---|---|---|\n| Kettle x2 | Kitchen | 60 |\n| Rug x2 | Home | 0 |\n| Mug x2 | Kitchen | 20 |\n| Toaster x1 | Kitchen | 25 |\n| Mug x2 | Kitchen | 20 |\n\n```formula\nK = Σ q_l × p_l for all l in L\nK = 2 × 30 + 2 × 10 + 1 × 25 + 2 × 10\nK = 125\nwhere\nK: February's kitchen value\nL: February's order lines whose category is Kitchen\nl: one order line\nq_l: the quantity on line l (qty)\np_l: the unit price on line l (price)\nΣ: sigma, \"add up\" the term after it for every line l in L\nIn words: multiply quantity by price for each Kitchen line and add them; the Rug line falls to ELSE 0.\n```\n\nSum: **125**. The Home column does the same with the opposite condition: 180. Together they make the month's 305.",
+    "link": {
+      "title": "Pivot: rows to columns — Modern SQL",
+      "url": "https://modern-sql.com/use-case/pivot"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PostgreSQL, from `customers c LEFT JOIN orders o ON o.customer_id = c.id GROUP BY c.id`, which expressions give each customer's number of February orders, showing **0** (not NULL) for customers with none? Let `feb` stand for `o.ordered_on >= '2026-02-01' AND o.ordered_on < '2026-03-01'`.",
+    "options": [
+      {
+        "text": "`SUM(CASE WHEN feb THEN 1 END)`",
+        "explanation": "With no ELSE, non-matching rows contribute NULL, and SUM over only NULLs is NULL, not 0. Ben and Eve would show NULL."
+      },
+      {
+        "text": "`COUNT(*) FILTER (WHERE feb)`",
+        "explanation": "Correct. COUNT never returns NULL; with no matching rows it gives 0."
+      },
+      {
+        "text": "`SUM(CASE WHEN feb THEN 1 ELSE 0 END)`",
+        "explanation": "Correct. Every row contributes 0 or 1, so the sum is 0 for customers without February orders."
+      },
+      {
+        "text": "`COUNT(CASE WHEN feb THEN 1 END)`",
+        "explanation": "Correct. The CASE yields NULL for non-matching rows and COUNT ignores NULLs, so non-matching customers get 0."
+      },
+      {
+        "text": "`SUM(feb)`",
+        "explanation": "This SQLite shortcut fails in Postgres: `function sum(boolean) does not exist`. You'd need `SUM(feb::int)`."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Check each against Ben (orders only in January and March) and Eve (no orders):\n\n| expression | Ben | Eve |\n|---|---|---|\n| COUNT(*) FILTER | 0 | 0 |\n| SUM(CASE ... ELSE 0) | 0 | 0 |\n| COUNT(CASE ... END) | 0 | 0 |\n| SUM(CASE ... END) | NULL | NULL |\n| SUM(boolean) | error | error |\n\nThe rule: COUNT returns 0 for empty input; SUM, AVG, MIN and MAX return NULL. `FILTER` is the clearest way to write it.",
+    "link": {
+      "title": "FILTER clause — Modern SQL",
+      "url": "https://modern-sql.com/feature/filter"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Imagine April had Kitchen sales but no Home sales. In the pivot below, what is `home` for April?\n\n```sql\n-- No Home inputs makes SUM NULL.\nSELECT month,\n  SUM(qty * price)\n    FILTER (WHERE category = 'Home')\n    AS home\nFROM sales\nGROUP BY month;\n```",
+    "options": [
+      {
+        "text": "0, because FILTER skips the rows and the sum is zero",
+        "explanation": "SUM over zero rows is NULL, not 0. That's the difference from the `CASE ... ELSE 0` version."
+      },
+      {
+        "text": "NULL, because no rows pass the filter and SUM over no rows is NULL",
+        "explanation": "Correct. FILTER removes every April row from this aggregate, leaving SUM with no input, so it returns NULL. Wrap it in COALESCE(..., 0) if the report needs zeros."
+      },
+      {
+        "text": "April doesn't appear in the result",
+        "explanation": "April has Kitchen rows, so its group exists. FILTER affects only this aggregate's input, not which groups appear."
+      },
+      {
+        "text": "An error, because FILTER can't be used with GROUP BY",
+        "explanation": "FILTER is designed for exactly this, and is supported in Postgres 9.4+ and SQLite 3.30+."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. GROUP BY month creates an April group from its Kitchen rows.\n2. For the `home` aggregate, FILTER keeps only Home rows: none in April.\n3. SUM of an empty set is NULL.\n4. Compare `SUM(CASE WHEN category = 'Home' THEN qty * price ELSE 0 END)`, which sums a column of zeros and returns 0.\n5. Neither is wrong, but be deliberate: NULL means \"no data\" and 0 means \"zero sales\", and charts treat them differently.",
+    "link": {
+      "title": "FILTER clause — Modern SQL",
+      "url": "https://modern-sql.com/feature/filter"
+    }
+  }
+]

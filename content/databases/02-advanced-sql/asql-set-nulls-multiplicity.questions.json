@@ -1,0 +1,32 @@
+[
+  {
+    "id": "asql-set-ops-pivot-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Table `a` has rows `(1, NULL)` and `(2, 5)`. Table `b` has `(1, NULL)` and `(2, 6)`. What does `a EXCEPT b` return, and what does the NOT EXISTS version return?\n\n```sql\n-- Equality does not match NULL to NULL.\nSELECT * FROM a\nWHERE NOT EXISTS (\n  SELECT 1 FROM b\n  WHERE b.x = a.x\n    AND b.y = a.y);\n```",
+    "options": [
+      {
+        "text": "Both return only (2, 5)",
+        "explanation": "EXCEPT does, but NOT EXISTS compares with `=`, and `NULL = NULL` is UNKNOWN, so (1, NULL) finds no match and is kept too."
+      },
+      {
+        "text": "EXCEPT returns (2, 5); NOT EXISTS returns (1, NULL) and (2, 5)",
+        "explanation": "Correct. Set operations treat NULLs as not distinct, so the (1, NULL) rows cancel. The `=` comparison never matches a NULL."
+      },
+      {
+        "text": "Both return (1, NULL) and (2, 5)",
+        "explanation": "EXCEPT uses distinctness, not equality, so the two (1, NULL) rows are considered identical and removed."
+      },
+      {
+        "text": "EXCEPT returns nothing; NOT EXISTS returns (2, 5)",
+        "explanation": "(2, 5) and (2, 6) differ in y, so (2, 5) survives EXCEPT."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. EXCEPT compares whole rows for **distinctness**, where NULL is not distinct from NULL. (1, NULL) is in both tables, so it is removed. (2, 5) isn't in `b`, so it stays.\n2. NOT EXISTS uses `b.y = a.y`. For (1, NULL) that is `NULL = NULL`, which is UNKNOWN, so the subquery finds no row and NOT EXISTS is TRUE: (1, NULL) is kept.\n3. For these unique rows with non-NULL x, match y null-safely with `b.y IS NOT DISTINCT FROM a.y` (Postgres) or `b.y IS a.y` (SQLite).\n4. This is why EXCEPT is a good tool for diffing two copies of a table.\n\nFor arbitrary tables, match every nullable column null-safely and remove duplicate output rows when emulating EXCEPT. A plain anti-join retains copies from its outer input.",
+    "link": {
+      "title": "PostgreSQL 18 primary reference",
+      "url": "https://www.postgresql.org/docs/18/sql-select.html"
+    }
+  }
+]

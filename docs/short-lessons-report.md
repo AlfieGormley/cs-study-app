@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 67/76. Updated 2026-10-15.
+Verified modules: 68/76. Updated 2026-10-16.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -74,6 +74,7 @@ The material is divided by concept while retaining substantive explanations, exa
 | theory/Context-Free Languages & Computability | 6 | 32 | 67 | 87 | 175 | 361 | 34 |
 | theory/Complexity Theory | 6 | 47 | 77 | 174 | 254 | 378 | 12 |
 | databases/SQL Fundamentals | 6 | 40 | 74 | 31 | 269 | 414 | 43 |
+| databases/Advanced SQL | 6 | 41 | 71 | 52 | 148 | 260 | 54 |
 | synth/Sound & Digital Audio | 6 | 32 | 69 | 112 | 296 | 220 | 26 |
 
 Review-item counts follow each independent verifier’s recorded counting method. They include overlapping lesson claim groups, formula reviews and question reviews; they are not counts of distinct atomic facts. Existing glossary confidence and source records are preserved rather than automatically upgraded.
@@ -4879,6 +4880,8 @@ Corrections and qualifications in this conversion:
 - Constraint, default, generated-ID reuse, aborted-state/savepoint and lock-queue definitions accurately scoped by engine.
 - Wrong-sense donor captures removed in original indexed options without changing correct indices, option counts/order or tested concepts.
 - Broad SQL surrogate-key alias rejected for CDN tags; PostgreSQL aborted-sentence alias rejected for Kafka fencing. Generic metadata-only and bound concepts explicitly supported across existing contexts.
+- Independent follow-up: cursor pagination avoids growing OFFSET traversal with an appropriate index/plan; equal latency at all page depths is not guaranteed. The glossary and related correct-option explanation/worked example now state the plan, filtering and row-visibility limits.
+- Independent supplemental review: CHECK reliably maintains row-local conditions; PostgreSQL functions can read other rows but cannot make CHECK a maintained cross-row guarantee. The related question now makes this distinction. Surrogate identifiers can remain stable when business attributes change, but are not automatically immutable.
 
 Remaining gaps:
 
@@ -4889,6 +4892,30 @@ Remaining gaps:
 Low-confidence areas:
 
 None newly recorded. Inherited glossary qualifications remain in the verification record.
+
+## databases: Advanced SQL
+
+[Independent verification record](../content/databases/02-advanced-sql/verification.json)
+
+Corrections and qualifications in this conversion:
+
+- Corrected materialisation demand/eager-scan claim, decorrelation physical-pass implication, HashAggregate spill wording and sort/hash necessity claims.
+- Qualified runtime/index eligibility, JSON aggregate order and raw-payload text preservation; corrected SQLite IS NOT DISTINCT FROM and PostgreSQL xmax semantics.
+- Added non-deferrable conflict-arbiter prerequisite, genuine local fixture/schema/type prerequisites and precise code comments; verified SQL/math results.
+- Removed or qualified wrong global aliases; scoped Advanced SQL fixture and recursive self-reference; independently rejected integer-array and ordinary not-distinct capture.
+- Refined borrowed generic moving average/deduplication/quantified comparison/tied-row/uncorrelated/side-effect meanings against all actual earlier contexts.
+
+Remaining gaps:
+
+- Historical minimum versions checked in official version-specific manuals/releases rather than obsolete binaries.
+- Production latency, index-size and plan-selection comparisons remain conditional; native fixtures demonstrate mechanisms rather than workload benchmarks.
+
+Low-confidence areas:
+
+- **medium** — asql-json-indexes: Relative production performance and physical I/O of the conditional plan/index strategy.. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
+- **medium** — asql-subquery-plans: Relative production performance and physical I/O of the conditional plan/index strategy.. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
+- **medium** — asql-top-group-strategies: Relative production performance and physical I/O of the conditional plan/index strategy.. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
+- **medium** — asql-window-last-value: Relative production performance and physical I/O of the conditional plan/index strategy.. Documented mechanism and native small fixtures checked; no production benchmark is claimed. Text states data, selectivity, visibility and planner qualifications.
 
 ## synth: Sound & Digital Audio
 

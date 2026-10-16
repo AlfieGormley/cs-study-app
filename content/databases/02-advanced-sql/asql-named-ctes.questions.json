@@ -1,0 +1,32 @@
+[
+  {
+    "id": "asql-ctes-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You need \"customers whose total spend is above the average customer's spend\". Why is a CTE a better fit than a derived table here?\n\n```sql\n-- Reuse the per-customer totals.\nWITH spend AS (\n  SELECT customer_id,\n         SUM(total) AS spent\n  FROM orders\n  GROUP BY customer_id)\nSELECT customer_id FROM spend\nWHERE spent > (SELECT AVG(spent)\n               FROM spend);\n```",
+    "options": [
+      {
+        "text": "A CTE is always faster than a derived table",
+        "explanation": "Neither is inherently faster. PostgreSQL 12+ can fold an eligible once-referenced, non-recursive, side-effect-free SELECT CTE into its parent."
+      },
+      {
+        "text": "Derived tables can't contain GROUP BY",
+        "explanation": "They can; the aggregation could be written as a derived table. It would just have to be written twice."
+      },
+      {
+        "text": "The CTE is defined once and referenced twice, so the per-customer aggregation isn't duplicated",
+        "explanation": "Correct. `spend` is used in the FROM and in the scalar subquery. With derived tables you'd copy the same GROUP BY into both places."
+      },
+      {
+        "text": "CTEs are the only way to compare an aggregate with another aggregate",
+        "explanation": "A nested derived table or a window function (`AVG(spent) OVER ()`) can do it too."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The question needs per-customer totals twice: once to list them and once to average them.\n2. A CTE names that result, so both uses refer to `spend`.\n3. Spend per customer: Ana 240, Ben 135, Cat 230, Dev 45. The subquery averages them:\n\n```formula\navg = (240 + 135 + 230 + 45) / n\navg = 650 / 4 = 162.5\nwhere\navg: the mean spend per customer, AVG(spent)\nn: the number of rows in spend, one per ordering customer, here 4\n240, 135, 230, 45: the spend of Ana, Ben, Cat and Dev\nIn words: add the four customers' spend and divide by four.\n```\n\n4. Ana and Cat are above 162.5.\n5. Without the CTE you'd repeat the subquery, and two copies of the same logic tend to drift apart when someone edits one.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-with.html"
+    }
+  }
+]

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "asql-interview-problems-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In PostgreSQL, which queries return exactly one row per customer who has orders: the customer's most recent order (assume dates are NOT NULL and no two orders for a customer share a date)?",
+    "options": [
+      {
+        "text": "`SELECT DISTINCT ON (customer_id) customer_id, id FROM orders ORDER BY customer_id, ordered_on DESC`",
+        "explanation": "Correct. DISTINCT ON keeps the first row per customer in the ORDER BY, which is the latest date."
+      },
+      {
+        "text": "A subquery with `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY ordered_on DESC) AS rn`, filtered by `rn = 1` outside",
+        "explanation": "Correct. The portable form, and it guarantees one row even if dates did tie."
+      },
+      {
+        "text": "`SELECT customer_id, id, MAX(ordered_on) FROM orders GROUP BY customer_id`",
+        "explanation": "Postgres rejects this because `id` is neither grouped nor aggregated. (SQLite accepts it and happens to pick the row with the MAX, a SQLite-specific quirk.)"
+      },
+      {
+        "text": "`SELECT customer_id, id FROM orders ORDER BY ordered_on DESC LIMIT 4`",
+        "explanation": "That gives the 4 most recent orders overall, which could include two from one customer and none from another."
+      },
+      {
+        "text": "A correlated `WHERE ordered_on = (SELECT MAX(o2.ordered_on) FROM orders o2 WHERE o2.customer_id = o.customer_id)`",
+        "explanation": "Correct, given the stated assumption. If dates could tie, this would return every tied row for that customer."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "Check each approach's guarantee:\n\n1. DISTINCT ON: one row per distinct `customer_id`, chosen by the ORDER BY. One row each.\n2. ROW_NUMBER = 1: exactly one row per partition, by construction.\n3. GROUP BY with bare `id`: invalid in Postgres (\"must appear in the GROUP BY clause or be used in an aggregate function\").\n4. Global LIMIT: not per customer at all. The latest four orders are 108, 107, 106, 105, which happens to be one per customer here only by luck.\n5. Correlated MAX: one row per customer *if* dates are unique per customer; ties would yield several.",
+    "link": {
+      "title": "SELECT — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/sql-select.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "A `products` table has 20 categories and 50 million rows, with an index on `products(category, revenue DESC)` and a separate small categories table listing them. Which top-3-per-category query is likely to be fastest in Postgres?",
+    "options": [
+      {
+        "text": "`ROW_NUMBER() OVER (PARTITION BY category ORDER BY revenue DESC)` in a subquery, filtered by `rn <= 3`",
+        "explanation": "This can still read many or all input rows, but PostgreSQL 15+ can use a run condition to stop computing row numbers after the bound within a partition. It is not guaranteed to number every row."
+      },
+      {
+        "text": "`SELECT DISTINCT ON (category) ...`",
+        "explanation": "DISTINCT ON returns one row per group, not three."
+      },
+      {
+        "text": "A correlated `WHERE (SELECT COUNT(*) FROM products p2 WHERE p2.category = p.category AND p2.revenue > p.revenue) < 3`",
+        "explanation": "This counts strictly higher rows, so ties can return more than three products. It also risks many repeated probes or scans; it is not equivalent to an exact-three ROW_NUMBER or LIMIT query."
+      },
+      {
+        "text": "A list of the 20 categories `CROSS JOIN LATERAL (SELECT ... WHERE category = c.category ORDER BY revenue DESC LIMIT 3)`",
+        "explanation": "Correct under the stated index and a cheaply available category list. Each of 20 index probes can stop after three visible matching rows. About 60 returned entries does not mean only 60 physical index or heap reads."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "Compare candidate rows read with rows returned:\n\n| approach | indicative work |\n|---|---|\n| ROW_NUMBER | ~50,000,000 |\n| correlated COUNT | many repeated probes |\n| LATERAL + LIMIT 3 | 60 returned entries |\n\n```formula\nN_LATERAL ≈ c × k = 20 × 3 = 60\nN_ROWNUM ≈ n = 50,000,000\nwhere\nN_LATERAL: index entries returned by the LATERAL plan\nN_ROWNUM: rows the ROW_NUMBER plan may read\nc: the number of categories, 20\nk: rows wanted per category, 3\nn: rows in products, 50 million\n≈: roughly; actual physical page reads differ\nIn words: LATERAL returns up to 3 rows per category, while ROW_NUMBER may read the whole table.\n```\n\n1. The LATERAL subquery is planned once and executed per category.\n2. With `(category, revenue DESC)` indexed, `WHERE category = ? ORDER BY revenue DESC LIMIT 3` can use an index scan that stops after three visible qualifying rows. Dead versions and visibility checks can require more physical reads.\n3. You need the category list cheaply too: a small `categories` table, or a recursive \"loose index scan\" if categories live only in `products`.\n4. ROW_NUMBER is the right default when groups are many and small; LATERAL can win when groups are few and large; measure the full query including category lookup.",
+    "link": {
+      "title": "PostgreSQL 18 primary reference",
+      "url": "https://www.postgresql.org/docs/18/sql-select.html"
+    }
+  }
+]

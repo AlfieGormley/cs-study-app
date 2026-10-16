@@ -1,0 +1,92 @@
+[
+  {
+    "id": "asql-json-upsert-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`stock` contains `(1, 10)` and `(4, 3)` as `(product_id, qty)`, with `product_id` the primary key. What does it contain after this?\n\n```sql\n-- Add incoming qty on a key conflict.\nINSERT INTO stock (product_id, qty)\nVALUES (1, 5), (2, 7)\nON CONFLICT (product_id)\nDO UPDATE SET\n  qty = stock.qty + excluded.qty;\n```",
+    "options": [
+      {
+        "text": "(1, 15), (2, 7), (4, 3)",
+        "explanation": "Correct. Product 1 conflicts, so its qty becomes 10 + 5 = 15. Product 2 has no conflict and is inserted. Product 4 is untouched."
+      },
+      {
+        "text": "(1, 5), (2, 7), (4, 3)",
+        "explanation": "That would be an overwrite (`SET qty = excluded.qty`). Here the update adds the existing value, `stock.qty`, to the proposed one."
+      },
+      {
+        "text": "(1, 15), (2, 7)",
+        "explanation": "Rows not mentioned in the INSERT are never deleted. Product 4 stays."
+      },
+      {
+        "text": "An error: duplicate key value violates unique constraint",
+        "explanation": "That's what a plain INSERT would do. ON CONFLICT turns the duplicate into an update."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Row (1, 5): product 1 exists, so DO UPDATE runs. `stock.qty` is the existing 10, `excluded.qty` is the proposed 5. New qty: 15.\n\n```formula\nq_new = q_stock + q_excluded\nq_new = 10 + 5 = 15\nwhere\nq_new: product 1's quantity afterwards\nq_stock: the existing quantity, stock.qty\nq_excluded: the proposed quantity, excluded.qty\nIn words: the update adds the incoming quantity to the stored one.\n```\n\n2. Row (2, 7): no conflict, so it is inserted as is.\n3. Product 4 isn't in the statement, so it stays (4, 3).\n4. Result: (1, 15), (2, 7), (4, 3). Both SQLite (3.24+) and Postgres (9.5+) behave identically here.",
+    "link": {
+      "title": "INSERT (ON CONFLICT) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/sql-insert.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q8",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`stock` holds `(4, 3)`. What does this return, and what is product 4's qty afterwards?\n\n```sql\n-- Return only actual stock writes.\nINSERT INTO stock (product_id, qty)\nVALUES (4, 2), (6, 9)\nON CONFLICT (product_id)\nDO UPDATE SET qty = excluded.qty\nWHERE excluded.qty > stock.qty\nRETURNING product_id, qty;\n```",
+    "options": [
+      {
+        "text": "Returns (4, 2) and (6, 9); product 4 now has qty 2",
+        "explanation": "The WHERE on DO UPDATE is false for product 4 (2 > 3 fails), so no update happens and no row is returned for it."
+      },
+      {
+        "text": "Returns (4, 3) and (6, 9); product 4 still has qty 3",
+        "explanation": "RETURNING only reports rows that were actually inserted or updated. A skipped conflict produces no output."
+      },
+      {
+        "text": "An error, because the WHERE clause rejected a conflicting row",
+        "explanation": "A false WHERE on DO UPDATE just skips the update, like DO NOTHING for that row."
+      },
+      {
+        "text": "Returns only (6, 9); product 4 still has qty 3",
+        "explanation": "Correct. Product 6 is inserted and returned. Product 4 conflicts, but the update's WHERE rejects it, so it isn't changed or returned."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. (4, 2) conflicts. DO UPDATE's WHERE, `excluded.qty > stock.qty`, is false, so there is no update:\n\n```formula\nq_excluded > q_stock\nq_excluded = 2,  q_stock = 3\nwhere\nq_excluded: the proposed quantity, 2\nq_stock: the stored quantity, 3\n>: greater than\nIn words: the update runs only if the incoming quantity is larger, and 2 is not larger than 3.\n```\n\n2. (6, 9): no conflict, inserted.\n3. RETURNING emits only rows the statement inserted or updated: (6, 9).\n4. Product 4 keeps qty 3.\n\nThis condition means \"only if the quantity is larger\", not \"only if newer\". A version or timestamp comparison can reject stale updates when the versioning rules define a reliable order; deduplication is still needed for additive messages.",
+    "link": {
+      "title": "UPSERT — SQLite docs",
+      "url": "https://www.sqlite.org/lang_upsert.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Two Postgres sessions run \"if no stock row exists for product 9, insert one\" at the same moment, using a SELECT followed by an INSERT. What usually goes wrong, and what is the fix?",
+    "options": [
+      {
+        "text": "Both SELECTs see no row, both INSERT, and the second fails with a duplicate-key error (or, without a unique constraint, you get two rows); use `INSERT ... ON CONFLICT`",
+        "explanation": "Correct. Check-then-insert is a race. ON CONFLICT relies on the unique index to make the check and the write atomic."
+      },
+      {
+        "text": "Postgres serialises the two SELECTs automatically, so nothing goes wrong",
+        "explanation": "Under the default READ COMMITTED isolation, both SELECTs can run before either INSERT commits. Nothing serialises them."
+      },
+      {
+        "text": "Use MERGE instead, which can never hit a unique violation",
+        "explanation": "Postgres's docs warn that MERGE can still fail with a unique violation when another session inserts the same key concurrently. ON CONFLICT is the concurrency-safe upsert."
+      },
+      {
+        "text": "Wrap both statements in a transaction; that alone prevents the race",
+        "explanation": "A READ COMMITTED transaction doesn't lock rows that don't exist yet. Both transactions still see no row and both insert."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "Timeline:\n\n```\nT1: SELECT -> none\nT2: SELECT -> none\nT1: INSERT (9, ...)   ok\nT2: INSERT (9, ...)   waits on T1,\n    then duplicate key error\n```\n\n1. Neither SELECT can see the other session's uncommitted row.\n2. With a unique constraint, T2 errors; without one, you silently get duplicates.\n3. `INSERT ... ON CONFLICT (product_id) DO UPDATE/NOTHING` uses the unique index: if T1's row appears, T2 waits for it to commit, then takes the conflict path.\n4. Alternatives like SERIALIZABLE isolation with retries also work but cost more.",
+    "link": {
+      "title": "INSERT (ON CONFLICT) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/sql-insert.html"
+    }
+  }
+]

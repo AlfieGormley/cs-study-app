@@ -1,0 +1,92 @@
+[
+  {
+    "id": "asql-subqueries-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Kitchen products: Kettle 30, Toaster 25, Mug 10. Home products: Lamp 40, Rug 90, Vase 35. What does this return?\n\n```sql\n-- Compare within the current category.\nSELECT p.name FROM products p\nWHERE p.price > (\n  SELECT AVG(p2.price)\n  FROM products p2\n  WHERE p2.category = p.category);\n```",
+    "options": [
+      {
+        "text": "Lamp, Rug",
+        "explanation": "Those are the products above the *overall* average (38.33). The subquery is correlated on category, so each product is compared with its own category's average."
+      },
+      {
+        "text": "Rug",
+        "explanation": "Rug is the only product above its category average in Home, but Kitchen has its own lower average (21.67) that Kettle and Toaster beat."
+      },
+      {
+        "text": "Kettle, Rug",
+        "explanation": "Toaster at 25 is also above the Kitchen average of 21.67."
+      },
+      {
+        "text": "Kettle, Toaster, Rug",
+        "explanation": "Correct. Kitchen averages 21.67, so Kettle and Toaster beat it. Home averages 55, so only Rug does."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "The subquery references `p.category`, so its result is defined relative to the row of the enclosing query’s category; the physical plan may reuse or rewrite the work.\n\nWork out each category's average once:\n\n```formula\navg_K = (30 + 25 + 10) / 3 ≈ 21.67\navg_H = (40 + 90 + 35) / 3 = 55\nwhere\navg_K: the mean price in Kitchen (Kettle 30, Toaster 25, Mug 10)\navg_H: the mean price in Home (Lamp 40, Rug 90, Vase 35)\n3: the number of products in each category\n≈: approximately equal to; the exact value is 21.666…\nIn words: each category's average is its prices added up and divided by how many products it has; each product is compared only with its own category's figure.\n```\n\nThen compare each product with its own category's average:\n\n| name | price | avg | keep |\n|---|---|---|---|\n| Kettle | 30 | 21.67 | yes |\n| Toaster | 25 | 21.67 | yes |\n| Mug | 10 | 21.67 | no |\n| Lamp | 40 | 55 | no |\n| Rug | 90 | 55 | yes |\n| Vase | 35 | 55 | no |",
+    "link": {
+      "title": "PostgreSQL 18 primary reference",
+      "url": "https://www.postgresql.org/docs/18/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In the Advanced SQL fixture every orders.customer_id is NOT NULL. A colleague wants \"orders above that customer's own average\" and writes:\n\n```sql\n-- Names resolve within the subquery.\nSELECT id FROM orders\nWHERE total > (\n  SELECT AVG(total) FROM orders\n  WHERE customer_id = customer_id);\n```\n\nWhat does the subquery actually compute?",
+    "options": [
+      {
+        "text": "The average over all orders, because the condition is true for every row inside the subquery",
+        "explanation": "Correct. `customer_id = customer_id` compares the inner column with itself, which is TRUE whenever it's not NULL. The subquery becomes the global average, 81.25."
+      },
+      {
+        "text": "Each customer's own average, as intended",
+        "explanation": "Unqualified `customer_id` resolves to the nearest table in scope, which is the inner `orders`. Both sides are the inner column, so the subquery does not reference the enclosing query at all."
+      },
+      {
+        "text": "NULL, because a column cannot be compared with itself",
+        "explanation": "Comparing a column with itself is legal and TRUE for any non-NULL value."
+      },
+      {
+        "text": "An error because both query levels have a customer_id column",
+        "explanation": "SQL resolves unqualified names from the innermost scope outwards, so there is no ambiguity error. That is why this bug is silent."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. Inside the subquery, the innermost `FROM` is `orders`. An unqualified `customer_id` binds there first.\n2. So the filter is `inner.customer_id = inner.customer_id`, true for every row.\n3. The subquery is now uncorrelated: the average of all 8 orders, 650 / 8 = 81.25.\n4. Fix: alias both tables.\n\n```sql\n-- Compare with this customer's mean.\nSELECT o.id FROM orders o\nWHERE o.total > (\n  SELECT AVG(o2.total)\n  FROM orders o2\n  WHERE o2.customer_id\n      = o.customer_id);\n```\n\nOn this data both versions happen to return 101, 104 and 106, which is exactly how such bugs survive testing: check with data where the answers differ.",
+    "link": {
+      "title": "PostgreSQL 18 primary reference",
+      "url": "https://www.postgresql.org/docs/18/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You want to replace this correlated subquery with a join for performance. Which rewrite gives identical results, including Eve's 0?\n\n```sql\n-- COUNT over no matches returns zero.\nSELECT c.name,\n  (SELECT COUNT(*) FROM orders o\n   WHERE o.customer_id = c.id) AS n\nFROM customers c;\n```",
+    "options": [
+      {
+        "text": "`FROM customers c JOIN orders o ON o.customer_id = c.id GROUP BY c.id`, selecting `COUNT(*)`",
+        "explanation": "The inner join drops Eve entirely, so she doesn't appear with 0. She doesn't appear at all."
+      },
+      {
+        "text": "`FROM customers c LEFT JOIN orders o ON o.customer_id = c.id GROUP BY c.id`, selecting `COUNT(*)`",
+        "explanation": "Close, but `COUNT(*)` counts Eve's NULL-padded row, so she shows 1 instead of 0."
+      },
+      {
+        "text": "`FROM customers c LEFT JOIN orders o ON o.customer_id = c.id GROUP BY c.id`, selecting `COUNT(o.id)`",
+        "explanation": "Correct. The LEFT JOIN keeps Eve with one NULL-padded row, and `COUNT(o.id)` ignores NULLs, so she gets 0."
+      },
+      {
+        "text": "`FROM customers c LEFT JOIN orders o ON o.customer_id = c.id WHERE o.id IS NOT NULL GROUP BY c.id`, selecting `COUNT(o.id)`",
+        "explanation": "The WHERE clause removes Eve's padded row, turning the LEFT JOIN back into an inner join."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Trace Eve (no orders) through each candidate:\n\n| Rewrite | Eve's row |\n|---|---|\n| JOIN + COUNT(*) | missing |\n| LEFT JOIN + COUNT(*) | 1 |\n| LEFT JOIN + COUNT(o.id) | 0 |\n| LEFT JOIN + WHERE | missing |\n\n1. A LEFT JOIN produces one row for Eve with every `o` column NULL.\n2. `COUNT(*)` counts rows, so that row counts as 1.\n3. `COUNT(o.id)` counts non-NULL values, giving 0.\n4. Ana still gets 3, Ben 2, Cat 2, Dev 1. The join form gives the planner additional strategy choices; use EXPLAIN to see whether it scans once or probes per customer.",
+    "link": {
+      "title": "PostgreSQL 18 primary reference",
+      "url": "https://www.postgresql.org/docs/18/functions-subquery.html"
+    }
+  }
+]

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "asql-set-ops-pivot-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`customers` has 5 people across 3 cities (each name unique). How many rows does this Postgres query return?\n\n```sql\n-- Detail, city subtotals, grand total.\nSELECT city, name, COUNT(*)\nFROM customers\nGROUP BY ROLLUP (city, name);\n```",
+    "options": [
+      {
+        "text": "5",
+        "explanation": "That counts only the most detailed (city, name) level. ROLLUP adds subtotal rows."
+      },
+      {
+        "text": "8",
+        "explanation": "That counts (city, name) rows plus per-city subtotals, but forgets the grand total."
+      },
+      {
+        "text": "9",
+        "explanation": "Correct. ROLLUP(city, name) computes the groupings (city, name), (city) and (): 5 + 3 + 1 = 9 rows."
+      },
+      {
+        "text": "14",
+        "explanation": "14 is the CUBE answer, which also adds the (name) grouping: 5 + 3 + 5 + 1."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "`ROLLUP (a, b)` is shorthand for `GROUPING SETS ((a, b), (a), ())`: each prefix of the list.\n\n| grouping set | rows |\n|---|---|\n| (city, name) | 5 |\n| (city) | 3 |\n| () | 1 |\n| total | 9 |\n\n```formula\nN_ROLLUP = 5 + 3 + 1 = 9\nN_CUBE = 5 + 3 + 5 + 1 = 14\nG_CUBE = 2^k = 2^2 = 4\nwhere\nN_ROLLUP: rows from ROLLUP (city, name)\nN_CUBE: rows from CUBE (city, name)\nG_CUBE: how many groupings CUBE makes\nk: the number of listed columns, 2\n2^k: k copies of 2 multiplied together\nIn words: each grouping set adds one row per distinct value combination: 5 people, 3 cities, 5 names and 1 grand total.\n```\n\n`CUBE (a, b)` uses every subset: (a, b), (a), (b) and (), which is the 14. In the subtotal rows, the rolled-up columns are NULL; `GROUPING(name)` returns 1 there, telling them apart from genuine NULLs.",
+    "link": {
+      "title": "Table expressions (GROUPING SETS, LATERAL) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-table-expressions.html"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "You're porting a reporting query from PostgreSQL to SQLite. Which features will you need to rewrite?",
+    "options": [
+      {
+        "text": "`SUM(x) FILTER (WHERE ...)`",
+        "explanation": "SQLite has supported FILTER on aggregates since 3.30, so this ports unchanged."
+      },
+      {
+        "text": "`EXCEPT ALL`",
+        "explanation": "Correct. SQLite supports only UNION ALL; EXCEPT and INTERSECT always deduplicate. A multiset difference needs ROW_NUMBER tricks or a join on counts."
+      },
+      {
+        "text": "`CROSS JOIN LATERAL (VALUES ...)` to unpivot",
+        "explanation": "Correct. SQLite has no LATERAL. Rewrite the unpivot as a UNION ALL with one branch per column."
+      },
+      {
+        "text": "`GROUP BY ROLLUP (city)`",
+        "explanation": "Correct. SQLite has no ROLLUP, CUBE or GROUPING SETS. Add the total row with a UNION ALL of an ungrouped query."
+      },
+      {
+        "text": "`UNION ALL` of two SELECTs",
+        "explanation": "Standard and supported everywhere."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Go through the features this lesson used:\n\n| feature | Postgres | SQLite |\n|---|---|---|\n| UNION / UNION ALL | yes | yes |\n| INTERSECT/EXCEPT ALL | yes | no |\n| FILTER on aggregates | 9.4+ | 3.30+ |\n| LATERAL | yes | no |\n| ROLLUP / CUBE | yes | no |\n\nEvery missing feature has a UNION ALL-based workaround, but those usually scan the data once per branch, so expect the SQLite version to do more work.",
+    "link": {
+      "title": "Table expressions (GROUPING SETS, LATERAL) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-table-expressions.html"
+    }
+  }
+]

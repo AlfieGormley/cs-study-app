@@ -71,7 +71,7 @@
       },
       {
         "text": "Remember the last id the client saw and query `WHERE id < :last_id ORDER BY id DESC LIMIT 50`",
-        "explanation": "Correct. This is keyset (seek) pagination. The index lets the database jump straight to `:last_id` and read 50 rows, so every page costs about the same."
+        "explanation": "Correct. This is keyset (seek) pagination. A compatible index scan can start after `:last_id` and avoid traversing all the earlier pages. This removes the growing OFFSET skip; the chosen plan, filtering, row visibility and heap access still affect page cost."
       },
       {
         "text": "Raise LIMIT to 500 so fewer pages are needed",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Work out the offset for page 20,000:\n\n```formula\noffset = (p − 1)s\noffset = (20000 − 1) × 50 = 999950\nrows_read = offset + s = 1000000\nwhere\noffset: rows skipped, the OFFSET value\np: the page number, counting from 1\ns: rows per page, the LIMIT value (50)\nrows_read: rows the database must produce in order to answer\nIn words: the query skips every row on the 19,999 earlier pages, but still has to walk past each one, so it handles a million rows to return 50.\n```\n\nSo `OFFSET 999950` means: produce the first 999,950 rows in order, throw them away, then return 50.\n2. Even with the primary-key index, that is about a million index entries walked per request, so cost grows linearly with page number.\n3. Keyset pagination asks for \"the 50 rows after the last one I saw\":\n\n```sql\n-- Bind last_id to the previous page\n-- end.\nSELECT id, kind FROM events\nWHERE id < :last_id\nORDER BY id DESC\nLIMIT 50;\n```\n\n4. The database seeks to `:last_id` in the index and reads 50 entries: about the same cost for page 1 and page 20,000.\n5. Trade-off: you can't jump to an arbitrary page number, which is fine for infinite scroll and APIs.",
+    "workedExample": "1. Work out the offset for page 20,000:\n\n```formula\noffset = (p − 1)s\noffset = (20000 − 1) × 50 = 999950\nrows_read = offset + s = 1000000\nwhere\noffset: rows skipped, the OFFSET value\np: the page number, counting from 1\ns: rows per page, the LIMIT value (50)\nrows_read: ordered result rows produced through this full page, assuming enough rows exist; underlying scans may inspect more rows\nIn words: the query skips every row on the 19,999 earlier pages, but still has to walk past each one, so it handles a million rows to return 50.\n```\n\nSo `OFFSET 999950` means: produce the first 999,950 rows in order, throw them away, then return 50.\n2. With an ordered primary-key index scan, this entails walking about a million index entries before returning this page. The skipped-result work grows linearly with page number; this is not a guarantee about elapsed time.\n3. Keyset pagination asks for \"the 50 rows after the last one I saw\":\n\n```sql\n-- Bind last_id to the previous page\n-- end.\nSELECT id, kind FROM events\nWHERE id < :last_id\nORDER BY id DESC\nLIMIT 50;\n```\n\n4. A compatible index scan can seek after `:last_id` and return the next 50 qualifying rows without traversing the earlier pages. Additional filters, row visibility, heap access and the chosen plan can add work, so equal page latency is not guaranteed.\n5. Trade-off: you can't jump to an arbitrary page number, which is fine for infinite scroll and APIs.",
     "link": {
       "title": "Paging through results without OFFSET — Use The Index, Luke",
       "url": "https://use-the-index-luke.com/no-offset"

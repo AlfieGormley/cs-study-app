@@ -1,0 +1,69 @@
+[
+  {
+    "id": "asql-window-functions-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "You want each customer's *cheapest* order. Ana has two orders of 60; everyone else has a unique minimum. How many rows does this return?\n\n```sql\n-- Both tied cheapest rows get rank 1.\nSELECT customer_id, id FROM (\n  SELECT customer_id, id,\n    RANK() OVER (\n      PARTITION BY customer_id\n      ORDER BY total) AS r\n  FROM orders\n) AS t\nWHERE r = 1;\n```",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "That's what ROW_NUMBER would give: exactly one row per customer. RANK gives tied rows the equal SQL rank."
+      },
+      {
+        "text": "8",
+        "explanation": "The `WHERE r = 1` keeps only each partition's lowest-ranked rows, not every order."
+      },
+      {
+        "text": "5",
+        "explanation": "Correct. Ana's two 60s both get rank 1, and Ben, Cat and Dev each contribute one row: 2 + 1 + 1 + 1 = 5."
+      },
+      {
+        "text": "3",
+        "explanation": "Every customer with orders has at least one rank-1 row. Ties add rows; they never remove a customer."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Partition by customer, order by total ascending.\n2. Ana: 60, 60, 120 gives ranks 1, 1, 3. Two rows have r = 1.\n3. Ben: 45, 90 gives 1, 2. One row.\n4. Cat: 30, 200 gives 1, 2. One row.\n5. Dev: 45 gives 1. One row.\n6. Total **5**. Pick deliberately: `RANK` if ties should all appear, `ROW_NUMBER` with a tie-breaker (`ORDER BY total, id`) if you need exactly one.",
+    "link": {
+      "title": "Window functions tutorial — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/tutorial-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "You computed `rn` with `ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY ordered_on DESC)`. Which of these correctly keep only `rn = 1`, in PostgreSQL?",
+    "options": [
+      {
+        "text": "Compute `rn` in a subquery in FROM, then `WHERE rn = 1` in the outer query",
+        "explanation": "Correct. The outer WHERE runs after the inner query has computed rn."
+      },
+      {
+        "text": "Compute `rn` in a CTE, then `SELECT ... FROM cte WHERE rn = 1`",
+        "explanation": "Correct. Same idea as the subquery, just named."
+      },
+      {
+        "text": "Put `WHERE ROW_NUMBER() OVER (...) = 1` in the same query",
+        "explanation": "Window functions are evaluated after WHERE, so Postgres rejects this: `window functions are not allowed in WHERE`."
+      },
+      {
+        "text": "Use `HAVING rn = 1`",
+        "explanation": "HAVING filters groups after GROUP BY, which still runs before window functions, and it can't see a SELECT-list alias like `rn` anyway."
+      },
+      {
+        "text": "Use `QUALIFY rn = 1`",
+        "explanation": "QUALIFY exists in Snowflake, BigQuery and DuckDB, but not in PostgreSQL or SQLite."
+      }
+    ],
+    "answer": [
+      0,
+      1
+    ],
+    "workedExample": "The logical order of a SELECT is roughly:\n\n```\nFROM / JOIN\nWHERE\nGROUP BY\nHAVING\nwindow functions\nSELECT list\nORDER BY / LIMIT\n```\n\nWindow values don't exist yet when WHERE and HAVING run. So you compute them in one query level and filter in the next, using a derived table or a CTE.",
+    "link": {
+      "title": "Window functions tutorial — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/tutorial-window.html"
+    }
+  }
+]

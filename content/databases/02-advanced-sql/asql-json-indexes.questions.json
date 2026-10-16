@@ -1,0 +1,78 @@
+[
+  {
+    "id": "asql-json-upsert-q7",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "In Postgres, which of these filters can a default GIN index on the `jsonb` column `payload` accelerate?",
+    "options": [
+      {
+        "text": "`WHERE payload @> '{\"type\":\"cart\"}'`",
+        "explanation": "Correct. Containment is the main use of a GIN index on jsonb."
+      },
+      {
+        "text": "`WHERE payload ? 'tags'`",
+        "explanation": "Correct. Top-level key existence (`?`, `?|`, `?&`) is supported by the default `jsonb_ops` operator class."
+      },
+      {
+        "text": "`WHERE payload ->> 'type' = 'cart'`",
+        "explanation": "GIN doesn't index the result of `->>`. Use an expression index on `(payload ->> 'type')`, or rewrite it as `@>`."
+      },
+      {
+        "text": "`WHERE (payload ->> 'qty')::int > 1`",
+        "explanation": "A range comparison on an extracted value needs a B-tree expression index on `((payload ->> 'qty')::int)`; GIN can't help."
+      },
+      {
+        "text": "`WHERE payload @> '{\"device\":{\"os\":\"iOS\"}}'`",
+        "explanation": "Correct. Containment works on nested documents too: this matches events 1 and 3."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      4
+    ],
+    "workedExample": "1. A GIN index on jsonb indexes the keys and values inside each document.\n2. The default operator class supports `@>`, `?`, `?|`, `?&` (and JSON path `@?`, `@@`).\n3. `->>` produces a text value outside the index's vocabulary, so equality on it needs an expression index:\n\n```sql\n-- Index the extracted type expression.\nCREATE INDEX ON events\n  ((payload ->> 'type'));\n```\n\n4. Ranges on extracted numbers need a B-tree expression index with the same cast.\n5. Tip: `payload ->> 'type' = 'cart'` can be rewritten for this string-valued JSON type attribute as `payload @> '{\"type\":\"cart\"}'` to use the GIN index.\n\nCheck types before generalising this rewrite: text extraction treats a JSON number 2 and a JSON string \"2\" alike, while JSON containment distinguishes them.",
+    "link": {
+      "title": "JSON types — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/datatype-json.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "A `users` table stores `prefs` as `jsonb`. Every row has a `country` key, dashboards filter and group by it constantly, and it should reference a `countries` table. Which are good reasons to move `country` into a real column?",
+    "options": [
+      {
+        "text": "A column can have a foreign key to `countries` and a NOT NULL constraint",
+        "explanation": "Correct. A regular or stored generated country column can directly carry a foreign key and NOT NULL. JSON expressions can have CHECK constraints or expression indexes, but a foreign key cannot directly target a key inside the document."
+      },
+      {
+        "text": "Ordinary column statistics give the planner direct information about the frequently queried country values",
+        "explanation": "Correct. ANALYZE collects scalar column statistics. PostgreSQL can also collect expression statistics, so better estimates are a practical reason to model the key deliberately rather than an exclusive capability of columns."
+      },
+      {
+        "text": "A targeted B-tree on country can be simpler and smaller than indexing the whole JSON document",
+        "explanation": "Correct. A B-tree on the chosen country value avoids indexing every JSON key and value. Relative size and speed depend on the data and workload, so measure rather than assuming every B-tree is smaller."
+      },
+      {
+        "text": "JSON keys can't be read inside a GROUP BY",
+        "explanation": "Grouping by an extracted JSON value is valid SQL. Its cost depends on statistics, expressions and access paths; promoting it to a column adds direct scalar types and constraints."
+      },
+      {
+        "text": "jsonb can't store strings longer than 255 characters",
+        "explanation": "There's no such limit; a single jsonb value can be hundreds of megabytes."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Use this rule of thumb: stable, always-present, frequently queried fields belong in columns. JSON is for genuinely variable attributes.\n\n1. Integrity: foreign keys and NOT NULL need columns.\n2. Planning: column statistics drive good join and filter estimates.\n3. Indexing: a targeted B-tree can avoid the cost of indexing the whole document; compare actual sizes and plans.\n4. Grouping on a JSON key works, so that's not a reason.\n5. Size limits aren't the issue.\n\nA migration path: add a generated column, `country text GENERATED ALWAYS AS (prefs ->> 'country') STORED`, then index it, or move the data fully and drop the key.",
+    "link": {
+      "title": "JSON types — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/datatype-json.html"
+    }
+  }
+]

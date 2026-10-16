@@ -1,0 +1,62 @@
+[
+  {
+    "id": "asql-json-upsert-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "SQLite `stock` holds `(4, 3, 'warehouse')` as `(product_id, qty, note)`. Assume product_id is the primary key and note is nullable with no explicit default. What is the row after this?\n\n```sql\n-- Replace deletes the old note too.\nINSERT OR REPLACE INTO stock\n  (product_id, qty)\nVALUES (4, 8);\n```",
+    "options": [
+      {
+        "text": "(4, 8, NULL)",
+        "explanation": "Correct. REPLACE deletes the conflicting row and inserts the new one. The new row didn't specify `note`, so it gets the default, NULL."
+      },
+      {
+        "text": "(4, 8, 'warehouse')",
+        "explanation": "That's what `ON CONFLICT (product_id) DO UPDATE SET qty = excluded.qty` would produce. REPLACE deletes the old row instead of updating it."
+      },
+      {
+        "text": "(4, 3, 'warehouse')",
+        "explanation": "That's `INSERT OR IGNORE` (or `ON CONFLICT DO NOTHING`). REPLACE does replace the row."
+      },
+      {
+        "text": "An error: UNIQUE constraint failed",
+        "explanation": "The `OR REPLACE` conflict clause resolves the uniqueness conflict, so there's no error."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. The insert conflicts on product 4.\n2. The REPLACE strategy **deletes** the existing row (4, 3, 'warehouse').\n3. It then inserts (4, 8) with every unspecified column at its default: `note` is NULL.\n4. Side effects of the delete: foreign-key cascades can remove child rows, and delete triggers can fire (if recursive triggers are on).\n5. To change only qty, use `ON CONFLICT (product_id) DO UPDATE SET qty = excluded.qty`.",
+    "link": {
+      "title": "ON CONFLICT clause (REPLACE) — SQLite docs",
+      "url": "https://www.sqlite.org/lang_conflict.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q6",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In PostgreSQL, a nightly job upserts a batch that happens to contain product 5 twice. Assume product 5 is initially absent and product_id is the primary key. What happens?\n\n```sql\n-- Repeated keys differ between engines.\nINSERT INTO stock (product_id, qty)\nVALUES (5, 1), (5, 2)\nON CONFLICT (product_id)\nDO UPDATE SET\n  qty = stock.qty + excluded.qty;\n```",
+    "options": [
+      {
+        "text": "Row 5 ends with qty 3",
+        "explanation": "That's SQLite's result, applying the rows in order. Postgres refuses to touch the same row twice in one statement."
+      },
+      {
+        "text": "Row 5 ends with qty 2, the last value wins",
+        "explanation": "Postgres doesn't silently pick one; the statement fails."
+      },
+      {
+        "text": "The statement fails with `ON CONFLICT DO UPDATE command cannot affect row a second time`",
+        "explanation": "Correct. Postgres won't update a row the same command already inserted or updated, because the result would depend on processing order. De-duplicate the batch first."
+      },
+      {
+        "text": "Row 5 ends with qty 1, the second row is ignored",
+        "explanation": "Ignoring the duplicate is what `DO NOTHING` does: the first row is inserted and the second is skipped. With `DO UPDATE`, it errors."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Row (5, 1) is inserted (no conflict yet).\n2. Row (5, 2) conflicts with the row the *same command* just inserted.\n3. Postgres raises an error, and its hint is to ensure no duplicate keys in the proposed rows. The whole statement rolls back.\n4. Fix by aggregating first:\n\n```sql\n-- Repeated keys differ between engines.\nINSERT INTO stock (product_id, qty)\nSELECT product_id, SUM(qty)\nFROM batch\nGROUP BY product_id\nON CONFLICT (product_id)\nDO UPDATE SET qty =\n  stock.qty + excluded.qty;\n```\n\nSQLite would instead give qty 3, processing one row at a time.",
+    "link": {
+      "title": "INSERT (ON CONFLICT) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/sql-insert.html"
+    }
+  }
+]

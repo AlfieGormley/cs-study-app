@@ -1,0 +1,100 @@
+[
+  {
+    "id": "asql-subqueries-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "The `customers` table has ids 1 to 5. What does this return?\n\n```sql\n-- NULL makes nonmatches UNKNOWN.\nSELECT name FROM customers\nWHERE id NOT IN (4, NULL);\n```",
+    "options": [
+      {
+        "text": "Ana, Ben, Cat and Eve",
+        "explanation": "This assumes the NULL is ignored. It isn't: every comparison with NULL is UNKNOWN, and that UNKNOWN is combined using SQL AND into every row's result."
+      },
+      {
+        "text": "All five customers",
+        "explanation": "Dev (id 4) is clearly excluded, and in fact the NULL excludes everyone else too."
+      },
+      {
+        "text": "No rows",
+        "explanation": "Correct. `id NOT IN (4, NULL)` expands to `id <> 4 AND id <> NULL`. The second term is UNKNOWN for every row, so no row is TRUE."
+      },
+      {
+        "text": "An error, because NULL is not allowed in an IN list",
+        "explanation": "NULL is perfectly legal in an IN list. The query runs; it just returns nothing, which is what makes the bug so dangerous."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "Expand `NOT IN` into the comparisons it stands for:\n\n```sql\n-- Compare both NULL-aware predicates.\nSELECT id, id NOT IN (4, NULL) AS a,\n  (id <> 4 AND id <> NULL) AS b\nFROM customers;\n```\n\nTake Ana (id 1):\n\n1. `1 <> 4` is TRUE.\n2. `1 <> NULL` is UNKNOWN.\n3. `TRUE AND UNKNOWN` is UNKNOWN.\n\n`WHERE` keeps only rows that are TRUE, so Ana is dropped. Dev fails on the first term (FALSE). Every row ends up FALSE or UNKNOWN, so the result is empty. `NOT EXISTS` doesn't have this problem.",
+    "link": {
+      "title": "PostgreSQL 18 primary reference",
+      "url": "https://www.postgresql.org/docs/18/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Which queries correctly return customers who have never placed an order? (`orders.customer_id` is declared `NOT NULL`.)",
+    "options": [
+      {
+        "text": "`WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.customer_id = c.id)`",
+        "explanation": "Correct. The canonical anti-join, and safe even if the column were nullable."
+      },
+      {
+        "text": "`LEFT JOIN orders o ON o.customer_id = c.id WHERE o.id IS NULL`",
+        "explanation": "Correct. Unmatched customers get NULLs for every `o` column, and `o.id` is never NULL on a real order, so only unmatched rows survive."
+      },
+      {
+        "text": "`WHERE c.id NOT IN (SELECT customer_id FROM orders)`",
+        "explanation": "Correct here because both the customer primary key and the returned order keys are non-NULL. Nullable outer keys need a separate decision; removing inner NULLs alone does not make every NOT IN expression equivalent to NOT EXISTS."
+      },
+      {
+        "text": "`JOIN orders o ON o.customer_id = c.id WHERE o.id IS NULL`",
+        "explanation": "An inner join drops customers without orders before `WHERE` runs, and every joined `o.id` is non-NULL. This always returns nothing."
+      },
+      {
+        "text": "`LEFT JOIN orders o ON o.customer_id = c.id WHERE o.total = 0`",
+        "explanation": "A customer without orders has `o.total` NULL, not 0, and `NULL = 0` is UNKNOWN. This finds zero-value orders, not missing ones."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Check each against Eve (no orders) and Ana (three orders).\n\n1. NOT EXISTS: Eve's subquery is empty, so NOT EXISTS is TRUE. Ana's isn't. Correct.\n2. LEFT JOIN, `o.id IS NULL`: Eve gets one row padded with NULLs, so it is kept. Ana's three rows have real ids and are dropped. Correct.\n3. NOT IN: the list is {1, 2, 3, 4} with no NULL possible, so Eve (5) passes. Correct, but fragile.\n4. Inner join: Eve has no row to filter. Wrong.\n5. `o.total = 0`: Eve's padded `total` is NULL. Wrong.\n\nPrefer option 1: it states the intent and has no NULL trap.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "What does this return on the shop data?\n\n```sql\n-- EXISTS tests rows, ignoring the NULL.\nSELECT COUNT(*)\nFROM customers c\nWHERE EXISTS (\n  SELECT NULL FROM orders o\n  WHERE o.customer_id = c.id);\n```",
+    "options": [
+      {
+        "text": "4",
+        "explanation": "Correct. Ana, Ben, Cat and Dev each have at least one order. Only Eve has none."
+      },
+      {
+        "text": "0, because the subquery selects NULL",
+        "explanation": "EXISTS only checks whether any row comes back. The values in that row, NULL included, are ignored."
+      },
+      {
+        "text": "8, one per order",
+        "explanation": "EXISTS is a semi-join: each customer counts once however many orders match."
+      },
+      {
+        "text": "5",
+        "explanation": "Eve has no orders, so her subquery returns no rows and EXISTS is FALSE."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. For each customer, ask whether a matching row inside the subquery exists; the optimiser may implement this without a separate execution per customer.\n2. EXISTS is TRUE if at least one row comes back, whatever the row contains.\n3. Ana (3 rows), Ben (2), Cat (2), Dev (1): TRUE. Eve (0): FALSE.\n4. `COUNT(*)` over the four survivors is **4**.\n\n`SELECT 1`, `SELECT *` and `SELECT NULL` behave identically inside EXISTS. `SELECT 1` is just the convention.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/functions-subquery.html"
+    }
+  }
+]

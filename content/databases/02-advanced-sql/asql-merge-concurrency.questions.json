@@ -1,0 +1,32 @@
+[
+  {
+    "id": "asql-json-upsert-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Postgres 17, `stock` holds `(1, 15)`. What does this MERGE do?\n\n```sql\n-- Delete depleted stock before update.\nMERGE INTO stock s\nUSING (VALUES (1, -15), (3, 4))\n  AS v(pid, delta)\nON s.product_id = v.pid\nWHEN MATCHED\n  AND s.qty + v.delta <= 0\n  THEN DELETE\nWHEN MATCHED THEN\n  UPDATE SET qty = s.qty + v.delta\nWHEN NOT MATCHED THEN\n  INSERT (product_id, qty)\n  VALUES (v.pid, v.delta);\n```",
+    "options": [
+      {
+        "text": "Updates product 1 to qty 0 and inserts product 3",
+        "explanation": "WHEN clauses are tried in order, and the first that matches wins. The DELETE clause matches first, since 15 - 15 = 0 <= 0."
+      },
+      {
+        "text": "Deletes product 1 and inserts (3, 4)",
+        "explanation": "Correct. Product 1 matches and its new qty would be 0, so the first WHEN MATCHED (DELETE) fires. Product 3 has no match, so it's inserted."
+      },
+      {
+        "text": "Deletes product 1 and ignores product 3",
+        "explanation": "Product 3 has no matching row, so the WHEN NOT MATCHED clause inserts it."
+      },
+      {
+        "text": "Fails, because MERGE can't both delete and insert in one statement",
+        "explanation": "MERGE can perform different actions for different source rows in one statement."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. Source row (1, -15) matches stock row 1.\n   - First clause: `WHEN MATCHED AND s.qty + v.delta <= 0` is true, so DELETE.\n   - Later clauses are not considered for this row.\n\nThe test on the first clause:\n\n```formula\nq_stock + δ ≤ 0\n15 + (−15) = 0 ≤ 0\nwhere\nq_stock: product 1's stored quantity, s.qty, 15\nδ: delta, the source row's change, v.delta, −15\n≤: less than or equal to\nIn words: the change would leave nothing in stock, so the DELETE clause fires.\n```\n\n2. Source row (3, 4) has no match: WHEN NOT MATCHED inserts (3, 4).\n3. With `RETURNING merge_action(), s.*` (Postgres 17+) you'd see `DELETE | 1 | 15` and `INSERT | 3 | 4`.\n\nSQLite has no MERGE; you'd write an upsert plus a separate DELETE.",
+    "link": {
+      "title": "MERGE — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/sql-merge.html"
+    }
+  }
+]

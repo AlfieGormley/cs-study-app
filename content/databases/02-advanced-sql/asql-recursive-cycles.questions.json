@@ -1,0 +1,40 @@
+[
+  {
+    "id": "asql-ctes-q6",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "Someone sets Mia's `manager_id` to Vic, creating a cycle. Start the org-chart query explicitly at Mia (`WHERE id = 1`), carrying id, name and depth but no pre-existing path column. Which changes would make this traversal terminate?",
+    "options": [
+      {
+        "text": "Carry a path of visited ids and skip any row whose id is already in the path",
+        "explanation": "Correct. Each path refuses to revisit an id already on that path, so a finite graph runs out of permitted extensions. The same node may still be reached through different acyclic paths."
+      },
+      {
+        "text": "In Postgres 14+, add `CYCLE id SET is_cycle USING path`",
+        "explanation": "Correct. Postgres tracks the path for you, marks the first repeated row with `is_cycle = true`, and stops following it."
+      },
+      {
+        "text": "Add a depth column and a guard such as `WHERE c.depth < 20`",
+        "explanation": "Correct. The loop is cut at depth 20, though you get repeated rows up to that point; it is a safety net rather than a proper fix."
+      },
+      {
+        "text": "Switch `UNION ALL` to `UNION` while still carrying a depth column",
+        "explanation": "Each lap round the cycle has a new depth, so the rows are never exact duplicates and `UNION` removes nothing. It still runs forever."
+      },
+      {
+        "text": "Add `ORDER BY name` to the final SELECT",
+        "explanation": "The outer ORDER BY only runs after the CTE finishes, which it never does."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      2
+    ],
+    "workedExample": "Think about whether each change eventually yields a pass with no new rows.\n\n1. Path check: Mia's id is in the path when the walk returns to her, so that row is filtered. The walk ends.\n2. CYCLE clause: built-in path tracking; the repeated Mia row is emitted once with `is_cycle = true` and not followed.\n3. Depth cap: after 20 levels the `WHERE` filters everything. It terminates, with duplicates.\n4. `UNION` with depth: `(1, 'Mia', 0)` and `(1, 'Mia', 4)` differ, so no repeated complete rows are removed. (Without the depth column, `UNION` *would* stop it.)\n5. `ORDER BY` outside: irrelevant to the loop.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-with.html"
+    }
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "asql-ctes-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Using the `staff` tree (Mia manages Raj and Sam; Raj manages Tom and Uma; Tom manages Vic), how many rows does this return?\n\n```sql\n-- Include Raj before his descendants.\nWITH RECURSIVE sub AS (\n  SELECT id, name FROM staff\n  WHERE id = 2   -- Raj\n  UNION ALL\n  SELECT s.id, s.name\n  FROM staff s\n  JOIN sub ON s.manager_id = sub.id\n)\nSELECT name FROM sub;\n```",
+    "options": [
+      {
+        "text": "3",
+        "explanation": "That counts Raj's reports (Tom, Uma, Vic) but forgets the anchor row, Raj himself, which is part of the result."
+      },
+      {
+        "text": "2",
+        "explanation": "Only Raj's direct reports are Tom and Uma, but recursion continues down to Vic, and the anchor row Raj is included."
+      },
+      {
+        "text": "4",
+        "explanation": "Correct. Raj (anchor), then Tom and Uma (pass 1), then Vic (pass 2). Pass 3 finds no one reporting to Vic."
+      },
+      {
+        "text": "6",
+        "explanation": "Six is the whole company. The anchor starts at Raj, so Mia and Sam are never reached."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Anchor: `id = 2` gives {Raj}.\n2. Pass 1: staff whose manager is in {Raj}: {Tom, Uma}.\n3. Pass 2: staff whose manager is in {Tom, Uma}: {Vic}.\n4. Pass 3: staff whose manager is Vic: none, so stop.\n5. Result: Raj, Tom, Uma and Vic, which is **4 rows**.\n\nTo count only reports, subtract the anchor: `SELECT COUNT(*) - 1 FROM sub` gives 3.",
+    "link": {
+      "title": "PostgreSQL 18 primary reference",
+      "url": "https://www.postgresql.org/docs/18/queries-with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "In PostgreSQL, `staff.name` is `varchar(10)`. This fails with `column 4 has type character varying(10) in non-recursive term but type character varying overall`. What is the right fix?\n\n```sql\n-- The path anchor retains its typmod.\nWITH RECURSIVE chain AS (\n  SELECT id, name, 0 AS depth,\n         name AS path\n  FROM staff\n  WHERE manager_id IS NULL\n  UNION ALL\n  SELECT s.id, s.name, c.depth + 1,\n         c.path || ' > ' || s.name\n  FROM staff s\n  JOIN chain c\n    ON s.manager_id = c.id\n)\nSELECT path FROM chain;\n```",
+    "options": [
+      {
+        "text": "Widen staff.name from varchar(10) to varchar(200)",
+        "explanation": "The larger declared length still conflicts with the unconstrained recursive result. Cast the anchor path to text; widening the source varchar bound alone does not fix it."
+      },
+      {
+        "text": "Use `UNION` instead of `UNION ALL`",
+        "explanation": "Deduplication doesn't change result types; the mismatch remains."
+      },
+      {
+        "text": "Cast in the anchor: `name::text AS path`",
+        "explanation": "Correct. The concatenation in the recursive term produces unconstrained text-like output, so the anchor must declare the same type. Casting the anchor to `text` makes them match."
+      },
+      {
+        "text": "Add `LIMIT 100` to the recursive term",
+        "explanation": "The query fails during planning, before any rows are produced. A limit can't fix a type error."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The CTE's result types come from the anchor. Here `path` is `varchar(10)`.\n2. In the recursive term, `c.path || ' > ' || s.name` uses a text concatenation operator; UNION type resolution yields unconstrained varchar, which does not match the anchor varchar(10).\n3. Postgres requires the two terms to agree exactly, and its hint says: cast the output of the non-recursive term.\n4. `name::text AS path` makes both terms resolve to text. Merely changing the anchor to varchar(200) still leaves a typmod mismatch; widening its bound alone is not the fix.\n5. SQLite has dynamic typing and performs no such check, which is one reason recursive SQL copied from SQLite can fail on Postgres.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-with.html"
+    }
+  }
+]

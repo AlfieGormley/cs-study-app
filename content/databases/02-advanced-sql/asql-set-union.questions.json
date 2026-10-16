@@ -1,0 +1,122 @@
+[
+  {
+    "id": "asql-set-ops-pivot-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "January order lines name Rug, Kettle, Toaster and Mug (4 rows). February's name Kettle, Rug, Mug, Toaster and Mug (5 rows). How many rows do `jan UNION ALL feb` and `jan UNION feb` return?",
+    "options": [
+      {
+        "text": "9 and 4",
+        "explanation": "Correct. UNION ALL appends: 4 + 5 = 9. UNION removes duplicates across the whole result, leaving the 4 distinct names."
+      },
+      {
+        "text": "9 and 5",
+        "explanation": "UNION deduplicates the combined result, not just the second branch. February's two Mugs and all of January's names collapse to 4 distinct values."
+      },
+      {
+        "text": "4 and 4",
+        "explanation": "UNION ALL never removes rows; it simply concatenates both results."
+      },
+      {
+        "text": "9 and 9",
+        "explanation": "UNION (without ALL) removes duplicate rows, so it can't return the same count as UNION ALL when duplicates exist."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "```formula\nN_ALL = n_Jan + n_Feb = 4 + 5 = 9\nN_UNION = |{Kettle, Mug, Rug, Toaster}|\nN_UNION = 4\nwhere\nN_ALL: rows returned by UNION ALL\nN_UNION: rows returned by UNION\nn_Jan, n_Feb: the row counts of each branch, 4 and 5\n|X|: the number of distinct items in set X\nX: any set\n{ }: a set of distinct items\nKettle, Mug, Rug, Toaster: the product names\nIn words: UNION ALL adds the two row counts; UNION counts each distinct name once.\n```\n\n1. UNION ALL keeps every row from both sides: **9**.\n2. UNION combines, then deduplicates, leaving the **4** distinct names.\n3. Note that UNION also removes duplicates *within* one branch (February's two Mugs), not just across branches.\n4. Duplicate removal adds work, often a sort or hash; an already ordered plan can avoid a new sort. UNION ALL skips duplicate removal when every copy is required or rows are already unique.",
+    "link": {
+      "title": "Combining queries — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-union.html"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "January products: Kettle, Mug, Rug, Toaster. March products: Kettle, Mug, Rug, Lamp. What does `march EXCEPT january` return?",
+    "options": [
+      {
+        "text": "Toaster",
+        "explanation": "That's `january EXCEPT march`. EXCEPT is not symmetric: it keeps rows from the left query that are missing from the right."
+      },
+      {
+        "text": "Lamp and Toaster",
+        "explanation": "That's the symmetric difference, which needs `(A EXCEPT B) UNION (B EXCEPT A)`."
+      },
+      {
+        "text": "Kettle, Mug and Rug",
+        "explanation": "Those are the products in both months, the result of INTERSECT."
+      },
+      {
+        "text": "Lamp",
+        "explanation": "Correct. Lamp is the only March product that wasn't sold in January."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Start with the left set: {Kettle, Mug, Rug, Lamp}.\n2. Remove anything that appears in the right set {Kettle, Mug, Rug, Toaster}.\n3. Kettle, Mug and Rug go; Lamp stays.\n4. Result: **Lamp**. Swapping the operands gives Toaster instead.",
+    "link": {
+      "title": "PostgreSQL 18 primary reference",
+      "url": "https://www.postgresql.org/docs/18/sql-select.html"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q3",
+    "level": "basic",
+    "type": "single",
+    "prompt": "What are the column names of this result?\n\n```sql\n-- Names come from the first SELECT.\nSELECT name AS who, city\nFROM customers\nUNION\nSELECT city, name\nFROM customers;\n```",
+    "options": [
+      {
+        "text": "`city, name`, from the second query",
+        "explanation": "Names come from the first query only. Later branches contribute rows, not headers."
+      },
+      {
+        "text": "`who, city`, and the second branch's values are placed by position, so cities land under `who`",
+        "explanation": "Correct. Columns are matched by position. Rows from the second branch put each city in the first column and each name in the second."
+      },
+      {
+        "text": "An error, because the column names don't match",
+        "explanation": "Set operations only check the number of columns and their types. Names are never compared."
+      },
+      {
+        "text": "`who, city`, and the second branch is reordered by name to match",
+        "explanation": "Plain UNION in PostgreSQL and SQLite matches by position. The second branch therefore puts city values under who. Some other engines have explicit by-name variants, but this query does not use one."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. A UNION requires the same number of columns (2 and 2) with compatible types (text and text). Both hold.\n2. Output columns take their names from the first SELECT: `who`, `city`.\n3. The second SELECT's first column (city) goes into `who`, its second (name) into `city`.\n4. So the result mixes rows like (Ana, London) and (London, Ana). This is a common bug when branches are written separately; list columns in the same order every time.",
+    "link": {
+      "title": "Combining queries — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-union.html"
+    }
+  },
+  {
+    "id": "asql-set-ops-pivot-q8",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A report unions this year's orders table with last year's archive table. Order ids are unique across both, and the query is slow. What is the simplest safe speed-up?\n\n```sql\n-- UNION removes projected duplicates.\nSELECT id, total FROM orders\nUNION\nSELECT id, total FROM orders_2025;\n```",
+    "options": [
+      {
+        "text": "Change UNION to UNION ALL",
+        "explanation": "Correct. The branches can't share an id, so there are no duplicates to remove. UNION ALL skips duplicate removal over the combined result."
+      },
+      {
+        "text": "Add `DISTINCT` to each branch",
+        "explanation": "That adds deduplication work rather than removing it. UNION already deduplicates the whole result."
+      },
+      {
+        "text": "Rewrite it as a FULL OUTER JOIN on id",
+        "explanation": "A join on id would put matching rows side by side, which is the wrong shape, and there are no matches anyway."
+      },
+      {
+        "text": "Add `ORDER BY id` to each branch",
+        "explanation": "ORDER BY applies only to the final result; inside a branch it needs a subquery and doesn't remove the deduplication step."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. UNION is UNION ALL followed by duplicate removal. The removal adds work, often a sort or hash, although a plan can exploit already ordered input.\n2. Ask whether duplicates are possible. Ids are unique across both tables, so every row is already distinct.\n3. UNION ALL gives exactly the same rows, minus that work.\n4. On tens of millions of rows the dedup can dominate the query, and may spill to disk once it exceeds `work_mem`.",
+    "link": {
+      "title": "Combining queries — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-union.html"
+    }
+  }
+]

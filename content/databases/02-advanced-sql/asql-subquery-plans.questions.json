@@ -1,0 +1,70 @@
+[
+  {
+    "id": "asql-subqueries-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "You want users with no matching events, including when events.user_id is NULL. users.id is a non-NULL primary key. On PostgreSQL 18, this query against a 50-million-row `events` table has been running for hours. `EXPLAIN` shows a plain `SubPlan`, not a hash or anti join. Which rewrite expresses that intent and enables anti-join plans?\n\n```sql\n-- NOT IN must account for inner NULLs.\nSELECT u.id FROM users u\nWHERE u.id NOT IN (\n  SELECT user_id FROM events);\n```",
+    "options": [
+      {
+        "text": "Add an index on `users(id)`",
+        "explanation": "`users.id` is already the primary key. The cost is in evaluating the subquery for each user, not in reading `users`."
+      },
+      {
+        "text": "Rewrite with `NOT EXISTS (SELECT 1 FROM events e WHERE e.user_id = u.id)`",
+        "explanation": "Correct for the stated intent. NOT EXISTS can enable an anti-join; the planner chooses among hash, merge and indexed nested-loop strategies. This intentionally differs from NOT IN when event application user identifiers contain NULL."
+      },
+      {
+        "text": "Add `DISTINCT` inside the subquery",
+        "explanation": "Deduplicating doesn't change the semantics that block the anti-join; the planner still can't convert NOT IN because a NULL `user_id` would change the answer."
+      },
+      {
+        "text": "Raise `statement_timeout` so the query can finish",
+        "explanation": "Increasing the timeout does not improve the plan. Repeated subplan scans can approach work proportional to the number of users multiplied by the number of events; inspect actual loop counts and early termination rather than assuming a full scan every time."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `NOT IN` must return no rows if the subquery contains any NULL, and it must treat UNKNOWN correctly. A standard anti-join doesn't have those semantics, so Postgres won't use one.\n2. Instead it uses a SubPlan. If the subquery result is estimated to fit the hash-memory budget, that's a fast hashed SubPlan. If it does not fit, a plain SubPlan may repeatedly scan or materialize the result; the threshold depends on width and configuration, not row count alone. The budget is:\n\n```formula\nB = work_mem × hash_mem_multiplier\nB = 4 MB × 2.0 = 8 MB\nwhere\nB: the hash-memory budget for one hash table\nwork_mem: the per-operation memory setting for sorts and hashes; default 4 MB\nhash_mem_multiplier: how many times work_mem a hash may use; default 2.0 since PostgreSQL 15\nMB: megabyte; in PostgreSQL settings 1 MB = 1024 × 1024 bytes\nIn words: with default settings a hash table may use 8 MB; a subquery result estimated to be larger than that is not hashed.\n```\n\n3. `NOT EXISTS` with a correlated equality is exactly an anti-join, so the planner can pick a Hash Anti Join or use an index on `events(user_id)`.\n4. As a bonus, it is also correct if `user_id` is ever NULL.",
+    "link": {
+      "title": "PostgreSQL 18 primary reference",
+      "url": "https://www.postgresql.org/docs/18/functions-subquery.html"
+    }
+  },
+  {
+    "id": "asql-subqueries-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which statements describe how PostgreSQL typically plans these subquery forms?",
+    "options": [
+      {
+        "text": "`WHERE id IN (SELECT ...)` is usually turned into a semi-join or a join over de-duplicated subquery rows",
+        "explanation": "Correct. Postgres flattens IN subqueries into the join tree, e.g. a hash join over a HashAggregate of the subquery."
+      },
+      {
+        "text": "`WHERE NOT EXISTS (correlated ...)` can become a hash, merge or nested-loop anti join",
+        "explanation": "Correct. NOT EXISTS has clean anti-join semantics, so it is flattened like a join."
+      },
+      {
+        "text": "`WHERE id NOT IN (SELECT ...)` is converted into an anti join just like NOT EXISTS",
+        "explanation": "It isn't: the NULL semantics of NOT IN differ from an anti-join, so Postgres runs it as a (hashed or plain) SubPlan."
+      },
+      {
+        "text": "A correlated scalar subquery in the SELECT list generally runs as a SubPlan evaluated per row of the enclosing query",
+        "explanation": "Correct for these typical PostgreSQL correlated scalar forms. They often remain a SubPlan under the outer scan, with repeated probes; inspect EXPLAIN ANALYZE rather than assuming every subquery has the same cost."
+      },
+      {
+        "text": "EXISTS subqueries always execute once per row of the enclosing query, so they are slower than joins",
+        "explanation": "That is the conceptual meaning, not the plan. Postgres usually turns EXISTS into a semi-join that is as fast as the equivalent join."
+      }
+    ],
+    "answer": [
+      0,
+      1,
+      3
+    ],
+    "workedExample": "Illustrative PostgreSQL plan shapes; run EXPLAIN to see the plan chosen for your data:\n\n```\nIN        -> Hash Join over\n             HashAggregate\nNOT EXISTS-> Hash Right Anti Join\nNOT IN    -> Filter: NOT (hashed\n             SubPlan 1)\nscalar    -> SubPlan 1 (Aggregate)\n```\n\n1. IN and EXISTS become semi-joins.\n2. NOT EXISTS becomes an anti join.\n3. NOT IN stays a SubPlan because one NULL in the subquery would change every answer.\n4. The correlated scalar subquery appears as `SubPlan 1` under the outer scan, so it runs per row of the enclosing query.",
+    "link": {
+      "title": "Subquery expressions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/functions-subquery.html"
+    }
+  }
+]

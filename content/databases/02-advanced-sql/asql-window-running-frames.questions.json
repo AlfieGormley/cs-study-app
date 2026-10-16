@@ -1,0 +1,69 @@
+[
+  {
+    "id": "asql-window-functions-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "Totals sorted ascending are 30, 45, 45, 60, 60, 90, 120, 200. What does order 103 (one of the 60s) show for `s`?\n\n```sql\n-- Default frame includes tied totals.\nSELECT id, total,\n  SUM(total) OVER (\n    ORDER BY total) AS s\nFROM orders;\n```",
+    "options": [
+      {
+        "text": "180",
+        "explanation": "That's the ROWS-mode answer for whichever 60 comes first. Without an explicit frame, the default is RANGE, which includes all peers with the same value."
+      },
+      {
+        "text": "240",
+        "explanation": "Correct. The default frame is `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`, which includes every row tied with the current one: 30 + 45 + 45 + 60 + 60 = 240."
+      },
+      {
+        "text": "60",
+        "explanation": "60 would come from a ROWS frame containing only the current row. SUM(total) OVER (PARTITION BY total) would sum both 60s and return 120."
+      },
+      {
+        "text": "650",
+        "explanation": "650 is the total of every row, which you'd get from `OVER ()` with no ORDER BY."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. ORDER BY with no frame means `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`.\n2. In RANGE mode, \"current row\" extends to all of its **peer rows** (rows with an equal sort value).\n3. For a 60, the frame is every row with total <= 60: 30, 45, 45, 60, 60.\n4. Both 60s show the same sum:\n\n```formula\ns = Σ t_j for all j with t_j ≤ 60\ns = 30 + 45 + 45 + 60 + 60 = 240\nwhere\ns: the window sum shown on a row with total 60\nt_j: the total of row j\nj: any row in the partition (here all 8 orders)\nΣ: sigma, \"add up\" the term after it for every j that meets the condition\n≤: less than or equal to; it includes the tied 60s (peer rows)\nIn words: the RANGE frame adds every row whose total is at most the current row's, so both tied rows get 240.\n```\n\n5. With `ROWS UNBOUNDED PRECEDING`, the first 60 would show 180 and the second 240.",
+    "link": {
+      "title": "Window functions — SQLite docs",
+      "url": "https://www.sqlite.org/windowfunctions.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q12",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "Which expressions give 650 (the grand total) on every one of the 8 rows?",
+    "options": [
+      {
+        "text": "`SUM(total) OVER ()`",
+        "explanation": "Correct. An empty window is the whole result set."
+      },
+      {
+        "text": "`SUM(total) OVER (ORDER BY ordered_on)`",
+        "explanation": "Adding ORDER BY makes it cumulative: 120 on the first row, reaching 650 only on the last."
+      },
+      {
+        "text": "`SUM(total) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)`",
+        "explanation": "Correct. The explicit frame covers the entire partition regardless of the ORDER BY."
+      },
+      {
+        "text": "`SUM(total) OVER (PARTITION BY customer_id)`",
+        "explanation": "This gives per-customer totals (240, 135, 230, 45), not the grand total."
+      },
+      {
+        "text": "`SUM(total) OVER (ORDER BY customer_id)`",
+        "explanation": "Cumulative by customer, with each customer's rows as peers: 240 for Ana's rows, 375 for Ben's, 605 for Cat's, 650 only for Dev's."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Ask two questions of each window: what is the partition, and what is the frame?\n\n| expression | partition | frame |\n|---|---|---|\n| `OVER ()` | all | all |\n| `ORDER BY date` | all | start..current |\n| explicit full frame | all | all |\n| `PARTITION BY cust` | customer | all of it |\n| `ORDER BY cust` | all | start..peers |\n\nOnly a whole-table partition with a whole-partition frame gives 650 everywhere. The last row is the RANGE peer rule again: all of Ana's orders show 240, Ben's 375, Cat's 605, Dev's 650.",
+    "link": {
+      "title": "Window functions — SQLite docs",
+      "url": "https://www.sqlite.org/windowfunctions.html"
+    }
+  }
+]

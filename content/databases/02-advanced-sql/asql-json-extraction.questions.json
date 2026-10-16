@@ -1,0 +1,62 @@
+[
+  {
+    "id": "asql-json-upsert-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "In PostgreSQL, `payload` is `jsonb` and one row holds `{\"type\":\"cart\",\"qty\":2}`. What type does `payload ->> 'qty'` return?",
+    "options": [
+      {
+        "text": "integer",
+        "explanation": "That's SQLite's behaviour, where `->>` returns a native SQL value. In Postgres, `->>` always returns text."
+      },
+      {
+        "text": "jsonb",
+        "explanation": "`->` returns jsonb. The double arrow `->>` converts the value to text."
+      },
+      {
+        "text": "text",
+        "explanation": "Correct. `->>` returns `text`, so `'2'`. Cast it, e.g. `(payload ->> 'qty')::int`, before numeric comparisons."
+      },
+      {
+        "text": "numeric",
+        "explanation": "Postgres doesn't infer a SQL type from the JSON value for `->>`; it returns text regardless."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Postgres has two extraction operators:\n   - `->` returns `jsonb` (here, the JSON number `2`).\n   - `->>` returns `text` (here, `'2'`).\n2. `pg_typeof(payload ->> 'qty')` confirms `text`.\n3. SQLite differs: `->>` returns an INTEGER for this JSON integer (other JSON numbers can produce REAL), which is why queries ported from SQLite can fail or misbehave in Postgres.",
+    "link": {
+      "title": "JSON functions and operators — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/functions-json.html"
+    }
+  },
+  {
+    "id": "asql-json-upsert-q4",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "In PostgreSQL using C collation for text comparisons, events have `qty` values 2 and 1. What does this return?\n\n```sql\n-- Text comparison uses C collation.\nSELECT id FROM events\nWHERE payload ->> 'qty' >= '10';\n```",
+    "options": [
+      {
+        "text": "No rows, because neither 2 nor 1 is at least 10",
+        "explanation": "That would be true for a numeric comparison. Both sides are text, so this is a string comparison."
+      },
+      {
+        "text": "The event with qty 2",
+        "explanation": "Correct. Text compares character by character: '2' > '1', so '2' >= '10' is true. '1' < '10' because it's a prefix, so qty 1 doesn't match."
+      },
+      {
+        "text": "Both events",
+        "explanation": "'1' versus '10': '1' is a prefix of '10', and a shorter prefix sorts first, so '1' < '10'."
+      },
+      {
+        "text": "An error: `operator does not exist: text >= integer`",
+        "explanation": "That error happens with an unquoted `10`. With `'10'` both sides are text, so the query runs and quietly compares strings."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. `payload ->> 'qty'` is text: '2' and '1'.\n2. `'10'` is a text literal, so the comparison is text vs text.\n3. '2' vs '10': compare the first characters, '2' > '1', so '2' > '10'. Match.\n4. '1' vs '10': equal first character, then '1' runs out; a prefix sorts first, so '1' < '10'. No match.\n5. Fix: `(payload ->> 'qty')::int >= 10`, which matches nothing. This silent string comparison is far more dangerous than the error you'd get without the quotes.",
+    "link": {
+      "title": "JSON functions and operators — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/functions-json.html"
+    }
+  }
+]

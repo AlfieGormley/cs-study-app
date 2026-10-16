@@ -1,0 +1,32 @@
+[
+  {
+    "id": "asql-ctes-q10",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "`order_items` has 13 rows, 2 of them for order 101. In PostgreSQL, what does the final SELECT return?\n\n```sql\n-- Main read shares the old snapshot.\nWITH d AS (\n  DELETE FROM order_items\n  WHERE order_id = 101\n  RETURNING order_id\n)\nSELECT COUNT(*) FROM order_items;\n```",
+    "options": [
+      {
+        "text": "13, because the main query sees the snapshot taken before the DELETE",
+        "explanation": "Correct. All parts of the statement see the same snapshot. The DELETE happens, but the main query's `COUNT(*)` reads the table as it was."
+      },
+      {
+        "text": "11, because the DELETE runs first",
+        "explanation": "The sub-statements in a WITH run against the same snapshot, so the main query doesn't see the CTE's deletion."
+      },
+      {
+        "text": "0, because the DELETE's RETURNING output replaces the table",
+        "explanation": "RETURNING feeds rows to anything that references `d`; it doesn't alter what `order_items` means elsewhere."
+      },
+      {
+        "text": "Nothing, because the DELETE is skipped when `d` isn't referenced",
+        "explanation": "Postgres always runs data-modifying CTEs to completion, whether or not the main query reads them."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. PostgreSQL executes data-modifying CTEs to completion and the main query reads under the same statement snapshot. Unreferenced SELECT CTEs need not execute.\n2. The DELETE removes 2 rows, but that change is invisible to other parts of the same statement.\n3. So `SELECT COUNT(*) FROM order_items` returns **13**.\n4. A follow-up query afterwards returns 11.\n5. To use the deleted rows, read them from the CTE: `SELECT COUNT(*) FROM d` gives 2. Data-modifying CTEs also run even if unreferenced, which surprises people who expect lazy evaluation.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-with.html"
+    }
+  }
+]

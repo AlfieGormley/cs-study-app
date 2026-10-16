@@ -1,16 +1,16 @@
-# Short lessons and code comments: ACTIVE (2026-10-15)
+# Short lessons and code comments: ACTIVE (2026-10-16)
 
 Continue until the whole course is converted. The user chose actual short lessons with separate completion
 dates and focused questions, requested clearer code comments, confirmed course order and explicitly said
 to run to completion without further approval questions. Published batches are milestones, not completion.
 
-- Independently verified: 67/76 modules; 426 originals → 2295 short lessons with 5001 focused questions.
+- Independently verified: 68/76 modules; 432 originals → 2336 short lessons with 5072 focused questions.
 - The fixed original course has 482 lessons and 5,565 questions. Every original question ID survives;
   converted question types, answer keys and option counts are preserved. All 964 original MD/question
   files remain byte-identical to baseline `f1e97e7e4eb13646f93bed3ea9ca5425ddc2792e`.
-- Latest confirmed live release: `32a7389`, version `644fa775c217`, 2255 short lessons/4927 focused questions
-  across 66 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
-- Current generated candidate: `700efee84ff1`, 67 modules/2295 units/5001 questions.
+- Latest confirmed live release: `41f7d67`, version `700efee84ff1`, 2295 short lessons/5001 focused questions
+  across 67 modules. GitHub Pages succeeded and app/manifest/progress/glossary/index files match the tested commit.
+- Current generated candidate: `9cb6432259e8`, 68 modules/2336 units/5072 questions.
   Check candidate versus last live version before calling it published.
 - All eleven system-design modules are converted and published: 413 short units/1,041 questions.
 - All ten DSA modules are converted and published: 399 short units/803 questions.
@@ -25,9 +25,9 @@ to run to completion without further approval questions. Published batches are m
 
 Current allocations:
 
-- databases/dbs-advanced: verifying; /root/database_advanced_short_verify.
-- databases/dbs-theory: authoring; /root/database_relational_short_author.
-- databases/dbs-query: authoring; /root/database_query_short_author.
+- databases/dbs-theory: verifying; /root/database_relational_short_verify.
+- databases/dbs-query: verifying; database_query_short_verify.
+- databases/postgresql: authoring; database_postgresql_short_author.
 
 Verification and integration:
 

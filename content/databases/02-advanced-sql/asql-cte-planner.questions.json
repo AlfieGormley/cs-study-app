@@ -1,0 +1,70 @@
+[
+  {
+    "id": "asql-ctes-q5",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "On Postgres 11, this query on a 100-million-row table takes minutes, even though `orders.id` is the primary key. After upgrading to Postgres 16 it takes milliseconds. Why?\n\n```sql\n-- Test whether id filtering folds in.\nWITH o AS (SELECT * FROM orders)\nSELECT * FROM o WHERE id = 104;\n```",
+    "options": [
+      {
+        "text": "Postgres 16 caches CTE results between queries",
+        "explanation": "Postgres has no cross-query result cache for CTEs. Each execution is planned and run fresh."
+      },
+      {
+        "text": "PostgreSQL 11 materialised this SELECT CTE; 12+ can fold it so the outer id condition can use the base-table index",
+        "explanation": "Correct. The old optimisation fence prevented the outer condition from restricting the CTE scan. Folding in newer versions permits that restriction; actual index choice remains a planner decision."
+      },
+      {
+        "text": "Postgres 16 automatically creates an index on CTE output",
+        "explanation": "The CTE’s temporary result has no automatically created primary-key index. Folding lets this query use the original orders primary-key index."
+      },
+      {
+        "text": "Postgres 11 doesn't support indexes inside CTEs",
+        "explanation": "Indexes could be used inside the CTE in 11, but the `id = 104` filter was outside it, so it couldn't drive an index scan."
+      }
+    ],
+    "answer": 1,
+    "workedExample": "1. In Postgres 11 and earlier, `WITH o AS (...)` always materialises: its separate CTE scan cannot push down the outer filter. This query needs to read all candidate orders to find the match; materialisation itself can otherwise stop early when consumers stop requesting rows.\n2. Only then is `WHERE id = 104` applied, to that store, with no index.\n3. Postgres 12 changed the default: a side-effect-free, non-recursive CTE referenced once is inlined, becoming `SELECT * FROM orders WHERE id = 104`.\n4. The primary-key lookup is now available; EXPLAIN confirms whether it was chosen.\n5. If you relied on the old fence behaviour, write `WITH o AS MATERIALIZED (...)`.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-with.html"
+    }
+  },
+  {
+    "id": "asql-ctes-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "In Postgres 12+, when is it reasonable to add `AS MATERIALIZED` to a CTE?",
+    "options": [
+      {
+        "text": "The CTE is referenced once and the outer query filters it on an indexed primary key",
+        "explanation": "Folding permits the selective outer condition to use the base-table index. Materialising prevents that push-down and is usually undesirable for this pattern; compare plans rather than assuming an index is always chosen."
+      },
+      {
+        "text": "The CTE is an expensive aggregation referenced three times in the outer query",
+        "explanation": "Reasonable, though Postgres already materialises a CTE referenced more than once by default. Writing it documents the intent."
+      },
+      {
+        "text": "The CTE calls a volatile function such as `random()` and every reference must see the same values",
+        "explanation": "Correct as documentation of intent. PostgreSQL already refuses to inline CTEs containing volatile functions, so MATERIALIZED makes existing behaviour explicit; it is not needed to prevent random() from being duplicated."
+      },
+      {
+        "text": "The planner keeps choosing a bad plan by pushing a filter into the CTE, and you want to fence it off",
+        "explanation": "Correct. MATERIALIZED restores the pre-12 fence on purpose, so the CTE is planned independently of the outer query."
+      },
+      {
+        "text": "You want the CTE's result cached for the next query in the session",
+        "explanation": "Materialisation lasts only for one statement. Use a temporary table or materialized view to keep results."
+      }
+    ],
+    "answer": [
+      1,
+      2,
+      3
+    ],
+    "workedExample": "Weigh what materialising gives and costs:\n\n- Gives: compute once, reuse many times; a stable result for volatile expressions; a planning fence.\n- Costs: no filter push-down, no index use from outer predicates, possibly a large temporary result.\n\n1. Single reference, selective filter: folding permits the indexed filter.\n2. Many references to an expensive result: compute once. Fine.\n3. `random()`: one CTE evaluation keeps references consistent; random() can still be called for each row produced by that CTE. Postgres actually won't inline a CTE containing volatile functions, but saying MATERIALIZED makes it explicit.\n4. Fence against a bad plan: the classic deliberate use.\n5. Nothing survives past the statement.",
+    "link": {
+      "title": "WITH queries (CTEs) — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-with.html"
+    }
+  }
+]

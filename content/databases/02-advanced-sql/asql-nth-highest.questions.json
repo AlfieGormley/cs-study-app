@@ -1,0 +1,99 @@
+[
+  {
+    "id": "asql-interview-problems-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Totals are 200, 120, 90, 60, 60, 45, 45, 30. What does each query return?\n\n```sql\n-- Distinctness changes row positions.\n-- A\nSELECT total FROM orders\nORDER BY total DESC\nLIMIT 1 OFFSET 4;\n\n-- B\nSELECT DISTINCT total\nFROM orders\nORDER BY total DESC\nLIMIT 1 OFFSET 4;\n```",
+    "options": [
+      {
+        "text": "A: 60, B: 45",
+        "explanation": "Correct. A skips four *rows* (200, 120, 90, 60) and lands on the second 60. B skips four *distinct values* (200, 120, 90, 60) and lands on 45."
+      },
+      {
+        "text": "A: 45, B: 45",
+        "explanation": "A has no DISTINCT, so the duplicate 60 occupies its own position and A returns 60."
+      },
+      {
+        "text": "A: 60, B: 60",
+        "explanation": "B deduplicates before the offset, so there's only one 60 to skip past."
+      },
+      {
+        "text": "A: 45, B: 30",
+        "explanation": "Count positions from zero: OFFSET 4 returns the 5th row. B's 5th distinct value is 45, not 30."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. A's sorted rows: 200, 120, 90, 60, **60**, 45, 45, 30. OFFSET 4 skips the first four, so it returns the second 60.\n2. B's distinct values: 200, 120, 90, 60, **45**, 30. OFFSET 4 skips four, returning 45.\n\nOFFSET skips rows before the one returned:\n\n```formula\np = k + 1 = 4 + 1 = 5\nwhere\np: the position (1 = first) of the row returned\nk: the OFFSET value, the rows skipped\nIn words: OFFSET 4 skips four rows, so LIMIT 1 returns the 5th.\n```\n\n3. \"5th highest total\" almost always means the distinct version. Clarify with the interviewer, then use DISTINCT or DENSE_RANK.",
+    "link": {
+      "title": "LIMIT and OFFSET — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-limit.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "Using `WHERE total < (SELECT MAX(total) ...)` to find the second-highest order for **Dev**, who has a single order of 45, what is returned?\n\n```sql\n-- Empty aggregate still returns NULL.\nSELECT MAX(total) FROM orders\nWHERE customer_id = 4\n  AND total < (\n    SELECT MAX(total) FROM orders\n    WHERE customer_id = 4);\n```",
+    "options": [
+      {
+        "text": "No rows",
+        "explanation": "An aggregate without GROUP BY always returns exactly one row, even over empty input. Only the LIMIT/OFFSET and ranking versions return no rows."
+      },
+      {
+        "text": "45",
+        "explanation": "45 is Dev's highest order. The filter `total < 45` excludes it, leaving nothing to take the MAX of."
+      },
+      {
+        "text": "An error",
+        "explanation": "Nothing is invalid here; the empty case just produces NULL."
+      },
+      {
+        "text": "One row containing NULL",
+        "explanation": "Correct. The WHERE leaves zero rows, and MAX over zero rows returns NULL in a single result row."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. Inner query: Dev's MAX is 45.\n2. Outer WHERE: Dev's orders with total < 45: none.\n3. `MAX` over no rows is NULL, and an ungrouped aggregate always produces one row.\n4. So the result is a single NULL, which is often exactly what an interview spec asks for (\"return NULL if there's no second-highest\").\n5. `LIMIT 1 OFFSET 1` would instead return zero rows; wrap it in a scalar subquery to get NULL.",
+    "link": {
+      "title": "Aggregate functions — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/functions-aggregate.html"
+    }
+  },
+  {
+    "id": "asql-interview-problems-q11",
+    "level": "advanced",
+    "type": "multi",
+    "prompt": "The task: \"return the 2nd highest *distinct* order total, or NULL if there isn't one\". Which queries meet the spec exactly, on any data? Ignore NULL totals when ranking.",
+    "options": [
+      {
+        "text": "`SELECT MAX(total) FROM orders WHERE total < (SELECT MAX(total) FROM orders)`",
+        "explanation": "Correct. It returns one row; when there's no second value, the MAX over nothing is NULL."
+      },
+      {
+        "text": "`SELECT DISTINCT total FROM orders ORDER BY total DESC LIMIT 1 OFFSET 1`",
+        "explanation": "Distinct and correctly positioned, but it returns *no rows* rather than NULL when there's no second value."
+      },
+      {
+        "text": "`SELECT (SELECT DISTINCT total FROM orders WHERE total IS NOT NULL ORDER BY total DESC LIMIT 1 OFFSET 1) AS second`",
+        "explanation": "Correct. Wrapping it as a scalar subquery turns \"no row\" into a single NULL."
+      },
+      {
+        "text": "`SELECT total FROM orders ORDER BY total DESC LIMIT 1 OFFSET 1`",
+        "explanation": "Without DISTINCT, a tie at the top (two orders of 200) would return 200 as the 'second highest'."
+      },
+      {
+        "text": "A CTE with `ROW_NUMBER() OVER (ORDER BY total DESC) AS rn`, then `SELECT total FROM cte WHERE rn = 2`",
+        "explanation": "ROW_NUMBER numbers ties separately, so a tie at the top returns the top value. It also returns no row rather than NULL."
+      }
+    ],
+    "answer": [
+      0,
+      2
+    ],
+    "workedExample": "Test each against two tricky inputs: totals {200, 200} (no distinct second) and {200, 200, 90}.\n\n| query | {200, 200} | {200, 200, 90} |\n|---|---|---|\n| nested MAX | NULL | 90 |\n| DISTINCT OFFSET | no row | 90 |\n| scalar wrap | NULL | 90 |\n| plain OFFSET | 200 | 200 |\n| ROW_NUMBER | 200 | 200 |\n\nOnly the nested MAX and the scalar-wrapped DISTINCT version handle both ties and the empty case. A `DENSE_RANK() = 2` version would also need the scalar wrap to return NULL.",
+    "link": {
+      "title": "LIMIT and OFFSET — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/queries-limit.html"
+    }
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "asql-window-functions-q2",
+    "level": "basic",
+    "type": "single",
+    "prompt": "`orders` has 8 rows across 4 customers. How many rows does this return?\n\n```sql\n-- Retain each order beside its sum.\nSELECT id,\n  SUM(total) OVER (\n    PARTITION BY customer_id) AS s\nFROM orders;\n```",
+    "options": [
+      {
+        "text": "8, one per order, each showing its customer's total",
+        "explanation": "Correct. Every order stays, and `s` is the sum over that order's partition: 240 on all three of Ana's orders, for example."
+      },
+      {
+        "text": "4, one per customer",
+        "explanation": "That's what `GROUP BY customer_id` would return. A window function never collapses rows; PARTITION BY only decides which rows each calculation sees."
+      },
+      {
+        "text": "1, the grand total",
+        "explanation": "That would be a plain `SUM(total)` with no GROUP BY or OVER."
+      },
+      {
+        "text": "An error: `id` must appear in GROUP BY",
+        "explanation": "That rule applies to GROUP BY queries. There is no GROUP BY here, and window functions don't impose it."
+      }
+    ],
+    "answer": 0,
+    "workedExample": "1. With no `WHERE`, 8 rows go into the window stage.\n2. `PARTITION BY customer_id` splits them into 4 groups but keeps all 8 rows.\n3. Each row gets the sum of its own group:\n\n| id | s |\n|---|---|\n| 101 | 240 |\n| 103 | 240 |\n| 107 | 240 |\n| 102 | 135 |\n| ... | ... |\n\nEight input orders remain eight output rows.",
+    "link": {
+      "title": "Window functions tutorial — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/tutorial-window.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q9",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "Assume total is PostgreSQL integer (32-bit) and contains integer values in SQLite. Order 104 has total 200; all orders sum to 650. In both SQLite and Postgres, what is `pct` for order 104?\n\n```sql\n-- Integer operands truncate division.\nSELECT id,\n  100 * total\n    / SUM(total) OVER () AS pct\nFROM orders;\n```",
+    "options": [
+      {
+        "text": "30.77",
+        "explanation": "That's the true percentage, but every operand is an integer, so the division is integer division and truncates."
+      },
+      {
+        "text": "31",
+        "explanation": "Integer division truncates towards zero; it doesn't round. 20000 / 650 = 30.77, truncated to 30."
+      },
+      {
+        "text": "30",
+        "explanation": "Correct. Multiplication produces 20000, and integer division by 650 truncates to 30. Use a decimal operand and explicit rounding for a chosen number of decimal places."
+      },
+      {
+        "text": "0",
+        "explanation": "That happens if you divide first: `total / SUM(total)` = 200 / 650 = 0 in integers, then times 100 is 0. Here the multiplication comes first."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. Evaluate left to right: `100 * total` = 20000 (integer).\n2. `SUM(total)` over integers is an integer: 650 in SQLite, `bigint` 650 in Postgres.\n3. Integer / integer truncates:\n\n```formula\npct = trunc(100 × t / T)\npct = trunc(20000 / 650)\npct = trunc(30.77…) = 30\nwhere\npct: the value the query shows\nt: order 104's total, 200\nT: the grand total, SUM(total) OVER (), 650\ntrunc(x): drop the digits after the decimal point, rounding towards zero\n…: the digits carry on (30.769…)\nIn words: with only integers involved, SQL keeps the whole-number part of 30.77, so the answer is **30**.\n```\n\n4. All eight rows lose their fractions, so the percentages no longer add to 100 (here they sum to 95).\n5. Fix with a decimal literal (`100.0 * total`) or a cast, then round: in Postgres `ROUND(100.0 * total / SUM(total) OVER (), 1)` works because the expression is `numeric`.",
+    "link": {
+      "title": "Window functions — SQLite docs",
+      "url": "https://www.sqlite.org/windowfunctions.html"
+    }
+  },
+  {
+    "id": "asql-window-functions-q11",
+    "level": "advanced",
+    "type": "single",
+    "prompt": "What does this return for order 101?\n\n```sql\n-- WHERE restricts the window input.\nSELECT id,\n  SUM(total) OVER () AS s\nFROM orders\nWHERE customer_id = 1;\n```",
+    "options": [
+      {
+        "text": "650, the total of all orders",
+        "explanation": "WHERE runs before window functions, so the window only sees Ana's three orders."
+      },
+      {
+        "text": "120, its own total",
+        "explanation": "`OVER ()` with no ORDER BY covers the whole (filtered) result, not just the current row."
+      },
+      {
+        "text": "240, the sum of Ana's orders",
+        "explanation": "Correct. The filter leaves 101, 103, 107, and `OVER ()` sums those: 120 + 60 + 60 = 240."
+      },
+      {
+        "text": "An error: a window aggregate can't be mixed with WHERE",
+        "explanation": "WHERE and window functions combine freely; the window just runs on the filtered rows."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. FROM and WHERE produce Ana's rows: 101 (120), 103 (60), 107 (60).\n2. Window functions run on that result set.\n3. `SUM(total) OVER ()` = 240 on each row.\n\nSo if you want \"this order as a share of *all* revenue\" while showing only Ana, compute the window in an inner query first, then filter outside:\n\n```sql\n-- Filter after the grand sum is known.\nSELECT * FROM (\n  SELECT id, customer_id,\n    SUM(total) OVER () AS s\n  FROM orders) AS t\nWHERE customer_id = 1;\n```\n\nThat gives 650.",
+    "link": {
+      "title": "Window functions tutorial — PostgreSQL docs",
+      "url": "https://www.postgresql.org/docs/18/tutorial-window.html"
+    }
+  }
+]

@@ -71,7 +71,8 @@ Intro paragraph...
   > [!note] Optional title
   > Body text...
   ```
-  Tags: `[!note]`, `[!tip]`, `[!warning]`, `[!example]`. A plain `>` blockquote also works.
+  Tags: `[!note]`, `[!tip]`, `[!warning]`, `[!example]`, `[!analogy]`. A plain `>` blockquote also works.
+  Analogy callouts render as native expandable disclosures, closed on initial load. Other callouts remain visible.
 - No raw HTML, images or nested blockquotes. Italic may sit inside bold (`**bold with *italic* inside**`), but don't end both at once (`***`).
 - Link URLs may contain one level of brackets, e.g. `https://en.wikipedia.org/wiki/Cache_(computing)`.
 
@@ -175,6 +176,39 @@ Other authors work at the same time. Put any temporary files in your own folder
 - Code examples use Python unless the topic calls for another language (C for OS internals, SQL for databases, etc.).
   Add concise comments explaining meaningful operations and the meaning of demonstrated outputs.
   Keep executable behaviour intact and verify any claimed output. Avoid comments that repeat obvious syntax.
+
+## Real-world analogies
+
+For each lesson introducing a technical concept, use a familiar real-world comparison when it helps a reader build an accurate
+mental model. Review each active lesson individually; do not insert generic filler or repeat one analogy
+across unrelated lessons. A short procedure, calculation or worked-code continuation may need no additional
+analogy when the comparison would not add understanding.
+
+Use this exact callout format, with every line (including blank lines) prefixed by `>`:
+
+```markdown
+> [!analogy] Real-world analogy: <familiar situation>
+> Describe the situation in a few short sentences.
+>
+> **How it maps:** Name the technical concept and explicitly connect its parts or behaviour to the situation.
+>
+> **Where it stops:** State the important limitation that prevents the reader taking the comparison literally.
+```
+
+- Keep each analogy focused on the lesson's learning objective, usually one short callout per concept.
+- Place it near the explanation it supports. Use everyday settings that require no specialist knowledge.
+- Keep the technical explanation complete with the analogy closed. Definitions, prerequisite facts, formulas,
+  safety guidance and information needed to answer questions must remain visible in the main lesson.
+- Prefer prose inside the disclosure. Keep required formulas and executable examples outside it.
+- An analogy is a teaching aid, not evidence or a proof. Independently verify its technical mapping and limits
+  against primary sources, following `docs/CONTENT_PROCESS.md`; preserve question ids and existing verification.
+- In questions, optional analogies may appear in feedback or worked examples after answering. Do not put
+  analogy disclosures in prompts or answer options, and do not give away answers in an optional hint.
+- Do not use raw HTML, an `open` attribute, or JavaScript to expand analogies automatically. The native summary
+  must stay usable by touch, keyboard and assistive technology, including offline.
+- `node scripts/audit-analogies.mjs` inventories all active lessons and question fields. Candidate matches and
+  missing callouts are review leads, not proof of a missing or correct analogy. Record any remaining review
+  work honestly; a keyword scan is not a semantic audit.
 
 ## Technical terms
 

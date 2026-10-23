@@ -29,6 +29,8 @@ anything that couldn't be checked is either removed, hedged in the text, or reco
     explained) and `.claude/skills/glossary-terms/SKILL.md` (a glossary entry for every term a beginner might not
     know; too many is better than too few)
   - source every specific number, formula, standard or product fact from a primary or authoritative source
+  - apply the real-world analogy rule in `CONTENT_SPEC.md`: optional `[!analogy]` blocks must include an
+    explicit technical mapping and limitation; keep the full technical explanation outside the disclosure
   - run every code snippet and confirm stated outputs
   - verify every link
   - make the module pass `node scripts/build.mjs --check content/<subject>/<module>`, apart from the
@@ -49,6 +51,8 @@ anything that couldn't be checked is either removed, hedged in the text, or reco
   - checks every answer key and distractor
   - checks every formula block (definitions, units, "In words") and every glossary definition and alias
   - checks that every link loads and supports its claim
+  - checks analogy mappings and limitations against primary sources, checks that required information stays
+    visible with analogies closed, and records which reviewed lessons need no analogy and why
 - The verifier fixes problems in place:
   - corrects errors
   - hedges or removes anything it can't verify
@@ -91,6 +95,17 @@ The verifier writes `content/<subject>/<module>/verification.json` and then runs
 
 Only stamp after a genuine verification pass. Stamping records the hashes of the lesson files and of each glossary
 term; any later edit invalidates them.
+
+For an analogy audit, preserve the existing verification record and add `analogyReview` with `ruleVersion: 1`,
+the author identity, an independent verifier identity and fetched primary `sources`, and a `lessons` object.
+Each reviewed active lesson gets `{ "decision": "added|converted|retained|not-needed", "rationale": "...",
+"hash": "<current lessonHash>" }`. Use one actual decision value, not the pipe-separated list. The verifier
+records the current hash using `lessonHash` from `scripts/verification.mjs` after reviewing the changes.
+Record a specific reason for each lesson that needs no analogy. This audit is scoped to the changed analogy
+and any surrounding text, and does not replace earlier reviews of unchanged questions or glossary terms.
+The audit script only counts reviews with distinct author/verifier identities, primary sources and hashes
+matching both the current source and its verification stamp. Later unrelated edits must not silently renew
+the analogy review; review the analogy again before replacing its stored hash.
 
 ## 5. Integrate and check
 
@@ -135,6 +150,8 @@ that lesson, record it under "Skipped lessons" in `docs/RESUME.md`, and tell the
 - a lesson isn't covered by the record;
 - a lesson's files or a glossary term changed after it was stamped;
 - a formula block leaves a symbol undefined or has no "In words:" line.
+- an analogy callout lacks its descriptive summary, technical mapping or limitation, contains a required
+  formula, or appears in a question prompt or answer option.
 
 Modules written before this procedure existed are listed in `content/verification-legacy.json`:
 - The list is **frozen**. Never add entries to it.

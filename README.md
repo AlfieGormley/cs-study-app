@@ -6,7 +6,7 @@ Each question has a worked example, an explanation for every option and a link t
 
 Subjects: System Design, Data Structures & Algorithms, Operating Systems, Computer Networks, Computer
 Architecture, Programming Languages & Compilers, Security & Cryptography, Software Engineering, Theory &
-Discrete Maths, Databases & SQL, and Synth Building.
+Discrete Maths, Databases & SQL, Synth Building, and Embedded Software.
 New modules follow `docs/new-module.md`; `docs/RESUME.md` records how the content was generated.
 
 ## Run it locally
@@ -29,6 +29,9 @@ lesson can then be completed or revisited independently. Existing question answe
 and old lesson links lead to the first unfinished replacement (or the first replacement when all are complete).
 
 The layout adapts to phone, tablet and desktop, with automatic dark mode and adjustable reading text.
+Real-world analogies appear in optional cards labelled **Real-world analogy**. They start collapsed;
+tap or use the keyboard to open one. Each comparison explains its technical mapping and limitations,
+and the main explanation stays complete with the card closed.
 Lessons include a section navigator. Example panels support copying and an expanded view with zoom;
 real SVG diagrams use shapes, connectors and arrowheads, and keep the original text as a reference.
 Wide diagrams scroll within their panel; Expand provides a larger view with zoom. Reading, diagrams and expansion work offline once the app is cached. Copy also depends on browser clipboard support, permission and a secure context.
@@ -37,6 +40,16 @@ those comments.
 
 Run `node --test scripts/test-renderer.mjs scripts/test-diagrams.mjs` to check example escaping, source preservation and safe
 rendering inside quiz choices, diagram topology and all generated diagram definitions. See `CONTENT_SPEC.md` for diagram and sequential-flow authoring.
+
+## Embedded Software beginner path
+
+Start with **Embedded Software** on the Learn screen. This subject assumes basic programming knowledge
+and explains the C and hardware vocabulary as it goes. Follow the modules in order: firmware foundations,
+C and device I/O, timing and serial buses, then debugging and a small project.
+
+You can learn and test the portable logic on a computer before using a board. Hardware examples distinguish
+the chip, board and SDK requirements; follow the relevant device manuals when connecting real hardware.
+Every lesson includes worked practice questions. Optional real-world analogies start collapsed.
 
 ## Practice completed lessons
 

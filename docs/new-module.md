@@ -22,6 +22,10 @@ Depth and quantity:
   algorithm", scenario and calculation questions. Every workedExample walks through the reasoning step by step.
   Every option explanation names the specific misconception.
 - Lessons in a module go basic → advanced.
+- Apply the real-world analogy rule in `CONTENT_SPEC.md`: use a concise `[!analogy]` callout where a familiar
+  comparison improves understanding, with explicit **How it maps:** and **Where it stops:** paragraphs.
+  Keep the main explanation complete while the analogy is collapsed. Do not force repetitive comparisons
+  onto procedural or calculation-only lessons; report which lessons need none and why.
 
 Formulas and glossary (mandatory, enforced by the build):
 - Read and follow `.claude/skills/writing-formulas/SKILL.md`. Every equation, relation or calculation that uses a

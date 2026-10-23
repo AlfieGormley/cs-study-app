@@ -31,6 +31,17 @@ If a safety check stops a writer, skip that lesson and record it; don't retry it
 - `.claude/skills/glossary-terms/SKILL.md`: each module's `glossary.json` gets an entry for every term a
   beginner might not know. Too many is better than too few.
 
+## Real-world analogies (mandatory)
+
+When teaching a technical concept, add a concise, familiar real-world analogy where it makes the concept
+easier to understand. Put the analogy in a `> [!analogy] Real-world analogy: <short label>` callout, which
+the app renders collapsed by default. Explicitly map the familiar situation to the technical mechanism
+and state where the comparison stops working. Keep definitions, technical explanations, assumptions,
+formulas and information needed to answer questions outside the collapsed block. Do not force an
+analogy onto a straightforward procedure or repeat an analogy without adding useful understanding.
+Audit active lessons listed in `module.json`, not archival lesson files. See `CONTENT_SPEC.md` for the
+format and `docs/CONTENT_PROCESS.md` for independent verification requirements.
+
 ## Other references
 
 - Content format: `CONTENT_SPEC.md`

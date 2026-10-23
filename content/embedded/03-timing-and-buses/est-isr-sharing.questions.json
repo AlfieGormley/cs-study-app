@@ -1,0 +1,96 @@
+[
+  {
+    "id": "est-isr-sharing-q1",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A shared event count contains three. Foreground code copies three locally; an ISR increments the shared count to four; foreground code then clears the shared count to zero and processes its local three. What happened?",
+    "options": [
+      {
+        "text": "The fourth event was preserved by volatile.",
+        "explanation": "Volatile access does not combine the foreground copy and clear into one indivisible operation."
+      },
+      {
+        "text": "Four events will be processed from the local copy.",
+        "explanation": "The local copy was taken before the interrupt incremented the shared count."
+      },
+      {
+        "text": "One event was lost from the software accounting.",
+        "explanation": "Correct. The interrupt increment was overwritten by the later clear, while the local copy still held three."
+      },
+      {
+        "text": "This sequence proves there are two CPU cores.",
+        "explanation": "The ISR can interrupt foreground code on the same core between the copy and clear."
+      }
+    ],
+    "answer": 2,
+    "workedExample": "1. The local copy retains three.\n2. The ISR records a fourth event in the shared value.\n3. The later foreground clear overwrites that new value, so the copied work accounts for only three events.",
+    "link": {
+      "title": "Primary reference for this question",
+      "url": "https://gcc.gnu.org/onlinedocs/gcc/Volatiles.html"
+    }
+  },
+  {
+    "id": "est-isr-sharing-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A Pico SDK function calls `save_and_disable_interrupts()` before a short shared-state operation. The caller had already disabled interrupts. What should the function do on exit?",
+    "options": [
+      {
+        "text": "Unconditionally enable interrupts.",
+        "explanation": "That would change the caller's execution state and may expose a surrounding protected operation."
+      },
+      {
+        "text": "Leave all interrupts disabled forever.",
+        "explanation": "The function should restore the saved state; another caller might have entered with interrupts enabled."
+      },
+      {
+        "text": "Clear every peripheral pending flag.",
+        "explanation": "Interrupt state restoration is not permission to discard unrelated device events."
+      },
+      {
+        "text": "Pass the saved state to the matching restore helper.",
+        "explanation": "Correct. Restoring the prior state preserves whether the caller entered with interrupts enabled or disabled."
+      }
+    ],
+    "answer": 3,
+    "workedExample": "1. The save helper returns the previous interrupt state on the calling core.\n2. The protected operation must remain short.\n3. Restoring that saved state preserves an already-disabled caller instead of accidentally enabling interrupts.",
+    "link": {
+      "title": "Primary reference for this question",
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/master/src/rp2_common/hardware_sync/include/hardware/sync.h"
+    }
+  },
+  {
+    "id": "est-isr-sharing-q3",
+    "level": "intermediate",
+    "type": "multi",
+    "prompt": "A design shares work between foreground code and an ISR. Which statements are correct? Select all that apply.",
+    "options": [
+      {
+        "text": "A true/false flag can merge multiple arrivals into one indication.",
+        "explanation": "Correct. Repeatedly setting an already-true flag does not add an event count."
+      },
+      {
+        "text": "Disabling interrupts on one core also stops the other core from accessing the data.",
+        "explanation": "The SDK helper affects the calling core; it is not a multicore lock."
+      },
+      {
+        "text": "A shared counter still needs an overflow policy or a justified no-overflow bound.",
+        "explanation": "Correct. Its finite range cannot retain an unlimited number of events."
+      },
+      {
+        "text": "An atomic type must be checked for suitability on the actual target before using it in an ISR.",
+        "explanation": "Correct. The operation must meet the target/compiler/SDK requirements; not every atomic implementation is appropriate for interrupt context."
+      }
+    ],
+    "answer": [
+      0,
+      2,
+      3
+    ],
+    "workedExample": "1. Decide whether the application needs latest state, event counts or ordered data.\n2. Exclude the actual competing actors; a calling-core interrupt mask does not exclude another core.\n3. Check storage capacity and whether the chosen primitive is suitable for the real interrupt environment.",
+    "link": {
+      "title": "Primary reference for this question",
+      "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/master/src/rp2_common/hardware_sync/include/hardware/sync.h"
+    }
+  }
+]

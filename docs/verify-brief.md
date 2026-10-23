@@ -20,6 +20,11 @@ For every lesson `.md` and `.questions.json` in your module:
    - Is the answer key right?
    - Is any other option also defensibly correct?
    - Do the explanations and worked examples agree with the lesson?
+   - Are required facts still available with every optional analogy closed? No analogy callouts belong in
+     prompts or answer options.
+   - Check each analogy's familiar scenario, technical mapping and stated limit against primary sources.
+     Fix misleading comparisons; do not treat an analogy as a proof. Review lessons without analogies and
+     report whether they need one or why the omission is appropriate.
 4. **Check formulas and the glossary** (`.claude/skills/writing-formulas/SKILL.md`,
    `.claude/skills/glossary-terms/SKILL.md`):
    - Every equation is in a ```formula block; each symbol's definition, unit and typical value is correct; the

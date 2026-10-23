@@ -26,7 +26,7 @@ export function inline(text, options = {}) {
 }
 
 const LIST_RE = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
-const CALLOUTS = { note: 'Note', tip: 'Tip', warning: 'Warning', example: 'Example' };
+const CALLOUTS = { note: 'Note', tip: 'Tip', warning: 'Warning', example: 'Example', analogy: 'Real-world analogy' };
 
 function renderList(lines, options) {
   // lines: [{indent, ordered, text}]
@@ -134,6 +134,14 @@ export function render(md, options = {}) {
         kind = tag[1].toLowerCase();
         title = tag[2] || CALLOUTS[kind];
         body.shift();
+      }
+      if (kind === 'analogy' && options.interactive !== false) {
+        // Summary labels must not contain links or glossary buttons: the whole label toggles the disclosure.
+        out += '<details class="callout callout-analogy"><summary>' +
+          inline(title, { ...options, interactive: false, terms: false }).replace(/<a\b[^>]*>(.*?)<\/a>/g, '$1') +
+          '</summary><div class="analogy-body">' +
+          render(body.join('\n'), { ...options, seen: new Set() }) + '</div></details>';
+        continue;
       }
       out += `<aside class="callout callout-${kind}">` +
         (title ? `<div class="callout-title">${inline(title, options)}</div>` : '') +

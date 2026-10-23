@@ -590,6 +590,23 @@ The System Design subject covers networking at the design level, so these module
 - 2026-10-04: the AI & Machine Learning subject (`content/ml`, 5 modules) was removed at the user's request to keep the
   focus narrower. The files were moved to the macOS Trash (`cs-study-ml-20261004`).
 
+## Embedded Software beginner course added on 23 October 2026
+
+Added `content/embedded` as a separate beginner subject: four modules, 26 short lessons, 70 worked practice
+questions, 26 optional analogy disclosures and 224 glossary entries. All four modules have independent
+verification records and current lesson, glossary and analogy-review hashes.
+
+The course covers firmware foundations, C and device I/O, timing and serial buses, then debugging and a
+small sensor/indicator project. Portable C examples and project models were exercised on the host;
+physical board behaviour and actual RTOS execution remain outside those checks.
+
+See `docs/embedded-software-brief.md` for scope and `docs/embedded-software-verification.json` for
+corrections, sources, validation evidence, gaps and confidence. Advanced bootloaders, OTA, DMA/cache
+coherence, production security and power characterisation are outside this introduction.
+
+This release adds the course and its optional-analogy renderer/build support to the existing published
+curriculum. Other subjects' pending analogy edits and local Theory-course removals are excluded.
+
 ## Skipped lessons
 
 A safety check stopped the writer partway through each of these, so they were left out on purpose. Don't retry them:

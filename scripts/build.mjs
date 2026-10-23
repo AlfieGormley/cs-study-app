@@ -13,6 +13,7 @@ import { checkFormula } from '../formula.js';
 import { migrationProblems, subjectMigrationProblems } from '../lesson-progress.js';
 import { glossary as coreGlossary } from '../glossary-data.js';
 import { aliasKey } from '../glossary-rules.js';
+import { inspectAnalogies } from './audit-analogies.mjs';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const contentDir = path.join(root, 'content');
@@ -55,6 +56,7 @@ const fences = (text) => [...String(text ?? '').matchAll(/```([^\n]*)\n([\s\S]*?
 const codeLines = (text) => fences(text).flatMap(({ lang, body }) =>
   (lang === 'formula' ? body.split(/^\s*where:?\s*$/im)[0] : body).split('\n'));
 const formulaProblems = (text) => fences(text).filter((f) => f.lang === 'formula').flatMap((f) => checkFormula(f.body));
+const analogyProblems = (text) => inspectAnalogies(String(text ?? '')).blocks.flatMap((b) => b.problems);
 const tooWide = (text, max) => codeLines(text).filter((l) => [...l].length > max);
 
 const isUrl = (u) => typeof u === 'string' && /^https?:\/\/\S+$/.test(u);
@@ -82,6 +84,9 @@ function validateQuestion(q, file, ids) {
     err(file, `${at}: multi answer must be a non-empty array of indices`);
   if (!q.workedExample) err(file, `${at}: missing workedExample`);
   const texts = [q.prompt, q.workedExample, ...(q.options ?? []).flatMap((o) => [o?.text, o?.explanation])];
+  for (const text of [q.prompt, ...(q.options ?? []).map(o => o?.text)])
+    if (inspectAnalogies(String(text ?? '')).blocks.length) err(file, `${at}: analogy callouts belong in feedback, not prompts or answer options`);
+  for (const problem of texts.flatMap(analogyProblems)) err(file, `${at}: ${problem}`);
   for (const problem of texts.flatMap(formulaProblems)) err(file, `${at}: ${problem}`);
   const wide = texts.flatMap((t) => tooWide(t, 40));
   if (wide.length) err(file, `${at}: ${wide.length} code line(s) wider than 40 chars, e.g. "${wide[0]}"`);
@@ -155,6 +160,7 @@ for (const subjectName of dirs(contentDir)) {
       if (migrationOwners.has(lessonId) && meta.sourceLesson !== migrationOwners.get(lessonId)) err(mdFile, 'migration targets must name their original sourceLesson in frontmatter');
       if (!meta.summary) err(mdFile, 'missing summary');
       for (const problem of formulaProblems(body)) err(mdFile, problem);
+      for (const problem of analogyProblems(body)) err(mdFile, problem);
       const wideL = tooWide(body, 44);
       if (wideL.length) err(mdFile, `${wideL.length} code line(s) wider than 44 chars, e.g. "${wideL[0]}"`);
       if (!/^## Key takeaways/m.test(body)) err(mdFile, 'missing "## Key takeaways"');

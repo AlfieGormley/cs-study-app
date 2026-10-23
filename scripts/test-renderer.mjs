@@ -27,10 +27,35 @@ test('explicit flow blocks use vector nodes while code stays code', () => {
 });
 
 test('answer choices never contain nested controls, including callouts and tables', () => {
-  const html = render('> [!example]\n> ```flow\n> Source\n> Execute\n> ```\n\n| A | B |\n|---|---|\n| 1 | 2 |', { interactive: false });
+  const html = render('> [!analogy] Real-world analogy\n> Optional comparison.\n\n> [!example]\n> ```flow\n> Source\n> Execute\n> ```\n\n| A | B |\n|---|---|\n| 1 | 2 |', { interactive: false });
   assert.ok(!/<button|<details|tabindex=/.test(html));
   assert.ok(html.includes('<svg'));
   assert.ok(html.includes('<table>'));
+});
+
+test('analogy disclosures start closed and keep subsequent technical content visible', () => {
+  const html = render('> [!analogy] Real-world analogy: a desk\n> **How it maps:** Redis keeps frequently used values nearby.\n>\n> **Where it stops:** A desk does not expire entries.\n\n## The mechanism\n\nThe technical explanation.');
+  assert.match(html, /<details class="callout callout-analogy"><summary>Real-world analogy: a desk<\/summary>/);
+  assert.doesNotMatch(html, /<details[^>]*\bopen\b/);
+  assert.match(html, /<strong>How it maps:<\/strong>/);
+  assert.match(html, /<strong>Where it stops:<\/strong>/);
+  assert.match(html, /<\/details><h2>The mechanism<\/h2><p>The technical explanation\.<\/p>/);
+});
+
+test('analogy summaries escape markup and contain no nested links or glossary controls', () => {
+  const html = render('> [!analogy] [Redis](https://redis.io) <script>alert(1)</script>\n> Redis is still linked in the body.');
+  const summary = html.match(/<summary>(.*?)<\/summary>/)[1];
+  assert.doesNotMatch(summary, /<a\b|<button\b|<script>/);
+  assert.match(summary, /&lt;script&gt;/);
+  assert.match(html.split('</summary>')[1], /data-term="redis"/);
+});
+
+test('closed analogy terms do not consume glossary links in the visible explanation', () => {
+  const html = render('> [!analogy]\n> Redis is like keeping a note nearby.\n\nRedis is the technical example.');
+  assert.equal((html.match(/data-term="redis"/g) || []).length, 2);
+  assert.match(html, /<summary>Real-world analogy<\/summary>/);
+  assert.match(html, /<\/details><p><button[^>]*data-term="redis"/);
+  assert.doesNotMatch(render('> [!note] A note\n> Always visible.'), /<details/);
 });
 
 test('text diagrams with Unicode arrows and ordinary code both stay available', () => {

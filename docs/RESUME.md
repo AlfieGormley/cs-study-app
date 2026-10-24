@@ -607,6 +607,27 @@ coherence, production security and power characterisation are outside this intro
 This release adds the course and its optional-analogy renderer/build support to the existing published
 curriculum. Other subjects' pending analogy edits and local Theory-course removals are excluded.
 
+## React concepts course added on 24 October 2026
+
+Added `content/react` as a separate beginner-to-intermediate subject: three modules, 26 short lessons,
+78 worked practice questions, 166 glossary terms and 19 optional analogy disclosures. Basic JavaScript
+is assumed; additional syntax is explained before it is used. The path covers components and JSX,
+state and controlled forms, then Hooks, effects, refs, context, performance and a small task-list project.
+
+Distinct authors and independent reviewers checked all modules against fetched official React and MDN
+sources. Review records cover 629 grouped checks and 21 correction groups, with no unresolved
+low-confidence claims. Actual examples were exercised with React and React DOM 19.3.1 in temporary
+JSX/DOM harnesses; the study app has no React runtime dependency.
+
+The full build and 67 automated tests pass. All 57 reading URLs load. Browser checks cover every lesson
+and all questions at 390 px and 1440 px, dictionary meanings, search, practice, offline loading and
+preservation of prior progress. All 80 existing modules remain byte-identical in compiled form and all
+5,722 existing question records are preserved.
+
+See `docs/react-concepts-brief.md` and `docs/react-concepts-verification.json` for scope, corrections,
+sources and evidence. Full JavaScript/CSS instruction, project installation, routing/state libraries,
+server rendering, advanced React APIs and production data-management architecture remain outside scope.
+
 ## Skipped lessons
 
 A safety check stopped the writer partway through each of these, so they were left out on purpose. Don't retry them:

@@ -6,7 +6,7 @@ Each question has a worked example, an explanation for every option and a link t
 
 Subjects: System Design, Data Structures & Algorithms, Operating Systems, Computer Networks, Computer
 Architecture, Programming Languages & Compilers, Security & Cryptography, Software Engineering, Theory &
-Discrete Maths, Databases & SQL, Synth Building, and Embedded Software.
+Discrete Maths, Databases & SQL, Synth Building, Embedded Software, and React.
 New modules follow `docs/new-module.md`; `docs/RESUME.md` records how the content was generated.
 
 ## Run it locally
@@ -50,6 +50,18 @@ C and device I/O, timing and serial buses, then debugging and a small project.
 You can learn and test the portable logic on a computer before using a board. Hardware examples distinguish
 the chip, board and SDK requirements; follow the relevant device manuals when connecting real hardware.
 Every lesson includes worked practice questions. Optional real-world analogies start collapsed.
+
+## React concepts: beginner to intermediate
+
+Choose **React** on the Learn screen. Start with components and JSX, then work through state updates,
+controlled forms and shared state. Finish with Hooks, refs, effects and cleanup, data-fetching lifecycles,
+context, performance trade-offs and a small searchable task-list project.
+
+The course assumes basic JavaScript and explains additional syntax as it appears. Each short lesson has
+worked practice questions and a glossary; useful analogies remain optional. Examples use function components
+and Hooks, and are checked with React and React DOM 19.3.1 in a separate test harness. React is not a runtime
+dependency of this study app. See `docs/react-concepts-brief.md` for scope and prerequisites, and
+`docs/react-concepts-verification.json` for independent review and validation evidence.
 
 ## Practice completed lessons
 

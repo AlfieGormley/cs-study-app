@@ -6,7 +6,7 @@ Each question has a worked example, an explanation for every option and a link t
 
 Subjects: System Design, Data Structures & Algorithms, Operating Systems, Computer Networks, Computer
 Architecture, Programming Languages & Compilers, Security & Cryptography, Software Engineering, Theory &
-Discrete Maths, Databases & SQL, Synth Building, Embedded Software, and React.
+Discrete Maths, Databases & SQL, Synth Building, Embedded Software, React, and Digital Signal Processing.
 New modules follow `docs/new-module.md`; `docs/RESUME.md` records how the content was generated.
 
 ## Run it locally
@@ -62,6 +62,18 @@ worked practice questions and a glossary; useful analogies remain optional. Exam
 and Hooks, and are checked with React and React DOM 19.3.1 in a separate test harness. React is not a runtime
 dependency of this study app. See `docs/react-concepts-brief.md` for scope and prerequisites, and
 `docs/react-concepts-verification.json` for independent review and validation evidence.
+
+## Digital Signal Processing: beginner to intermediate
+
+Choose **Digital Signal Processing** on the Learn screen. Begin with samples, timing and signal levels,
+then work through systems, convolution and filters. Finish with Fourier analysis, spectrum measurements,
+sample-rate conversion and a reproducible measurement project. The examples cover general time-series,
+sensor and audio processing rather than synthesiser design.
+
+Basic algebra and simple Python are assumed; unfamiliar notation is explained as it appears. Equations
+define their symbols and units, and each short lesson includes worked practice questions. Python examples
+are checked in a separate NumPy/SciPy environment; the study app remains a static PWA. See
+`docs/dsp-concepts-brief.md` for scope and `docs/dsp-concepts-verification.json` for review evidence.
 
 ## Practice completed lessons
 

@@ -628,6 +628,30 @@ See `docs/react-concepts-brief.md` and `docs/react-concepts-verification.json` f
 sources and evidence. Full JavaScript/CSS instruction, project installation, routing/state libraries,
 server rendering, advanced React APIs and production data-management architecture remain outside scope.
 
+## Digital Signal Processing course added on 25 October 2026
+
+Added `content/dsp` as a separate beginner-to-intermediate subject: three modules, 27 short lessons,
+81 worked practice questions, 72 formula cards, 164 glossary terms and 19 optional analogy disclosures.
+The route covers sampled signals and levels, systems/convolution/FIR/IIR filters, then Fourier analysis,
+windowing, rate conversion and a reproducible measurement project. Basic algebra and simple Python are
+assumed; notation is introduced as it is used. Existing synth/audio lessons remain unchanged.
+
+Distinct authors and independent reviewers checked all modules using actual primary-source retrievals,
+recomputed examples and exact Python execution with NumPy 2.5.4 and SciPy 1.18.1. Records contain 356
+explicitly grouped review units and 20 correction groups, with no unresolved low-confidence claims.
+Corrections include sampled versus ideal peaks, filter phase/delay assumptions, Hann/PSD calibration,
+FFT boundary wording and glossary definitions that previously opened unrelated concepts.
+
+The whole build and 67 app tests pass; all 45 reading URLs load. Browser checks cover all lessons and
+questions at 390 px and 1440 px, including 144 formula-card checks, dictionary meanings, search,
+practice, offline loading and saved-progress preservation. All 83 previous modules remain byte-identical
+in compiled form, and all 5,800 previous question records are unchanged.
+
+Scope, sources, corrections and validation are in `docs/dsp-concepts-brief.md` and
+`docs/dsp-concepts-verification.json`. Full calculus/proofs, detailed z-transform/pole-zero design,
+adaptive filtering, beamforming, production real-time guarantees and fixed-point implementation are
+outside this introduction; synthetic host experiments do not establish real-device performance.
+
 ## Skipped lessons
 
 A safety check stopped the writer partway through each of these, so they were left out on purpose. Don't retry them:

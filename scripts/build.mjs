@@ -340,7 +340,7 @@ for (const [rel, obj] of Object.entries(outputs)) {
 }
 
 // App shell + data files for the service worker to precache.
-const shell = ['./', 'index.html', 'update.html', 'styles.css', 'app.js', 'practice.js', 'lesson-progress.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'glossary-rules.js', 'glossary-terms.js', 'formula.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
+const shell = ['./', 'index.html', 'update.html', 'styles.css', 'app.js', 'practice.js', 'lesson-progress.js', 'quiz-session.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'glossary-rules.js', 'glossary-terms.js', 'formula.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 for (const f of shell.slice(1)) {
   const p = path.join(root, f);

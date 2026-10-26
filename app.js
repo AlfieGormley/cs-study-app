@@ -4,6 +4,7 @@ import { loadDiagrams } from './diagrams.js';
 import { installGlossary, searchGlossary, glossary } from './glossary.js';
 import { daysSinceCompletion, normalizeCompletionRange } from './practice.js';
 import { migrateLessonProgress, migratedLessonId, updateOriginalCompletion } from './lesson-progress.js';
+import { sessionQuestion, advanceSession } from './quiz-session.js';
 installGlossary();
 installExampleTools();
 
@@ -384,13 +385,32 @@ async function quizView(id) {
   }
   if (ses.i >= ses.items.length) return quizSummary(ses);
   const item = ses.items[ses.i];
-  const { lesson, q } = await resolveItem(item);
+  const { lesson, q: liveQuestion } = await resolveItem(item);
   if (navigation !== navigationId) return;
-  if (!q) { // content changed since the session was saved: skip it
+  const restored = sessionQuestion(ses, item, liveQuestion, lesson?.title);
+  const next = () => {
+    advanceSession(ses);
+    save(true);
+    quizView(id).then(() => { scrollTo(0, 0); view.focus({ preventScroll: true }); });
+  };
+  if (restored.kind === 'recorded') {
+    chrome({ title: ses.title, back: ses.back, backLabel: 'Exit', focus: true });
+    view.innerHTML = `<h1>Answer saved</h1>
+      <p class="subtitle">Your previous result is saved. Continue your quiz from here.</p>
+      ${restored.result ? `<div class="card"><b>Recorded result: ${restored.result.ok ? 'Correct' : 'Not quite'}</b></div>` : ''}
+      <div class="sticky-actions"><button class="btn" id="next">${ses.i + 1 < ses.items.length ? 'Next question' : 'See results'}</button></div>`;
+    $('#next').onclick = next;
+    return;
+  }
+  if (restored.kind === 'missing') { // content changed since the session was saved: skip it
     ses.items.splice(ses.i, 1);
+    ses.picked = [];
+    delete ses.currentQuestion;
     save();
     return quizView(id);
   }
+  const { question: q, lessonTitle } = restored;
+  save(true);
   chrome({ title: ses.title, back: ses.back, backLabel: 'Exit', focus: true });
   const key = qKey(item.s, q.id);
   const multi = q.type === 'multi';
@@ -419,7 +439,8 @@ async function quizView(id) {
         <div class="progress"><div style="width:${pct(ses.i + (checked ? 1 : 0), ses.items.length)}%"></div></div>
         <button class="icon-btn" id="bm" aria-pressed="${marked}" aria-label="Bookmark question">${bookmarkIcon(marked)}</button>
       </div>
-      <div class="row-meta" style="margin:0 0 10px">${badge(q.level)}<span class="meta">${esc(lesson.title)}</span>${completionAge === null ? '' : `<span class="meta quiz-completion-age">Completed ${completionAge ? `${plural(completionAge, 'day')} ago` : 'today'}</span>`}</div>
+      <div class="row-meta" style="margin:0 0 10px">${badge(q.level)}<span class="meta">${esc(lessonTitle)}</span>${completionAge === null ? '' : `<span class="meta quiz-completion-age">Completed ${completionAge ? `${plural(completionAge, 'day')} ago` : 'today'}</span>`}</div>
+      ${!checked && !picked.length && restored.selectionReset ? '<p role="status" class="quiz-hint">Please choose an answer again so it matches the current question.</p>' : ''}
       <div class="quiz-prompt prose">${md(q.prompt, { subject: item.s })}</div>
       ${multi ? '<div class="quiz-hint">Select all that apply.</div>' : ''}
       ${checked ? verdict(right) : ''}
@@ -454,7 +475,7 @@ async function quizView(id) {
           <span><b>Learn more: ${esc(q.link.title)}</b><small>${esc(new URL(q.link.url).hostname)}</small></span></a>
         <a class="link-card" href="#/l/${item.s}/${item.m}/${item.l}">
           <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 015.5 4H11v16H5.5A1.5 1.5 0 014 18.5zM13 4h5.5A1.5 1.5 0 0120 5.5v13a1.5 1.5 0 01-1.5 1.5H13z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
-          <span><b>Revisit the lesson</b><small>${esc(lesson.title)}</small></span></a>` : ''}
+          <span><b>Revisit the lesson</b><small>${esc(lessonTitle)}</small></span></a>` : ''}
       <div class="sticky-actions">
         ${checked
           ? `<button class="btn" id="next">${ses.i + 1 < ses.items.length ? 'Next question' : 'See results'}</button>`
@@ -481,20 +502,14 @@ async function quizView(id) {
       const a = state.answers[key] || { c: 0, w: 0 };
       state.answers[key] = { c: a.c + (ok ? 1 : 0), w: a.w + (ok ? 0 : 1), last: ok, t: Date.now() };
       ses.checked = true;
-      ses.results.push({ ...item, ok, level: q.level });
+      ses.results.push({ ...item, ok, level: q.level, prompt: q.prompt, lessonTitle });
       markDay();
       save(true);
       draw();
       $('.verdict', view)?.focus({ preventScroll: true });
       $('.verdict', view)?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'center' });
     });
-    $('#next')?.addEventListener('click', () => {
-      ses.i++;
-      ses.picked = [];
-      ses.checked = false;
-      save(true);
-      quizView(id).then(() => { scrollTo(0, 0); view.focus({ preventScroll: true }); });
-    });
+    $('#next')?.addEventListener('click', next);
   };
   draw();
 }
@@ -511,8 +526,10 @@ async function quizSummary(ses) {
   }).join('');
   const wrong = ses.results.filter((r) => !r.ok);
   const wrongRows = await Promise.all(wrong.map(async (r) => {
-    const { q, lesson } = await resolveItem(r);
-    return q ? `<a class="row" href="#/l/${r.s}/${r.m}/${r.l}"><div class="row-main"><div class="row-title">${esc(plainText(q.prompt).slice(0, 110))}</div><div class="row-sub">${esc(lesson.title)}</div></div>${chevron}</a>` : '';
+    const { lesson } = await resolveItem(r);
+    const title = r.lessonTitle ?? lesson?.title;
+    const prompt = r.prompt ? plainText(r.prompt).slice(0, 110) : `Revisit ${title ?? 'the lesson'}`;
+    return title ? `<a class="row" href="#/l/${r.s}/${r.m}/${r.l}"><div class="row-main"><div class="row-title">${esc(prompt)}</div><div class="row-sub">${esc(title)}</div></div>${chevron}</a>` : '';
   }));
   if (navigation !== navigationId) return;
   const C = 2 * Math.PI * 54;

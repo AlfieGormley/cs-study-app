@@ -25,11 +25,20 @@ library finished from a renderer change or a partial module audit.
   and `/tmp/check-concept-first-library.mjs` (every compiled lesson/question at phone and desktop widths).
   Re-run against the final verified build; passing renders do not certify content review.
 - The first six-module checkpoint is commit `9bd10c5`. The next thirteen-module build is version
-  `2e2f58e71760`, including sound glossary corrections. All 78 Node tests and the original migration
+  `2e2f58e71760` (commit `1056c5f`), including sound glossary corrections. All 78 Node tests and the original migration
   audit pass. All 2,717 lessons and 5,881 questions render at 390 and 1440 px; all 168 changed dictionary
   name/alias lookups pass. DSP route/control/offline/prior-progress checks pass. This is integration
   evidence for the compiled build, not semantic certification of the remaining modules. Original
   migration snapshots are in `/tmp/concept-first-migration/`.
+- A subsequent paused-quiz fix builds as `e726e29b301f` with the same verified content. New sessions
+  preserve the current question text/options/key across content updates. Older checked answers keep
+  their recorded result without being regraded against revised options; older unsubmitted selections
+  are cleared once. Historical attempts and scores remain intact. All 84 tests, DSP navigation/offline
+  checks and dedicated saved-quiz/update/offline checks pass. The new `quiz-session.js` is precached.
+  QA for the earlier content checkpoint is preserved in `/tmp/concept-first-qa-2e2f58e71760/`.
+- Theory/discrete structures found its corrected `sql-null` entry is shadowed by theory/01-logic-proofs.
+  Prioritise the owning module next and independently correct its ordinary-comparison/IS NULL distinction;
+  a correction to a shadowed entry alone does not change the compiled dictionary.
 - Nothing from this rewrite has been published yet. Finish independent review, build/tests/audits,
   commit and publish the verified result, and check the public app matches the tested release.
 

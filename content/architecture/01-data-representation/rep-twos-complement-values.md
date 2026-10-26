@@ -7,25 +7,11 @@ summary: The highest two's-complement bit has a negative weight.
 sourceLesson: rep-integers
 ---
 
-This unit continues the preceding material on fixed-width integer representations.
+Two's complement gives negative and non-negative integers distinct patterns while keeping one representation of zero. Reading its top bit correctly explains both its range and its asymmetry.
 
 ## Two's complement
 
 Two's complement makes one small change to the weights. The most significant bit is worth **minus** its usual weight instead of plus. All other bits keep their usual positive weights:
-
-```formula
-x = −d_{n−1} 2^{n−1} + Σ d_i 2^i
-where
-x: the signed value that the n bits represent
-n: the number of bits (8 for an 8-bit integer)
-d_{n−1}: the top bit, also called the sign bit: 0 or 1
-2^{n−1}: the weight of the top bit, n − 1 copies of 2 multiplied together; 128 for 8 bits, but subtracted instead of added
-Σ: "add up" the term after it for every bit position i from 0 to n − 2, that is, every bit except the top one
-d_i: the bit (0 or 1) in position i
-i: the bit position, counted from 0 at the right
-2^i: the ordinary positive weight of position i
-In words: read the bits exactly as for unsigned numbers, except that the top bit subtracts its weight instead of adding it.
-```
 
 For 8 bits the weights are:
 
@@ -34,11 +20,7 @@ bit:      7   6   5   4  3  2  1  0
 weight: -128  64  32  16  8  4  2  1
 ```
 
-So `1111 1011` is:
-
-```
--128 + 64 + 32 + 16 + 8 + 2 + 1 = -5
-```
+The pattern `1111 1011` therefore reads as −5. The lower set bits contribute 123, which is five less than the magnitude of the negative top-bit weight.
 
 And `1000 0000` is −128 on its own, the most negative 8-bit value.
 
@@ -56,10 +38,8 @@ Notice that the same bit pattern means different things. `1111 1111` is 255 if y
 
 The most negative value has only the top bit set; the most positive has every bit set except the top one:
 
-```formula
+```formula reference
 −2^{n−1} ≤ x ≤ 2^{n−1} − 1
-−2^7 ≤ x ≤ 2^7 − 1   for n = 8
-−128 ≤ x ≤ 127
 where
 x: a value an n-bit two's complement integer can hold
 n: the number of bits
@@ -79,7 +59,7 @@ The range is lopsided: there is one more negative value than positive, because z
 
 ### Negating: invert and add one
 
-To find −x, flip every bit and add 1:
+To negate a value within the retained width, flip every bit and add one:
 
 ```
  +5 = 0000 0101
@@ -87,18 +67,7 @@ flip  1111 1010
  +1   1111 1011   = -5
 ```
 
-It works in both directions. Negate −5 the same way and you get +5 back. Here is why:
-
-```formula
-x + ~x = −1
-~x = −x − 1
-~x + 1 = −x
-where
-x: any n-bit two's complement value
-~x: x with every bit inverted, 0s becoming 1s and 1s becoming 0s; ~ is the bitwise NOT operator in C and Python
-−1: in two's complement, the all-ones pattern (1111 1111 in 8 bits)
-In words: a number plus its inverted copy has a 1 in every position, which is −1; move x to the other side and add 1, and "flip and add one" is exactly negation.
-```
+For values whose negation fits, this works in both directions. Inverting pairs every bit with its opposite, giving the all-ones pattern when the two are added. Adding one to the inverted pattern makes it the additive inverse within the retained width.
 
 For example, complementing the value five gives `1111 1010` (−6), and adding 1 gives `1111 1011`, which is −5.
 

@@ -7,13 +7,13 @@ sourceLesson: prob-bayes
 summary: Conditional independence within each class turns feature likelihoods into a product.
 ---
 
-## Naive Bayes classifiers
+A **naive Bayes classifier** compares explanations for a set of features. In email, the classes might be spam and **ham**, meaning legitimate email. A word common in spam and uncommon in ham is evidence towards spam; its rate within spam alone is not a posterior probability.
 
-A spam filter wants the chance an email is spam given the words in it. Bayes flips this round to the chance of those words given spam, which is easy to estimate by counting words in labelled email. **Ham** is the usual name for legitimate, non-spam email.
+## Combine prior and feature evidence
 
-The **naive assumption** is conditional independence of the chosen features given the class. In the token model used by the later code and smoothing formula, tokens at the email’s positions are modelled as independent draws from a class-specific vocabulary distribution. Then each word contributes its own factor, and the denominator (the same for both classes) can be dropped when you only want to know which class wins:
+For each class, start from its prior frequency and combine how typical the observed features are within that class. The naive assumption makes those features conditionally independent given the class, so their likelihood factors multiply. Compare class scores; a common normalising denominator can be omitted when only the winning class matters.
 
-```formula
+```formula reference
 S_c = P(c) × Π_i P(w_i | c)
 where
 c: a class, here either spam or ham
@@ -24,17 +24,21 @@ i: a counter running over the words, 1, 2, 3, …
 Π_i: the product sign Π, "multiply the following term together for every word i"
 P(w_i | c): the probability of token w_i at position i in the class-c token model (| is read "given"), estimated from token counts
 P: probability; probabilities are dimensionless and apply to measurable events
-Conditioning: every event to the right of a given bar in this card has positive probability
 In words: start with how common the class is, then multiply in how typical each word is of that class.
 ```
 
-A different presence-feature model uses the probability that an entire email contains a word, rather than the probability of a token draw. The questions below supply document-presence probabilities and assume those presence features are conditionally independent. Do not substitute token-frequency estimates for document-presence probabilities.
+This token model treats word positions as independent draws from a class-specific vocabulary distribution. A document-presence model instead asks whether a word occurs anywhere in the email. Token frequencies and document-presence probabilities are different inputs and cannot be interchanged.
 
-Compute the score for spam and for ham, and pick whichever is larger. Real words can remain correlated even within a class (for example, words in fixed phrases), so the naive assumption is an approximation and posterior scores may be poorly calibrated. Paul Graham’s 2002 "A Plan for Spam" describes a related Bayesian filter with token-selection and scoring choices beyond the simple model here.
+## Useful classification is not calibrated certainty
+
+Two words may occur together in a phrase even within spam messages. Treating them as independent may count overlapping evidence twice and produce overly extreme probabilities. The model can still classify usefully, but a good spam/ham ranking does not demonstrate that a reported probability is calibrated.
+
+When comparing two positive indicators, a second word more characteristic of spam strengthens the spam score under the stated independence model. In practice, check dependence and evaluate predictions on held-out labelled examples.
 
 ## Key takeaways
-- Conditional independence within each class turns feature likelihoods into a product.
-- Compare class scores to classify; useful rankings do not guarantee calibrated probabilities.
+- Compare evidence under competing classes and include their priors.
+- Conditional independence simplifies scoring but needs scrutiny.
+- Specify whether features describe token occurrences or document presence.
 
 ## Further reading
 - [Naive Bayes — scikit-learn](https://scikit-learn.org/stable/modules/naive_bayes.html)

@@ -7,44 +7,31 @@ sourceLesson: prob-basics
 summary: Series systems require every component to work.
 ---
 
-## Reliability: the engineer's favourite use
+Availability asks whether a service is working at a sampled instant, or what fraction of time it is serving. The first modelling decision is which components must be working together.
 
-Independence makes system reliability easy to estimate. **System availability** is the fraction of time a component is up and serving.
+## Required dependencies versus alternatives
 
-In a **series system** (components that must all work), multiply the availabilities. A request that passes through three services, each independently up 99.9% of the time, in a model with no other causes of failure:
+In a **series system**, every required component must work. A checkout path needing a gateway, authentication and payment service fails when any required link fails. Adding another required dependency cannot improve availability in this model. With independent component states, multiply their availabilities. When at least two required components each have availability strictly between zero and one, the path is less available than either one alone.
 
-```formula
-A_s = a_1 × a_2 × a_3
-A_s = 0.999 × 0.999 × 0.999 ≈ 0.997
-where
-A_s: the availability of the whole chain, the fraction of time every service is up at once
-a_1, a_2, a_3: the availability of each service, here 0.999 (99.9%)
-≈: approximately equal to (0.997003, rounded)
-In words: the chain works only when all three work, so with independent failures the chance is the product, about 99.7%.
-```
+In **parallel redundancy**, any one replica is sufficient. With perfect routing and failover and no other failure causes, the service fails only when all replicas are down. Under mutual independence, multiply the downtime probabilities and take the complement. This can produce a large improvement, but the assumptions do the work.
 
-So the chain is down about 0.3% of the time, roughly three times worse than any single service. Long chains of dependencies erode availability.
+## Investigate shared failure causes
 
-With **parallel redundancy** (replicas where any one working copy is sufficient, with ideal routing and failover), multiply the failure probabilities. Three replicas, each down 1% of the time independently:
+Replicas can share power, networking, configuration or a software defect. A bad change rolled out everywhere may take every copy down together. A surviving replica may also overload when traffic shifts to it. Both mechanisms break the independent-failure model.
 
-```formula
-P(D) = q^3 = 0.01^3 = 0.000001
-1 − P(D) = 0.999999
-where
-P: probability of measurable events, dimensionless and between zero and one
-q: the probability that one replica is down, here 0.01 (1%)
-q^3: three copies of q multiplied together, one factor per independent replica
-D: the event "all three replicas are down at once"
-P(D): the probability of D
-In words: the cluster fails only when all three replicas are down together, about one moment in a million, giving "six nines" (99.9999%) availability.
-```
+Separating failure domains reduces some shared infrastructure risks; it does not remove shared software risks. Review routing, failover capacity and deployment practice before using a replica count to promise an availability target.
 
-> [!warning] Real failures are correlated
-> The six-nines figure assumes the replicas fail independently. Put them in the same rack, region, power feed or software version and a single event takes them all down. Separating replicas across failure domains can reduce shared infrastructure risks, while a bad deployment across all replicas can still defeat redundancy. When an estimate looks too good, the independence assumption is usually the culprit.
+> [!analogy] Real-world analogy: keys and spare keys
+> A journey needing every key on a ring stops if one required key is missing. Spare copies of one key help only if one copy can still be reached.
+>
+> **How it maps:** Required keys resemble series dependencies; usable copies resemble redundant replicas. Losing the bag containing every copy is a shared failure.
+>
+> **Where it stops:** Services also have partial failures, recovery delays and changing capacity; physical keys do not model those dynamics.
 
 ## Key takeaways
-- Series systems require every component to work.
-- Parallel replicas help only under the stated independence and failover assumptions.
+- Decide whether all components or any one component must work.
+- Multiplication assumes independent component states.
+- Shared causes and inadequate failover can defeat redundancy.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 17/86 modules and 321/2717 active lessons have current independent editorial reviews.
+Status: **in progress**. 19/86 modules and 399/2717 active lessons have current independent editorial reviews.
 
 The user requested the whole library. This report counts only active lesson IDs from module.json. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -14,7 +14,7 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 
 | Module | Status | Lessons | Questions | Lesson formula cards before → after | Essential / reference | Question cards before → after | Glossary terms | Review units | Corrections |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| architecture / Data Representation | Pending review | 37 | — | — | — | — | — | — | — |
+| [architecture / Data Representation](../content/architecture/01-data-representation/verification.json) | Reviewed | 37 | 76 | 39 → 8 | 1 / 7 | 21 → 0 | 393 | 116 | 10 |
 | [architecture / Digital Logic](../content/architecture/02-digital-logic/verification.json) | Reviewed | 34 | 74 | 79 → 41 | 29 / 12 | 154 → 0 | 262 | 154 | 6 |
 | architecture / Instruction Sets & Assembly | Pending review | 35 | — | — | — | — | — | — | — |
 | architecture / Pipelining & CPU Performance | Pending review | 29 | — | — | — | — | — | — | — |
@@ -96,12 +96,66 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | system-design / Case Studies II | Pending review | 42 | — | — | — | — | — | — | — |
 | [theory / Logic & Proofs](../content/theory/01-logic-proofs/verification.json) | Reviewed | 37 | 74 | 80 → 34 | 32 / 2 | 91 → 4 | 278 | 43 | 15 |
 | [theory / Discrete Structures](../content/theory/02-discrete-structures/verification.json) | Reviewed | 40 | 75 | 119 → 56 | 34 / 22 | 110 → 2 | 344 | 123 | 13 |
-| theory / Probability for Computer Science | Pending review | 41 | — | — | — | — | — | — | — |
+| [theory / Probability for Computer Science](../content/theory/03-probability/verification.json) | Reviewed | 41 | 70 | 95 → 27 | 5 / 22 | 82 → 0 | 217 | 118 | 20 |
 | theory / Automata & Regular Languages | Pending review | 32 | — | — | — | — | — | — | — |
 | theory / Context-Free Languages & Computability | Pending review | 32 | — | — | — | — | — | — | — |
 | theory / Complexity Theory | Pending review | 47 | — | — | — | — | — | — | — |
 
 The report certifies editorial provenance only. Build, migration, rendering, offline and deployed-version evidence must be checked separately before publication.
+
+## architecture / Data Representation
+
+46 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- Bit mask was incorrectly restricted to constants; computed patterns are valid masks.
+- Binade spacing doubling now explicitly applies to normal binary values; subnormal spacing is fixed.
+- Infinity glossary now scopes overflow to rounding mode and distinguishes language exceptions.
+- Packed struct explanation now admits nested types and explicit alignment retaining padding.
+- Signed zero wording now distinguishes encodings/signs rather than claiming unequal numeric values.
+- Native Python struct layout example now states the four-byte int ABI assumption.
+- Removed incomplete C if-statement demonstration by supplying complete controlled statements.
+- rep-integers-q4: unsigned-range premise alone did not imply signed overflow; added two positive signed inputs, retaining the correct carry-clear/overflow-set answer.
+- binade glossary example: generic floats with spacing 2^-23 replaced by explicit binary32 scope.
+- rep-alignment-rules: replaced a fixed ordering of within-line/line-crossing/page-crossing costs with processor-, instruction- and cache/TLB-dependent wording.
+
+**Scope gaps and exclusions:**
+
+- All six original scopes retained in 37 focused units, with all 72 original question contracts and 44 executable statement sets preserved; four questions fill newly focused units.
+- No physical cache-line, atomicity, split-lock, DMA or accelerator benchmark: implementation-dependent performance is qualified.
+- MySQL8.4 charset and migration syntax are source-checked, not executed on a MySQL8.4 service. Native C17 builtin checked arithmetic ran; C23 stdckdint/stdbit library availability was not exercised.
+- Peripheral historical adoption/prevalence and product examples are medium confidence; this review does not certify every implementation/version. The unverified YouTube counter anecdote and unsupported fastest-computer ranking are omitted or replaced by directly checked examples.
+- Rust str.len syntax is corrected from primary Rust documentation; no native Rust compiler was available. Java21, Node25, Python3.14 and NumPy2.5 examples were run.
+- No core learning objective omitted; numerical drills replaced by mechanism, interpretation and diagnosis.
+- The historical unavailable YouTube counter anecdote and undated UTF-8 adoption percentage remain omitted with honest evidence-gap notes.
+- No physical split-lock, cache/page, strict-alignment MCU, SIMD, DMA or accelerator benchmark was run. The source-backed conditional descriptions are not measured performance guarantees.
+- C23 checked/std-bit library availability was not executed: retained executable C uses compiler builtins; commented alternatives were checked against the standard. MySQL migration ran on 8.0; the specified 8.4 utf8 alias is primary-source checked.
+- Full integration build and browser/mobile/offline checks are delegated to root. Runtime glossary preview used production matcher and current definitions with existing compiled owners; root must regenerate the actual dictionary and confirm architecture--bit-mask, binade and infinity-float updates.
+- Default all-file link sweep still fails the archived Stanford Bit Twiddling Hacks URL; active-only sweep passes 66/66. Archives remain untouched.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, rep-bit-byte-word-units: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-signed-representations: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-overflow-failures: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-xor-and-applications: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-float-fields: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-floating-practice: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-ascii-and-codepoints: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-utf8-bytes: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-utf16-pairs: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-string-lengths: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-unicode-normalisation: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-text-boundaries: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-endian-byte-order: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-alignment-rules: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-struct-layout: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-packed-struct-risks: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-native-layout-performance: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
+- medium confidence, rep-alignment-rules: Specific unaligned-access and split-lock performance on an arbitrary target Intel, Arm and Linux documents corroborate qualified mechanisms; timings vary by processor, instruction, mode, cache/TLB state and workload and were not benchmarked.
+- medium confidence, rep-native-layout-performance: Performance improvement from SIMD alignment or false-sharing layout on a particular workload No target benchmark; preserve explicit implementation/workload qualifications.
+
 
 ## architecture / Digital Logic
 
@@ -655,6 +709,45 @@ None recorded in this editorial review.
 - No universal RSA performance or attack-time benchmark is claimed; the existing evidence-gap note remains.
 - Browser/mobile/offline and the final shared generated catalogue are root integration checks; this pass independently rendered glossary contexts in an isolated scratch compilation.
 - The other 336 unchanged glossary records retain their historical confidence and provenance; they are not counted as freshly fact-verified in this concept-first pass.
+
+**Low-confidence areas, including preserved qualifications:**
+
+None recorded in this editorial review.
+
+
+## theory / Probability for Computer Science
+
+70 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"scope":"author glossary correction independently verified","term":"prob-bernoulli-trial","before":{"id":"prob-bernoulli-trial","term":"Bernoulli trial","aliases":["Bernoulli trial","Bernoulli trials","Bernoulli(p)","Bernoulli variable","Bernoulli proportion","Bernoulli samples","Bernoulli model","Bernoulli models"],"definition":"A single random experiment with exactly two outcomes, success (probability p) and failure (probability 1 − p). Repeated independent Bernoulli trials underlie the binomial and geometric distributions.","example":"Each packet sent over a link that drops 1% of packets is a Bernoulli trial with p = 0.01 for 'lost'.","source":"https://en.wikipedia.org/wiki/Bernoulli_trial"},"after":{"id":"prob-bernoulli-trial","term":"Bernoulli trial","aliases":["Bernoulli trial","Bernoulli trials","Bernoulli(p)","Bernoulli variable","Bernoulli proportion","Bernoulli samples","Bernoulli model","Bernoulli models"],"definition":"A random experiment with two labelled outcomes, success and failure. Independent repetitions with one common success probability underlie the binomial and geometric distributions; a single Bernoulli trial does not itself assert independence from other trials.","example":"Each packet sent over a link that drops 1% of packets is a Bernoulli trial with p = 0.01 for 'lost'.","source":"https://math.dartmouth.edu/~prob/prob/prob.pdf"}}
+- {"scope":"author glossary correction independently verified","term":"prob-true-positive-rate","before":{"id":"prob-true-positive-rate","term":"Sensitivity (recall, true positive rate)","aliases":["true positive rate","TPR","detection rate","sensitivity","recall"],"definition":"The fraction of real positive cases that a test or detector correctly flags, P(positive result | real case). Called sensitivity in medicine and recall in machine learning.","example":"A test that detects 99 of 100 ill people has sensitivity 99%.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"},"after":{"id":"prob-true-positive-rate","term":"Sensitivity (recall, true positive rate)","aliases":["true positive rate","TPR","detection rate","sensitivity","classifier recall","classification recall","recall metric"],"definition":"The fraction of real positive cases that a test or detector correctly flags, P(positive result | real case). Called sensitivity in medicine and recall in machine learning.","example":"A test that detects 99 of 100 ill people has sensitivity 99%.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"}}
+- {"scope":"author glossary correction independently verified","term":"prob-precision","before":{"id":"prob-precision","term":"Precision (positive predictive value)","aliases":["positive predictive value","PPV"],"definition":"In classification, the fraction of predicted positives that are really positive, P(actually positive | predicted positive). It is the Bayesian posterior of an alert, and, with sensitivity and false positive rate fixed, it falls as the base rate falls.","example":"980 real frauds among 10,970 alerts is a precision of about 8.9%.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"},"after":{"id":"prob-precision","term":"Precision (positive predictive value)","aliases":["positive predictive value","PPV","classifier precision","classification precision"],"definition":"In classification, the proportion of predicted positives that are actually positive, when positive predictions have nonzero probability. It depends on prevalence as well as sensitivity and false-positive rate. With positive sensitivity and positive false-positive rate fixed, lowering prevalence lowers precision; zero false positives are an important exception.","example":"980 real frauds among 10,970 alerts is a precision of about 8.9%.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"}}
+- {"scope":"author glossary correction independently verified","term":"prob-accuracy","before":{"id":"prob-accuracy","term":"Accuracy (classification)","aliases":["overall accuracy"],"definition":"The fraction of all predictions a classifier gets right. On imbalanced data it can be very high for a useless model, so precision and recall are reported instead.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"},"after":{"id":"prob-accuracy","term":"Accuracy (classification)","aliases":["overall accuracy","classification accuracy"],"definition":"The fraction of all predictions a classifier gets right. On imbalanced data it can be very high for a useless model, so precision and recall are reported instead.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"}}
+- {"scope":"author glossary correction independently verified","term":"prob-inversion","before":{"id":"prob-inversion","term":"Inversion (array)","aliases":["array inversion","inversions","inversion count"],"definition":"A pair of positions in an array where the earlier element is larger than the later one. Insertion sort does one swap or shift per inversion; a random permutation has n(n − 1)/4 on average.","example":"[3, 1, 2] has two inversions: (3,1) and (3,2).","source":"https://en.wikipedia.org/wiki/Inversion_(discrete_mathematics)"},"after":{"id":"prob-inversion","term":"Inversion (array)","aliases":["array inversion","inversions","inversion count"],"definition":"A pair of array positions where the earlier value is larger than the later one. Adjacent-swap insertion sort uses one swap per inversion; the usual shifting version uses one rightward shift per inversion. For a uniformly random permutation of distinct values, each pair is inverted with probability one-half.","example":"[3, 1, 2] has two inversions: (3,1) and (3,2).","source":"https://algs4.cs.princeton.edu/21elementary/"}}
+- {"scope":"author glossary correction independently verified","term":"prob-normal-distribution","before":{"id":"prob-normal-distribution","term":"Normal distribution","aliases":["normal distribution","normal distributions","Gaussian","Gaussian distribution","bell curve","normal approximation","normal model","normally distributed","N(μ, σ²)","approximately normal"],"definition":"The symmetric bell-shaped continuous distribution described by its mean μ and standard deviation σ. About 68%, 95% and 99.7% of it lies within 1, 2 and 3 standard deviations of the mean.","source":"https://en.wikipedia.org/wiki/Normal_distribution"},"after":{"id":"prob-normal-distribution","term":"Normal distribution","aliases":["normal distribution","normal distributions","Gaussian","Gaussian distribution","bell curve","normal approximation","normal model","normally distributed","N(μ, σ²)","approximately normal"],"definition":"A symmetric bell-shaped continuous distribution specified by its mean and positive standard deviation. About 68%, 95% and 99.7% lies within one, two and three standard deviations of the mean; these are two-sided bands, not one-sided percentile labels.","source":"https://www.itl.nist.gov/div898/handbook/eda/section3/eda3661.htm"}}
+- {"scope":"author glossary correction independently verified","term":"prob-outlier","before":{"id":"prob-outlier","term":"Outlier","aliases":["outlier","outliers"],"definition":"A value far from most of the others, such as one timed-out request among fast ones. It moves the mean a lot and the median hardly at all.","source":"https://en.wikipedia.org/wiki/Outlier"},"after":{"id":"prob-outlier","term":"Outlier","aliases":["outlier","outliers"],"definition":"An observation far from most of the others, such as one timeout among fast requests. Extreme observations can strongly influence the mean; the median is more resistant because it depends on central ranks rather than the magnitudes of tail observations.","source":"https://www.itl.nist.gov/div898/handbook/eda/section3/eda351.htm"}}
+- Precision improvement statements now specify true/false alerts and positive conditional rates; zero false positives do not permit strict improvement.
+- Bloom caveat now distinguishes independent hash positions from dependent set-bit events rather than calling the sampled positions dependent.
+- Series availability strict inequality now excludes zero/perfect component degeneracies.
+- Conditional independence is sufficient for multiplying unchanged likelihood ratios, not a mathematically necessary condition.
+- prob-basics-q6 supplies nonzero imperfect availability for every required service.
+- prob-basics-q9 explicitly supplies independent dice for equally weighted enumeration.
+- prob-bayes-q1 supplies mixed populations and positive detector rates for its posterior comparison.
+- prob-bayes-q2 supplies prevalence and detector rates, making high-sensitivity and evidence feedback standalone.
+- prob-expectation-q9 requires at least two shards for strictly longer random coverage.
+- prob-distributions-q7 excludes success probability one, where conditioning on failures is undefined.
+- prob-algorithms-q4 supplies a large population for its approximately quadratic pair-count prediction.
+- prob-statistics-q5 excludes certain slowness so adding calls strictly increases tail risk.
+- Classifier precision now has precise linking aliases and a matching introductory phrase; bare ordinary-language precision is not captured.
+
+**Scope gaps and exclusions:**
+
+- No measure-theoretic conditioning on null events is taught; elementary conditioning explicitly requires positive probability.
+- No exact finite-filter Bloom false-positive derivation, exact A/B power calculation or unrestricted sequential-testing procedure is taught; approximation/model limits are explicit.
+- Real operational independence, traffic intensities, detector rates and latency distributions require measurement; supplied numerical scenarios are hypothetical models.
+- Historical attribution and original unreplicable simulations remain omitted with explicit evidence-gap notes; no unsupported population or hardware-failure comparisons restored.
 
 **Low-confidence areas, including preserved qualifications:**
 

@@ -7,7 +7,7 @@ summary: Declare and enforce the encoding at each boundary.
 sourceLesson: rep-text-encoding
 ---
 
-This unit continues the preceding material on Unicode scalar values and their encodings.
+Text corruption often begins at a boundary where bytes are decoded under the wrong rules. Preserve the encoding contract when storing, transmitting and validating text.
 
 ## Mojibake and other failures
 

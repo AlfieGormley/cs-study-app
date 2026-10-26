@@ -7,11 +7,11 @@ summary: Packed layout can create misaligned members.
 sourceLesson: rep-memory-layout
 ---
 
-This unit continues the preceding material on eight-bit bytes and multibyte object representations.
+Removing padding changes alignment obligations, while copying padding can expose data you never intended to send. Internal layout needs care at external boundaries.
 
 ### Packed structs
 
-`__attribute__((packed))` (GCC/Clang) or `#pragma pack(1)` (also MSVC) removes padding: `struct A` becomes 6 bytes. This is used to match an exact wire or file format. The costs:
+`__attribute__((packed))` (GCC/Clang) or `#pragma pack(1)` (also MSVC) reduces padding. With the earlier four-byte-int ABI, a simple char-int-char struct becomes six bytes. Nested types and explicit alignment constraints can still retain padding; inspect the actual layout. This is used to match an exact wire or file format. The costs:
 
 - Members may be misaligned, so the compiler must use slower byte-by-byte or unaligned access sequences on some targets.
 - Taking a pointer to a packed member (`&p->b`) can produce a misaligned int pointer. Using it can fault or otherwise misbehave; GCC warns with `-Waddress-of-packed-member`.

@@ -7,13 +7,12 @@ summary: Use tolerances justified by the application and exact decimal or intege
 sourceLesson: rep-floating-point
 ---
 
-This unit continues the preceding material on binary floating-point representations.
+Choose a numeric representation and error policy for the application. More bits help only when they address the actual failure: range, precision or an exactness requirement.
 
 ## Real-world failures and fixes
 
 > [!example] The Patriot missile, 1991
 > The GAO investigation found that limited precision in a time conversion caused an increasingly inaccurate tracking calculation. After over 100 hours of continuous operation, the system looked in the wrong place for the incoming Scud, which hit barracks and killed 28 Americans. This was an accumulated numerical conversion error, not physical clock drift or a failure of IEEE binary32 specifically. The GAO reports a roughly 0.34-second time error at 100 hours.
-
 
 Practical rules:
 
@@ -32,20 +31,7 @@ Many neural-network workloads can use reduced precision with suitable training a
 | FP16 (half) | 1 / 5 / 10 | 65,504 |
 | bfloat16 | 1 / 8 / 7 | ≈ 3.39e38 |
 
-The maxima come from the same largest-value formula as for float and double:
-
-```formula
-v_max = (2 − 2^{−m}) 2^{E_max}
-(2 − 2^{−10}) × 2^15 = 65,504
-(2 − 2^{−7}) × 2^127 ≈ 3.39 × 10^38
-where
-v_max: the largest finite value the format can hold
-m: the number of stored fraction bits (10 for FP16, 7 for bfloat16)
-E_max: the largest true exponent of a normal number (15 for FP16, 127 for bfloat16)
-2 − 2^{−m}: the largest significand, just under 2
-≈: approximately equal to
-In words: FP16's 5-bit exponent stops at 2 to the 15, so its largest value is only 65,504; bfloat16 keeps float32's 8-bit exponent and so reaches about 3.4 × 10^38.
-```
+The exponent controls the broad range while fraction bits control precision. A wider exponent can keep large activations finite, but fewer fraction bits mean coarser rounding.
 
 **bfloat16**, used by Google TPUs, has the same sign and exponent widths as float32 but a shorter fraction. Conversion normally rounds rather than simply discarding bits. Its normal exponent range matches float32, with slightly different finite limits. Subnormal handling depends on the implementation: Cloud TPU conversion flushes bfloat16 subnormals to zero. FP16 has more precision but a maximum of 65,504. Loss scaling helps prevent small gradients from underflowing; it does not fix activations that exceed FP16's maximum. Recent GPUs go further with 8-bit and even 4-bit floating-point formats.
 

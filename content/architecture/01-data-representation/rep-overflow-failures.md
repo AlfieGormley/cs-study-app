@@ -7,7 +7,13 @@ summary: A finite counter needs an explicit range and rollover policy.
 sourceLesson: rep-integers
 ---
 
-This unit continues the preceding material on fixed-width integer representations.
+Rollover is a system-design issue when a counter outlives assumptions made by its readers. Incident reports show why range and failure handling belong in the design.
+
+## Design for the boundary
+
+A fixed-width unsigned counter eventually returns to zero. Increasing its width delays that point; using finer time units makes it arrive sooner at the same width. Neither choice removes the need to define how consumers handle rollover.
+
+For a counter using unsigned arithmetic at its specified width, subtracting the saved start value from the current value gives elapsed ticks across one rollover, provided the true elapsed interval is shorter than one complete counter period. A simple numerical comparison with a future deadline can fail when that deadline has wrapped. Longer intervals need additional state or a wider time source.
 
 ## Overflow in the real world
 

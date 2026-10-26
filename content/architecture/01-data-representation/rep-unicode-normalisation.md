@@ -7,7 +7,7 @@ summary: Visually identical strings can have different code-point sequences.
 sourceLesson: rep-text-encoding
 ---
 
-This unit continues the preceding material on Unicode scalar values and their encodings.
+Text can have different code-point spellings that represent the same abstract text. Normalisation supplies a consistent spelling when that equivalence is intended.
 
 ## Normalisation
 

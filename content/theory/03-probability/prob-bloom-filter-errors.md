@@ -7,13 +7,19 @@ sourceLesson: prob-algorithms
 summary: An insert-only Bloom filter trades space for false positives.
 ---
 
-## Bloom filters: designed-in false positives
+A **Bloom filter** can cheaply rule out membership, but a positive answer means “possibly present”. It is useful when a false positive merely triggers a more expensive exact lookup.
 
-A **Bloom filter** answers "have I seen this key?" using an array of bits and several hash functions. Inserting a key sets the bit chosen by each hash function; a query checks those same bits. A correctly implemented, insert-only filter with the same hash mappings on insertion and query and no lost updates gives no false negatives for inserted keys, but it can give false positives when other keys happened to set all of a query's bits.
+## Why the two answers differ
 
-Under an ideal model with independent uniform hash positions for distinct inserted keys, every bit-setting chooses uniformly, so it misses a specified bit unless it selects that one position. A false positive needs all k of the query's bits to be set:
+Insertion sets several hash-selected bits. Querying checks the same positions. If any required bit is unset, the key was not inserted. If all are set, other keys may have set them, so membership still needs confirmation.
 
-```formula
+No false negatives requires an insert-only filter, consistent hash mappings and no lost updates. Clearing a shared bit to delete one key can break that guarantee for other keys. An ordinary Bloom filter therefore cannot support deletion by simply clearing its bits.
+
+## Balance memory and hash work
+
+More bits per inserted key reduces crowding. More hash functions initially help distinguish queries, but too many set too many bits and increase false positives. The usual large-filter ideal-hashing approximation gives a useful sizing rule:
+
+```formula reference
 P(B = 0) = (1 − 1/m)^{k × n}
 P(B = 0) ≈ e^{−(kn) / m}
 FPR ≈ (1 − e^{−(kn) / m})^k
@@ -33,35 +39,16 @@ ln(2): the natural logarithm of 2, about 0.693
 In words: the more bits per key, the fewer bits are set and the rarer false positives become; about 0.7 hash functions per bit-per-key is best.
 ```
 
-With 10 bits per key and 7 hash functions:
+Under that approximation, ten bits per distinct key and seven hash functions give about a 0.82% false-positive rate. The query hash positions are independently sampled in this model, but the events that their selected bits are set are not generally independent after averaging over random insertions. Repeated positions can also test the same bit. The result is therefore not an exact finite-filter probability.
 
-```formula
-FPR ≈ (1 − e^{−7/10})^7
-FPR ≈ 0.5034^7 ≈ 0.0082
-k_opt ≈ 10 × 0.693 ≈ 6.9
-where
-FPR: the false positive rate
-7: the number of hash functions, k
-10: bits per key, m / n
-e: Euler's number, about 2.718
-k_opt: the best number of hash functions, which rounds to 7
-≈: approximately equal to
-In words: 10 bits per key with 7 hash functions gives false positives about 0.82% of the time.
-```
+Check actual insertion count and query workload. Inserting beyond the planned count fills more bits and raises false positives. Memory, hash computation and the cost of unnecessary exact lookups all affect the useful design.
 
-The false positive rate is about 0.82% under this approximation. Bit occupancies and repeated query positions introduce dependence in a finite filter, so multiplying marginal occupancy probabilities is not an exact finite-size error formula. Storage engines can use Bloom filters to skip files that cannot contain a key; RocksDB documents this use. Whether an absent-key read avoids physical I/O depends on filter configuration, cache state and the other files or metadata examined. Whether this memory/error trade is useful depends on key sizes and the cost of false positives.
-
-## Pitfalls
-
-- **Believing uniform hashing for adversarial input.** Use an appropriate secret keyed hash and bound untrusted input size; check which key types actually use that hash.
-- **Underestimating collisions.** Think in pairs: risk grows with the square of the number of items, and collisions are likely at about the square root of the number of possible values.
-- **Confusing expected and worst case.** The stated randomised comparison bound assumes distinct keys, suitable partitioning and independent uniform pivots. Simple deterministic pivot rules can have quadratic inputs; deterministic algorithms with stronger pivot guarantees or fallback strategies can avoid that worst case.
-- **Bad randomness.** A **pseudo-random number generator** (PRNG; `random` in Python) can serve non-adversarial pivot selection but not for security tokens; use the `secrets` module.
+Security-sensitive randomness also needs an appropriate source. Python's pseudo-random `random` module is suitable for teaching simulations, not security tokens; use a cryptographic source such as its `secrets` module for those.
 
 ## Key takeaways
-- An insert-only Bloom filter trades space for false positives.
-- The optimum hash count follows the large-filter ideal hashing approximation.
-- Security tokens require a suitable cryptographic random source.
+- Negative answers can rule out membership under stated implementation conditions.
+- Positive answers need exact confirmation when correctness matters.
+- More hashes help only up to a trade-off point.
 
 ## Further reading
 - [On the false-positive rate of Bloom filters — Bose and colleagues](https://people.scs.carleton.ca/~michiel/bloomfilter.pdf)

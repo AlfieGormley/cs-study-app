@@ -7,7 +7,7 @@ summary: In C, equality binds tighter than bitwise AND.
 sourceLesson: rep-bitwise
 ---
 
-This unit continues the preceding material on unsigned bit patterns and masks.
+A correct mask can still produce the wrong answer if the language groups the surrounding expression differently from its author.
 
 ## Precedence traps
 
@@ -17,8 +17,9 @@ In C, `&`, `^` and `|` bind **more loosely** than `==`. This is a historical lef
 /* Compare the unintended / intended */
 /* tests. */
 if (x & 1 == 0)    /* x & (1 == 0) */
-                   /* = x & 0 = 0   */
-if ((x & 1) == 0)  /* what you meant */
+    puts("even"); /* never reached */
+if ((x & 1) == 0)  /* intended test */
+    puts("even");
 ```
 
 Python fixed this: its bitwise operators bind tighter than comparisons, so `x & 1 == 0` means `(x & 1) == 0`. Code ported between the two languages can therefore change meaning silently. Shifts also bind looser than `+` in both languages: `1 << n - 1` is `1 << (n - 1)`. When in doubt, add brackets.

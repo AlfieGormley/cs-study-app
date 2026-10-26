@@ -7,51 +7,26 @@ sourceLesson: prob-statistics
 summary: A mean reflects totals and outliers; a median describes the centre.
 ---
 
-Probability goes from a model to predictions. **Statistics** goes the other way: from data back to conclusions about the world. Engineers do this constantly, often without noticing. Is the new build slower? Did the checkout redesign raise conversion? Is the 99th-percentile (p99) latency within the SLO (service level objective)?
+A latency average should answer a specific question. The **arithmetic mean** reflects totals; the **median** describes the middle observation. Neither alone describes the slow tail.
 
-This lesson covers the handful of statistical ideas that come up most in engineering, and the traps that catch experienced teams.
+## One timeout changes the story
 
-## Mean versus median
+Suppose 99 requests take 10 milliseconds and one takes 5,000 milliseconds. The mean is 59.9 milliseconds, while the median is 10 milliseconds. Most requests are still fast, but the timeout contributes strongly to total elapsed latency across the requests.
 
-The **arithmetic mean** is the sum divided by the count. The **median** is the middle sorted value, conventionally the average of the two middle values for an even-sized numeric sample. For a finite symmetric sample the mean and this median agree; for skewed data they can be wildly different.
+The mean is the total of the observations divided by their count. The median sorts them and takes the middle value, conventionally averaging the two middle values for an even-sized numeric sample. Weighting each distinct latency equally would ignore how often each occurred.
 
-In symbols, the mean of a sample of values is:
+## Choose the summary for the decision
 
-```formula
-x̄ = (x_1 + x_2 + … + x_n) / n
-where
-x̄: "x-bar", the sample mean
-x_1, x_2, x_n: the first, second and last values in the sample
-n: the number of values
-…: and so on, every value in between
-In words: add every value and divide by how many there are.
-```
+For total resource work, mean resource use per request is useful: multiplied by request count it gives the total. Wall-clock latency includes waiting and is not automatically CPU service time, so mean latency alone does not determine machine capacity.
 
-> [!example] One slow request
-> 99 requests take 10 ms (milliseconds) and one takes 5,000 ms (a timeout).
+The median is robust to a small number of extreme observations. That makes it useful for typical experience, but also means a median dashboard can hide painful timeouts. Conversely, a higher mean does not imply most requests became slower.
 
-```formula
-x̄ = (99 × 10 ms + 5,000 ms) / 100
-x̄ = 5,990 ms / 100 = 59.9 ms
-M = 10 ms
-where
-x̄: the mean latency, in milliseconds (ms)
-M: the median latency, the middle value when sorted (both middle values are 10 ms)
-ms: milliseconds, thousandths of a second
-In words: one timeout drags the mean to about 60 ms even though 99 of the 100 requests took 10 ms; the median stays at 10 ms.
-```
-
-The mean describes no actual request. The median ignores the timeout entirely.
-
-Neither is "right"; they answer different questions.
-
-- The **arithmetic mean** matters for totals: total resource use is the request count times mean resource use per request. Wall-clock latency includes waiting and is not automatically CPU service time; capacity also depends on concurrency, utilisation and variability.
-- The **median** describes the typical experience and is robust to outliers.
-- Neither tells you about the slow tail that users complain about.
+Use appropriate tail percentiles or threshold exceedance rates alongside the centre. Record time windows and populations consistently so a change in traffic mix does not masquerade as a change in each request's behaviour.
 
 ## Key takeaways
-- A mean reflects totals and outliers; a median describes the centre.
-- Wall-clock latency is not automatically CPU service time.
+- A few extreme values can move the mean while leaving the median unchanged.
+- Means, medians and tail measures answer different questions.
+- Distinguish elapsed latency from resource service time.
 
 ## Further reading
 - [Engineering Statistics Handbook — NIST](https://www.itl.nist.gov/div898/handbook/)

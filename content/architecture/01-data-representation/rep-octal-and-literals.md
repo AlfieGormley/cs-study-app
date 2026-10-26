@@ -7,7 +7,7 @@ summary: Octal groups bits in threes, matching Unix permission triples.
 sourceLesson: rep-number-systems
 ---
 
-This unit continues the preceding material on binary place values.
+Octal is useful when a field naturally groups bits in threes. In code, choosing the wrong literal prefix can silently change a constant.
 
 ## Octal: three bits per digit
 

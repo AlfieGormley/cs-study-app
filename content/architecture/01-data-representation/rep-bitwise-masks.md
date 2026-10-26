@@ -33,7 +33,7 @@ Three intuitions are worth memorising:
 - OR with 1 **sets** a bit; OR with 0 leaves it alone.
 - XOR with 1 **flips** a bit; XOR with 0 leaves it alone.
 
-A **bit mask** (often just called a mask) is a constant whose 1s pick out the positions you care about. Choosing the operator decides what happens to those positions.
+A **bit mask** (often just called a mask) is a bit pattern whose 1s pick out the positions you care about. Choosing the operator decides what happens to those positions.
 
 > [!warning] Bitwise is not logical
 > `&&` and `||` in C (and `and` / `or` in Python) are **logical** operators. They treat each whole operand as true or false and short-circuit. `2 & 1` is 0, but `2 && 1` is 1.

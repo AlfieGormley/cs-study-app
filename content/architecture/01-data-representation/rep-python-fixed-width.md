@@ -7,7 +7,7 @@ summary: Python integers have no fixed-width arithmetic wrap.
 sourceLesson: rep-integers
 ---
 
-This unit continues the preceding material on fixed-width integer representations.
+Python integers can grow, whereas a register or protocol field has a fixed width. Modelling that boundary requires an explicit choice about which bits to keep.
 
 ## Python: no overflow, but you can fake it
 

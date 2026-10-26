@@ -7,26 +7,19 @@ summary: XOR cancels matching pairs and can reconstruct parity-protected data.
 sourceLesson: rep-bitwise
 ---
 
-This unit continues the preceding material on unsigned bit patterns and masks.
+XOR toggles the positions selected by another pattern. Applying the same toggle twice restores the original, which explains cancellation and parity.
 
 ### XOR's algebra
 
 XOR has properties that make it unusually useful:
 
-```formula
-a ⊕ a = 0
-a ⊕ 0 = a
-a ⊕ b = b ⊕ a
-(a ⊕ b) ⊕ c = a ⊕ (b ⊕ c)
+```formula essential
 (a ⊕ k) ⊕ k = a
 where
-⊕: XOR (exclusive or), written ^ in C and Python: each result bit is 1 where the two input bits differ
-a: any integer, treated as a row of bits
-b: any second integer
-c: any third integer
-k: a key: any value XOR-ed in and then XOR-ed in again
-0: the value whose bits are all 0
-In words: anything XOR itself is 0, XOR with 0 changes nothing, order and grouping do not matter, and XOR-ing the same key twice undoes it.
+⊕: bitwise exclusive OR; a result bit is one when the input bits differ
+a: the original integer bit pattern
+k: the integer bit pattern used to toggle selected positions, applied twice at the same width
+In words: applying the same XOR mask twice restores every original bit.
 ```
 
 - A value XOR itself is 0, and XOR with 0 leaves a value alone.
@@ -66,7 +59,7 @@ The **XOR swap** (`a ^= b; b ^= a; a ^= b;`) swaps without a temporary, but do n
 - [C working draft N3220](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n3220.pdf)
 - [Python bitwise integer operations](https://docs.python.org/3/library/stdtypes.html#bitwise-operations-on-integer-types)
 - [Bitwise operation — Wikipedia](https://en.wikipedia.org/wiki/Bitwise_operation)
-- [Bit Twiddling Hacks — Sean Eron Anderson, Stanford](https://graphics.stanford.edu/~seander/bithacks.html)
+- [GCC bit-operation builtins](https://gcc.gnu.org/onlinedocs/gcc/Bit-Operation-Builtins.html)
 - [Bitwise shift operators — cppreference (C)](https://en.cppreference.com/w/c/language/operator_arithmetic)
 - [Bitwise operations on integer types — Python docs](https://docs.python.org/3/library/stdtypes.html#bitwise-operations-on-integer-types)
 - [Bitboard — Chess Programming Wiki](https://www.chessprogramming.org/Bitboards)

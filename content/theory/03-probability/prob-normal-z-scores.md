@@ -7,74 +7,34 @@ sourceLesson: prob-distributions
 summary: A normal model is specified by its mean and positive standard deviation.
 ---
 
-## Normal: the bell curve
+A **normal distribution** is a continuous symmetric bell curve. Its mean locates the centre and its positive standard deviation sets the spread. A larger spread makes the same absolute distance from the centre less unusual.
 
-The **normal distribution** (Gaussian) is continuous (it can take any real value), symmetric, and described by just two numbers, its mean and its standard deviation. The **68–95–99.7 rule** says how much of it lies within one, two and three standard deviations of the mean:
+## Standardise distance
 
-```formula
-X ~ N(μ, σ^2)
-P(|X − μ| ≤ σ) ≈ 0.683
-P(|X − μ| ≤ 2 × σ) ≈ 0.954
-P(|X − μ| ≤ 3 × σ) ≈ 0.997
-where
-X: a normally distributed random variable
-~: "is distributed as"
-N(μ, σ^2): the normal distribution with mean μ and variance σ^2
-μ: mu, the mean, the centre of the bell
-σ: sigma, the standard deviation, the width of the bell; greater than 0
-σ^2: the variance, σ squared
-|X − μ|: the distance of X from the mean, ignoring direction (absolute value)
-P: probability; probabilities are dimensionless and apply to measurable events
-≤: less than or equal to
-≈: approximately equal to
-Conditioning: every event to the right of a given bar in this card has positive probability
-In words: about 68% of values lie within one standard deviation of the mean, 95% within two and 99.7% within three.
-```
+A **z-score** describes how many standard deviations a value lies above or below the mean. Subtract the mean and divide by the standard deviation. Positive values are above the mean; negative ones are below. This comparison needs a finite positive standard deviation, but computing a z-score does not itself make data normal.
 
-The bell shape, with the mean in the middle and one and two standard deviations either side:
-
-```
-          ____
-        /|    |\
-      /  |    |  \
-   __/   |    |   \__
- ---+----+----+----+---
-  μ−2σ  μ−σ  μ+σ  μ+2σ
-
-```
-
-A **z-score** says how many standard deviations a value is from the mean:
-
-```formula
+```formula reference
 z = (x − μ) / σ
-P(Z > 1.96) ≈ 0.025
 where
 z: the z-score of x, with no units
 x: one particular value
 μ: mu, the mean
 σ: sigma, the positive standard deviation, in the same units as the observations
-Z: a **standard normal** variable, a normal with mean 0 and standard deviation 1
-P: probability; probabilities are dimensionless and apply to measurable events
-1.96: the z-score that cuts off the top 2.5%, so 95% lies between −1.96 and +1.96
-≈: approximately equal to
-In words: a value 1.96 standard deviations above the mean is beaten only 2.5% of the time.
+In words: Subtract the mean and divide by the positive standard deviation to express distance from the centre in units of spread.
 ```
 
-This is where the "1.96" in 95% confidence intervals comes from (the later confidence-interval unit). For example, if response sizes are normal with mean 500 KB and standard deviation 50 KB:
+Under a normal model, roughly 68% of observations lie within one standard deviation of the mean, 95% within two and 99.7% within three. These are two-sided bands. The upper edge of the three-standard-deviation band is about the 99.865th percentile, because only half the remaining probability lies above it.
 
-```formula
-z = (600 KB − 500 KB) / (50 KB) = 2
-where
-z: the z-score of a 600 KB response, in standard deviations
-500: the mean size, in kilobytes (KB)
-50: the standard deviation, in KB
-KB: kilobyte, 1,000 bytes
-In words: a 600 KB response is two standard deviations above the mean, so only about 2.3% of responses are larger.
-```
+## Use the model, not just the scale
+
+For a normal response-size model with mean 500 kilobytes and standard deviation 50 kilobytes, 600 kilobytes is two standard deviations above the mean. If spread doubles while the mean stays fixed, that same response is less unusual.
+
+A normal law allows all real values. For a nonnegative quantity it can only be an approximation, and its negative tail may be unacceptable. A z-score alone does not give a tail probability for an arbitrary distribution; use the distributional model or measured observations.
 
 ## Key takeaways
-- A normal model is specified by its mean and positive standard deviation.
-- A z-score measures distance from the mean in standard deviations.
+- Mean and standard deviation control location and spread in a normal model.
+- Z-scores compare distance on a common scale.
+- Normal percentage bands are two-sided and are not universal rules.
 
 ## Further reading
 - [Normal distribution — NIST](https://www.itl.nist.gov/div898/handbook/eda/section3/eda3661.htm)

@@ -7,7 +7,9 @@ sourceLesson: prob-algorithms
 summary: A sampled comparison count is one draw, rather than proof of the mean.
 ---
 
-For a fixed input of distinct totally ordered keys, the preceding indicator proof gives about 10,986 comparisons on average at 1,000 elements. An unlucky pivot sequence can still compare every pair. This function counts comparisons rather than returning the sorted array; its random choices determine the count.
+A measured quicksort execution is one draw from a runtime distribution. Repeating it can check an expected-comparison prediction, but one fast run cannot establish either the mean or a worst-case guarantee.
+
+## Count the work actually performed
 
 ```python
 import random
@@ -36,15 +38,22 @@ print(qs(list(range(1000))))
 # One run; the mean is about 10,986.
 ```
 
-A quadratic execution remains possible. The expectation guarantee assumes the input is fixed independently of the random choices and comparisons obey a total order; an adaptive adversary or predictable pivots needs separate analysis. A naive two-way implementation can also be quadratic on equal keys. A related analysis shows **quickselect** (finding an element at a specified rank among n values) runs in expected O(n).
+This function counts pivot comparisons; it does not return the sorted array. It assumes distinct keys with a total order. Every partition compares its pivot once with each other element, then adds the two recursive counts.
 
-> [!note] What libraries do
-> Production sorts hedge further. GCC’s libstdc++ implements `std::sort` with an introsort loop that uses a heap-based fallback at its depth limit. Go's `sort` package switched to pattern-defeating quicksort (pdqsort) in Go 1.19, and Rust's documented current unstable sort uses ipnsort. Python's list sort and Java's object-array sort are stable; implementation details can change by version. These library algorithms have additional safeguards and are not identical to the teaching function above.
+For 1,000 distinct keys and fresh independent uniform pivots, the theoretical mean is about 10,986 comparisons. Individual runs vary. Check many independent runs if estimating the mean, and distinguish comparison counts from elapsed time, which also includes allocation, recursion and machine effects.
+
+## Understand what randomisation changes
+
+On sorted distinct input, always choosing the first element repeatedly creates the most unbalanced partition. Uniform random pivots remove that systematic dependence on input order in expectation. They do not prevent a sequence of extreme pivots by chance.
+
+The teaching implementation can still have quadratic work and deep recursion. Equal keys also all enter one side in this two-way partition, so the distinct-key guarantee does not apply to them. An adaptive adversary or predictable random choices changes the assumptions too.
+
+Production sorts can use duplicate-aware partitioning, depth limits and a fallback algorithm such as heapsort to provide stronger safeguards. Evaluate the actual library contract and implementation rather than assuming it is this teaching function.
 
 ## Key takeaways
-- A sampled comparison count is one draw, rather than proof of the mean.
-- Quadratic pivot sequences remain possible, and duplicate keys need suitable partitioning.
-- Production sorts add implementation-specific safeguards.
+- A single run checks behaviour, not an expectation or bound.
+- Random pivots improve expected behaviour on fixed distinct-key inputs.
+- Duplicate handling and fallback strategies address risks outside that expectation.
 
 ## Further reading
 - [Mathematics for Computer Science — MIT](https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-fall-2010/)

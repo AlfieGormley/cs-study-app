@@ -2,12 +2,20 @@
 id: prob-naive-bayes-log-smoothing
 title: Compute naive Bayes scores with logs and smoothing
 level: basic
-minutes: 4
+minutes: 3
 sourceLesson: prob-bayes
 summary: Logs preserve the ranking of positive scores and avoid product underflow.
 ---
 
-The preceding model scores a class by multiplying its prior and token likelihoods. This unit computes that score without multiplying a long chain of small floating-point numbers. The function assumes a nonempty collection of classes, positive priors and positive smoothed probabilities for every supplied token.
+Two different problems can make a naive Bayes score collapse: a genuinely zero estimated likelihood, or floating-point underflow from multiplying many small positive numbers. They need different fixes.
+
+## Keep scores usable
+
+**Laplace smoothing** adds one pseudo-count to every token in a fixed finite vocabulary and normalises by the adjusted total. A vocabulary token unseen in one class then has a small positive likelihood rather than vetoing that class. Tokens outside the vocabulary still need an explicit policy.
+
+Taking **log scores** turns products into sums. The logarithm preserves the ordering of positive scores, so the mathematical winning class is unchanged. This avoids product underflow; rounding can still affect very close scores. Logs cannot repair a zero likelihood: the real logarithm of zero is undefined.
+
+## Read the implementation
 
 ```python
 from math import log
@@ -29,14 +37,9 @@ def classify(words, prior, like):
     return best
 ```
 
-Two practical details matter:
+The inputs must contain a nonempty set of classes, positive priors and a positive likelihood for every supplied token in every class. Converting the words to a tuple lets each class see the same tokens even if the caller supplied a generator. Ties retain the first class encountered.
 
-1. **Work in logs.** Multiplying enough small probabilities can underflow to zero in floating point. Summing finite logs avoids that product underflow and preserves the mathematical ranking; floating-point rounding can still affect close scores.
-2. **Smooth the counts.** If "invoice" never appeared in your spam training set, its estimated chance in spam is 0, and one word vetoes everything else. **Laplace (add-one) smoothing** adds 1 to each token count in a fixed vocabulary and normalises by the total count plus vocabulary size. Every token in that vocabulary then has positive probability in every class; out-of-vocabulary tokens need a separate policy.
-
-The log step and the smoothing step, written out:
-
-```formula
+```formula reference
 ln(S_c) = ln(P(c)) + Σ_i ln(P(w_i | c))
 P(w | c) = (n_{w,c} + 1) / (N_c + V)
 where
@@ -53,23 +56,15 @@ c: the class, with positive prior probability
 i: an index over the finite sequence of email tokens
 1: the "add-one" pseudo-count given to every token
 P: probability; probabilities are dimensionless and apply to measurable events
-Conditioning: every event to the right of a given bar in this card has positive probability
-In words: add logs instead of multiplying probabilities, and pretend every word was seen once more than it was, so no word ever gets probability 0.
+In words: Add logarithms of positive likelihoods to preserve the score ordering; add-one smoothing gives each token in the fixed vocabulary a positive estimated probability.
 ```
 
-For example, if "invoice" appears 0 times in 50,000 spam words with a 10,000-token vocabulary, the smoothed estimate is (0 + 1) / (50,000 + 10,000) ≈ 0.0000167 instead of 0. A small number, but no longer a veto.
-
-## Pitfalls
-
-- **Confusing the inverse.** The chance of the evidence given the hypothesis and the chance of the hypothesis given the evidence are not equal in general. In court this is the **prosecutor's fallacy**: "the chance of a DNA match if innocent is 1 in a million, so the chance he is innocent is 1 in a million." In a hypothetical population of 10 million innocent people each with that marginal match probability, the expected number of matches is 10; the actual count and posterior need further assumptions.
-- **Ignoring the prior.** "The test is 99% accurate" says nothing about the chance a positive person is ill until you know prevalence.
-- **Assuming tests are independent.** Rerunning the same test on the same sample often repeats the same error. Using unchanged per-test likelihood ratios requires conditional independence both with and without the condition. Otherwise use the likelihood of the new evidence conditional on what was already observed.
-- **Priors of exactly 0 or 1.** Within a fixed model, conditioning on positive-probability evidence preserves probability-zero and probability-one events. Evidence the model assigns probability zero makes the elementary update undefined; revise the model rather than dividing by zero.
+These formulas document the scoring and smoothing operations. Smoothing prevents vocabulary zeros; logs avoid repeated multiplication. Neither establishes feature independence, repairs a misleading prior or makes the scores calibrated probabilities.
 
 ## Key takeaways
-- Logs preserve the ranking of positive scores and avoid product underflow.
-- Add-one smoothing is defined over a fixed finite vocabulary.
-- Repeated evidence and probability-zero priors need explicit modelling assumptions.
+- Distinguish unseen-token zeros from numerical underflow.
+- Smooth within a defined vocabulary and handle unknown tokens separately.
+- Add logs of positive likelihoods while preserving the score ordering.
 
 ## Further reading
 - [Naive Bayes — scikit-learn](https://scikit-learn.org/stable/modules/naive_bayes.html)

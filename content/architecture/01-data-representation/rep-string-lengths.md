@@ -7,7 +7,7 @@ summary: String length depends on the unit a language counts.
 sourceLesson: rep-text-encoding
 ---
 
-This unit continues the preceding material on Unicode scalar values and their encodings.
+Before enforcing a text limit, decide what it counts: storage bytes, code units, code points or user-perceived characters.
 
 ## What is the length of a string?
 

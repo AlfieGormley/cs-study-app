@@ -7,7 +7,7 @@ summary: UTF-8 uses one to four bytes per scalar value.
 sourceLesson: rep-text-encoding
 ---
 
-This unit continues the preceding material on Unicode scalar values and their encodings.
+UTF-8 carries both character data and byte-boundary markers. Recognising those markers explains variable length, ASCII compatibility and strict validation.
 
 ## UTF-8: the encoding that won
 
@@ -21,6 +21,8 @@ This unit continues the preceding material on Unicode scalar values and their en
 | U+10000–10FFFF | 4 | `11110xxx` + 3 × `10xxxxxx` |
 
 The `x` positions carry the code point's bits, most significant first. For a valid multibyte sequence, the number of leading 1s gives the **total** byte count, not the number of following bytes, and every continuation byte starts with `10`.
+
+Only the shortest encoding of a scalar value is valid. The byte markers alone do not establish validity: surrogates, values above U+10FFFF and non-shortest forms must be rejected or handled under the decoder's specified error policy.
 
 ### Worked example: € (U+20AC)
 

@@ -7,22 +7,13 @@ summary: Natural alignment is a divisibility condition on an address.
 sourceLesson: rep-memory-layout
 ---
 
-This unit continues the preceding material on eight-bit bytes and multibyte object representations.
+An address can hold the right bytes and still be unsuitable for a typed access. Alignment connects language requirements, ABI layout and hardware behaviour.
 
 ## Alignment
 
-A value is **naturally aligned** if its address is a whole multiple of its own size:
+A value is **naturally aligned** if its address is a whole multiple of its own size.
 
-```formula
-A mod n = 0
-where
-A: the address where the value starts, counted in bytes
-n: the size of the value in bytes (1, 2, 4 or 8 for ordinary scalar types)
-mod: modulo, the remainder after dividing A by n
-In words: an aligned address divides exactly by the value's size, leaving no remainder.
-```
-
-So a 4-byte `int` belongs at 0, 4, 8, and so on, and an 8-byte `double` at multiples of 8. Because sizes are powers of two, this is also a bit test: an address is a multiple of 8 exactly when its low 3 bits are 0.
+Natural alignment puts a four-byte value at 0, 4, 8 and so on, and an eight-byte value at multiples of eight. A type's actual required alignment comes from the ABI and can differ from its size. For these power-of-two sizes, alignment also has a bit test: an address is a multiple of 8 exactly when its low 3 bits are 0.
 
 ### Why hardware cares
 
@@ -38,7 +29,7 @@ misaligned at 62:         [====|====]
 
 When a power-of-two access size is no larger than and divides the line/page size, natural alignment keeps that access within a boundary. This does not mean every aligned object, arbitrarily wide access or generated instruction requires only one memory transaction. A misaligned one may need two accesses, two cache lines, even two page translations. The consequences depend on the architecture:
 
-- **x86** handles many ordinary misaligned loads in hardware; alignment-requiring instruction forms and alignment-checking modes can fault. Within a cache line they are usually as fast as aligned ones; crossing a line costs extra; crossing a page costs more. A misaligned `lock`-prefixed atomic that spans two cache lines (a **split lock**) stalls the whole memory system, and recent Linux kernels can warn about or penalise processes that do it.
+- **x86** handles many ordinary misaligned loads in hardware; alignment-requiring instruction forms and alignment-checking modes can fault. Within a cache line, ordinary unaligned loads can have little or no extra cost on many modern x86 processors. Crossing a line or page can add work; the actual penalty depends on the instruction, processor and cache/TLB state. A misaligned `lock`-prefixed atomic that spans two cache lines (a **split lock**) stalls the whole memory system, and recent Linux kernels can warn about or penalise processes that do it.
 - **ARMv8 (AArch64)** handles most misaligned ordinary loads and stores in hardware, but its exclusive and atomic instructions generally require aligned addresses and fault otherwise.
 - **Strict-alignment targets**, including relevant older ARM, SPARC and microcontroller configurations, can fault on unsupported unaligned accesses. Linux may emulate an access or report a signal such as SIGBUS; some hardware instead performs an unintended access, so consult the target rules.
 - **Atomicity** depends on the architecture, memory type and access. For example, x86-64 guarantees indivisibility for suitably aligned ordinary 8-byte loads/stores to ordinary write-back memory. A misaligned access can lack that guarantee. In C/C++, hardware non-tearing does not permit data races: use atomics or synchronisation for conflicting cross-thread accesses.

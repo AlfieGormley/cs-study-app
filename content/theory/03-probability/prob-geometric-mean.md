@@ -1,47 +1,42 @@
 ---
 id: prob-geometric-mean
-title: Derive the expected wait for success
+title: Understand the expected wait for success
 level: intermediate
 minutes: 3
 sourceLesson: prob-expectation
 summary: Independent constant-probability attempts restart after a failure.
 ---
 
-## Waiting for success: the geometric case
+An expected retry count describes average load, not a deadline. Even when success has a finite expected wait, a particular request can need many more attempts.
 
-A request succeeds with the same probability p (more than 0, at most 1) on each independent attempt. How many attempts does it take on average? The number of attempts T has a **geometric distribution**, and:
+## A fresh chance after every failure
 
-```formula
+Assume attempts are independent and each has the same positive success probability. Count all attempts up to and including the first success. This is the **geometric distribution**.
+
+After a failed attempt, the future process has the same distribution as it had initially. You have spent one attempt, but have made no progress towards a success being “due”. A larger success probability shortens the expected wait; halving it doubles the mean attempt count.
+
+```formula reference
 E[T] = 1 / p
-E[T] = 1 / 0.2 = 5
 where
 T: the number of attempts up to and including the first success
 E[T]: the expected (long-run average) number of attempts
-p: the probability that one attempt succeeds; 0.2 (20%) in the second line
+p: the fixed success probability for an independent attempt, greater than zero and at most one
 Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
-In words: if each try succeeds one time in five, you need five tries on average.
+In words: With independent attempts and a constant positive success chance, the mean total attempts through success is the reciprocal of that chance.
 ```
 
-A neat derivation: with probability p you finish after 1 attempt; otherwise you have used 1 attempt and are back where you started, because independent attempts have no memory.
+For a success chance of one in five, the mean is five total attempts. That includes the successful attempt, so failures-only counts are one smaller. A run can still end on its first attempt or continue far beyond five.
 
-```formula
-E[T] = 1 + (1 − p) × E[T]
-p × E[T] = 1
-E[T] = 1 / p
-where
-E[T]: the expected number of attempts
-1: the attempt you always make
-p: the chance that attempt succeeds
-1 − p: the chance it fails, after which you face the same problem again
-Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
-In words: one attempt, plus (if it failed) a fresh copy of the whole wait; solving for the expected wait gives 1/p.
-```
+## Why the mean is finite
 
-The restart equation identifies a finite mean; finiteness must not simply be assumed. Summing the geometric tail probabilities gives a convergent geometric series because the failure probability is strictly below one. This supplies the finite-expectation justification for the rearrangement.
+Each extra failure multiplies the probability of still waiting by the same factor below one. The resulting geometric tail has a finite sum, which justifies the finite mean. At success probability one, the first attempt always succeeds; at zero, this proper finite-mean model does not apply.
+
+In a real overloaded service, attempts may share a persistent cause and retries may worsen the overload. The constant independent chance is an assumption to test, not a reason to retry without a limit or delay.
 
 ## Key takeaways
-- Independent constant-probability attempts restart after a failure.
-- Count the successful attempt as part of the waiting time.
+- Count the successful attempt when interpreting geometric waiting time.
+- A finite expectation does not impose a maximum wait.
+- Retry-load estimates depend on constant independent success chances.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

@@ -2,40 +2,27 @@
 id: prob-quicksort-comparison-proof
 title: Prove expected quicksort comparisons
 level: advanced
-minutes: 4
+minutes: 3
 sourceLesson: prob-algorithms
 summary: A pair is compared when an endpoint is the first pivot in its rank interval.
 ---
 
-## Quicksort with uniform random pivots
+Random pivots protect quicksort's expected comparison count against a fixed bad input order. They do not remove unlucky executions. The reason becomes clear by following one pair of values.
 
-Quicksort picks a pivot, partitions the array into smaller and larger elements, and recurses. With a fixed pivot (say the first element), a sorted input of n elements gives the maximum-comparison case: every partition peels off one element, as shown by this count:
+## Specify the comparison model
 
-```formula
-Q_w = (n(n − 1)) / 2
-Q_w = (1000 × 999) / 2 = 499,500
-where
-Q_w: the maximum number of pivot comparisons
-n: the positive integer number of distinct elements; 1,000 in the example
-In words: peeling off one element per partition compares every unordered pair once.
-```
+Assume distinct totally ordered keys, fresh independent uniform pivots, and one comparison between each pivot and every other element in its partition. The input is fixed independently of those choices.
 
- Sorted and nearly sorted inputs are common in practice, so this matters.
+A first-element pivot on sorted input repeatedly removes only one element, giving quadratic work. A uniform pivot can occupy any rank, so sorted input has the same comparison-count distribution as any other fixed ordering of distinct keys.
 
-For distinct keys, standard pivot partitioning that compares the pivot once with every other element, and fresh independent uniform pivots, the comparison-count distribution does not depend on the initial order. The expected comparison count grows on the order of the input length times its logarithm, for every fixed distinct-key input. The exact formula and its leading-term approximation are derived below.
+## Follow a pair through the partitions
 
-## The indicator proof
+Consider two values and all values between them in sorted order. Pivots outside this interval leave the pair together. The first pivot chosen from within the interval determines whether they ever meet:
 
-Name the elements in sorted order, smallest first. Every comparison is between a pivot and another element, and each pair is compared no more than once (after partitioning, the pivot is never touched again). So the number of comparisons is a sum of indicators, one per pair.
+- An endpoint pivot is compared with the other endpoint.
+- An interior pivot separates the endpoints into different recursive calls, so they never meet.
 
-Take the i-th smallest and the j-th smallest elements, and the block of sorted elements from one to the other. They stay together in one subarray until one element of that block is chosen as a pivot:
-
-- If the first pivot chosen from the block is one of the two ends, the pair is compared.
-- If it is anything in between, the two are split into different sides and never compared.
-
-Each element of the block is equally likely to be first, so:
-
-```formula
+```formula essential
 P(X_ij = 1) = 2 / (j − i + 1)
 where
 z_1 < z_2 < … < z_n: the n elements in sorted order
@@ -47,9 +34,13 @@ P: probability; probabilities are dimensionless and apply to measurable events
 In words: two elements are compared only if one of them is the first pivot picked from the block between them, a chance of 2 divided by the number of elements in the block.
 ```
 
-By linearity, summing over all pairs:
+Every element in the interval is equally likely to be that first pivot. There are exactly two favourable endpoints. Nearby ranks are therefore more likely to be compared than distant ranks.
 
-```formula
+## Turn pairs into total work
+
+Each pair is compared at most once because a pivot is excluded from later recursive calls. Give each pair an indicator and add its comparison probability. Linearity requires no independence between the indicators.
+
+```formula reference
 E[Q] = Σ_{i<j} 2 / (j − i + 1)
 E[Q] = 2 × (n + 1) × H_n − 4 × n
 E[Q] ≈ 2 × n × ln(n)
@@ -63,39 +54,16 @@ H_n: the n-th harmonic number, 1 + 1/2 + … + 1/n
 ln(n): the natural logarithm of n (base e ≈ 2.718)
 ≈: approximately equal to (for large n)
 Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
-In words: close pairs are compared often and distant pairs rarely; adding up all pairs gives about 2 n ln(n) comparisons.
+In words: nearby ranks are compared more often than distant ranks. Adding every pair's comparison probability gives an expected total growing as input length times its logarithm.
 ```
 
-For n = 1,000:
-
-```formula
-E[Q] = 2 × 1001 × H_1000 − 4000
-E[Q] ≈ 2002 × 7.485471 − 4000
-E[Q] ≈ 10,986
-where
-E[Q]: the expected number of pivot comparisons for 1,000 distinct totally ordered elements under fresh independent uniform pivots
-H_1000: the 1,000th harmonic number, about 7.485
-≈: approximately equal to
-Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
-In words: quicksort with uniform random pivots makes about 11,000 comparisons on 1,000 elements, against 499,500 in the maximum-comparison case.
-```
-
-That is about 11,000 comparisons, versus 499,500 in the maximum-comparison case. The next unit checks this mean against sampled executions.
-
-```formula
-2n ln(n) ≈ 1.39n log_2(n)
-where
-n: the integer input length, greater than 1
-ln: the natural logarithm, to base Euler’s number
-log_2: the base-two logarithm
-≈: approximately equal to, from rounding twice the natural logarithm of 2
-In words: changing logarithm base gives the same leading comparison count with a different constant factor.
-```
+The expected count grows as input length times its logarithm. A particular pivot sequence can still give quadratic work. Duplicates, adaptive comparisons or predictable pivot choices need their own analysis rather than inheriting this guarantee automatically.
 
 ## Key takeaways
-- A pair is compared when an endpoint is the first pivot in its rank interval.
-- Summing indicator expectations gives the exact harmonic-number formula.
-- The expectation uses distinct keys and fresh independent uniform pivots.
+- The first pivot within a rank interval decides whether its endpoints meet.
+- Pair indicators turn local probabilities into expected total work.
+- The expectation is over pivots for every fixed distinct-key input.
 
 ## Further reading
+- [Quicksort and indicator analysis — MIT lecture notes](https://ocw.mit.edu/courses/18-310-principles-of-discrete-applied-mathematics-fall-2013/7db820f51ad2de2340639a7ea14b7795_MIT18_310F13_Ch12.pdf)
 - [Mathematics for Computer Science — MIT](https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-fall-2010/)

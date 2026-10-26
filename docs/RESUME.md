@@ -7,11 +7,12 @@ library finished from a renderer change or a partial module audit.
 
 - Task checkout: `/tmp/cs-study-concept-first-20261026`. The user's primary checkout contains unrelated
   drafts and must remain untouched. Working queue: `/tmp/concept-first-queue.json`.
-- Seventeen modules have current independent concept-first reviews (321 lessons, 758 questions): all
+- Nineteen modules have current independent concept-first reviews (399 lessons, 904 questions): all
   three DSP modules, network foundations, system-design fundamentals, sound sampling, all four Embedded
-  modules, all three React modules, DSA complexity, digital logic, discrete structures, and logic/proofs.
-  The other 69 modules still need their semantic review; probability, data representation and theoretical
-  complexity are currently in the author/reviewer pipeline. See `docs/concept-first-report.md`.
+  modules, all three React modules, DSA complexity, digital logic, discrete structures, logic/proofs,
+  probability and data representation. The other 67 modules still need their semantic review;
+  automata, computability and theoretical complexity are in the author/reviewer pipeline.
+  See `docs/concept-first-report.md`.
 - Rules in `CLAUDE.md`, `CONTENT_SPEC.md`, `AGENTS.md` and the content process apply to future work.
   Mark essential relationships `formula essential`, useful optional maths `formula reference`, and remove
   redundant arithmetic. Unreviewed legacy formulas remain visible. Quiz information remains expanded.
@@ -49,8 +50,16 @@ library finished from a renderer change or a partial module audit.
   from the snapshot with `/tmp/write-concept-first-report.mjs <snapshot>`, and validate staged source plus
   generated artifacts with `/tmp/check-concept-first-staged.mjs <snapshot> --include-generated` after staging.
   Do not compile working unverified drafts or renew content stamps at root.
-- Nothing from this rewrite has been published yet. Finish independent review, build/tests/audits,
-  commit and publish the verified result, and check the public app matches the tested release.
+- The nineteen-module candidate is version `905cdda87539`, built from the exact staged snapshot
+  `/tmp/concept-first-stage-19`. All 87 tests, full-library phone/desktop rendering, 376 revised dictionary
+  name/alias probes and the original migration audit pass. Probability and data representation retain
+  their independent review records, including hardware-dependent performance qualifications and the
+  unavailable archival Stanford URL. Active reading links pass. Current dictionary definitions now include
+  the independently corrected bit-mask, binade, infinity and probability entries.
+- Publish tested checkpoints while the remaining rewrite continues. A partial release does not complete
+  the whole-library request. Confirm public asset bytes against the committed release and check live
+  navigation/offline behaviour before calling a checkpoint live. Deployment evidence is kept in the
+  versioned `/tmp/concept-first-qa-<version>/` folder; do not infer publication from a local build.
 
 The sections below describe earlier completed work and its historical environment. They do not replace
 the current task or the current sandbox/approval instructions.

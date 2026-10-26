@@ -7,9 +7,11 @@ sourceLesson: prob-basics
 summary: Enumeration is exact for finite equally likely outcomes.
 ---
 
-## Checking your answers by simulation
+A simulation samples outcomes from a model; enumeration lists every outcome. Both can catch reasoning errors, but neither establishes that the model represents the real system.
 
-When you are unsure of a calculation, simulate it. For independent trials from the specified model, the sample frequency converges to the model probability as the number of trials grows. This checks arithmetic against a simulation; it does not establish that the model describes the real system.
+## Sample a model
+
+The code models independent fair die rolls and records whether any of four rolls is a six. Each experiment produces one yes/no observation.
 
 ```python
 import random
@@ -26,7 +28,9 @@ hits = sum(at_least_one_six()
 print(hits / trials)   # about 0.518
 ```
 
-For small sample spaces you can be exact instead, by enumerating every outcome:
+The printed fraction varies between runs. With independent identically distributed experiments it approaches the model probability as the sample grows, but it need not move closer after every extra trial.
+
+## Enumerate when the space is small
 
 ```python
 from itertools import product
@@ -41,34 +45,20 @@ print(Fraction(len(first3), len(sum8)))
 # 1/5
 ```
 
-How close should the simulated fraction be? Each simulated run is a **Bernoulli trial** (a yes/no experiment), and the typical size of the error in the estimated fraction is its **standard error**:
+Here every ordered dice pair is equally likely. Filtering to the known total changes the denominator as well as the numerator. The fraction is exact for this model because every permitted outcome is included, rather than sampled.
 
-```formula
-SE = √((p(1 − p)) / n)
-SE ≤ √(0.25 / 1,000,000) = 0.0005
-where
-SE: the standard error, the typical distance between the simulated fraction and the true probability
-p: the true probability being estimated (about 0.518 here)
-n: the number of independent simulated trials, here 1,000,000
-√: the square root
-≤: less than or equal to
-0.25: the largest possible value of p × (1 − p), reached when p = 0.5
-In words: the error shrinks like one over the square root of the number of trials, so a million trials gives a typical error of at most 0.0005.
-```
+## Choose an appropriate check
 
-This is not a guarantee of three correct decimal places: the estimate can stray a few standard errors. Rare events (tiny p) can require far more trials for small relative error; exact enumeration is preferable when feasible.
+Enumeration becomes expensive as the outcome space grows. Simulation scales more readily, but rare events may be missed entirely in a finite run. Seeing no failures is not proof that their probability is zero.
 
-## Common pitfalls
+The **standard error** describes variation between estimates. For independent yes/no trials, increasing the trial count fourfold halves the standard error; it does not guarantee a particular realised error. Small relative errors for rare probabilities can require many trials.
 
-- **Assuming equal likelihood.** Counting outcomes only works if each is equally likely. "Either it rains or it doesn't" is not 50/50.
-- **Confusing "A given B" with "B given A".** The chance a test is positive given disease is not the chance of disease given a positive test. The next lesson is entirely about this.
-- **Assuming independence by default.** Retries to the same overloaded server, disks from the same batch, and users in the same household can be correlated.
-- **The gambler's fallacy.** Independent events have no memory. After five heads, a fair coin is still 50/50.
+If real retries share an outage while the simulation gives each an independent fresh chance, more simulation only estimates the wrong model more precisely. Test the assumptions against observations too.
 
 ## Key takeaways
-- Enumeration is exact for finite equally likely outcomes.
-- Simulation checks a model; it does not establish that real failures follow it.
-- Standard error describes variability rather than a guaranteed error limit.
+- Enumeration is exact when the outcomes and weights are fully specified.
+- Simulation estimates a model probability with sampling variation.
+- Rare events and incorrect assumptions need special care.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

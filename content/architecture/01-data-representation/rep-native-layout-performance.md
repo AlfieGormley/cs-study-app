@@ -7,11 +7,11 @@ summary: Python native struct packing omits automatic tail padding.
 sourceLesson: rep-memory-layout
 ---
 
-This unit continues the preceding material on eight-bit bytes and multibyte object representations.
+A library's native packing rules are not automatically identical to a C struct's complete layout. Alignment also affects performance through object spacing and access boundaries.
 
 ### Python's struct module and padding
 
-Python's `struct` uses native alignment with the default `@` prefix, but does **not** add tail padding:
+Python's `struct` uses native alignment with the default `@` prefix, but does **not** add tail padding. On an ABI with four-byte `int` size and alignment:
 
 ```python
 # Native packing omits automatic tail pads.

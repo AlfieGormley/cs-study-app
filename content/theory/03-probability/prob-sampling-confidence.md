@@ -2,36 +2,34 @@
 id: prob-sampling-confidence
 title: Estimate uncertainty with standard errors and intervals
 level: advanced
-minutes: 4
+minutes: 3
 sourceLesson: prob-statistics
 summary: The standard error scales with the inverse square root of the iid sample size.
 ---
 
-## Sampling and the standard error
+The spread of individual requests and the uncertainty in an estimated mean are different. **Standard deviation** describes individual variation; **standard error** describes variation of the estimator across repeated samples.
 
-You rarely measure everything; you measure a **statistical sample** and estimate. The sample mean estimates the true (population) mean. How far off is it likely to be?
+## More independent data reduces uncertainty
 
-For independent, identically distributed observations with a finite standard deviation, the **standard error** of the mean is:
+For independent identically distributed observations with finite variance, the standard error of the sample mean decreases with the square root of sample size. Quadrupling observations halves it; doubling observations does not.
 
-```formula
+```formula essential
 SE = σ / √(n)
 where
 SE: the standard error, the typical distance between the sample mean x̄ and the true mean μ (mu)
 σ: sigma, the standard deviation of a single observation, in the same units as the data
 n: the positive integer number of independent identically distributed observations
 √: the square root
-In words: averaging n independent observations shrinks the typical error by a factor of the square root of n.
+In words: for independent identically distributed observations with finite variance, the sample mean's standard deviation is the individual standard deviation divided by the square root of sample size.
 ```
 
-For example, with a single-request standard deviation of 80 ms, 100 requests give a standard error of 8 ms and 400 requests give 4 ms.
+This scaling describes sampling variability, not a guaranteed realised error. More observations also cannot remove systematic sampling bias or repair an unrepresentative measurement window.
 
-Quadrupling the sample halves the standard error; the realised estimation error is still random. That square root is the central fact of measurement: precision gets expensive fast.
+## Interpret an interval as a procedure
 
-## Confidence intervals
+A **95% confidence interval** comes from a procedure intended to cover the fixed true value in 95% of repeated experiments under its assumptions. It is not a statement that 95% of individual requests lie inside, or that this one fixed interval has a 95% posterior probability of containing the parameter.
 
-Under suitable **central limit theorem (CLT)** conditions and a large enough sample for the approximation, the sample mean is approximately normal. An approximate **95% confidence interval** is:
-
-```formula
+```formula reference
 x̄ ± 1.96 × SE
 where
 x̄: "x-bar", the sample mean
@@ -41,58 +39,18 @@ SE: the standard error of the mean
 In words: take the estimate and go about two standard errors either side.
 ```
 
-> [!example] Latency benchmark
-> 400 requests, mean 250 ms, sample **standard deviation (SD)** 80 ms.
+The normal approximation requires a sufficiently accurate sampling approximation. A mean estimated from normal iid observations can use a Student-t interval when the standard deviation is estimated. For proportions, the simple Wald interval can perform poorly near zero or one or with few successes or failures; Wilson or exact binomial procedures offer alternatives.
 
-```formula
-SE = (80 ms) / √(400)
-SE = (80 ms) / 20 = 4 ms
-1.96 × SE = 1.96 × 4 ms ≈ 7.8 ms
-CI = 250 ms ± 7.8 ms
-CI ≈ 242 ms to 258 ms
-where
-SE: the standard error of the mean latency, in milliseconds (ms)
-80: the sample standard deviation of one request's latency, in ms
-400: the number of requests measured
-√: the square root
-1.96: the 95% multiplier for a normal distribution
-CI: the 95% confidence interval
-±: plus or minus
-ms: milliseconds
-≈: approximately equal to
-In words: 400 requests pin the mean latency down to about ±8 ms.
-```
+## Check what counts as independent evidence
 
-For an **independent and identically distributed (iid)** Bernoulli **proportion**, the estimated standard error is:
+Many requests during one shared pause may provide less information than the same number spread across independent conditions. Positive correlation can make an independence-based standard error too small; the sign and structure of dependence matter.
 
-```formula
-SE = √((p̂(1 − p̂)) / n)
-SE = √((0.05 × 0.95) / 10,000) ≈ 0.0022
-CI ≈ 0.05 ± 1.96 × 0.0022
-CI ≈ 0.046 to 0.054
-where
-p̂: "p-hat", the observed proportion, for example the fraction of visitors who converted; 0.05 (5%) here
-n: the positive integer number of iid Bernoulli trials (visitors), 10,000 here
-SE: the estimated standard error of the proportion; the interval approximation requires adequate successes and failures
-CI: the approximate 95% confidence interval
-√: the square root
-±: plus or minus
-1.96: the 95% normal multiplier
-≈: approximately equal to
-In words: a 5% rate measured on 10,000 visitors is uncertain by about 0.22 percentage points, so the 95% interval is roughly 4.6% to 5.4%.
-```
-
-The resulting **Wald interval** can be inaccurate near 0 or 1 or with small success/failure counts; Wilson or exact binomial intervals are alternatives. For a mean with an estimated standard deviation, a **Student-t interval** is exact under normal iid sampling and approaches the displayed normal interval for large samples.
-
-> [!note] What "95% confidence" means
-> It is a statement about the procedure: if you repeated the experiment many times, about 95% of the intervals you computed would contain the true value. It does **not** mean "there is a 95% probability the true value is in this particular interval" (a Bayesian credible interval can make a posterior-probability statement under its prior and likelihood model).
-
-These formulas assume independent observations. Requests from the same user, or latencies during the same **garbage collection (GC)** pause, can be positively correlated, making an independence-based standard error too small. Correlation does not invariably increase uncertainty; its sign and structure matter. Benchmarks also suffer from warm-up effects and noisy neighbours, so run them repeatedly and interleave A and B rather than running all of A first.
+Benchmark warm-up, noisy neighbours and changing conditions also matter. Repeat and interleave comparisons rather than giving every observation of one version an earlier environment. A narrow interval under a wrong sampling model can be misleading.
 
 ## Key takeaways
-- The standard error scales with the inverse square root of the iid sample size.
-- Confidence describes repeated-procedure coverage.
-- Approximation quality and dependence can invalidate naive intervals.
+- Standard error concerns an estimator, not individual spread.
+- Confidence coverage belongs to the repeated procedure.
+- Sample size does not fix bias, dependence or a poor approximation.
 
 ## Further reading
 - [Engineering Statistics Handbook — NIST](https://www.itl.nist.gov/div898/handbook/)

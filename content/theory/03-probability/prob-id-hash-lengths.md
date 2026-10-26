@@ -7,40 +7,38 @@ sourceLesson: prob-algorithms
 summary: Independent random IDs need enough space for pairwise collision risk.
 ---
 
-## Why engineers care
+Choose a random identifier space from the expected population and acceptable collision risk. A large-looking range is not enough: every new ID can collide with every earlier ID.
 
-| Space | Size | 50% collision at |
-|---|---|---|
-| Birthdays | 365 | ~23 |
-| 7 hex chars (28 bits) | 2²⁸ | ~19,000 |
-| 32-bit hash | 2³² | ~77,000 |
-| 64-bit hash | 2⁶⁴ | ~5.1 billion |
-| UUIDv4 (122 random bits) | 2¹²² | ~2.7 × 10¹⁸ |
+## Population and space size both matter
 
-- **Short IDs.** A 32-bit random ID looks huge (4 billion values), but collisions are a coin flip after about 77,000 IDs. Even at 10,000 IDs the chance is about 1.2%.
-- **Git abbreviations.** Seven hex characters give 28 bits, so a repository with tens of thousands of objects has a material probability of ambiguous abbreviations of one set length under an ideal uniform-hash model. That is why Git automatically lengthens abbreviations as a repository grows.
-- **UUIDs.** Version 4 UUIDs have 122 random bits. You would need about 2.7 quintillion of them for an even chance of a single collision, which is why systems generate them without coordination.
-- **Cryptographic hashes.** For an ideal b-bit hash under a classical generic attack, finding *some* collision takes on the order of 2 to the power b/2 evaluations (the square root of the 2 to the power b possible outputs), a **birthday attack**. A 128-bit hash gives only 64-bit collision resistance. MD5 and SHA-1 also have cryptanalytic collision weaknesses beyond this generic bound; their history cannot be explained by output length alone. SHA-256 offers a generic 128-bit classical collision bound, assuming no better attack.
+Under independent uniform generation and small collision risk, doubling the issued population roughly quadruples the risk. Adding one random bit doubles the space and roughly halves that risk. These are planning approximations, not guarantees of uniqueness.
 
-> [!tip] Quick estimate
-> For small probabilities, the collision chance is about the expected number of colliding pairs. Doubling the number of items quadruples the risk; adding 1 bit to the ID halves it.
-
-```formula
+```formula reference
 P(C) ≈ n^2 / (2 × m)
-P(C) ≈ 10,000^2 / (2 × 2^32) ≈ 0.012
 where
 C: the event "at least one collision"
-n: the nonnegative integer number of independent uniform items (IDs); 10,000 in the second line
+n: the integer number of independent uniform items (IDs), large enough to approximate the pair count using its squared leading term
 m: the positive integer number of possible values; 2^32 ≈ 4.29 billion for a 32-bit ID
 n^2: n multiplied by itself
 P: probability; probabilities are dimensionless and apply to measurable events
 ≈: approximately equal to (good while the result is well below 1)
-In words: 10,000 random 32-bit IDs collide with about a 1.2% chance.
+In words: For many independent uniform IDs while collision risk is small, risk is approximately proportional to the square of the population and inversely proportional to the space size.
 ```
 
+A 32-bit random ID has billions of possible values, yet issuing 10,000 carries roughly a 1.2% chance of some collision under this model. If collisions are unacceptable, detect duplicates and retry or use a coordinated allocation scheme as appropriate.
+
+A version 4 UUID is 128 bits overall, including 122 random bits and fixed version and variant fields. The random space is enormous, but generation quality and the number issued still matter. Fixed formatting bits add no randomness.
+
+## Accidental uniqueness and attack resistance differ
+
+A classical generic **birthday attack** searches for any two inputs with the same ideal hash. It needs work on the order of the square root of the output-space size. Thus an ideal 128-bit hash has about 64-bit generic collision resistance.
+
+A **preimage attack** instead targets one already specified output, a different and generically harder task. Cryptanalytic weaknesses can also beat generic bounds; output length alone does not make a hash secure. MD5 and SHA-1 have demonstrated collision weaknesses beyond the birthday bound.
+
 ## Key takeaways
-- Independent random IDs need enough space for pairwise collision risk.
-- Generic classical collision resistance is roughly half the bit length.
+- Size IDs for all-pairs risk and the expected population.
+- Random formatting does not guarantee uniqueness.
+- Distinguish generic collision search, preimage search and algorithm-specific weaknesses.
 
 ## Further reading
 - [Mathematics for Computer Science — MIT](https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-fall-2010/)

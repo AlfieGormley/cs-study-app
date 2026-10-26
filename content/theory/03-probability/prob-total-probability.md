@@ -7,11 +7,15 @@ sourceLesson: prob-basics
 summary: A partition covers every outcome exactly once.
 ---
 
-## The law of total probability
+An overall error rate depends on both regional error rates and how much traffic each region serves. Giving a tiny region the same weight as a busy one answers the wrong question.
 
-For a countable partition of the sample space into disjoint pieces (every outcome lies in exactly one piece), find an event's overall chance by working out its chance inside each piece and weighting by how likely each piece is. Pieces with zero probability are left out.
+## Weight cases by how often they occur
 
-```formula
+A **partition of the sample space** separates outcomes into disjoint cases that cover everything exactly once. The **law of total probability** finds an overall chance by weighting its chance within each case by the chance of that case. Zero-probability cases can be omitted; a finite or countable partition supports this sum.
+
+If most requests go to a reliable region, the overall rate lies nearer that region's rate. Moving more traffic to an unreliable region raises the overall error rate even if neither regional rate changes.
+
+```formula reference
 P(A) = Σ_i P(A | B_i) × P(B_i)
 where
 P: probability of measurable events, dimensionless and between zero and one
@@ -21,53 +25,23 @@ i: an index counting the pieces 1, 2, 3, …
 Σ_i: sigma, "add up the following term for every piece i"
 P(A | B_i): the probability of A given that we are in piece B_i (| is read "given")
 P(B_i): the probability of landing in piece B_i
-Conditioning: every event to the right of a given bar in this card has positive probability
-In words: the overall chance of A is a weighted average of its chance in each case, weighted by how often each case happens.
+In words: the overall event probability is a weighted average of its probability within each disjoint case, weighted by how often each case occurs.
 ```
 
-Suppose 70% of your traffic hits region X with a 1% error rate and 30% hits region Y with a 4% error rate.
+The cases must refer to the same experiment and cover it without overlap. Averaging regional percentages equally would instead describe a uniformly selected region.
 
-```formula
-P(R) = P(R | X) × P(X) + P(R | Y) × P(Y)
-P(R) = 0.01 × 0.7 + 0.04 × 0.3
-P(R) = 0.007 + 0.012 = 0.019
-where
-P: probability of measurable events, dimensionless and between zero and one
-R: the event "a request returns an error"
-X: the event "the request went to region X"; P(X) = 0.7 (70%)
-Y: the event "the request went to region Y"; P(Y) = 0.3 (30%)
-P(R | X): the error rate given region X, 0.01 (1%); | is read "given"
-P(R | Y): the error rate given region Y, 0.04 (4%)
-Conditioning: every event to the right of a given bar in this card has positive probability
-In words: the overall error rate is 1.9%, a traffic-weighted average of the two regional rates.
-```
+## The observation policy matters
 
-This rule supplies the evidence denominator in the later Bayesian update.
+In the three-door game, a car is initially equally likely behind each door. After your choice, a knowledgeable host always reveals an unchosen goat and offers a switch. Switching wins whenever your original choice was wrong: two out of three games.
 
-## A host policy changes the weights
+If the host also chooses fairly when two goat doors are available, switching still has a two-thirds chance after observing a particular door opened. To condition on that observation, weight each car location by how likely that location makes the host's action.
 
-A car is uniformly hidden behind three doors. You pick door 1. A host who knows the hiding place always opens an unpicked goat door and offers a switch. If both goat doors are available, the host chooses each with equal probability. Let the observation be that door 3 was opened. Partition by the car location: the observation has probability one-half with the car at door 1, one with it at door 2, and zero with it at door 3.
-
-```formula
-P(H_3) = (1/2)(1/3) + 1(1/3)
-P(H_3) = 1/2
-P(C_2 ∩ H_3) = 1/3
-P(C_2 | H_3) = (1/3) / (1/2) = 2/3
-where
-C_2: the event that the car is behind door 2
-H_3: the event that the host opens door 3
-P: probability in this three-door model; probabilities are dimensionless and apply to measurable events
-∩: intersection, both events happen
-|: given the event to the right; the denominator here is positive
-Conditioning: every event to the right of a given bar in this card has positive probability
-In words: weight the host observation by each possible car location, then divide the joint chance by the chance of the observation; switching wins with probability two-thirds.
-```
-
-The host policy is part of the experiment. Opening an unpicked door at random, without knowing where the car is, and happening to show a goat would produce a different conditional probability.
+A host who opens an unchosen door blindly and happens to reveal a goat follows a different policy. Under uniform blind choice, the two unopened doors are equally likely conditional on that observation. The visible goat alone does not specify the experiment.
 
 ## Key takeaways
-- A partition covers every outcome exactly once.
-- Weight conditional probabilities by the chance of each case.
+- Weight conditional rates by the size of each disjoint case.
+- A changed mixture can change an overall rate without changing any component rate.
+- Include the observation policy in the probability model.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

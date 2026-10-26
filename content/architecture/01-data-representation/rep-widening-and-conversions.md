@@ -7,7 +7,7 @@ summary: Sign extension preserves a negative signed value when widening.
 sourceLesson: rep-integers
 ---
 
-This unit continues the preceding material on fixed-width integer representations.
+Widening should preserve a value, but preserving its old bits is not enough: the new upper bits must match the source interpretation.
 
 ## Sign extension
 

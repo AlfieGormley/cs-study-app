@@ -7,11 +7,15 @@ sourceLesson: prob-distributions
 summary: The geometric distribution counts through the first success.
 ---
 
-## Geometric: how long until the first success?
+A **geometric distribution** models the number of independent constant-probability trials up to and including the first success. It answers a waiting question, not a count within a fixed batch.
 
-Repeat independent Bernoulli trials, each succeeding with the same probability, until the first success. The number of trials has a **geometric distribution**:
+## A run of failures does not make success due
 
-```formula
+When the success probability is strictly between zero and one and attempts are independent, knowing that several attempts failed leaves the future trial distribution unchanged. The remaining wait has the same distribution as the original wait. This is **memorylessness**.
+
+The expected further wait is therefore unchanged after any possible failure streak. Total attempts so far still increase: memorylessness concerns what remains, not erasing the cost already paid. A long wait remains possible even when the expected wait is short.
+
+```formula reference
 P(T = k) = (1 − p)^{k − 1} × p
 E[T] = 1 / p
 Var(T) = (1 − p) / p^2
@@ -29,37 +33,21 @@ p^2: p multiplied by itself
 P(T > k): the probability of still having no success after k trials
 Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
 Moments: variables in these variance or covariance expressions have finite second moments
-In words: fail k − 1 times then succeed once; on average it takes 1/p tries, and the chance of a long wait shrinks by a factor of 1 − p per extra try.
+In words: a first success on a chosen attempt requires every earlier attempt to fail. The mean wait is the reciprocal of the success chance; each extra failure multiplies the remaining tail probability by the fixed failure chance.
 ```
 
-If every attempt succeeds with probability one, the first attempt is always the successful one. Treat that deterministic endpoint separately rather than evaluating a zero-to-zero power in the mass formula.
+At success probability one, the first attempt succeeds with certainty. A failure streak is then impossible and cannot be used as an ordinary conditioning event. Success probability zero gives no eventual success and falls outside this proper geometric model.
 
-For a retry that succeeds 20% of the time, the mean is 5 attempts, and the chance of still failing after 10 attempts is 0.8¹⁰ ≈ 0.107.
+## Check whether the real process remembers
 
-Independent retries with constant success probability and independent fair-die rolls until a six fit this model. Open-addressing probes generally are not independent draws with replacement, so geometric waiting time is only a simplified probing model, not an exact law for every table.
+After several failed requests, a persistent outage may be more plausible than it was before. That is evidence against treating every attempt as an independent draw with a fixed success chance. Retries can also add load and change the chance of recovery.
 
-## Memorylessness
-
-The geometric distribution is **memoryless**: having already waited tells you nothing about how much longer you will wait.
-
-```formula
-P(T > m + k | T > m) = P(T > k)
-where
-T: the number of trials until the first success
-m: the number of trials that have already failed; a whole number 0 or more
-k: how many more trials we ask about; a whole number 0 or more
-P(T > m): the probability of failing the first m trials; must be above 0
-|: read "given"; the left side assumes the first m trials failed
-P: probability; probabilities are dimensionless and apply to measurable events
-Conditioning: every event to the right of a given bar in this card has positive probability
-In words: after m failures, the chance of needing more than k further trials is exactly what it was at the start.
-```
-
-If the success probability p is strictly between 0 and 1 and you have already failed 10 times, the expected number of further attempts is still the reciprocal of the success probability. The past failures are sunk; they do not make success "due". This is the formal version of the gambler's fallacy, and it holds only when trials really are independent with constant success probability. Persistent server overload can correlate failures or change the success probability; backoff can reduce retry load in that setting.
+Backoff can reduce retry pressure, but its effect requires a system model. Open-addressing hash probes also generally do not behave like independent draws with replacement, so a geometric model is a simplification rather than a universal probing law.
 
 ## Key takeaways
-- The geometric distribution counts through the first success.
-- Past failures change nothing only under independent constant-probability trials.
+- Memorylessness describes the remaining wait under specific assumptions.
+- Past effort does not make success due in an independent fixed-probability model.
+- Persistent causes or changing conditions invalidate that simple interpretation.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

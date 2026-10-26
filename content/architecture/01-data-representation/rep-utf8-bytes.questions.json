@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. 0xE9 = 233, between 0x80 and 0x7FF → **2 bytes**.\n2. 11 payload bits: 0xE9 = `000 1110 1001` → split 5 | 6 = `00011 | 101001`.\n3. Fill `110xxxxx 10xxxxxx`: `11000011 10101001` = `C3 A9`.\n\nIn Latin-1, by contrast, é is the single byte `E9`. Confusing the two is one frequent source of mojibake.",
+    "workedExample": "U+00E9 lies above ASCII and within the two-byte UTF-8 range, so it takes two bytes. It encodes as `C3 A9`. Latin-1 instead uses the single byte `E9`, showing why knowing a code point is not enough to interpret an arbitrary byte sequence.",
     "link": {
       "title": "UTF-8 — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/UTF-8"
@@ -63,27 +63,27 @@
     "id": "rep-text-encoding-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Encode `ñ` (U+00F1) in UTF-8 by hand. Which bytes do you get?",
+    "prompt": "A Latin-1 file stores ñ as the single byte `F1`. A program relabels that file UTF-8 without converting its bytes. What is wrong?",
     "options": [
       {
-        "text": "`F1`",
-        "explanation": "`F1` is the Latin-1 encoding. In UTF-8 a single byte above 0x7F is never a complete character."
+        "text": "Nothing: code-point numbers are always the same bytes",
+        "explanation": "An encoding maps scalar values into bytes; the mappings differ."
       },
       {
-        "text": "`C3 B1`",
-        "explanation": "Correct. 0xF1 → 11 bits `00011 110001` → `110 00011` (C3) and `10 110001` (B1)."
+        "text": "A byte above the ASCII range cannot by itself be a complete UTF-8 scalar-value encoding",
+        "explanation": "Correct. The Latin-1 byte must be decoded and then re-encoded into the appropriate UTF-8 sequence."
       },
       {
-        "text": "`C7 81`",
-        "explanation": "This splits the bits 4 | 4 like hex digits. UTF-8 splits the payload 5 | 6 for two-byte sequences."
+        "text": "UTF-8 represents every non-ASCII scalar in four bytes",
+        "explanation": "UTF-8 uses two, three or four bytes for non-ASCII scalar values, depending on the value."
       },
       {
-        "text": "`00 F1`",
-        "explanation": "That is UTF-16BE. UTF-8 never has a zero byte except for U+0000."
+        "text": "The only missing step is reversing the file's bytes",
+        "explanation": "UTF-8 has no endian variant; this is an encoding mismatch."
       }
     ],
     "answer": 1,
-    "workedExample": "1. 0xF1 = 241, in U+0080–07FF → two bytes, 11 payload bits.\n2. 0xF1 as 11 bits: `000 1111 0001`.\n3. Split 5 | 6: `00011` | `110001`.\n4. Fill the template:\n\n```\n110 00011  -> 1100 0011 = C3\n10 110001  -> 1011 0001 = B1\n```\n\nResult: `C3 B1`. Check: `'ñ'.encode()` → `b'\\xc3\\xb1'`.",
+    "workedExample": "Separate the original byte from the intended scalar value. Latin-1 maps `F1` directly to ñ. UTF-8 encodes that scalar as `C3 B1`; changing a label does not perform that conversion.",
     "link": {
       "title": "RFC 3629: UTF-8",
       "url": "https://www.rfc-editor.org/rfc/rfc3629"
@@ -93,27 +93,27 @@
     "id": "rep-text-encoding-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Decode the UTF-8 bytes `E4 BD A0`. Which code point do they represent?",
+    "prompt": "A valid UTF-8 sequence starts with `1110` and has two continuation bytes. Why can the three bytes not simply be concatenated as a code-point number?",
     "options": [
       {
-        "text": "U+E4BD",
-        "explanation": "UTF-8 bytes are not the code point written out. The marker bits (`1110`, `10`, `10`) must be stripped first."
+        "text": "Every sequence must be reversed first",
+        "explanation": "UTF-8 byte order is already specified and is not reversed by host endianness."
       },
       {
-        "text": "U+4F60",
-        "explanation": "Correct. Payload bits `0100` + `111101` + `100000` = `0100 1111 0110 0000` = 0x4F60 (你)."
+        "text": "The prefix bits mark the sequence structure and are not payload",
+        "explanation": "Correct. Decode the payload positions after removing the lead and continuation markers."
       },
       {
-        "text": "U+1F60",
-        "explanation": "This uses an incorrect leading payload nibble. E4 contributes 0100, giving U+4F60. Dropping that nibble entirely would instead give U+0F60, not U+1F60."
+        "text": "Only the last byte carries data",
+        "explanation": "All three bytes carry some code-point payload bits."
       },
       {
-        "text": "Invalid: three bytes cannot start with E4",
-        "explanation": "`E4` = `1110 0100` is a valid three-byte lead, and `BD`, `A0` are valid continuation bytes."
+        "text": "Three-byte UTF-8 is always invalid",
+        "explanation": "Three-byte sequences encode many BMP scalar values, with validity restrictions."
       }
     ],
     "answer": 1,
-    "workedExample": "```\nE4 = 1110 0100  -> payload 0100\nBD = 10 111101  -> payload 111101\nA0 = 10 100000  -> payload 100000\n```\n\nConcatenate: `0100 111101 100000` → regroup in fours: `0100 1111 0110 0000` = **0x4F60**.\n\nU+4F60 is 你 (\"you\" in Chinese). This BMP ideograph takes 3 bytes in UTF-8 and 2 in UTF-16. Supplementary CJK characters take 4 bytes in either encoding; repertoire counts are not the same as text-frequency statistics.",
+    "workedExample": "The lead prefix identifies a three-byte sequence, and each continuation prefix marks a following byte. Only the remaining payload bits form the scalar value. A real decoder must also reject forbidden values and non-shortest forms.",
     "link": {
       "title": "UTF-8 — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/UTF-8"

@@ -7,49 +7,30 @@ summary: Fractional binary positions have weights one half, one quarter and so o
 sourceLesson: rep-number-systems
 ---
 
-This unit continues the preceding material on binary place values.
+A decimal fraction can be simple to write and still need infinitely many binary digits. This matters whenever a fixed-size binary format stores measurements or prices.
 
-## Fractions in binary
+## The positions continue past the point
 
-Positions to the right of the point have weights 1/2, 1/4, 1/8 and so on: the powers of two continue below 1. So `0.101` in binary is:
+To the right of the binary point, the positions are worth one half, one quarter, one eighth and so on. A binary `0.101` includes a half and an eighth, giving decimal 0.625. The zero skips the quarter position.
 
-```formula
-0.101_2 = 1 × 2^−1 + 0 × 2^−2 + 1 × 2^−3
-0.101_2 = 1/2 + 0 + 1/8 = 0.625
-where
-0.101_2: the digits 0.101 read in base 2; the small 2 written below the number names the base
-2^−1: 2 to the power −1, which means 1/2 = 0.5; a negative power means "1 divided by" the positive power
-2^−2: 1/(2 × 2) = 1/4 = 0.25
-2^−3: 1/(2 × 2 × 2) = 1/8 = 0.125
-In words: the first place after the binary point is worth a half, the next a quarter, the next an eighth; add the ones that hold a 1.
-```
+A fraction terminates in binary only when its denominator, after reducing to lowest terms, is a power of two. For example, three eighths terminates; one tenth does not, because its denominator contains a factor of five.
 
-To convert a decimal fraction, **multiply by 2** repeatedly and take the integer parts, reading **top to bottom**:
+Decimal has its own limitation: one third repeats forever in base ten. Repetition is a property of the value and chosen base, not a fault in a particular computer.
 
-```
-0.625 × 2 = 1.25   → 1
-0.25  × 2 = 0.5    → 0
-0.5   × 2 = 1.0    → 1   (stop: 0 left)
-0.625 = 0.101₂
-```
+## What a finite format must do
 
-Try 0.1 and something unsettling happens:
+Binary one tenth starts `0.0001100110011...`, with a repeating tail. More bits improve the approximation but no finite number of binary fraction positions makes one tenth exact.
 
-```
-0.1 × 2 = 0.2 → 0
-0.2 × 2 = 0.4 → 0
-0.4 × 2 = 0.8 → 0
-0.8 × 2 = 1.6 → 1
-0.6 × 2 = 1.2 → 1
-0.2 × 2 = 0.4 → 0   (repeats from here)
-0.1 = 0.0001100110011...₂
-```
+For a hand conversion, repeatedly double the remaining fraction. The whole-number part gives the next binary digit; continue with the fractional remainder. Reaching a zero remainder means the expansion terminates. Returning to an earlier nonzero remainder means the same digits will repeat. You do not need to carry out the whole expansion to diagnose the representability problem.
 
-It never terminates, just as 1/3 never terminates in decimal. A fraction terminates in a given base if and only if, after reducing it to lowest terms, every prime factor of its denominator also divides the base. For example, 3/8 has denominator 8 = 2 × 2 × 2, so it ends in binary (`0.011`). Ten is 2 × 5, so 1/10 has a factor of 5 that base 2 cannot express. This is the root of the surprises covered in the floating-point units.
+A fixed-size floating-point format must also have enough significant bits and exponent range. A terminating binary fraction can still be too large, too small or require more precision than that particular format provides.
+
+For decimal quantities that must remain exact, choose a suitable decimal representation or integer units with an explicit rounding policy. For approximate measurements, binary floating point is often appropriate; later lessons explain its rounding and precision limits.
 
 ## Key takeaways
-- Fractional binary positions have weights one half, one quarter and so on.
-- A reduced fraction terminates in binary only when its denominator is a power of two.
+- Binary fraction positions successively halve in weight.
+- A reduced denominator containing factors other than two gives a repeating binary expansion.
+- Termination alone does not guarantee that a particular fixed-size format can store the value.
 
 ## Further reading
 - [Python integer conversion functions](https://docs.python.org/3/library/functions.html)

@@ -1,34 +1,17 @@
 ---
 id: prob-poisson-capacity-streams
-title: Calculate Poisson tails and combine streams
+title: Interpret Poisson tails and combine streams
 level: intermediate
 minutes: 3
 sourceLesson: prob-distributions
 summary: Arrival-count exceedance is different from queueing delay or exceeding queue capacity.
 ---
 
-## Capacity planning
+A service whose average arrivals are below capacity can still receive busy windows. To estimate that risk, look at the arrival-count tail, while keeping it separate from actual queueing behaviour.
 
-Requests arrive at an average of 5 per second, so the count in one second is modelled as Poisson with mean 5. Compare that count with a nominal capacity of 9 requests per second. How often does a one-second arrival count exceed 9? Add the probabilities of 0 to 9 and subtract from 1:
+## Interpret a tail calculation
 
-```formula
-P(X ≥ 10)
-  = 1 − Σ_{k=0}^{9} (λ^k e^{−λ}) / k!
-P(X ≥ 10) ≈ 0.0318   for λ = 5
-where
-X: the number of requests arriving in one second
-P: probability; probabilities are dimensionless and apply to measurable events
-λ: lambda, the expected count in the one-second window, 5; a dimensionless count
-k: a count from 0 to 9
-Σ_{k=0}^{9}: sigma, "add up the term for k = 0, 1, …, 9"
-e: Euler's number, about 2.718
-!: factorial; k! = k × (k − 1) × … × 1, and 0! = 1
-≥: greater than or equal to
-≈: approximately equal to
-In words: about 3.2% of one-second windows see 10 or more requests when 5 are expected.
-```
-
-The same sum in Python:
+Suppose arrivals follow a homogeneous Poisson process averaging five per second. The code computes the chance of ten or more arrivals in a one-second window by subtracting the probabilities of zero through nine from one.
 
 ```python
 from math import exp, factorial
@@ -43,38 +26,22 @@ p_ok = sum(poisson_pmf(k, lam)
 print(round(1 - p_ok, 4))  # 0.0318
 ```
 
-The direct PMF calculation is a small-parameter demonstration; large arguments can exceed the floating-point range or lose precision. Use a numerical distribution library for general calculations.
+The result is about 3.18%. It describes arrival-count exceedance of a nine-request threshold. It is not automatically the chance of a full queue or high latency: those also depend on existing backlog, buffering and service times. A higher threshold reduces this count-tail probability without removing all uncertainty.
 
-About 3.2% of one-second windows see 10 or more requests: about 0.0318 × 60 ≈ 1.91 such windows per minute in expectation. A threshold of 12 is exceeded (13 or more arrivals) with probability about 0.202%, still above 0.1%. A threshold of 13 is exceeded (14 or more) with probability about 0.0698%. These are arrival-count probabilities, not probabilities that a queue fills up or that latency is high: buffering, existing backlog and service times also matter.
+The direct calculation is suitable for this small example. Large arguments or tiny tails need numerical methods that stay within floating-point range and avoid cancellation; a distribution library's survival function is usually preferable to subtracting a nearly-one cumulative probability.
 
-## Useful properties
+## Combining and selecting streams
 
-- **Poisson superposition**: independent Poisson streams add. Independent counts over the same window with means 2 and 3 sum to a Poisson count with mean 5.
-- **Poisson thinning**: if each request is independently an error with some fixed probability, the errors also form a Poisson count, with the mean scaled down by that probability.
-- **Inter-arrival times** of a homogeneous Poisson process follow an **exponential distribution**, the continuous memoryless cousin of the geometric.
+**Poisson superposition** says independent Poisson streams combine into another Poisson stream whose rates add. Independent regions at two and three requests per second produce five per second together. A quiet combined window requires both regions to be quiet; averaging their quiet probabilities is wrong.
 
-```formula
-X_1 + X_2 ~ Poisson(λ_1 + λ_2)
-Y ~ Poisson(q × λ)
-E[G] = 1 / r
-where
-X_1, X_2: independent Poisson counts over the same window with means λ_1 and λ_2
-λ_1, λ_2: lambda 1 and 2, their expected counts, for example 2 and 3
-~: "is distributed as"
-Poisson( ): the Poisson distribution with the given mean
-Y: the number of error requests when each of a Poisson(λ) stream of requests is independently an error with probability q
-λ: lambda, the expected number of requests in the window
-q: the probability that one request is an error
-G: the gap between consecutive events, in time units
-r: the intensity, the average number of events per time unit; greater than 0
-E[G]: the expected gap
-Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
-In words: merging independent streams adds their means; randomly keeping a fraction q of events scales the mean by q; and at 5 events per second the average gap is 1/5 = 0.2 s.
-```
+**Poisson thinning** independently keeps each event with a fixed probability, producing another Poisson stream with a reduced rate. A label based on a shared burst or changing state does not meet that assumption.
+
+For a homogeneous Poisson process with positive rate, **inter-arrival times** follow an exponential distribution. A larger rate means a shorter average gap.
 
 ## Key takeaways
-- Arrival-count exceedance is different from queueing delay or exceeding queue capacity.
-- Superposition requires independent Poisson processes; thinning uses independent labels.
+- A count exceeding a threshold does not directly measure queue failure.
+- Superposition needs independent Poisson streams.
+- Thinning needs independent fixed-probability selection.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

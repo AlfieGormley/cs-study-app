@@ -7,15 +7,15 @@ summary: Carry and signed overflow detect different out-of-range results.
 sourceLesson: rep-integers
 ---
 
-This unit continues the preceding material on fixed-width integer representations.
+A result that exceeds the available range raises two separate questions: what the instruction reports, and what the programming language permits.
 
 ## Overflow
 
 **Integer overflow** means the true mathematical result does not fit in the type. The hardware still produces *n* bits; what those bits mean, and what your language promises, varies.
 
-### The two flags
+### The two flags after addition
 
-Architectures such as x86, and flag-setting ARM add instructions, distinguish two kinds of overflow. Not all ISAs have these flags:
+Architectures such as x86, and flag-setting ARM add instructions, distinguish two kinds of overflow. Not all ISAs have these flags, and only instructions specified to update them do so. For a flag-setting addition:
 
 - **Carry flag**: there was a carry out of the top bit. This means **unsigned** overflow. 200 + 100 in 8 bits gives 44 with carry set.
 - **Overflow flag**: the signed result has the wrong sign. This happens only when adding two numbers of the **same** sign gives a result of the opposite sign.

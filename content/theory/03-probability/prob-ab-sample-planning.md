@@ -7,46 +7,43 @@ sourceLesson: prob-statistics
 summary: Choose effect size, significance and power before collecting the sample.
 ---
 
-## Sample size: decide before you start
+Before collecting an A/B sample, decide how small an effect matters. A study can be large enough to detect a major change yet too noisy to resolve a smaller one.
 
-To detect a change from 10% to 11% conversion with a two-sided significance level of 0.05 and 80% power, the standard normal-approximation planning formula gives the users needed in each arm:
+## Specify the design inputs
 
-```formula
-n ≈ (z_{0.975} + z_{0.8})^2
-  × ((p_1 q_1 + p_2 q_2) / δ^2)
-n ≈ (1.96 + 0.84)^2
-  × ((0.09 + 0.0979) / 0.01^2)
-n ≈ (7.84 × 0.1879) / 0.0001 ≈ 14,732
-where
-n: the number of users needed in each arm
-z_{0.975}: 1.96, the standard normal value with 97.5% below it; it sets the two-sided 5% significance level
-z_{0.8}: about 0.84, the standard normal value with 80% below it; it sets 80% power
-p_1, p_2: the baseline and target conversion rates, 0.10 and 0.11
-q_1, q_2: one minus each rate, 0.90 and 0.89; so p_1 × q_1 = 0.09 and p_2 × q_2 = 0.0979
-δ: delta, the difference to detect, 0.11 − 0.10 = 0.01
-≈: approximately equal to; 14,731.4 is rounded up because users come in whole numbers (unrounded z values give about 14,750)
-In words: detecting a 1-point lift on a 10% base needs roughly 15,000 users per arm.
-```
+Choose the primary metric, expected baseline rate, minimum detectable effect, significance level, desired power and allocation between arms. For a conversion rate, distinguish percentage points from relative change: moving from 10% to 11% is one percentage point and a 10% relative increase.
 
-Using approximately equal arm variances gives a handy planning rule:
+Power is the chance the planned test detects a specified real effect under the model. An 80% target is a design choice, not a promise that the experiment will show significance or that a significant result is 80% likely to be real.
 
-```formula
+## Small effects require much more data
+
+At similar variance and fixed significance and power, halving the target effect approximately quadruples the required sample. Sampling noise shrinks with the square root of sample size, so reducing that noise by half takes about four times the data.
+
+The following approximation is a reference for equal-sized independent conversion-rate arms near a shared baseline, two-sided 5% significance and 80% power:
+
+```formula reference
 n ≈ (16p(1 − p)) / δ^2
-n ≈ (16 × 0.1 × 0.9) / 0.01^2 = 14,400
 where
 n: users per arm
-p: the baseline rate, 0.10
-δ: delta, the difference to detect, 0.01
+p: the baseline conversion probability, strictly between zero and one
+δ: delta, the positive absolute probability difference to detect, not a relative percentage change
 16: about 2 × (1.96 + 0.84)^2 = 15.7, rounded up; it bakes in 5% significance and 80% power
 ≈: approximately equal to
-In words: sixteen times the per-user variance divided by the squared effect gives a quick sample-size estimate.
+In words: For this approximate equal-arm design, required users per arm grow with outcome variance and with the inverse square of the target absolute difference.
 ```
 
-Notice the effect size is squared in the denominator: **halving the effect you want to detect quadruples the sample size**. Low traffic may make the required sample impractical within a stable experiment window; looking for a trend does not replace adequate sample size. This is an approximate planning formula, not an exact power guarantee.
+Use an appropriate planning method for the actual test, baseline and allocation. This shortcut is not an exact power guarantee, especially with rare outcomes or small samples.
+
+## Plan a feasible experiment
+
+Translate users per arm into duration at available traffic, allowing for the intended sampling unit and relevant cycles. If the needed sample exceeds a stable experiment window, reconsider the detectable effect or design. Reading a visible trend does not create missing information.
+
+Pre-specify the stopping plan. A valid sequential design can use a different stopping rule, but repeatedly extending an ordinary fixed-sample test changes its error properties.
 
 ## Key takeaways
-- Choose effect size, significance and power before collecting the sample.
-- Halving the target effect approximately quadruples required sample size.
+- Plan around an effect that matters, stated in clear units.
+- Smaller effects usually require much larger samples.
+- Sample-size approximations and stopping rules depend on the design.
 
 ## Further reading
 - [Engineering Statistics Handbook — NIST](https://www.itl.nist.gov/div898/handbook/)

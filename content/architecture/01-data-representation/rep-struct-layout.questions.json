@@ -3,27 +3,27 @@
     "id": "rep-memory-layout-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "Under the ordinary x86-64 Linux System V ABI without packing options, what is `sizeof` this struct?\n\n```c\nstruct A {\n    char a;\n    int  b;\n    char c;\n};\n```",
+    "prompt": "An ordinary ABI gives a struct four-byte alignment. Its last member ends after byte offset 8, yet `sizeof` is 12. What is the purpose of the final three bytes?",
     "options": [
       {
-        "text": "6",
-        "explanation": "6 is the sum of the members. That is the packed size; by default the compiler pads `b` to a 4-byte boundary."
+        "text": "They store hidden copies of the fields",
+        "explanation": "Padding is not duplicate field storage."
       },
       {
-        "text": "9",
-        "explanation": "This includes the 3 bytes of padding before `b` but forgets tail padding. The size must be a multiple of the struct's alignment (4)."
+        "text": "They encode the struct's byte order",
+        "explanation": "The ABI's endian rule is separate from padding."
       },
       {
-        "text": "12",
-        "explanation": "Correct. a at 0, 3 bytes padding, b at 4–7, c at 8, then 3 bytes of tail padding to reach a multiple of 4."
+        "text": "They keep the next array element correctly aligned",
+        "explanation": "Correct. Array stride is sizeof the element, so tail padding preserves alignment."
       },
       {
-        "text": "16",
-        "explanation": "That would require 8-byte alignment, but the largest member is a 4-byte `int`."
+        "text": "They allow the compiler to reorder declared members",
+        "explanation": "Ordinary C members retain declaration order."
       }
     ],
     "answer": 2,
-    "workedExample": "```\noffset 0     a\noffset 1-3   pad   (b needs 4)\noffset 4-7   b\noffset 8     c\noffset 9-11  tail pad\n```\n\nThe struct takes the largest member alignment, and its size rounds up to a multiple of it:\n\n```formula\na_S = max(1, 4, 1) = 4\nS = ⌈9 / 4⌉ × 4 = 3 × 4 = 12\nwhere\na_S: the struct's alignment in bytes\nmax: the largest of the listed values, here the alignments of a, b and c\nS: the struct's size in bytes\n9: the bytes used up to the end of c (offsets 0 to 8)\n⌈ ⌉: ceiling: round up to the next whole number, so ⌈9/4⌉ = ⌈2.25⌉ = 3\nIn words: the struct is 4-byte aligned, so 9 bytes round up to 12.\n```\n\nSo the size is **12**. Tail padding exists so that in `struct A arr[2]`, `arr[1].b` is still 4-byte aligned. Reordering to `{int b; char a; char c;}` gives 8.",
+    "workedExample": "The next array element begins one complete struct size after the current one. A stride of nine would misalign later elements. Rounding the size up to twelve preserves four-byte alignment even though the last three bytes hold no declared member.",
     "link": {
       "title": "Data structure alignment — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"
@@ -33,27 +33,27 @@
     "id": "rep-memory-layout-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Under the ordinary x86-64 Linux System V ABI without packing options, what is `sizeof` this struct as declared, and what is the smallest size you can get by reordering its members?\n\n```c\nstruct G {\n    uint8_t  t;\n    uint64_t x;\n    uint16_t y;\n    uint32_t z;\n};\n```",
+    "prompt": "A private struct has small fields separated by highly aligned fields. You want to reduce its array footprint without weakening member alignment. Which is the best first investigation?",
     "options": [
       {
-        "text": "15 as declared, 15 reordered",
-        "explanation": "15 is the sum of the member sizes. Padding is added both between members and at the tail, and the size must be a multiple of 8."
+        "text": "Remove every gap with a packed attribute",
+        "explanation": "Packing may create misaligned members and change access requirements."
       },
       {
-        "text": "24 as declared, 16 reordered",
-        "explanation": "Correct. As declared: t 0, pad to 8, x 8–15, y 16–17, pad, z 20–23 → 24. Largest first (x, z, y, t): 15 bytes rounded up to 16."
+        "text": "Reorder members and inspect the resulting ABI layout",
+        "explanation": "Correct. Grouping fields can reduce padding while keeping each field aligned."
       },
       {
-        "text": "32 as declared, 16 reordered",
-        "explanation": "y and z can share the third 8-byte slot: y at 16, z at 20. The declared size is 24, not 32."
+        "text": "Assume sizeof is always the sum of field sizes",
+        "explanation": "That ignores member and tail padding."
       },
       {
-        "text": "24 as declared, 15 reordered",
-        "explanation": "The struct's alignment is 8 (from `uint64_t`), so its size must be a multiple of 8. 15 rounds up to 16."
+        "text": "Change only the array's starting alignment",
+        "explanation": "That does not remove padding inside each element or change its stride."
       }
     ],
     "answer": 1,
-    "workedExample": "As declared:\n\n```\n0      t\n1-7    pad   (x needs 8)\n8-15   x\n16-17  y\n18-19  pad   (z needs 4)\n20-23  z\nsize 24 (multiple of 8)\n```\n\nReordered largest first:\n\n```\n0-7    x\n8-11   z\n12-13  y\n14     t\n15     tail pad\nsize 16\n```\n\nA third smaller. In an array of 10 million that is 240 MB vs 160 MB.",
+    "workedExample": "Inspect the current member offsets and gaps. Reordering can let smaller fields share space that would otherwise be padding, while the ABI still aligns every member. Check sizeof and offsets after the change, and do not silently change a layout shared with external consumers.",
     "link": {
       "title": "The Lost Art of Structure Packing — Eric S. Raymond",
       "url": "http://www.catb.org/esr/structure-packing/"
@@ -63,27 +63,27 @@
     "id": "rep-memory-layout-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Under the usual x86-64 ABI without packing options, at what offset does `i` sit in this struct?\n\n```c\nstruct E {\n    char  a;\n    short s;\n    char  c;\n    int   i;\n};\n```",
+    "prompt": "The next unused offset in a struct is five, but the next member requires four-byte alignment. Why must the compiler leave a gap before that member?",
     "options": [
       {
-        "text": "4",
-        "explanation": "This forgets the padding before `s`. `s` needs 2-byte alignment, so it starts at 2, and `c` is at 4."
+        "text": "It can move earlier declared fields behind the new member",
+        "explanation": "Ordinary C member order is fixed by the declaration."
       },
       {
-        "text": "5",
-        "explanation": "Offset 5 is where `c` ends. `i` needs a multiple of 4, so it moves to 8."
+        "text": "Every field must start at an odd offset",
+        "explanation": "Alignment is a multiple requirement, not an odd-offset rule."
       },
       {
-        "text": "6",
-        "explanation": "6 is 2-byte aligned but not 4-byte aligned. An `int` must start at a multiple of 4."
+        "text": "The member's size alone guarantees alignment",
+        "explanation": "The member's starting address must satisfy its alignment too."
       },
       {
-        "text": "8",
-        "explanation": "Correct. a 0, pad 1, s 2–3, c 4, pad 5–7, i 8–11. Total size 12."
+        "text": "Offset five does not meet the member's alignment requirement",
+        "explanation": "Correct. The compiler advances to the next suitable offset, eight in this example."
       }
     ],
     "answer": 3,
-    "workedExample": "Place each member at the next multiple of its alignment:\n\n```\na  char   align 1 -> 0\ns  short  align 2 -> 2   (pad 1)\nc  char   align 1 -> 4\ni  int    align 4 -> 8   (pad 5-7)\n```\n\nSize = 12, already a multiple of 4. Reordering to `{char a; char c; short s; int i;}` packs into offsets 0, 1, 2, 4 and size 8.",
+    "workedExample": "A member begins at an address satisfying its ABI alignment. The next free byte can fail that rule, so padding advances the member to a permitted starting position. The gap preserves valid access; it is not additional user data.",
     "link": {
       "title": "Data structure alignment — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Data_structure_alignment"

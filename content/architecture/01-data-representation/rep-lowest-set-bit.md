@@ -7,7 +7,7 @@ summary: Subtracting one lets AND clear the lowest set bit.
 sourceLesson: rep-bitwise
 ---
 
-This unit continues the preceding material on unsigned bit patterns and masks.
+Clearing one set bit at a time lets an algorithm work on the positions that matter. The useful part of these idioms is how subtraction changes the pattern.
 
 ## Classic bit tricks
 

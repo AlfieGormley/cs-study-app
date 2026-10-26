@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. A float has 24 significant bits (23 stored + the hidden 1).\n2. From 2²⁴ to 2²⁵ the true exponent is 24, so the gap between neighbouring floats is:\n\n```formula\nΔ = 2^{E − m}\nΔ = 2^{24 − 23} = 2^1 = 2\nwhere\nΔ: delta, the gap between neighbouring floats in this range\nE: the true exponent, 24 for values from 2^24 up to 2^25\nm: the number of stored fraction bits, 23 in binary32\nIn words: the last fraction bit is worth 2 to the power (24 − 23), which is 2, so only even integers can be stored here.\n```\n\n3. 16,777,216 + 1 = 16,777,217 lies exactly halfway between 16,777,216 and 16,777,218.\n4. Round-to-nearest-even picks 16,777,216 (its last significand bit is 0).\n5. So the counter is stuck forever.\n\nAt 60 frames a second this happens after about 3.2 days. Use a 64-bit integer for counters.",
+    "workedExample": "At this boundary the next larger binary32 value is 16,777,218. Adding one lands halfway between it and the current value. Nearest-even selects the current value, whose last significand bit is zero. Every subsequent identical increment repeats the same tie, so the counter remains stuck. Its exponent range is still ample; an exact integer counter avoids this precision failure.",
     "link": {
       "title": "Single-precision floating-point format — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Single-precision_floating-point_format"
@@ -33,27 +33,27 @@
     "id": "rep-floating-point-q7",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "Which of these values can be stored **exactly** as a 64-bit double? Select all that apply.",
+    "prompt": "Which claims about storing values in binary64 are correct? Select all that apply.",
     "options": [
       {
-        "text": "0.75",
-        "explanation": "Correct. 0.75 = 3/4 = `1.1₂ × 2⁻¹`."
+        "text": "A small fraction such as three quarters can be exact",
+        "explanation": "Correct. Its finite binary expansion fits comfortably within binary64 precision and range."
       },
       {
-        "text": "0.2",
-        "explanation": "0.2 = 1/5 has a non-power-of-two denominator, so its binary expansion repeats and must be rounded."
+        "text": "Every short decimal fraction is exact",
+        "explanation": "One fifth repeats in binary even though its decimal spelling is short."
       },
       {
-        "text": "2⁵³ + 1",
-        "explanation": "A double has 53 significant bits. 2⁵³ + 1 needs 54, so it rounds to 2⁵³."
+        "text": "Every integer within the finite magnitude range is exact",
+        "explanation": "Large magnitudes have gaps greater than one, so many integers cannot be represented."
       },
       {
-        "text": "3.0",
-        "explanation": "Correct. Every integer up to 2⁵³ is exact; 3 = `1.1₂ × 2¹`."
+        "text": "Integers through the consecutive-integer precision limit are exact",
+        "explanation": "Correct. Binary64 represents every integer through 9,007,199,254,740,992 in magnitude."
       },
       {
-        "text": "1/1024",
-        "explanation": "Correct. 1/1024 = 2⁻¹⁰ is a power of two: significand 1.0, exponent −10."
+        "text": "A finite binary expansion still needs enough precision and exponent range",
+        "explanation": "Correct. Termination alone is insufficient for a fixed-size format."
       }
     ],
     "answer": [
@@ -61,7 +61,7 @@
       3,
       4
     ],
-    "workedExample": "A value is exact if it can be written as a whole number that fits in 53 bits times a power of two:\n\n```formula\nv = M (2^k)\n0.75 = 3 × 2^{−2}\nwhere\nv: the value to store\nM: a whole number below 2^53, so it fits in a double's 53 significant bits\nk: an integer power, possibly negative, whose binary quantum is no smaller than 2 to the power −1074 and whose scaled value remains within binary64's finite range\n2^{−2}: 2 to the power −2, which means 1/4\nIn words: if the value is a whole number of 53 bits or fewer, scaled by a power of two, a double stores it exactly.\n```\n\n| Value | Form | Exact? |\n|---|---|---|\n| 0.75 | 3 × 2⁻² | yes |\n| 0.2 | 1/5 | no |\n| 2⁵³ + 1 | needs 54 bits | no |\n| 3.0 | 3 × 2⁰ | yes |\n| 1/1024 | 1 × 2⁻¹⁰ | yes |\n\nIn Python, `float(2**53 + 1) == 2**53` is `True`.",
+    "workedExample": "Check three constraints: whether the expansion terminates in binary, whether its significant bits fit, and whether its scale is within range. Binary64 can represent many small integers and fractions exactly, but a huge magnitude range does not imply unit spacing throughout it.",
     "link": {
       "title": "Double-precision floating-point format — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Double-precision_floating-point_format"
@@ -91,7 +91,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. 10¹⁶ is between 2⁵³ ≈ 9.007 × 10¹⁵ and 2⁵⁴.\n2. In that range the gap between doubles is:\n\n```formula\nΔ = 2^{E − m}\nΔ = 2^{53 − 52} = 2\nwhere\nΔ: delta, the gap between neighbouring doubles in this range\nE: the true exponent, 53 for values from 2^53 up to 2^54\nm: the number of stored fraction bits, 52 in a double\nIn words: the last fraction bit is worth 2 here, so only even integers are representable.\n```\n\n3. 10¹⁶ + 1 sits exactly halfway between 10¹⁶ and 10¹⁶ + 2. Ties-to-even chooses 10¹⁶.\n4. Evaluation is left to right: (10¹⁶ + 1) − 10¹⁶ = 10¹⁶ − 10¹⁶ = **0.0**.\n\nReordering fixes it: `1e16 - 1e16 + 1.0` gives 1.0. This is why float addition is not associative.",
+    "workedExample": "Near `1e16`, adjacent binary64 values are two apart. The first addition lands halfway between neighbours and rounds back to `1e16`. The following subtraction therefore produces `0.0`; it cannot recover an increment already lost. Changing the grouping can change the answer, which is why floating-point addition is not associative.",
     "link": {
       "title": "What Every Computer Scientist Should Know About Floating-Point Arithmetic",
       "url": "https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html"

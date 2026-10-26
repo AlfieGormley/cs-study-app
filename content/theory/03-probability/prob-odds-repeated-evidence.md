@@ -7,22 +7,13 @@ sourceLesson: prob-bayes
 summary: Likelihood ratios multiply prior odds.
 ---
 
-## The odds form: Bayes in your head
+**Odds** compare the chance a hypothesis is true with the chance it is false. A 1% probability is odds of one to 99. Probability and odds express the same belief on different scales.
 
-**Odds** compare the chance something happens with the chance it does not. A probability of 1% is odds of 1 : 99 ("1 to 99").
+## Evidence multiplies odds
 
-```formula
-O = p / (1 − p)
-p = O / (1 + O)
-where
-O: the odds in favour, as a single number; odds of 1 : 99 are O = 1/99
-p: the probability, strictly between 0 and 1 (at exactly 0 or 1 the odds are 0 or infinite)
-In words: odds are the chance of yes divided by the chance of no; the second line converts back.
-```
+A **likelihood ratio** compares how likely the observed evidence is under the hypothesis and under its alternative. Evidence more likely under the hypothesis raises its odds; equally likely evidence leaves them unchanged; evidence more likely under the alternative lowers them.
 
-In odds form Bayes becomes a single multiplication by the **likelihood ratio (L_ratio)**, how many times more likely the evidence is when H is true than when it is false. This needs the false positive rate to be above 0.
-
-```formula
+```formula reference
 O_post = O_prior × L_ratio
 L_ratio = P(E | H) / P(E | ¬H)
 where
@@ -34,44 +25,23 @@ E: the evidence
 P(E | H): how likely the evidence is if H is true (| is read "given")
 P(E | ¬H): how likely the evidence is if H is false; must be above 0
 P: probability; probabilities are dimensionless and apply to measurable events
-Conditioning: every event to the right of a given bar in this card has positive probability
-In words: multiply your odds before the evidence by how much more the evidence favours H than not H.
+In words: multiply the prior odds by the evidence's likelihood under the hypothesis divided by its likelihood under the alternative.
 ```
 
-For the test, prior odds are 1 : 99:
+The displayed ratio assumes both hypotheses have positive priors and the evidence has positive probability under the alternative. Multiplying odds is different from multiplying probability. Strong evidence can favour a rare hypothesis without making it the most likely explanation.
 
-```formula
-L_ratio = 0.99 / 0.05 = 19.8
-O_post = (1/99) × 19.8 = 0.2
-p = 0.2 / (1 + 0.2) = 1/6
-where
-L_ratio: the likelihood ratio, sensitivity 0.99 divided by false positive rate 0.05
-O_post: the odds of being ill after one positive test; 0.2 is odds of 1 : 5
-p: the matching probability of being ill
-In words: one positive test multiplies the odds by about 20, from 1 : 99 to 1 : 5, which is a probability of 1 in 6.
-```
+## Do repeated results add new information?
 
-Same answer as before, with no denominators to work out.
+After an update, use the posterior as the prior for the next piece of evidence. Conditional independence both when the hypothesis is true and when it is false is sufficient to multiply the individual likelihood ratios unchanged. Without it, calculate each new likelihood ratio conditional on the evidence already seen; do not assume the original ratio still applies.
 
-Likelihood ratios multiply when the evidence pieces are conditionally independent both given H and given not H. Under that assumption, a second positive test multiplies the odds by 19.8 again:
+Copying an alert into a second dashboard does not create a second independent observation. Two tests sharing the same faulty input may repeat the same error. Use the likelihood of the new evidence given what is already known; do not blindly multiply an unchanged ratio again.
 
-```formula
-O_2 = 0.2 × 19.8 = 3.96
-p_2 = 3.96 / (1 + 3.96) ≈ 0.80
-where
-O_2: the odds of being ill after two positive tests, about 4 : 1
-0.2: the odds after the first test
-19.8: the likelihood ratio of each test
-p_2: the matching probability, about 80%
-≈: approximately equal to
-In words: a second independent positive multiplies the odds by about 20 again, from 1 : 5 to about 4 : 1, or about 80%.
-```
-
-Yesterday's posterior is today's prior. This sequential updating is the heart of Bayesian reasoning.
+Under genuine conditional independence, requiring two positive detectors reduces false positives by requiring both to fire, but also misses real cases whenever either fails to detect them. Improved precision can come at a sensitivity cost.
 
 ## Key takeaways
-- Likelihood ratios multiply prior odds.
-- Repeated evidence uses unchanged likelihood ratios only under conditional independence in both classes.
+- Likelihood ratios change odds, not probabilities directly.
+- Sequential updates must account for previous evidence.
+- Conditional independence in both classes permits multiplying the individual likelihood ratios unchanged.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

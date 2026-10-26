@@ -7,7 +7,7 @@ summary: Not every API flag constant denotes a single independent bit.
 sourceLesson: rep-bitwise
 ---
 
-This unit continues the preceding material on unsigned bit patterns and masks.
+A packed word can hold independent switches, a choice between modes, or several numeric fields. Identify which kind of field you have before choosing a mask.
 
 ### Flags
 
@@ -37,15 +37,13 @@ To pack, shift each field up and OR them together: `(r << 16) | (g << 8) | b`. C
 
 A mask of the low bits is one less than a power of two, because subtracting 1 from `1000...0` turns it into `0111...1`:
 
-```formula
+```formula reference
 M = 2^n − 1
-M = 2^5 − 1 = 31 = 0b11111
 where
 M: a mask whose low n bits are 1 and every bit above them 0; in Python it is written (1 << n) - 1
-n: how many low bits the mask covers (not negative), here 5
+n: how many low bits the mask covers, a non-negative count
 2^n: n copies of 2 multiplied together; written 1 << n in code
-0b11111: the binary literal for five 1-bits (0b marks binary in Python and C23)
-In words: one less than 2 to the power n is a run of n ones, which keeps exactly the low n bits when AND-ed.
+In words: a mask with consecutive low bits set keeps a field after it has been shifted down; five set low bits give the mask 31.
 ```
 
 In C, the operand type, promotions and shift-count limit matter; use an appropriately wide unsigned mask and handle *n* equal to the width separately.

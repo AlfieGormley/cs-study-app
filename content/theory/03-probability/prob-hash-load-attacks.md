@@ -2,60 +2,33 @@
 id: prob-hash-load-attacks
 title: Analyse hashing load and adversarial keys
 level: advanced
-minutes: 4
+minutes: 3
 sourceLesson: prob-algorithms
 summary: Expected bucket occupancy is the load factor under uniform hashing.
 ---
 
-## Hash tables and collisions
+A hash table's expected performance depends on how keys reach buckets. **Simple uniform hashing** assumes each key independently chooses a uniformly random bucket. Real implementations and adversarial inputs need separate scrutiny.
 
-Hash keys into buckets, each key independently to a uniformly random bucket (the **simple uniform hashing** assumption). By indicators and linearity, the expected number of keys in each bucket is the **load factor**, and the expected number of pairs of keys that land in the same bucket follows from counting pairs:
+## Average occupancy is not the worst bucket
 
-```formula
-α = n / m
-E[K_b] = n × (1/m) = α
-E[N_c] = C(n, 2) × (1/m)
-E[N_c] = (n(n − 1)) / (2m)
-where
-n: the number of keys stored
-m: the positive integer number of buckets
-α: alpha, the load factor, the average number of keys per bucket
-K_b: the number of keys in one particular bucket b
-1/m: the chance a key lands in a given bucket, and the chance two keys land in the same bucket
-N_c: the number of colliding pairs, pairs of keys in the same bucket
-C(n, 2): "n choose 2", the number of pairs of keys, n × (n − 1) / 2
-E[ ]: expected value
-Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
-In words: each bucket gets α keys on average, and with n keys there are about n²/2 pairs, each colliding with chance 1/m.
-```
+The **load factor** is stored keys divided by buckets. Under the uniform model, it is the expected occupancy of a specified bucket. In a **chained hash table**, an unsuccessful lookup scans its selected bucket; with bounded-cost hashing and comparisons, keeping the load factor bounded keeps expected lookup cost bounded.
 
-An unsuccessful search in a **chained table** (each bucket holds a list of its keys) inspects about α keys on average, plus the cost of hashing, so lookups are O(1 + α), where O( ) is big-O notation, "grows at most as fast as".
+Collisions are ordinary. More keys create more pairs that can collide, even when each bucket's expected occupancy looks small. The mean occupancy does not guarantee short chains in every bucket.
 
-The colliding-pairs result is surprising. With as many keys as buckets, the load factor is one and you expect about half as many colliding pairs as keys: 1,000 keys in 1,000 buckets give 1000 × 999 / 2000 ≈ 500. Collisions are not a rare failure; they are the normal state of a hash table, which is why every hash table needs a collision strategy.
+**Open addressing** stores keys directly in slots and probes alternatives after a collision. As the table fills, searches for an empty slot become harder. Linear probing can form long runs of occupied slots, so a high load factor hurts more than a simple occupancy average suggests.
 
-> [!note] Real tables resize
-> CPython's dictionary implementation uses a usable-entry fraction of about two-thirds; deletions and table layout complicate a simple occupancy trigger. Java `HashMap` has a configurable load factor, default 0.75. These are implementation/default details, not universal rules for all hash tables. Keeping the load factor bounded keeps the expected cost constant. **Open addressing** (storing every key in the array itself and probing other slots on a collision) degrades sharply as the load factor approaches 1.
+## Challenge the input model
 
-In the classical large-table model with uniform independent home positions and no deletions, **linear probing** (trying the next slot, then the next) has this expected cost for an unsuccessful search:
+An attacker able to construct colliding keys can defeat uniform-model expectations. In a list-backed bucket, each insertion may scan existing keys; a large batch then causes quadratic total work, where input size means the number of supplied keys.
 
-```formula
-U ≈ 1/2 × (1 + 1 / (1 − α)^2)
-U ≈ 1/2 × (1 + 1 / 0.1^2) = 50.5
-where
-U: the expected number of probes (slots examined) in an unsuccessful search
-α: alpha, the occupied fraction, at least 0 and strictly below 1; 0.9 in the second line
-(1 − α)^2: the free fraction of slots, squared
-≈: approximately equal to (valid for large tables)
-In words: at 90% full, a failed lookup examines about 50 slots, versus 2.5 at 50% full.
-```
+Resizing may separate keys that only shared a bucket index, but it cannot separate identical full hash values under the same hash function. An appropriate secret keyed hash makes precomputed attacks harder. Input limits still matter, as do key types, key handling and adaptive attackers.
 
-## Adversaries and hash flooding
-
-The uniform-hashing assumption fails if an attacker chooses the keys. In 2011, researchers showed that web frameworks in PHP, Java, Python and others could be knocked over by POST requests whose parameter names all hashed to one bucket, making each insert cost O(n) work, where n is the number of keys already in that bucket. Defences include capping the number of request parameters and secret keyed hashing. Python enables hash randomisation for str and bytes by default since 3.3; CPython commonly uses SipHash, with the active algorithm visible in `sys.hash_info`. Configuration can disable randomisation, and custom or non-string hashes need separate consideration. A random seed alone is not a guarantee against every adaptive attack.
+Python randomises hashes for covered string and byte keys by default; configuration and other key types need checking. Do not infer that every object is protected merely because a process has a hash seed.
 
 ## Key takeaways
-- Expected bucket occupancy is the load factor under uniform hashing.
-- Untrusted keys can defeat an unkeyed uniform model.
+- Uniform expected occupancy is not a maximum-load guarantee.
+- High occupancy particularly hurts probing schemes.
+- Untrusted keys require defences beyond an average-case model.
 
 ## Further reading
 - [Mathematics for Computer Science — MIT](https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-fall-2010/)

@@ -7,56 +7,19 @@ sourceLesson: prob-expectation
 summary: Each indicator has expectation equal to its event probability.
 ---
 
-## Indicator variables
+To find an expected count, ask a small yes/no question for each item. An **indicator variable** is one when its event happens and zero otherwise. Its mean is the event's probability.
 
-An **indicator variable** for an event A is 1 if A happens and 0 otherwise. Its expectation is just a probability:
+## Build a count from simple pieces
 
-```formula
-E[I_A] = 1 × P(A) + 0 × P(¬A)
-E[I_A] = P(A)
-where
-P: probability of measurable events, dimensionless and between zero and one
-A: an event
-I_A: the indicator of A: 1 if A happens, 0 if not
-E[I_A]: its expected value
-P(A): the probability of A
-¬A: "not A", the event that A does not happen (¬ is "not")
-Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
-In words: the average of a 0-or-1 switch is just the chance it is on.
-```
+Give every trial an indicator for success. Adding the indicators gives the total successes. **Linearity of expectation** then adds their probabilities to obtain the expected count, even when the events are dependent.
 
-The recipe for "expected number of things that happen" is:
+Ten flips each with marginal head probability 0.3 have expected total three heads. Independence would be needed to call the full count binomial, but is unnecessary for this mean.
 
-1. Write the count as a sum of indicators, one per thing.
-2. Find each indicator's probability.
-3. Add them up, by linearity.
+## Random returns in a cloakroom
 
-## Example: fixed points of a random permutation
+A cloakroom returns a positive number of coats in uniformly random order. Each owner has the same chance of receiving any coat, so their own coat is one possibility among the whole group. Add one match indicator per owner: there is one match on average, regardless of group size.
 
-A positive number of people check their hats; the hats are handed back in a uniformly random order. How many people expect to get their own hat? A person who gets their own hat back is a **fixed point** of the shuffle.
-
-Each person's own hat is just one of all the equally likely hats they could receive. Its match probability is therefore one divided by the number of people.
-
-```formula
-F = I_1 + I_2 + … + I_n
-E[F] = Σ_i E[I_i] = n × (1/n) = 1
-where
-F: the number of people who get their own hat back (fixed points)
-n: the positive integer number of people; the permutation is uniform
-I_i: the indicator that person i gets their own hat: 1 if so, 0 if not
-I_1, I_2, I_n: the indicators for person 1, person 2 and the last person, n
-i: a counter running over the people, 1 to n
-E[ ]: expected value
-Σ_i: sigma, "add up over every person i"
-…: and so on, one indicator per person
-1/n: the chance a given person gets their own hat
-Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
-In words: n people each with a 1-in-n chance gives an expected total of exactly 1.
-```
-
-The answer is 1 for every positive n, whether 3 people or 3 million. With two or more people the indicators are dependent (if all but one have their own hats, the last must too), but linearity does not care.
-
-## Checking by simulation
+This is an expectation, not a guarantee of one match in each shuffle. The matches are dependent: if everyone but the final owner receives the correct coat, the final owner must too. That does not invalidate linearity. A match is called a **fixed point** of the permutation.
 
 ```python
 import random
@@ -72,9 +35,12 @@ print(sum(fixed_points(50)
           for _ in range(t)) / t)  # ~1.0
 ```
 
+This simulation averages match counts from repeated random shuffles. It should approach one, with variation between runs. The explanation using indicators is what establishes the model expectation.
+
 ## Key takeaways
-- Each indicator has expectation equal to its event probability.
-- Dependent coat-return events still have an expected total of one.
+- A count is a sum of yes/no indicators.
+- Add individual probabilities to obtain an expected count.
+- Dependence affects the distribution without preventing linearity.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

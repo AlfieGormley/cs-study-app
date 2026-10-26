@@ -7,22 +7,11 @@ summary: A bit pattern acquires meaning from its interpretation.
 sourceLesson: rep-integers
 ---
 
-The preceding binary units read a row of bits as a non-negative number. That is an **unsigned integer**. Its range follows from counting patterns:
-
-```formula
-0 ≤ x ≤ 2^n − 1
-0 ≤ x ≤ 2^8 − 1 = 255
-where
-x: a value an n-bit unsigned integer can hold
-n: the number of bits, here 8
-2^n: n copies of 2 multiplied together: the number of different bit patterns
-≤: less than or equal to
-In words: the smallest unsigned value is 0 (all bits 0) and the largest is one less than the number of patterns (all bits 1), because one pattern is used up by zero.
-```
+The preceding binary units read a row of bits as a non-negative number. That is an **unsigned integer**. An unsigned field starts at zero and ends one below its pattern count, because zero uses one pattern.
 
 So an 8-bit unsigned value runs from 0 to 255, and a 32-bit one from 0 to 4,294,967,295.
 
-Programs also need negative numbers. There is no minus sign in hardware, only bits, so some bit patterns have to be set aside to mean negative values. Several schemes have been tried. Mainstream present-day processors use **two's complement** for signed integers. This lesson explains how it works, why it won, and what goes wrong when a result does not fit.
+Programs also need negative numbers. There is no minus sign in hardware, only bits, so some bit patterns have to be set aside to mean negative values. Several schemes have been tried. Mainstream present-day processors use **two's complement** for signed integers. Here we compare the earlier schemes; the next units explain how two's complement uses the patterns and why it simplifies arithmetic.
 
 ## Two schemes that lost
 
@@ -52,6 +41,8 @@ To negate, invert every bit:
 ```
 
 Addition is nearly uniform, but you must add any carry out of the top bit back in at the bottom ("end-around carry"), and there are still two zeros (`0000 0000` and `1111 1111`). Some early machines such as the CDC 6600 used it. Today you meet it mainly in the **Internet checksum** used by IPv4, TCP and UDP, which is a ones' complement sum.
+
+Two's complement, introduced next, has just one zero. Its top bit has a negative positional weight rather than acting as a separate sign attached to a magnitude.
 
 ## Key takeaways
 - A bit pattern acquires meaning from its interpretation.

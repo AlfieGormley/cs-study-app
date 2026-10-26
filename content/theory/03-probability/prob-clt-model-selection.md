@@ -7,64 +7,35 @@ sourceLesson: prob-distributions
 summary: The iid finite-variance CLT is a limiting statement.
 ---
 
-## Why it is everywhere: the central limit theorem
+Averages can become more stable and more nearly bell-shaped than individual observations. The **central limit theorem (CLT)** explains one important case, but it is not permission to treat every data set as normal.
 
-One standard **central limit theorem (CLT)** says that the centred and scaled sum of independent, identically distributed variables with finite, nonzero variance converges in distribution to a standard normal as the sample size grows. This motivates a large-sample normal approximation; independence and finite variance alone are not sufficient for arbitrary non-identically distributed sequences, and no universal finite sample size guarantees accurate tails.
+## What approaches a normal distribution?
 
-Roll 100 independent fair six-sided dice. Each has mean 3.5 and variance 35/12, and means and (for independent variables) variances add:
+For independent identically distributed observations with finite nonzero variance, the centred and scaled sum, or equivalently the centred and scaled average, converges in distribution to a standard normal as the sample grows. This is a limiting statement; there is no universal sample size that guarantees accurate tail estimates.
 
-```formula
-E[S] = 100 × 3.5 = 350
-Var(S) = 100 × 35/12 ≈ 291.7
-σ = √(291.7) ≈ 17.1
-1.96 × σ ≈ 34
-where
-S: the sum of the 100 dice
-E[S]: its expected value
-Var(S): its variance
-σ: sigma, the standard deviation of S
-√: the square root
-1.96: the z-score for the middle 95% of a normal distribution
-≈: approximately equal to
-Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
-Moments: variables in these variance or covariance expressions have finite second moments
-In words: the sum centres on 350 and typically varies by about 17, so about 95% of the time it lands within 34 of 350.
-```
+The original observations do not thereby become normal. For independent copies with the same variance, the sum's standard deviation grows with the square root of the count, while the average's standard deviation shrinks with that square root. Quadrupling observations halves the average's standard deviation.
 
-The sum is close to normal, so about 95% of the time it lands within 350 ± 34 (exact enumeration gives 95.7% between 316 and 384).
+## Choose a model from the process
 
-The binomial has a useful normal approximation when both the expected successes and the expected failures are sufficiently large; the Poisson approaches normal as its mean grows. Check tail accuracy and use a **continuity correction** (treating each whole-number count as an interval extending half a unit on each side) for discrete counts.
+| Quantity | Candidate model |
+|---|---|
+| Success count in fixed independent equal-probability trials | Binomial |
+| Independent equal-probability trials until success | Geometric |
+| Count in a homogeneous Poisson-process window | Poisson |
+| Standardised average meeting CLT assumptions | Approximate normal |
 
-```formula
-Bin(n, p) ≈ N(n × p, n × p × (1 − p))
-Bin(1000, 0.02) ≈ N(20, 4.4^2)
-where
-Bin(n, p): binomial with n trials and success probability p
-N(μ, σ^2): normal with mean μ and variance σ^2
-n: the number of trials; 1,000 disks in the second line
-p: the success probability; 0.02 in the second line
-4.4: the standard deviation √(1000 × 0.02 × 0.98)
-≈: approximately distributed as
-In words: the disk-failure count behaves roughly like a bell curve centred on 20 with standard deviation 4.4.
-```
+A binomial normal approximation needs enough expected successes and failures. A Poisson normal approximation improves as its mean grows. A **continuity correction** treats whole-number counts as intervals extending half a unit on either side, but does not repair invalid assumptions.
 
-> [!warning] Check latency tails before choosing a model
-> Latency can be right-skewed, multimodal or heavy-tailed, but none of these properties follows merely from being nonnegative. Right skew also does not imply a heavy tail. A normal approximation may misestimate high percentiles; inspect measured distributions and enough tail observations before using it for an **SLO** (service level objective, a target such as "99% of requests under 200 ms"). Mean and standard deviation alone do not determine the tail.
+## Inspect latency tails directly
 
-## Choosing a distribution
+Mean and standard deviation do not determine high percentiles. Latency can be skewed or multimodal; nonnegativity alone proves neither skewness nor a heavy tail. A normal approximation may fit central observations while misrepresenting rare delays that matter to an SLO.
 
-1. **Fixed number of independent tries with the same success probability, count successes?** Binomial.
-2. **Independent constant-probability trials until success?** Geometric. Waiting for the next event in a homogeneous Poisson process? Exponential distribution.
-3. **Count independent rare events at a stable rate?** Consider a Poisson model and check its assumptions.
-4. **A standardised sum or average meeting CLT conditions?** Consider a normal approximation and check finite-sample accuracy.
-5. **Check the assumptions.** Independence and constant rates are the usual casualties: retries cluster, traffic is diurnal, failures cascade.
-
-In Python, `scipy.stats` provides all of these (`binom`, `geom`, `poisson`, `norm`) with `cdf` and `sf` (survival function, 1 − cdf) methods. Discrete distributions provide `pmf`; the continuous normal provides `pdf` instead. Use `sf` directly for small upper-tail probabilities to reduce cancellation error. The standard library has `statistics.NormalDist`.
+Use enough observations or an appropriate histogram to estimate the relevant tail and its uncertainty. Dependence, changing traffic and rare extreme values all require attention before trusting an approximation.
 
 ## Key takeaways
-- The iid finite-variance CLT is a limiting statement.
-- Finite-sample tail accuracy needs checking.
-- Mean and standard deviation alone do not determine latency tails.
+- The CLT concerns standardised sums or averages under stated assumptions.
+- Large samples do not provide a universal tail-accuracy guarantee.
+- Choose models by process and check the predictions that matter.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

@@ -7,7 +7,7 @@ summary: The ABI determines member alignment and struct layout.
 sourceLesson: rep-memory-layout
 ---
 
-This unit continues the preceding material on eight-bit bytes and multibyte object representations.
+A struct's size includes the space needed to keep its members and array elements aligned. That size can exceed the sum of its field sizes.
 
 ## Struct padding
 
@@ -40,21 +40,7 @@ offset 9-11  tail padding
 sizeof = 12, alignment 4
 ```
 
-The offsets follow from rounding up to the next multiple of each alignment:
-
-```formula
-o = ⌈p / a⌉a
-o_b = ⌈1 / 4⌉ × 4 = 4
-S = ⌈9 / 4⌉ × 4 = 12
-where
-o: the offset where a member starts, in bytes from the start of the struct
-p: the first free offset, just after the previous member
-a: the member's alignment in bytes (4 for int)
-o_b: the offset of b: the first free byte is 1, rounded up to a multiple of 4
-S: the struct's size: the 9 bytes used so far, rounded up to a multiple of the struct's alignment, 4
-⌈ ⌉: ceiling: round up to the next whole number, so ⌈1/4⌉ = 1 and ⌈9/4⌉ = 3
-In words: each member moves forward to the next multiple of its alignment, and the whole struct is rounded up the same way.
-```
+Each member moves forward to the next offset satisfying its alignment. The final size is rounded up to the struct's alignment too.
 
 Six bytes of data, six bytes of padding. Why the tail padding? In an array `struct A arr[2]`, `arr[1]` starts sizeof(struct A) **bytes** after arr[0], namely `(unsigned char *)arr + sizeof(struct A)`. The expression `arr + sizeof(struct A)` would incorrectly scale that count by the element size again. If the size were 9, `arr[1].b` would sit at offset 13, misaligned. Rounding the size to 12 keeps every element aligned.
 
@@ -93,6 +79,13 @@ printf("%zu %zu %zu\n",
 
 > [!note] ABI-dependent
 > Alignment of each type comes from the platform ABI, not the C standard. On 32-bit x86 Linux (i386 System V), a `double` inside a struct is only 4-byte aligned, so `{char; double; char}` is 16 bytes there, not 24. Code that shares binary structs between platforms cannot rely on the layout.
+
+> [!analogy] Real-world analogy: Marked parking bays
+> Vehicles must begin at designated bay markings, so empty space may remain between them.
+>
+> **How it maps:** Member alignment restricts starting offsets. Tail padding makes the next struct in an array start at a suitable boundary too.
+>
+> **Where it stops:** The ABI determines exact byte layout; compilers do not rearrange ordinary C members to find a better fit.
 
 ## Key takeaways
 - The ABI determines member alignment and struct layout.

@@ -7,11 +7,15 @@ sourceLesson: prob-distributions
 summary: A Poisson parameter is an expected count in a specified window.
 ---
 
-## Poisson: counting rare events in a window
+A **Poisson distribution** describes a nonnegative whole-number count. Its parameter is the expected count in a specified window, so “three per hour” and “three per minute” cannot be substituted without changing the window.
 
-Many independent rare opportunities can yield an approximately **Poisson** count. An exact example is the count in a window of fixed length of a homogeneous Poisson process, with constant intensity and independent increments. The Poisson parameter λ is the expected count in that window, not a rate with unspecified units:
+## Where the model comes from
 
-```formula
+An exact example is the count during a fixed window of a homogeneous **Poisson process**: a process with constant intensity and independent increments. A suitable collection of many independent rare opportunities can also have an approximately Poisson count.
+
+An average of three events per hour does not mean three arrive every hour. Quiet windows and bursts are possible even in a constant-rate model. Increasing the window's expected count reduces its chance of being empty.
+
+```formula reference
 P(X = k) = (λ^k e^{−λ}) / k!
 E[X] = λ
 Var(X) = λ
@@ -28,53 +32,23 @@ E[X]: the expected count
 Var(X): the variance of the count
 Expectations: all displayed expectations are finite; an expectation has the units of the quantity averaged
 Moments: variables in these variance or covariance expressions have finite second moments
-In words: the chance of exactly k events depends only on the expected count λ; the mean and the variance are both λ.
+In words: within a Poisson model, the expected count determines every count probability; it also equals the count variance.
 ```
 
-At mean zero the count is zero with probability one. This degenerate case is defined separately to avoid an ambiguous zero-to-zero power.
+At expected count zero, the count is always zero. This is a separate deterministic endpoint of the model.
 
-For example, with 2 errors expected per hour:
+## Test a proposed approximation
 
-```formula
-P(X = 0) = e^{−2} ≈ 0.135
-P(X = 2) = (2^2 e^{−2}) / 2! ≈ 0.271
-where
-X: the number of errors in one hour, Poisson with mean λ = 2
-λ: lambda, the expected count in the one-hour window, 2; a dimensionless count
-P: probability; probabilities are dimensionless and apply to measurable events
-e: Euler's number, about 2.718
-!: factorial; 2! = 2 × 1 = 2
-≈: approximately equal to
-In words: an hour with no errors happens about 13.5% of the time, and an hour with exactly two errors about 27%.
-```
+A binomial count can be approximated by a Poisson count when there are many trials with small individual success probabilities. Use the same expected count. Fair coin tosses do not have rare successes, so this is not generally a good approximation to their head count.
 
-The mean equals the variance, a handy diagnostic. If your measured counts have variance much bigger than the mean ("overdispersion"), a single Poisson model does not match that dispersion. Bursts, changing intensity or heterogeneous populations are possible causes. Mean–variance equality alone does not establish a Poisson distribution.
+The Poisson mean equals its variance. Substantially larger observed count variance, called **overdispersion**, is a warning: bursts, varying intensity or mixed populations may invalidate a single Poisson model. Sample estimates vary, and mean–variance agreement alone does not establish the distribution.
 
-## Poisson approximates binomial
-
-When there are many trials and each has a small success probability, the binomial count is close to a Poisson count with the same mean.
-
-```formula
-Bin(n, p) ≈ Poisson(λ)   if λ = n × p
-P(L = 0) ≈ e^{−1} ≈ 0.368
-P(L ≥ 2) ≈ 1 − 2 × e^{−1} ≈ 0.264
-where
-Bin(n, p): binomial with n trials, success probability p
-Poisson(λ): the Poisson distribution with mean λ (lambda)
-n: the number of trials, large; 100 packets here
-p: the per-trial probability, small; 0.01 here
-λ: lambda, the matching mean, n × p = 1 for the packets
-L: the number of lost packets
-e: Euler's number, about 2.718
-P: probability; probabilities are dimensionless and apply to measurable events
-≥: greater than or equal to
-≈: approximately equal to
-In words: for 100 packets at 1% loss, the Poisson shortcut gives 0.368 for no loss and 0.264 for two or more, almost identical to the exact binomial 0.366 and 0.264.
-```
+Retries until success are a waiting-time question, not events per window. Always specify what the random quantity counts before selecting a distribution.
 
 ## Key takeaways
-- A Poisson parameter is an expected count in a specified window.
-- A Poisson approximation needs a suitable independent rare-event model.
+- Attach an explicit window to a Poisson expected count.
+- Independent rare trials can motivate an approximation.
+- A stable average alone does not establish a Poisson process.
 
 ## Further reading
 - [Introduction to Probability — Grinstead and Snell](https://math.dartmouth.edu/~prob/prob/prob.pdf)

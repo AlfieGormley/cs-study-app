@@ -7,87 +7,51 @@ summary: Normalise the binary significand before applying the exponent bias.
 sourceLesson: rep-floating-point
 ---
 
-For normal IEEE binary32 values, the stored sign is one bit, the exponent eight bits with bias 127, and the fraction 23 bits with an implicit leading one.
+A binary32 decoder must identify the fields before doing arithmetic. The sign occupies one bit, the exponent eight bits, and the stored fraction 23 bits. Normal values use exponent bias 127 and an implicit leading one; reserved exponents select different rules.
 
-## Worked example: encoding −6.25 as a float
+## Read the fields, then the value
 
-1. Sign: negative, so **1**.
-2. Binary: 6.25 = `110.01`.
-3. Normalise: `1.1001 × 2²`.
-4. Exponent: 2 + 127 = 129 = **`10000001`**.
-5. Fraction: the bits after the point, `1001`, padded to 23 bits.
+Here is the encoding of −6.25:
 
 ```
-1 10000001 10010000000000000000000
+sign  exponent  fraction
+1     10000001  10010000000000000000000
 ```
 
-Group into hex:
+- The sign bit says negative.
+- Stored exponent 129 means a true exponent of two after removing the bias: scale the significand by four.
+- Fraction bits start `1001`. Restore the implicit leading one to get binary `1.1001`, whose value is 1.5625.
 
-```
-1100 0000 1100 1000 0000 ... 0000
-   C    0    C    8    0 0 0 0
-= 0xC0C80000
-```
+Together these fields represent −6.25. The complete encoding is `0xC0C80000`. The sign does not participate in two's-complement negation: flipping that one sign bit gives positive 6.25 while keeping the exponent and fraction.
 
-Check it by decoding with the value formula:
+## Use a decoder to inspect bytes
 
-```formula
-v = (−1)^s (1.f) 2^{e − bias}
-v = (−1)^1 × 1.1001_2 × 2^{129 − 127}
-v = −1 × 1.5625 × 4 = −6.25
-where
-v: the value the bits represent
-s: the sign bit, here 1 (negative)
-1.f: the significand, here 1.1001 in binary = 1 + 1/2 + 1/16 = 1.5625
-1.1001_2: the digits 1.1001 read in base 2
-f: the stored fraction bits, here 1001 followed by zeros
-e: the stored exponent field, here 129
-bias: 127 for a float
-In words: the bits decode back to −1.5625 × 4, which is −6.25.
-```
-
-You can also check it in Python:
+Python's `struct` module can encode and decode the format directly:
 
 ```python
-# Choose big-endian IEEE binary32 bytes.
+# Explicit big-endian IEEE binary32 bytes.
 import struct
 struct.pack('>f', -6.25).hex()
 # 'c0c80000'
+raw = bytes.fromhex('41580000')
+struct.unpack('>f', raw)
+# (13.5,)
 ```
 
-### Decoding works backwards
+The `>` chooses big-endian byte order, and `f` chooses binary32. A hex value from a debugger and a sequence of bytes are not interchangeable without knowing byte order. The later memory-layout units explain that distinction.
 
-Take `0x41580000`:
+## Diagnose a decoding mistake
 
-```
-0100 0001 0101 1000 0000 ...
-0 10000010 10110000000000000000000
-```
+A decoder that reads the fraction as an integer loses its fractional position weights. A decoder that omits the hidden one makes normal magnitudes too small. A decoder that treats the stored exponent as the true exponent applies a wildly incorrect scale.
 
-- Sign 0: positive.
-- Exponent `10000010` = 130, so the true exponent is 130 − 127 = 3.
-- Significand: 1 followed by the fraction bits `1011`.
+Classify the exponent first. With an all-zero exponent, zero and subnormal rules apply; with an all-one exponent, infinity and NaN rules apply. The normal rule cannot decode every bit pattern.
 
-```formula
-v = (−1)^s (1.f) 2^{e − bias}
-v = (−1)^0 × 1.1011_2 × 2^{130 − 127}
-v = 1 × 1.6875 × 2^3
-v = 1.6875 × 8 = 13.5
-where
-v: the value the bits represent
-s: the sign bit, here 0 (positive)
-1.f: the significand; here 1.1011 in binary
-1.1011_2: 1 + 1/2 + 1/8 + 1/16 = 1.6875
-f: the stored fraction bits, here 1011 followed by zeros
-e: the stored exponent field, here 130
-bias: 127 for a float
-2^3: 2 to the power 3, which is 8
-In words: 1.6875 with its binary point moved three places right is 13.5.
-```
+When writing an encoder, first express the magnitude with the binary point after its leading one, record the scale, and store the remaining fraction bits. If they do not fit, rounding is required. Use a tested format implementation for routine conversion; the important skill is recognising which field caused a wrong result.
 
 ## Key takeaways
-- Normalise the binary significand before applying the exponent bias.
-- Interpret the field layout in reverse to decode a finite normal value.
+- Decode the field roles before interpreting the value.
+- Normal values restore a hidden one and remove the exponent bias.
+- Check reserved exponents and byte order before applying the normal rule.
 
 ## Further reading
 - [Oracle numerical computation guide](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_math.html)

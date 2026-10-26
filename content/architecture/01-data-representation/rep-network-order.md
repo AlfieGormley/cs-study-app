@@ -7,7 +7,7 @@ summary: Convert protocol fields at the host/wire boundary.
 sourceLesson: rep-memory-layout
 ---
 
-This unit continues the preceding material on eight-bit bytes and multibyte object representations.
+A protocol fixes the order of bytes on the wire independently of the host's memory layout. Convert when crossing that boundary.
 
 ### Network byte order
 

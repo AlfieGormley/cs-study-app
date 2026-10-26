@@ -11,19 +11,14 @@ summary: An implication fails only when its premise holds and its conclusion fai
 
 The bottom two rows of p implies q surprise everyone. Why is "if p then q" true whenever p is false? Here is the rule in one place:
 
-```formula
-p → q = F   when p = T and q = F
-p → q = T   otherwise
-where
-p: the "if" part (the premise or antecedent), a proposition; here "you pass the exam"
-q: the "then" part (the conclusion or consequent), a proposition; here "I buy you dinner"
-→: implies: "if p then q"
-T: true
-F: false
-In words: an implication is broken only by a true premise with a false conclusion; in the other three rows it holds.
-```
+The condition is false only when the premise is true and the conclusion is false. A false premise cannot violate this particular rule.
 
-Think of p implies q as a **promise**. "If you pass the exam, I'll buy you dinner." The only way I break the promise is if you pass (p true) and I don't buy dinner (q false). If you fail, I have kept my word whatever I do. A promise that was never triggered was never broken.
+> [!analogy] Real-world analogy: A conditional dinner promise
+> “If you pass the exam, I will buy you dinner.” Passing without receiving dinner breaks that promise; failing leaves the dinner decision open.
+>
+> **How it maps:** Passing is the premise and buying dinner is the conclusion. Only a true premise with a false conclusion violates the implication.
+>
+> **Where it stops:** Material implication records truth values, not intentions, causes or whether a promise is fair.
 
 This is called **vacuous truth**, and it matters. "Every element of the empty list is negative" is true, because there is no element to break it. Python agrees: `all([])` is `True`.
 
@@ -37,7 +32,7 @@ The connective defined by this table is the **material conditional**. It says no
 
 From an implication p implies q you can form three related statements by swapping the two sides, negating both, or doing both:
 
-```formula
+```formula essential
 p → q
 q → p
 ¬p → ¬q

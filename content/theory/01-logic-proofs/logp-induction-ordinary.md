@@ -12,20 +12,12 @@ Many claims in computer science are about *every* size of input: every n, every 
 
 **Mathematical induction** is the tool for this. It turns an infinite claim into two finite pieces of work. It is also exactly how you should think about recursive code: if the base case is right, and each call is right assuming the smaller calls are right, the function is right.
 
-## The domino picture
-
-Imagine an infinite row of dominoes. To know they all fall, you need two facts:
-
-1. The first domino falls.
-2. Whenever a domino falls, it knocks over the next one.
-
-Neither fact alone is enough. With both, every domino falls. In the sketch below, P(n) is the claim about the number n (domino n falls), and each arrow means "leads to":
-
-```
-P(0)  ->  P(1)  ->  P(2)  ->  P(3) ...
- ^base     \_ step: P(n) -> P(n+1) _/
-```
-
+> [!analogy] Real-world analogy: A row of dominoes
+> Push the first domino and ensure each falling domino knocks over its successor.
+>
+> **How it maps:** The initial push is the base case; the guaranteed transfer to the next domino is the inductive step. Both are needed to reach any chosen later position.
+>
+> **Where it stops:** This is a picture of a logical implication chain, not a claim that a physical infinite row can finish falling in finite time.
 
 ## Weak (ordinary) induction
 
@@ -34,21 +26,7 @@ To prove P(n) for every integer n at least b:
 1. **Base case**: prove P(b).
 2. **Inductive step**: for an arbitrary integer n at least b, **assume P(n)** (the **inductive hypothesis**, IH) and prove P(n plus 1).
 
-Written as a single formula, the principle of induction says:
-
-```formula
-P(b) ∧ ∀n ≥ b (P(n) → P(n + 1))
-  → ∀n ≥ b P(n)
-where
-P(n): the statement being proved about the integer n, which is either true or false for each n
-b: the base value, the first n the claim is about (often 0 or 1)
-n: an integer at least b
-∧: AND: both parts must be proved
-∀: "for all"; ∀n ≥ b means "for every integer n from b upwards"
-→: implies: "if ... then ..."
-≥: is greater than or equal to
-In words: if the claim holds at b, and whenever it holds for some n it also holds for n + 1, then it holds for every n from b upwards.
-```
+The base supplies the first true case. The step extends that truth to any specified later integer by finitely many applications.
 
 The inductive step is a direct proof of an implication. You do not assume P(n) is true for all n; you assume it for one arbitrary n and show the next case follows.
 
@@ -56,27 +34,26 @@ The inductive step is a direct proof of an implication. You do not assume P(n) i
 
 The claim, for all integers n at least 1, is the formula for adding up the first n whole numbers:
 
-```formula
+```formula essential
 1 + 2 + ... + n = n(n + 1) / 2
 where
 n: how many whole numbers are being added, n ≥ 1
 ...: and so on: every whole number between 2 and n
-In words: the sum of 1 to n is n times n + 1, halved. For n = 4: 1 + 2 + 3 + 4 = 10 = 4 × 5 / 2.
+In words: the sum of the first positive integers is half the product of the last integer and its successor.
 ```
 
 **Base case**, n equals 1: the left-hand side is 1, and the right-hand side is 1 times 2 / 2 equals 1. ✓
 
 **Step**: assume the formula holds for n (the IH). Add the next number, n plus 1, to both sides:
 
-```formula
+```formula essential
 1 + ... + n + (n + 1)
   = n(n + 1) / 2 + (n + 1)
-  = (n + 1) × (n / 2 + 1)
   = (n + 1) × (n + 2) / 2
 where
 n: an arbitrary whole number at least 1, for which the formula is assumed (the inductive hypothesis)
 ...: every whole number in between
-In words: the second line uses the IH to replace 1 + ... + n; taking out the common factor n + 1 then gives exactly the formula with n + 1 in place of n.
+In words: use the known sum for the current size, add the next integer, then factor to obtain the same claimed form for the next size.
 ```
 
 That is the formula for n plus 1, so the claim holds for every integer n at least 1. ∎ (The symbol ∎ marks the end of a proof, and ✓ marks a checked step.)

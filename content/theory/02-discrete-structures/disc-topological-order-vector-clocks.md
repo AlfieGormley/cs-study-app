@@ -11,16 +11,7 @@ sourceLesson: disc-relations
 
 A **linear extension** of a poset is a total order that respects it: a list of all the elements in which everything strictly below another element comes earlier.
 
-```formula
-a ≺ b   ⇒   pos(a) < pos(b)
-where
-a, b: elements of the poset
-≺: is strictly below in the partial order (for a build: is a prerequisite of)
-⇒: implies
-pos: the position of an element in the chosen list (1 for first, 2 for second, …)
-<: is less than
-In words: a valid order never lists something before one of its prerequisites. Elements with no order between them can go either way round.
-```
+A valid list places every prerequisite before its dependent. Incomparable elements can appear in either order, provided all other dependencies are respected.
 
 For a finite DAG of prerequisite-to-dependent edges, finding one is **topological sorting**, and it exists precisely because there are no cycles (a cycle of distinct vertices conflicts with antisymmetry of reachability, and a self-loop would need a target to come strictly before itself).
 
@@ -45,18 +36,14 @@ There are usually many valid orders: for any two incomparable elements, some lin
 > [!example] Vector clocks are a partial order
 > In a store that tracks versions with vector clocks, each version carries a list of counters, one for each tracked participant. One version is below another when none of its counters is larger. Two versions where neither is below the other are **concurrent**: incomparable in the partial order. Riak and Dynamo-style stores surface these as siblings for the application to merge.
 
-```formula
+```formula essential
 V ≤ W   means   V_i ≤ W_i   for every i
-[2, 1, 0] ≤ [2, 2, 1]
-[2, 1, 0] ∥ [1, 2, 0]
 where
 V, W: two vector clocks: lists of counters, one per participant
 V_i, W_i: counter number i in V and in W
 i: a position in the list, one per participant
 ≤: on the left, the order on whole clocks; on the right, ordinary "less than or equal to" on two counters
-∥: is incomparable with (concurrent)
-[ ]: a vector clock written as its list of counters
-In words: one clock is below another when it is behind or level on every counter. [2, 1, 0] and [1, 2, 0] each lead on one counter, so neither is below the other: the two versions were written concurrently.
+In words: One vector clock is at or behind another only when every corresponding counter is at or behind. If each clock leads on a different counter, they are incomparable.
 ```
 
 ## Pitfalls

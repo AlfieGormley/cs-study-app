@@ -37,57 +37,36 @@ These numbers set the speed of the whole chip. Consider two registers with combi
 
 Data leaves FF1 at t_cq after an edge, takes up to t_pd to get through the logic, and must arrive t_su before the *next* edge. That gives the **setup constraint** on the clock period, and from it the fastest allowed clock:
 
-```formula
+```formula reference
 T_clk ≥ t_{cq,max} + t_{pd,max} + t_su
-f_max = 1 / T_{clk,min}
 where
 T_clk: the clock period, the time between rising edges, in picoseconds (ps)
-T_{clk,min}: the smallest period that meets the constraint
-t_{cq,max}: the longest clock-to-Q delay of FF1: the time from the clock edge until FF1's output changes
-t_{pd,max}: the longest propagation delay through the logic between FF1 and FF2
-t_su: the setup time of FF2: how long before the edge its input must be stable
-f_max: the highest clock frequency allowed, in hertz (Hz); 1 GHz is 10^9 cycles per second
+t_{cq,max}: the longest clock-to-Q delay of FF1, in ps: the time from the clock edge until FF1's output changes
+t_{pd,max}: the longest propagation delay through the logic between FF1 and FF2, in ps
+t_su: the setup time of FF2, in ps: how long before the edge its input must be stable
 ≥: greater than or equal to
 ps: picoseconds, 10^-12 seconds
-Hz: hertz, cycles per second
-In words: one clock period must be long enough for data to leave the first flip-flop, cross the slowest logic, and settle before the second flip-flop samples it.
+In words: With aligned clocks and no jitter, one period must fit the slowest launch delay, the slowest logic path and the receiving register's setup allowance.
 ```
 
-For example, with t_cq = 50 ps, t_pd = 400 ps and t_su = 30 ps:
-
-```formula
-T_clk ≥ 50 ps + 400 ps + 30 ps = 480 ps
-f_max = 1 / (480 × 10^{-12} s)
-f_max ≈ 2.08 × 10^9 Hz = 2.08 GHz
-where
-T_clk: the clock period
-f_max: the highest allowed clock frequency
-ps: picoseconds, 10^-12 seconds
-s: seconds
-Hz: hertz, cycles per second
-GHz: gigahertz, 10^9 Hz
-≥: greater than or equal to
-≈: approximately equal to
-In words: the period must be at least 480 ps, so the clock can run at about 2.08 GHz at most.
-```
+A longer logic path leaves less setup margin. Slowing the clock can help a setup failure by moving the next capture edge later, provided the other constraints remain satisfied.
 
 The constraint assumes an ideal clock that reaches both flip-flops at the same moment, with no jitter. The slowest such path on the chip is the **critical path**, and it sets the clock rate. (Clock skew, the difference in clock arrival time between FF1 and FF2, shifts this budget: if FF2's clock arrives earlier than FF1's, the logic has that much less time. If it arrives later, setup gets easier but hold, below, gets harder.)
 
-There is a second, sneakier constraint. The *new* value from FF1 must never reach FF2 so fast that it corrupts what FF2 is capturing on the same edge. This is the **hold constraint**, shown here with an example path whose fastest clock-to-Q delay is 20 ps, fastest logic path 5 ps and hold time 40 ps:
+There is a second, sneakier constraint. The *new* value from FF1 must never reach FF2 so fast that it corrupts what FF2 is capturing on the same edge. This is the **hold constraint**: even the fastest new data must arrive after the receiving register's hold window closes. The reference below assumes aligned clocks without jitter:
 
-```formula
+```formula reference
 t_{cq,min} + t_{pd,min} ≥ t_h
-20 ps + 5 ps = 25 ps < 40 ps
 where
-t_{cq,min}: the shortest clock-to-Q delay of FF1
-t_{pd,min}: the shortest propagation delay through the logic (the fastest path)
-t_h: the hold time of FF2: how long after the edge its input must stay stable
-≥: greater than or equal to; <: less than
+t_{cq,min}: the shortest clock-to-Q delay of FF1, in ps
+t_{pd,min}: the shortest propagation delay through the logic (the fastest path), in ps
+t_h: the hold time of FF2, in ps: how long after the edge its input must stay stable
+≥: greater than or equal to
 ps: picoseconds, 10^-12 seconds
-In words: the earliest new data must never arrive before FF2's hold window has closed. In the example numbers, the new data arrives after 25 ps but FF2 needs its input steady for 40 ps, so the path fails by 15 ps.
+In words: the fastest launch and logic path must still delay new data until the receiving register has finished holding its old input stable.
 ```
 
-A **hold violation** cannot be fixed by slowing the clock, because the clock period does not appear in it. The fix is to add delay (buffers) to the short path. Static timing analysis tools check both constraints on every path.
+A **hold violation** in this same-edge model cannot be fixed by slowing the clock: moving the next edge does not change the current capture window. Adding delay buffers to the short path is a common fix. Recheck setup and hold across the required operating conditions afterwards; clock skew and constraints also matter. Static timing analysis tools check the constrained paths.
 
 ## Key takeaways
 - Setup constrains the slowest path to the next capture edge.

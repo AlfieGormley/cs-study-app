@@ -3,60 +3,44 @@ id: cx-variable-step-loops
 sourceLesson: cx-analysing-code
 title: Loops with a variable step
 level: intermediate
-minutes: 3
+minutes: 2
 summary: Sum the shrinking inner counts in a harmonic loop.
 ---
 
-Here n is the positive input size. This example varies the step of the inner range instead of varying its endpoint.
+An inner loop can become shorter even when its endpoint stays fixed. Here n is a positive input bound and `work()` is one constant-cost step.
 
-## A harmonic loop
-
-The second trap is the **harmonic** loop:
+## Watch the step size
 
 ```python
 for i in range(1, n + 1):
-    # i is the step; the stop n is excluded.
+    # Start at zero; exclude n.
     for j in range(0, n, i):
         work()
 ```
 
-The inner range starts at zero, stops before the bound and jumps by the outer variable’s value. Its count is the input bound divided by that step, rounded up. Sum those actual counts:
+With step one, the inner loop visits every position. With step two it visits about half; step three about a third. Each length is the bound divided by the step, rounded up. The total does not equal the largest inner length multiplied by the outer count.
 
-```formula
-W(n) ≈ n/1 + n/2 + n/3 + … + n/n
-W(n) ≈ n H(n)
-H(n) = 1 + 1/2 + … + 1/n ≈ ln(n)
-W(1000) ≈ 1000 × 7.5 = 7500
-W(n) = Σ_{i=1}^{n} ⌈n/i⌉
-W(1000) = 8053
-where
-W(n): the total number of work() calls
-n: the input size
-H(n): the n-th harmonic number, the sum of the fractions 1/1 to 1/n
-ln(n): the natural logarithm of n (base e ≈ 2.718); about 0.69 × log_2(n)
-…: "and so on"
-≈: approximately equal to (each pass runs n / i times rounded up; H(1000) ≈ 7.49)
-Σ_{i=1}^{n}: sum over all step sizes from one through the bound
-i: the positive step size set by the outer loop
-⌈ ⌉: ceiling: round up to a whole number of iterations
-In words: the inner loop shrinks as 1/i, and those fractions add up to only about the logarithm of n, so the total is about n log n, not n squared.
-```
+These contributions form a **harmonic sum**, whose growth is logarithmic. Multiplying by the original bound gives Θ(n log n) work. Rounding adds less than one extra step per outer pass, so it cannot change that class.
 
-So this is **Θ(n log n)**, where n is the input bound, rather than quadratic. Similar sums appear in sieves; the Sieve of Eratosthenes has the tighter Θ(n log log n) bound, where the second logarithm is applied to the first. They also occur in graph and number-theory problems.
+## Why a logarithmic factor appears
 
-| Pattern | Approximate count |
+Group step sizes into bands that double: one, then two to three, then four to seven, and so on. A later band has about twice as many step sizes, but each inner loop is about half as long. Each complete band therefore contributes work proportional to the original bound. There are logarithmically many bands.
+
+This differs from a geometric sum of inner lengths. In a geometric sum, doubling the index halves the entire next contribution. Here there are many step sizes between successive powers of two, and their combined contributions matter.
+
+| Inner-loop pattern | Total growth |
 |---|---|
-| Inner bound grows with outer | half the square |
-| Doubling variable | logarithmic |
-| Squared variable within bound | square root |
-| Doubling outer, inner to outer | less than twice the bound |
-| Inner step equals outer | bound times natural log |
+| Same full range each time | quadratic |
+| Length grows with outer position | quadratic |
+| Doubling outer value sets inner length | linear |
+| Outer value sets the inner step | linear times log |
+
+The shared lesson is to read the actual range. Similar-looking nested loops need not have similar cost.
 
 ## Key takeaways
-- A range step can change the inner length even when the stop stays fixed.
-- The harmonic loop adds many shrinking contributions rather than equally sized passes.
-- Summing actual counts can reveal a tighter bound than multiplying maximum bounds.
+- A larger step means fewer inner iterations.
+- Harmonic contributions accumulate across logarithmically many bands.
+- Integer rounding does not change this loop's tight growth bound.
 
 ## Further reading
-- [Harmonic series — Wikipedia](https://en.wikipedia.org/wiki/Harmonic_series_(mathematics))
-- [Algorithms by Jeff Erickson (free textbook)](https://jeffe.cs.illinois.edu/teaching/algorithms/)
+- [Erickson: Solving Recurrences](https://jeffe.cs.illinois.edu/teaching/algorithms/notes/99-recurrences.pdf)

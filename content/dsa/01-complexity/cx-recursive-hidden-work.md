@@ -3,97 +3,29 @@ id: cx-recursive-hidden-work
 sourceLesson: cx-analysing-code
 title: Recursive work and hidden costs
 level: intermediate
-minutes: 4
+minutes: 2
 summary: Count recursive calls and uncover work hidden inside ordinary Python operations.
 ---
 
-Here n is the input size or recursive argument. A small amount of source code can describe a large amount of executed work.
+A short function can perform a large amount of work. Count all recursive calls and the work each call performs outside its children. Here n is the recursive argument or list length, as stated.
 
-## Recursion
-
-For recursive code, count **how many calls** happen and **how much work each does** outside the recursive calls.
-
-Linear recursion makes one call per level:
+## Repeated subproblems multiply work
 
 ```python
-def fact(n):
-    if n <= 1:
-        return 1
-    # Multiply after the smaller call ends.
-    return n * fact(n - 1)
-```
-
-Θ(n) calls and multiplications in the unit-cost model, where n is the recursive argument. Actual Python multiplication gets more expensive as the factorial grows; factorial means the product of all positive integers up to the argument.
-
-Branching recursion is where things explode. Naive Fibonacci makes two calls per level:
-
-```python
-# fib(5) returns 5; it makes 15 calls.
+# fib(5) returns 5.
 def fib(n):
     if n < 2:
         return n
-    # Both branches can repeat earlier work.
     return fib(n - 1) + fib(n - 2)
 ```
 
-Draw the **recursion tree**:
+Both children repeat calculations already performed elsewhere. Drawing the calls for `fib(5)` reveals repeated `fib(3)` and `fib(2)` work. The total call count grows exponentially. More precisely it is Θ(φⁿ), where n is the nonnegative argument and φ is the golden ratio, about 1.618. The branches have different depths, so a full binary tree with base two is a loose upper bound, not the tight call count.
 
-```
-                 f5
-           /            \
-         f4              f3
-       /    \          /    \
-     f3      f2      f2      f1
-    /  \    /  \    /  \
-   f2  f1  f1  f0  f1  f0
-  /  \
- f1  f0
-```
+Memoisation stores completed answers by argument. Only a linear number of distinct arguments need calculating. This gives a linear number of additions; it does not make arithmetic on increasingly large Python integers constant-time.
 
-(Here `f5` means `fib(5)`.) `fib(5)` makes 15 calls. In general:
+## A line of Python is not one operation
 
-```formula
-calls(n) = 2F(n + 1) − 1
-calls(5) = 2F(6) − 1 = 2 × 8 − 1 = 15
-calls(n) = Θ(φ^n)
-φ = (1 + √5) / 2 ≈ 1.618
-where
-calls(n): the total number of calls made by fib(n), counting the first one
-F(n): the n-th Fibonacci number: 0, 1, 1, 2, 3, 5, 8, … (each is the sum of the two before; F(0) = 0, F(1) = 1, F(6) = 8)
-n: the argument passed to fib
-φ: phi, the golden ratio, about 1.618
-φ^n: n copies of φ multiplied together
-√5: the square root of 5, about 2.236
-Θ: Big-Theta: grows at exactly this rate, up to a constant factor
-≈: approximately equal to
-In words: the number of calls is itself almost twice a Fibonacci number, and Fibonacci numbers grow by a factor of about 1.618 each step, so the call count grows exponentially.
-```
-
-`fib(30)` makes about 2.7 million calls; `fib(50)` would make about 4 × 10^10.
-
-The waste is visible in the tree: `fib(3)` is computed twice, `fib(2)` three times. Caching results (**memoisation**, covered with dynamic programming later) reduces this to n distinct calls: Θ(n).
-
-Divide-and-conquer recursion (halving the problem) needs the tools in the recurrence lessons, but a rough guide:
-
-- One call on half the input, O(1) extra work: Θ(log n) (binary search).
-- Two calls on halves, O(n) extra work: Θ(n log n) (merge sort).
-
-## Hidden costs
-
-Many "one-line" operations aren't O(1). In this CPython table, n is the list length:
-
-| Operation | Cost |
-|---|---|
-| `x in some_list` | O(n) |
-| `x in some_set` | O(1) average |
-| `lst.append(x)` | O(1) amortised |
-| `lst.insert(0, x)` | O(n) |
-| `lst.pop(0)` | O(n) |
-| `lst[a:b]` | O(b - a) copy |
-| `sorted(lst)` | O(n log n) |
-| `len(lst)` | O(1) |
-
-This turns innocent-looking code quadratic:
+For CPython lists, indexing and reading length are constant-cost in the usual model. Membership scans may inspect every item. Front removal shifts remaining references. Slicing creates a new list of references. Appending is constant amortised time, allowing occasional resizing.
 
 ```python
 # unique([3, 1, 3]) returns [3, 1].
@@ -101,35 +33,21 @@ def unique(items):
     seen = []
     out = []
     for x in items:
-        if x not in seen:   # O(n) scan
+        if x not in seen:
             seen.append(x)
             out.append(x)
     return out
 ```
 
-The membership test scans `seen`, so the function is Θ(n^2) when most items are distinct. Changing `seen` to a `set` makes it Θ(n) on average. The algorithm didn't change; the data structure did.
+All-distinct input makes each membership scan longer, giving quadratic comparisons. Replacing `seen` with a set and using `add` gives expected linear work for hashable values with constant-cost hashing and equality under a suitable hashing model. Keeping `out` as a list preserves first-occurrence order.
 
-> [!warning] Slicing in recursion
-> `binary_search(arr[mid:], target)` looks logarithmic, but each slice copies the chosen half. The shrinking halves add to just under the original length, so a search on n items is O(n) rather than O(log n). Pass indices (`lo`, `hi`) instead.
-
-```formula
-C(n) ≈ n/2 + n/4 + n/8 + …
-C(n) < n
-where
-C(n): the copied element slots over an absent-target search
-n: the original list length
-…: continue halving
-≈: approximately, ignoring integer rounding
-<: less than
-In words: The series of copied halves is linear in the original length.
-```
+A recursive binary search that slices its chosen half also hides work. Its comparison count is logarithmic, but the copied halves form a linear total in the original list length. Passing index bounds avoids those copies.
 
 ## Key takeaways
-- Count all recursive calls and the work performed outside those calls.
-- Naive Fibonacci repeats subproblems; memoisation stores their answers.
-- Membership tests and slices can turn a short-looking Python function into expensive work.
+- Count the whole call tree, including repeated subproblems.
+- Include comparison, hashing, copying and shifting costs.
+- Changing the representation can remove repeated work while preserving the result.
 
 ## Further reading
-- [TimeComplexity — Python wiki](https://wiki.python.org/moin/TimeComplexity)
-- [Memoization — Wikipedia](https://en.wikipedia.org/wiki/Memoization)
-- [Algorithms by Jeff Erickson (free textbook)](https://jeffe.cs.illinois.edu/teaching/algorithms/)
+- [CPython 3.14 list implementation](https://raw.githubusercontent.com/python/cpython/3.14/Objects/listobject.c)
+- [Python caching tools](https://docs.python.org/3.14/library/functools.html)

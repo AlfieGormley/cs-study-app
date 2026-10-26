@@ -25,7 +25,7 @@ A **finite-state machine** (FSM) is a state register plus combinational logic:
 
 On each clock edge, the state register loads the next state, computed from the current state and the inputs. There are two kinds:
 
-- **Moore machine**: outputs depend only on state. In a synchronous model, an input affects them after a state update. Combinational decoding of state bits can glitch during transitions as bits arrive at different times; register the output or design a suitable hazard-free encoding when needed. The latency comparison with Mealy depends on when inputs and outputs are sampled.
+- **Moore machine**: outputs depend only on state. In a synchronous model, an input affects them after a state update. Combinational decoding of state bits can glitch during transitions as bits arrive at different times; register the output or design a suitable glitch-free encoding when needed. The latency comparison with Mealy depends on when inputs and outputs are sampled.
 - **Mealy machine**: outputs depend on the **state and the current inputs**. It can respond in the same cycle and often needs fewer states, but the output can glitch as inputs change, and there is a combinational path from input to output.
 
 ### Worked example: detect two 1s in a row
@@ -68,8 +68,8 @@ Q1 Q0 X | N1 N0 | Z
 
 **Step 4: minimise** with K-maps, using the don't-cares:
 
-```formula
-N_1 = X·Q_1 + X·Q_0 = X·(Q_1 + Q_0)
+```formula essential
+N_1 = X·(Q_1 + Q_0)
 N_0 = X·Q_1′·Q_0′
 Z = Q_1
 where
@@ -80,7 +80,7 @@ Z: the output
 Q_1′, Q_0′: NOT Q_1, NOT Q_0
 ·: AND: 1 only when both sides are 1
 +: OR: 1 when at least one side is 1
-In words: go to S2 (N_1 = 1) when X is 1 and we were already in S1 or S2; go to S1 (N_0 = 1) when X is 1 and we were in S0; Z is simply the high state bit. Code 11 was a don't-care, which is what allows these short forms.
+In words: A sampled high input enters the detected state if the machine has already seen a high input. From the initial state it enters the one-high state instead. The output is the high state bit.
 ```
 
 **Step 5: build it**: two D flip-flops whose D inputs are N1 and N0, a few gates, and Z wired straight from Q1. Simulating it in Python confirms the behaviour:
@@ -103,32 +103,11 @@ for x in [1, 1, 1, 0, 1, 1, 0]:
 # Z: 0 1 1 0 0 1 0
 ```
 
-A Mealy version needs only two states (S0: last input 0, S1: last input 1) with 
-
-```formula
-Z = X
-where
-X: Boolean input bit
-Z: Boolean output bit while the machine is in S1
-In words: While the Mealy machine is in state S1, its output copies the current input.
-```
-
- while in S1. With X stable before an edge, the Mealy output can assert before that edge; the Moore state output asserts after the edge sampling the second 1. It does not wait an additional full cycle after that sampling edge.
+A Mealy version needs only two states (S0: last input 0, S1: last input 1). Its output follows the current input in S1 and is low in S0. With X stable before an edge, the Mealy output can assert before that edge; the Moore state output asserts after the edge sampling the second 1. It does not wait an additional full cycle after that sampling edge.
 
 ### State encoding
 
-Binary encoding uses the fewest flip-flops:
-
-```formula
-N_ff = ⌈log_2(n)⌉
-N_ff = ⌈log_2(10)⌉ = ⌈3.32⌉ = 4
-where
-N_ff: the number of state flip-flops with binary encoding
-n: the number of states, here 10
-log_2: logarithm base 2: the power you must raise 2 to in order to get n
-⌈ ⌉: ceiling: round up to the next whole number
-In words: k flip-flops give 2^k codes, so 10 states need 4 flip-flops (16 codes, 6 unused), because 3 flip-flops give only 8.
-```
+Binary encoding uses the fewest state bits. Each additional bit doubles the number of available codes. Choose enough bits to give each state a distinct code; any spare codes need an explicit policy if fault recovery is required.
 
 **One-hot** encoding uses one flip-flop per state, with exactly one set at a time. It needs more flip-flops but its next-state logic is usually simpler and faster, which suits FPGAs, where flip-flops are plentiful. Synthesis tools often re-encode FSMs automatically.
 

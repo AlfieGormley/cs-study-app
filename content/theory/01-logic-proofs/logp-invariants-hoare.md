@@ -11,7 +11,7 @@ summary: A partial-correctness Hoare triple promises a postcondition only if exe
 
 Tony Hoare (1969) wrote correctness claims as **Hoare triples** {P} S {Q}: if **precondition** P holds before running statement S, and S terminates, then postcondition Q holds after. The rule for loops is the recipe above:
 
-```formula
+```formula essential
 {I ∧ B} S {I}
 gives   {I} W {I ∧ ¬B}
 where
@@ -23,14 +23,6 @@ W: the whole loop, `while B: S`
 ∧: AND
 ¬: NOT; ¬B means the loop condition is false
 In words: if one run of the body, started with I and B true, ends with I true, then the whole loop, started with I true, ends (if it ends) with I true and B false.
-```
-
-Textbooks draw the rule as a fraction: the premise above a line, the conclusion below:
-
-```
-       {I ∧ B}  body  {I}
-------------------------------
-{I}  while B: body  {I ∧ ¬B}
 ```
 
 If the body preserves I whenever the condition B is true, then the loop as a whole preserves I and exits with not B. Tools such as **Dafny** ask you to write invariants and then check these obligations automatically with an SMT solver.

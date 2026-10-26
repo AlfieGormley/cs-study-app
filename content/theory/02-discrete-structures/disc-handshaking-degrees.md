@@ -2,7 +2,7 @@
 id: disc-handshaking-degrees
 title: "The handshaking lemma and degree counts"
 level: intermediate
-minutes: 3
+minutes: 2
 summary: "Every undirected edge contributes two to the degree sum."
 sourceLesson: disc-graphs
 ---
@@ -13,34 +13,24 @@ An undirected graph has vertices joined by edges. Its degree counts incident edg
 
 Every edge has two ends, so if you add up the degrees of all the vertices, each edge is counted exactly twice. For multigraphs with loops, count each loop twice in the degree; then the same identity holds:
 
-```formula
+```formula essential
 Σ deg(v) = 2 × m
-2 + 2 + 2 = 2 × 3
 where
 Σ: "sum of": add up the expression after it once for every vertex v of the graph
 deg(v): the degree of vertex v: the number of incident edge ends; a loop contributes two
 v: a vertex of the graph
 m: the number of edges
-In words: the degrees add up to twice the number of edges. A triangle has three vertices of degree 2 and three edges, and 6 = 2 × 3.
+In words: Adding all vertex degrees counts every undirected edge twice, once for each end, including both ends of a self-loop.
 ```
 
 Consequences you can use immediately:
 
 - The degree sum is even, so the number of vertices with **odd degree is always even**.
-- There is no graph on 7 vertices where every vertex has degree 3: the degree sum would be 7 × 3 = 21, which is odd, and the edge count would be 21 / 2 = 10.5.
-- Dividing both sides by the number of vertices links edges to the average degree:
+- Seven vertices of degree three would give an odd degree sum. That is impossible: edge ends must occur in pairs.
 
-```formula
-m = n × d / 2
-m = 10^9 × 200 / 2 = 10^11
-where
-m: the number of edges
-n: the positive number of vertices (the average degree needs a nonempty vertex set)
-d: the average degree: the degree sum divided by n
-In words: a graph's edge count is half of (vertices × average degree). A social network of a billion users averaging 200 friends has 100 billion friendship edges.
-```
+The average degree determines the total number of edge ends. Halve that total to count edges. This assumes undirected links and counts a self-loop twice; it does not describe follower counts in a directed network.
 
-The handshaking lemma is about undirected edges. In a directed graph the same counting gives: the in-degrees add up to m, and so do the out-degrees.
+In a directed graph, the in-degrees add up to the edge count, and the out-degrees separately add up to that same count.
 
 ## Key takeaways
 

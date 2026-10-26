@@ -7,48 +7,45 @@ sourceLesson: logp-induction
 summary: A stronger bound can track the slack needed for the next step.
 ---
 
-## Strengthening the hypothesis
+## Why a stronger claim can be easier
 
-Sometimes induction fails because the IH is too *weak* to carry the step. The surprising fix is to prove something **stronger**.
+An inductive hypothesis is a tool for the next step. If it throws away information that the next step needs, a true claim can be difficult to prove directly.
 
-Claim: the sum of the reciprocals of the squares stays below 2:
+For example, add the reciprocals of the positive squares: one, then a quarter, then a ninth, and so on. Every finite sum stays below two. But “the current sum is below two” tells us no guaranteed amount of space remains. Adding another positive term cannot be justified from that fact alone.
 
-```formula
+The repair is to track a specific gap: after a given number of terms, the sum is at least the reciprocal of that count below two. This is a stronger claim. It gives the induction step a budget for the next fraction.
+
+## Check the stronger claim
+
+At one term, the sum is one and the required gap below two is one, so the strengthened base holds.
+
+For the next step, the permitted gap gets slightly smaller. The difference between the old and new bounds is the reciprocal of the product of two consecutive positive integers. The next term has the square of the larger integer in its denominator, so it is no bigger than that available difference. It fits, and the new sum retains the promised gap.
+
+The optional calculation records the precise bound and the comparison used in that argument.
+
+```formula reference
 S(n) = 1/1^2 + 1/2^2 + ... + 1/n^2
-S(n) < 2   for n ≥ 1
+S(n) ≤ 2 − 1/n
+1/n − 1/(n + 1) = 1/(n(n + 1))
+1/(n + 1)^2 ≤ 1/(n(n + 1))
 where
-S(n): the sum of 1 divided by each square from 1² up to n²
-n: a whole number, n ≥ 1
-...: and so on, one term for every whole number up to n
-≥: at least
-<: less than
-In words: however many terms you add, the total stays below 2. For n = 3: 1 + 1/4 + 1/9 ≈ 1.36.
+S(n): the sum of the reciprocals of the first n positive integer squares
+n: a positive integer, the number of terms already included
+...: every intervening reciprocal-square term
+≤: is at most
+In words: tracking a guaranteed gap below two gives enough room for the next fraction while preserving the smaller gap promised for the next sum.
 ```
 
-Try it directly: assume S(n) is less than 2. Then S(n plus 1) equals S(n) plus 1/(n plus 1) squared, which is less than 2 plus something positive. Stuck: knowing S(n) is less than 2 leaves no room for the next fraction.
+Because the guaranteed gap is positive at every finite stage, the original “below two” claim follows. The strengthened bound need not equal the true sum; it only needs to be strong enough to carry the step.
 
-Prove instead the stronger claim S(n) is at most 2 minus 1/n. **Base**, n equals 1: S(1) equals 1 and 2 minus 1 equals 1, so 1 is at most 1. ✓ **Step**: assume S(n) is at most 2 minus 1/n. The aim is to reach S(n plus 1) is at most 2 minus 1/(n plus 1). Adding the next fraction gives the first line below, so it is enough that the next fraction fits into the gap between 2 minus 1/n and 2 minus 1/(n plus 1), which is the second line:
+This is still ordinary induction: the proof uses the immediately preceding case. **Strong induction** instead changes which earlier cases the step may assume. These are different ways of improving a proof.
 
-```formula
-S(n + 1) ≤ 2 − 1/n + 1/(n + 1)^2
-1/n − 1/(n + 1) ≥ 1/(n + 1)^2
-1/(n(n + 1)) ≥ 1/(n + 1)^2
-where
-S(n): the sum 1/1² + ... + 1/n², assumed at most 2 − 1/n (the strengthened hypothesis)
-n: a whole number, n ≥ 1
-≤, ≥: is at most, is at least
-In words: the last line holds because n is less than n + 1, so n × (n + 1) is less than (n + 1)², and dividing 1 by a smaller number gives a bigger result. The third line is the second with the gap simplified, so the second line is true, which is exactly what the step needs. ∎
-```
-
-Since 2 minus 1/n is less than 2, the original claim follows. The stronger statement tracks *how far* below 2 we are, which is exactly what the step needs. The same trick appears when choosing loop invariants in the next lesson.
-
-
-A recurrence proof uses the same method: state the cost at the smallest input, substitute the proposed expression for each smaller recursive cost, then simplify to the expression for the current input. When sizes repeatedly halve, induction on the number of halvings keeps every size in the power-of-two domain.
+The same discipline applies to recursive cost claims. Include the cost of the smallest input in the base case, then account for smaller calls and the current work in the step. Omitting leaf work can make an exact cost formula fail before the recursion even begins.
 
 ## Key takeaways
-- A stronger bound can track the slack needed for the next step.
-- Check the strengthened base and show the extra term fits the gap to the next bound.
+- A stronger claim can retain the slack needed for the inductive step.
+- Check the stronger base and show the next addition fits the available gap.
+- Strengthening the claim and using strong induction are different choices.
 
 ## Further reading
 - [MIT Mathematics for Computer Science](https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-spring-2015/mit6_042js15_textbook.pdf)
-- [Mathematics for Computer Science — MIT OpenCourseWare](https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-spring-2015/)

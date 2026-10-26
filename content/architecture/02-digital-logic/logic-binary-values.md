@@ -2,7 +2,7 @@
 id: logic-binary-values
 title: Binary values and Boolean operations
 level: basic
-minutes: 4
+minutes: 3
 sourceLesson: logic-boolean-algebra
 summary: Boolean signals abstract voltage ranges into two values.
 ---
@@ -17,54 +17,27 @@ This unit introduces the signal values and basic operations used throughout the 
 
 A Boolean variable takes one of two values: 0 or 1 (mapped here using positive logic to low and high voltage ranges). There are three fundamental operations.
 
-**AND** is one only when both inputs are one. Its symbolic notation is:
+> [!analogy] Real-world analogy: Two permissions
+> An action may require both a manager's approval and a supervisor's approval, or either approval may be enough.
+>
+> **How it maps:** Requiring both permissions is AND; accepting either or both is OR. NOT reverses one yes/no condition.
+>
+> **Where it stops:** This compares settled yes/no decisions. A physical gate also has voltage limits and takes time to respond.
 
-```formula
-A·B
+**AND** is one only when both inputs are one. **OR** is one when at least one input is one, including when both are one. **NOT** flips a bit. The notation is compact, but OR must not be mistaken for ordinary addition:
+
+```formula essential
+A·B      A + B      A′
 where
-A: Boolean input bit
-B: Boolean input bit
-· or adjacent brackets: Boolean AND
-In words: Read this Boolean expression as (A AND B).
-```
-
-Adjacent letters also denote AND. **OR** is one when at least one input is one:
-
-```formula
-A + B
-where
-A: Boolean input bit
-B: Boolean input bit
-+: Boolean OR
-In words: Read this Boolean expression as (A OR B).
-```
-
-**NOT** flips a bit. Its usual notations are a bar over the input, a preceding negation sign, or a prime after the input, as the next card shows.
-
-The symbols are borrowed from arithmetic, but they mean something different here. This card shows representative cases, using 0 and 1 directly:
-
-```formula
-0·0 = 0    0·1 = 0    1·1 = 1
-0 + 0 = 0  0 + 1 = 1  1 + 1 = 1
-0′ = 1     1′ = 0
-where
+A, B: Boolean input bits, each zero or one
+A′: the complement of A
 ·: AND: the result is 1 only when both sides are 1. In the text it is often left out, so AB means A·B
 +: OR, not addition: the result is 1 when at least one side is 1
 ′: NOT, the complement: it turns 0 into 1 and 1 into 0. The text writes it as an apostrophe (A'); books often draw a bar over the letter instead
-In words: AND behaves like multiplication on 0 and 1, and OR almost behaves like addition. The one surprise is that 1 + 1 = 1: OR has no carry, it just asks "is anything true?".
+In words: the three expressions mean AND of the inputs, OR of the inputs, and NOT of the first input. OR of two ones is still one: it asks whether anything is true and produces no carry.
 ```
 
-A **truth table** lists the output for every input combination. Each extra input doubles the number of combinations, so the table size grows quickly:
-
-```formula
-N_rows = 2^n
-N_rows = 2^3 = 8   for n = 3
-where
-N_rows: the number of rows in the truth table, one per input combination
-n: the number of inputs (Boolean variables)
-2^n: n copies of 2 multiplied together. Each input can be 0 or 1, and every new input doubles the number of combinations
-In words: a truth table for n inputs has 2^n rows, so three inputs need 8 rows and four need 16.
-```
+A **truth table** lists the output for every input combination. Adding a new independent input creates two cases for every old row: the new input low and the new input high. Each extra input therefore doubles the table size. A complete table must cover both cases, even when their outputs happen to match.
 
 Here is the table for the three operations, with two inputs:
 
@@ -79,7 +52,7 @@ Here is the table for the three operations, with two inputs:
 
 **Precedence**: NOT binds tightest, then AND, then OR, just as powers come before multiplication and multiplication before addition in arithmetic. A NOT written after a bracket applies to the whole bracket:
 
-```formula
+```formula essential
 A + B·C′ = A + (B·(C′))
 (A·B)′ ≠ A′·B′
 where

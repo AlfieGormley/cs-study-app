@@ -2,7 +2,7 @@
 id: disc-relation-closures
 title: "Reachability and relation closures"
 level: basic
-minutes: 3
+minutes: 2
 summary: "Transitive closure links pairs joined by positive-length paths, including self-pairs reached by cycles."
 sourceLesson: disc-relations
 ---
@@ -11,24 +11,13 @@ sourceLesson: disc-relations
 
 Often you have a relation that is "almost" what you want. The **transitive closure** is the smallest transitive relation containing it: it links a to b whenever a chain of one or more links leads from a to b.
 
-```formula
-a R⁺ b   means   a R x_1 R x_2 … R x_k R b
-1 R 2 and 2 R 3   so   1 R⁺ 3
-where
-R: the original relation
-R⁺: the transitive closure of R, read "R plus"
-a, b: elements of the set
-x_1, x_2, x_k: the intermediate elements on the chain
-k: the number of intermediate vertices; when there are none, read the chain simply as a R b
-…: and so on along the chain
-In words: R⁺ adds a direct link for every path of length one or more in R. If 1 links to 2 and 2 links to 3, the closure links 1 to 3.
-```
+A positive-length path counts, even if it returns to its starting vertex. Thus a directed cycle makes its vertices reachable from themselves; an isolated vertex does not acquire a self-link merely through transitive closure.
 
 "Can user A reach user B through follows?" and "does package X depend on Y, directly or indirectly?" are transitive-closure questions.
 
-Two standard ways to compute it, viewing the relation as a directed graph:
+You can compute reachability with a matrix-based algorithm such as Warshall, or search outward from each vertex using adjacency lists. Sparse graphs can favour the search approach.
 
-```formula
+```formula reference
 T_W = O(n^3)
 T_S = O(n × (n + m))
 where
@@ -37,12 +26,19 @@ T_S: running time of a breadth-first or depth-first search (BFS or DFS) from eve
 n: the number of elements (vertices)
 m: the number of related pairs (edges)
 O( ): big-O: grows no faster than the expression inside, up to a constant factor
-In words: Warshall's algorithm costs about n^3 steps whatever the relation looks like; a search from every vertex costs about n searches of n + m steps each.
+In words: A matrix-based closure algorithm has cubic growth in the vertex count. Searching from every vertex can use the smaller edge count of a sparse graph, though actual speed also depends on representation and constants.
 ```
 
-For a sparse relation with 10,000 vertices and 50,000 edges, cubing 10,000 gives a trillion steps while 10,000 × 60,000 is 600 million, so the searches win on the asymptotic bound. That is not a promise of a fixed wall-clock speedup, since constant factors and memory access patterns differ. SQL computes reachability with a recursive CTE.
+The growth bounds do not promise a particular wall-clock speedup: constants and memory access patterns matter. SQL can compute reachability with a recursive CTE; cycles require duplicate elimination or another stopping rule.
 
 The empty relation on an empty set is already reflexive, symmetric and transitive. For other sets, the **reflexive closure** adds the diagonal, the **symmetric closure** adds reverse edges. The reflexive, symmetric, transitive closure of any relation is an equivalence relation: it groups vertices into connected components after ignoring any edge directions.
+
+> [!analogy] Real-world analogy: Connecting journeys
+> A route map may show only direct legs, while a journey planner asks which destinations can be reached with changes.
+>
+> **How it maps:** Direct edges are the original relation; allowing any positive number of legs gives transitive closure. A round trip can make a station reachable from itself.
+>
+> **Where it stops:** Real journeys have timetables and costs. Plain reachability ignores those extra constraints.
 
 ## Key takeaways
 

@@ -59,7 +59,7 @@ With `=` instead, `a = b;` would happen first and `b = a;` would then copy the *
 
 ### Pitfalls
 
-- **Accidental latches.** In an `always @(*)` block, every output must be assigned on every path. If you write `if (en) y = d;` with no `else`, `y` must remember its old value when `en = 0`, and synthesis builds a transparent latch, with all the timing problems from sequential-logic lessons. Always add an `else` or a `default`.
+- **Accidental latches.** In intended combinational `always @(*)` logic, assign each output on every path. For independent input signals, `if (en) y = d;` with no `else` retains `y` when enable is low and normally infers a transparent latch. Synthesis may remove unreachable paths or unused storage, so inspect its reports. Supply an `else` or a suitable default to describe combinational behaviour.
 - **Simulation-only code.** Simulation delays such as #5 do not specify physical gate delay in ordinary RTL synthesis. Some FPGA flows do synthesize supported initial blocks into power-up register or memory initialization; other constructs and ASIC flows differ. Check the target tool's supported subset.
 - **Thinking in software.** A synthesizable fixed-bound loop may be unrolled, but data dependencies can make a combinational chain and optimizations can share or remove logic. A 1,000-iteration source loop does not guarantee exactly 1,000 physical copies. Explicit state/control is needed to spread work across clock cycles.
 

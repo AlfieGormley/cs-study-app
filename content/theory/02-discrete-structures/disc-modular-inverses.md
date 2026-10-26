@@ -2,7 +2,7 @@
 id: disc-modular-inverses
 title: "Modular inverses and finite fields"
 level: advanced
-minutes: 3
+minutes: 2
 summary: "An inverse exists exactly when the integer and modulus have greatest common divisor one."
 sourceLesson: disc-number-theory
 ---
@@ -11,32 +11,20 @@ sourceLesson: disc-number-theory
 
 The **modular inverse** of a modulo n is the number that multiplies a to give 1, in remainder arithmetic. It plays the role that 1/a plays for ordinary fractions:
 
-```formula
+```formula essential
 a × a^{−1} ≡ 1 (mod n)
-a × x + n × y = 1
-a × x ≡ 1 (mod n)
 where
 a: the integer you want to "divide by"
 n: the modulus, an integer at least 2 for these nonzero inverse representatives
 a^{−1}: the inverse of a modulo n, a number from 1 to n − 1 (not the fraction 1/a)
-x, y: Bézout coefficients from the extended Euclidean algorithm
 ≡: is congruent to: leaves the same remainder after dividing by n
 mod: "modulo": remainders after dividing by n
-In words: an inverse exists exactly when a and n share no common factor greater than 1 (their gcd is 1, called coprime). Then Bézout gives a × x + n × y = 1, and since n × y is a multiple of n, a × x leaves remainder 1, so x is the inverse.
+In words: A modular inverse multiplies a residue back to one. It exists exactly when that integer and the modulus are coprime.
 ```
 
-Worked example: the inverse of 7 modulo 40.
+For example, multiplying seven by twenty-three leaves remainder one modulo forty. The inverse is the residue represented by twenty-three, not the ordinary fraction one-seventh.
 
-```formula
-7 × (−17) + 40 × 3 = 1
-7^{−1} ≡ −17 ≡ −17 + 40 = 23 (mod 40)
-7 × 23 = 161 = 4 × 40 + 1
-where
-7^{−1}: the inverse of 7 modulo 40
-≡: is congruent to: leaves the same remainder after dividing by 40
-mod: "modulo": remainders after dividing by 40
-In words: the extended algorithm gives −17 as the coefficient of 7; adding 40 makes it positive, 23, and 7 × 23 = 161 really does leave remainder 1 when divided by 40.
-```
+Bézout expresses one as an integer combination of the value and modulus whenever they are coprime. The modulus’s contribution vanishes in remainder arithmetic, leaving the value’s coefficient as an inverse.
 
 If the gcd is bigger than 1 there is no inverse: 6 has none modulo 10, because every multiple of 6 is even and so leaves an even remainder, never 1. Python 3.8+ does this for you: `pow(7, -1, 40)` returns `23`, and raises `ValueError` if no inverse exists.
 

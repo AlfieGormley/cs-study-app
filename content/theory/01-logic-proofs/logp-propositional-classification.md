@@ -11,19 +11,7 @@ summary: A tautology is true on every assignment; a contradiction is false on ev
 
 Tautology, contradiction and contingency form three disjoint classes. Satisfiability is a related property that overlaps them. The two simplest examples, "p or not p" and "p and not p":
 
-```formula
-p ∨ ¬p ≡ T
-p ∧ ¬p ≡ F
-where
-p: a proposition, true or false
-¬: NOT: ¬p is true exactly when p is false
-∨: OR: true when at least one side is true
-∧: AND: true only when both sides are true
-≡: is logically equivalent to: same truth value in every row
-T: the constant "true", a formula that is true in every row
-F: the constant "false", a formula that is false in every row
-In words: "p or not p" is true whatever p is, and "p and not p" is false whatever p is. Try p = T and p = F: the first gives T both times, the second F both times.
-```
+A statement OR its negation is always true in classical two-valued logic. A statement AND its negation is always false.
 
 - A **tautology** is true in every row. Example: p or not p.
 - A **contradiction** is false in every row. Example: p and not p.

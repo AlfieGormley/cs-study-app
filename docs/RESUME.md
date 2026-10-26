@@ -7,11 +7,11 @@ library finished from a renderer change or a partial module audit.
 
 - Task checkout: `/tmp/cs-study-concept-first-20261026`. The user's primary checkout contains unrelated
   drafts and must remain untouched. Working queue: `/tmp/concept-first-queue.json`.
-- Thirteen modules have current independent concept-first reviews: all three DSP modules, network foundations,
-  system-design fundamentals, sound sampling, all four Embedded modules and all three React modules
-  (175 lessons). Complexity, digital logic and discrete structures are being authored. The other
-  70 modules still need their semantic audit.
-  See `docs/concept-first-report.md` for current review details.
+- Seventeen modules have current independent concept-first reviews (321 lessons, 758 questions): all
+  three DSP modules, network foundations, system-design fundamentals, sound sampling, all four Embedded
+  modules, all three React modules, DSA complexity, digital logic, discrete structures, and logic/proofs.
+  The other 69 modules still need their semantic review; probability, data representation and theoretical
+  complexity are currently in the author/reviewer pipeline. See `docs/concept-first-report.md`.
 - Rules in `CLAUDE.md`, `CONTENT_SPEC.md`, `AGENTS.md` and the content process apply to future work.
   Mark essential relationships `formula essential`, useful optional maths `formula reference`, and remove
   redundant arithmetic. Unreviewed legacy formulas remain visible. Quiz information remains expanded.
@@ -36,9 +36,19 @@ library finished from a renderer change or a partial module audit.
   are cleared once. Historical attempts and scores remain intact. All 84 tests, DSP navigation/offline
   checks and dedicated saved-quiz/update/offline checks pass. The new `quiz-session.js` is precached.
   QA for the earlier content checkpoint is preserved in `/tmp/concept-first-qa-2e2f58e71760/`.
-- Theory/discrete structures found its corrected `sql-null` entry is shadowed by theory/01-logic-proofs.
-  Prioritise the owning module next and independently correct its ordinary-comparison/IS NULL distinction;
-  a correction to a shadowed entry alone does not change the compiled dictionary.
+- The seventeen-module candidate is version `34de83583e0b`. All 84 tests, full-library phone/desktop
+  rendering, 317 changed dictionary name/alias checks and the original migration audit pass. Exact staged
+  checks retain all 5,881 question IDs/owners and all 964 archived files. Source drafts are excluded from
+  this build using an index snapshot (`/tmp/concept-first-stage-17`).
+- The owning SQL NULL correction is present in the compiled dictionary. A focused, separately verified
+  carry-flag correction in data representation fixes the earlier-owned definition; it does not count as a
+  full review of that module. Overflow's differently worded earlier definition is independently accepted
+  only for the exact recorded text. See `docs/concept-first-integration-review.json` for the scoped evidence
+  and root compiled-check closure.
+- Root's integration helpers accept exact index snapshots so new authors need not stop: generate the report
+  from the snapshot with `/tmp/write-concept-first-report.mjs <snapshot>`, and validate staged source plus
+  generated artifacts with `/tmp/check-concept-first-staged.mjs <snapshot> --include-generated` after staging.
+  Do not compile working unverified drafts or renew content stamps at root.
 - Nothing from this rewrite has been published yet. Finish independent review, build/tests/audits,
   commit and publish the verified result, and check the public app matches the tested release.
 

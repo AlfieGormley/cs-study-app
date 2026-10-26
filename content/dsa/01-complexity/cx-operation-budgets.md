@@ -3,66 +3,38 @@ id: cx-operation-budgets
 sourceLesson: cx-in-practice
 title: Estimating a feasible input budget
 level: advanced
-minutes: 4
+minutes: 2
 summary: Use an explicitly assumed operation rate to screen algorithm choices.
 ---
 
-Asymptotic analysis is a model. It is an excellent one, and for large enough inputs it predicts the winner. But it deliberately throws away information: constant factors, the memory hierarchy, the language runtime, and what your inputs actually look like. Experts know both the model and where it leaks.
+Complexity helps reject implausible designs before implementing them. It does not supply a universal number of operations a machine can perform each second.
 
-This lesson is about using complexity as an engineering tool rather than an exam answer.
+## Build a workload-specific budget
 
-## What fits in one second
+Start with the largest expected input, the actual operation being counted and the time available. A comparison of two small integers is different from a network request or comparison of long strings. Use measured throughput for representative data, or label a hypothetical rate clearly.
 
-The most practical skill is estimating from the input size n which complexity you can afford. For the arithmetic exercise below, **assume 10^8 counted operations per second** and unit leading constants. This is a hypothetical model, not measured throughput or a guarantee for any language. The estimate is one division:
-
-```formula
-t = W(n) / r
-where
-t: the estimated running time, in seconds (s)
-W(n): the number of operations the algorithm does on input size n, read off its complexity with the constant taken as 1 (for example n^2 for a quadratic algorithm)
-n: the input size
-r: the assumed speed, 10^8 (a hundred million) operations per second
-In words: divide the operation count by the speed; anything that comes out near 1 second or less fits the budget.
-```
-
-In the table, factorial means the product of all positive integers up to n; exponential growth uses a fixed base of two. Here n is the input size and log is the base-2 logarithm.
-
-| Largest n (about 1 s) | Affordable complexity |
+| Candidate | What to investigate |
 |---|---|
-| 10 to 11 | O(n!) |
-| 20 to 25 | O(2^n) |
-| ~500 | O(n^3) |
-| ~5,000 to 10,000 | O(n^2) |
-| ~10^6 | O(n log n) |
-| ~10^8 | O(n) |
-| large n, subject to constants and storage | O(log n), O(1) |
+| All pairs | whether quadratic growth fits the largest input |
+| Sort then scan | comparison cost, allocation and input mutation |
+| Hash-based scan | memory, hash quality and equality cost |
+| Exhaustive subsets | candidate count and cost of checking each |
 
-The table comes straight from the arithmetic:
+A quadratic design can look fine on a sample and fail when an upload grows substantially. Sorting or hashing may avoid most of those comparisons. Conversely, exhaustive search can be the simplest exact solution for a tightly bounded small input. There is no universal "twenty to twenty-five items" limit: pruning, per-candidate work, parallelism and the time budget alter feasibility.
 
-```formula
-11! ≈ 4 × 10^7
-2^25 ≈ 3.4 × 10^7
-500^3 = 1.25 × 10^8
-(10^4)^2 = 10^8
-10^6log_2(10^6) ≈ 2 × 10^7
-where
-11!: 11 factorial, 11 × 10 × … × 1 = 39,916,800
-2^25: 25 copies of 2 multiplied together, 33,554,432
-500^3: 500 × 500 × 500
-log_2(10^6): the base-2 logarithm of a million, about 19.9
-≈: approximately equal to
-In words: at each table row's largest n, the operation count comes out at about 10^7 to 10^8, which is about a second or less at 10^8 operations per second.
-```
+## Treat an estimate as a model to validate
 
-Read it backwards too. A 200,000-item quadratic problem needs 40 billion counted operations: 400 seconds at the assumed rate, far above a second. So seek O(n log n) or better, where n is the item count. At no more than 20 items, exponential subset search may instead be the simplest correct answer.
+Dividing counted work by a representative operations-per-second rate gives an estimated runtime. A range of observed rates produces a range of predicted times. Do not substitute CPU clock frequency for measured iteration throughput.
 
-> [!note] Content gap: cross-language timings
-> A reproducible benchmark for the claimed universal Python-to-compiled speed ratio is absent, so that ratio is omitted. Interpreter version, operation type, data and hardware matter. Native built-ins or vectorisation can reduce interpreter overhead; measure the actual workload.
+If the larger input crosses a cache or memory boundary, the old rate may no longer apply. Include allocation, parsing, output and peak memory when those are part of the job. Leave headroom instead of relying on a model that only just fits.
+
+Big-O is an upper growth bound with hidden constants, not an exact operation count. A label alone cannot justify a particular one-second deadline. Use the mechanism to screen candidates, then benchmark the actual implementation and workload.
 
 ## Key takeaways
-- An operation budget is useful only with a stated rate and cost model.
-- Large quadratic counts can rule out an approach before implementation.
-- Small inputs can make exhaustive search a sensible starting point.
+- Feasibility depends on input bounds, operation cost and available time.
+- Exhaustive search has no universal practical item cutoff.
+- Use estimates to choose what to measure, not to replace measurement.
 
 ## Further reading
-- [Time complexity guide — USACO Guide](https://usaco.guide/bronze/time-comp)
+- [Python timeit](https://docs.python.org/3.14/library/timeit.html)
+- [Erickson: Introduction](https://jeffe.cs.illinois.edu/teaching/algorithms/book/00-intro.pdf)

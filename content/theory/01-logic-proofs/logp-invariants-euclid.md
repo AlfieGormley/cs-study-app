@@ -24,7 +24,7 @@ def gcd(a, b):
 
 The key fact behind the maintenance step:
 
-```formula
+```formula essential
 gcd(a, b) = gcd(b, a mod b)
 a = q × b + (a mod b)
 0 ≤ a mod b < b

@@ -11,7 +11,14 @@ summary: Synchroniser stages give metastability time to resolve.
 
 What if D changes inside the setup/hold window? This is unavoidable when a signal comes from outside the clock domain: a button, a network chip with its own clock, another core running at a different frequency.
 
-The flip-flop's internal loop can then be caught balanced between 0 and 1, like a ball on the top of a hill. This **metastable** state resolves to a valid 0 or 1 eventually, but the time it takes is unbounded in principle; the probability of still being unresolved falls off exponentially with the time you wait.
+The flip-flop's internal loop can then be caught near an unstable balance between its two valid states. This **metastable** state resolves to a valid 0 or 1 eventually, but the time it takes is unbounded in principle; the probability of still being unresolved falls off exponentially with the time you wait.
+
+> [!analogy] Real-world analogy: A ball balanced on a hill
+> A ball very close to a hilltop may take a while to visibly fall to either side.
+>
+> **How it maps:** The unstable balance represents metastability; either downhill side represents a stable stored bit. Extra settling time makes an unresolved state less likely.
+>
+> **Where it stops:** The circuit is an electrical feedback system, not a moving ball. This picture gives neither a fixed settling deadline nor a device-specific failure rate.
 
 A common mitigation for a single-bit level is a two-flip-flop synchroniser, with both stages clocked by the destination clock:
 
@@ -34,11 +41,11 @@ Imagine a slow destination clock and a brief source pulse that rises and falls b
 
 For an isolated event, one option is to stretch the pulse long enough for the specified destination sampling assumptions. Another is to toggle a source bit once per event and detect a change after synchronisation. A toggle scheme still needs a bound on event spacing: two toggles before the receiver observes either can cancel. A request/acknowledge handshake can instead keep an event pending until the receiver confirms it.
 
-For a multi-bit word, synchronising every bit independently does not make the word coherent. Different bits can be observed in different cycles. A bundled-data handshake can keep the word stable during transfer; an asynchronous FIFO can queue words while transferring appropriately constrained pointers. These are design patterns with timing and protocol requirements, not interchangeable fixes for every crossing.
+For a multi-bit word, synchronising every bit independently does not guarantee that all received bits belong to the same source value. Different bits can be observed in different cycles. A bundled-data handshake can keep the word stable during transfer; an asynchronous FIFO can queue words while transferring appropriately constrained pointers. These are design patterns with timing and protocol requirements, not interchangeable fixes for every crossing.
 
 ## Key takeaways
 - Synchroniser stages give metastability time to resolve.
-- Single-bit levels, pulses and coherent multi-bit data need different transfer schemes.
+- Single-bit levels, pulses and complete multi-bit values need different transfer schemes.
 
 ## Further reading
 - [MIT — Synchronisation and arbitration](https://computationstructures.org/notes/arbitration/notes.html)

@@ -7,7 +7,7 @@ summary: "A binary relation chooses ordered pairs and can be represented by a ma
 sourceLesson: disc-relations
 ---
 
-A function links each input to exactly one output. A **binary relation** is the looser idea: any collection of links between things. "Follows" on a social network, "depends on" between packages, "is congruent to mod 7" between integers and "happened before" between events in a distributed system are all relations.
+A function links each input to exactly one output. A **binary relation** is the looser idea: any collection of links between things. "Follows" on a social network, "depends on" between packages, "is congruent to mod 7" between integers and "happened-before" between events in a distributed system are all relations.
 
 Two special kinds of relation do a huge amount of work in computer science. **Equivalence relations** say when two things count as "the same" and split a set into groups. **Partial orders** say when one thing must come "before" another, and are what a build system or a task scheduler sorts.
 
@@ -15,7 +15,7 @@ Two special kinds of relation do a huge amount of work in computer science. **Eq
 
 A **binary relation** from a set A to a set B is just a set of ordered pairs: it lists which elements of A are linked to which elements of B. A relation on a single set uses pairs from that set on both sides.
 
-```formula
+```formula essential
 R ⊆ A × B
 a R b   means   (a, b) ∈ R
 where
@@ -26,7 +26,7 @@ A, B: the sets the first and second parts of each pair come from
 a: an element of A
 b: an element of B
 a R b: infix shorthand, read "a is related to b by R"
-( , ): an ordered pair: (a, b) and (b, a) are different
+( , ): an ordered pair: swapping different elements changes the pair
 ∈: is an element of
 In words: a relation is any chosen set of pairs (for a relation on one set A, take B to be A as well). Writing a R b is just a shorter way to say that the pair (a, b) is in the set.
 ```
@@ -47,20 +47,9 @@ graph:   1 --> 2 --> 3
          plus a self-loop 1 --> 1
 ```
 
-The matrix view shows how many relations a set has: every cell is independently 0 or 1.
+Every matrix cell chooses whether its ordered pair belongs to the relation. Requiring reflexivity fixes the diagonal to present; the other cells remain free unless another property constrains them.
 
-```formula
-N_rel = 2^(n^2)
-N_rel = 2^(3^2) = 2^9 = 512   for n = 3
-where
-N_rel: the number of different relations on the set
-n: the number of elements in the set
-n^2: n × n, the number of cells in the n-by-n matrix (one per ordered pair)
-2^(n^2): 2 multiplied by itself n^2 times: two choices (0 or 1) per cell
-In words: a 3-element set has 9 possible ordered pairs, each either in or out, so 2^9 = 512 relations.
-```
-
-The count explodes quickly: a 4-element set has 16 possible pairs and already 65,536 relations (16 copies of 2 multiplied together). The graph view is why so much of graph theory is really about relations.
+Adding elements increases the number of possible ordered pairs rapidly. The graph view connects relation properties directly to graph structure.
 
 ## The four key properties
 
@@ -75,7 +64,7 @@ For a relation R on a set A:
 
 In symbols, one line per row of the table:
 
-```formula
+```formula essential
 a R a   for every a ∈ A
 a R b   ⇒   b R a
 a R b and b R a   ⇒   a = b
@@ -90,18 +79,7 @@ a R b: a is related to b, that is, (a, b) is in R
 In words: reflexive means everything relates to itself; symmetric means links go both ways; antisymmetric means the only way to have links both ways is between an element and itself; transitive means a two-step chain always has a direct link.
 ```
 
-Test them on “less than or equal to” over the numbers 1, 2 and 3:
-
-```formula
-2 ≤ 2
-1 ≤ 2
-not 2 ≤ 1
-1 ≤ 2 and 2 ≤ 3   ⇒   1 ≤ 3
-where
-≤: is less than or equal to
-⇒: implies
-In words: Every number is at most itself, reverse links need not hold, and two comparisons in the same direction chain. These show reflexivity, failure of symmetry, and the transitive pattern.
-```
+“Less than or equal to” is reflexive and transitive: a number is at most itself, and two forward comparisons chain. It is not symmetric: 1 is at most 2, but the reverse fails.
 
 In the matrix: reflexive means the diagonal is all 1s, symmetric means the matrix equals its transpose. In the graph: reflexive means a self-loop on every node, symmetric means every edge has a reverse edge, transitive means every two-step path has a shortcut edge.
 

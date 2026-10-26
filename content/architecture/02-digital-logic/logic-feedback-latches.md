@@ -54,7 +54,7 @@ Each NOR's output feeds the other's input. Recall that a NOR outputs 1 only when
 
 The SR latch has two control inputs and a forbidden combination. The **D latch** (D for data) fixes both. It has a data input D and an enable E, and internally drives the SR latch's inputs like this:
 
-```formula
+```formula reference
 S = D·E
 R = D′·E
 S·R = D·D′·E = 0
@@ -64,7 +64,7 @@ D: the data input, 0 or 1
 E: the enable input, 0 or 1
 D′: NOT D
 ·: AND: 1 only when both sides are 1
-In words: when E is 1, D = 1 sets the latch and D = 0 resets it; when E is 0 both S and R are 0, so it holds. Because D and NOT D are never both 1, S and R are never both 1.
+In words: while enabled, high data sets the latch and low data resets it. Disabling the latch clears both controls so it holds. In the ideal Boolean model, the data and its complement cannot assert set and reset together.
 ```
 
 So the ideal Boolean equations never assert both. Physical implementations still need timing constraints; propagation delays do not disappear.

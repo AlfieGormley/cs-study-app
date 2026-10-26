@@ -9,10 +9,9 @@ sourceLesson: disc-graphs
 
 ## Trees
 
-A **tree** is a connected graph with no cycles. Its edge count is fixed by its vertex count, and the same idea extends to a **forest** (a graph with no cycles that need not be connected, so it is a collection of separate trees):
+Here graphs are finite, simple and undirected. A **tree** is a connected graph with no cycles. Its edge count is fixed by its vertex count, and the same idea extends to a **forest** (a graph with no cycles that need not be connected, so it is a collection of separate trees):
 
-```formula
-m = n − 1
+```formula essential
 c = n − m
 where
 m: the number of edges
@@ -34,18 +33,17 @@ These equivalences are surprisingly handy. Adding an edge between previously non
 
 A **spanning tree** of a connected graph is a tree that uses all its vertices. Network protocols (the Spanning Tree Protocol in Ethernet switching) build one to avoid broadcast loops. How many different trees can be built on a fixed set of labelled vertices is given by **Cayley's formula**:
 
-```formula
+```formula reference
 T(n) = n^{n − 2}   for n ≥ 2
-T(4) = 4^2 = 16
 where
 T(n): the number of different trees whose vertices are exactly the n labelled vertices (two trees differ if some pair is joined in one but not the other)
 n: the number of vertices, at least 2
 n^{n − 2}: n multiplied by itself n − 2 times
 ≥: is greater than or equal to
-In words: there are n to the power n − 2 labelled trees on n vertices, so 4 labelled vertices can be joined into 16 different trees.
+In words: Cayley’s formula counts trees on a fixed set of distinct labelled vertices. Ignoring labels counts different objects and can give fewer possibilities.
 ```
 
-The 16 trees on four labelled vertices split into 4 stars (pick the centre) and 12 paths (the 24 orderings of the 4 vertices, halved because a path read backwards is the same tree). The count grows very fast: 10 vertices already allow 10⁸ trees. It counts labelled trees; if you ignore labels, 4 vertices only make 2 shapes (the star and the path).
+With four vertices, there are only two unlabelled shapes: a path and a star. Choosing different labelled centres or neighbours creates different labelled trees without necessarily changing the shape.
 
 ## Key takeaways
 

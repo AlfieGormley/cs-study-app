@@ -11,7 +11,7 @@ summary: Unit propagation forces a literal when all other literals in its clause
 
 The classic algorithm, DPLL (Davis, Putnam, Logemann, Loveland, 1962), is backtracking search plus one crucial trick.
 
-**Unit propagation**: if a clause has only one unassigned literal left and every other literal is false, that literal is forced. Setting it may force others, in a chain. If a clause ever has all literals false, that is a **conflict**: backtrack.
+**Unit propagation**: if a clause has only one unassigned literal left and every other literal is false, that literal is forced. Setting it may force others, in a chain. If a clause ever has all literals false, that is a **SAT conflict**: backtrack.
 
 The input is a list of clauses represented by Python `frozenset` objects containing nonzero integers that may be positive or negative. Positive integers are variables and negative integers negate those variables. These function definitions alone print nothing.
 

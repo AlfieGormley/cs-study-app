@@ -2,7 +2,7 @@
 id: disc-equivalence-classes
 title: "Equivalence classes, partitions and union-find"
 level: basic
-minutes: 5
+minutes: 4
 summary: "Equivalence relations partition a set into disjoint classes, and every partition defines one."
 sourceLesson: disc-relations
 ---
@@ -13,34 +13,16 @@ A relation that is **reflexive, symmetric and transitive** is an **equivalence r
 
 Examples:
 
-- **Congruence modulo n**: two integers are related when they leave the same remainder after division by n (see below). Mod 3 groups integers by remainder.
+- **Modular congruence**: integers are related when they leave the same remainder under one fixed positive modulus.
 - **Same connected component** in an undirected graph.
 - **Case-insensitive equality** of strings: "Hello" and "HELLO" are equivalent.
-- **Same hash bucket**: two keys are related when the hash function sends them to the same value. Any relation of the form "same output of some function" is an equivalence relation.
+- **Same hash bucket**: two keys are related when the same fixed bucket-selection function gives the same bucket.
 
-The first and last examples in symbols:
-
-```formula
-a ≡ b (mod n)   means   n | (a − b)
-17 − 5 = 12 = 4 × 3
-so   17 ≡ 5 (mod 3)
-x ~ y   means   f(x) = f(y)
-where
-a, b: integers
-n: the modulus, a positive integer (3 in the example)
-≡: is congruent to: the two numbers leave the same remainder after division by n
-mod: modulo: names the number n we divide by
-|: divides: n | m means m is a whole-number multiple of n
-x, y: any two elements, such as two hash keys
-~: is equivalent to (the relation being defined)
-f: any function, such as a hash function h or "birth month"
-f(x): the output of f for input x
-In words: a and b are congruent mod n when their difference is a multiple of n; 17 and 5 both leave remainder 2 when divided by 3. In general, "x and y give the same output" is always reflexive, symmetric and transitive, because equality of outputs is.
-```
+Integers 17 and 5 both leave remainder 2 when divided by 3, so they are equivalent under congruence modulo 3. More generally, equality of outputs under one fixed function is reflexive, symmetric and transitive.
 
 The **equivalence class** of an element is everything equivalent to it:
 
-```formula
+```formula essential
 [a] = { x ∈ A : x ~ a }
 where
 [a]: the equivalence class of a
@@ -57,20 +39,9 @@ Case-insensitive equality needs a fixed normalisation rule. Likewise, “same ha
 
 The crucial theorem: **the equivalence classes partition the set**. Every element is in exactly one class, and two classes are either identical or disjoint.
 
-For congruence mod 3, the integers split into three classes:
+Modulo 3, the classes collect integers with remainder 0, 1 or 2. Every integer belongs to exactly one, including negative integers under the non-negative remainder convention.
 
-```formula
-[0] = {…, −3, 0, 3, 6, …}
-[1] = {…, −2, 1, 4, 7, …}
-[2] = {…, −1, 2, 5, 8, …}
-where
-[0], [1], [2]: the equivalence classes of 0, 1 and 2 under congruence mod 3: the integers leaving remainder 0, 1 and 2 when divided by 3
-{ }: the set of the things listed inside
-…: and so on without end, in both directions
-In words: every integer lands in exactly one of three classes by its remainder mod 3. Negative numbers follow the same pattern: −2 = −1 × 3 + 1, so −2 is in [1].
-```
-
-The converse holds too: any partition defines an equivalence relation ("in the same block"). So the number of equivalence relations on an n-element set equals the number of partitions, the **Bell number**: 1, 1, 2, 5, 15, 52, … for sets of 0, 1, 2, 3, 4 and 5 elements. For example, {a, b, c} has 5 partitions: everything together, the three ways to pair two elements and leave one alone, and all three apart.
+The converse holds too: any partition defines an equivalence relation, “in the same block”. Counting equivalence relations therefore amounts to counting partitions; these counts are called **Bell numbers**. Ordering the blocks or their members does not create a new partition.
 
 ### Equivalence relations in code
 
@@ -103,19 +74,14 @@ Python's own contract relies on this theory. Well-behaved value equality is norm
 > [!warning] "Approximately equal" is not an equivalence
 > Calling two numbers equal when they are within a small tolerance of each other breaks transitivity, so it cannot be used to bucket values into consistent groups. The example below shows the chain that fails.
 
-```formula
-x ~ y   means   |x − y| < 0.1
-|0.0 − 0.08| = 0.08   so 0.0 ~ 0.08
-|0.08 − 0.16| = 0.08   so 0.08 ~ 0.16
-|0.0 − 0.16| = 0.16   so 0.0 ≁ 0.16
-where
-x, y: any two real numbers
-~: "approximately equal", the relation being tested
-≁: is not related by ~
-| |: around a number, the absolute value: its size ignoring the sign, so |x − y| is the distance between x and y
-<: is less than
-In words: 0.0 is close to 0.08, and 0.08 is close to 0.16, but 0.0 is not close to 0.16, so the relation is not transitive.
-```
+With a strict tolerance of 0.1, 0 is close to 0.08 and 0.08 is close to 0.16, but 0 is not close to 0.16. Chaining “close” judgements therefore need not preserve closeness.
+
+> [!analogy] Real-world analogy: Sorting laundry by colour label
+> Assign every garment one fixed colour label and put matching labels together.
+>
+> **How it maps:** Equality of a fixed label forms equivalence classes. Every item belongs to exactly one class, and merging classes is different from changing individual labels.
+>
+> **Where it stops:** Informal judgements like “nearly the same colour” need not be transitive, so they do not automatically define the same kind of grouping.
 
 ## Key takeaways
 

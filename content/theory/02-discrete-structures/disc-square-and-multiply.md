@@ -2,45 +2,18 @@
 id: disc-square-and-multiply
 title: "Fast modular powers with square-and-multiply"
 level: advanced
-minutes: 3
+minutes: 2
 summary: "Binary exponentiation uses at most two modular multiplications per exponent bit."
 sourceLesson: disc-number-theory
 ---
 
 ## Fast modular exponentiation
 
-Computing a power modulo n by multiplying the base by itself once per unit of the exponent is impossible when the exponent has 600 digits. **Square-and-multiply** uses the binary digits of the exponent instead: square repeatedly to get the base to the powers 1, 2, 4, 8, …, and multiply together the ones whose bit is 1, reducing mod n after each step.
+Computing a huge integer power by one multiplication per unit of exponent is impractical. **Square-and-multiply** instead reads its binary digits: repeated squaring supplies powers with exponents one, two, four, eight and so on. Multiply the selected powers and reduce modulo the fixed positive modulus after every operation.
 
-```formula
-13 = 8 + 4 + 1 = 1101_2
-3^13 = 3^8 × 3^4 × 3^1
-3^1 ≡ 3, 3^2 ≡ 2 (mod 7)
-3^4 ≡ 4, 3^8 ≡ 2 (mod 7)
-3^13 ≡ 2 × 4 × 3 = 24 ≡ 3 (mod 7)
-where
-1101_2: the number 13 written in binary (base 2): 1 eight, 1 four, 0 twos, 1 one
-3^k: k copies of 3 multiplied together
-≡: is congruent to: leaves the same remainder after dividing by 7
-mod: "modulo": remainders after dividing by 7
-In words: write 13 in binary, get 3 to the powers 1, 2, 4, 8 by squaring (reducing mod 7 each time), and multiply the ones for the 1-bits: the answer is 3.
-```
+Exponent thirteen selects the powers corresponding to binary positions eight, four and one. Repeated squaring produces those powers, and reducing each result modulo seven keeps the intermediate residues small.
 
-Each bit of the exponent costs one squaring, plus one extra multiplication if the bit is 1, so the work grows with the number of bits, not the size of the exponent:
-
-```formula
-M ≤ 2 × b
-b = ⌊log_2(e)⌋ + 1   for e ≥ 1
-where
-M: the number of modular multiplications square-and-multiply needs
-b: the number of bits in the exponent e
-e: a non-negative integer exponent; zero is handled without any loop iterations
-⌊ ⌋: floor: round down to the nearest integer
-≥: is greater than or equal to
-log_2: logarithm to base 2: how many times you can halve e before reaching 1
-≤: is less than or equal to
-≈: is approximately equal to
-In words: the cost is at most two multiplications per bit, so a 600-digit (about 2,000-bit) exponent needs at most about 4,000 multiplications instead of 10^600.
-```
+One iteration handles one exponent bit. It always squares the base and multiplies into the result only for a set bit, so there are at most two modular multiplications per bit. This counts operations, not CPU time: multiplication cost also depends on the modulus size.
 
 For positive exponents, square-and-multiply needs O(1 + log e) multiplications, where e is the exponent. An exponent of zero returns the identity residue immediately.
 

@@ -19,13 +19,7 @@ The systematic procedure: find all prime implicants, take all the essential ones
 
 The trap is the prime that looks useful but isn't. Consider this function:
 
-```formula
-F = Σm(0, 4, 5, 7, 8, 12, 13, 15)
-where
-F: the function being minimised, of the four inputs A, B, C and D (each 0 or 1)
-Σm(…): OR together the minterms with these row numbers
-In words: F is 1 on the eight listed rows out of 16.
-```
+The function is high on rows 0, 4, 5, 7, 8, 12, 13 and 15, and low elsewhere. Rows use binary order A, B, C, D.
 
 ```
           CD
@@ -40,7 +34,7 @@ In words: F is 1 on the eight listed rows out of 16.
 
 There are three primes: NOT C AND NOT D (the whole first column), B AND D (the middle 2×2 square), and B AND NOT C (rows 01 and 11, columns 00 and 01). The first column and middle square are essential and together cover every one, including all cells covered by B AND NOT C. The minimum is:
 
-```formula
+```formula essential
 F = C′·D′ + B·D
 where
 F: the minimised function
@@ -55,16 +49,11 @@ Adding the third prime, B AND NOT C, would give a correct but non-minimal circui
 
 Some functions have **no** essential primes and more than one minimal answer. Consider this three-input function:
 
-```formula
-Σm(0, 1, 2, 5, 6, 7)
-where
-Σm(…): OR together the listed binary-indexed minterms, using A, B, C from most to least significant input bit
-In words: OR together the minterms of rows 0, 1, 2, 5, 6, 7. The result is one exactly on these rows.
-```
+The three-input function is high on rows 0, 1, 2, 5, 6 and 7, and low elsewhere, using binary order A, B, C.
 
 This function has six primes arranged in a ring. One minimal cover is:
 
-```formula
+```formula essential
 A′·B′ + B·C′ + A·C
 where
 A: Boolean input bit
@@ -81,7 +70,7 @@ In words: Read this Boolean expression as ((NOT (A) AND NOT (B)) OR (B AND NOT (
 
 A second minimal cover is:
 
-```formula
+```formula essential
 A′·C′ + B′·C + A·B
 where
 A: Boolean input bit

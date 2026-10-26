@@ -16,7 +16,7 @@ The insight is that each bit position can say, *before* knowing its carry in, wh
 
 Written as equations, with the carry rule that follows from them:
 
-```formula
+```formula essential
 G_i = A_i·B_i
 P_i = A_i ⊕ B_i
 C_{i+1} = G_i + P_i·C_i
@@ -33,9 +33,9 @@ C_{i+1}: the carry out of bit i, which is the carry into bit i + 1
 In words: a carry leaves column i if the column generates one, or if it propagates a carry that arrived from below.
 ```
 
-Now unroll the recurrence: substitute each carry into the next, so every carry depends only on the G and P signals and the original carry in:
+A carry can originate at any lower bit, but it reaches the target only if every intervening bit propagates it. Lookahead tests these possible routes in parallel, using input-derived signals rather than waiting for a carry to ripple through each column. The expanded equations are a reference for wiring a four-bit block:
 
-```formula
+```formula reference
 C_1 = G_0 + P_0·C_0
 C_2 = G_1 + P_1·G_0 + P_1·P_0·C_0
 C_3 = G_2 + P_2·G_1 + P_2·P_1·G_0
@@ -55,21 +55,7 @@ In words: each term is one way for a carry to arrive: generated at some bit and 
 
 For example, add binary 1011 (decimal 11) and binary 0110 (decimal 6) with no carry in, writing every 4-bit value with bit 3 on the left:
 
-```formula
-G = 1011 · 0110 = 0010
-P = 1011 ⊕ 0110 = 1101
-P_3·P_2·G_1 = 1·1·1 = 1
-C_4 = 1
-where
-G: the four generate bits G_3 G_2 G_1 G_0, from ANDing A and B bit by bit
-P: the four propagate bits P_3 P_2 P_1 P_0, from XORing A and B bit by bit
-P_3, P_2: the propagate bits of bits 3 and 2
-G_1: the generate bit of bit 1
-C_4: the carry out of the 4-bit adder
-·: AND, bit by bit
-⊕: XOR, bit by bit
-In words: only one term of the C_4 equation is 1: the carry is generated at bit 1 and rides through bits 2 and 3. Check: 11 + 6 = 17, which is binary 1 0001, so the carry out is indeed 1.
-```
+Bit 1 has two high operand bits and generates a carry. Bits 2 and 3 have unequal operand bits, so both propagate it to the output. The carry therefore reaches the top even though the top bit does not generate one.
 
 Each carry is a two-level sum of products of G and P. In an ideal unit-delay model with arbitrary required fan-in and one-level G/P generation, this gives about three levels. Real XORs, wide gates, fan-out and wiring do not share one universal delay. Read `C2` in words: "a carry arrives at bit 2 if bit 1 generates one, or bit 1 propagates one that bit 0 generated, or both propagate the original carry in."
 

@@ -15,9 +15,8 @@ This lesson builds the combinational blocks that every processor contains: multi
 
 A **multiplexer** (mux) is a hardware `if`. A 2-to-1 mux passes input A when the select S is 0, and B when S is 1:
 
-```formula
+```formula essential
 Y = S′·A + S·B
-Y = 1·A + 0·B = A   for S = 0
 where
 Y: the mux output
 A, B: the two data inputs, each 0 or 1
@@ -25,7 +24,7 @@ S: the select input: 0 picks A, 1 picks B
 S′: NOT S
 ·: AND: 1 only when both sides are 1
 +: OR: 1 when at least one side is 1
-In words: when S is 0 only the A·S′ term can be 1, so Y copies A; when S is 1 only the S·B term can be 1, so Y copies B.
+In words: A low select passes the first data input; a high select passes the second. The unselected input cannot change the settled output.
 ```
 
 ```
@@ -38,32 +37,16 @@ B ----|1    |
          S
 ```
 
-A 4-to-1 mux uses two select bits and four AND terms, one for each value of the select bits:
+A four-way mux uses a two-bit binary selection code: 00 picks input zero, 01 picks input one, 10 picks input two and 11 picks input three.
 
-```formula
-Y = S_1′·S_0′·I_0 + S_1′·S_0·I_1
-  + S_1·S_0′·I_2 + S_1·S_0·I_3
-where
-Y: the mux output
-I_0, I_1, I_2, I_3: the four data inputs
-S_1, S_0: the two select bits (S1 and S0 in the text), S_1 the more significant; together they form the binary number of the input to pass
-S_1′, S_0′: NOT S_1, NOT S_0
-·: AND: 1 only when both sides are 1
-+: OR: 1 when at least one side is 1
-In words: each data input is ANDed with the one combination of select bits that names it, so S_1 = 1, S_0 = 0 (binary 2) passes I_2.
-```
+> [!analogy] Real-world analogy: Choosing a television input
+> A television's source button chooses which connected device appears on the screen.
+>
+> **How it maps:** The source choice is the mux select; the connected sources are data inputs; the selected source feeds the output.
+>
+> **Where it stops:** A mux selects electrical data under timing constraints. It does not decode a television programme, and switching inputs need not be free of transients.
 
-In general, each extra select bit doubles the number of inputs the mux can choose between:
-
-```formula
-N_inputs = 2^k
-N_inputs = 2^3 = 8   for k = 3
-where
-N_inputs: the number of data inputs the mux chooses between
-k: the number of select lines
-2^k: k copies of 2 multiplied together
-In words: each extra select line doubles the number of inputs, so an 8-to-1 mux needs 3 select lines and a 32-to-1 mux needs 5.
-```
+Each extra select bit doubles the number of inputs the mux can choose between. Three select bits identify eight inputs; five identify thirty-two. These bits name an input rather than hold the data being selected.
 
 Muxes are everywhere in a CPU: choosing whether the ALU's second operand is a register or an immediate, choosing which result is written back, choosing the next PC. In the datapath lesson you will see that most of a processor's "control" is just driving mux selects.
 
@@ -80,18 +63,9 @@ The active-high binary decoder model here maps a binary input to one output per 
   1  1 |  1  0  0  0
 ```
 
-Each output is one minterm of the select bits:
+Each output is one minterm of the select bits: it recognises one particular input code. Only that output is high in this enabled, active-high model.
 
-```formula
-Y_0 = S_1′·S_0′      Y_1 = S_1′·S_0
-Y_2 = S_1·S_0′       Y_3 = S_1·S_0
-where
-Y_0, Y_1, Y_2, Y_3: the four decoder outputs (Y0 to Y3 in the table)
-S_1, S_0: the two input bits, S_1 the more significant
-S_1′, S_0′: NOT S_1, NOT S_0
-·: AND: 1 only when both sides are 1
-In words: output number k is 1 only when the input bits spell k in binary; for example Y_2 is 1 only for S_1 = 1, S_0 = 0.
-```
+Mux data inputs need not be independent external signals. Suppose one selection should output a remaining input bit, another should output its complement, and the other selections should output constants. Wiring those four choices into the mux implements that truth table. This is another way to build a Boolean function by splitting it into cases.
 
 Decoders select which memory row or register to write, and which instruction class an opcode belongs to. A **binary encoder** does the reverse, and a **priority encoder** reports the active input with the highest assigned priority. That may be the highest- or lowest-numbered input; interrupt controllers may use programmable priorities.
 

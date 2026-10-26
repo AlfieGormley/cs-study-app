@@ -19,7 +19,7 @@ Modern solvers (MiniSat, Glucose, CaDiCaL, Kissat) use **conflict-driven clause 
 
 The learned clause from point 1 is the negation of the failing combination:
 
-```formula
+```formula essential
 ¬(x_1 ∧ ¬x_7) ≡ (¬x_1 ∨ x_7)
 where
 x_1, x_7: variables 1 and 7 of the formula (written x1, x7 above)

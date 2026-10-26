@@ -13,33 +13,23 @@ Any Boolean function can be written straight from its truth table in two standar
 
 ### Sum of products (SOP) and minterms
 
-A **minterm** is an AND of every variable, each either plain or complemented, that is 1 for exactly one row. Number the rows by reading the inputs as a binary number (A as the most significant bit), with this example row:
-
-```formula
-A=1, B=0, C=1
-where
-A: Boolean input bit
-B: Boolean input bit
-C: Boolean input bit
-In words: The ordered input bits are one, zero, one: binary row five.
-```
+A **minterm** is an AND of every variable, each either plain or complemented, that is 1 for exactly one row. Number the rows by reading the inputs as a binary number (A as the most significant bit). For example, take A high, B low and C high.
 
 Reading the three bits as binary 101 gives row five:
 
-```formula
+```formula essential
 m_5 = A·B′·C
-m_5 = 1·1·1 = 1   for A = 1, B = 0, C = 1
 where
 m_5: minterm number 5: the product term that is 1 on row 5 (inputs 101) and 0 on every other row
 A, B, C: the inputs, each 0 or 1
 B′: NOT B: here B is 0, so B′ is 1
 ·: AND: 1 only when both sides are 1
-In words: use each variable plain where the row has a 1 and complemented where it has a 0, so the term is 1 on that one row only.
+In words: The term selects the row where the first and third inputs are high and the middle input is low. Changing any one input makes this AND output low.
 ```
 
 The **canonical SOP** ORs together the minterms of every row where the output is 1. The majority function above is 1 on rows 011, 101, 110 and 111, which are rows 3, 5, 6 and 7:
 
-```formula
+```formula essential
 Maj = Σm(3, 5, 6, 7)
 Maj = m_3 + m_5 + m_6 + m_7
 where

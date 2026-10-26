@@ -11,22 +11,11 @@ summary: Validity rules out a true-premises, false-conclusion assignment.
 
 A **logical argument** has premises and a conclusion. It is **logically valid** if the conclusion is true in every row where all the premises are true. Equivalently:
 
-```formula
-(P_1 ∧ P_2 ∧ ... ∧ P_k) → C ≡ T
-where
-P_1, P_2, ..., P_k: the k premises, each a formula
-C: the conclusion, a formula
-k: the number of premises
-∧: AND: true only when every part is true
-→: implies: false only when the left side is true and the right side false
-≡: is logically equivalent to
-T: the constant true, so "≡ T" means "is a tautology"
-In words: an argument is valid exactly when "if all the premises hold then the conclusion holds" is true in every row.
-```
+A valid argument has no assignment that makes all its premises true and its conclusion false.
 
 The standard valid forms, written with derives ("therefore"):
 
-```formula
+```formula essential
 p → q, p ⊢ q
 p → q, ¬q ⊢ ¬p
 p → q, q → r ⊢ p → r
@@ -55,16 +44,7 @@ And two famous invalid ones:
 - **Affirming the consequent**: from p implies q and q, conclude p. Invalid (row p equals F, q equals T).
 - **Denying the antecedent**: from p implies q and not p, conclude not q. Invalid (same row).
 
-```formula
-p → q, q ⊬ p
-p → q, ¬p ⊬ ¬q
-where
-p, q: propositions, each true or false
-→: implies
-¬: NOT
-⊬: "does not follow": some row makes every premise true and the conclusion false
-In words: knowing the "then" part is true doesn't tell you the "if" part, and knowing the "if" part is false doesn't tell you the "then" part. The row p = F, q = T breaks both.
-```
+For both errors, let p be false and q true. The original implication holds. Affirming the consequent then wrongly concludes p; denying the antecedent wrongly concludes not q. Each argument has true premises and a false conclusion.
 
 > [!warning] Debugging with the converse
 > "If the cache is down, latency spikes. Latency spiked, so the cache is down." That is affirming the consequent. Latency spikes have many causes. Modus tollens is the safe direction: "latency did not spike, so the cache is not down" (given the premise holds).

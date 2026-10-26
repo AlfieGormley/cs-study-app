@@ -9,9 +9,9 @@ sourceLesson: disc-graphs
 
 ## Bipartite graphs and colouring
 
-A **proper colouring** assigns a colour to each vertex so that adjacent vertices differ. The **chromatic number** is the fewest colours needed. Two bounds pin it down for many graphs:
+Here graphs are finite, simple and undirected. A **proper colouring** assigns a colour to each vertex so that adjacent vertices differ. The **chromatic number** is the fewest colours needed. Two bounds pin it down for many graphs:
 
-```formula
+```formula reference
 χ(K_n) = n
 χ(G) ≤ Δ(G) + 1
 where
@@ -21,15 +21,15 @@ K_n: the complete graph on n vertices, every pair joined
 n: the number of vertices
 Δ(G): delta of G, the maximum degree: the largest number of edges touching any one vertex of G
 ≤: is less than or equal to
-In words: a complete graph needs one colour per vertex, because every vertex clashes with every other; and no graph ever needs more than one colour above its highest degree.
+In words: A complete graph needs a different colour for every vertex. Any nonempty finite simple undirected graph can be greedily coloured with at most one more colour than its maximum degree, though this need not be optimal.
 ```
 
-For example, K₄ needs 4 colours, and a cycle on 5 vertices has maximum degree 2, so it needs at most 3 colours (it needs exactly 3, as the list below explains). The second bound is often loose: a star with 100 leaves has maximum degree 100 but needs only 2 colours.
+The complete graph on four vertices needs four colours because every pair conflicts. A five-cycle needs three: two colours clash when they meet round the odd cycle, and a third resolves that clash. A high-degree star still needs only two colours, showing that the maximum-degree bound can be loose.
 
 - A graph is **2-colourable (bipartite)** if and only if it has **no odd cycle**. Even cycles need 2 colours; odd cycles need 3.
-- BFS checks bipartiteness in O(n + m), where m is the number of edges: colour by distance parity and look for an edge between two vertices of the same parity.
+- BFS checks bipartiteness in O(n + m), where n counts vertices and m counts edges: colour by distance parity and look for an edge joining the same parity.
 - Deciding 3-colourability is NP-complete.
-- **Greedy colouring** (go through vertices, give each the smallest colour not used by its neighbours) uses at most Δ + 1 colours, which is where the bound above comes from: when a vertex is coloured, at most Δ neighbours already hold a colour, so one of Δ + 1 colours is always free. It can be far from optimal depending on the order.
+- **Greedy colouring** gives each vertex the first colour unused by its already-coloured neighbours. At most as many colours as its degree are blocked, so one additional colour always suffices. Vertex order can make this use more colours than optimal.
 
 ```python
 from collections import deque

@@ -3,49 +3,35 @@ id: cx-hardware-scaling
 sourceLesson: cx-growth-rates
 title: What faster hardware buys
 level: basic
-minutes: 3
+minutes: 2
 summary: Translate a hardware speedup into the input size each growth rate can handle.
 ---
 
-Keep the time budget fixed and ask how much larger the input can become. The growth rate decides how much value a faster machine provides.
+A faster machine can help immediately. How much larger an input it can handle in the same time depends on the algorithm's growth.
 
-## Faster hardware does not save you
+## More work budget, different input gains
 
-It is tempting to think faster hardware fixes a slow algorithm. Here N is the old input limit and N_new the new one, with the same time budget. The table compares growth shapes for a **10-times-faster** machine.
+Assume the new machine performs every counted operation at the same fixed speedup, with memory and other resources sufficient. This deliberately excludes changes in parallel overhead, cache behaviour or algorithm choice.
 
-| Growth | Original limit | New limit |
-|---|---|---|
-| Linear | original | ten times original |
-| Quadratic | original | about 3.16 times original |
-| Cubic | original | about 2.15 times original |
-| Exponential | original | about 3.3 extra items |
+- For a linear scan, twice the work budget buys twice as many items.
+- For pairwise work, twice as many items need roughly four times the budget. Input capacity grows more slowly than hardware speed.
+- For a search that checks every subset at constant cost, each additional item doubles the candidate count. A doubling of machine speed therefore buys only one more item.
 
-Where do these numbers come from? Set the work the new machine can do in the same time equal to 10 times the old work, and solve for the new input size:
+That last rule is additive: repeated hardware doublings add items rather than multiplying the previous item limit. A thousandfold speedup buys about ten extra binary choices under this model. It does not make an arbitrary exponential search practical.
 
-```formula
-N_new^2 = 10N^2
-N_new = √(10) × N ≈ 3.16N
-2^{N_new} = 10 × 2^N
-N_new = N + log_2(10) ≈ N + 3.3
-N_new = 10N
-N_new^3 = 10N^3
-N_new = 10^{1/3}N ≈ 2.15N
-where
-N: the largest input the old machine can handle in the time budget
-N_new: the largest input the 10-times-faster machine can handle in the same time
-√(10): the square root of 10, the number that multiplied by itself gives 10, about 3.16
-log_2(10): the base-2 logarithm of 10, the power you raise 2 to in order to get 10, about 3.32
-≈: approximately equal to (rounded)
-In words: for quadratic work, 10 times the speed buys only √10 ≈ 3.16 times the input; for exponential work, it buys only about 3 more items.
-```
+> [!analogy] Real-world analogy: A growing dinner party
+> Serving one plate per guest and arranging a conversation between every pair scale differently.
+>
+> **How it maps:** Plates resemble linear work; pair meetings resemble quadratic work. Faster service buys less extra capacity when the number of relationships also grows.
+>
+> **Where it stops:** Real meetings can overlap. The algorithm comparison assumes a fixed counted-work model and a uniform speedup.
 
-For a cubic algorithm the same steps give the cube root of 10, about 2.15. Better algorithms routinely give improvements of thousands or millions of times; hardware gives you a constant factor.
+A lower growth rate can give a larger long-term improvement than a constant hardware speedup, but that is not a reason to dismiss hardware upgrades. Measure the current bottleneck and expected input range. A better algorithm may have extra setup or memory costs; a practical decision includes those too.
 
 ## Key takeaways
-- A hardware speedup changes a constant factor in runtime.
-- For quadratic work, the input gain follows the square root of the speed gain.
-- Exponential search gains only a few extra items from a large constant speedup.
+- Hardware changes the work budget under the stated model.
+- Quadratic work turns a large speed gain into a smaller input gain.
+- Binary-choice exhaustive search gains one item per doubling of speed.
 
 ## Further reading
-- [Analysis of algorithms — Wikipedia](https://en.wikipedia.org/wiki/Analysis_of_algorithms)
-- [Algorithms by Jeff Erickson (free textbook)](https://jeffe.cs.illinois.edu/teaching/algorithms/)
+- [Erickson: Introduction](https://jeffe.cs.illinois.edu/teaching/algorithms/book/00-intro.pdf)

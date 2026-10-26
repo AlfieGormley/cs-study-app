@@ -3,97 +3,62 @@ id: cx-akra-bazzi
 sourceLesson: cx-recurrences
 title: Uneven splits and Akra–Bazzi
 level: advanced
-minutes: 5
+minutes: 2
 summary: Balance unequal subproblems and account for work across their scales.
 ---
 
-## Akra–Bazzi: the general case
+Unequal subproblems need not have equal depths. Akra–Bazzi extends recurrence analysis to several fixed shrinking fractions and accounts for work across those scales.
 
-The **Akra–Bazzi** method handles recurrences with several subproblem sizes under regularity assumptions: nonnegative g with suitable polynomial growth, bounded positive base cases, and sufficiently small perturbations of the subproblem sizes. The smooth polynomial/logarithmic examples here satisfy these conditions. The recurrence looks like this:
+## Balance the recursive structure
 
-```formula
+Use a fixed number of positive child weights and fixed fractions strictly between zero and one. Base-case costs must stay between positive constants. Choose a sufficiently large fixed base threshold so that recursive children stay in the defined domain.
+
+The nonnegative outside work must satisfy a polynomial-growth condition: throughout the range from each child size to its parent size, it stays between fixed positive multiples of the work at the parent size. Powers of size and logarithms used here satisfy this above a suitable threshold. Arbitrary oscillations need not. The formula below uses exact fractional sizes; rounded recurrences require the extended theorem’s conditions.
+
+```formula essential
 T(n) = g(n) + Σ_{i=1}^{m} a_i T(b_i n)
-a_i > 0,  0 < b_i < 1
+Σ_{i=1}^{m} a_i (b_i)^p = 1
 where
-T(n): the running time on input size n
-g(n): the work done outside the recursive calls (the Master Theorem's f(n))
-Σ_{i=1}^{m}: capital sigma, "sum of": add up the term for every kind of subproblem i from 1 to m
-m: the number of different subproblem sizes
-a_i: how many subproblems of kind i each call makes, a positive constant
-b_i: the fraction of n that each subproblem of kind i gets, between 0 and 1
-i: which kind of subproblem
-n: the input size
-In words: a call does g(n) work and recurses on several groups of subproblems, each group with its own count and its own fraction of the input.
+T(n): total work on input size n
+g(n): work outside the children
+n: input size
+m: a fixed number of child groups
+i: group index
+a_i: fixed positive child weight for group i
+b_i: fixed fraction of parent size for group i, strictly between zero and one
+p: the unique balancing exponent
+Σ_{i=1}^{m}: add the expression for every group from one through m
+In words: balance the weighted child-size fractions to find the recursive structure's growth before adding the outside work across scales.
 ```
 
-1. Find the unique p that balances the subproblems' total weight:
+The exact integral is reference material. An integral accumulates contributions over a continuous range, much as a sum adds contributions from discrete levels. Choose a fixed base threshold above any singularity, and use constant positive costs below it:
 
-```formula
-Σ_{i=1}^{m} a_i × (b_i)^p = 1
+```formula reference
+T(n) = Θ(n^p(1 + I(n)))
+I(n) = ∫_{n_0}^{n} g(u)/u^{p+1} du
 where
-Σ_{i=1}^{m}: "sum of" over every kind of subproblem i from 1 to m
-a_i: the number of subproblems of kind i
-b_i: the fraction of the input each one gets
-(b_i)^p: b_i raised to the power p
-p: the unknown exponent being solved for
-m: the number of kinds of subproblem
-i: which kind
-In words: p is the power at which the subproblems' sizes, weighted by how many there are, add up to exactly 1.
+T(n): total work under the stated Akra–Bazzi assumptions
+n: input size above the fixed base threshold
+p: the balancing exponent
+I(n): the accumulated outside-work correction
+n_0: a fixed positive base threshold where the integrand is defined
+g(u): outside work at size u
+u: integration variable representing intermediate input size
+∫: integrate over the sizes from the lower limit to the upper limit
+du: integrate with respect to u
+Θ: a tight growth bound
+In words: start with the recursive leaf growth, then include the contribution of outside work accumulated across smaller input scales.
 ```
 
-2. Then:
+For one-third and two-thirds children with linear outside work, the pieces preserve the parent's total size. Complete early levels each cost linear work; every branch still has logarithmic depth. Total work is Θ(n log n).
 
-```formula
-T(n) = Θ(n^p × (1 + I))
-I = ∫_1^n g(u) / u^{p+1} du
-where
-T(n): the running time on input size n
-n: the input size
-p: the balancing exponent from step 1
-I: an integral that measures how much the outside work g adds across all scales
-∫_1^n … du: the integral from 1 to n with respect to u: the area under the curve between u = 1 and u = n, a continuous version of summing
-g(u): the outside work at input size u
-u: a stand-in variable for the input size, running from 1 to n
-Θ: Big-Theta, exactly this rate up to constants
-In words: start from n^p, the cost if the leaves dominated, and multiply by a correction that grows when the outside work is comparable to or bigger than n^p.
-```
-
-The balancing exponent plays the same role as the critical exponent in the Master Theorem. It balances the total weight of the subproblems. Comparing outside work with the resulting leaf-growth term gives the correction, but the integral handles in-between cases smoothly. The theorem also tolerates small perturbations such as floors and ceilings.
-
-**Example 1: uneven split.** Split into one third and two thirds, with linear outside work:
-
-```formula
-(1/3)^p + (2/3)^p = 1  gives  p = 1
-I = ∫_1^n u / u^2 du = ∫_1^n 1/u du = ln(n)
-T(n) = Θ(n(1 + ln(n))) = Θ(n log(n))
-L_early ≈ log_3(n)
-L_deep ≈ log_{3/2}(n)
-T(n) = T(n/3) + T(2n/3) + n
-where
-p: the balancing exponent; at p = 1 the fractions 1/3 and 2/3 add up to exactly 1
-I: the Akra–Bazzi integral
-∫_1^n … du: the integral from 1 to n with respect to u, the area under the curve
-u: a stand-in for the input size, from 1 to n
-ln(n): the natural logarithm of n (base e ≈ 2.718)
-log: the logarithm in any base; it differs from ln by a constant factor
-T(n): the running time
-n: the input size
-Θ: Big-Theta, exactly this rate up to constants
-L_early: the number of complete early levels
-L_deep: the depth of the longest path, always taking the two-thirds child
-log_3: logarithm to base three
-log_{3/2}: logarithm to base one and a half
-≈: approximately equal, with integer rounding
-In words: the two pieces add up to the whole input, so every level does about n work, and there are about log n levels.
-```
-
-The recursion tree agrees: complete early levels each do linear work, and even the deepest chain has logarithmic depth. The card records the respective logarithm bases; rounding only changes these level counts by constants.
+For one-half and one-quarter children, total size falls to three quarters each generation. With linear outside work, this gives a shrinking geometric sum and Θ(n) total work. The root already supplies the matching linear lower bound.
 
 ## Key takeaways
-- Akra–Bazzi allows different subproblem fractions under its regularity assumptions.
-- The balancing exponent describes the recursive structure.
-- The integral adds the contribution of outside work across scales.
+- Unequal fixed fractions can still have tractable growth.
+- The balancing exponent describes recursion; the correction includes outside work.
+- Check regularity and base cases before applying the formula.
 
 ## Further reading
-- [Akra–Bazzi method — Wikipedia](https://en.wikipedia.org/wiki/Akra%E2%80%93Bazzi_method)
+- [Leighton: Akra–Bazzi assumptions and extensions](https://courses.csail.mit.edu/6.046/spring04/handouts/akrabazzi.pdf)
 - [Erickson: Solving Recurrences](https://jeffe.cs.illinois.edu/teaching/algorithms/notes/99-recurrences.pdf)

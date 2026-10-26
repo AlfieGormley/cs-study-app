@@ -38,24 +38,9 @@ The invariant splits the list into three regions (with n equals len(a)):
         [ <x ][  unknown  ][ >=x ]
 ```
 
-In symbols:
+The three regions have precise meanings:
 
-```formula
-∀j < lo:  a[j] < x
-∀j ≥ hi:  a[j] ≥ x
-lo ≤ mid < hi
-where
-a: the sorted list, with n = len(a) items
-x: the value being searched for
-lo, hi: the bounds of the unknown zone; positions before lo are known to be < x, positions from hi on are known to be ≥ x
-mid: the midpoint, (lo + hi) // 2, where // is floor division (divide and round down)
-j: any valid position in the list
-a[j]: the item at position j
-∀: "for all"
-<, ≥: is less than, is at least
-≤: at most
-In words: everything left of lo is smaller than x and everything from hi on is at least x (the invariant). The third line is not part of the invariant: whenever the loop body runs (lo < hi), the midpoint lies inside the unknown zone.
-```
+Everything before the lower boundary is known to be smaller than the target. Everything from the upper boundary onward is known to be at least the target. During an iteration the midpoint lies inside the remaining unknown region.
 
 - **Init**: a[:0] and a[n:] are both empty, so I holds vacuously. ✓
 - **Maintain**: since lo is at most mid is less than hi, mid is in the unknown zone.
@@ -67,20 +52,9 @@ In words: everything left of lo is smaller than x and everything from hi on is a
 Each choice is now forced by the invariant. Write `hi = mid - 1` and you could skip the answer; write `lo = mid` and when hi equals lo plus 1 the loop spins forever, because mid equals lo. The invariant tells you which is right instead of guessing.
 
 > [!warning] Proofs over ideal numbers
-> In 2006 Joshua Bloch reported that the JDK's `binarySearch` had been broken for about nine years. The line `mid = (low + high) / 2` overflows a 32-bit `int` once low plus high exceeds the largest signed 32-bit integer, giving a negative index (the arithmetic is shown below). The invariant proof was right *for mathematical integers*. Python integers have arbitrary precision, subject to available memory. For nonnegative in-range indices low is at most high in Java or C, use low plus (high - low) / 2. C signed overflow is undefined behaviour, whereas Java int arithmetic wraps.
+> In 2006 Joshua Bloch reported that the JDK's `binarySearch` had been broken for about nine years. The line `mid = (low + high) / 2` overflows a 32-bit `int` once low plus high exceeds the largest signed 32-bit integer, giving a negative index. The invariant proof was right *for mathematical integers*. Python integers have arbitrary precision, subject to available memory. For nonnegative in-range indices with low at most high in Java or C, use `low + (high - low) / 2`. C signed overflow is undefined behaviour, whereas Java int arithmetic wraps.
 
-```formula
-INT_MAX = 2^31 − 1 = 2,147,483,647
-low + high > INT_MAX
-low + (high − low) / 2 ≤ high
-where
-INT_MAX: the largest value a 32-bit signed int can hold
-2^31: 31 copies of 2 multiplied together (one of the 32 bits holds the sign)
-low, high: the search bounds, array indices with 0 ≤ low ≤ high
-≤: at most
->: greater than
-In words: the second line is the overflow condition: two indices above about 1.07 billion add up to more than a 32-bit int can hold. The safe form only ever adds half the gap to low, so it never exceeds high.
-```
+A signed 32-bit integer holds values only up to 2,147,483,647. Two valid large indices can have a sum above that limit. Adding half the nonnegative gap to the lower index stays between the two indices, so it remains in range.
 
 
 ## Key takeaways
@@ -89,4 +63,4 @@ In words: the second line is the overflow condition: two indices above about 1.0
 
 ## Further reading
 - [MIT Mathematics for Computer Science](https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-spring-2015/mit6_042js15_textbook.pdf)
-- [Hoare logic — Wikipedia](https://en.wikipedia.org/wiki/Hoare_logic)
+- [Binary-search overflow — Joshua Bloch](https://research.google/blog/extra-extra-read-all-about-it-nearly-all-binary-searches-and-mergesorts-are-broken/)

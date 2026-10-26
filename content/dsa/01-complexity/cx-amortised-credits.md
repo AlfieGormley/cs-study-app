@@ -3,51 +3,37 @@ id: cx-amortised-credits
 sourceLesson: cx-amortised-analysis
 title: Banking credits for expensive steps
 level: advanced
-minutes: 3
+minutes: 2
 summary: Use the accounting method to save credit during cheap operations.
 ---
 
-The aggregate proof bounded all appends together. The accounting method instead assigns credit to elements so that each future copy has already been paid for.
+The accounting method explains an amortised bound by saving credit during cheap operations and spending it during expensive ones. Credit is a proof device, measured in counted work units; no actual runtime balance is needed.
 
-## Method 2: the accounting method
+## Charge enough to fund later copies
 
-Charge each operation a fixed **amortised cost**, which may be more than it really costs. The overcharge is stored on elements of the structure as **amortised credit**, and expensive operations pay for themselves out of saved credit. The rule: **credit must never go negative**.
+Use the doubling-array model, starting empty with capacity one. Count each copy and new-element write as one unit. Charge three units per append: one pays for the immediate write and two are saved.
 
-For the dynamic array, charge **3 units** per append:
+Before a resize, saved credit pays to copy all existing elements. After doubling, the appends that fill the new half save enough to pay for the next whole-array copy. The first append also creates enough credit for the first small resize. Inductively, the bank never needs to go below zero.
 
-1. 1 unit pays for writing the new element now.
-2. 1 unit is stored on the new element, to pay for copying it at the next resize.
-3. 1 unit is stored on an element from the *older half* of the array, which already spent its credit in the previous resize.
+Why save for older elements too? At the last resize those elements spent their previous copying credit. New appends must rebuild credit for the whole array, not just themselves. Banking two units per new element covers both halves by the next full state.
 
-Why it works: consider the append that doubles capacity, plus the subsequent appends filling the new block. Together they number the old capacity and each banks two units:
+> [!analogy] Real-world analogy: Saving for an annual bill
+> Regular payments can put aside money for an occasional larger bill.
+>
+> **How it maps:** Cheap appends contribute spare credit; resizing consumes that saved credit. A nonnegative balance proves earlier charges cover the real cost.
+>
+> **Where it stops:** There is no interest, prediction or random arrival rate. The algorithm proof must cover every allowed sequence from its stated initial state.
 
-```formula
-banked = k × 2 = 2k
-needed = 2k
-banked − needed = 0 ≥ 0
-where
-banked: the credit saved by the k appends between two resizes, in units
-needed: the cost of copying all 2k elements at the next resize, in units
-k: the capacity before the earlier resize; the new capacity is 2 × k
-≥: greater than or equal to
-In words: the appends that fill the new half save exactly enough credit to copy the whole array next time, so the credit never goes negative.
-```
+## The balance is the proof obligation
 
-```
-resize 4 -> 8, then write e:
-  [o o o o e _ _ _]   e banks 2
-3 more appends (f, g, h):
-  [o o o o e f g h]   8 banked
-append i: copy 8, spending all 8
-```
+If a proposed charge lets the bank become negative, that accounting argument has failed: it is spending work credits never collected. This does not automatically prove the algorithm is slow; it means the proposed charges or invariant are insufficient.
 
-Since the bank never goes negative, the real total cost is at most the total charged: **3n**.
+Starting from a pre-populated array requires an initial-credit allowance. Supporting deletion requires a separate argument for the shrinking policy. A proof for append-only sequences does not automatically cover arbitrary updates.
 
 ## Key takeaways
-- An accounting proof charges cheap operations more than their immediate cost.
-- Saved credit pays for later expensive operations.
-- The credit must not go negative if the charges are to bound actual cost.
+- Cheap operations can prepay future expensive work.
+- Credits must cover every allowed prefix of the sequence.
+- A negative balance invalidates the proposed accounting proof.
 
 ## Further reading
-- [Accounting method — Wikipedia](https://en.wikipedia.org/wiki/Accounting_method_(computer_science))
 - [Erickson: Amortized Analysis](https://jeffe.cs.illinois.edu/teaching/algorithms/notes/09-amortize.pdf)

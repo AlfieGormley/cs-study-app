@@ -2,7 +2,7 @@
 id: logic-xor-basic-laws
 title: XOR and the basic Boolean laws
 level: basic
-minutes: 4
+minutes: 3
 sourceLesson: logic-boolean-algebra
 summary: XOR detects unequal bits; XNOR detects equal bits.
 ---
@@ -11,16 +11,7 @@ summary: XOR detects unequal bits; XNOR detects equal bits.
 
 One more operation is so common it gets its own symbol. **XOR** is one when its inputs differ:
 
-```formula
-A ⊕ B
-where
-A: Boolean input bit
-B: Boolean input bit
-⊕: XOR
-In words: Read this Boolean expression as (A XOR B).
-```
-
-The complete truth table is:
+The symbol ⊕ denotes XOR. Its complete truth table is:
 
 ```
  A B | A⊕B
@@ -31,9 +22,9 @@ The complete truth table is:
  1 1 |  0
 ```
 
-XOR is addition modulo 2: add the bits and keep only the remainder after dividing by 2, so 1 + 1 = 2 leaves 0. That is why it turns up in adders, parity bits, checksums and CRCs. Four facts are worth knowing by heart:
+XOR is addition modulo 2: add the bits and keep only the remainder after dividing by 2. It appears in adders, parity bits, checksums and CRCs. Its useful behaviour is easy to predict: XOR with zero leaves a bit alone; XOR with one flips it. Applying the same XOR mask twice restores the original bits.
 
-```formula
+```formula essential
 A ⊕ 0 = A
 A ⊕ 1 = A′
 A ⊕ A = 0
@@ -66,9 +57,9 @@ These identities hold for every value of the variables. You can check any of the
 | Absorption | A combined with a term that contains A is just A |
 | De Morgan | a NOT over a group complements each variable and swaps AND with OR |
 
-The one-variable laws, in table order (identity, null, idempotent, complement, involution), AND form on the left and OR form on the right:
+The behaviour table above is enough to reason about these laws. The following cards are a notation reference for writing circuits:
 
-```formula
+```formula reference
 A·1 = A        A + 0 = A
 A·0 = 0        A + 1 = 1
 A·A = A        A + A = A
@@ -80,12 +71,12 @@ A: a Boolean variable, 0 or 1
 +: OR: 1 when at least one side is 1
 A′: NOT A: 1 when A is 0, and 0 when A is 1
 (A′)′: NOT applied twice to A
-In words: line by line, these are the identity, null, idempotent, complement and involution laws. Each one can be checked by trying A = 0 and A = 1.
+In words: AND with one or OR with zero preserves a bit; AND with zero or OR with one fixes the output. Repeating the same input changes nothing, opposite inputs force the AND low and OR high, and two inversions cancel.
 ```
 
-The laws with two or three variables, in table order (commutative, associative, distributive, absorption, De Morgan):
+The two- and three-variable notation is collected here for reference:
 
-```formula
+```formula reference
 A·B = B·A        A + B = B + A
 (A·B)·C = A·(B·C)
 (A + B) + C = A + (B + C)

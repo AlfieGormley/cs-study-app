@@ -10,23 +10,13 @@ summary: CNF is an AND of OR clauses; a satisfying assignment makes every clause
 
 Earlier propositional logic raised a question that sounds trivial: given a propositional formula, is there *any* assignment of true and false to its variables that makes it true? That is the **Boolean satisfiability problem**, or **SAT**.
 
-How many assignments are there to try?
+Why use a solver rather than blindly try everything?
 
-```formula
-N_assign = 2^n
-N_assign = 2^100 ≈ 1.27 × 10^30
-where
-N_assign: the number of ways to give every variable the value true or false
-n: the number of propositional variables in the formula
-2^n: n copies of 2 multiplied together, because each variable doubles the count
-≈: approximately equal to
-10^30: a 1 followed by 30 zeros
-In words: each extra variable doubles the number of assignments, so (second line) a formula with just 100 variables already has about 10^30 of them, far too many to try one by one.
-```
+Each additional Boolean variable doubles the number of assignments. Exhaustive search quickly becomes impractical; a solver tries to avoid exploring assignments individually.
 
-SAT was the first problem proved **NP-complete**, which means nobody knows an algorithm that is fast on every input, and finding one would settle P vs NP. Modern SAT solvers can solve large structured industrial formulas, but instance size alone does not predict runtime. They verify chip designs, resolve package dependencies and power program-verification tools.
+SAT was the first problem proved **NP-complete**: every NP decision problem can be translated into it in polynomial time. No polynomial-time algorithm for general SAT is known; finding one would settle P vs NP. Polynomial time is a growth guarantee, not a promise of practical speed. Modern SAT solvers can solve large structured industrial formulas, but instance size alone does not predict runtime. They verify chip designs, resolve package dependencies and power program-verification tools.
 
-This lesson is about both halves of that story: why SAT is hard in theory, and why it is so often easy in practice.
+This lesson explains the input representation that lets a solver work with those constraints.
 
 ## Conjunctive normal form
 
@@ -38,7 +28,7 @@ Solvers take their input in a standard shape, **conjunctive normal form (CNF)**:
 
 Here is a running example, with four clauses over three variables:
 
-```formula
+```formula essential
 (x ∨ y) ∧ (¬x ∨ z) ∧ (¬y ∨ ¬z) ∧ (¬z)
 where
 x, y, z: propositional variables, each true or false
@@ -64,27 +54,15 @@ The header says 3 variables and 4 clauses; each clause ends in 0.
 
 ### Converting to CNF
 
-Every formula has an equivalent CNF, found using the laws from the first lesson: eliminate → (implies) and ↔ (if and only if), push ¬ inwards with De Morgan, then distribute ∨ over ∧. But distribution can explode. Take this formula, an OR of n pairs:
+Every formula has an equivalent CNF, found using the laws from the first lesson: eliminate → (implies) and ↔ (if and only if), push ¬ inwards with De Morgan, then distribute ∨ over ∧. But distribution can explode. Consider an OR of independent two-input AND groups:
 
-```formula
-(a_1 ∧ b_1) ∨ (a_2 ∧ b_2)
-  ∨ ... ∨ (a_n ∧ b_n)
-N_clauses = 2^n
-where
-a_1, b_1, a_2, b_2, ..., a_n, b_n: propositional variables, two per pair
-n: the number of pairs
-∧: AND
-∨: OR
-N_clauses: the number of clauses in the equivalent CNF made by distribution
-2^n: n copies of 2 multiplied together
-In words: distributing turns this into one clause for every way of picking a or b from each pair, so 2^n clauses; 30 pairs already give over a billion.
-```
+Distributing an OR of independent AND pairs requires a clause for every choice of one member from each pair. The clause count doubles with each added pair, even though the original expression grows by only one pair.
 
-The formula has 2n literals, but its distributed CNF has 2 to the power n clauses.
+The important distinction is input size: an equivalent representation may be exponentially larger.
 
 The fix is the **Tseitin transformation**: introduce a fresh variable for each subformula and add clauses that define it. For an AND gate, the fresh variable x must equal a and b:
 
-```formula
+```formula essential
 x ↔ (a ∧ b)
 (¬x ∨ a) ∧ (¬x ∨ b) ∧ (x ∨ ¬a ∨ ¬b)
 where

@@ -4,23 +4,22 @@ title: Why minimal logic can glitch
 level: intermediate
 minutes: 3
 sourceLesson: logic-karnaugh-maps
-summary: Unequal physical delays can create static hazards despite Boolean equivalence.
+summary: Unequal physical delays can create a static-1 hazard despite Boolean equivalence.
 ---
 
-## Hazards: when minimal is too minimal
+## Static-1 hazard: when minimal is too minimal
 
 A minimal circuit can produce a brief false output, a **glitch**, when an input changes. Take this function with B and C both held at 1:
 
-```formula
+```formula essential
 F = A·B + A′·C
-F = A·1 + A′·1 = A + A′ = 1   for B = C = 1
 where
 F: the circuit's output
 A, B, C: inputs, each 0 or 1
 A′: NOT A, produced by an inverter
 ·: AND: 1 only when both sides are 1
 +: OR: 1 when at least one side is 1
-In words: with B and C at 1, the logic says F is "A or not A", which is always 1, so F should stay 1 whatever A does.
+In words: With the other two inputs high, either the first input or its complement makes the output high. The truth table therefore requires a steady high output when only the first input changes.
 ```
 
 The  NOT A  signal comes through an inverter, so it changes slightly later than A. When A falls from 1 to 0, unequal path delays can leave a moment when AB has dropped but A'C has not risen:
@@ -39,7 +38,7 @@ This is a **static-1 hazard**. On the K-map, it shows up as two groups that touc
 
 The fix is to add the redundant group that bridges them, the consensus term from Boolean-algebra lessons:
 
-```formula
+```formula essential
 F = A·B + A′·C + B·C
 where
 F: the circuit's output, now hazard-free for this input change
@@ -60,10 +59,10 @@ K-maps work well up to four variables, are awkward at five or six (two or four s
 - **Espresso**: a heuristic two-level minimiser associated with Berkeley. It seeks compact covers without guaranteeing a globally minimal answer.
 - **Multi-level synthesis**: real chips are not two-level. Synthesis tools factor logic into many levels and map it onto the gates in a cell library, trading depth for area.
 
-K-maps remain the best way to *understand* minimisation, and they are still handy for small pieces of control logic and for spotting hazards.
+K-maps help explain minimisation and remain handy for small pieces of control logic and for spotting glitches.
 
 ## Key takeaways
-- Unequal physical delays can create static hazards despite Boolean equivalence.
+- Unequal physical delays can create a static-1 hazard despite Boolean equivalence.
 - A bridging consensus term protects the illustrated one-input two-level transition.
 
 ## Further reading

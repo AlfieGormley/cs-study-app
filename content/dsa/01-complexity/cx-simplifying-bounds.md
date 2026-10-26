@@ -3,100 +3,42 @@ id: cx-simplifying-bounds
 sourceLesson: cx-asymptotic-notation
 title: Simplifying asymptotic expressions
 level: basic
-minutes: 3
+minutes: 2
 summary: Drop dominated terms while preserving distinctions between exponential bases.
 ---
 
-Here n is the input size. These rules simplify a cost after the meaning of upper, lower and tight bounds is clear.
+Simplifying a cost means keeping the part that determines eventual growth. Here n is input size; log denotes a logarithm with a fixed base greater than one.
 
-## Simplification rules
+## Remove details only when the bound permits it
 
-These all follow from the definitions. In each, n is the input size:
+- Fixed positive multipliers do not change a tight growth class.
+- In a finite sum of nonnegative familiar growth functions, keep the fastest-growing term. For example, cubic work eventually dominates quadratic-times-log work and fixed overhead.
+- Two sequential phases add their costs. Independent nested phases multiply their counts.
+- Independent input dimensions must remain separate unless their relationship is known.
 
-- **Constants vanish.** Fixed multipliers go into the bound’s constant.
-- **Sums take the maximum.** Eventually the fastest-growing term dwarfs the others.
-- **Log bases do not matter.** Any two logarithms differ by a fixed factor, so O(log n) ignores their bases.
-- **Exponent bases do matter.** Cubic-base and quartic-base exponentials outgrow a base-two exponential.
-- **Polynomials beat logs, exponentials beat polynomials.** The examples below hold eventually even when small inputs suggest the reverse.
-- **Products multiply.** Θ(n) iterations each costing Θ(log n) give Θ(n log n) overall. Here n is the input size.
+The rule is about growth, not exact equality. Two functions can share a quadratic upper bound while having quite different values, or even different tight growth rates. A linear function and a quadratic function both have a quadratic upper bound.
 
-```formula
-5n^2 = Θ(n^2)
-n^3 + 100n^2 + 10^6 = Θ(n^3)
-(log(n))^{100} = o(n^{0.01})
-n^{100} = o(1.01^n)
-where
-n: the input size
-log: the base-2 logarithm
-Θ: a tight growth bound
-o: little-o: grows strictly slower than the comparison
-In words: Fixed coefficients and dominated terms do not change eventual growth. A fixed power of a logarithm loses to any positive power of the input, and a fixed polynomial loses to an exponential.
-```
+## Logarithm bases and exponential bases behave differently
 
-Why log bases don't matter: the change-of-base rule turns a log in one base into a log in another by dividing by a constant.
+Changing between two fixed logarithm bases multiplies the value by a constant. It changes an exact count, but not the logarithmic growth class. The useful conversion is available as reference:
 
-```formula
+```formula reference
 log_a(n) = log_b(n) / log_b(a)
-log_2(n) = log_10(n) / log_10(2)
-log_2(n) ≈ 3.32log_10(n)
 where
-log_a(n): the logarithm of n to base a: the power you raise a to in order to get n
-log_b(n): the logarithm of n to base b
-log_b(a): the logarithm of a to base b, a fixed number because a and b are fixed
-log_2(n): the base-2 logarithm of n
-log_10(n): the base-10 logarithm of n (log_10(1000) = 3)
-a, b: any two fixed bases greater than 1
-n: the input size
-≈: approximately equal to
-In words: switching the base of a logarithm just multiplies it by a constant, and Big-O ignores constants, so O(log_2 n) and O(log_10 n) are the same class.
+log_a, log_b: logarithms to bases a and b
+a, b: fixed bases greater than one
+n: positive input size
+In words: changing between two fixed logarithm bases rescales the value by a fixed multiplier, so the growth class stays the same.
 ```
 
-Why exponent bases do matter: dividing one exponential by another leaves an exponential, not a constant.
+Changing an exponential base is different. Choosing among three possibilities per item creates more candidates than choosing among two. Their ratio itself grows exponentially, so a constant multiplier cannot absorb that difference.
 
-```formula
-3^n / 2^n = (3 / 2)^n = 1.5^n
-4^n = (2^2)^n = 2^{2n}
-4^n / 2^n = 2^n
-where
-2^n: n copies of 2 multiplied together
-n: the input size
-In words: the ratio of two exponentials with different bases keeps growing, so no constant c can cover it and the faster one is not Big-O of the slower one.
-```
-
-> [!warning] The "=" is one-way
-> A growth class is a set of functions. Saying a function has an upper bound means membership in that set, rather than ordinary equality. Reversing that statement treats a class as a value. Two functions in the same class need not equal one another.
-
-```formula
-f ∈ O(g)
-n ∈ O(n^2)
-f ∈ O(n^2), g ∈ O(n^2)
-f(n) = n, g(n) = n^2
-f ≠ g
-where
-f, g: operation-count functions; the last two lines give a counterexample with f linear and g quadratic
-f(n), g(n): the values of those functions at input size n
-n: the positive input size; in the second line n names the linear input-size function
-O: an eventual upper growth class
-∈: is a member of
-≠: is not equal to
-In words: Membership is not equality: a linear function has a quadratic upper bound, and two functions can share a bound without having equal values.
-```
-
-An expression that incorrectly treats the class as a number is:
-
-```formula
-O(n^2) = n
-where
-n: the input size
-O(n^2): the class of functions with a quadratic upper bound
-In words: This displayed equality is invalid; it reverses a membership statement and compares a class with a value.
-```
+A fixed power of a logarithm eventually grows more slowly than any positive power of input size. A fixed polynomial eventually grows more slowly than an exponential with fixed base greater than one. "Eventually" matters: a very large polynomial exponent or coefficient can delay that order far beyond practical inputs.
 
 ## Key takeaways
-- Constants and lower-order terms disappear when comparing eventual growth.
-- Changing a logarithm base changes a constant factor.
-- Changing an exponential base can change the growth class.
+- Drop coefficients and dominated terms when describing eventual growth.
+- A shared upper bound is not a statement of equal cost.
+- Fixed log bases change constants; exponential bases can change growth classes.
 
 ## Further reading
-- [Big O notation — Wikipedia](https://en.wikipedia.org/wiki/Big_O_notation)
-- [Asymptotic analysis — Wikipedia](https://en.wikipedia.org/wiki/Asymptotic_analysis)
+- [Erickson: Introduction](https://jeffe.cs.illinois.edu/teaching/algorithms/book/00-intro.pdf)

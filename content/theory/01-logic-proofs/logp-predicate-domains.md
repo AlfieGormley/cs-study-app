@@ -22,18 +22,7 @@ A **predicate** is a statement with variables, which becomes a proposition once 
 
 Plugging in a value gives a plain true-or-false proposition:
 
-```formula
-Even(4) = T
-Even(7) = F
-Less(2, 5) = T
-where
-Even(x): the predicate "x is even", for a whole number x
-Less(x, y): the predicate "x is less than y", for numbers x and y
-x, y: variables: placeholders for values from the domain
-T: true
-F: false
-In words: a predicate is a function from values to true or false. "4 is even" is true, "7 is even" is false, "2 is less than 5" is true.
-```
+For example, “4 is even” is true, “7 is even” is false, and “2 is less than 5” is true. Supplying values turns each predicate into a proposition.
 
 Every variable ranges over a **domain** (or **universe of discourse**): the set of things it may stand for. The domain is part of the meaning. "There is a number whose square is 2" is true over the real numbers (the square root of 2, about 1.414) and false over the integers.
 
@@ -42,7 +31,7 @@ Every variable ranges over a **domain** (or **universe of discourse**): the set 
 
 Two symbols turn a predicate into a proposition about the whole domain:
 
-```formula
+```formula essential
 ∀x P(x)
 ∃x P(x)
 where
@@ -61,20 +50,7 @@ In words: "P holds for every x" and "P holds for at least one x". The symbols ar
 
 The Python analogy assumes finite iterables, terminating predicates and no side effects. On a finite domain {d₁, d₂, d₃}, the quantifiers are just big connectives:
 
-```formula
-∀x P(x) ≡ P(d_1) ∧ P(d_2) ∧ P(d_3)
-∃x P(x) ≡ P(d_1) ∨ P(d_2) ∨ P(d_3)
-where
-d_1, d_2, d_3: the three members of the domain
-x: a variable ranging over that domain
-P(x): a predicate, true or false for each x
-∀: for all: every member of the domain
-∃: there exists: at least one member of the domain
-∧: AND: true only when every part is true
-∨: OR: true when at least one part is true
-≡: is logically equivalent to: always has the same truth value
-In words: on a finite domain, "for all" is a long AND over every member, and "there exists" is a long OR.
-```
+On a finite domain, “for all” combines the results with AND, while “there exists” combines them with OR.
 
 Standard first-order structures usually require a nonempty universe. Restricted quantification over an empty subset is still meaningful; the same conventions apply if empty universes are explicitly allowed. That explains the empty-set behaviour. An empty AND is true and an empty OR is false, so over an empty domain every ∀ statement is (vacuously) true and every ∃ statement is false. `all([])` is `True` and `any([])` is `False` for exactly this reason.
 

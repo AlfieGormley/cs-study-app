@@ -38,18 +38,7 @@ The output is `(True, None)` then `(False, (False, True))`. The second line hand
 
 How far does brute force go? Count the rows:
 
-```formula
-N_rows = 2^n
-N_rows = 2^20 = 1,048,576   for n = 20
-N_rows = 2^60 ≈ 1.15 × 10^18   for n = 60
-where
-N_rows: the number of rows (assignments) to check
-n: the number of propositional variables
-2^n: n copies of 2 multiplied together
-≈: approximately equal to
-10^18: a 1 followed by 18 zeros (a billion billion)
-In words: 20 variables means about a million rows; checking them takes implementation-dependent time, but 60 variables is over a billion billion rows, far too many to check one by one.
-```
+Twenty inputs already need about a million rows. Every additional input doubles that work; sixty need over a billion billion rows.
 
 This is often practical for small numbers of Boolean inputs. Exhaustive work at sixty variables is far larger; the actual runtime depends on the cost of evaluating each row. That gap is the subject of the SAT lesson.
 
@@ -58,7 +47,7 @@ This is often practical for small numbers of Boolean inputs. Exhaustive work at 
 
 By convention, ¬ binds tightest, then ∧, then ∨, then →, then ↔. Implication is usually read right-associatively (grouped from the right):
 
-```formula
+```formula essential
 ¬p ∧ q → r   means   ((¬p) ∧ q) → r
 p → q → r    means   p → (q → r)
 where

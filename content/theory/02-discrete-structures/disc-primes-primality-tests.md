@@ -11,19 +11,17 @@ sourceLesson: disc-number-theory
 
 A **prime number** has exactly two positive divisors, 1 and itself. The **fundamental theorem of arithmetic** says every integer above 1 factors into primes in exactly one way (up to order). There are infinitely many primes (Euclid again), and the **prime number theorem** says how common they are:
 
-```formula
+```formula reference
 π(x) ≈ x / ln(x)
-1 / ln(2^1024) ≈ 1 / 710
-2 × (1 / 710) ≈ 1 / 355
 where
 π(x): the prime-counting function: how many primes there are up to x (here π does not mean 3.14159)
 x: a large positive number
-ln: the natural logarithm, log to base e ≈ 2.718; ln(2^1024) = 1024 × ln(2) ≈ 709.8
-≈: is approximately equal to (the approximation improves as x grows)
-In words: about 1 in ln(x) numbers near x are prime. Near 2^1024 that is about 1 in 710, and if you only try odd numbers the prime probability roughly doubles to about 1 in 355.
+ln: the natural logarithm, with base approximately 2.718
+≈: asymptotically approximate: the ratio of the two sides tends to one as x grows without bound
+In words: Primes become less dense as numbers grow, but slowly enough that repeated random candidate testing remains useful. Trying odd candidates avoids the obvious even composites.
 ```
 
-So a random 1024-bit odd number is prime with probability roughly 1 in 355. That is why generating RSA primes by "pick random, test, repeat" is quick: a few hundred tries on average.
+For uniformly chosen odd candidates of about 1024 bits, the approximate prime density is one in a few hundred. This is a density estimate, not a measured key-generation latency.
 
 ### Finding and testing primes
 
@@ -52,15 +50,13 @@ def primes_upto(n):
 
 The rounds are independent, so their failure chances multiply:
 
-```formula
+```formula reference
 P_false ≤ (1/4)^k
-(1/4)^40 = 2^{−80} ≈ 8.3 × 10^{−25}
 where
 P_false: the probability that a fixed composite number passes every round
-k: the number of independent rounds, here 40
+k: the positive number of independent rounds
 ≤: is less than or equal to
-≈: is approximately equal to
-In words: each round lets a composite slip through at most a quarter of the time, so 40 rounds let it through at most 1 time in 2^80.
+In words: For one fixed odd composite, independent uniformly chosen Miller–Rabin bases multiply the per-round false-pass bound. This is not the probability that an arbitrary passing candidate is composite.
 ```
 
 This is a conditional false-pass bound for one given composite, not the probability that a number which passed is composite (that also depends on how candidates are chosen).

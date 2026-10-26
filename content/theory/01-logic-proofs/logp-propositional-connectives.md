@@ -28,7 +28,7 @@ We name propositions with letters: p, q, r. These are **propositional variables*
 
 Five connectives build bigger formulas from smaller ones. Each has its own symbol, and these symbols appear in every lesson of this module, so it is worth learning them now.
 
-```formula
+```formula essential
 ¬p
 p ∧ q
 p ∨ q
@@ -56,16 +56,7 @@ The table gives each one's name and the nearest Python.
 
 The Python column assumes Boolean operands. Python and/or return operands and short-circuit; arbitrary objects can have custom truth tests and equality. The logical connectives have their meaning fixed by a **truth table**, which lists every combination of inputs, one per row. Each variable doubles the number of combinations, because every existing row splits into a "true" version and a "false" version:
 
-```formula
-N_rows = 2^n
-N_rows = 2^2 = 4   for n = 2
-N_rows = 2^3 = 8   for n = 3
-where
-N_rows: the number of rows in the truth table, one per combination of input values
-n: the number of propositional variables in the formula
-2^n: n copies of 2 multiplied together (2 to the power n)
-In words: a truth table over n variables has 2 to the power n rows, so two variables need 4 rows and three need 8.
-```
+With two Boolean inputs there are four possible assignments; with three there are eight. Adding an independent input doubles the work.
 
 Here is the truth table for all five connectives over p and q. T is true and F is false; each column is one connective.
 
@@ -83,18 +74,7 @@ Two things trip people up.
 - **∨ is inclusive.** p or q is true when both are true. "Exclusive or" (exactly one) is a separate connective, written ⊕. In Python on booleans it is `p != q`.
 - **→ is false in exactly one row**: when p is true and q is false.
 
-Exclusive or is "not (p if and only if q)", because it is true exactly when p and q differ:
-
-```formula
-p ⊕ q ≡ ¬(p ↔ q)
-where
-p, q: propositions, each true or false
-⊕: XOR (exclusive or): true when exactly one of p, q is true
-↔: if and only if: true when p and q have the same truth value
-¬: NOT: flips true to false and false to true
-≡: is logically equivalent to: the two sides have the same truth value in every row of the truth table
-In words: "exactly one of p and q" means the same as "it is not the case that p and q agree". With p true and q false, both sides are true.
-```
+Exclusive OR accepts the two cases where the inputs differ and rejects the two cases where they agree.
 
 
 ## Key takeaways

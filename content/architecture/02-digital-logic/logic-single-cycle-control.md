@@ -51,23 +51,7 @@ The `x` for `sw` is a don't-care from K-map lessons: with register writing disab
 
 ### Why high-performance designs pipeline
 
-In a single-cycle design the clock period must fit the **slowest** instruction. A load goes through every block: instruction memory, register read, ALU, data memory, then setup time at the register file. With illustrative delays (not measurements of a real chip):
-
-```formula
-T_clk ≥ t_IM + t_RF + t_ALU + t_DM + t_su
-T_clk ≥ (250 + 150 + 200 + 250 + 50) ps
-T_clk ≥ 900 ps
-where
-T_clk: the clock period, in picoseconds (ps)
-t_IM: the instruction memory read delay, here 250 ps
-t_RF: the register-file read delay, here 150 ps
-t_ALU: the ALU delay, here 200 ps
-t_DM: the data memory access delay, here 250 ps
-t_su: the setup time of the register file's write, here 50 ps
-ps: picoseconds, 10^-12 seconds
-≥: greater than or equal to
-In words: with these illustrative delays, a load needs 900 ps, so every instruction gets a 900 ps cycle, about 1.1 GHz, even though an add skips the data memory and would be finished after 650 ps. Mux, clock-to-Q and wire delays are ignored here.
-```
+In a single-cycle design, the clock period must accommodate the **slowest** supported instruction path under the timing assumptions. A load passes through instruction memory, register read, the ALU and data memory before register-file setup. Those delays occur along one dependent path: knowing the slowest individual block is insufficient. Real timing also includes launch, mux, wire and clock effects.
 
 An `add` skips the data memory but still has to wait for the same long clock. Most of the hardware also sits idle most of the cycle: while the ALU computes, the instruction memory is doing nothing useful.
 

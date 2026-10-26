@@ -16,11 +16,10 @@ Sometimes you can prove existence without saying which object works. A famous **
 - If x is rational, take a equals b equals the square root of 2: both irrational, and a to the power b equals x is rational.
 - If x is irrational, take a equals x and b equals the square root of 2, and compute:
 
-```formula
+```formula essential
 x = (√(2))^{√(2)}
-a^b = ((√(2))^{√(2)})^{√(2)}
-    = (√(2))^{√(2) × √(2)}
-    = (√(2))^2 = 2
+a = x, b = √(2)
+a^b = (√(2))^2 = 2
 where
 √2: the square root of 2, about 1.41421, which is irrational
 x: √2 to the power √2, about 1.63
@@ -32,9 +31,9 @@ In words: raising (√(2))^{√(2)} to the power √2 multiplies the exponents, 
 
 Either way such a and b exist. ∎
 
-The proof is valid, yet it doesn't tell you which case holds. (x is in fact irrational, by the Gelfond–Schneider theorem, but the proof doesn't need that.)
+The proof is valid without deciding which case holds. Positive bases allow the exponent rule used here; the two exponents multiply to two.
 
-To **disprove** a "for all" claim (written for every x P(x)), a single **counterexample** is enough, as n equals 40 is for Euler's polynomial. Checking finitely many examples does not prove a universal claim over an infinite domain. Exhaustively checking every case in a known finite domain can prove it; a counterexample disproves either kind of universal claim.
+To **disprove** a "for all" claim (written for every x P(x)), a single **counterexample** is enough, as one allowed input producing a composite output is for a prime-producing claim. Checking finitely many examples does not prove a universal claim over an infinite domain. Exhaustively checking every case in a known finite domain can prove it; a counterexample disproves either kind of universal claim.
 
 
 ## How proofs go wrong
@@ -47,22 +46,11 @@ To **disprove** a "for all" claim (written for every x P(x)), a single **counter
 | Hidden division by 0 | Any "result" follows |
 | Missing cases | Gap where the claim may fail |
 
-The classic fake proof that 2 equals 1 hides a division by zero. Start with a equals b equals 1:
+The classic fake proof that two equals one hides a division by zero:
 
-```formula
-a^2 = a × b
-a^2 − b^2 = a × b − b^2
-(a + b) × (a − b) = b × (a − b)
-a + b = b
-2b = b
-2 = 1
-where
-a, b: two numbers, both set to 1
-a^2, b^2: a and b squared
-In words: every line up to the third is true. The fourth line cancels the factor (a − b) from both sides, which is dividing by a − b = 0, and from there on every line is false.
-```
+Cancelling a common factor requires that factor to be nonzero. If both original numbers are one, their difference is zero. Multiplying two different values by zero gives equal products, so equality of those products cannot justify cancelling the zero.
 
-Since a equals b, the step that cancels (a minus b) divides by zero. Every line before it is true; the line after is not.
+The problem is the operation's missing precondition: cancellation is valid only for a nonzero factor.
 
 > [!tip] A template that avoids most errors
 > 1. State the claim precisely, with quantifiers.

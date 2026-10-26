@@ -22,18 +22,16 @@ Add two single bits. There are four cases:
 
 Read the columns:
 
-```formula
+```formula essential
 S = A ⊕ B
 C_out = A·B
-S = 1 ⊕ 1 = 0   for A = B = 1
-C_out = 1·1 = 1   for A = B = 1
 where
 S: the sum bit (the "sum" column)
 C_out: the carry bit (the "carry" column), worth 2 in the next column up
 A, B: the two bits being added
 ⊕: XOR: 1 when the two bits differ
 ·: AND: 1 only when both bits are 1
-In words: the sum bit is 1 when exactly one input is 1, and the carry is 1 only when both are, so 1 + 1 gives sum 0, carry 1: binary 10, which is 2.
+In words: Different inputs make the sum high. Two high inputs instead make the sum low and carry high, representing binary ten.
 ```
 
 One XOR and one AND. It is called a *half* adder because it cannot accept a carry from a previous column.
@@ -57,7 +55,7 @@ To add multi-bit numbers, each column must add three bits: A, B and the carry in
 
 Two equations describe it:
 
-```formula
+```formula essential
 S = A ⊕ B ⊕ C_in
 C_out = A·B + C_in·(A ⊕ B)
 C_out = A·B + A·C_in + B·C_in
@@ -72,19 +70,9 @@ C_in: the carry in from the column to the right (Cin in the table)
 In words: the sum bit is 1 when an odd number of the three inputs are 1. A carry out happens if both A and B are 1, or if exactly one of them is and a carry comes in. The last line is the same carry written as the majority function from Boolean-algebra lessons.
 ```
 
-The second and third lines are the same function: the second just factors the majority to reuse the XOR that the sum already computes. For example, with A = 1, B = 0 and a carry in of 1:
+The second and third lines are the same function: the second factors the majority to reuse the XOR that the sum already computes.
 
-```formula
-S = 1 ⊕ 0 ⊕ 1 = 0
-C_out = 1·0 + 1·(1 ⊕ 0) = 0 + 1 = 1
-where
-S: the sum bit
-C_out: the carry out
-⊕: XOR: 1 when the two sides differ
-·: AND
-+: OR
-In words: 1 + 0 + 1 is 2, binary 10, so the sum bit is 0 and the carry out is 1, matching the 1 0 1 row of the table.
-```
+With one data input high, the other low and carry-in high, two input bits are high. The sum is zero and carry-out is one, matching the truth-table row.
 
 ## Key takeaways
 - A half adder combines two bits; a full adder includes carry-in.

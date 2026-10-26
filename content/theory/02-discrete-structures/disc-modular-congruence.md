@@ -2,7 +2,7 @@
 id: disc-modular-congruence
 title: "Congruence and modular arithmetic"
 level: advanced
-minutes: 3
+minutes: 4
 summary: "Congruence means leaving the same remainder for a fixed positive modulus."
 sourceLesson: disc-number-theory
 ---
@@ -11,10 +11,8 @@ sourceLesson: disc-number-theory
 
 Two numbers are **congruent** modulo n when they leave the same remainder after dividing by n. A 12-hour clock is the everyday example: 17:00 and 5 o'clock show the same hand position.
 
-```formula
-a ≡ b (mod n)
-n | (a − b)
-17 ≡ 5 (mod 12)
+```formula essential
+a ≡ b (mod n)   means   n | (a − b)
 where
 a, b: integers
 n: the modulus, a positive integer (12 for a clock)
@@ -28,7 +26,7 @@ This is the equivalence relation from the relations lesson, and its classes are 
 
 Congruence plays nicely with addition and multiplication. If you swap a number for anything congruent to it, sums and products stay congruent:
 
-```formula
+```formula essential
 if a ≡ a′ and b ≡ b′ (mod n) then
 a + b ≡ a′ + b′ (mod n)
 a × b ≡ a′ × b′ (mod n)
@@ -45,34 +43,22 @@ For example, the last digit of 17 × 23 is the last digit of 7 × 3 = 21, which 
 
 So you can **reduce at every step**. This is how you compute huge expressions without huge numbers, and how fixed-width hardware arithmetic works: unsigned 64-bit arithmetic in C/C++ wraps modulo 2⁶⁴. Other languages may use checked arithmetic or wider integers; signed C/C++ overflow is not defined as modular wraparound.
 
-Here is the trick on the last digit of 7¹⁰⁰ (the last digit is the remainder mod 10). Reduce after each multiplication until the powers repeat:
+Last-digit calculations are remainder calculations modulo ten.
 
-```formula
-7^1 ≡ 7 (mod 10)
-7^2 = 49 ≡ 9 (mod 10)
-7^3 ≡ 9 × 7 = 63 ≡ 3 (mod 10)
-7^4 ≡ 3 × 7 = 21 ≡ 1 (mod 10)
-7^100 = (7^4)^25 ≡ 1^25 = 1 (mod 10)
-where
-7^k: k copies of 7 multiplied together (here k is 1, 2, 3, 4 or 100)
-≡: is congruent to: leaves the same remainder after dividing by 10
-mod: "modulo": the remainders are after dividing by 10, which gives the last digit
-In words: the last digit of the powers of 7 cycles 7, 9, 3, 1, and 100 is a whole number of 4-step cycles, so 7^100 ends in 1.
-```
+Repeatedly multiplying by seven gives last digits 7, 9, 3, 1, then repeats. Reducing each intermediate product keeps the information needed for the final last digit without keeping the huge full power.
 
-Division is the exception. You can't just cancel a common factor from both sides:
+Division is the exception. You can't just cancel a common factor from both sides.
 
-```formula
-2 × 3 = 6 ≡ 16 = 2 × 8 (mod 10)
-3 ≢ 8 (mod 10)
-where
-≡: is congruent to: leaves the same remainder after dividing by 10
-≢: is not congruent to: leaves a different remainder
-mod: "modulo": remainders after dividing by 10
-In words: 2 × 3 and 2 × 8 have the same last digit, but 3 and 8 don't, so you can't divide both sides by 2 modulo 10.
-```
+Multiplying three and eight by two produces six and sixteen: the same last digit, although three and eight have different last digits. Cancellation by two modulo ten would therefore discard a real distinction.
 
-"Dividing by a" means multiplying by an **inverse** of a, which only sometimes exists (see below).
+Division means multiplying by a **modular inverse**, which exists only when the factor and modulus are coprime.
+
+> [!analogy] Real-world analogy: A clock face
+> A twelve-hour clock returns to the same position after a full turn.
+>
+> **How it maps:** Times separated by whole twelve-hour turns have the same residue modulo twelve. Adding hours preserves that equivalence.
+>
+> **Where it stops:** The residue loses the day and number of completed turns; it cannot recover elapsed time by itself.
 
 ## Key takeaways
 

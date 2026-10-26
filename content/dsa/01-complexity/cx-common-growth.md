@@ -3,97 +3,47 @@ id: cx-common-growth
 sourceLesson: cx-growth-rates
 title: Comparing growth rates
 level: basic
-minutes: 5
+minutes: 2
 summary: Compare logarithmic, linear, quadratic and exponential operation counts.
 ---
 
-## Growth rates
+A growth rate describes how work changes as the input becomes larger. It is a scaling prediction, not a stopwatch reading. Here n is the item count and each counted operation has constant cost.
 
-The function that describes how the operation count grows is the algorithm's **growth rate**. Before comparing them, two pieces of notation need decoding: the logarithm and the power.
+## Recognise the behaviour
 
-A **logarithm** answers "how many times do I multiply 2 by itself to reach n?", or equivalently "how many times can I halve n before I get down to 1?". It is the reverse of raising 2 to a power:
-
-```formula
-2^10 = 1024
-log_2(1024) = 10
-log_2(2^k) = k
-where
-log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n; it grows very slowly (log_2 of a million is about 20)
-k: any number used as a power
-n: here, any positive number
-In words: the base-2 logarithm undoes "2 to the power": since ten 2s multiplied together make 1,024, the base-2 log of 1,024 is 10.
-```
-
-Logarithms appear whenever an algorithm repeatedly halves its problem, as binary search does. In this module logarithms use base two unless another base is stated; later lessons show why the base rarely matters.
-
-Here are the common growth rates side by side:
-
-```formula
-f(n) = n log_2(n)
-f(1000) ≈ 1000 × 10 = 10^4
-f(n) = n^2 = n × n
-f(n) = 2^n
-f(n) = log_2(n)
-f(n) = n
-where
-f(n): the number of operations an algorithm with this growth rate does on an input of n items
-n: the input size, a whole number of items
-log_2(n): the base-2 logarithm of n: the power you raise 2 to in order to get n (log_2(1000) ≈ 9.97)
-2^n: n copies of 2 multiplied together
-10^4: ten to the power 4, which is 10,000
-≈: approximately equal to (rounded)
-In words: each row of the table below is one choice of f; the table shows how many operations each one needs at three input sizes.
-```
-
-Values are rounded and logarithms are base two:
-
-| Growth | 10 items | 1,000 items | Million items |
-|---|---|---|---|
-| Logarithmic | 3 | 10 | 20 |
-| Linear | 10 | 1,000 | 1,000,000 |
-| Linear times log | 33 | 10,000 | 20,000,000 |
-| Quadratic | 100 | 1,000,000 | 1,000,000,000,000 |
-| Exponential | 1,024 | about 10^301 | absurd |
-
-Two things jump out.
-
-First, **for small inputs, nothing matters much.** On 10 items, even exponential subset search needs only 1,024 steps. This is why a naive algorithm often works fine in testing.
-
-Second, **for large n, the growth rate is everything.** Suppose a machine does about 10^8 simple operations per second (an illustrative assumed rate, not a general hardware benchmark). Turning an operation count into a time is a division:
-
-```formula
-t = W / r
-t = 10^12 / (10^8/s) = 10^4 s
-t = 10^4 s / (3600 s/h) ≈ 2.8 h
-where
-t: the running time, in seconds (s)
-W: the number of operations the algorithm does; here n^2 = 10^12 for n = 10^6 items
-r: the machine's speed, assumed to be 10^8 (100 million) simple operations per second
-n: the input size, here a million items
-s: seconds
-h: hours; 1 h = 3,600 s
-≈: approximately equal to (rounded)
-In words: a trillion operations at a hundred million per second takes ten thousand seconds, nearly three hours.
-```
-
-The same division for the other growth rates gives these illustrative times for a million items:
-
-| Growth | Operations | Time |
+| Growth | What creates it | Effect of a larger input |
 |---|---|---|
-| Linear | 1,000,000 | 0.01 s |
-| Linear times log | 20,000,000 | 0.2 s |
-| Quadratic | 1,000,000,000,000 | about 2.8 hours |
+| Constant | fixed amount of work | no input-dependent increase |
+| Logarithmic | repeatedly discard a fixed fraction | doubling adds roughly one halving step |
+| Linear | visit every item once | doubling roughly doubles work |
+| Linear times log | linear work over logarithmically many levels | doubling costs slightly more than twice |
+| Quadratic | compare all pairs | doubling roughly quadruples work |
+| Exponential | explore independent binary choices | each extra choice doubles candidates |
 
-The quadratic algorithm is not "a bit slower". It is the difference between instant and unusable.
+A base-two **logarithm** is the power needed to produce a value from two. For powers of two it also counts repeated halvings down to one. Ten halvings reduce 1,024 to one; doubling that starting size adds just one halving. For other sizes, an algorithm rounds its number of steps as its stopping rule requires.
 
-> [!example] The production surprise
-> A team writes the pairwise `has_dup` check for a feature that validates uploaded CSV files. In testing, files have 200 rows: 19,900 comparisons, unnoticeable. A customer uploads 2 million rows: about 2 x 10^12 comparisons. The request times out, retries, and takes the worker pool with it. Nothing was "wrong" with the code except its growth rate.
+The contrast between linear, quadratic and exponential growth is worth seeing directly:
+
+```formula essential
+W_linear(n) = n
+W_pairs(n) = n^2
+W_subsets(n) = 2^n
+where
+W_linear(n): an idealised count with one operation per input item
+W_pairs(n): an idealised full ordered-pair count, including self-pairs
+W_subsets(n): the number of subsets of n distinct items, assuming one check per subset
+n: the nonnegative item count
+In words: a scan grows with the item count, all-pairs work grows with its square, and adding one binary choice doubles the number of subsets.
+```
+
+The subset model counts candidates. If checking a candidate requires scanning its contents, include that cost too.
+
+Small test inputs can conceal an expensive growth rate. Conversely, a small fixed input may make exhaustive search entirely sensible. There is no universal item cutoff for exponential algorithms: candidate cost, pruning, hardware and the available time all matter.
 
 ## Key takeaways
-- Repeated halving produces logarithmic growth.
-- Large inputs separate linear, linearithmic, quadratic and exponential work.
-- The example timings use an illustrative operation rate; actual runtime requires measurement.
+- Recognise how the work changes before calculating an exact count.
+- Logarithmic growth comes from reducing the remaining problem by a fixed factor.
+- Growth labels help compare scaling; measurements settle practical runtime.
 
 ## Further reading
-- [Analysis of algorithms — Wikipedia](https://en.wikipedia.org/wiki/Analysis_of_algorithms)
-- [Time complexity — Wikipedia](https://en.wikipedia.org/wiki/Time_complexity)
+- [Erickson: Introduction](https://jeffe.cs.illinois.edu/teaching/algorithms/book/00-intro.pdf)

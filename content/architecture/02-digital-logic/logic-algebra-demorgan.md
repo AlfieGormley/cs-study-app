@@ -7,30 +7,25 @@ sourceLesson: logic-boolean-algebra
 summary: OR distributes over AND in Boolean algebra.
 ---
 
-Two of these surprise people who know ordinary algebra.
+Boolean simplification removes logic that cannot change an output. Test a proposed shortcut by asking whether any input combination would behave differently.
 
-**OR distributes over AND.** In arithmetic, 1 + 2 × 3 is 7 but (1 + 2) × (1 + 3) is 12, so the rule fails. In Boolean algebra it holds. Expand the right-hand side, then use idempotence and absorption:
+**OR distributes over AND.** If A is true, both sides below are true regardless of B and C. If A is false, both require B and C together. That checks the relationship without expanding a long expression:
 
-```formula
-(A + B)·(A + C)
-  = A·A + A·C + A·B + B·C
-  = A + A·C + A·B + B·C
-  = A + B·C
+```formula essential
+(A + B)·(A + C) = A + B·C
 where
 A, B, C: Boolean variables, each 0 or 1
 ·: AND: 1 only when both sides are 1
 +: OR: 1 when at least one side is 1
-In words: multiply out the brackets as usual; A·A is just A (idempotence), and A swallows A·C and A·B (absorption), leaving A + B·C.
+In words: requiring both “A or B” and “A or C” is equivalent to accepting A alone or requiring B and C together.
 ```
 
-**Absorption**: A + A·B is just A. If A is 1 the whole thing is 1; if A is 0 then A·B is 0 too. The A·B term adds nothing.
+**Absorption**: accepting A alone already accepts every case where A and B are both true. The extra AND branch cannot change the result.
 
-A close cousin of absorption is worth memorising. Check it by trying both values of A:
+A related shortcut has the same two-case explanation:
 
-```formula
+```formula essential
 A + A′·B = A + B
-1 + 0·B = 1 = 1 + B     for A = 1
-0 + 1·B = B = 0 + B     for A = 0
 where
 A, B: Boolean variables, each 0 or 1
 A′: NOT A: 1 when A is 0, and 0 when A is 1
@@ -47,7 +42,7 @@ Notice that each law comes in a mirrored pair. Swap AND with OR and 0 with 1 in 
 
 De Morgan's laws are the most-used tool in logic design. They tell you how to push a NOT inside a bracket:
 
-```formula
+```formula essential
 (A·B)′ = A′ + B′
 (A + B)′ = A′·B′
 (A·B·C)′ = A′ + B′ + C′

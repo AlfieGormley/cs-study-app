@@ -3,83 +3,45 @@ id: cx-recursion-memory
 sourceLesson: cx-space-complexity
 title: Pending calls and recursion depth
 level: intermediate
-minutes: 4
+minutes: 3
 summary: Count live stack frames and understand why caching does not remove the first recursive descent.
 ---
 
-Here n is the input length or recursive argument. Memoisation remembers returned answers, but the first uncached chain still has to reach its base case. A bottom-up loop avoids that chain.
-
-## The recursion stack
-
-This is where most space mistakes happen. Every call that hasn't returned yet holds a **stack frame** with its local variables, arguments and return address. Recursive code uses space proportional to the **maximum depth of the recursion**, even if it never creates a list.
+Every call that is waiting for a child needs a frame containing its local state. Space follows the deepest chain of pending calls, together with data those calls retain.
 
 ```python
 def fact(n):
     if n <= 1:
         return 1
-    # Wait for the smaller call to return.
     return n * fact(n - 1)
 ```
 
-When `fact(5)` reaches its base case, five frames are alive at once:
+For a positive argument n, this creates a chain down to one. Under a model treating each number as atomic and each frame as fixed-size, stack space is Θ(n). An iterative version holds a constant number of values. Actual Python integers grow: the factorial result alone needs Θ(n log n) bits for sufficiently large n.
 
-```
-fact(1)   <- top: about to return 1
-fact(2)   waiting to multiply by 2
-fact(3)   waiting to multiply by 3
-fact(4)   waiting to multiply by 4
-fact(5)   waiting to multiply by 5
-```
+## Calls over time are not simultaneous frames
 
-Counting frames and treating values as atomic, `fact` has Θ(n) auxiliary space, where n is its argument; an iterative version keeps a constant number of values. Python integers are not fixed-size: a factorial alone needs Θ(n log n) bits. Its bit length follows the logarithm of its value, and the logarithm of a factorial has that growth rate.
+Naive Fibonacci makes exponentially many calls but follows one child at a time. Completed branches release their frames before later siblings finish. Its maximum depth is linear in the argument, so its stack is linear in the atomic-value model.
 
-Note that it's **depth**, not the total number of calls, that matters. Naive `fib(n)` makes an exponential number of calls, but at any moment only one path from the root to a leaf is active:
+Recursive binary search with index bounds has logarithmic depth because it halves the range. Merge sort also has logarithmic depth, but its merge buffer requires linear extra space. Count retained buffers as well as frames.
 
-```formula
-time(n) = Θ(φ^n)
-φ ≈ 1.618
-space(n) = Θ(n)
-C_fib(n) = Θ(φ^n)
-C_merge(n) ≈ 2n
-where
-time(n): the number of calls naive fib(n) makes, which sets its running time
-space(n): the maximum number of stack frames alive at once, which sets its memory use
-n: the positive Fibonacci argument, or merge-sort item count for C_merge; fib’s deepest path has n frames
-φ: phi, the golden ratio, about 1.618
-φ^n: n copies of φ multiplied together
-Θ: Big-Theta: grows at exactly this rate, up to a constant factor
-≈: approximately equal to
-C_fib(n): the naive Fibonacci call count
-C_merge(n): the merge-sort call count with one-item leaves
-In words: naive Fibonacci takes exponential time but only linear space, because each finished branch hands its stack frames back before the next branch starts.
-```
+> [!analogy] Real-world analogy: A stack of unfinished tasks
+> When a task depends on a smaller task, put a reminder aside until that task finishes.
+>
+> **How it maps:** Each reminder is a pending frame. The tallest pile matters for space, even if many reminders are used throughout the day.
+>
+> **Where it stops:** Frames can retain differently sized objects; counting reminders alone assumes fixed-size state.
 
-In the table below, n is the input (the argument, or the list length) and logarithmic means base-two logarithmic growth:
+## Caching does not shorten the first descent
 
-| Function | Calls | Maximum live depth |
-|---|---|---|
-| Factorial | linear | linear |
-| Naive Fibonacci | exponential | linear |
-| Binary search | logarithmic | logarithmic |
-| Merge sort | about twice the item count | logarithmic |
+Memoisation avoids repeating completed calculations. With an empty cache, a Fibonacci-style function still descends through consecutive smaller arguments before any result is available. It can hit the configured recursion limit despite doing only linearly many distinct computations.
 
-Merge sort’s stack has Θ(log n) depth, where n is the list length, because each call halves its range. The merge buffer needs O(n) space, so total auxiliary space is O(n).
-
-> [!warning] Python stops at 1,000
-> CPython's default recursion limit is 1,000 frames (`sys.getrecursionlimit()`). `fact(5000)` raises `RecursionError`. You can raise the limit with `sys.setrecursionlimit`, but very deep recursion stays fragile: every frame costs memory, and recursion that passes through C code can still overflow the real thread stack and crash the interpreter. Python doesn't do **tail-call optimisation**, so even tail-recursive functions use one frame per call. For deep linear recursion, rewrite it as a loop.
-
-Other languages vary. Scheme guarantees proper tail calls. Some C and C++ compilers eliminate tail calls when optimising, but the language standards don't require it. Stack limits depend on the operating system, thread configuration and build, so measure the actual limits and frame costs before relying on a recursion depth.
-
-## Memoisation and stack depth
-
-- **Memoisation.** Caching `fib` results turns Θ(φ^n) time into Θ(n) time, at the cost of Θ(n) space for the cache. A loop keeping just the last two values gets Θ(n) time *and* O(1) space.
+Use `sys.getrecursionlimit()` to inspect that limit. Raising it is not a substitute for a space analysis and can be unsafe for some interpreter and C-extension call paths. Python does not eliminate recursive Python tail calls. A bottom-up loop avoids the recursive chain; retaining only the previous two values also avoids a full answer cache. Their growing bit lengths remain a separate cost.
 
 ## Key takeaways
-- Stack space follows the deepest chain of pending calls.
-- Many calls over time do not imply that all their frames coexist.
-- Caching completed answers avoids repeated work; a cold recursive descent can still reach the recursion limit.
+- Count simultaneously live frames and retained data.
+- Exponential call counts can coexist with linear stack depth.
+- A bottom-up loop can remove a cold recursive descent that caching preserves.
 
 ## Further reading
-- [Call stack — Wikipedia](https://en.wikipedia.org/wiki/Call_stack)
-- [sys.setrecursionlimit — Python docs](https://docs.python.org/3/library/sys.html)
-- [Tail call — Wikipedia](https://en.wikipedia.org/wiki/Tail_call)
+- [Python recursion limits](https://docs.python.org/3.14/library/sys.html)
+- [Python caching tools](https://docs.python.org/3.14/library/functools.html)

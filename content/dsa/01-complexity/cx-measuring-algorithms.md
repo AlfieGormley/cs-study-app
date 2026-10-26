@@ -3,64 +3,44 @@ id: cx-measuring-algorithms
 sourceLesson: cx-in-practice
 title: Measuring and choosing an algorithm
 level: advanced
-minutes: 4
+minutes: 2
 summary: Use doubling ratios and realistic constraints to choose a suitable implementation.
 ---
 
-Here n is the input size. Measurement complements operation counting by exposing hidden costs and practical crossover points.
+Measurement tests whether the model explains the actual implementation. Use realistic inputs, repeat runs and inspect the operations dominating elapsed time.
 
-## Measuring: the doubling experiment
+## Doubling is a diagnostic experiment
 
-You can estimate the exponent of an algorithm empirically. Time it at n, 2n, 4n and look at the ratios. These numbers are illustrative, not recorded measurements:
+Measure at several successively doubled input sizes while holding the task and environment comparable. A roughly doubled time suggests linear behaviour; quadrupled time suggests quadratic behaviour; eightfold time suggests cubic behaviour. Linear-times-log growth is slightly above doubling over sufficiently large sizes.
 
-| n | time | ratio |
-|---|---|---|
-| 1,000 | 0.05 s | |
-| 2,000 | 0.20 s | 4.0 |
-| 4,000 | 0.81 s | 4.05 |
-| 8,000 | 3.30 s | 4.07 |
+These are clues over the measured range, not proofs of asymptotic bounds. Startup work, cache transitions, allocation and noise can distort ratios. A backtracking or exponential algorithm need not follow a stable power-law ratio at all.
 
-Why does the ratio reveal the exponent? If the running time is roughly a power of n, doubling n multiplies it by 2 to that power, and the constant cancels:
+Python's `timeit` repeats small benchmarks and documents common measurement pitfalls. Decide whether setup and garbage collection belong in the measured workload. Minimum repeated time can help estimate uncontended execution; service latency needs its own distribution, including slow requests. A profiler identifies where time is spent but also adds overhead.
 
-```formula
-T(n) ≈ cn^k
-T(2n) / T(n) ≈ (2n)^k / n^k = 2^k
-k ≈ log_2(ratio)
-k ≈ log_2(4.07) ≈ 2.02
-where
-T(n): the measured running time at input size n, in seconds (s)
-c: an unknown constant (machine speed, language, implementation), which cancels in the ratio
-n: the input size
-k: the exponent being estimated
-ratio: the measured T(2n) / T(n)
-log_2: the base-2 logarithm: log_2(x) is the power you raise 2 to in order to get x
-≈: approximately equal to
-In words: if doubling the input roughly quadruples the time, the time grows like n squared.
+## Connect the observation to the code
+
+```python
+def drain(items):
+    out = []
+    while items:
+        out.append(items.pop(0))
+    return out
 ```
 
-A ratio of four suggests exponent two: quadratic. A ratio of 2 means linear; slightly above two suggests linear-times-log growth; 8 means cubic. The method assumes the time is close to a single power of n over the range measured; constant start-up costs or a change in cache behaviour between sizes can distort the ratios. This catches the "it's O(n) on paper but quadratic in practice" bugs from hidden costs (the code-analysis lessons).
+One visible loop does not make this linear. Each front removal shifts the remaining list references, so the total work is quadratic in original item count. A consistent fourfold doubling ratio supports that diagnosis. A deque can remove from the front without shifting every remaining element. Copying once and clearing the original may also satisfy the required behaviour; check mutation and aliasing requirements.
 
-Measure carefully: warm up first (JIT compilers, caches), repeat runs and take the minimum or median, and use realistic data. In Python, the `timeit` module handles the repetition for you, and a profiler (such as `cProfile`) tells you where the time actually goes.
+## Choose for the scarce resource
 
-## Choosing between algorithms
+To keep the best hundred scores from a stream too large to store, maintain a min-heap of at most a hundred retained scores. Its smallest retained score is the replacement threshold. Read every record once and replace only when necessary. Storage depends on the requested result count, not stream length.
 
-For these choices, n counts input items. A practical checklist:
-
-1. **How big is n, really?** Today and in a few years. If n will never exceed 1,000, an O(n^2) algorithm doing 1,000 × 1,000 = a million cheap steps is probably fine.
-2. **Typical or worst case?** Is the input adversarial or user-controlled? Do you have latency requirements (tail latency) or just throughput?
-3. **Memory.** Will the faster algorithm's extra space fit? (The space-complexity lessons.)
-4. **Constants and hardware.** Contiguous arrays and sequential access are fast; pointer chasing is slow.
-5. **Simplicity.** Simpler code has fewer bugs and is easier to change. Use the simplest algorithm that is fast enough for the largest n you expect.
-6. **Use the library.** Standard library sorts, hash maps and heaps are heavily tuned. Beating them is rarely worth the effort.
-7. **Measure.** Knuth's line, "premature optimization is the root of all evil", continues: "yet we should not pass up our opportunities in that critical 3%". Profile to find that 3%.
-
-> [!example] A realistic decision
-> You need the top 10 scores from 50 million records. Sorting is O(n log n). A size-10 heap scan is O(n log 10), effectively O(n), and uses tiny memory. Quickselect is O(n) average. At that input size, the heap scan is simple, streaming (no need to hold all records) and fast, making it a suitable starting point to benchmark, even though sorting would also "work".
+A conventional in-memory quickselect requires the items available for partitioning, and sorting all records does more ordering than the request needs. Match the approach to output, memory and streaming requirements, then benchmark it.
 
 ## Key takeaways
-- Doubling experiments suggest growth only over the range and conditions measured.
-- Profile realistic data to find which operations dominate.
-- Choose the simplest approach that meets the input, memory and latency constraints.
+- Doubling ratios suggest where to investigate.
+- Confirm the mechanism behind an observed slowdown.
+- Choose and measure against actual input, output, memory and latency constraints.
 
 ## Further reading
-- [timeit — Python docs](https://docs.python.org/3/library/timeit.html)
+- [Python timeit](https://docs.python.org/3.14/library/timeit.html)
+- [Python heap selection](https://docs.python.org/3.14/library/heapq.html)
+- [Python deque](https://docs.python.org/3.14/library/collections.html)

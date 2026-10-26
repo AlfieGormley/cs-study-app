@@ -27,7 +27,7 @@ col addr->[    column mux        ]-> data
 - Each bit line carries a tiny signal, so **sense amplifiers** at the bottom amplify it to a full 0 or 1.
 - A **column mux** picks the bits you asked for out of the row.
 
-Both use row/column organization, but their cells, sensing, write circuits, timing and peripheral structures differ.
+SRAM and DRAM both use row/column organisation, but their cells, sensing, write circuits, timing and peripheral structures differ.
 
 ## SRAM: the bistable loop, made addressable
 
@@ -51,8 +51,8 @@ A static RAM cell is the two-inverter loop from sequential-logic lessons plus tw
 Two inverters (2 transistors each) plus two access transistors make the standard **6T cell**.
 
 - **Hold**: the word line is low, the access transistors are off, and the loop keeps its value as long as the chip has power. No refresh is needed: that is what *static* means.
-- **Read**: precharge BL and BL' high, then raise WL. The side storing 0 slowly pulls its bit line down. The sense amplifier detects the small difference between BL and BL' and resolves it quickly, long before the bit line has swung fully.
-- **Write**: drive BL and BL' hard to the new value and its complement, then raise WL. The drivers overpower the small inverters and flip the loop.
+- **Read**: precharge both complementary bit lines high, then raise the word line. The side storing 0 slowly pulls its bit line down. The sense amplifier detects the small difference between the two bit lines and resolves it quickly, long before the bit line has swung fully.
+- **Write**: drive the two bit lines hard to the new value and its complement, then raise the word line. The drivers overpower the small inverters and flip the loop.
 
 Transistor sizing is delicate: the cell must be strong enough not to flip during a read, yet weak enough to be overwritten during a write. SRAM integrates with logic processes and provides low-latency storage; actual cache latency depends on size, organization, technology and clock rate, so it is used for **registers, caches, TLBs and buffers**. Its drawback is size: six transistors per bit. Caches often make up a large fraction of a modern CPU die's area.
 

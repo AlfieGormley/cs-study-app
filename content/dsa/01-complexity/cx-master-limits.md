@@ -3,132 +3,46 @@ id: cx-master-limits
 sourceLesson: cx-recurrences
 title: When the Master Theorem does not fit
 level: advanced
-minutes: 5
+minutes: 2
 summary: Recognise unsupported recurrences and prove a guessed bound by induction.
 ---
 
-Here n is input size. Check the theorem’s assumptions first; otherwise use a recursion tree and induction.
+The Master Theorem is a shortcut with assumptions. When a recurrence falls outside them, inspect its actual work instead of forcing it into a case.
 
-## Where the Master Theorem doesn't apply
+## Recognise the mismatch
 
-**Subtract-and-conquer.** Subtracting from input size fails the required equal-fraction split. Unroll instead:
+- Subtracting one item is not shrinking by a fixed fraction. A single recursive chain with a full scan at each step has linearly many levels of decreasing linear work, giving quadratic total work.
+- Two calls each one item smaller create exponential branching across a linear depth.
+- Unequal-size children do not fit the equal-size theorem. Recursion trees or Akra–Bazzi may still work.
+- A number of children or shrink factor that varies with input size needs a different analysis.
+- Outside work smaller than the critical growth by only a logarithm falls between the leaf case and the nonnegative-log-power balanced version taught here.
 
-```formula
-T(n) = T(n − 1) + n
-T(n) = n + (n − 1) + … + 1
-T(n) = n × (n + 1) / 2 = Θ(n^2)
-T(0) = 0
-where
-T(n): counted scan work with zero cost at size zero
-n: input item count, decreasing by one per call
-…: "and so on" down to 1
-Θ: a tight growth bound, up to constant factors
-In words: size-proportional work across inputs decreasing by one sums to about half the squared input.
-```
+For that last example, two half-size calls plus linear work divided by a logarithm give Θ(n log log n), where n is input size. The next lessons explain the slowly accumulating factor. Some stronger theorem statements cover this case directly; the limitation is in the stated version.
 
-Two calls one item smaller plus a constant outside step double work per level:
+## Guess, then prove with the same constants
 
-```formula
-T(n) = 1 + 2 + 4 + … + 2^{n−1}
-T(n) = 2^n − 1 = Θ(2^n)
-T(n) = 2T(n − 1) + 1
-T(0) = 0
-where
-T(n): step count, here Towers of Hanoi disc moves
-n: disc count
-…: "and so on", doubling each time
-Θ: Big-Theta, exactly this rate up to constants
-In words: two calls one size smaller double the call count on each level.
-```
+A recursion tree can suggest a bound. **Mathematical induction** then checks a base case and shows that assuming the bound for smaller inputs establishes it for the current input with the same fixed multiplier.
 
-For 10 discs that is 1,023 moves; for 64 discs, about 1.8 × 10^19.
+Here is a failed attempt for two half-size calls plus linear work:
 
-**The gap between cases.** With critical exponent one, outside work is smaller by a logarithm instead of a fixed positive power:
-
-```formula
-f(n) = n / log(n)
-f(n) / n^{1 − ε} = n^ε / log(n) → ∞
-f(n) / n = 1 / log(n) → 0
-T(n) = 2T(n/2) + n/log(n)
-a = 2, b = 2, c = log_2(2) = 1
-where
-f(n): outside-call work, in steps
-n: the input size
-log: the base-two logarithm
-ε: epsilon, any fixed positive number
-→: "tends to", as n grows
-∞: infinity, growing without limit
-T(n): the recurrence’s running time
-a: the number of child calls
-b: the shrink factor
-c: the critical exponent
-log_2: the base-2 logarithm
-In words: outside work exceeds every fixed sublinear power, failing case 1; its logarithmic deficit also fails standard case 2.
-```
-
-So it falls between case 1 and case 2 of the standard statement. (The answer is Θ(n log log n), as the later Akra–Bazzi examples show. Some textbooks state an extended case 2 that allows negative k and covers this directly.)
-
-**Uneven splits.** Different-size children fail the equal-size assumption.
-
-**Non-constant branching or shrink factors.** Square-root-sized children with square-root branching need another technique. Rewriting input as a power of two halves its exponent:
-
-```formula
-T(n) = T(n/3) + T(2n/3) + n
-T(n) = √(n) T(√(n)) + n
-n = 2^m, √(n) = 2^{m/2}
-where
-T(n): the cost in each independent recurrence
-n: the input size
-m: the exponent used as the transformed input
-√: the nonnegative square root
-In words: unequal fractions fail equal splitting. The square-root example has size-dependent parameters; the exponent substitution turns its split into halving.
-```
-
-## Substitution: guess and prove
-
-When no theorem fits, guess from a recursion tree and prove the bound by **mathematical induction**. For merge sort on powers of two, start at two items and choose a fixed multiplier covering that base case. Handle one item separately: its logarithm is zero:
-
-```formula
+```formula essential
 T(n) = 2T(n/2) + n
-T(n) ≤ 2c(n/2)log_2(n/2) + n
-T(n) ≤ cn(log_2(n) − 1) + n
-T(n) ≤ cn log_2(n) − cn + n
-T(n) ≤ cn log_2(n)   when c ≥ 1
-log_2(1) = 0
+T(n) ≤ 2c(n/2) + n = (c + 1)n
 where
-T(n): merge sort step count
-n: a power-of-two input of at least 4 in the inductive step; size 2 is the base case
-c: one fixed positive multiplier in the guessed bound
-log_2: the base-two logarithm
-≤, ≥: less than or equal to, greater than or equal to
-In words: assuming the bound for half-size inputs, the bound for size n follows with the same c, as long as c is at least 1.
+T(n): counted work on input size n, with a fixed positive base case
+n: positive input size; use powers of two for this argument
+c: the fixed multiplier in the proposed linear induction bound
+≤: at most
+In words: assuming a linear bound for the children produces a larger multiplier for the parent, so the proposed induction does not close.
 ```
 
-The second line assumes the bound for half-size input. The final subtraction cancels the added linear work because the fixed multiplier is at least one.
-
-> [!warning] The classic induction bug
-> A linear growth class does not prove the same fixed multiplier works. The failed step increases the coefficient; hiding it inside Big-O incorrectly makes the induction appear to close.
-
-```formula
-T(n) = 2T(n/2) + n
-T(n) ≤ 2c(n/2) + n = cn + n
-cn + n = O(n)
-cn + n > cn for n > 0
-where
-T(n): step count under the attempted linear bound
-n: the positive input size
-c: one fixed positive multiplier used in the induction
-O: an eventual upper growth bound
->: greater than
-In words: the expression has linear growth, but the same fixed multiplier cannot absorb its extra linear term.
-```
+Calling the final expression "linear" does not repair the proof. Repeating that multiplier increase through the levels hides the missing logarithmic factor. A linear-times-log guess has enough room for each level's added work. Its proof must cover a suitable base case; the logarithm at one is zero, so handle that size separately.
 
 ## Key takeaways
-- Subtracting from input size, uneven splits and some gap functions need other techniques.
-- A substitution proof must preserve the same chosen constant through the induction.
-- A loose asymptotic simplification inside the proof does not establish the required inequality.
+- Check the recurrence form and the growth-case conditions.
+- Induction must preserve one fixed bound through every level.
+- A failed proof suggests a better guess but does not prove that guess.
 
 ## Further reading
-- [Master theorem — Wikipedia](https://en.wikipedia.org/wiki/Master_theorem_(analysis_of_algorithms))
-- [Akra–Bazzi method — Wikipedia](https://en.wikipedia.org/wiki/Akra%E2%80%93Bazzi_method)
+- [MIT: Master theorem, including power gaps and regularity](https://people.csail.mit.edu/thies/6.046-web/master.pdf)
 - [Erickson: Solving Recurrences](https://jeffe.cs.illinois.edu/teaching/algorithms/notes/99-recurrences.pdf)

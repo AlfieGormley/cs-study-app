@@ -11,7 +11,7 @@ summary: Restricted universal claims use an implication so non-members do not vi
 
 Most real statements quantify over *some* of the domain: "every admin", "some order". These **restricted quantifiers** have a fixed shape, and getting it wrong is the most common error in the whole subject. Over a domain of users:
 
-```formula
+```formula essential
 ∀u (Admin(u) → Verified(u))
 ∃u (Admin(u) ∧ Verified(u))
 where

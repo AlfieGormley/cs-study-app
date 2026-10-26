@@ -9,61 +9,32 @@ sourceLesson: disc-inclusion-recurrences
 
 ### Divide-and-conquer recurrences
 
-Recursive algorithms that split the input into equal parts give recurrences of a standard shape. Merge sort splits into two halves and merges in linear time. Unrolling its recursion tree shows the same work on every level:
+Merge sort splits an input into two halves and combines them with linear work. Each level contains more subproblems, but their total size stays the original input size. For this model assume powers-of-two input sizes, constant positive base cost at size one, and unit-cost operations:
 
-```formula
-T(n) = a × T(n / b) + f(n)
+```formula essential
 T(n) = 2 × T(n / 2) + n
-W_i = 2^i × (n / 2^i) = n
-L = log_2(n)
-T(n) ≈ W_i × L = n × log_2(n)
 where
 T(n): the running time on an input of size n
-n: the positive input size, considered on powers of b for exact equal splits; merge sort here uses powers of 2
-a: the fixed positive integer number of recursive calls (subproblems), 2 for merge sort
-b: the fixed real factor greater than 1 by which each subproblem is smaller, 2 for merge sort
-f(n): the work done outside the recursive calls (splitting and combining), n for merge sort
-W_i: the total work on level i of the recursion tree: 2^i subproblems of size n / 2^i each
-i: the level, 0 at the top
-L: the number of levels before the subproblems reach size 1
-log_2: logarithm base 2: how many times you can halve n before reaching 1
-≈: approximately (ignoring constant factors and rounding)
-In words: merge sort does about n work on each of about log_2(n) levels. For n = 1024 that is 1024 × 10 = 10,240 units of work.
+n: the positive input size; the recurrence uses powers of two and applies above size one
+In words: Merge sort makes two recursive calls on half-sized inputs, then does linear combining work. More calls at deeper levels exactly offset their smaller individual size.
 ```
 
-The **master theorem** packages this. Compare the outside work f(n) with the work at the leaves of the tree:
+The **master theorem** packages this comparison for a fixed number of equal-sized recursive subproblems. Compare work outside the recursive calls with the growth in the number of leaves.
 
-```formula
+```formula reference
 N_leaf = n^{log_b(a)}
-n^{log_2(1)} = n^0 = 1
-n^{log_2(2)} = n^1 = n
-n^{log_2(3)} ≈ n^{1.585}
 where
 N_leaf: the number of leaves of the recursion tree, which sets the work done at the bottom
-n: the positive input size, considered on powers of b for exact equal splits; merge sort here uses powers of 2
+n: the positive input size, a power of the shrink factor b for exact equal splits down to size one
 a: the fixed positive integer number of recursive calls
 b: the fixed real factor greater than 1 by which each call's input shrinks
 log_b: logarithm base b: the power you raise b to in order to get its argument
-log_2: logarithm base 2; log_2(1) = 0, log_2(2) = 1 and log_2(3) ≈ 1.585
-≈: approximately equal to
-In words: the last three lines are binary search (a = 1, b = 2), merge sort (a = 2, b = 2) and Karatsuba multiplication (a = 3, b = 2). Roughly, if f(n) grows more slowly than N_leaf, the leaves dominate and the time is about N_leaf; if f(n) matches it, multiply by a factor of log n; if f(n) grows faster, f(n) dominates (each case has technical conditions).
+In words: The number of leaves depends on both how many recursive calls each node creates and how much each call shrinks the input. This reference applies to fixed equal splits down to constant-size leaves.
 ```
 
-So binary search has logarithmic time; merge sort has linear times logarithmic time; and Karatsuba multiplication has the power-law bound shown below.
+Binary search follows one branch with constant work per level, so it is logarithmic. Merge sort has linear total work per level and logarithmically many levels. Karatsuba multiplication uses three half-size subproblems; its growth lies between linear and quadratic under the usual digit-operation model.
 
-```formula
-T_B(n) = O(log_2(n))
-T_M(n) = O(n log_2(n))
-T_K(n) = O(n^{log_2(3)})
-where
-T_B, T_M, T_K: running times of binary search, merge sort and Karatsuba multiplication under their usual arithmetic-cost models
-n: the input size
-log_2: logarithm to base two
-O( ): an upper bound on growth up to a fixed constant factor for sufficiently large input sizes
-In words: The first two algorithms respectively have constant and linear work per level. Karatsuba has three half-size subproblems, giving an exponent of about 1.585.
-```
-
-A merely slower or faster function is not enough for the usual first and third cases: the gap must be polynomial. For the faster outside-work case, require that the total outside work of the children is eventually at most a fixed fraction, strictly below one, of the parent’s outside work. This regularity condition prevents large oscillations. The equal-order case shown here assumes non-negative outside work matching leaf growth up to constant factors. The DSA subject covers the full theorem in depth.
+When outside work is polynomially smaller than leaf growth, the leaves dominate. When it matches leaf growth up to constant factors, similar work accumulates across logarithmically many levels. When it is polynomially larger, it dominates only with the usual regularity condition: eventually, the children’s total outside work is at most a fixed fraction below one of the parent’s outside work. Work must be non-negative. A slight growth difference alone does not establish one of these cases; the DSA subject covers the full theorem.
 
 ## Key takeaways
 

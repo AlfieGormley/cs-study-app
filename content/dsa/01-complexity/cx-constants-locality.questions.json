@@ -15,7 +15,7 @@
       },
       {
         "text": "The compiler can't optimise linked list code at all",
-        "explanation": "Compilers optimise both fine. The bottleneck is memory latency, which no compiler can remove from a pointer-chasing loop."
+        "explanation": "Compilers can optimise both. The dependent memory accesses in the specified scattered list remain a possible bottleneck; the claim that no optimisation is possible is too strong."
       },
       {
         "text": "Linked lists store more data, so there's more to add up",
@@ -23,40 +23,40 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. With 4-byte integers and 64-byte lines, a line can contain 64 / 4 = 16 adjacent array values.\n2. A scattered list may need a new line for each node, and its next address depends on the current load.\n3. These access patterns can have different costs despite the same Θ(n) count.\n\nContent gap: no reproducible hardware measurements support a universal cache-miss latency or speed ratio, so those numeric claims are omitted.",
+    "workedExample": "A contiguous array lets nearby accesses reuse cache lines. Scattered list traversal also depends on loading each next pointer before knowing the following address. Both visit n values, so both are linear, but the cost per visit can differ. Measure the target workload; the explanation does not establish a universal speed ratio.",
     "link": {
-      "title": "Latency numbers every programmer should know",
-      "url": "https://gist.github.com/jboner/2841832"
+      "title": "What every programmer should know about memory",
+      "url": "https://www.akkadia.org/drepper/cpumemory.pdf"
     }
   },
   {
     "id": "cx-in-practice-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "`a` is a square array of `double` in C (row-major), with 10,000 rows and columns; N denotes the side length. Assume 8-byte doubles, 64-byte cache lines, a matrix larger than cache, and no compiler loop interchange. Which loop has better sequential locality?\n\n```c\n/* A: adjacent columns in one row. */\nfor (i = 0; i < N; i++)\n  for (j = 0; j < N; j++)\n    s += a[i][j];\n\n/* B: same column in successive rows. */\nfor (j = 0; j < N; j++)\n  for (i = 0; i < N; i++)\n    s += a[i][j];\n```",
+    "prompt": "`a` is a square array of `double` in C (row-major), with N rows and columns. Assume a large matrix and no compiler loop interchange. Which loop has better sequential locality?\n\n```c\n/* A: adjacent columns in one row. */\nfor (i = 0; i < N; i++)\n  for (j = 0; j < N; j++)\n    s += a[i][j];\n\n/* B: same column in successive rows. */\nfor (j = 0; j < N; j++)\n  for (i = 0; i < N; i++)\n    s += a[i][j];\n```",
     "options": [
       {
         "text": "B, because it accesses columns, which are stored contiguously in C",
-        "explanation": "C stores arrays row by row, not column by column. Fortran, MATLAB and Julia are column-major, but C is row-major."
+        "explanation": "C multidimensional arrays store complete rows consecutively; the column direction is not contiguous."
       },
       {
         "text": "Neither: both are Θ(N^2) and do the same additions",
         "explanation": "The loops have the same Θ(N^2) work and arithmetic but different access patterns; N is side length. Asymptotic growth does not capture locality."
       },
       {
-        "text": "A walks sequentially; B advances by 80,000 bytes in its inner loop",
-        "explanation": "Correct. Row-order accesses are eight bytes apart and each stated cache line can serve eight doubles. Column-order accesses jump by a full row.\n\n```formula\nJ = 10000 × 8 B = 80000 B\nwhere\nB: bytes\nJ: the column traversal’s byte stride\nIn words: Row-order accesses are eight bytes apart and each stated cache line can serve eight doubles. Column-order accesses jump by a full row.\n```"
+        "text": "A walks adjacent entries; B jumps by a full row stride",
+        "explanation": "Correct. The column index selects adjacent elements within a row. Changing row while holding column fixed jumps across rows."
       },
       {
         "text": "A, because it has fewer loop iterations",
-        "explanation": "Both visit every cell exactly once. The difference is the cost of memory accesses.\n\n```formula\nE = 10000^2 = 10^8\nwhere\nE: the additions performed by either traversal\nIn words: Both visit every cell exactly once. The difference is the cost of memory accesses.\n```"
+        "explanation": "Both visit every cell exactly once. The difference is the cost of memory accesses."
       }
     ],
     "answer": 2,
-    "workedExample": "Work out where each element lives in memory:\n\n```formula\naddr(i, j) = (i N + j) × 8 B\nstep_A = 8 B\nstep_B = N × 8 B = 80000 B\nsize = N × N × 8 B = 8 × 10^8 B = 800 MB\nwhere\naddr(i, j): the byte offset of a[i][j] from the start of the array\ni: the row index\nj: the column index\nN: the number of rows and of columns, 10,000\nstep_A: the distance between consecutive accesses in loop A (j changes fastest)\nstep_B: the distance between consecutive accesses in loop B (i changes fastest)\nsize: the total size of the array\nB: bytes; each double is 8 bytes\nMB: megabytes; 1 MB = 10^6 bytes\nIn words: in row-major order neighbours in a row are 8 bytes apart, but neighbours in a column are a whole row, 80,000 bytes, apart.\n```\n\n1. Loop A: one 64-byte cache line serves 64 / 8 = 8 accesses.\n2. Loop B: a different cache line every time.\n3. Whether B retains lines for the next column depends on cache capacity, associativity and the column working set; exceeding total cache capacity alone does not prove eviction.\n\nResult: A has better spatial locality; measure the actual speed difference. Same Θ(N^2), very different constants.",
+    "workedExample": "In row-major storage, changing the column within one row reaches adjacent elements. Changing the row while holding the column fixed jumps by a full row stride. Both loops visit the same number of cells, but A has better sequential locality. Cache reuse across later columns depends on cache capacity and associativity, so measure the speed difference.",
     "link": {
-      "title": "Locality of reference — Wikipedia",
-      "url": "https://en.wikipedia.org/wiki/Locality_of_reference"
+      "title": "What every programmer should know about memory",
+      "url": "https://www.akkadia.org/drepper/cpumemory.pdf"
     }
   },
   {
@@ -67,7 +67,7 @@
     "options": [
       {
         "text": "Because insertion sort is Θ(n) on every input",
-        "explanation": "The quadratic worst case is not removed: insertion sort is linear only for already sorted input, with work depending on disorder for nearly sorted input. Here n is run length."
+        "explanation": "The worst-case moving cost is still quadratic in run length. Binary search reduces position-finding comparisons, not the number of elements that may need to shift."
       },
       {
         "text": "Because insertion sort uses less memory than merge sort for large n",
@@ -78,45 +78,45 @@
         "explanation": "Merge sort is stable, and so is Timsort's merge step. Stability isn't the reason."
       },
       {
-        "text": "For small n, insertion sort's low constant factors and cache-friendly access make it faster than merging, and the run length is bounded so the quadratic cost is capped",
-        "explanation": "Correct. The bounded run length caps the quadratic subroutine at a fixed cost; distributing such runs across the item count gives linear total extension work. Small-run constants make it worthwhile.\n\n```formula\nW_run ≤ 64^2/2 = 2048\nW_total = O(n)\nwhere\nO: at most a constant times n\nW_run: the illustrative comparison bound for one full run\nW_total: the total bounded-run extension work\nn: the total item count\n<, >, ≤, ≥: less than, greater than, at most, at least\nIn words: The bounded run length caps the quadratic subroutine at a fixed cost; distributing such runs across the item count gives linear total extension work. Small-run constants make it worthwhile.\n```"
+        "text": "A fixed cap bounds the small-run cost, so total extension work stays linear",
+        "explanation": "Correct. The bounded run length caps the quadratic subroutine at a fixed cost; distributing such runs across the item count gives linear total extension work. Small-run constants make it worthwhile."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Asymptotic class matters for large n. For inputs of around thirty-two to sixty-four items, constants dominate.\n2. Insertion sort's inner loop is a few instructions, works on data already in cache, and is very fast on nearly-sorted data (which Timsort exploits).\n3. The quadratic part is bounded:\n\n```formula\nW_ins ≤ Σ_{i=1}^{r} m_i^2\nm_i ≤ m ≤ 64\nΣ_{i=1}^{r} m_i ≤ n\nW_ins ≤ m Σ_{i=1}^{r} m_i ≤ mn\nW_ins ≤ 64n = O(n)\nwhere\nW_ins: total counted comparisons and shifts in the bounded insertion-sort extensions\nn: the total input item count\nr: the number of run fragments extended using insertion sort\ni: the fragment index\nm_i: the item count in fragment i\nm: the largest permitted fragment length, at most 64\nΣ_{i=1}^{r}: sum over all the extended fragments\nO(n): at most a fixed constant times n\n≤: less than or equal to\nIn words: each fragment’s quadratic bound is at most its length times 64. The fragments together contain at most the input’s items, so their total extension work is linear.\n```\n\n4. The merges then cost O(n log n) overall, which dominates.\n\nIntrosort does the same with a threshold of 16 elements in libstdc++. The crossover is found by benchmarking.",
+    "workedExample": "The short-run cap is a fixed constant, independent of total input length n. Quadratic work on each capped run is bounded by a constant times that run’s length. Summed across all runs, extension work is linear; the merge stage can retain O(n log n) overall time. The cap and practical crossover are implementation choices.",
     "link": {
-      "title": "Timsort — Wikipedia",
-      "url": "https://en.wikipedia.org/wiki/Timsort"
+      "title": "What every programmer should know about memory",
+      "url": "https://www.akkadia.org/drepper/cpumemory.pdf"
     }
   },
   {
     "id": "cx-in-practice-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "A colleague proposes replacing your BLAS matrix multiply (blocked Θ(n^3), where n is matrix side length) with an implementation of a recent algorithm with exponent about 2.37, for multiplying 10,000 x 10,000 matrices. What is the best response?",
+    "prompt": "A colleague proposes replacing a tuned matrix-multiplication implementation with another that has a smaller asymptotic exponent. What is the best response before adopting it for your workload?",
     "options": [
       {
         "text": "Keep the existing baseline until representative benchmarks show that the proposed implementation is faster and meets memory and accuracy needs",
-        "explanation": "Correct. A smaller exponent alone does not establish performance for ten-thousand-side matrices. Constants, implementation, memory and numerical behaviour matter."
+        "explanation": "Correct. A smaller exponent alone does not establish performance for a particular matrix workload. Constants, implementation, memory and numerical behaviour matter."
       },
       {
-        "text": "Adopt it: the smaller exponent suggests about 300 times less work",
-        "explanation": "This unit-constant exponent comparison ignores the enormous constants of the theoretical algorithm. Those constants prevent the ratio from establishing a practical speedup.\n\n```formula\nR = 10000^{3−2.37}\nR = 10000^{0.63} ≈ 330\nwhere\nR: the ratio of the two pure-power counts, with constants set to one\n≈: approximately equal\nIn words: This unit-constant exponent comparison ignores the enormous constants of the theoretical algorithm. Those constants prevent the ratio from establishing a practical speedup.\n```"
+        "text": "Adopt it immediately because its exponent is smaller",
+        "explanation": "A smaller exponent does not quantify finite-size time without constants, implementation and workload details."
       },
       {
         "text": "Adopt it only for square matrices, since the exponent only applies to them",
-        "explanation": "Squareness isn't the issue. The issue is enormous hidden constants and complexity."
+        "explanation": "Input shape matters for benchmarking, but squareness alone does not establish a performance benefit."
       },
       {
         "text": "Use Strassen's algorithm instead, since it is always faster than Θ(n^3)",
-        "explanation": "Strassen has a lower exponent but higher constants, extra memory and worse numerical stability. Whether it helps depends on size and hardware, and it is often not used at all in tuned libraries."
+        "explanation": "Strassen is not universally faster. Its extra work, memory use and numerical behaviour require evaluation for the target workload."
       }
     ],
     "answer": 0,
-    "workedExample": "1. An exponent-only ratio ignores leading constants and lower-order work.\n2. Require a concrete implementation and benchmark representative shapes, sizes and numeric types.\n3. Check accuracy and peak memory as well as time.\n4. Keep the measured baseline until the alternative demonstrates an improvement.",
+    "workedExample": "A smaller exponent describes eventual growth under a cost model, not performance at the stated finite size. Require an actual implementation and benchmark representative shapes and numeric types. Compare peak memory and numerical accuracy as well as elapsed time. Keep the existing measured baseline until the alternative demonstrates the needed improvement.",
     "link": {
-      "title": "Galactic algorithm — Wikipedia",
-      "url": "https://en.wikipedia.org/wiki/Galactic_algorithm"
+      "title": "What every programmer should know about memory",
+      "url": "https://www.akkadia.org/drepper/cpumemory.pdf"
     }
   },
   {
@@ -135,7 +135,7 @@
       },
       {
         "text": "A's constant factor is hundreds of times larger than B's",
-        "explanation": "Yes. A large coefficient on linear-times-log work lets the lower-coefficient quadratic model win through several thousand items. Measure the range relevant to the workload.\n\n```formula\nA(n) = 500n log_2(n)\nB(n) = n^2\nwhere\nA: the slower-growth model’s operation count\nB: the quadratic model’s operation count\nlog_2: the base-2 logarithm of n (log_2(6310) ≈ 12.6)\nn: the input size\nIn words: A large coefficient on linear-times-log work lets the lower-coefficient quadratic model win through several thousand items. Measure the range relevant to the workload.\n```"
+        "explanation": "Yes. A much larger coefficient can let the faster-growing quadratic model win over a finite range. Measure the range relevant to the workload."
       },
       {
         "text": "Larger n alone guarantees that the quadratic algorithm wins",
@@ -143,7 +143,7 @@
       },
       {
         "text": "Both are written in the same programming language",
-        "explanation": "No. Using the same language puts them on equal footing; it doesn't favour B. (A slower language for A would only add a constant factor.)"
+        "explanation": "A shared language does not by itself favour either implementation. Their operations and representations can still differ."
       }
     ],
     "answer": [
@@ -151,10 +151,10 @@
       1,
       2
     ],
-    "workedExample": "B can win only while its lower constant outweighs its worse growth:\n\n1. **Small n.** Below the crossover, B wins.\n2. **Memory behaviour.** Cache misses inflate A's effective constant.\n3. **Big constant.** Find where the two costs are equal:\n\n```formula\nc_A n log_2(n) = c_B n^2\nn / log_2(n) = c_A / c_B\n500n log_2(n) = n^2\nn = 500log_2(n),  n ≈ 6310\nwhere\nc_A: A's constant factor, here 500\nc_B: B's constant factor, here 1\nn: the input size\nlog_2(n): the base-2 logarithm of n (log_2(6310) ≈ 12.6)\n≈: approximately equal to\nIn words: dividing both sides by n shows the crossover is where n over its own log equals the ratio of the constants; with a 500-to-1 ratio that happens at about n = 6,310.\n```\n\n| Items | Linear-times-log count | Quadratic count |\n|---|---|---|\n| 1,000 | 5.0 × 10^6 | 1.0 × 10^6 |\n| 5,000 | 3.1 × 10^7 | 2.5 × 10^7 |\n| 6,000 | 3.8 × 10^7 | 3.6 × 10^7 |\n| 8,000 | 5.2 × 10^7 | 6.4 × 10^7 |\n\n4. **Larger n alone:** does not favour B; eventual asymptotic superiority does not specify a finite crossover.\n5. **Same language:** neutral.\n\nThe practical rule: know your real n, then measure.",
+    "workedExample": "Finite-range performance includes constants, allocation and access patterns. Small inputs, expensive dependent memory accesses in A, or a much larger coefficient in A can let B win. Larger input alone eventually favours A’s slower growth under fixed comparable cost models. Sharing a language does not determine the winner.",
     "link": {
-      "title": "Time complexity — USACO Guide",
-      "url": "https://usaco.guide/bronze/time-comp"
+      "title": "What every programmer should know about memory",
+      "url": "https://www.akkadia.org/drepper/cpumemory.pdf"
     }
   }
 ]

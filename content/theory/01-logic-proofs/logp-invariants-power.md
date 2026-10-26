@@ -31,7 +31,7 @@ def power(x, n):
 
 The invariant is not obvious from the code; it is what makes the code make sense. Written as maths, with what each branch does to it:
 
-```formula
+```formula essential
 result × base^e = x^n
 result × (base^2)^{e/2} = result × base^e
 result × base × (base^2)^{(e−1)/2}
@@ -49,31 +49,13 @@ In words: the first line is the invariant. The second line is the even case (bas
 - **Maintain**, if e is even: the second line of the block shows the product is unchanged. ✓
 - **Maintain**, if e is odd: the third and fourth lines show the same. ✓
 - **Terminate**: e equals 0, so result times base⁰ equals result equals x to the power n. ✓
-- **Variant**: e, which at least halves and stays is at least 0.
+- **Variant**: e, which strictly decreases while positive and remains nonnegative.
 
-Trace x equals 3, n equals 13; the last column (result times base to the power e) never changes:
+The odd and even branches handle the same conserved product in different ways:
 
-```
-result  base       e   result·baseᵉ
-1       3          13  1594323
-3       9          6   1594323
-3       81         3   1594323
-243     6561       1   1594323
-1594323 43046721   0   1594323
-```
+After an odd exponent transfers one factor to the accumulator, the remaining factors can be paired. Squaring the base and halving that even remainder preserves the represented result.
 
-Check the second row against the invariant:
-
-```formula
-result × base^e = 3 × 9^6
-                = 3 × 531,441 = 1,594,323
-                = 3^13
-where
-result, base, e: the second row of the trace: 3, 9 and 6
-In words: 3 times 9 to the 6th is 1,594,323, which is 3 to the 13th, so the invariant holds in that row.
-```
-
-Three to the power thirteen equals 1,594,323. Modular variants of repeated squaring are used in modular exponentiation. Real cryptographic implementations also need side-channel protections; this branching teaching code is not a production RSA implementation.
+Modular variants of repeated squaring are used in modular exponentiation. Real cryptographic implementations also need side-channel protections; this branching teaching code is not a production RSA implementation.
 
 > [!note] Evidence gap
 > A previous fixed RSA runtime claim is omitted because no reproducible implementation, exponent, hardware or benchmark was supplied.

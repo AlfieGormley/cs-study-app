@@ -3,48 +3,35 @@ id: cx-amortised-latency
 sourceLesson: cx-amortised-analysis
 title: Amortisation beyond arrays and latency
 level: advanced
-minutes: 3
+minutes: 2
 summary: Apply sequence reasoning to counters and queues while recognising latency spikes.
 ---
 
-Here n counts operations or stored items, as stated in each example. Separate total work from the latency of one operation.
+A good sequence bound does not guarantee a short delay for each operation. Here n counts operations or stored items, as each example states.
 
-## More examples
+## Follow each piece of work across its lifetime
 
-- **Binary counter.** Incrementing a binary counter can flip many bits (`0111 -> 1000`), but over the sequence the lowest bit flips each time, the next about half as often, and the next about a quarter as often:
+A binary counter starting at zero flips its lowest bit on every increment, the next about half as often and later bits progressively less often. Across n increments, the total number of flips is linear in n even though a single carry can flip many bits.
 
-```formula
-flips ≤ n + n/2 + n/4 + … < 2n
-where
-flips: the total number of bit flips over n increments
-n: the number of increments, starting from 0
-…: "and so on", halving each time
-≤: less than or equal to
-In words: bit j flips once every 2^j increments, and those halving counts add up to less than 2n, so each increment costs fewer than 2 flips on average.
-```
+A queue can use an `inbox` stack and an `outbox` stack. Enqueue pushes to the inbox. Dequeue pops the outbox; only when it is empty does it transfer the inbox by repeated pop-and-push operations. The reversal restores first-in-first-out order.
 
-So increment is O(1) amortised: a constant per operation, however large n is.
-- **Queue from two stacks.** Push onto an `inbox` stack. To dequeue, pop from `outbox`; if it's empty, first move everything from `inbox` to `outbox`. A single dequeue can cost O(n), where n is the number of elements waiting, but each element is moved at most once, so every operation is O(1) amortised.
-- **Hash table resizing** works just like the dynamic array: double the table when the load factor gets high, rehashing every key.
-- Later modules meet more advanced cases: splay trees and union-find both have amortised bounds that worst-case analysis can't show.
+Each item enters the inbox once, transfers at most once and leaves the outbox once. Starting empty, total stack operations are proportional to total queue operations, assuming each stack operation is constant cost. One dequeue can still pay for a large transfer.
 
-## Pitfalls in production
+## Throughput and deadlines are different requirements
 
-**Amortised O(1) is not "every operation is fast".** A Python list of 100 million pointers occupies about 800 MB; the append that triggers a resize may have to copy most of that, and the call pauses until it finishes. Amortisation bounds aggregate work, but allocation and copying still affect measured throughput. For latency-sensitive systems (trading, games, audio, real-time control), one slow append can blow a deadline.
+A dynamic-array append may relocate all existing elements. An amortised constant bound permits that delay. A system with a strict per-operation deadline must inspect allocation, relocation and other slow paths rather than relying on the average sequence charge.
 
-Ways to avoid spikes:
+Possible approaches include reserving enough capacity before the hot path, filling a pre-sized container by index, using fixed-size chunks, or spreading migration work across updates. Each has costs: extra memory, more complicated lookup rules or allocation at chunk boundaries. None alone promises a fixed wall-clock deadline.
 
-- **Preallocate** when you know the size: `reserve()` in C++, `with_capacity()` in Rust, `[None] * n` in Python.
-- **Incremental resizing.** Redis's hash tables rehash gradually: they keep the old and new tables side by side and move a few buckets on each operation (and in a background timer), so no single command pays for the whole rehash.
+In Python, `[None] * n` creates a list with n actual elements. Fill those slots by index; appending instead adds after them. It is not an empty list with reserved capacity.
 
-**Amortisation can break if expensive states can be replayed.** The proofs assume each expensive operation is preceded by many cheap ones that build up credit. If a data structure is shared and old versions can be reused (some persistent or functional structures), an adversary can trigger the expensive operation on the same "full" version repeatedly. Okasaki's work on purely functional data structures handles this with lazy evaluation.
+The proof also assumes updates progress through states. Reusing an old version of a persistent data structure can repeat expensive work without rebuilding credit. Such structures need an analysis of sharing and deferred work, not an automatic reuse of an imperative proof.
 
 ## Key takeaways
-- Counters and two-stack queues reuse the same sequence-cost reasoning.
-- A good amortised bound does not guarantee a fast individual operation.
-- Preallocation and incremental resizing can help workloads with tight latency requirements.
+- Count how often each item or bit can incur work over a sequence.
+- Amortised cost bounds total work, not tail latency.
+- Preallocation or incremental work needs its own capacity and latency assumptions.
 
 ## Further reading
-- [Amortized analysis — Wikipedia](https://en.wikipedia.org/wiki/Amortized_analysis)
-- [CPython listobject.c (list growth policy)](https://github.com/python/cpython/blob/main/Objects/listobject.c)
 - [Erickson: Amortized Analysis](https://jeffe.cs.illinois.edu/teaching/algorithms/notes/09-amortize.pdf)
+- [Python sequence operations](https://docs.python.org/3.14/library/stdtypes.html)

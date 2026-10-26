@@ -11,26 +11,13 @@ summary: A functionally complete collection expresses every Boolean truth table.
 
 Not five. Implication and the biconditional can be rewritten with the others, and OR can be rewritten with NOT and AND:
 
-```formula
-p → q ≡ ¬p ∨ q
-p ↔ q ≡ (p → q) ∧ (q → p)
-p ∨ q ≡ ¬(¬p ∧ ¬q)
-where
-p, q: propositions, each true or false
-¬: NOT
-∧: AND: true only when both sides are true
-∨: OR: true when at least one side is true
-→: implies
-↔: if and only if
-≡: is logically equivalent to
-In words: anything written with → and ↔ can be rewritten with NOT, AND and OR, and by De Morgan OR itself can be written with NOT and AND.
-```
+Implication can be expressed as NOT-premise OR conclusion. A biconditional combines implications in both directions. De Morgan then rewrites OR using only NOT and AND.
 
-So the set {not, ∧, or } can express every truth table, and even {not, and } alone suffices. A set like this is **functionally complete**.
+NOT, AND and OR can express every Boolean truth table: describe each accepted row with an AND of its required input values, then join the accepted rows with OR. De Morgan shows that NOT and AND alone suffice too. A set like this is **functionally complete**.
 
 Remarkably, a single connective is enough: **NAND** ("not and"), written ↑. Feeding a value into both inputs of a NAND negates it, which is the key to building the rest:
 
-```formula
+```formula essential
 p ↑ q ≡ ¬(p ∧ q)
 ¬p ≡ p ↑ p
 p ∧ q ≡ (p ↑ q) ↑ (p ↑ q)

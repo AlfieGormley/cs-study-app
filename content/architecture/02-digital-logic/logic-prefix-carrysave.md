@@ -11,7 +11,7 @@ summary: Associative span combination enables logarithmic prefix depth.
 
 Generate and propagate pairs for neighbouring spans of bits combine with an associative operator:
 
-```formula
+```formula reference
 (G, P) ∘ (G′, P′) = (G + P·G′, P·P′)
 where
 G, P: the generate and propagate signals of the more significant span of bits
@@ -22,37 +22,27 @@ G′, P′: the generate and propagate signals of the adjacent less significant 
 In words: the combined span generates a carry if the upper part generates one, or the upper part propagates one that the lower part generated; it propagates only if both parts propagate.
 ```
 
-Because the operator is associative (the grouping does not matter), the carries for all positions are a **parallel prefix** computation (like a prefix sum), which can be done in a tree whose depth grows with the logarithm of the width:
+Because the operator is associative (the grouping does not matter), the carries for all positions are a **parallel prefix** computation (like a prefix sum), which can be done in a tree whose depth grows with the logarithm of the width.
 
-```formula
-L = ⌈log_2(n)⌉
-L = ⌈log_2(64)⌉ = 6
-where
-L: the number of binary prefix-tree levels (Kogge–Stone), excluding input and final-sum logic
-⌈ ⌉: ceiling, rounding up to a whole number
-n: the adder width in bits
-log_2: logarithm base 2: how many times you must double 1 to reach n, since 2^6 = 64
-In words: each level doubles the span each carry covers, so 64 bits need 6 levels instead of a 64-stage ripple, and doubling the width adds just one level.
-```
+Each binary prefix level combines neighbouring spans and doubles the reach of a carry calculation. Doubling the adder width adds one such combining level, instead of doubling a serial carry chain.
 
 The classic designs trade depth against area and wiring:
 
-| Adder | 64-bit topology model | Trade-off |
+| Adder | Structure | Trade-off |
 |---|---|---|
-| Ripple-carry | 64 carry stages | Simple linear chain |
-| Kogge–Stone | 6 prefix levels | Shallow tree, substantial wiring |
-| Brent–Kung | 11 scheduled rows | Fewer cells, deeper |
-| Han–Carlson | 7 | A hybrid |
+| Ripple-carry | Serial carry chain | Simple, depth grows with width |
+| Kogge–Stone | Broad prefix tree | Shallow tree, substantial wiring |
+| Brent–Kung | More selective prefix tree | Fewer combining cells, deeper paths |
+| Han–Carlson | Hybrid prefix structure | Balances depth and wiring |
 
-These counts exclude input generate/propagate and final-sum logic. The Brent–Kung count uses the original buffered layout: its scheduled rows include forwarding stages. Counting only combining cells on the longest unbuffered path instead gives ten at 64 bits. Keep the counting convention explicit when comparing drawings. Cell delay, fan-out, routing and design variants determine actual speed and area.
+These comparisons concern topology. Input logic, final-sum logic, cell delay, fan-out and routing also affect actual speed and area.
 
 ## Beyond addition
 
 - **Multiplication** is many additions. Hardware multipliers generate all partial products at once and sum them with trees of **carry-save adders**, which add three numbers into two without propagating carries, so only one real carry-propagate add is needed at the end.
 - **Division** commonly uses iterative hardware, but algorithms, latency, throughput and operand dependence vary by processor.
 
-> [!note] Evidence gap
-> Universal modern-CPU multiplication/division cycle counts are omitted because no target processor, instruction or measurement was supplied.
+Instruction latency is a property of a particular processor and instruction, not a consequence of the word “multiply” or “divide” alone.
 
 ## Key takeaways
 - Associative span combination enables logarithmic prefix depth.

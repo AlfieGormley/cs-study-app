@@ -37,22 +37,18 @@ next rising edge   0      0        0
 
 The latch passes the short pulse on D because the clock happens to be high. The flip-flop ignores it, because D was 0 at both surrounding edges. In the ideal single-clock model, registers sample at the same edge. Real clock skew, clock-to-Q, setup/hold and wire delays reduce or shift the available budget; synchronous designs can also use carefully timed latches.
 
+> [!analogy] Real-world analogy: Live view and a snapshot
+> A camera's live view follows a scene as it changes. A saved snapshot keeps one view after the scene moves on.
+>
+> **How it maps:** An enabled D latch follows changing data like a live view. An edge-triggered flip-flop retains the value sampled around an edge like a snapshot.
+>
+> **Where it stops:** Sampling is not physically instantaneous. Data must meet setup and hold requirements, and the output changes after clock-to-Q delay.
+
 ## Building blocks from flip-flops
 
-- **Register**: n flip-flops sharing one clock. To make it hold its value unless `load` is asserted, put a 2-to-1 mux in front of each D:
+- **Register**: a group of flip-flops sharing one clock, one flip-flop per stored bit. To make it hold its value unless `load` is asserted, put a 2-to-1 mux in front of each D.
 
-```formula
-D = L′·Q + L·D_new
-where
-D: the flip-flop's data input, sampled at the next clock edge
-Q: the flip-flop's current output (its stored value)
-L: the load signal (`load` in the text): 1 to load a new value
-L′: NOT L
-D_new: the new value to load
-·: AND: 1 only when both sides are 1
-+: OR: 1 when at least one side is 1
-In words: when load is 0 the flip-flop is fed its own output and keeps its value; when load is 1 it is fed the new value. In code this is `D = load ? new : Q`.
-```
+A load mux chooses either the current stored output (hold) or the new data (load) as the flip-flop input. The clock continues running; selecting feedback makes the next sampled value equal the old one.
 
 This avoids naive combinational clock gating. Proper integrated clock-gating cells or dedicated FPGA clock-enable resources can safely save power when used with their timing rules.
 - **Shift register**: each flip-flop's Q feeds the next one's D; data moves one place per clock. Used for serial links and delay lines.

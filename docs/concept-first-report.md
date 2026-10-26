@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 13/86 modules and 175/2717 active lessons have current independent editorial reviews.
+Status: **in progress**. 17/86 modules and 321/2717 active lessons have current independent editorial reviews.
 
 The user requested the whole library. This report counts only active lesson IDs from module.json. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -8,12 +8,14 @@ The rule for future content is in [the authoring brief](concept-first-brief.md),
 
 Comparison baseline: `5b8fb6f2709893396373ba979ba194aacf5cb034`. Lesson IDs, question IDs and question ownership must match this baseline. Archived originals and progress migrations remain unchanged.
 
+Focused dictionary integration corrections and exact-definition equivalence reviews are recorded in [the integration review](concept-first-integration-review.json). A focused glossary correction does not count as a completed module rewrite. Reviewer records retain checks that were pending at handoff; subsequent compiled-check closure is recorded separately in that integration report.
+
 “Review units” below retain each independent reviewer’s stated counting method. Some are grouped claim sets, not atomic assertions; counts must not be compared as a quality score. The linked verification records preserve earlier factual/glossary history and define the fresh review scope.
 
 | Module | Status | Lessons | Questions | Lesson formula cards before → after | Essential / reference | Question cards before → after | Glossary terms | Review units | Corrections |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
 | architecture / Data Representation | Pending review | 37 | — | — | — | — | — | — | — |
-| architecture / Digital Logic | Pending review | 34 | — | — | — | — | — | — | — |
+| [architecture / Digital Logic](../content/architecture/02-digital-logic/verification.json) | Reviewed | 34 | 74 | 79 → 41 | 29 / 12 | 154 → 0 | 262 | 154 | 6 |
 | architecture / Instruction Sets & Assembly | Pending review | 35 | — | — | — | — | — | — | — |
 | architecture / Pipelining & CPU Performance | Pending review | 29 | — | — | — | — | — | — | — |
 | architecture / Caches & the Memory Hierarchy | Pending review | 31 | — | — | — | — | — | — | — |
@@ -23,7 +25,7 @@ Comparison baseline: `5b8fb6f2709893396373ba979ba194aacf5cb034`. Lesson IDs, que
 | databases / Relational Theory & Normalisation | Pending review | 35 | — | — | — | — | — | — | — |
 | databases / Query Processing & Optimisation | Pending review | 33 | — | — | — | — | — | — | — |
 | databases / PostgreSQL | Pending review | 13 | — | — | — | — | — | — | — |
-| dsa / Complexity Analysis | Pending review | 35 | — | — | — | — | — | — | — |
+| [dsa / Complexity Analysis](../content/dsa/01-complexity/verification.json) | Reviewed | 35 | 81 | 79 → 17 | 13 / 4 | 211 → 14 | 150 | 181 | 24 |
 | dsa / Arrays, Lists, Stacks & Queues | Pending review | 32 | — | — | — | — | — | — | — |
 | dsa / Hash Tables & Hashing | Pending review | 37 | — | — | — | — | — | — | — |
 | dsa / Trees & Heaps | Pending review | 35 | — | — | — | — | — | — | — |
@@ -92,14 +94,124 @@ Comparison baseline: `5b8fb6f2709893396373ba979ba194aacf5cb034`. Lesson IDs, que
 | system-design / Reliability, Operations & Security | Pending review | 38 | — | — | — | — | — | — | — |
 | system-design / Case Studies I | Pending review | 43 | — | — | — | — | — | — | — |
 | system-design / Case Studies II | Pending review | 42 | — | — | — | — | — | — | — |
-| theory / Logic & Proofs | Pending review | 37 | — | — | — | — | — | — | — |
-| theory / Discrete Structures | Pending review | 40 | — | — | — | — | — | — | — |
+| [theory / Logic & Proofs](../content/theory/01-logic-proofs/verification.json) | Reviewed | 37 | 74 | 80 → 34 | 32 / 2 | 91 → 4 | 278 | 43 | 15 |
+| [theory / Discrete Structures](../content/theory/02-discrete-structures/verification.json) | Reviewed | 40 | 75 | 119 → 56 | 34 / 22 | 110 → 2 | 344 | 123 | 13 |
 | theory / Probability for Computer Science | Pending review | 41 | — | — | — | — | — | — | — |
 | theory / Automata & Regular Languages | Pending review | 32 | — | — | — | — | — | — | — |
 | theory / Context-Free Languages & Computability | Pending review | 32 | — | — | — | — | — | — | — |
 | theory / Complexity Theory | Pending review | 47 | — | — | — | — | — | — | — |
 
 The report certifies editorial provenance only. Build, migration, rendering, offline and deployed-version evidence must be checked separately before publication.
+
+## architecture / Digital Logic
+
+59 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- Scoped the visible carry-XOR overflow rule to fixed-width addition/subtraction, matching the already corrected glossary and executable model.
+- Defined picoseconds explicitly for every retained setup/hold delay term, making each reference card independently understandable.
+- Qualified incomplete combinational assignment synthesis and its question with reachability, independent-input and used-output assumptions.
+- Corrected the changed bit-line glossary definition: paired complementary lines describe the standard 6T cell, not every SRAM port/cell implementation.
+- Rephrased active wrong-sense glossary matches for inversion circles, carry propagation, complete CDC words, static hazards, Python integers and first-stage access without changing other modules.
+- Removed reliance on a hidden width symbol in ALU slices, named the two memory technologies in their comparison and cleaned obsolete formula introductions.
+
+**Scope gaps and exclusions:**
+
+- No transistor-level simulation, measured cell-library timing, physical SRAM/DRAM experiment, target-specific synchroniser MTBF, FPGA placement or silicon validation was performed. The lessons retain these limits explicitly.
+- Yosys is not installed: synthesis claims were checked against the official process/FSM documentation, while Icarus executed RTL behaviour. RTL recovery is not claimed to prove synthesized fault recovery.
+- The current generic RISC-V redirect was unavailable to the web tool; the official versioned 20240411 RV32I/RV64I specification was fetched for the unchanged base-ISA semantics.
+- Whole-project generated assets, browser/offline checks and cross-module compilation belong to the coordinating agent. This review uses current source, not stale compiled data.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, logic-universal-gates: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-cmos-networks: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-gate-delay-power: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-shared-bus-safety: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-prefix-carrysave: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-cdc-metastability: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-fsm-design: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-register-file: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-single-cycle-control: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-sram-array: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-dram-refresh: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+- medium confidence, logic-verilog-fsm-scheduling: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
+
+
+## dsa / Complexity Analysis
+
+81 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- Removed universal20–40 exponential feasibility threshold; hardware statements explicitly conditional on candidate/check cost and budget.
+- Removed nonstandard total-problem terminology; preserved glossary ID but replaced display label with Termination guarantee.
+- Corrected streaming total space, generator memory, word-RAM width and reallocation assumptions.
+- Removed cache-aware alias from cache-oblivious and binary-insertion-sort alias from ordinary insertion sort.
+- Removed stale matrix exponent record and blanket never-practical claim; BLAS interface no longer mandates cubic algorithm.
+- Added exact Master power-gap/log-extension/regularity and Akra polynomial-growth conditions outside reference card.
+- Selection recurrence is a worst-case upper bound with rounding, not an exact equality.
+- Binary counter starts zero, array potential starts capacityzero, and aggregate examples state starting state.
+- Removed unsupported throughput models and hardware/cache ratios; retained the distinction between incident-specific evidence and general exponential backtracking after the independent correction below.
+- Fixed dangling removed-card references, numeric crossover residue, and binary insertion comparison/move distinction.
+- Induction question cx-recurrences-q11 had a second true distractor about a missing base case; changed it to claim this is the only flaw and would repair the proof.
+- Added constant-cost work/arithmetic assumptions to the standalone nested-loop, geometric-loop, harmonic-loop and recurrence-from-code prompts.
+- CPython operation question now explicitly requests amortised end-pop cost and worst-case costs for the other operations, removing an ambiguous selection contract.
+- Scoped the merge-sort space distractor to standard array merge sort so specialised in-place merge methods do not make the blanket wording defensible.
+- Defined Phi as stored potential in the standalone potential-method question.
+- Replaced dangling c in simplification feedback with fixed bound multipliers after the original defining arithmetic had been removed.
+- Defined n and the logarithm locally in the operation-budget question.
+- Removed the unsupported exact quadratic classification of the2019 Cloudflare outage; primary report establishes excessive backtracking/CPU exhaustion and does not justify one universal degree for all search inputs.
+- Qualified the basic-operation glossary example: fixed-size inputs alone do not guarantee a fixed-size running total.
+- Replaced blur-filter glossary source with official OpenCV neighbourhood/kernel documentation; the introductory algorithm chapter did not substantiate that definition.
+- Replaced insertion-sort glossary source with the actual Princeton textbook section covering ordinary versus binary insertion comparisons/moves.
+- Replaced two-pointer glossary source with MIT k-SUM lecture material proving the bounded monotonic scans.
+- Replaced galactic-algorithm glossary source with a primary researcher article that actually explains this informal usage.
+- Rephrased child-cost prose to avoid recursive-term opening an unrelated recursive-SQL dictionary entry.
+
+**Scope gaps and exclusions:**
+
+- Universal cross-language speed ratios and memory latency figures lack reproducible measurements and are explicitly omitted.
+- No benchmark-derived crossover recommendation for a particular deployment.
+- Code execution uses small representative inputs and explicit harness assumptions; it is not a proof for arbitrary inputs.
+- The35 units preserve the depth of the seven originals. Two naturally small units retain honest two-minute estimates;33 units use three-to-five-minute estimates. Some focused units have one question rather than padding them with unrelated questions.
+- No target-machine benchmark or universal deadline/feasibility cutoff is supplied; practical claims are conditional and recommend measurement.
+- Full arbitrary Akra–Bazzi perturbation proof is linked rather than taught; visible exact-fraction assumptions and the examples remain complete.
+- Unchanged historical glossary provenance is retained; this pass does not assert a fresh primary-source citation for every unchanged dictionary sentence.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, cx-growth-rates: Version- and implementation-sensitive runtime details or illustrative cost assumptions Core asymptotic reasoning checked against teaching sources and code/counts recomputed. Implementation details are qualified and valid only for the cited builds/model; this record does not assert a primary source individually attached to every retained sentence.
+- medium confidence, cx-asymptotic-notation: Version- and implementation-sensitive runtime details or illustrative cost assumptions Core asymptotic reasoning checked against teaching sources and code/counts recomputed. Implementation details are qualified and valid only for the cited builds/model; this record does not assert a primary source individually attached to every retained sentence.
+- medium confidence, cx-analysing-code: Version- and implementation-sensitive runtime details or illustrative cost assumptions Core asymptotic reasoning checked against teaching sources and code/counts recomputed. Implementation details are qualified and valid only for the cited builds/model; this record does not assert a primary source individually attached to every retained sentence.
+- medium confidence, cx-space-complexity: Version- and implementation-sensitive runtime details or illustrative cost assumptions Core asymptotic reasoning checked against teaching sources and code/counts recomputed. Implementation details are qualified and valid only for the cited builds/model; this record does not assert a primary source individually attached to every retained sentence.
+- medium confidence, cx-amortised-analysis: Version- and implementation-sensitive runtime details or illustrative cost assumptions Core asymptotic reasoning checked against teaching sources and code/counts recomputed. Implementation details are qualified and valid only for the cited builds/model; this record does not assert a primary source individually attached to every retained sentence.
+- medium confidence, cx-recurrences: Version- and implementation-sensitive runtime details or illustrative cost assumptions Core asymptotic reasoning checked against teaching sources and code/counts recomputed. Implementation details are qualified and valid only for the cited builds/model; this record does not assert a primary source individually attached to every retained sentence.
+- medium confidence, cx-in-practice: Version- and implementation-sensitive runtime details or illustrative cost assumptions Core asymptotic reasoning checked against teaching sources and code/counts recomputed. Implementation details are qualified and valid only for the cited builds/model; this record does not assert a primary source individually attached to every retained sentence.
+- medium confidence, cx-growth-rates: Glossary term 'Total problem' (used in the lesson's definition of an algorithm) retrofit: 'total problem' is not a standard textbook term; the definition is a reasonable reading by analogy with total vs partial functions (Wikipedia: Partial function), but no primary algorithms text defines it this way.
+- medium confidence, cx-space-complexity: Glossary alias 'two pointers' now resolves DSA-wide to the general two-pointer-technique entry (overriding dsa/02's fast/slow entry) retrofit: the definition now covers both opposite-ends and same-direction (fast/slow) variants, so dsa/02 and dsa/09 uses read correctly; but several DSA lessons use 'two pointers' literally (e.g. 'one or two pointers plus allocator bookkeeping' in dsa/02, 'only two pointers are stored' in dsa/04), which will also link. Those modules are outside this verifier's scope.
+- medium confidence, cx-growth-rates: Glossary 'Exponential time': practical only up to about n = 20 to 40 for 2^n retrofit: an order-of-magnitude rule of thumb consistent with the lesson's 10^8 ops/s model (2^25 to 2^35 steps), not a sourced figure.
+- medium confidence, cx-counting-work: Inherited nonstandard total-problem glossary terminology Core algorithm properties are primary-source checked. The unchanged glossary term still lacks a primary algorithms textbook definition, as the inherited record honestly states.
+- medium confidence, cx-recursive-hidden-work: Simplified costs for CPython operations Current implementation is fetched and examples run. Counts assume bounded-value or constant-cost comparisons/hash operations and describe this cost model; arbitrary user objects or large integers require separate analysis.
+- medium confidence, cx-recursion-memory: CPython recursion limit and atomic-number space model Current source defines1000 and the independent local Python3.14.4 run observed1000. Builds and user configuration can differ; whole-number bit storage is explicitly treated separately.
+- medium confidence, cx-in-place-memory: Implementation-specific list-sort auxiliary allocation Current CPython listsort primary source supports up to half-list temporary pointers; it is an implementation statement, not a permanent Python-language guarantee.
+- medium confidence, cx-memory-tradeoffs: Typical64-bit CPython object sizes and packed-buffer memory budgets The text is qualified and asks the reader to measure their build. This run observes28-byte int(1); 80/360MB arithmetic is recomputed, but allocator, value magnitude and construction overhead depend on the deployment.
+- medium confidence, cx-resizing-policies: CPython/OpenJDK/libstdc++ growth factors Fetched current implementation sources support the qualified factors. These are version-sensitive implementation details; Rust documents no particular factor guarantee.
+- medium confidence, cx-amortised-latency: Resize latency and Redis incremental-rehash implementation The data movement model and current Redis source are checked. The module does not claim a reproducible latency distribution or promise that every incremental step has a fixed wall-clock bound.
+- medium confidence, cx-constants-locality: Practical performance ratios, sorting/multiplication crossover and cache-line assumptions Algorithm and implementation structure are source-checked; the preserved qualitative several-times performance language has no reproducible target-specific benchmark.64-byte lines and8-byte elements are explicit illustrative assumptions where calculations depend on them.
+- medium confidence, cx-measuring-algorithms: Historical Knuth quotation and deployment-specific timing interpretation timeit measurement guidance is fetched and ratios recomputed. The original quotation attribution is retained but its primary paper was inaccessible through the web tool; the citation is not upgraded to high confidence.
+- medium confidence, cx-recursive-hidden-work: Runtime-specific implementation and practical performance scope Core mechanism, cited implementation/API and model arithmetic are verified. CPython3.14 branches, configured recursion limits, allocation, cache effects and target timing can vary; visible text preserves their scope and no target performance guarantee is asserted.
+- medium confidence, cx-recursion-memory: Runtime-specific implementation and practical performance scope Core mechanism, cited implementation/API and model arithmetic are verified. CPython3.14 branches, configured recursion limits, allocation, cache effects and target timing can vary; visible text preserves their scope and no target performance guarantee is asserted.
+- medium confidence, cx-in-place-memory: Runtime-specific implementation and practical performance scope Core mechanism, cited implementation/API and model arithmetic are verified. CPython3.14 branches, configured recursion limits, allocation, cache effects and target timing can vary; visible text preserves their scope and no target performance guarantee is asserted.
+- medium confidence, cx-memory-tradeoffs: Runtime-specific implementation and practical performance scope Core mechanism, cited implementation/API and model arithmetic are verified. CPython3.14 branches, configured recursion limits, allocation, cache effects and target timing can vary; visible text preserves their scope and no target performance guarantee is asserted.
+- medium confidence, cx-aggregate-appends: Runtime-specific implementation and practical performance scope Core mechanism, cited implementation/API and model arithmetic are verified. CPython3.14 branches, configured recursion limits, allocation, cache effects and target timing can vary; visible text preserves their scope and no target performance guarantee is asserted.
+- medium confidence, cx-resizing-policies: Runtime-specific implementation and practical performance scope Core mechanism, cited implementation/API and model arithmetic are verified. CPython3.14 branches, configured recursion limits, allocation, cache effects and target timing can vary; visible text preserves their scope and no target performance guarantee is asserted.
+- medium confidence, cx-amortised-latency: Runtime-specific implementation and practical performance scope Core mechanism, cited implementation/API and model arithmetic are verified. CPython3.14 branches, configured recursion limits, allocation, cache effects and target timing can vary; visible text preserves their scope and no target performance guarantee is asserted.
+- medium confidence, cx-constants-locality: Runtime-specific implementation and practical performance scope Core mechanism, cited implementation/API and model arithmetic are verified. CPython3.14 branches, configured recursion limits, allocation, cache effects and target timing can vary; visible text preserves their scope and no target performance guarantee is asserted.
+- medium confidence, cx-measuring-algorithms: Runtime-specific implementation and practical performance scope Core mechanism, cited implementation/API and model arithmetic are verified. CPython3.14 branches, configured recursion limits, allocation, cache effects and target timing can vary; visible text preserves their scope and no target performance guarantee is asserted.
+- medium confidence, cx-memory-tradeoffs: Historical two pointers alias can match a literal two-pointer count in another DSA module The corrected definition covers opposite-end and monotonic-window patterns; the existing broad alias remains because other modules use it. Those other modules require their own semantic rendering review; prior qualification is preserved.
+
 
 ## dsp / Samples, Signals and Levels
 
@@ -476,4 +588,75 @@ None recorded in this editorial review.
 - medium confidence, fund-quorum-read-guarantees: ZooKeeper sync() is not a strict linearisability guarantee under every failure Supported by Apache project issue/developer discussion, while the programmer guide presents a simpler freshness description.
 - medium confidence, fund-durable-write-batching: Kafka and PostgreSQL defaults and Redis persistence exposure Current version-specific docs checked, including Kafka historical idempotence bug; configuration and failure assumptions must be rechecked for deployment.
 - medium confidence, fund-estimation-fleet-capacity: Per-node capacity and resource headroom examples Hypothetical exercise capacities; arithmetic checked without production benchmarking.
+
+
+## theory / Logic & Proofs
+
+70 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- Glossary coverage: add a precisely named SAT conflict entry and use that name at its introduction, without aliasing the ordinary word conflict.
+- SQL NULL: replace the overbroad comparison definition with ordinary equality/ordering UNKNOWN, WHERE accepting only TRUE, IS NULL, and valid three-valued De Morgan laws; the owning source exactly matches discrete structures.
+- Loop correctness: both the glossary and lesson introduction now say invariant initialisation/maintenance/exit prove partial correctness; termination is an additional obligation for total correctness.
+- Euclid glossary: remove the bare Euclid alias that could open the infinitude-of-primes theorem in the gcd algorithm context.
+- Solver restarts: qualify preserved learned clauses with deletion policies and retain root consequences, rather than implying every learned clause is permanently retained.
+- Partial-correctness glossary: replace nobody-can-prove wording with the current unproved universal Collatz termination claim, retaining time-sensitive confidence.
+- SAT complexity: replace fast-on-every-input shorthand with polynomial-time reductions/algorithms and distinguish asymptotic growth from practical speed in the introductory and complexity lessons.
+- Logical guard rewriting: explicitly require ordinary Boolean, side-effect-free attributes and preserve safe short-circuit evaluation order.
+- Big-O question logp-predicate-q9: a stronger proposed condition was also sufficient evidence of failure; ask for the exact negation without stronger requirements and use inclusive no-greater-than bound wording.
+- Question logp-propositional-q7: remove the comment explicitly supplying True/False answers before the learner predicts the output.
+- Question logp-predicate-q5: remove the comment explicitly supplying both printed truth values.
+- Question logp-induction-q4: replace the comment revealing the odd-input failure with a neutral description of the recursive step.
+- Invalid-argument explanation: distinguish p and q within the implication from the premises and conclusion of the whole argument; the counterexample must have true argument premises and a false argument conclusion.
+- Contextual glossary capture: replace ordinary Recall in the active contrapositive lesson, where compiled lookup opened the unrelated true-positive-rate metric.
+- Contextual glossary capture: replace algebraic factoring wording in the faulty-proof feedback, where compiled lookup opened integer prime factorisation.
+
+**Scope gaps and exclusions:**
+
+- No substantive archived topic removed; SAT proof logging, industrial encodings and formal proof-assistant mechanisation remain introductory or outside the original scope.
+- No unbounded program claim is inferred from a finite experiment: native runs supplement the explicit algebraic, inductive, invariant and well-founded arguments.
+- No requested conceptual objective is missing. Long derivations, formula memorisation and routine arithmetic were deliberately removed; their removal is not counted as an accuracy correction.
+- Formal mechanisation of the proofs, full production SAT solver internals and reproducible cryptographic/SAT performance benchmarks are outside this introductory module. Existing unsupported benchmark/density examples remain omitted, not relabelled as fresh verified claims.
+- Full-library build, iPhone/offline rendering and deployment are coordinator integration checks, not claimed by this scoped verifier.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, logp-invariants-hoare: Collatz termination for every positive integer remains an open problem; this status is time-sensitive. Checked against freshly fetched Terence Tao primary exposition and a current literature search. No accepted full proof located; future mathematical developments require rechecking the status.
+- medium confidence, logp-invariants-hoare: Universal termination of the Collatz loop remains an open conjecture. Freshly fetched Tao research still treats the universal statement as a conjecture; finite executions cannot prove it, and mathematical status must be rechecked after future developments. The partial-correctness argument itself is high confidence.
+
+
+## theory / Discrete Structures
+
+70 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- SQL NULL glossary: replace the claim that NULL breaks De Morgan with ordinary-comparison UNKNOWN semantics, IS NULL and validity of De Morgan in three-valued logic; verified by PostgreSQL truth tables and all nine SQL cases. The earlier-module compiled lookup is still a separate dependency.
+- Mathematical-function glossary: deterministic routines require termination and relevant state included in their inputs to model total functions; the square example now explicitly uses non-negative integer outputs so the zero case is unambiguous.
+- Incomparable/comparable glossary: remove aliases that opened the opposite concept and provide the independently checked comparable-elements entry.
+- Lattice glossary: remove semilattice aliases because existence of joins alone does not guarantee meets; Shapiro’s original paper supports the state-based merge distinction.
+- Lamport-clock glossary: remove happened-before aliases, which denote the causal relation rather than a scalar timestamp; use the original 1978 paper.
+- Search-space glossary: candidate count alone does not determine runtime; include generation/checking cost.
+- Complement-counting glossary: replace an unconditional fastest-method claim with a conditional simpler-method explanation.
+- Cartesian-product ordered-pair example: replace (1,x) versus (x,1), which coincide when x is one, with the genuinely distinct (1,2) and (2,1).
+- Prime-density card: define the previously unexplained approximation operator and its asymptotic ratio meaning.
+- Composition card: explicitly identify the input, intermediate and final sets used in its definitions.
+- Euclid takeaway: actual renderer opened the infinitude-of-primes theorem for a sentence about the gcd algorithm; precise Euclidean algorithm wording now opens the correct entry.
+- Function-properties prose: actual renderer opened operating-system I/O for input and output sets; separate domain and codomain clauses preserve the mathematical meaning and avoid that false link.
+- Partial-orders prose: after removing the incorrect lattice alias, bare semilattice had no glossary target; use the precise existing join-semilattice term.
+
+**Scope gaps and exclusions:**
+
+- Full proofs of Cayley, Dirac, Kuratowski, the four colour theorem and the master theorem remain referenced rather than developed, matching the inherited scope.
+- No reproducible RSA latency benchmark or universal attack-time estimate is asserted. Gidney2025 is explicitly a modelled resource estimate under specified assumptions.
+- SQL NULL integration dependency: this module’s corrected definition remains shadowed by theory/01-logic-proofs/sql-null (compiled theory--sql-null in the isolated current-source snapshot). The owning-module revision and final compiled lookup are assigned to root; no ID was renamed or duplicated to force precedence.
+- Full proofs of Cayley, Dirac, Kuratowski, four-colour and master theorems remain linked rather than developed, matching the existing short-lesson scope.
+- No universal RSA performance or attack-time benchmark is claimed; the existing evidence-gap note remains.
+- Browser/mobile/offline and the final shared generated catalogue are root integration checks; this pass independently rendered glossary contexts in an isolated scratch compilation.
+- The other 336 unchanged glossary records retain their historical confidence and provenance; they are not counted as freshly fact-verified in this concept-first pass.
+
+**Low-confidence areas, including preserved qualifications:**
+
+None recorded in this editorial review.
 

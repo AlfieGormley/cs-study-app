@@ -56,6 +56,12 @@ rewritten question ids and their reasons in that lesson's `questionsRewritten` o
 scoped to the editorial changes and classification; it must not claim fresh full verification of unrelated
 unchanged material. Existing verification of unchanged glossary entries can be preserved.
 
+Put this pass's `summary` (`claimsChecked`, `errorsCorrected` and a clear counting method), `corrections`,
+`gaps` and `lowConfidence` inside `conceptFirstReview`. Keep those counts separate from older top-level
+summaries and history. Say whether a count represents complete lesson/question groups or individual
+claims; do not add historical and current counts together. Record dictionary corrections that are still
+shadowed by an earlier module as unresolved integration dependencies until the compiled lookup is checked.
+
 Do not add optional maths simply to save content that should be deleted. Prefer fewer useful reference
 cards to a long hidden appendix. Retain code when code behaviour is the concept being taught. A theory
 lesson may need visible definitions or a short proof; removing essential notation to meet a numerical

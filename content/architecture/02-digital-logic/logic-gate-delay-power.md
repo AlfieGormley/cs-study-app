@@ -2,7 +2,7 @@
 id: logic-gate-delay-power
 title: Gate delay and switching power
 level: basic
-minutes: 4
+minutes: 3
 sourceLesson: logic-gates-cmos
 summary: Clock period limits the available logic delay.
 ---
@@ -13,24 +13,7 @@ summary: Clock period limits the available logic delay.
 
 A gate's output does not change instantly. Its output has to charge or discharge the capacitance of the wires and gate inputs it drives. Propagation delay characterises the input-to-output response under specified thresholds, load, slew, process, voltage and temperature. A timing model may bound the time until a valid output.
 
-> [!note] Evidence gap
-> A universal modern-gate delay is omitted because no process, library cell, load or operating corner was supplied to verify the previous ten-picosecond figure.
-
-That sounds negligible until you do the arithmetic. The time for one clock cycle is one divided by the clock frequency:
-
-```formula
-T = 1 / f
-T = 1 / (3 × 10^9 Hz)
-T ≈ 3.33 × 10^{-10} s ≈ 333 ps
-where
-T: the clock period, the time for one cycle, in seconds (s) or picoseconds (ps)
-f: the clock frequency, in hertz (Hz); here 3 GHz = 3 × 10^9 Hz
-Hz: hertz, cycles per second
-s: seconds
-ps: picoseconds: 1 ps = 10^{-12} s, a millionth of a millionth of a second
-≈: approximately equal to (rounded)
-In words: a 3 GHz clock ticks every third of a nanosecond, about 333 ps, and the logic between two registers must settle within that.
-```
+A higher clock frequency gives each cycle less time. The logic must settle before the next capture edge, allowing for the registers and clock timing too. Gate delay has no universal value: it depends on the selected cell, load and operating conditions.
 
 How many gate stages fit depends on cell and wire delays and register overhead, which is why the depth of a circuit (the longest chain of gates, the **critical path**) matters as much as its size.
 
@@ -38,9 +21,9 @@ Delay grows with **fan-out**, the number of gate inputs one output drives, becau
 
 ### Where the power goes
 
-Each time a gate's output switches from 0 to 1, it charges its load capacitance from the supply; switching back to 0 dumps that charge to ground. The resulting **dynamic power** is approximately:
+Each time a gate's output switches from 0 to 1, it charges its load capacitance from the supply; switching back to 0 dumps that charge to ground. This **dynamic power** increases with switching activity, load capacitance and clock frequency. Supply voltage has a squared effect when the other factors stay fixed. The optional relationship is useful for estimates:
 
-```formula
+```formula reference
 P_dynamic ≈ αCV^2 f
 where
 P_dynamic: the dynamic (switching) power, in watts (W)
@@ -56,27 +39,7 @@ Hz: hertz, cycles per second
 In words: switching power grows in proportion to how often nodes switch, how much capacitance they drive and the clock rate, and with the square of the supply voltage.
 ```
 
-For example, with illustrative numbers (not a real chip) α = 0.1, C = 1 nF of total switched capacitance, V = 1.0 V and f = 3 GHz:
-
-```formula
-P_dynamic ≈ αCV^2 f
-P_dynamic ≈ 0.1 × 10^{-9} F × (1.0 V)^2
-            × 3 × 10^9 Hz
-P_dynamic ≈ 0.3 W
-where
-P_dynamic: the dynamic power, in watts (W)
-α: the activity factor, here 0.1 transitions per node per cycle
-C: the switched capacitance, here 1 nF (nanofarad) = 10^-9 F
-V: the supply voltage, here 1.0 V (V is also the symbol for volts, its unit)
-f: the clock frequency, here 3 GHz (gigahertz) = 3 × 10^9 Hz
-F: farads, the unit of capacitance
-Hz: hertz, cycles per second
-W: watts: one watt is one joule of energy per second
-≈: approximately equal to
-In words: these illustrative numbers give about 0.3 watts of switching power. Lowering the voltage to 0.8 V alone would multiply it by 0.8 × 0.8 = 0.64, saving 36 %.
-```
-
-The V² term makes voltage reduction powerful at fixed activity and capacitance, but voltage limits and performance requirements constrain it. It is also why phones scale voltage and frequency together (DVFS). **Clock gating**, which stops the clock to idle blocks, attacks α.
+Reducing supply voltage can substantially reduce capacitive switching power, but it also changes transistor speed and must stay within the device's operating limits. Dynamic voltage and frequency scaling (DVFS) coordinates both settings. **Clock gating** stops unnecessary clock transitions in idle blocks, reducing switching activity. It requires clock-gating cells or dedicated resources used within their timing rules.
 
 There is also **static (leakage) power**: real transistors are not perfect switches and leak a little current even when "off". At modern feature sizes, leakage is a significant share of total power, which is one reason the dream of ever-faster clocks ended in the mid-2000s (lesson 7 of the pipelining module covers the power wall).
 

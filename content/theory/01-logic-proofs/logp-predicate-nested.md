@@ -18,7 +18,7 @@ Let the domain be people and L(x, y) mean "x trusts y".
 
 The second is much stronger. It implies the first, but not the other way round:
 
-```formula
+```formula essential
 ∃y ∀x L(x, y)  ⊨  ∀x ∃y L(x, y)
 ∀x ∃y L(x, y)  ⊭  ∃y ∀x L(x, y)
 where
@@ -31,33 +31,13 @@ L(x, y): the predicate "x trusts y"
 In words: if one person is trusted by everyone, then everyone trusts somebody. But everyone trusting somebody does not mean there is one person trusted by all.
 ```
 
-A counterexample to the second line, over the integers with "y is greater than x" in place of L(x, y):
+A simple counterexample uses integers instead of people:
 
-```formula
-∀x ∃y (y > x)
-y = x + 1
-∃y ∀x (y > x)
-where
-x, y: variables ranging over the integers (…, −2, −1, 0, 1, 2, …)
->: is greater than
-∀: for all
-∃: there exists at least one
-In words: "every integer has a bigger one" is true, because y = x + 1 is a witness for each x. "Some integer is bigger than every integer" is false: it would need a largest integer.
-```
+Every integer has a greater integer: choose its successor. There is no single integer greater than every integer, because that chosen integer itself has a successor.
 
 Quantifiers of the **same** kind commute (can swap places):
 
-```formula
-∀x ∀y P(x, y) ≡ ∀y ∀x P(x, y)
-∃x ∃y P(x, y) ≡ ∃y ∃x P(x, y)
-where
-x, y: variables ranging over the domain
-P(x, y): a predicate of two variables
-∀: for all
-∃: there exists at least one
-≡: is logically equivalent to
-In words: two "for all"s, or two "there exists"es, can be written in either order. Only mixed pairs are order-sensitive.
-```
+Two universal quantifiers can swap order, as can two existential quantifiers. In each case the same pairs are covered. Mixed quantifiers need separate justification.
 
 Nested quantifiers are nested loops:
 
@@ -75,21 +55,9 @@ print(any(all(y >= x for x in xs)
 
 The first fails at x equals 3, since nothing in the list exceeds it. The second succeeds with the witness y equals 3.
 
-To negate a nested statement, walk left to right, flipping each quantifier, then negate the inside:
+To negate a nested statement, change each quantifier and negate the property:
 
-```formula
-¬∀x ∃y P(x, y)
-  ≡ ∃x ¬∃y P(x, y)
-  ≡ ∃x ∀y ¬P(x, y)
-where
-x, y: variables ranging over the domain
-P(x, y): a predicate of two variables
-¬: NOT
-∀: for all
-∃: there exists at least one
-≡: is logically equivalent to
-In words: "not everyone has someone they P" means "someone has nobody they P". Each step moves the ¬ one quantifier to the right and flips that quantifier.
-```
+Negating “everyone trusts someone” gives “someone trusts nobody”. Each quantifier changes kind, and the final trust condition is negated.
 
 
 ## Key takeaways

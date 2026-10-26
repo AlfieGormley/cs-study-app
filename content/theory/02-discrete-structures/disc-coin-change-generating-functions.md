@@ -2,16 +2,16 @@
 id: disc-coin-change-generating-functions
 title: "Coin change as generating-function multiplication"
 level: intermediate
-minutes: 3
+minutes: 2
 summary: "Each coin denomination contributes a geometric-series factor."
 sourceLesson: disc-inclusion-recurrences
 ---
 
 ### Example: making change
 
-How many ways can you make n pence from 1p, 2p and 5p coins (order doesn't matter)? Any number of 1p coins is allowed, with one way to use each number, which is the geometric series. 2p coins can only make even amounts, and 5p coins multiples of 5. Each term in the product picks one power from each factor, so the coefficient of xⁿ counts the combinations:
+To make an amount from unlimited 1p, 2p and 5p coins, ignore coin order and track how many of each denomination are used. One series records each denomination’s achievable amounts: pennies can make every non-negative amount, two-pence coins make even amounts, and five-pence coins make multiples of five. Multiplying combines these choices.
 
-```formula
+```formula reference
 G(x) = 1 / ((1 − x) × (1 − x^2) × (1 − x^5))
 1 / (1 − x^2) = 1 + x^2 + x^4 + …
 1 / (1 − x^5) = 1 + x^5 + x^10 + …
@@ -20,10 +20,10 @@ G(x): the generating function for making change; the coefficient of x^n is the n
 x: the placeholder variable; x^k stands for k pence
 1 − x, 1 − x^2, 1 − x^5: one factor per coin; 1 / (1 − x^c) lists the amounts 0, c, 2c, … that coins worth c pence can make
 …: and so on forever
-In words: multiply one series per coin; the number in front of x^10 counts the ways to make 10p, which is 10.
+In words: Each denomination contributes one series describing its possible totals. Multiplying the series combines denominations; the coefficient for an amount counts unordered ways to make that amount.
 ```
 
-Multiplying the polynomials (truncated at degree n) is precisely the classic coin-change dynamic programme. In this code, n is a non-negative integer and coins contains distinct positive integer denominations:
+Keep only coefficients up to the target amount. This gives the classic coin-change dynamic programme. In the code, `n` is a non-negative integer amount and `coins` contains distinct positive integer denominations:
 
 ```python
 def ways(n, coins):
@@ -40,18 +40,9 @@ def ways(n, coins):
 ways(10, [1, 2, 5])   # 10
 ```
 
-The inner loop multiplies the series in w by one coin's factor. Because w[v − c] has already been updated when w[v] uses it, the loop computes:
+The list `w` stores the number of combinations for each amount using denominations processed so far. Its zero entry starts at one because choosing no coins makes zero in exactly one way.
 
-```formula
-w′(x) = w(x) + x^c × w′(x)
-w′(x) = w(x) / (1 − x^c)
-where
-w(x): the generating function held in the list w before this coin's loop: w[v] is the coefficient of x^v
-w′(x): the same list after the loop (the prime mark means "new")
-c: the value of the current coin, in pence
-x^c: shifting every coefficient up c places, which is what w[v - c] does
-In words: the new count for v pence is the old count plus the new count for v − c pence (use at least one more of this coin), which is division by 1 − x^c.
-```
+The forward amount loop reads a count that may already include the current coin. It therefore permits repeated use of that denomination. Processing one denomination at a time avoids counting different orders of the same coins as different combinations.
 
 ## Key takeaways
 

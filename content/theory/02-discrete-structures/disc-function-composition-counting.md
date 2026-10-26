@@ -2,7 +2,7 @@
 id: disc-function-composition-counting
 title: "Composition, function counts and round trips"
 level: basic
-minutes: 4
+minutes: 3
 summary: "Composition runs the right-hand function first; merging reachable inputs loses information."
 sourceLesson: disc-sets-functions
 ---
@@ -11,20 +11,20 @@ sourceLesson: disc-sets-functions
 
 **Composition** chains two functions: apply one, then feed its output to the other.
 
-```formula
+```formula essential
 (g ∘ f)(x) = g(f(x))
-f(x) = x + 1,  g(y) = 2 × y
-(g ∘ f)(3) = g(4) = 8
 where
 f: the first function applied, from A to B
 g: the second function applied, from B to C
+A, B, C: the input, intermediate and final output sets, respectively
 x: an input from the domain A of f
-y: an input to g, from the set B
 ∘: composition, read "after": g ∘ f means "g after f"
-In words: g ∘ f runs f first and then g on the result. With f adding 1 and g doubling, 3 becomes 4 and then 8. The order matters: f ∘ g would give 2 × 3 + 1 = 7.
+In words: Composition runs the right-hand function first and feeds its output into the left-hand function. Order can change the result.
 ```
 
-Compositions preserve the properties above: two injections compose to an injection, two surjections to a surjection, and two bijections to a bijection.
+Adding one then doubling a number can differ from doubling then adding one. Composition therefore depends on order.
+
+Compositions preserve these properties: two injections compose to an injection, two surjections to a surjection, and two bijections to a bijection.
 
 If g ∘ f is injective, then f must be injective (if f merged two inputs, g could not separate them again). If a stage merges two intermediate states actually produced that arose from distinct valid inputs, later deterministic stages cannot recover that distinction without additional information. Non-injectivity only on states the pipeline never reaches need not lose information.
 
@@ -32,7 +32,7 @@ If g ∘ f is injective, then f must be injective (if f merged two inputs, g cou
 
 For finite sets, including empty sets, you can count how many functions of each kind exist. Each input chooses an output; for an injection, each choice must avoid the outputs already used.
 
-```formula
+```formula reference
 N_all = n^m
 N_inj = n! / (n − m)!   if m ≤ n
 N_inj = 0   if m > n
@@ -50,28 +50,18 @@ n^m: m copies of n multiplied together
 !: factorial: k! = k × (k − 1) × … × 2 × 1, with 0! = 1
 ≤: is less than or equal to
 >: is greater than
-In words: each of the m inputs freely picks one of n outputs, giving n^m functions; an injection must use a new output each time, giving n × (n − 1) × … for m factors; a bijection from a set to itself is a reordering (permutation), and there are m! of those.
+In words: Counting all functions allows every input to reuse any output. Counting injections forbids reusing an output; counting bijections of a finite set counts its reorderings.
 ```
 
-A worked example with three inputs and four possible outputs:
+For three inputs and four outputs, unrestricted functions allow reuse of outputs. Injections forbid reuse, so their available choices shrink after each assignment.
 
-```formula
-n^m = 4^3 = 64
-n! / (n − m)! = 4! / 1! = 4 × 3 × 2 = 24
-where
-n: the number of possible outputs, here 4
-m: the number of inputs, here 3
-!: factorial: the product of all whole numbers from 1 up to that number, so 4! = 24 and 1! = 1
-In words: from a 3-element set to a 4-element set there are 64 functions, of which 24 never repeat an output.
-```
-
-Use the counting convention 0⁰ = 1 for the unique empty-domain function. There are 2⁸ = 256 functions from the 8 bit positions of a byte to {0, 1}: one per byte value.
+There is one function on an empty domain: it makes no assignments. The reference count uses the combinatorial convention that zero to the zeroth power is one.
 
 ## Functions in real code
 
 The mathematical idea of a function is stricter than a programming "function". A routine whose result depends on changing hidden state may return different results for the same explicit arguments. Including the relevant state in the mathematical input gives a function again; reading an immutable constant does not itself violate determinism. Pure terminating routines fit the simple total-function model and can be easier to test, memoise and parallelise.
 
-Bijections show up whenever you need a lossless round trip:
+Injectivity is essential whenever you need a lossless round trip:
 
 - **Serialisation**: `decode(encode(x)) == x` for every valid x is a requirement that `encode` is injective, and `decode` is its inverse on the image.
 - **Base64, UTF-8, gzip**: with a fixed encoder configuration and appropriate valid input domain, lossless round trips require injectivity. Ordinary lossy JPEG and MP3 encoding merge distinct inputs; the JPEG family also includes lossless modes.

@@ -3,63 +3,41 @@ id: cx-akra-bazzi-examples
 sourceLesson: cx-recurrences
 title: Akra–Bazzi worked examples
 level: advanced
-minutes: 3
+minutes: 2
 summary: Apply the general method to linear selection and a gap between Master Theorem cases.
 ---
 
-The previous unit introduced the balancing exponent and outside-work integral. Here n is the input size. These examples apply that method to selection and a recurrence whose outside work lies between the standard Master Theorem cases.
+Use the distribution of work to understand an Akra–Bazzi answer before evaluating an integral. Here n is the current input size, with bounded positive base cases.
 
-## Two applications
+## Selection: leave a fixed fraction out
 
-**Example 2: median of medians.** Linear-time selection has one child a fifth of the size, another seven tenths, and linear outside work:
+Median-of-medians selection groups items into fives, recursively finds a pivot from the group medians, then recurses only into the relevant partition. Its worst-case analysis bounds child sizes by about one fifth and seven tenths of the parent, with rounding and a constant-sized boundary correction. This is an upper-bound recurrence for the algorithm, not an exact equality for every input.
 
-```formula
-(1/5)^1 + (7/10)^1 = 0.9 < 1
-(1/5)^p + (7/10)^p = 1  gives  p ≈ 0.84
-I ≈ n^{1−p} / (1 − p)
-T(n) = Θ(n^p n^{1−p}) = Θ(n)
-T(n) = T(n/5) + T(7n/10) + n
+Those fractions total less than the whole input. With linear partitioning work, the recursive contribution shrinks geometrically once inputs are large enough. The resulting worst-case bound is linear. The small rounding corrections are handled by the base threshold; they do not remove the fixed gap below the full parent size.
+
+## A logarithmic gap accumulates slowly
+
+Consider this recurrence for sufficiently large inputs, stopping at a fixed size above one:
+
+```formula essential
+T(n) = 2T(n/2) + n/log_2(n)
+T(n) = Θ(n log_2(log_2(n)))
 where
-p: the balancing exponent; since the sum is below 1 at p = 1, p must be smaller than 1
-I: the Akra–Bazzi integral, here ∫ of u / u^(p+1) = u^(−p) from 1 to n
-T(n): the running time of median-of-medians selection on n items
-n: the input size
-Θ: Big-Theta, exactly this rate up to constants
-≈: approximately equal to
-In words: the two subproblems together are only 90% of the input, so the work per level shrinks geometrically and the root's linear work dominates.
+T(n): total work, with bounded positive cost below the fixed base threshold
+n: input size; use powers of two to visualise the levels
+log_2: base-two logarithm; the outer logarithm is applied to the inner result
+Θ: a tight growth bound
+In words: outside work slightly below linear still accumulates across the tree, adding a slowly growing log-log factor to the linear leaf cost.
 ```
 
-**Example 3: the gap case.** Two half-size calls and linear work divided by a logarithm balance at exponent one. Use natural logarithms in the integral; changing base rescales outside work by a fixed factor:
+Each complete level contains the same total item count, but its outside work is divided by the logarithm of the current subproblem size. Looking upward from the base, those denominators grow in roughly consecutive steps. The level contributions therefore form a harmonic sum over logarithmically many levels. That adds the logarithm of a logarithm.
 
-```formula
-I = ∫_2^n 1 / (u ln(u)) du = ln(ln(n)) + C
-T(n) = Θ(n × (1 + ln(ln(n))))
-T(n) = Θ(n log(log(n)))
-T(n) = 2T(n/2) + n/log(n)
-2(1/2)^1 = 1, p = 1
-ln(1) = 0
-where
-I: the Akra–Bazzi integral with g(u) = u / ln(u) and p = 1
-∫_2^n … du: the integral from 2 to n with respect to u, the area under the curve
-u: a stand-in for the input size
-ln: the natural logarithm (base e ≈ 2.718)
-C: a constant from the lower limit, which disappears inside Θ
-T(n): the running time
-n: the input size
-log log n: the logarithm of the logarithm of n, which grows extremely slowly (log_2 log_2 of a billion is about 5)
-Θ: Big-Theta, exactly this rate up to constants
-p: the balancing exponent, here one
-log: any fixed logarithm base greater than one
-In words: the outside work is just a log factor below n, and summed over all levels that adds only a log-log factor.
-```
-
-The integral starts at two rather than one because the logarithm at one is zero; the lower limit only changes constants.
+The result lies between linear and linear-times-log growth. It is not covered by the nonnegative-log-power balanced case or the leaf case requiring a fixed positive power gap. Akra–Bazzi's accumulated outside-work correction distinguishes it without pretending those conditions hold.
 
 ## Key takeaways
-- Subproblem fractions whose total is below one can lead to geometrically shrinking outside work.
-- The integral distinguishes near-linear gap cases from the ordinary balanced case.
-- A fixed lower integration limit avoids singularities without changing the growth class.
+- A fixed gap below the parent size can support linear selection.
+- Real algorithm recurrences may be upper bounds with rounding corrections.
+- Slightly sublinear outside work can still add a growing factor across levels.
 
 ## Further reading
-- [Akra–Bazzi method — Wikipedia](https://en.wikipedia.org/wiki/Akra%E2%80%93Bazzi_method)
 - [Erickson: Solving Recurrences](https://jeffe.cs.illinois.edu/teaching/algorithms/notes/99-recurrences.pdf)

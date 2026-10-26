@@ -2,7 +2,7 @@
 id: disc-derangements-surjections
 title: "Derangements and onto assignments"
 level: intermediate
-minutes: 4
+minutes: 2
 summary: "Derangements exclude every fixed point by inclusion–exclusion."
 sourceLesson: disc-inclusion-recurrences
 ---
@@ -11,61 +11,21 @@ sourceLesson: disc-inclusion-recurrences
 
 A **derangement** is a permutation where nothing stays in its original place: every guest leaves with someone else's coat, or every reviewer gets someone else's pull request.
 
-Let Aᵢ be the permutations that fix item i (leave it in its original position). Fixing any particular k items leaves (n − k)! permutations of the rest, and there are C(n, k) ways to choose which k. Inclusion–exclusion over "at least one fixed point" gives:
+The forbidden event for each person is receiving their own item. Those events can happen together.
 
-```formula
-D(n) = n! − C(n, 1) × (n − 1)!
-     + C(n, 2) × (n − 2)! − …
-D(n) = n! × (1 − 1/1! + 1/2! − … ± 1/n!)
-D(4) = 24 × (1 − 1 + 1/2 − 1/6 + 1/24)
-D(4) = 24 − 24 + 12 − 4 + 1 = 9
-where
-D(n): the number of derangements of n items: orderings with no item in its original position
-n: the number of items, 0 or more
-k: the number of items forced to stay in their original positions in one term, from 0 to n
-C(n, k): "n choose k", the number of ways to pick which k items stay put
-!: factorial: the product of every whole number from that number down to 1, with 0! = 1
-…: and so on, one term for each k up to n
-±: the sign of the last term: + when n is even, − when n is odd
-In words: start from all n! orderings, subtract those fixing some item, add back those fixing two, and so on. Since C(n, k) × (n − k)! = n! / k!, each term is n! divided by k!, which gives the bracketed form.
-```
+Start with all assignments. For each person, exclude assignments with that self-review. Those forbidden groups overlap: an assignment with two self-reviews was removed twice, so restore their intersection. Continue alternating for larger overlaps.
 
-The bracket is the start of the series for e⁻¹ (1 divided by Euler's number e ≈ 2.718), which gives a shortcut:
+For a uniformly random permutation, the fraction with no fixed points approaches about 36.8% as the number of items grows. This is a limiting probability, not an exact rule for small groups.
 
-```formula
-D(n) = ⌊n! / e + 1/2⌋   for n ≥ 1
-D(4) = ⌊24 / 2.718 + 0.5⌋ = ⌊9.33⌋ = 9
-D(n) / n! → 1 / e ≈ 0.368
-where
-D(n): the number of derangements of n items
-n!: n factorial, the number of all orderings of n items
-e: Euler's number, about 2.71828, the base of natural logarithms
-⌊ ⌋: floor: round down to a whole number. Adding 1/2 first turns this into rounding to the nearest whole number
-→: tends to, as n grows larger and larger
-≈: approximately equal to
-In words: the number of derangements is n! / e rounded to the nearest whole number, and the chance that a random ordering moves every item approaches about 36.8%.
-```
-
-The values run 0, 1, 2, 9, 44, 265, … for 1 to 6 items. The limit is approached quickly, but small cases differ substantially: for 1 item the probability is 0, and for 2 items it is 1/2.
+For one item avoiding its original position is impossible; for two, swapping them is the only derangement. Small cases need not match the limiting proportion.
 
 ### Counting onto functions
 
-How many ways can you assign 5 distinct jobs to 3 servers so every server gets at least one? There are 3⁵ assignments in all. Subtract those missing a given server, add back those missing two:
+Suppose five distinct jobs must be assigned to three distinct servers, leaving none idle.
 
-```formula
-S = 3^5 − C(3, 1) × 2^5 + C(3, 2) × 1^5
-S = 243 − 3 × 32 + 3 × 1
-S = 243 − 96 + 3 = 150
-where
-S: the number of assignments of 5 distinct jobs to 3 servers that leave no server idle (onto, or surjective, functions)
-3^5: all assignments: each of the 5 jobs independently picks one of 3 servers
-C(3, 1) × 2^5: choose 1 server to leave idle (3 ways), then send all 5 jobs to the other 2
-C(3, 2) × 1^5: choose 2 servers to leave idle (3 ways), then all jobs go to the last one
-C(a, b): "a choose b", the number of ways to choose b items from a
-In words: 150 of the 243 assignments use every server. Assignments missing two servers were subtracted twice, so they are added back once.
-```
+Jobs are distinct and servers are distinct. Start with unrestricted assignments, exclude those leaving each server idle, and restore overlaps where several servers were idle. An assignment using only one server belongs to two of the idle-server groups.
 
-The same pattern counts onto functions from an m-element set to an n-element set: add or subtract, for each number j of excluded targets, C(n, j) × (n − j)ᵐ, with the sign + for even j and − for odd j.
+Unlike stars and bars, this tracks which particular job goes to each server. Two assignments with the same job counts per server may still be different.
 
 Inclusion–exclusion is the go-to method whenever the condition is "every X is covered" or "no X is bad": count the complement events, which are often easier, and alternate.
 

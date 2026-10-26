@@ -13,17 +13,11 @@ Almost every structure in computer science is built from two ideas: a **mathemat
 
 A set is an unordered collection of distinct elements. Curly braces list what is in it, and only membership counts: the order you write the elements in and any repeats make no difference.
 
-```formula
-{1, 2, 3} = {3, 1, 2} = {1, 1, 2, 3}
-where
-{ }: curly braces: the set whose elements are the things listed inside, separated by commas
-=: the two sets are equal: they have exactly the same elements
-In words: all three ways of writing it describe the same set, the one containing exactly 1, 2 and 3. Changing the order or repeating 1 does not make a new set.
-```
+Writing the numbers 1, 2 and 3 in a different order, or listing 1 twice, still describes the same three-element set.
 
-Notation you will see constantly:
+These concepts have notation you will see constantly:
 
-| Symbol | Meaning |
+| Concept | Meaning |
 |---|---|
 | Membership | An object belongs to a set |
 | Non-membership | An object does not belong |
@@ -32,21 +26,18 @@ Notation you will see constantly:
 | Empty set | A set with no elements |
 | Cardinality | The size of a set |
 
-The following card supplies the corresponding symbols and example sets.
-
 For example, take a two-element set containing 1 and 2, and a three-element set also containing 3:
 
-```formula
+```formula essential
 1 ∈ A     3 ∉ A
-A ⊆ B     A ⊂ B     A ≠ B
-|A| = 2   |B| = 3
+A ⊆ B     A ⊂ B
+|A| = 2
 where
 A: the example set {1, 2}
 B: the example set {1, 2, 3}
 ∈: is an element of
 ∉: is not an element of
 ⊆: is a subset of: every element of the left-hand set is also in the right-hand set (the two may be equal)
-≠: is not equal to
 ⊂: is a proper subset of: a subset that is not equal, so the right-hand set has at least one extra element
 | |: vertical bars around a set mean its cardinality: the number of elements it has
 In words: 1 is in A but 3 is not; everything in A is also in B, and B has an extra element (3), so A is a proper subset of B; A has 2 elements and B has 3.
@@ -54,9 +45,8 @@ In words: 1 is in A but 3 is not; everything in A is also in B, and B has an ext
 
 Sets can be written by listing elements, or with **set-builder notation**, which describes the elements by a rule. It resembles a Python comprehension, but mathematical sets can also be infinite:
 
-```formula
+```formula reference
 E = { x ∈ ℤ : 0 ≤ x < 10, x mod 2 = 0 }
-E = {0, 2, 4, 6, 8}
 where
 E: the set being defined (the even numbers below 10)
 x: a stand-in for each candidate element
@@ -66,10 +56,10 @@ x: a stand-in for each candidate element
 ≤: is less than or equal to
 <: is less than
 mod: the remainder after dividing, so x mod 2 = 0 means x is even
-In words: E is the set of integers x with 0 ≤ x < 10 that are even, which works out to {0, 2, 4, 6, 8}.
+In words: A set-builder rule keeps exactly the integers from zero through nine that are even.
 ```
 
-The same set in Python, where `%` is the remainder operator:
+For example, select even integers from zero through nine in Python, where `%` is the remainder operator:
 
 ```python
 # Keep exactly the even candidates below 10.
@@ -81,10 +71,9 @@ Common number sets: ℕ (natural numbers; whether 0 is included varies by author
 > [!warning] Elements versus subsets
 > The empty set is a subset of every set, but it is an element of a set only if that set literally lists the empty set inside its braces. The set containing just the empty set has one element; the empty set itself has none.
 
-```formula
+```formula essential
 ∅ ⊆ A   for every A
 ∅ ∈ {∅}     ∅ ∉ {1, 2}
-|{∅}| = 1   |∅| = 0
 where
 ∅: the empty set, the set with no elements, also written {}
 A: any set at all
@@ -92,11 +81,17 @@ A: any set at all
 ∈: is an element of
 ∉: is not an element of
 { }: curly braces: the set of the things listed inside
-| |: the cardinality: the number of elements in the set
 In words: the empty set is a subset of everything (it has no element that could fail to be in A), but it is only an element of a set that lists it, like {∅}. That set has one element; ∅ has none.
 ```
 
 Sets are unordered and deduplicated. Converting a list to a set and back loses order and duplicates. Python sets only hold hashable elements, so use `frozenset` for a set of sets.
+
+> [!analogy] Real-world analogy: An empty shopping basket
+> An empty basket contains nothing; a basket holding an empty box contains one object.
+>
+> **How it maps:** Membership asks what is inside the outer collection. A collection holding the empty set has one element even though that element itself contains nothing.
+>
+> **Where it stops:** Physical baskets have capacity and order, while mathematical sets do not.
 
 ## Key takeaways
 

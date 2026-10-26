@@ -27,25 +27,10 @@ The price is paid in behaviour:
 
 - **Reads are destructive.** Raising WL connects the capacitor to a bit line with much larger capacitance. The charge spreads out ("charge sharing"), nudging the bit line voltage up or down by a small amount. The sense amplifier detects and amplifies this, and in doing so **writes the value back** into the cells of the row.
 - **Rows, not words.** Activating a word line reads an entire row into the sense amplifiers, which act as a **DRAM row buffer**. Further reads from the same open row are much faster than opening a new one. This is why access patterns matter so much for DRAM performance (module 5).
-- **Charge leaks.** A capacitor slowly loses its charge, so every cell must be read and rewritten periodically. Refresh windows and commands depend on the device, temperature and selected refresh mode. As an illustrative schedule, 8,192 refresh operations spread evenly over a 64 ms window are this far apart:
+- **Charge leaks.** Stored charge degrades, so the memory must periodically sense and restore its rows even when software makes no accesses. Refresh windows, commands and scheduling limits depend on the device, temperature and selected mode. Shortening the allowed refresh window while retaining the same command count requires more frequent refreshes.
 
-```formula
-t_REFI = t_window / N_refresh
-t_REFI = 64 ms / 8192
-t_REFI = 64000 µs / 8192 = 7.8125 µs
-where
-t_REFI: the average interval between refresh commands (the name DDR datasheets use)
-t_window: the time within which every row must be refreshed, here 64 milliseconds (ms)
-N_refresh: the number of refresh commands in that window, here 8,192; each one refreshes a group of rows
-ms: milliseconds, 10^-3 seconds
-µs: microseconds, 10^-6 seconds; 1 ms = 1000 µs
-In words: 8,192 evenly spaced refreshes in 64 ms means one about every 7.8 microseconds.
-```
+Controllers must obey the selected part's timing and scheduling limits; affected banks cannot serve ordinary accesses during their refresh operation. A generic interval is not a controller specification.
 
-Controllers must obey the part's timing and scheduling limits; affected banks cannot serve ordinary accesses during their refresh operation.
-
-> [!note] Evidence gap
-> A blanket DDR4/DDR5 refresh-window rule is omitted because no complete part-specific temperature/mode table was verified for that claim. Use the selected device's datasheet; the arithmetic example is not a controller specification.
 - **A different process.** Making capacitors that hold enough charge in a tiny area needs special manufacturing, so commodity main-memory DRAM is commonly on separate dies, adding interface and interconnect costs. Embedded DRAM and integrated/stacked arrangements also exist; off-chip placement is not part of the definition of DRAM.
 
 | | SRAM | DRAM |

@@ -2,7 +2,7 @@
 id: logic-universal-gates
 title: Standard gates and NAND universality
 level: basic
-minutes: 5
+minutes: 4
 sourceLesson: logic-gates-cmos
 summary: NAND alone or NOR alone can implement any Boolean function.
 ---
@@ -44,7 +44,7 @@ A set of gates is **functionally complete** if it can build every Boolean functi
 
 Remarkably, **NAND on its own is complete**. So is NOR. Here is how NAND replaces the others:
 
-```formula
+```formula essential
 A′ = NAND(A, A)
 A·B = NAND(NAND(A, B), NAND(A, B))
 A + B = NAND(NAND(A, A), NAND(B, B))
@@ -68,19 +68,9 @@ n3 = NAND(B,  n1)
 Y  = NAND(n2, n3)    # Y is A XOR B
 ```
 
-Check one row by substituting A = 1 and B = 0, one gate at a time:
+Trace one row with A high and B low, one gate at a time:
 
-```formula
-n1 = NAND(1, 0) = 1
-n2 = NAND(1, 1) = 0
-n3 = NAND(0, 1) = 1
-Y = NAND(0, 1) = 1
-where
-n1, n2, n3: the internal wires named in the netlist
-Y: the circuit's output
-NAND( , ): the NAND gate: 0 only when both inputs are 1, otherwise 1
-In words: with A = 1 and B = 0 the output is 1, which is what A XOR B should give, since the inputs differ.
-```
+With A high and B low, the first NAND produces one. The second sees two ones and produces zero; the third produces one. The final NAND therefore produces one, correctly detecting unequal inputs.
 
 ### Two-level logic in NAND-NAND
 
@@ -98,10 +88,8 @@ D --+------+
 
 Why it works, using De Morgan on the output gate:
 
-```formula
+```formula essential
 Y = NAND(NAND(A, B), NAND(C, D))
-Y = ((A·B)′·(C·D)′)′
-Y = (A·B)′′ + (C·D)′′
 Y = A·B + C·D
 where
 Y: the circuit's output
@@ -111,10 +99,10 @@ NAND(X, Y): NOT (X AND Y): 0 only when both inputs are 1
 +: OR: 1 when at least one side is 1
 ( )′: NOT applied to the whole bracket
 ( )′′: NOT applied twice, which cancels out
-In words: the outer NAND turns into an OR of its inverted inputs, and those inversions cancel the inner NANDs' inversions, leaving AND-OR.
+In words: Either high input pair makes its first NAND output low, which forces the output NAND high. The output is low only when neither pair is all high.
 ```
 
-So draw the AND-OR circuit, replace every gate with NAND, and the function is unchanged. The inversion bubbles cancel in pairs.
+For this two-level AND-OR construction, replacing both layers with NAND preserves the function. The paired inversions cancel.
 
 ## Key takeaways
 - NAND alone or NOR alone can implement any Boolean function.

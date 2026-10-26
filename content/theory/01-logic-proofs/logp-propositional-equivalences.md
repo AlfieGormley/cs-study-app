@@ -2,98 +2,43 @@
 id: logp-propositional-equivalences
 title: Simplifying conditions with logical laws
 level: basic
-minutes: 4
+minutes: 3
 sourceLesson: logp-propositional
 summary: De Morgan changes AND to OR or OR to AND while negating both parts.
 ---
 
 ## Logical equivalence
 
-Two formulas are **logically equivalent** if they have the same truth value in every row:
+Two formulas are **logically equivalent** if they have the same truth value in every row. Equivalence means agreement on every allowed assignment, not merely agreement in the examples tested.
 
-```formula
-A ≡ B
-where
-A, B: any two formulas built from propositions and connectives
-≡: is logically equivalent to: A and B have the same truth value in every row of their truth table
-In words: A and B always agree. Equivalently, the formula "A if and only if B" is a tautology.
-```
+These are the laws you use daily to simplify conditions. The following two laws can be checked with a four-row truth table.
 
-These are the laws you use daily to simplify conditions. Each line can be checked with a four- or eight-row truth table.
-
-```formula
-¬¬p ≡ p
+```formula essential
 ¬(p ∧ q) ≡ ¬p ∨ ¬q
 ¬(p ∨ q) ≡ ¬p ∧ ¬q
-p → q ≡ ¬p ∨ q
-p → q ≡ ¬q → ¬p
-p ∧ (q ∨ r) ≡ (p ∧ q) ∨ (p ∧ r)
-p ∨ (q ∧ r) ≡ (p ∨ q) ∧ (p ∨ r)
-p ∨ (p ∧ q) ≡ p
-p ↔ q ≡ (p → q) ∧ (q → p)
 where
-p, q, r: propositions, each true or false
-¬: NOT: flips true and false; ¬¬p is NOT applied twice
+p, q: propositions, each true or false
+¬: NOT: flips true and false
 ∧: AND: true only when both sides are true
 ∨: OR (inclusive): true when at least one side is true
-→: implies: false only when the left side is true and the right side false
-↔: if and only if: true when both sides have the same truth value
 ≡: is logically equivalent to: same truth value in every row
-In words: line by line, these are double negation, De Morgan's two laws, the implication law, the contrapositive, distribution of AND over OR and of OR over AND, absorption, and the biconditional law.
+In words: negating “both” means at least one part fails; negating “either” means both parts fail.
 ```
 
 **De Morgan's laws** are the ones you will use most: to negate an AND, negate each part and switch to OR (and vice versa).
 
-Commutativity (order doesn't matter), associativity (grouping doesn't matter) and the identity laws complete the toolkit:
-
-```formula
-p ∧ T ≡ p
-p ∨ T ≡ T
-p ∨ F ≡ p
-p ∧ F ≡ F
-where
-p: a proposition, true or false
-T: the constant true
-F: the constant false
-∧: AND: true only when both sides are true
-∨: OR: true when at least one side is true
-≡: is logically equivalent to
-In words: AND with true and OR with false change nothing; OR with true is always true and AND with false is always false.
-```
+Commutativity means order doesn't matter; associativity means grouping doesn't matter. The identity laws say that AND with true and OR with false leave the other input unchanged. OR with true always succeeds; AND with false always fails.
 
 > [!example] Simplifying a guard
-> A code review finds `if not (user.banned or not user.verified):`. Write b for `user.banned` and v for `user.verified`, then apply De Morgan and double negation, as shown below.
+> A code review finds `if not (user.banned or not user.verified):`. Assume Boolean attributes without side effects. Apply De Morgan and double negation.
 
-```formula
-¬(b ∨ ¬v) ≡ ¬b ∧ ¬¬v
-          ≡ ¬b ∧ v
-where
-b: the proposition "the user is banned"
-v: the proposition "the user is verified"
-¬: NOT; ¬¬v is NOT applied twice, which gives v back
-∨: OR: true when at least one side is true
-∧: AND: true only when both sides are true
-≡: is logically equivalent to
-In words: "not (banned or unverified)" is the same as "not banned and verified". The first step is De Morgan, the second is double negation.
-```
+Negate each alternative and join them with AND: the user must be not banned and not unverified. Double negation turns the latter into verified.
 
-So it is `if not user.banned and user.verified:`, which reads far better.
+So it is `if not user.banned and user.verified:`. With ordinary Boolean attributes, both guards admit exactly the same cases.
 
-You can also prove an equivalence algebraically, one law per step. Here is a derivation that tells you exactly when an implication fails:
+Python evaluates `and` and `or` from left to right and may stop early. A logical rewrite that changes evaluation order can therefore be unsafe if an expression raises an exception or has side effects. Check an object is not `None` before reading its attributes.
 
-```formula
-¬(p → q) ≡ ¬(¬p ∨ q)
-         ≡ ¬¬p ∧ ¬q
-         ≡ p ∧ ¬q
-where
-p, q: propositions, each true or false
-¬: NOT: flips true and false
-→: implies: "if p then q"
-∨: OR: true when at least one side is true
-∧: AND: true only when both sides are true
-≡: is logically equivalent to
-In words: an implication is false exactly when p is true and q is false. The steps use the implication law, then De Morgan, then double negation.
-```
+The same reasoning explains the failing case of an implication. Its premise must hold and its conclusion must fail. That describes the same single failing row as the truth-table definition.
 
 
 ## Key takeaways

@@ -11,7 +11,7 @@ The earlier parity proof established that an integer whose square is even is its
 
 ## Proof by contradiction
 
-To prove a statement S: **assume not S (not S) and derive something impossible**, such as a statement and its negation. Since a true assumption cannot lead to a false conclusion, not S must be false, so S is true.
+To prove a statement S: **assume the claim is false and derive something impossible**, such as a statement and its negation. Since a true assumption cannot lead to a false conclusion, not S must be false, so S is true.
 
 The two classic examples are over 2,000 years old.
 
@@ -19,9 +19,8 @@ The two classic examples are over 2,000 years old.
 
 Suppose the square root of 2 is rational. Then it is a fraction a/b of integers with b is not equal to 0, and we may take the fraction in lowest terms (a and b share no factor, as any fraction can be reduced). Square both sides and rearrange:
 
-```formula
+```formula essential
 √2 = a / b
-2 = a^2 / b^2
 a^2 = 2b^2
 where
 √2: the square root of 2, the positive number whose square is 2 (about 1.41421)
@@ -32,17 +31,9 @@ a^2, b^2: a and b squared
 In words: if √2 were a fraction a/b, then a² would be exactly twice b², so a² would be even.
 ```
 
-So a² is even, which means a is even (that is the contrapositive result above). Write a equals 2k and substitute:
+So a² is even, which means a is even (that is the contrapositive result above). Use the definition of even to substitute for the numerator:
 
-```formula
-(2k)^2 = 2b^2
-4k^2 = 2b^2
-b^2 = 2k^2
-where
-k: the integer with a = 2 × k
-b: the denominator from before
-In words: b² is twice an integer, so b² is even, and so b is even too.
-```
+Writing the even numerator as twice an integer and substituting into the squared relation shows that the denominator's square is also even. The earlier parity lemma therefore makes the denominator even too.
 
 Now a and b are both even, so a/b is not in lowest terms. Contradiction. ∎
 
@@ -52,14 +43,13 @@ The proof uses the earlier contrapositive result as a **lemma**. Building proofs
 
 Suppose there are only finitely many primes, and list them all as p₁, p₂, …, pₖ. Build a new number N from them:
 
-```formula
+```formula essential
 N = p_1 × p_2 × ... × p_k + 1
-N − p_1 × p_2 × ... × p_k = 1
 where
 N: the product of every listed prime, plus 1
 p_1, p_2, ..., p_k: the supposedly complete list of primes
 k: how many primes are on the list
-In words: N is one more than the product of all the primes, so subtracting that product from N leaves exactly 1.
+In words: build a number one larger than the product of the supposedly complete prime list; every listed prime leaves remainder one when dividing it.
 ```
 
 N is greater than 1, so N has a prime factor q. Since the list is supposed to be complete, q is one of the pᵢ, so q divides the product p₁·p₂·…·pₖ. q also divides N, so q divides their difference, which is 1. No prime divides 1. Contradiction. ∎

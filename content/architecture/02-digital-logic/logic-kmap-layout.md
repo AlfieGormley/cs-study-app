@@ -2,56 +2,18 @@
 id: logic-kmap-layout
 title: K-map layout and valid groups
 level: intermediate
-minutes: 5
+minutes: 4
 sourceLesson: logic-karnaugh-maps
 summary: Gray ordering makes one-bit changes adjacent, including wrap-around.
 ---
 
-In Boolean-algebra lessons we simplified the majority function by spotting this:
-
-```formula
-A′·B·C + A·B·C = B·C·(A′ + A) = B·C
-where
-A, B, C: Boolean inputs, each 0 or 1
-A′: NOT A: 1 when A is 0, and 0 when A is 1
-·: AND: 1 only when both sides are 1
-+: OR: 1 when at least one side is 1
-In words: two terms that are identical except that one has A and the other has NOT A collapse into one term without A, because A′ + A is always 1.
-```
-
-That move, combining two terms that differ in exactly one variable, is the combination step in two-level minimisation; selecting a minimum cover is a separate problem. The hard part is seeing which terms to pair.
-
-A **Karnaugh map** (K-map), introduced by Maurice Karnaugh at Bell Labs in 1953, rearranges the truth table into a grid where terms that differ in one variable sit **next to each other**. Simplification becomes drawing rectangles around 1s.
+A **Karnaugh map** (K-map) rearranges a truth table so that input rows differing in one bit sit next to each other. If the output is high for both values of that bit, the bit is irrelevant within that group and can disappear from its product term.
 
 ## The key idea: adjacency
 
-The algebra behind every K-map group is one identity:
+Combine a pair that differs in one input and that input drops out. Double a valid group again and another changing input drops out. In a four-input map, a pair leaves three fixed inputs, a four-cell group leaves two, and an eight-cell group leaves one. Grouping does not discard cases: the larger group covers exactly the combined cases.
 
-```formula
-X·Y + X·Y′ = X·(Y + Y′) = X·1 = X
-where
-X: any product term shared by both terms, for example A·B′
-Y: the one variable that differs between the two terms
-Y′: NOT Y
-·: AND: 1 only when both sides are 1
-+: OR: 1 when at least one side is 1
-In words: if two terms are the same except for one variable, which is plain in one and complemented in the other, they merge into the shared part and that variable disappears.
-```
-
-Two minterms that differ in one variable merge into one term with that variable removed. Four minterms that form two such pairs merge again, removing a second variable, and so on. Each doubling of the group removes one more variable:
-
-```formula
-N_cells = 2^k
-N_literals = n − k
-N_literals = 4 − 2 = 2   for n = 4, k = 2
-where
-N_cells: the number of cells in a valid group (1, 2, 4, 8 or 16)
-k: how many variables the group eliminates
-2^k: k copies of 2 multiplied together
-n: the number of input variables in the map
-N_literals: the number of literals (variables, plain or complemented) left in the group's product term
-In words: in a 4-variable map, a group of 4 cells (k = 2) leaves a 2-literal term, a pair leaves 3 literals and a group of 8 leaves just 1.
-```
+The point is to find shared behaviour, then choose a small set of groups covering every required high output.
 
 To make mergeable minterms adjacent, the rows and columns are labelled in **Gray code** order, where neighbours differ in exactly one bit:
 
@@ -95,7 +57,7 @@ AB on the rows, CD on the columns, both in Gray order:
        +---+---+---+---+
 ```
 
-The map has **wrap-round** adjacency in both directions, like the surface of a doughnut. The left column is adjacent to the right column, and the top row to the bottom row. So cells 0, 2, 8 and 10 (the four corners) form a valid group.
+The map has **wrap-round** adjacency in both directions. The left column is adjacent to the right column, and the top row to the bottom row. So cells 0, 2, 8 and 10 (the four corners) form a valid group.
 
 ## The grouping rules
 

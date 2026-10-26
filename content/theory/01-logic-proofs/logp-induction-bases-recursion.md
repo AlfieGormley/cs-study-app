@@ -15,25 +15,13 @@ Claim: 2 to the power n is greater than n squared for all integers n at least 5 
 
 **Base case**, n equals 5: 2 to the power five equals 32 and 5 squared equals 25, and 32 is greater than 25. ✓
 
-**Step**: assume 2 to the power n is greater than n squared for some integer n at least 5. Doubling both sides gives the first line below; the rest shows that 2n squared is at least (n plus 1) squared:
+**Step**: assume 2 to the power n is greater than n squared for some integer n at least 5. The exponential value doubles when the index increases by one:
 
-```formula
-2^{n+1} = 2 × 2^n > 2n^2
-2n^2 ≥ (n + 1)^2 = n^2 + 2n + 1
-  iff n^2 ≥ 2n + 1
-n^2 ≥ 3n = 2n + n > 2n + 1
-  for n ≥ 3
-where
-n: an integer with 2^n > n^2 assumed (the inductive hypothesis)
-2^n: n copies of 2 multiplied together
-n^2: n multiplied by itself
->, ≥: is greater than, is greater than or equal to
-In words: doubling 2^n keeps it above 2n², and 2n² is at least (n + 1)² whenever n ≥ 3, so 2^{n+1} > (n + 1)².
-```
+The step doubles the current exponential value. From index three onward, doubling the current square is at least the next square, so the implication carries a successful case forward. It does not establish that the current case is successful.
 
 So 2 to the power (n plus one) is greater than (n plus 1) squared. ∎
 
-The inductive step works for every integer n at least 3, yet the claim is **false** at n equals 3 (2 cubed equals 8 is less than 3 squared equals 9) and at n equals 4 (2 to the power four equals 16 equals 4 squared equals 16). Without a correct base case, a valid step proves nothing. The dominoes are lined up, but the first one you push must actually fall.
+The inductive step works for every integer n at least 3, yet the claim is **false** at n equals 3 (2 cubed equals 8 is less than 3 squared equals 9) and at n equals 4 (2 to the power four equals 16 equals 4 squared equals 16). Without a correct base case, a valid step proves nothing. The implication chain still needs a true statement to start it.
 
 
 ## Recursion is induction

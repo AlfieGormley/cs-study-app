@@ -9,7 +9,7 @@ summary: Carry and signed overflow answer different questions.
 
 ### The flags
 
-Our teaching ALU reports N/Z/C/V-style condition flags. Architectures such as ARM use these; other ISAs, including base RISC-V, use different comparison mechanisms without such an architectural flag register:
+Our teaching ALU reports N/Z/C/V-style condition flags. Architectures such as ARM use these; other ISAs, including base RISC-V, use different comparison mechanisms without such an architectural flag register. The following table and carry-based overflow rule describe our fixed-width addition and subtraction circuits. Flag behaviour for other operations depends on the selected model or ISA.
 
 | Flag | Meaning | Computed as |
 |---|---|---|
@@ -18,9 +18,9 @@ Our teaching ALU reports N/Z/C/V-style condition flags. Architectures such as AR
 | C | Carry | carry out of MSB |
 | V | Signed overflow | carry into MSB ⊕ carry out of MSB |
 
-For an n-bit result, the four flags are:
+The table gives the behaviour needed to interpret the flags. The wiring equations are optional reference:
 
-```formula
+```formula reference
 N = r_{n−1}
 Z = (r_{n−1} + … + r_1 + r_0)′
 C = c_n
@@ -38,13 +38,13 @@ N, Z, C, V: the negative, zero, carry and overflow flags, each 0 or 1
 In words: N copies the sign bit, Z is 1 only when every result bit is 0, C is the carry out of the top bit, and V is 1 when the carry into the top bit differs from the carry out of it.
 ```
 
-The **V** rule deserves a moment. Signed overflow happens when two numbers of the same sign produce a result of the other sign, such as 7 + 1 in 4 bits giving `1000`, which is -8. That happens exactly when the carry into the sign bit differs from the carry out of it: in 0111 + 0001, a carry of 1 enters bit 3 but none leaves it, so V = 1 XOR 0 = 1.
+The **V** rule deserves a moment. For addition, signed overflow happens when two numbers of the same sign produce a result of the other sign, such as 7 + 1 in 4 bits giving `1000`, which is -8. That happens exactly when the carry into the sign bit differs from the carry out of it: in 0111 + 0001, a carry of 1 enters bit 3 but none leaves it, so V = 1 XOR 0 = 1.
 
 ### Comparisons come free
 
-A compare instruction (`cmp` on x86 and ARM) is a subtraction that keeps only the flags. After computing A − B:
+A compare instruction (`cmp` on x86 and ARM) is a subtraction that keeps only the flags. A zero result means equality. For unsigned comparison, check whether the subtraction borrowed, taking the ISA's flag polarity into account. For signed less-than, the negative and overflow flags must disagree: using the result sign alone fails when overflow has changed that sign. The optional notation is:
 
-```formula
+```formula reference
 A = B       if Z = 1
 A <_u B     if C = 0
 A <_s B     if N ≠ V

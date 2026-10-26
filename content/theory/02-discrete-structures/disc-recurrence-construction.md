@@ -14,38 +14,33 @@ A **recurrence** defines each term of a sequence from earlier terms, plus base c
 ### Setting up a recurrence
 
 > [!example] Binary strings with no two adjacent 1s
-> Count the binary strings of a given length that never contain "11". Look at the first character. If it's 0, the rest is any valid string one character shorter. If it's 1, the next must be 0, and then any valid string two characters shorter follows. The two cases don't overlap, so the count is the sum of the two shorter counts.
+> For length at least two, inspect the first bit. A leading 0 leaves any valid suffix one character shorter. A leading 1 forces the next bit to be 0, leaving any valid suffix two characters shorter. These cases are disjoint. The one-bit strings are 0 and 1; the two-bit strings are 00, 01 and 10.
 
-```formula
+```formula essential
 a(n) = a(n − 1) + a(n − 2)
 a(1) = 2,  a(2) = 3
-a(3) = 3 + 2 = 5,  a(4) = 5 + 3 = 8
 where
 a(n): the number of binary strings of length n with no two adjacent 1s
 n: the string length, a whole number; the recurrence applies for n ≥ 3
 a(n − 1), a(n − 2): the counts for strings one and two characters shorter
-In words: valid strings starting with 0, plus valid strings starting with 10. The values 2, 3, 5, 8, 13, … are the Fibonacci numbers.
+In words: Valid strings start with zero or, when at least two positions remain, with one followed by zero. These disjoint cases leave valid suffixes one or two characters shorter. Base counts start the sequence.
 ```
 
 The skill is finding the right **first decision** that splits the objects into disjoint cases, each a smaller instance of the same problem. It is exactly the step you take when designing a dynamic-programming solution.
 
 The **Tower of Hanoi** uses three pegs: move one disc at a time, never placing a larger disc on a smaller one. To move n discs, move n − 1 out of the way, move the biggest, then move the n − 1 back on top.
 
-```formula
-T(n) = 2 × T(n − 1) + 1,   T(0) = 0
-T(1), T(2), … = 1, 3, 7, 15, 31, …
-T(n) = 2^n − 1
-2 × (2^{n−1} − 1) + 1 = 2^n − 1
+```formula essential
+T(n) = 2 × T(n − 1) + 1
+T(0) = 0
 where
 T(n): the minimum number of single-disc moves to move a tower of n discs
 n: the number of discs, a non-negative integer; the recurrence applies from 1 upwards
 T(n − 1): the moves for the smaller tower, needed twice (off, then back on)
-2^n: n copies of 2 multiplied together
-…: and so on
-In words: the first line is the recurrence, the second its first few values, the third a guessed closed form, and the fourth checks the guess: putting 2^{n−1} − 1 into the right-hand side gives back 2^n − 1.
+In words: Moving a larger Hanoi tower requires moving the smaller tower twice, with one move of the largest disc between them. An empty tower needs no moves.
 ```
 
-Guessing a formula from small values and proving it by induction is a perfectly good method. For 10 discs it gives 2¹⁰ − 1 = 1,023 moves.
+A pattern in a few counts suggests a formula, but does not prove it. A proof must establish the base cases and show that the claimed pattern is preserved by the recurrence.
 
 ## Avoid overlapping cases
 

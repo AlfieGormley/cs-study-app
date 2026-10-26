@@ -11,7 +11,7 @@ summary: Pairing terms can eliminate a changing variable.
 
 Take the **majority function** of three inputs: output 1 when at least two of A, B and C are 1. Reading the rows where it is 1 straight off the truth table gives four terms, one per row:
 
-```formula
+```formula essential
 Maj = A′·B·C + A·B′·C + A·B·C′ + A·B·C
 where
 Maj: the majority function of A, B and C: 1 when at least two of them are 1
@@ -22,22 +22,17 @@ A′, B′, C′: NOT A, NOT B, NOT C
 In words: the output is 1 on exactly four rows: 011, 101, 110 and 111 (A, B, C in that order). Each term is 1 on just one of those rows.
 ```
 
-That is four 3-input AND terms and a 4-input OR. Now simplify. The trick is idempotence: A·B·C = A·B·C + A·B·C + A·B·C, so we can reuse the A·B·C term three times, pairing it with each of the others. Each pair then differs in only one variable, and the complement law (A′ + A = 1) removes that variable:
+That is four 3-input AND terms and a 4-input OR. Pair each two-ones row with the all-ones row. In each pair, one input changes while the other two stay high, so the changing input does not affect that pair's output. Reusing the all-ones row is allowed: OR does not count how many times a row is covered.
 
-```formula
-Maj = (A′·B·C + A·B·C)
-    + (A·B′·C + A·B·C)
-    + (A·B·C′ + A·B·C)
-    = B·C·(A′ + A) + A·C·(B′ + B)
-    + A·B·(C′ + C)
-    = B·C + A·C + A·B
+```formula essential
+Maj = B·C + A·C + A·B
 where
 Maj: the majority function of A, B and C
 A, B, C: the three inputs, each 0 or 1
 A′, B′, C′: NOT A, NOT B, NOT C
 ·: AND: 1 only when both sides are 1
 +: OR: 1 when at least one side is 1
-In words: pair the all-ones term with each other term, factor out what they share, and each bracket of the form (X′ + X) becomes 1. The result says "some pair of inputs is 1".
+In words: the majority output is high whenever any pair of inputs is high. Covering the all-high case more than once does not change its output.
 ```
 
 Three 2-input ANDs and a 3-input OR. This exact function is the carry-out of a binary adder, which you will meet in adder lessons.
@@ -48,7 +43,7 @@ Algebraic simplification works, but it relies on spotting the right move. The K-
 
 One more identity removes redundant terms:
 
-```formula
+```formula essential
 A·B + A′·C + B·C = A·B + A′·C
 where
 A, B, C: Boolean variables, each 0 or 1
@@ -92,19 +87,7 @@ print(equivalent(f, g, 3))       # True
 
 ## Pitfalls
 
-**Misreading a complemented group.** Consider:
-
-```formula
-(A·B)′
-where
-A: Boolean input bit
-B: Boolean input bit
-· or adjacent brackets: Boolean AND
-′: NOT of the preceding bit or whole bracket
-In words: Read this Boolean expression as NOT ((A AND B)).
-```
-
-This means NOT applied to the whole AND, rather than AND applied to the two complemented inputs. Apply De Morgan, which also swaps the operator.
+**Misreading a complemented group.** NOT applied to a whole AND differs from AND applied to two complemented inputs. De Morgan also swaps AND with OR.
 - **Forgetting that OR has no carry.** In Boolean algebra, 1 OR 1 is 1. If you need a carry, you need XOR and AND (an adder).
 - **Over-applying cancellation.** Knowing that "A OR B" equals "A OR C" does not tell you that B equals C: if A is 1, both sides are 1 whatever B and C are. Boolean algebra has no subtraction or division.
 - **Assuming canonical means minimal.** The canonical SOP for majority uses four 3-input terms; the minimal form uses three 2-input terms.

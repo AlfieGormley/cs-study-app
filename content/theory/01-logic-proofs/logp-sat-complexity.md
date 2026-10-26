@@ -14,7 +14,7 @@ SAT has a crucial asymmetry.
 - **Checking** a proposed assignment is fast: evaluate each clause, linear time.
 - **Finding** one seems to need search, and the best known algorithms for general SAT take exponential time in the worst case.
 
-NP is the class of decision problems whose yes instances have polynomial-length certificates verifiable in polynomial time. In 1971 Stephen Cook proved (and Leonid Levin independently, around the same time) that SAT is **NP-complete**: every problem in NP can be translated into SAT in polynomial time. A fast SAT algorithm would therefore give fast algorithms for every NP problem: scheduling, routing, protein folding models, breaking many cryptosystems. Whether one exists is the P vs NP question. The complexity module covers this properly.
+NP is the class of decision problems whose yes instances have polynomial-length certificates verifiable in polynomial time. In 1971 Stephen Cook proved (and Leonid Levin independently, around the same time) that SAT is **NP-complete**: every problem in NP can be translated into SAT in polynomial time. A polynomial-time SAT algorithm would therefore give polynomial-time algorithms for every NP decision problem, though large exponents or constants could still make them impractical. Whether one exists is the P vs NP question. The complexity module covers this properly.
 
 ### Where the line falls
 
@@ -29,7 +29,7 @@ Restricting clause shape changes everything.
 
 **2-SAT** is easy because a two-literal clause is two implications:
 
-```formula
+```formula essential
 (a ∨ b) ≡ (¬a → b) ≡ (¬b → a)
 where
 a, b: literals (a variable or its negation)
@@ -44,7 +44,7 @@ Build a graph with those edges. First reject any empty clause and encode a unit 
 
 **Horn clauses**, with at most one positive (un-negated) literal, are rules:
 
-```formula
+```formula essential
 (¬a ∨ ¬b ∨ c) ≡ (a ∧ b) → c
 where
 a, b, c: propositional variables

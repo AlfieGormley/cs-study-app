@@ -28,7 +28,7 @@ Example: a circuit takes a BCD digit (0 to 9 in four bits, ABCD) and outputs 1 i
 - m5 and m7 with m13, m15: B AND D.
 - m7 and m6 with m15, m14: B AND C.
 
-```formula
+```formula essential
 F = A + B·D + B·C
 where
 F: 1 when the BCD digit is 5 or more
@@ -40,7 +40,7 @@ In words: the digit is 5 or more if it is 8 or 9 (A = 1), or if it is 5 or 7 (B 
 
 If codes ten to fifteen must instead output zero, the strict function needs three three-literal terms:
 
-```formula
+```formula reference
 A·B′·C′ + A′·B·D + A′·B·C
 where
 A: Boolean input bit
@@ -53,7 +53,7 @@ D: Boolean input bit
 +: Boolean OR
 · or adjacent brackets: Boolean AND
 ′: NOT of the preceding bit or whole bracket
-In words: Read this Boolean expression as ((A AND NOT (B) AND NOT (C)) OR (NOT (A) AND B AND D) OR (NOT (A) AND B AND C)).
+In words: requiring invalid BCD codes to output zero adds validity checks to the simplified threshold detector. The shorter circuit is correct only under its promised input restrictions.
 ```
 
 Don't-cares can save logic only when the interface permits them. An unused opcode is not automatically a don't-care: a processor may require a defined illegal-instruction response.
@@ -64,44 +64,15 @@ To get a minimal POS, group the **0s** instead. Each group gives a sum term, rea
 
 Return to the earlier three-input function:
 
-```formula
-F = Σm(0, 2, 4, 5, 6)
-where
-F: Boolean output
-Σm(…): OR together the listed binary-indexed minterms, using A, B, C from most to least significant input bit
-In words: OR together the minterms of rows 0, 2, 4, 5, 6. The result is one exactly on these rows.
-```
+The output is high on rows 0, 2, 4, 5 and 6, using binary order A, B, C.
 
 Its zero rows are m1, m3 and m7.
 
-- m1, m3 (row 0, columns 01 and 11): A = 0, C = 1. Sum term: 
+- m1, m3 (row 0, columns 01 and 11): A is low and C is high. The sum factor is A OR NOT C.
+- m3, m7 (column 11): B and C are high. The sum factor is NOT B OR NOT C.
 
-```formula
-(A + C′)
-where
-A: Boolean input bit
-C′: NOT C
-+: Boolean OR
-′: NOT of the preceding bit or whole bracket
-In words: Read this Boolean expression as (A OR NOT (C)).
-```
-
-- m3, m7 (column 11): B = 1, C = 1. Sum term: 
-
-```formula
-(B′ + C′)
-where
-B′: NOT B
-C′: NOT C
-+: Boolean OR
-′: NOT of the preceding bit or whole bracket
-In words: Read this Boolean expression as (NOT (B) OR NOT (C)).
-```
-
-
-```formula
+```formula essential
 F = (A + C′)·(B′ + C′)
-F = A·B′ + A·C′ + B′·C′ + C′·C′
 F = C′ + A·B′
 where
 F: the function Σm(0, 2, 4, 5, 6) from earlier
@@ -109,7 +80,7 @@ A, B, C: the inputs, each 0 or 1
 B′, C′: NOT B, NOT C
 ·: AND: 1 only when both sides are 1
 +: OR: 1 when at least one side is 1
-In words: the product of sums is 0 exactly where one bracket is 0, at the three 0 cells. Multiplying it out, C′·C′ is C′, and C′ absorbs A·C′ and B′·C′, giving back the sum-of-products answer.
+In words: The two sum factors reject exactly the three required zero rows. The sum-of-products expression covers the other rows; both describe the same truth table.
 ```
 
 Neither form is always smaller; designers try both.

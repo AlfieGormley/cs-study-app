@@ -7,22 +7,26 @@ minutes: 2
 summary: Recognise when an attacker can force expensive algorithm paths.
 ---
 
-Here n counts input items or characters, as stated in each example. Hostile input makes worst-case behaviour an engineering concern.
+Typical performance is not enough when someone can choose inputs that expose expensive paths. Ask what the algorithm guarantees under the actual input and randomness model.
 
-## Worst case and adversaries
+## Three ways input can amplify work
 
-Average-case performance is fine when inputs are benign. When an attacker controls the input, they will find your worst case.
+- **Hash collisions:** a basic hash table can degrade to a linear scan when many keys collide. Repeated insertion can then take quadratic work in the key count. Keyed hash randomisation makes predictable collision attacks harder; it is not a universal constant-time guarantee for arbitrary keys.
+- **Regex backtracking:** some patterns force a backtracking engine to explore many alternatives, giving superlinear or exponential behaviour. Cloudflare's July 2019 outage involved excessive backtracking that exhausted CPU capacity. Check the engine and the exact search API: guarantees for one fixed-pattern search do not automatically cover repeated-match iteration or an unbounded pattern size.
+- **Predictable quicksort pivots:** repeatedly selecting an end element on sorted distinct input leaves one nearly unchanged partition and can cause quadratic work. Randomisation gives an expected guarantee under its assumptions; an introspective fallback to heapsort supplies a worst-case time bound.
 
-- **Hash flooding.** Hash tables give O(1) average lookups, but if many keys collide, operations degrade to O(n) for a table of n keys, and inserting n colliding keys becomes Θ(n^2): roughly half the square of the key count in comparisons. In 2011, researchers showed that many web frameworks could be knocked over by a single POST request whose parameter names all collided. Languages responded by randomising their hash functions per process. Python has randomised `str` hashing by default since 3.3 and uses SipHash since 3.4.
-- **Regular expression backtracking.** Many regex engines use backtracking, which is exponential on some patterns and inputs. In July 2019 a single badly behaved regular expression exhausted CPU across Cloudflare's network and caused a global outage. RE2 and Rust's `regex` provide bounded search complexity for supported patterns. Rust documents O(mn) for individual searches (pattern size m, haystack size n), while repeated-match iterators can reach O(mn²). A fixed-pattern single search is linear in n.
-- **Quicksort on sorted input.** A first- or last-element pivot can turn sorted distinct input into Θ(n²). Randomisation gives an expected bound; introsort's heapsort fallback provides the worst-case bound.
+## Match the defence to the source of risk
 
-If an input could be hostile, choose algorithms with good **worst-case** bounds, or randomise.
+Use a suitable worst-case bound when latency must be bounded by the algorithm. Where randomisation is appropriate, state what remains unpredictable to the input chooser. Apply input and resource limits as well: even a linear scan takes too long or too much memory on an unbounded request.
+
+A fixed tiny configuration list and an ordinary fixed-width numeric sum do not have the same shape-dependent amplification as those examples. That does not make all costs irrelevant: huge input, expensive user-defined comparisons or growing integers require their own model.
 
 ## Key takeaways
-- User-controlled input can expose an algorithm’s worst paths.
-- Hash collisions, regex backtracking and bad pivots can amplify work.
-- Choose a suitable worst-case guarantee or stated randomisation model for the workload.
+- Check who chooses the input and which slow paths remain reachable.
+- Randomised expected guarantees and worst-case guarantees are different.
+- Bound input size and operation cost as well as the growth rate.
 
 ## Further reading
-- [Introsort — Wikipedia](https://en.wikipedia.org/wiki/Introsort)
+- [Python hash randomisation](https://docs.python.org/3.14/reference/datamodel.html#object.__hash__)
+- [Cloudflare's July 2019 outage analysis](https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/)
+- [RE2 design guarantees](https://github.com/google/re2)

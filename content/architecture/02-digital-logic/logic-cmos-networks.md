@@ -61,17 +61,7 @@ The fully complementary static CMOS gates constructed here have a **pull-up netw
 - The nMOS pair is in **series**: Y is pulled to 0 only when A **and** B are both 1.
 - The pMOS pair is in **parallel**: Y is pulled to 1 if A **or** B is 0.
 
-That is NOT (A AND B), the NAND function, in **4 transistors**:
-
-```formula
-Y = (A·B)′
-where
-Y: the gate's output
-A, B: the two inputs, each 0 or 1
-·: AND: 1 only when both sides are 1
-( )′: NOT applied to the whole bracket
-In words: the output is pulled to 0 only when both series nMOS transistors are on (A and B both 1); otherwise a parallel pMOS pulls it to 1.
-```
+That is NOT (A AND B), the NAND function, in **4 transistors**. The pull-down conducts only for two high inputs. Every other valid input combination enables the pull-up instead.
 
 NOR is the mirror image: pMOS connected in series, nMOS connected in parallel, also 4 transistors.
 

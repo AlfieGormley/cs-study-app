@@ -2,7 +2,7 @@
 id: disc-function-domain-image
 title: "Functions, domains and images"
 level: basic
-minutes: 3
+minutes: 2
 summary: "A total function gives each allowed input exactly one output."
 sourceLesson: disc-sets-functions
 ---
@@ -11,7 +11,7 @@ sourceLesson: disc-sets-functions
 
 A **mathematical function** assigns to every element of its **domain** exactly one element of its **codomain**. Two conditions: every input has an output, and no input has two outputs.
 
-```formula
+```formula essential
 f : A → B
 f(a) ∈ B   for every a ∈ A
 where
@@ -27,38 +27,9 @@ In words: f takes each element of A and gives back exactly one element of B.
 
 There is exactly one function from an empty domain to any codomain: it makes no assignments. A nonempty domain cannot map into an empty codomain.
 
-The **function image** (often called the range) is the set of outputs actually hit:
+The **function image** (often called the range) is the set of outputs actually hit. It is contained in the codomain but can leave some declared outputs unused.
 
-```formula
-f(A) = { f(a) : a ∈ A }
-f(A) ⊆ B
-where
-f(A): the image of f: every output that some input actually produces
-f: a function from the set A to the set B
-A: the domain, the set of inputs
-B: the codomain
-a: an input taken from A
-f(a): the output for input a
-∈: is an element of
-⊆: is a subset of
-{ : }: the set of all values f(a), one for each a in A
-In words: the image collects every output f really produces. It is always inside the codomain and may be smaller.
-```
-
-For example, doubling an integer:
-
-```formula
-f : ℤ → ℤ,   f(x) = 2 × x
-f(ℤ) = {…, −4, −2, 0, 2, 4, …}
-where
-f: the doubling function
-x: an integer input
-ℤ: the integers: …, −2, −1, 0, 1, 2, …
-f(ℤ): the image of f: every output it actually produces
-→: in "f : ℤ → ℤ", f takes integers and its declared codomain is the integers
-…: and so on in both directions
-In words: doubling hits only the even integers, so the image is smaller than the codomain: 3, for example, is in the codomain but never an output.
-```
+For example, doubling integer inputs produces only even integers. If all integers are the codomain, 3 is allowed by that declaration but never reached.
 
 ## Key takeaways
 

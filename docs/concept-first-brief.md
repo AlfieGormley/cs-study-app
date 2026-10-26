@@ -31,6 +31,11 @@ For each active lesson (use `module.json`, not archival originals):
 - Retain dictionary entries unless inaccurate; do not delete useful reference definitions just
   because an associated formula is removed from the main lesson.
 
+Preserving verification history does not freeze inaccurate dictionary definitions or aliases. Correct
+affected entries when they contradict the reviewed lesson, overstate a conditional relationship or open
+the wrong concept. Preserve their IDs and earlier provenance, then independently verify the corrected
+definition. Do not substitute a confidence caveat for a straightforward correction supported by a source.
+
 Read CLAUDE.md, CONTENT_SPEC.md, docs/CONTENT_PROCESS.md and both writing skills. The rule above
 supersedes older briefs that request calculations in every worked example. Authors do not stamp
 their own changes. A distinct verifier fetches primary sources, checks the changed lessons and all

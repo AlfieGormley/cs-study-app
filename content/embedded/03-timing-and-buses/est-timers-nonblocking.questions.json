@@ -3,27 +3,27 @@
     "id": "est-timers-nonblocking-q1",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A millisecond counter uses `uint32_t`. A saved start is `UINT32_MAX - 3u`; the current reading is `6u`. Actual elapsed time is known to be less than one complete counter cycle. Does `(uint32_t)(now - start) >= 10u` report the timer due?",
+    "prompt": "A `uint32_t` tick counter has rolled past its maximum back to zero. The actual time since the saved start is less than one complete counter cycle. Why can `(uint32_t)(now - start)` still measure elapsed ticks even when `now` is numerically smaller than `start`?",
     "options": [
       {
-        "text": "No, because the current reading is numerically smaller.",
-        "explanation": "That compares display positions instead of using unsigned elapsed-time subtraction."
+        "text": "The counter permanently stops at its maximum.",
+        "explanation": "A wrapping counter continues at zero; a stopped counter would not measure the subsequent time."
       },
       {
-        "text": "It has undefined signed-overflow behaviour on every C implementation.",
-        "explanation": "The explicit conversion to the exact unsigned width gives modulo behaviour; the example is not a signed-overflow timer design."
+        "text": "The subtraction records how many complete cycles were missed.",
+        "explanation": "The result retains only a position within one counter cycle. The stated observation bound is what removes that ambiguity."
       },
       {
-        "text": "No, because the difference must be six.",
-        "explanation": "Six counts have passed since zero, but four more counts take the old reading to zero."
+        "text": "Comparing `now` directly with `start` reconstructs the elapsed time.",
+        "explanation": "Those readings are positions on a repeating counter; their ordinary numeric ordering does not describe elapsed time across rollover."
       },
       {
-        "text": "Yes: the unsigned elapsed value is ten.",
-        "explanation": "Correct. Four increments reach zero and six more reach six, within the stated observation bound."
+        "text": "Conversion to the unsigned counter width wraps the difference into the elapsed count within that cycle.",
+        "explanation": "Correct. With the stated less-than-one-cycle bound, the wrapped difference identifies the elapsed ticks despite the lower current reading."
       }
     ],
     "answer": 3,
-    "workedExample": "1. From UINT32_MAX minus three, four increments reach zero.\n2. Six further increments reach the current count six.\n3. The elapsed count is ten, so the comparison with ten is true. The known less-than-one-cycle bound is essential.",
+    "workedExample": "1. A counter reading is a position in a repeating unsigned range.\n2. Subtracting the saved position and converting to that range recovers the forward distance across rollover.\n3. The observation bound matters: the same result could otherwise hide one or more complete missed cycles.",
     "link": {
       "title": "C11 draft: unsigned arithmetic and conversions",
       "url": "https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf"
@@ -63,27 +63,27 @@
     "id": "est-timers-nonblocking-q3",
     "level": "basic",
     "type": "single",
-    "prompt": "A task uses a non-blocking timer with a 10 ms interval. It was due at 50 ms but the loop handles it at 55 ms, then saves 55 ms as its new start. Assuming timely future checks, when is it next due under that policy?",
+    "prompt": "A periodic task is handled late because other main-loop work took longer than expected. After handling it, firmware saves the current time as the new start. What does this policy do to future timing?",
     "options": [
       {
-        "text": "60 ms, because all timer policies preserve the original phase.",
-        "explanation": "Saving the actual handling time restarts this policy from 55 ms."
+        "text": "It preserves every original scheduled instant automatically.",
+        "explanation": "Restarting from the actual handling time moves the next interval with that late observation; preserving the original schedule needs a different policy."
       },
       {
-        "text": "65 ms.",
-        "explanation": "Correct. The next interval begins at the newly saved start, so the late check shifts the schedule."
+        "text": "It starts a fresh interval from the late handling time, shifting the schedule.",
+        "explanation": "Correct. The next due time is measured from the newly saved start rather than the original planned instant."
       },
       {
-        "text": "Immediately and repeatedly until every missed instant is replayed.",
-        "explanation": "That is a catch-up policy, not the stated restart-from-now policy."
+        "text": "It immediately replays every missed execution.",
+        "explanation": "A catch-up policy must be designed explicitly; saving the current time alone does not replay missed work."
       },
       {
-        "text": "Exactly 55 ms, because elapsed time is always due after rollover.",
-        "explanation": "Immediately after saving the new start the elapsed count is zero."
+        "text": "It guarantees the next action executes at its exact due instant.",
+        "explanation": "The main loop must still reach the timer check. Checking a timer without waiting does not eliminate delays caused by other work."
       }
     ],
     "answer": 1,
-    "workedExample": "1. The task chooses a new starting marker of 55 ms.\n2. Another 10 ms interval ends at 65 ms.\n3. An alternative fixed-period schedule could preserve phase, but would need its own late-work policy.",
+    "workedExample": "1. The saved marker determines where the next interval begins.\n2. Replacing it with the actual handling time shifts that interval after a late check.\n3. A fixed-period schedule could preserve the original timing pattern, but needs an explicit policy for catching up or skipping late work.",
     "link": {
       "title": "Primary reference for this question",
       "url": "https://raw.githubusercontent.com/raspberrypi/pico-sdk/master/src/common/pico_time/include/pico/time.h"

@@ -7,9 +7,11 @@ library finished from a renderer change or a partial module audit.
 
 - Task checkout: `/tmp/cs-study-concept-first-20261026`. The user's primary checkout contains unrelated
   drafts and must remain untouched. Working queue: `/tmp/concept-first-queue.json`.
-- Six modules have current independent concept-first reviews: all three DSP modules, network foundations,
-  system-design fundamentals and sound sampling (123 lessons). Embedded foundations is next. All other
-  modules still need their semantic audit. See `docs/concept-first-report.md` for current review details.
+- Thirteen modules have current independent concept-first reviews: all three DSP modules, network foundations,
+  system-design fundamentals, sound sampling, all four Embedded modules and all three React modules
+  (175 lessons). Complexity, digital logic and discrete structures are being authored. The other
+  70 modules still need their semantic audit.
+  See `docs/concept-first-report.md` for current review details.
 - Rules in `CLAUDE.md`, `CONTENT_SPEC.md`, `AGENTS.md` and the content process apply to future work.
   Mark essential relationships `formula essential`, useful optional maths `formula reference`, and remove
   redundant arithmetic. Unreviewed legacy formulas remain visible. Quiz information remains expanded.
@@ -22,8 +24,12 @@ library finished from a renderer change or a partial module audit.
 - Working browser harnesses: `/tmp/check-concept-first.mjs` (real navigation, controls, progress/offline)
   and `/tmp/check-concept-first-library.mjs` (every compiled lesson/question at phone and desktop widths).
   Re-run against the final verified build; passing renders do not certify content review.
-- The six-module checkpoint builds as version `532cf4b25d9b`; all 78 Node tests and the original
-  short-lesson migration audit pass. Original migration snapshots are in `/tmp/concept-first-migration/`.
+- The first six-module checkpoint is commit `9bd10c5`. The next thirteen-module build is version
+  `2e2f58e71760`, including sound glossary corrections. All 78 Node tests and the original migration
+  audit pass. All 2,717 lessons and 5,881 questions render at 390 and 1440 px; all 168 changed dictionary
+  name/alias lookups pass. DSP route/control/offline/prior-progress checks pass. This is integration
+  evidence for the compiled build, not semantic certification of the remaining modules. Original
+  migration snapshots are in `/tmp/concept-first-migration/`.
 - Nothing from this rewrite has been published yet. Finish independent review, build/tests/audits,
   commit and publish the verified result, and check the public app matches the tested release.
 

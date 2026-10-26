@@ -43,4 +43,4 @@ Each task also needs a stack budget, and scheduling adds its own configuration a
 ## Further reading
 - [FreeRTOS task states and task API contracts](https://raw.githubusercontent.com/FreeRTOS/FreeRTOS-Kernel/main/include/task.h)
 - [FreeRTOS scheduling implementation](https://raw.githubusercontent.com/FreeRTOS/FreeRTOS-Kernel/main/tasks.c)
-- [FreeRTOS queues and bounded waiting](https://raw.githubusercontent.com/FreeRTOS/FreeRTOS-Kernel/main/include/queue.h)
+- [FreeRTOS queues and wait timeouts](https://raw.githubusercontent.com/FreeRTOS/FreeRTOS-Kernel/main/include/queue.h)

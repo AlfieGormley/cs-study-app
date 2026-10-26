@@ -60,9 +60,9 @@ It prints `5`, the zero-based sample index at which the stable state changes to 
 >
 > **Where it stops:** Agreement at sample instants does not prove the contact stayed steady between them. A real debounce interval must suit the switch, sampling schedule and how quickly the application must react.
 
-## Sampling frequency is part of the policy
+## Sampling schedule is part of the policy
 
-If these samples occur every 5 ms starting at time zero, the three final true samples occur at 15, 20 and 25 ms. The state changes at 25 ms. Three sample instants span two sampling intervals, not three. A missed or irregular sample changes the real elapsed time represented by the count.
+Three matching samples span two gaps between sample instants. Taking the same number of samples faster shortens the observed interval; taking them irregularly means the count no longer represents a fixed duration. Neither case proves that the contact stayed steady between samples.
 
 The later timing module schedules calls using a timer. Do not poll this function as fast as the CPU allows and then treat its count as milliseconds. Measure the actual switch behaviour and choose a stable-time requirement. If the application wants only presses, additionally require that the new stable state is true; a release is also a stable change.
 

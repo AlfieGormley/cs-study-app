@@ -45,5 +45,5 @@ Halting a processor changes its relationship with external devices and deadlines
 - [GDB breakpoints and watchpoints](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Breakpoints.html)
 - [GDB watchpoint support and limits](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Set-Watchpoints.html)
 - [GDB: optimisation and source-variable visibility](https://sourceware.org/gdb/current/onlinedocs/gdb.html/Optimized-Code.html)
-- [Zephyr: logging time, buffering and rate limits](https://docs.zephyrproject.org/latest/services/logging/index.html)
+- [Zephyr: logging overhead and bounded output](https://docs.zephyrproject.org/latest/services/logging/index.html)
 - [Pico SDK watchdog debug-pause option](https://raw.githubusercontent.com/raspberrypi/pico-sdk/master/src/rp2_common/hardware_watchdog/include/hardware/watchdog.h)

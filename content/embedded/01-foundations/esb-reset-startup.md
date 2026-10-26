@@ -16,14 +16,14 @@ Arm's CMSIS Cortex-M startup template describes a **reset handler**, an initial 
 
 This names a particular Cortex-M software model. The exact sequence comes from the chip, toolchain and project. Another processor or startup package can use a different arrangement.
 
-C variables with **static storage duration** have storage for the whole program execution; program-wide variables are an example. C requires these variables to receive their initial values before C program startup. The described runtime completes this initialisation before calling `main`. This is a software initialisation rule, not a claim that reset hardware erases all physical RAM. C does not require every microcontroller project to use an entry function named `main`.
+C variables with **static storage duration** have storage for the whole program execution; program-wide variables are an example. C requires these variables to receive their specified starting values before C program startup. The described runtime completes this initialisation before calling `main`. This is a software initialisation rule, not a claim that reset hardware erases all physical RAM. C does not require every microcontroller project to use an entry function named `main`.
 
 > [!analogy] Real-world analogy: opening a shop before serving customers
 > A shop can need its entrance opened, workspace prepared and equipment checked before the first customer is served.
 >
 > **How it maps:** The opening procedure represents the reset and startup path; serving the first customer represents entering application code. A fault during preparation can prevent the application's first visible action.
 >
-> **Where it stops:** There is no universal startup checklist for every MCU. Hardware-defined entry rules and vendor startup code determine the real order, and a reset need not erase every memory region.
+> **Where it stops:** There is no universal startup checklist for every MCU. Hardware-defined entry rules and vendor startup routines determine the real order, and a reset need not erase every memory region.
 
 ## Boot code and application code are distinct
 
@@ -33,7 +33,7 @@ RP2040 is one concrete example: its boot ROM participates in startup and support
 
 When diagnosing a board that never reaches the application, ask which milestone failed. Did the programming tool report a successful transfer? Can the debug tools reach the target? Does execution reach application startup? Does hardware initialisation finish? These observations separate a startup failure from a failure in the later decision logic.
 
-Treat retained settings deliberately. Some reset conditions can preserve physical RAM or special retention storage, while startup code may reinitialise application data. Check the specific device and runtime rather than using a reset as a general promise to erase all data.
+Treat retained settings deliberately. Some reset conditions can preserve RAM contents or special retention storage, while startup routines may reinitialise application data. Check the specific device and runtime rather than using a reset as a general promise to erase all data.
 
 ## Key takeaways
 - Reset, flash programming, startup and application entry are distinct operations.

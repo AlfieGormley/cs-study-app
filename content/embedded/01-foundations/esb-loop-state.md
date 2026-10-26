@@ -45,7 +45,7 @@ Using the held-button level as the event would toggle again on every pass while 
 >
 > **How it maps:** The person represents foreground execution, desks represent loop jobs and each short visit represents work that returns control. The remembered indicator mode represents the application's explicit state.
 >
-> **Where it stops:** Real MCU interrupts can run between foreground instructions, and another core may run simultaneously. A loop structure alone proves neither a response-time limit nor safe access to shared data.
+> **Where it stops:** Real MCU interrupts can run between foreground instructions, and another core may run simultaneously. A loop structure alone proves neither how soon work will finish nor safe access to shared data.
 
 ## Test decisions separately from hardware
 

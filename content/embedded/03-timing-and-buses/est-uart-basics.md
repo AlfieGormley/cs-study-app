@@ -10,23 +10,25 @@ A **UART**, or universal asynchronous receiver/transmitter, converts bytes into 
 
 Both ends must agree on baud rate, data bits, parity and stop bits. Pin functions and electrical levels are separate requirements. Work only with low-voltage development hardware. Use a board-approved adapter and the device manuals: a UART framing setting does not establish a safe voltage, and an RS-232 electrical interface is not directly interchangeable with a microcontroller's logic-level pins.
 
-## Count framing as well as payload
+## Framing uses time too
 
 Assume an ordinary binary UART link with **8N1** framing: one start bit, eight data bits, no parity and one stop bit. That is ten transmitted bit periods for one payload byte, before any gaps between frames.
 
-```formula
-T = N × b / R
-T = (96 × 10 / 9600) s
-T = 0.1 s = 100 ms
+Counting only the eight data bits underestimates how long transmission takes. More payload or more framing bits takes longer at the same line rate; a higher line rate shortens the ideal wire time. Gaps between frames and software delays can add to that time.
+
+Use this relationship when you need a transfer estimate:
+
+```formula reference
+T = (N × b) / R
 where
-T: ideal wire time for the data, in seconds (s) or milliseconds (ms)
-N: number of payload bytes, here 96
-b: transmitted bits per byte under the assumed framing, here 10 for 8N1
-R: line rate in bits per second, here 9600; for this binary UART signalling it matches 9600 baud
-s: second
-ms: millisecond, one thousandth of a second
-In words: 96 payload bytes need 960 line bits, taking 100 milliseconds at 9600 bits per second, before any additional gaps.
+T: ideal wire time for the data, in seconds
+N: number of payload bytes
+b: transmitted bits per payload byte, including framing; 10 for the assumed 8N1 format
+R: line rate in bits per second; for this binary UART signalling its numerical value matches the baud rate
+In words: ideal wire time is the number of payload bytes multiplied by the line bits needed for each byte, divided by the line bit rate. Framing consumes time as well as payload.
 ```
+
+For example, 96 payload bytes take 100 milliseconds at 9600 baud with 8N1 and no extra gaps. This is a wire-time estimate, not a promise about the time an application call takes.
 
 A UART's FIFO and any software receive buffer provide temporary storage. They do not increase the sustained drain rate. If input keeps arriving faster than software consumes it, a finite buffer eventually overflows. An overrun can lose data; check the hardware and driver error reporting.
 

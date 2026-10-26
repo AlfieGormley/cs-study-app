@@ -32,11 +32,11 @@ A successful compile does not prove that linking will succeed. A function can ha
 >
 > **How it maps:** Preparing pages represents compilation; assembling the pack represents linking; delivery represents transferring the firmware. Observing the device checks the behaviour of the delivered result.
 >
-> **Where it stops:** Firmware must match a processor, memory layout and transfer format. A successfully delivered image can still contain logical errors or initialise the wrong hardware.
+> **Where it stops:** Firmware must match the processor, code and data locations, and transfer format. A successfully delivered image can still contain decision bugs or initialise the wrong hardware.
 
 ## A concrete supported route
 
-For an original Raspberry Pi Pico running an appropriate Pico SDK blink image, the official documentation describes entering BOOTSEL mode, which exposes a USB mass-storage interface, then copying a UF2 image through that interface. The bootloader interprets the transfer and the board restarts into the application. This is a Pico workflow, not a universal way of programming MCUs or an ordinary storage drive for arbitrary files.
+For an original Pico running an appropriate Pico SDK blink image, the official documentation describes entering BOOTSEL mode, which exposes a USB mass-storage interface, then copying a UF2 image through that interface. The bootloader interprets the transfer and the board restarts into the application. This is a Pico workflow, not a universal way of programming MCUs or an ordinary storage drive for arbitrary files.
 
 Other supported routes use a debug interface and a programming tool. Follow the board's current guide for the required image format and procedure. Record the board selection, build configuration and image you transferred so an observation can be tied to a particular build.
 

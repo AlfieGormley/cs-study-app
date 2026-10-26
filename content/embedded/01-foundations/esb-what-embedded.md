@@ -34,7 +34,7 @@ The threshold and the fault indication are choices for this example, not univers
 
 ## What changes from desktop development
 
-A **bare-metal** application runs without an operating system managing its application execution. Its startup code and libraries still do real work. A real-time operating system is still an operating system; an application running under one is not bare metal. Other embedded devices use an operating system, so embedded does not automatically mean bare metal.
+A **bare-metal** application runs without an operating system managing its application execution. Its startup support and libraries still do real work. A real-time operating system is still an operating system; an application running under one is not bare metal. Other embedded devices use an operating system, so embedded does not automatically mean bare metal.
 
 Hardware places constraints on available memory, supported signals and the time allowed for a response. A **real-time** requirement concerns meeting a timing requirement, not simply running as fast as possible. A program that eventually gives the right answer can still fail if that answer arrives too late for its intended job.
 

@@ -51,7 +51,7 @@ int main(void) {
 }
 ```
 
-It prints `0 1`. The `!` operator negates a truth value. On a real target, a small driver obtains the electrical level through its SDK, then applies this interpretation. For example, Raspberry Pi's SDK documents separate operations for initialising GPIO, selecting direction, selecting pulls and reading or writing values. The correct sequence and pin assignment still depend on the exact board.
+It prints `0 1`. The `!` operator negates a truth value. On a real target, a small driver obtains the electrical level through its SDK, then applies this interpretation. For example, the SDK for RP2040 documents separate operations for initialising GPIO, selecting direction, selecting pulls and reading or writing values. The correct sequence and pin assignment still depend on the exact board.
 
 ## Key takeaways
 - Configure the signal function, direction and required pull before interpreting readings.

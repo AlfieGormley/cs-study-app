@@ -34,7 +34,7 @@ function OpenTasks({ tasks }) {
 
 Suppose the records are `a: Read` (open), `b: Rest` (done) and `c: Practise` (open). Filtering keeps records `a` and `c`. Mapping returns two list elements, displaying `Read` and `Practise`. The original array still contains all three records.
 
-## Give each sibling a stable identity
+## Give each sibling a stable React key
 
 A **React key** is an identity hint for an element in a collection of siblings. It helps React match a record's previous UI to its next UI when items are inserted, removed or reordered. Put the key on the element returned directly from `map`; a key buried inside a child component is too far down.
 

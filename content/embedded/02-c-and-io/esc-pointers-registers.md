@@ -6,7 +6,7 @@ minutes: 4
 summary: Separate an address, the object it refers to and a hardware register access.
 ---
 
-A **pointer** is a value that refers to an object or function. This lesson uses object pointers. Taking an object's address does not copy the object. Dereferencing the pointer accesses the referred-to object, provided that access is valid for its type, alignment and lifetime.
+A **pointer** is a value that can refer to an object or function. This lesson uses object pointers. A null pointer refers to neither, and a pointer one past an array's end cannot be used to access an element. Taking an object's address does not copy the object. Dereferencing the pointer accesses the referred-to object, provided that access is valid for its type, alignment and lifetime.
 
 ## Address and value are different
 

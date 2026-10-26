@@ -22,7 +22,7 @@ For an onboard indicator, follow this sequence:
 4. Use the official SDK example for that board and check its build configuration.
 5. Observe the intended result before adding external circuitry.
 
-The Raspberry Pi SDK's blink example illustrates why this matters. Its ordinary Pico LED path and Pico W wireless-chip LED path differ. The example selects the supported path using board configuration. Copying a pin number from a different board is not a substitute for that selection.
+The Pico SDK's blink example illustrates why this matters. Its ordinary Pico LED path and Pico W wireless-chip LED path differ. The example selects the supported path using board configuration. Copying a pin number from a different board is not a substitute for that selection.
 
 > [!analogy] Real-world analogy: an appliance manual and a room plan
 > An appliance manual explains what the appliance can do. A room plan shows where it is installed and how it is connected. A control panel provides the supported way to operate it.

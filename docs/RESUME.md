@@ -1,4 +1,29 @@
-# Concept-first library rewrite: IN PROGRESS (2026-10-26)
+# Current application scope: four subjects removed (2026-10-26)
+
+The user permanently removed Operating Systems (`os`), Computer Architecture (`architecture`),
+Theory & Discrete Maths (`theory`), and Programming Languages & Compilers (`languages`) from the
+application. Their source lessons, questions, module glossaries, compiled data and unique diagram
+overrides are removed. `content/retired-subjects.json` prevents accidental reintroduction. Historical
+review documents below describe earlier scope; they are not instructions to restore those courses.
+
+The remaining application has **10 subjects, 60 modules, 1,845 lessons and 4,029 questions**.
+The concept-first rewrite remains **PAUSED BY USER**. Of the retained modules, **14 are independently
+reviewed (210 lessons and 535 questions); 46 still need review**. Recalculate progress against this
+scope rather than the old 86-module denominator. The permanent concept-first authoring rules remain.
+
+- Removal checkout: `/tmp/cs-study-remove-subjects-20261026`, based on published `e1bd171`.
+- Paused rewrite drafts: `/tmp/cs-study-concept-first-20261026`; preserve synth02/03/04 author/reviewer
+  work and the focused synth01 glossary draft. Do not publish unstamped drafts or resume workers.
+- Queue: `/tmp/concept-first-queue.json`; pause record: `/tmp/concept-first-pause-20261026.json`.
+  Rebase the rewrite checkout onto the removal release before resuming; resolve its RESUME.md overlap
+  using this scope. Never restore deleted courses from the paused checkout or earlier snapshots.
+- Removal release checks and public deployment evidence: `/tmp/remove-subjects-*.json` and
+  `/tmp/remove-subjects-*.log`. Confirm the public commit before calling this release live.
+- Retained lesson/question source and compiled module data remain identical to the published baseline.
+  App updates discard retired-subject saved progress and quiz snapshots while preserving retained
+  progress, preferences and activity dates. Old retired lesson routes show the not-found page.
+
+# Historical checkpoint before subject removal (2026-10-26)
 
 The user explicitly requested rewriting the entire library for fundamentals-focused reading on a phone.
 This is 86 modules, 2,717 active lessons and 5,881 questions, starting from published commit

@@ -9,9 +9,12 @@ show the idea in words, with “Show the maths” for equations and symbol defin
 remain visible, and quiz data stays expanded. Future content follows the concept-first rule in
 `CONTENT_SPEC.md`; worked examples can explain reasoning without requiring calculations.
 
-Subjects: System Design, Data Structures & Algorithms, Operating Systems, Computer Networks, Computer
-Architecture, Programming Languages & Compilers, Security & Cryptography, Software Engineering, Theory &
-Discrete Maths, Databases & SQL, Synth Building, Embedded Software, React, and Digital Signal Processing.
+Subjects: System Design, Data Structures & Algorithms, Computer Networks, Security & Cryptography,
+Software Engineering, Databases & SQL, Synth Building, Embedded Software, React, and Digital Signal Processing.
+
+Operating Systems, Computer Architecture, Theory & Discrete Maths, and Programming Languages & Compilers
+were removed from the application at the user's request. `content/retired-subjects.json` records these
+retirements; do not add these subjects back without an explicit request.
 New modules follow `docs/new-module.md`; `docs/RESUME.md` records how the content was generated.
 
 ## Run it locally

@@ -1,25 +1,19 @@
 # Concept-first library review
 
-Status: **in progress**. 22/86 modules and 510/2717 active lessons have current independent editorial reviews.
+Status: **paused by user**. 14/60 modules and 210/1845 active lessons have current independent editorial reviews.
 
-The user requested the whole library. This report counts only active lesson IDs from module.json. Pending modules have not been certified by keyword scans or by renderer tests.
+This report covers the remaining library after the user permanently removed Operating Systems, Computer Architecture, Theory & Discrete Maths, and Programming Languages & Compilers on 2026-10-26. It counts only active lesson IDs from module.json. Pending modules have not been certified by keyword scans or by renderer tests.
 
 The rule for future content is in [the authoring brief](concept-first-brief.md), [CONTENT_SPEC.md](../CONTENT_SPEC.md) and [the content process](CONTENT_PROCESS.md). Essential relationships remain visible; selected reference maths opens on demand. Redundant equations and routine calculation questions are removed or rewritten around interpretation, prediction and diagnosis.
 
-Comparison baseline: `5b8fb6f2709893396373ba979ba194aacf5cb034`. Lesson IDs, question IDs and question ownership must match this baseline. Archived originals and progress migrations remain unchanged.
+Comparison baseline: `5b8fb6f2709893396373ba979ba194aacf5cb034`. Within retained subjects, lesson IDs, question IDs and question ownership must match this baseline; archived originals and progress migrations remain unchanged. The four explicit subject removals are recorded in `content/retired-subjects.json`.
 
-Focused dictionary integration corrections and exact-definition equivalence reviews are recorded in [the integration review](concept-first-integration-review.json). The [theory dictionary review](concept-first-theory-dictionary-review.json) records independently accepted exact definitions for shared theory terms. A focused glossary correction does not count as a completed module rewrite. Reviewer records retain checks that were pending at handoff; subsequent compiled-check closure is recorded separately in the integration report.
+Focused dictionary integration corrections and exact-definition equivalence reviews are recorded in [the integration review](concept-first-integration-review.json). A focused glossary correction does not count as a completed module rewrite. Reviewer records retain checks that were pending at handoff; subsequent compiled-check closure is recorded separately in the integration report.
 
 “Review units” below retain each independent reviewer’s stated counting method. Some are grouped claim sets, not atomic assertions; counts must not be compared as a quality score. The linked verification records preserve earlier factual/glossary history and define the fresh review scope.
 
 | Module | Status | Lessons | Questions | Lesson formula cards before → after | Essential / reference | Question cards before → after | Glossary terms | Review units | Corrections |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| [architecture / Data Representation](../content/architecture/01-data-representation/verification.json) | Reviewed | 37 | 76 | 39 → 8 | 1 / 7 | 21 → 0 | 393 | 116 | 10 |
-| [architecture / Digital Logic](../content/architecture/02-digital-logic/verification.json) | Reviewed | 34 | 74 | 79 → 41 | 29 / 12 | 154 → 0 | 262 | 154 | 6 |
-| architecture / Instruction Sets & Assembly | Pending review | 35 | — | — | — | — | — | — | — |
-| architecture / Pipelining & CPU Performance | Pending review | 29 | — | — | — | — | — | — | — |
-| architecture / Caches & the Memory Hierarchy | Pending review | 31 | — | — | — | — | — | — | — |
-| architecture / Parallel Hardware | Pending review | 33 | — | — | — | — | — | — | — |
 | databases / SQL Fundamentals | Pending review | 40 | — | — | — | — | — | — | — |
 | databases / Advanced SQL | Pending review | 41 | — | — | — | — | — | — | — |
 | databases / Relational Theory & Normalisation | Pending review | 35 | — | — | — | — | — | — | — |
@@ -42,26 +36,12 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [embedded / C and Device I/O](../content/embedded/02-c-and-io/verification.json) | Reviewed | 8 | 16 | 3 → 2 | 0 / 2 | 2 → 0 | 88 | 54 | 7 |
 | [embedded / Timing, Interrupts & Serial Buses](../content/embedded/03-timing-and-buses/verification.json) | Reviewed | 6 | 18 | 1 → 1 | 0 / 1 | 1 → 0 | 54 | 173 | 2 |
 | [embedded / Debugging, Reliability & First Projects](../content/embedded/04-debugging-and-projects/verification.json) | Reviewed | 6 | 18 | 0 → 0 | 0 / 0 | 0 → 0 | 36 | 90 | 2 |
-| languages / Programming Paradigms | Pending review | 31 | — | — | — | — | — | — | — |
-| languages / Type Systems | Pending review | 26 | — | — | — | — | — | — | — |
-| languages / Memory Management & Garbage Collection | Pending review | 26 | — | — | — | — | — | — | — |
-| languages / Functional Programming | Pending review | 33 | — | — | — | — | — | — | — |
-| languages / Compilers & Interpreters | Pending review | 37 | — | — | — | — | — | — | — |
-| languages / Concurrency Models in Languages | Pending review | 25 | — | — | — | — | — | — | — |
 | [networks / Network Foundations & the Link Layer](../content/networks/01-foundations/verification.json) | Reviewed | 37 | 72 | 47 → 19 | 0 / 19 | 34 → 0 | 433 | 139 | 2 |
 | networks / IP, Addressing & Routing | Pending review | 38 | — | — | — | — | — | — | — |
 | networks / Transport Layer: TCP & UDP in Depth | Pending review | 43 | — | — | — | — | — | — | — |
 | networks / Application-Layer Protocols | Pending review | 42 | — | — | — | — | — | — | — |
 | networks / Network Security | Pending review | 36 | — | — | — | — | — | — | — |
 | networks / Wireless, Mobile & Modern Networks | Pending review | 37 | — | — | — | — | — | — | — |
-| os / OS Basics & Processes | Pending review | 29 | — | — | — | — | — | — | — |
-| os / Threads & Scheduling | Pending review | 31 | — | — | — | — | — | — | — |
-| os / Concurrency & Synchronisation | Pending review | 33 | — | — | — | — | — | — | — |
-| os / Deadlock & Liveness | Pending review | 32 | — | — | — | — | — | — | — |
-| os / Memory Management | Pending review | 42 | — | — | — | — | — | — | — |
-| os / File Systems & Storage | Pending review | 38 | — | — | — | — | — | — | — |
-| os / I/O & Event-Driven Servers | Pending review | 32 | — | — | — | — | — | — | — |
-| os / Virtualisation & Containers | Pending review | 29 | — | — | — | — | — | — | — |
 | [react / Components and JSX](../content/react/01-components/verification.json) | Reviewed | 8 | 24 | 0 → 0 | 0 / 0 | 0 → 0 | 70 | 102 | 4 |
 | [react / State and Interactive Forms](../content/react/02-state/verification.json) | Reviewed | 9 | 27 | 0 → 0 | 0 / 0 | 0 → 0 | 44 | 80 | 4 |
 | [react / Hooks, Effects and Shared Logic](../content/react/03-hooks/verification.json) | Reviewed | 9 | 27 | 0 → 0 | 0 / 0 | 0 → 0 | 52 | 94 | 3 |
@@ -94,104 +74,8 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | system-design / Reliability, Operations & Security | Pending review | 38 | — | — | — | — | — | — | — |
 | system-design / Case Studies I | Pending review | 43 | — | — | — | — | — | — | — |
 | system-design / Case Studies II | Pending review | 42 | — | — | — | — | — | — | — |
-| [theory / Logic & Proofs](../content/theory/01-logic-proofs/verification.json) | Reviewed | 37 | 74 | 80 → 34 | 32 / 2 | 91 → 4 | 278 | 43 | 15 |
-| [theory / Discrete Structures](../content/theory/02-discrete-structures/verification.json) | Reviewed | 40 | 75 | 119 → 56 | 34 / 22 | 110 → 2 | 344 | 123 | 13 |
-| [theory / Probability for Computer Science](../content/theory/03-probability/verification.json) | Reviewed | 41 | 70 | 95 → 27 | 5 / 22 | 82 → 0 | 217 | 118 | 20 |
-| [theory / Automata & Regular Languages](../content/theory/04-automata/verification.json) | Reviewed | 32 | 73 | 47 → 20 | 9 / 11 | 45 → 0 | 170 | 36 | 6 |
-| [theory / Context-Free Languages & Computability](../content/theory/05-computability/verification.json) | Reviewed | 32 | 67 | 45 → 32 | 21 / 11 | 42 → 14 | 175 | 100 | 4 |
-| [theory / Complexity Theory](../content/theory/06-complexity/verification.json) | Reviewed | 47 | 77 | 90 → 49 | 32 / 17 | 84 → 3 | 255 | 133 | 11 |
 
 The report certifies editorial provenance only. Build, migration, rendering, offline and deployed-version evidence must be checked separately before publication.
-
-## architecture / Data Representation
-
-46 question objects changed. Every changed question has a specific independent-review reason in the linked record.
-
-**Corrections in this review:**
-
-- Bit mask was incorrectly restricted to constants; computed patterns are valid masks.
-- Binade spacing doubling now explicitly applies to normal binary values; subnormal spacing is fixed.
-- Infinity glossary now scopes overflow to rounding mode and distinguishes language exceptions.
-- Packed struct explanation now admits nested types and explicit alignment retaining padding.
-- Signed zero wording now distinguishes encodings/signs rather than claiming unequal numeric values.
-- Native Python struct layout example now states the four-byte int ABI assumption.
-- Removed incomplete C if-statement demonstration by supplying complete controlled statements.
-- rep-integers-q4: unsigned-range premise alone did not imply signed overflow; added two positive signed inputs, retaining the correct carry-clear/overflow-set answer.
-- binade glossary example: generic floats with spacing 2^-23 replaced by explicit binary32 scope.
-- rep-alignment-rules: replaced a fixed ordering of within-line/line-crossing/page-crossing costs with processor-, instruction- and cache/TLB-dependent wording.
-
-**Scope gaps and exclusions:**
-
-- All six original scopes retained in 37 focused units, with all 72 original question contracts and 44 executable statement sets preserved; four questions fill newly focused units.
-- No physical cache-line, atomicity, split-lock, DMA or accelerator benchmark: implementation-dependent performance is qualified.
-- MySQL8.4 charset and migration syntax are source-checked, not executed on a MySQL8.4 service. Native C17 builtin checked arithmetic ran; C23 stdckdint/stdbit library availability was not exercised.
-- Peripheral historical adoption/prevalence and product examples are medium confidence; this review does not certify every implementation/version. The unverified YouTube counter anecdote and unsupported fastest-computer ranking are omitted or replaced by directly checked examples.
-- Rust str.len syntax is corrected from primary Rust documentation; no native Rust compiler was available. Java21, Node25, Python3.14 and NumPy2.5 examples were run.
-- No core learning objective omitted; numerical drills replaced by mechanism, interpretation and diagnosis.
-- The historical unavailable YouTube counter anecdote and undated UTF-8 adoption percentage remain omitted with honest evidence-gap notes.
-- No physical split-lock, cache/page, strict-alignment MCU, SIMD, DMA or accelerator benchmark was run. The source-backed conditional descriptions are not measured performance guarantees.
-- C23 checked/std-bit library availability was not executed: retained executable C uses compiler builtins; commented alternatives were checked against the standard. MySQL migration ran on 8.0; the specified 8.4 utf8 alias is primary-source checked.
-- Full integration build and browser/mobile/offline checks are delegated to root. Runtime glossary preview used production matcher and current definitions with existing compiled owners; root must regenerate the actual dictionary and confirm architecture--bit-mask, binade and infinity-float updates.
-- Default all-file link sweep still fails the archived Stanford Bit Twiddling Hacks URL; active-only sweep passes 66/66. Archives remain untouched.
-
-**Low-confidence areas, including preserved qualifications:**
-
-- medium confidence, rep-bit-byte-word-units: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-signed-representations: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-overflow-failures: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-xor-and-applications: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-float-fields: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-floating-practice: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-ascii-and-codepoints: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-utf8-bytes: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-utf16-pairs: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-string-lengths: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-unicode-normalisation: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-text-boundaries: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-endian-byte-order: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-alignment-rules: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-struct-layout: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-packed-struct-risks: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-native-layout-performance: Platform, product, historical or performance-specific context Core semantics checked against fetched standards/implementation documents and bounded native fixtures. Historical case studies are interpretations of reports; compiler/ABI/defaults can vary. No physical hardware performance, cache, split-lock or DMA benchmark was performed.
-- medium confidence, rep-alignment-rules: Specific unaligned-access and split-lock performance on an arbitrary target Intel, Arm and Linux documents corroborate qualified mechanisms; timings vary by processor, instruction, mode, cache/TLB state and workload and were not benchmarked.
-- medium confidence, rep-native-layout-performance: Performance improvement from SIMD alignment or false-sharing layout on a particular workload No target benchmark; preserve explicit implementation/workload qualifications.
-
-
-## architecture / Digital Logic
-
-59 question objects changed. Every changed question has a specific independent-review reason in the linked record.
-
-**Corrections in this review:**
-
-- Scoped the visible carry-XOR overflow rule to fixed-width addition/subtraction, matching the already corrected glossary and executable model.
-- Defined picoseconds explicitly for every retained setup/hold delay term, making each reference card independently understandable.
-- Qualified incomplete combinational assignment synthesis and its question with reachability, independent-input and used-output assumptions.
-- Corrected the changed bit-line glossary definition: paired complementary lines describe the standard 6T cell, not every SRAM port/cell implementation.
-- Rephrased active wrong-sense glossary matches for inversion circles, carry propagation, complete CDC words, static hazards, Python integers and first-stage access without changing other modules.
-- Removed reliance on a hidden width symbol in ALU slices, named the two memory technologies in their comparison and cleaned obsolete formula introductions.
-
-**Scope gaps and exclusions:**
-
-- No transistor-level simulation, measured cell-library timing, physical SRAM/DRAM experiment, target-specific synchroniser MTBF, FPGA placement or silicon validation was performed. The lessons retain these limits explicitly.
-- Yosys is not installed: synthesis claims were checked against the official process/FSM documentation, while Icarus executed RTL behaviour. RTL recovery is not claimed to prove synthesized fault recovery.
-- The current generic RISC-V redirect was unavailable to the web tool; the official versioned 20240411 RV32I/RV64I specification was fetched for the unchanged base-ISA semantics.
-- Whole-project generated assets, browser/offline checks and cross-module compilation belong to the coordinating agent. This review uses current source, not stale compiled data.
-
-**Low-confidence areas, including preserved qualifications:**
-
-- medium confidence, logic-universal-gates: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-cmos-networks: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-gate-delay-power: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-shared-bus-safety: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-prefix-carrysave: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-cdc-metastability: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-fsm-design: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-register-file: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-single-cycle-control: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-sram-array: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-dram-refresh: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-- medium confidence, logic-verilog-fsm-scheduling: Implementation-specific physical, topology, workload or synthesis behaviour is qualified; illustrative values are not measured device specifications. Primary conceptual sources and bounded native/RTL checks support the teaching model. No target hardware/library/tool-flow timing or reliability evidence is supplied.
-
 
 ## dsa / Complexity Analysis
 
@@ -642,219 +526,4 @@ None recorded in this editorial review.
 - medium confidence, fund-quorum-read-guarantees: ZooKeeper sync() is not a strict linearisability guarantee under every failure Supported by Apache project issue/developer discussion, while the programmer guide presents a simpler freshness description.
 - medium confidence, fund-durable-write-batching: Kafka and PostgreSQL defaults and Redis persistence exposure Current version-specific docs checked, including Kafka historical idempotence bug; configuration and failure assumptions must be rechecked for deployment.
 - medium confidence, fund-estimation-fleet-capacity: Per-node capacity and resource headroom examples Hypothetical exercise capacities; arithmetic checked without production benchmarking.
-
-
-## theory / Logic & Proofs
-
-70 question objects changed. Every changed question has a specific independent-review reason in the linked record.
-
-**Corrections in this review:**
-
-- Glossary coverage: add a precisely named SAT conflict entry and use that name at its introduction, without aliasing the ordinary word conflict.
-- SQL NULL: replace the overbroad comparison definition with ordinary equality/ordering UNKNOWN, WHERE accepting only TRUE, IS NULL, and valid three-valued De Morgan laws; the owning source exactly matches discrete structures.
-- Loop correctness: both the glossary and lesson introduction now say invariant initialisation/maintenance/exit prove partial correctness; termination is an additional obligation for total correctness.
-- Euclid glossary: remove the bare Euclid alias that could open the infinitude-of-primes theorem in the gcd algorithm context.
-- Solver restarts: qualify preserved learned clauses with deletion policies and retain root consequences, rather than implying every learned clause is permanently retained.
-- Partial-correctness glossary: replace nobody-can-prove wording with the current unproved universal Collatz termination claim, retaining time-sensitive confidence.
-- SAT complexity: replace fast-on-every-input shorthand with polynomial-time reductions/algorithms and distinguish asymptotic growth from practical speed in the introductory and complexity lessons.
-- Logical guard rewriting: explicitly require ordinary Boolean, side-effect-free attributes and preserve safe short-circuit evaluation order.
-- Big-O question logp-predicate-q9: a stronger proposed condition was also sufficient evidence of failure; ask for the exact negation without stronger requirements and use inclusive no-greater-than bound wording.
-- Question logp-propositional-q7: remove the comment explicitly supplying True/False answers before the learner predicts the output.
-- Question logp-predicate-q5: remove the comment explicitly supplying both printed truth values.
-- Question logp-induction-q4: replace the comment revealing the odd-input failure with a neutral description of the recursive step.
-- Invalid-argument explanation: distinguish p and q within the implication from the premises and conclusion of the whole argument; the counterexample must have true argument premises and a false argument conclusion.
-- Contextual glossary capture: replace ordinary Recall in the active contrapositive lesson, where compiled lookup opened the unrelated true-positive-rate metric.
-- Contextual glossary capture: replace algebraic factoring wording in the faulty-proof feedback, where compiled lookup opened integer prime factorisation.
-
-**Scope gaps and exclusions:**
-
-- No substantive archived topic removed; SAT proof logging, industrial encodings and formal proof-assistant mechanisation remain introductory or outside the original scope.
-- No unbounded program claim is inferred from a finite experiment: native runs supplement the explicit algebraic, inductive, invariant and well-founded arguments.
-- No requested conceptual objective is missing. Long derivations, formula memorisation and routine arithmetic were deliberately removed; their removal is not counted as an accuracy correction.
-- Formal mechanisation of the proofs, full production SAT solver internals and reproducible cryptographic/SAT performance benchmarks are outside this introductory module. Existing unsupported benchmark/density examples remain omitted, not relabelled as fresh verified claims.
-- Full-library build, iPhone/offline rendering and deployment are coordinator integration checks, not claimed by this scoped verifier.
-
-**Low-confidence areas, including preserved qualifications:**
-
-- medium confidence, logp-invariants-hoare: Collatz termination for every positive integer remains an open problem; this status is time-sensitive. Checked against freshly fetched Terence Tao primary exposition and a current literature search. No accepted full proof located; future mathematical developments require rechecking the status.
-- medium confidence, logp-invariants-hoare: Universal termination of the Collatz loop remains an open conjecture. Freshly fetched Tao research still treats the universal statement as a conjecture; finite executions cannot prove it, and mathematical status must be rechecked after future developments. The partial-correctness argument itself is high confidence.
-
-
-## theory / Discrete Structures
-
-70 question objects changed. Every changed question has a specific independent-review reason in the linked record.
-
-**Corrections in this review:**
-
-- SQL NULL glossary: replace the claim that NULL breaks De Morgan with ordinary-comparison UNKNOWN semantics, IS NULL and validity of De Morgan in three-valued logic; verified by PostgreSQL truth tables and all nine SQL cases. The earlier-module compiled lookup is still a separate dependency.
-- Mathematical-function glossary: deterministic routines require termination and relevant state included in their inputs to model total functions; the square example now explicitly uses non-negative integer outputs so the zero case is unambiguous.
-- Incomparable/comparable glossary: remove aliases that opened the opposite concept and provide the independently checked comparable-elements entry.
-- Lattice glossary: remove semilattice aliases because existence of joins alone does not guarantee meets; Shapiro’s original paper supports the state-based merge distinction.
-- Lamport-clock glossary: remove happened-before aliases, which denote the causal relation rather than a scalar timestamp; use the original 1978 paper.
-- Search-space glossary: candidate count alone does not determine runtime; include generation/checking cost.
-- Complement-counting glossary: replace an unconditional fastest-method claim with a conditional simpler-method explanation.
-- Cartesian-product ordered-pair example: replace (1,x) versus (x,1), which coincide when x is one, with the genuinely distinct (1,2) and (2,1).
-- Prime-density card: define the previously unexplained approximation operator and its asymptotic ratio meaning.
-- Composition card: explicitly identify the input, intermediate and final sets used in its definitions.
-- Euclid takeaway: actual renderer opened the infinitude-of-primes theorem for a sentence about the gcd algorithm; precise Euclidean algorithm wording now opens the correct entry.
-- Function-properties prose: actual renderer opened operating-system I/O for input and output sets; separate domain and codomain clauses preserve the mathematical meaning and avoid that false link.
-- Partial-orders prose: after removing the incorrect lattice alias, bare semilattice had no glossary target; use the precise existing join-semilattice term.
-
-**Scope gaps and exclusions:**
-
-- Full proofs of Cayley, Dirac, Kuratowski, the four colour theorem and the master theorem remain referenced rather than developed, matching the inherited scope.
-- No reproducible RSA latency benchmark or universal attack-time estimate is asserted. Gidney2025 is explicitly a modelled resource estimate under specified assumptions.
-- SQL NULL integration dependency: this module’s corrected definition remains shadowed by theory/01-logic-proofs/sql-null (compiled theory--sql-null in the isolated current-source snapshot). The owning-module revision and final compiled lookup are assigned to root; no ID was renamed or duplicated to force precedence.
-- Full proofs of Cayley, Dirac, Kuratowski, four-colour and master theorems remain linked rather than developed, matching the existing short-lesson scope.
-- No universal RSA performance or attack-time benchmark is claimed; the existing evidence-gap note remains.
-- Browser/mobile/offline and the final shared generated catalogue are root integration checks; this pass independently rendered glossary contexts in an isolated scratch compilation.
-- The other 336 unchanged glossary records retain their historical confidence and provenance; they are not counted as freshly fact-verified in this concept-first pass.
-
-**Low-confidence areas, including preserved qualifications:**
-
-None recorded in this editorial review.
-
-
-## theory / Probability for Computer Science
-
-70 question objects changed. Every changed question has a specific independent-review reason in the linked record.
-
-**Corrections in this review:**
-
-- {"scope":"author glossary correction independently verified","term":"prob-bernoulli-trial","before":{"id":"prob-bernoulli-trial","term":"Bernoulli trial","aliases":["Bernoulli trial","Bernoulli trials","Bernoulli(p)","Bernoulli variable","Bernoulli proportion","Bernoulli samples","Bernoulli model","Bernoulli models"],"definition":"A single random experiment with exactly two outcomes, success (probability p) and failure (probability 1 − p). Repeated independent Bernoulli trials underlie the binomial and geometric distributions.","example":"Each packet sent over a link that drops 1% of packets is a Bernoulli trial with p = 0.01 for 'lost'.","source":"https://en.wikipedia.org/wiki/Bernoulli_trial"},"after":{"id":"prob-bernoulli-trial","term":"Bernoulli trial","aliases":["Bernoulli trial","Bernoulli trials","Bernoulli(p)","Bernoulli variable","Bernoulli proportion","Bernoulli samples","Bernoulli model","Bernoulli models"],"definition":"A random experiment with two labelled outcomes, success and failure. Independent repetitions with one common success probability underlie the binomial and geometric distributions; a single Bernoulli trial does not itself assert independence from other trials.","example":"Each packet sent over a link that drops 1% of packets is a Bernoulli trial with p = 0.01 for 'lost'.","source":"https://math.dartmouth.edu/~prob/prob/prob.pdf"}}
-- {"scope":"author glossary correction independently verified","term":"prob-true-positive-rate","before":{"id":"prob-true-positive-rate","term":"Sensitivity (recall, true positive rate)","aliases":["true positive rate","TPR","detection rate","sensitivity","recall"],"definition":"The fraction of real positive cases that a test or detector correctly flags, P(positive result | real case). Called sensitivity in medicine and recall in machine learning.","example":"A test that detects 99 of 100 ill people has sensitivity 99%.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"},"after":{"id":"prob-true-positive-rate","term":"Sensitivity (recall, true positive rate)","aliases":["true positive rate","TPR","detection rate","sensitivity","classifier recall","classification recall","recall metric"],"definition":"The fraction of real positive cases that a test or detector correctly flags, P(positive result | real case). Called sensitivity in medicine and recall in machine learning.","example":"A test that detects 99 of 100 ill people has sensitivity 99%.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"}}
-- {"scope":"author glossary correction independently verified","term":"prob-precision","before":{"id":"prob-precision","term":"Precision (positive predictive value)","aliases":["positive predictive value","PPV"],"definition":"In classification, the fraction of predicted positives that are really positive, P(actually positive | predicted positive). It is the Bayesian posterior of an alert, and, with sensitivity and false positive rate fixed, it falls as the base rate falls.","example":"980 real frauds among 10,970 alerts is a precision of about 8.9%.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"},"after":{"id":"prob-precision","term":"Precision (positive predictive value)","aliases":["positive predictive value","PPV","classifier precision","classification precision"],"definition":"In classification, the proportion of predicted positives that are actually positive, when positive predictions have nonzero probability. It depends on prevalence as well as sensitivity and false-positive rate. With positive sensitivity and positive false-positive rate fixed, lowering prevalence lowers precision; zero false positives are an important exception.","example":"980 real frauds among 10,970 alerts is a precision of about 8.9%.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"}}
-- {"scope":"author glossary correction independently verified","term":"prob-accuracy","before":{"id":"prob-accuracy","term":"Accuracy (classification)","aliases":["overall accuracy"],"definition":"The fraction of all predictions a classifier gets right. On imbalanced data it can be very high for a useless model, so precision and recall are reported instead.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"},"after":{"id":"prob-accuracy","term":"Accuracy (classification)","aliases":["overall accuracy","classification accuracy"],"definition":"The fraction of all predictions a classifier gets right. On imbalanced data it can be very high for a useless model, so precision and recall are reported instead.","source":"https://developers.google.com/machine-learning/crash-course/classification/accuracy-precision-recall"}}
-- {"scope":"author glossary correction independently verified","term":"prob-inversion","before":{"id":"prob-inversion","term":"Inversion (array)","aliases":["array inversion","inversions","inversion count"],"definition":"A pair of positions in an array where the earlier element is larger than the later one. Insertion sort does one swap or shift per inversion; a random permutation has n(n − 1)/4 on average.","example":"[3, 1, 2] has two inversions: (3,1) and (3,2).","source":"https://en.wikipedia.org/wiki/Inversion_(discrete_mathematics)"},"after":{"id":"prob-inversion","term":"Inversion (array)","aliases":["array inversion","inversions","inversion count"],"definition":"A pair of array positions where the earlier value is larger than the later one. Adjacent-swap insertion sort uses one swap per inversion; the usual shifting version uses one rightward shift per inversion. For a uniformly random permutation of distinct values, each pair is inverted with probability one-half.","example":"[3, 1, 2] has two inversions: (3,1) and (3,2).","source":"https://algs4.cs.princeton.edu/21elementary/"}}
-- {"scope":"author glossary correction independently verified","term":"prob-normal-distribution","before":{"id":"prob-normal-distribution","term":"Normal distribution","aliases":["normal distribution","normal distributions","Gaussian","Gaussian distribution","bell curve","normal approximation","normal model","normally distributed","N(μ, σ²)","approximately normal"],"definition":"The symmetric bell-shaped continuous distribution described by its mean μ and standard deviation σ. About 68%, 95% and 99.7% of it lies within 1, 2 and 3 standard deviations of the mean.","source":"https://en.wikipedia.org/wiki/Normal_distribution"},"after":{"id":"prob-normal-distribution","term":"Normal distribution","aliases":["normal distribution","normal distributions","Gaussian","Gaussian distribution","bell curve","normal approximation","normal model","normally distributed","N(μ, σ²)","approximately normal"],"definition":"A symmetric bell-shaped continuous distribution specified by its mean and positive standard deviation. About 68%, 95% and 99.7% lies within one, two and three standard deviations of the mean; these are two-sided bands, not one-sided percentile labels.","source":"https://www.itl.nist.gov/div898/handbook/eda/section3/eda3661.htm"}}
-- {"scope":"author glossary correction independently verified","term":"prob-outlier","before":{"id":"prob-outlier","term":"Outlier","aliases":["outlier","outliers"],"definition":"A value far from most of the others, such as one timed-out request among fast ones. It moves the mean a lot and the median hardly at all.","source":"https://en.wikipedia.org/wiki/Outlier"},"after":{"id":"prob-outlier","term":"Outlier","aliases":["outlier","outliers"],"definition":"An observation far from most of the others, such as one timeout among fast requests. Extreme observations can strongly influence the mean; the median is more resistant because it depends on central ranks rather than the magnitudes of tail observations.","source":"https://www.itl.nist.gov/div898/handbook/eda/section3/eda351.htm"}}
-- Precision improvement statements now specify true/false alerts and positive conditional rates; zero false positives do not permit strict improvement.
-- Bloom caveat now distinguishes independent hash positions from dependent set-bit events rather than calling the sampled positions dependent.
-- Series availability strict inequality now excludes zero/perfect component degeneracies.
-- Conditional independence is sufficient for multiplying unchanged likelihood ratios, not a mathematically necessary condition.
-- prob-basics-q6 supplies nonzero imperfect availability for every required service.
-- prob-basics-q9 explicitly supplies independent dice for equally weighted enumeration.
-- prob-bayes-q1 supplies mixed populations and positive detector rates for its posterior comparison.
-- prob-bayes-q2 supplies prevalence and detector rates, making high-sensitivity and evidence feedback standalone.
-- prob-expectation-q9 requires at least two shards for strictly longer random coverage.
-- prob-distributions-q7 excludes success probability one, where conditioning on failures is undefined.
-- prob-algorithms-q4 supplies a large population for its approximately quadratic pair-count prediction.
-- prob-statistics-q5 excludes certain slowness so adding calls strictly increases tail risk.
-- Classifier precision now has precise linking aliases and a matching introductory phrase; bare ordinary-language precision is not captured.
-
-**Scope gaps and exclusions:**
-
-- No measure-theoretic conditioning on null events is taught; elementary conditioning explicitly requires positive probability.
-- No exact finite-filter Bloom false-positive derivation, exact A/B power calculation or unrestricted sequential-testing procedure is taught; approximation/model limits are explicit.
-- Real operational independence, traffic intensities, detector rates and latency distributions require measurement; supplied numerical scenarios are hypothetical models.
-- Historical attribution and original unreplicable simulations remain omitted with explicit evidence-gap notes; no unsupported population or hardware-failure comparisons restored.
-
-**Low-confidence areas, including preserved qualifications:**
-
-None recorded in this editorial review.
-
-
-## theory / Automata & Regular Languages
-
-38 question objects changed. Every changed question has a specific independent-review reason in the linked record.
-
-**Corrections in this review:**
-
-- {"kind":"question-context","detail":"auto-pumping-q10 referred to an undefined five-symbol s after the prompt rewrite; the distractor now reasons about any non-empty member and pumping length one."}
-- {"kind":"question-definition","detail":"auto-minimisation-q9 feedback introduced an undefined n in an unnecessary pair-count expression; replace it with the conceptual difference between state pairs and scheduled blocks."}
-- {"kind":"dictionary-bound","detail":"Thompson construction definition now states that linear size is measured after shorthand expansion, matching the visible compiled-size caveat."}
-- {"kind":"dictionary-scope","detail":"Counted-repetition definition no longer universalises a separate-copy representation across all engines and gives RE2’s precise minimum/maximum limit."}
-- {"kind":"dictionary-routing","detail":"Removed generic minimisation/minimise variants from the DFA-only entry so NFA minimisation and unrelated optimisation do not open a DFA-specific definition."}
-- {"kind":"dictionary-routing","detail":"Verified author removal of the PSPACE alias from PSPACE-complete: the class belongs to theory06 pspace, whereas completeness retains its separate definition."}
-
-**Scope gaps and exclusions:**
-
-- The original fixed grep throughput figure, exact incomplete backtracker call counts/laptop timing, and detailed unavailable Stack Overflow postmortem claims remain explicitly omitted. No replacement performance measurement was invented.
-- Native code checks run all5lesson programs and4question snippets with supplied fixtures on Python3.14 and Docker Python3.12. No Go,Rust,JavaScript,.NET,PCRE2,RE2 or Ruby runtime integrations were needed by the Python-only executable examples. Product claims were checked against official documentation.
-- Bounded exhaustive tests support worked examples only. DFA invariants, subset correctness, pumping quantifier order and all legal split cases, arithmetic witness inequalities, lower bounds and coarsest acceptance-respecting refinement were separately reviewed mathematically.
-- This is the concept-first editorial and affected-definition pass. All active lessons/questions were read; unchanged glossary entries retain historical factual provenance and are not represented as 170 new primary-source verifications.
-- The original Jiang/Ravikumar abstract was retrieved by web search, but direct publisher access returned 403. The stronger DFA-input hardness claim is additionally supported by the freshly fetched primary MFCS 2021 paper, theorem 5.9 and its explicit account of the reduction; the full 1993 proof was not rederived.
-- The default all-file URL check has two preserved archival-only failures: the Stanford Hopcroft HTTP PDF in auto-minimisation and the Ullman HTTP page in auto-dfa. Active lesson/question links pass separately (27/27).
-- Whole-project build, 390px browser interaction, offline and deployed checks remain coordinating-agent integration responsibilities; this pass performs scoped validation and scratch production compiler/lookup checks.
-
-**Low-confidence areas, including preserved qualifications:**
-
-- medium confidence, auto-nfa-lazy-tradeoffs: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
-- medium confidence, auto-regex-automaton-engines: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
-- medium confidence, auto-regex-backtracking: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
-- medium confidence, auto-regex-defences: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
-- medium confidence, auto-regex-growth-outages: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
-- medium confidence, auto-thompson-practice: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
-
-
-## theory / Context-Free Languages & Computability
-
-39 question objects changed. Every changed question has a specific independent-review reason in the linked record.
-
-**Corrections in this review:**
-
-- Oracle glossary (author correction independently accepted): distinguish fixed-language oracle from oracle TM; the answer is unit-cost after ordinary-cost query construction. Exact accepted owner wording retained.
-- Language nonemptiness complement recogniser: explicitly accept malformed encodings, matching the module’s all-string complement universe.
-- Halting-practice question feedback: include possible analyser nontermination alongside unknown answers and wrong answers; only always-finishing tools must choose between the latter limitations.
-- Bounded-runtime question feedback: make halting at step ten answer no and execution of an eleventh transition answer yes.
-- Editorial: two optional formula summaries now stand alone without hidden n/t definitions; fix two grammatical typos. These are not counted as accuracy corrections.
-- Editorial: independently accepted concept-first formula selection and question rewrites remove redundant arithmetic while preserving constructions and short proofs; reductions in formula counts are not accuracy corrections.
-- Editorial glossary routing: replace rule table with transition table and longest path with root-to-leaf path of maximum length, avoiding unrelated firewall and graph-problem definitions.
-- Editorial glossary routing: qualify all three bare computability-sense recursive references as recursive languages or general recursive functions, selecting the existing precise aliases without changing programming-recursion entries.
-
-**Scope gaps and exclusions:**
-
-- Reverse PDA-to-CFG construction remains an explicitly labelled sketch; full normalisation/rule construction is outside the retained scope.
-- Inherent ambiguity, CFG ambiguity/universality/equivalence, PCP/Hilbert/SystemF and eventual busy-beaver domination are sourced results without every full proof.
-- The unspecified six-state Collatz-like machine claim is omitted; no concrete convention or machine was provided.
-- Reading-time metadata is an estimate; no timed learner trial was conducted.
-- Finite execution tests corroborate examples and never prove universal Goldbach, totality, pumping or asymptotic claims.
-- PDA-to-CFG normalisation remains a stated construction sketch. Full inherent-ambiguity, CFG-undecidability, MRDP and eventual busy-beaver-domination proofs remain further reading; the lessons do not pretend the simpler examples prove those results.
-- Universality constructions for Life, Rule 110, Magic, C++ templates and mov were checked against primary construction descriptions; their complete external implementations/proofs were not reproduced. SQL universality is explicitly conditional on suitable operations and unbounded values/storage.
-- All 175 glossary definitions/aliases were read for context. Only the changed oracle entry is freshly certified as a glossary change; unchanged historical glossary bibliography/provenance is preserved rather than claimed entirely re-fetched.
-- Whole-app mobile, offline, generated-asset and live-release checks are parent-owned. This verifier checks module build, source invariants and production glossary lookup in its own scratch snapshot.
-
-**Low-confidence areas, including preserved qualifications:**
-
-None recorded in this editorial review.
-
-
-## theory / Complexity Theory
-
-72 question objects changed. Every changed question has a specific independent-review reason in the linked record.
-
-**Corrections in this review:**
-
-- Tableau glossary: replace exact unpadded square/cell counts with asymptotic bounds including input and boundary padding.
-- DRAT glossary: verification depends on combined formula and proof size, not proof length alone.
-- Held–Karp glossary: remove numerical operation estimates inferred from an asymptotic upper bound.
-- QBF glossary: distinguish a quantified formula from a fully closed quantified formula.
-- Optimality-gap glossary: handle minimisation/maximisation and state denominator and zero conventions.
-- Degeneracy glossary: quantify over nonempty subgraphs; global sparsity does not bound dense local subgraphs.
-- Expected-time glossary: separate fixed-input random expectation from worst-case-over-input expectation.
-- Hardness/membership lesson: being an optimisation task alone does not make a problem NP-hard.
-- BPP containment lesson: RP accepting paths give NP certificates; do not assert this for every one-sided-error class.
-- FPT lesson/question: budget controls search-tree size, not its branching factor; filtering occurs per branch rather than once per call.
-- Metric-TSP answer explanation: use approximation factors strictly below123/122, avoiding an unsupported equality-boundary claim.
-- Improve standalone completeness of vertex-cover and TQBF code questions by supplying their algorithm/quantifier assumptions.
-- Clarify oracle-query writing cost in the own glossary; earlier-owner simplified definition is compatible, as documented separately.
-- Add cryptography dictionary coverage with NIST source and complexity-security caveat; preserve all existing glossary IDs.
-- Remove learner-facing audit/provenance and unsourced-benchmark gap commentary, retaining the proof distinction and limitations in this record.
-- Classify retained formulas individually and remove duplicate calculations; this editorial work is not counted as an accuracy correction.
-
-**Scope gaps and exclusions:**
-
-- No new empirical solver benchmarks or hardware reliability claims. Finite implementation tests are not proofs of general complexity theorems.
-- Generalised games are stated for the cited growing-board rule families; no claim about all commercial rulesets.
-- Quantum resource costs are dated theoretical estimates under explicit assumptions, not current available hardware; real query/oracle implementation cost is separate.
-- The module remains introductory in full gadget construction for 3-colouring/Subsetsum and in full PCP/UGC/quantum proofs; all archived depth is retained.
-- Integrated compiled glossary check remains parent-owned: ensure PSPACE opens theory06 pspace, PSPACE-complete opens theory04 pspace-complete, and cryptography opens complexity-cryptography. Source-derived routes are checked; current generated PSPACE output is stale.
-- Oracle/DRAT refinements and PSPACE-complete share earlier owners. Exact current source definitions have independent acceptance records; root must match those precise id/subject/definition fields after rebuilding. Earlier observed generated definitions are retained as snapshots, not treated as current final output.
-- Cook–Levin and TQBF hardness remain explicit proof outlines; full PCP, quantum and auxiliary gadget proofs are further reading. Finite program tests do not prove general complexity results.
-- No new empirical solver throughput or tour-quality percentages are certified; benchmark and hardware-dependent claims remain outside this pass.
-- Unchanged glossary entries were read for actual context, but their entire historical source bibliography was not freshly fetched. Earlier provenance and archived content remain preserved.
-
-**Low-confidence areas, including preserved qualifications:**
-
-None recorded in this editorial review.
 

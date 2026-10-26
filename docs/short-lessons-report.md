@@ -1,6 +1,6 @@
 # Short lessons and code comments
 
-Verified modules: 76/76. Updated 2026-10-16.
+Historical short-lesson conversion report for the 50 retained original modules. Scope updated 2026-10-26 after four subjects were removed; newer courses and the separate concept-first rewrite are tracked in their own reports.
 
 Each converted lesson has its own completion status, completion date and focused questions. Original completed lessons carry their exact dates into all new parts. Existing question IDs, saved answers, bookmarks and quiz sessions remain compatible; old lesson links open the new units.
 
@@ -29,32 +29,12 @@ The material is divided by concept while retaining substantive explanations, exa
 | dsa/Dynamic Programming | 7 | 46 | 80 | 154 | 155 | 473 | 42 |
 | dsa/Problem-Solving Patterns | 8 | 42 | 89 | 77 | 105 | 313 | 189 |
 | dsa/Advanced Structures & Algorithms | 7 | 49 | 84 | 124 | 144 | 476 | 70 |
-| os/OS Basics & Processes | 6 | 29 | 68 | 25 | 467 | 611 | 171 |
-| os/Threads & Scheduling | 6 | 31 | 67 | 55 | 232 | 411 | 48 |
-| os/Concurrency & Synchronisation | 6 | 33 | 68 | 26 | 325 | 508 | 56 |
-| os/Deadlock & Liveness | 6 | 32 | 66 | 32 | 167 | 514 | 47 |
-| os/Memory Management | 7 | 42 | 85 | 80 | 253 | 474 | 39 |
-| os/File Systems & Storage | 6 | 38 | 74 | 48 | 338 | 450 | 43 |
-| os/I/O & Event-Driven Servers | 6 | 32 | 67 | 29 | 356 | 455 | 66 |
-| os/Virtualisation & Containers | 6 | 29 | 66 | 34 | 510 | 605 | 36 |
 | networks/Network Foundations & the Link Layer | 6 | 37 | 72 | 81 | 431 | 629 | 41 |
 | networks/IP, Addressing & Routing | 7 | 38 | 84 | 54 | 435 | 612 | 65 |
 | networks/Transport Layer: TCP & UDP in Depth | 7 | 43 | 81 | 89 | 319 | 532 | 48 |
 | networks/Application-Layer Protocols | 6 | 42 | 69 | 65 | 623 | 734 | 49 |
 | networks/Network Security | 6 | 36 | 67 | 40 | 371 | 514 | 46 |
 | networks/Wireless, Mobile & Modern Networks | 6 | 37 | 74 | 73 | 531 | 715 | 28 |
-| architecture/Data Representation | 6 | 37 | 76 | 60 | 393 | 566 | 52 |
-| architecture/Digital Logic | 6 | 34 | 74 | 233 | 261 | 602 | 14 |
-| architecture/Instruction Sets & Assembly | 6 | 35 | 73 | 58 | 375 | 541 | 40 |
-| architecture/Pipelining & CPU Performance | 6 | 29 | 66 | 65 | 187 | 282 | 9 |
-| architecture/Caches & the Memory Hierarchy | 6 | 31 | 69 | 92 | 185 | 377 | 39 |
-| architecture/Parallel Hardware | 6 | 33 | 73 | 74 | 213 | 393 | 42 |
-| languages/Programming Paradigms | 6 | 31 | 68 | 20 | 449 | 568 | 52 |
-| languages/Type Systems | 6 | 26 | 69 | 28 | 264 | 387 | 38 |
-| languages/Memory Management & Garbage Collection | 6 | 26 | 66 | 29 | 277 | 398 | 80 |
-| languages/Functional Programming | 6 | 33 | 68 | 43 | 248 | 392 | 82 |
-| languages/Compilers & Interpreters | 7 | 37 | 86 | 36 | 293 | 452 | 53 |
-| languages/Concurrency Models in Languages | 6 | 25 | 67 | 16 | 264 | 372 | 39 |
 | security/Security Fundamentals | 6 | 27 | 66 | 13 | 408 | 501 | 54 |
 | security/Cryptography Basics | 6 | 37 | 72 | 121 | 248 | 357 | 143 |
 | security/Applied Cryptography & PKI | 6 | 39 | 71 | 49 | 270 | 429 | 107 |
@@ -67,12 +47,6 @@ The material is divided by concept while retaining substantive explanations, exa
 | software-engineering/Version Control & CI/CD | 6 | 26 | 69 | 15 | 279 | 389 | 39 |
 | software-engineering/Software Architecture at the Code Level | 6 | 25 | 67 | 10 | 171 | 1143 | 24 |
 | software-engineering/Engineering Practices | 6 | 24 | 66 | 26 | 235 | 483 | 62 |
-| theory/Logic & Proofs | 6 | 37 | 74 | 171 | 277 | 388 | 31 |
-| theory/Discrete Structures | 6 | 40 | 75 | 229 | 343 | 686 | 64 |
-| theory/Probability for Computer Science | 6 | 41 | 70 | 177 | 217 | 708 | 32 |
-| theory/Automata & Regular Languages | 6 | 32 | 73 | 92 | 170 | 367 | 48 |
-| theory/Context-Free Languages & Computability | 6 | 32 | 67 | 87 | 175 | 361 | 34 |
-| theory/Complexity Theory | 6 | 47 | 77 | 174 | 254 | 378 | 12 |
 | databases/SQL Fundamentals | 6 | 40 | 74 | 31 | 269 | 414 | 43 |
 | databases/Advanced SQL | 6 | 41 | 71 | 52 | 148 | 262 | 55 |
 | databases/Relational Theory & Normalisation | 6 | 35 | 72 | 151 | 190 | 449 | 48 |

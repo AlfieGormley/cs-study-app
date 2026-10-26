@@ -1,6 +1,10 @@
 // Short, offline definitions. Prefer precise aliases; short acronyms are case-sensitive.
+// Shared vocabulary remains useful in retained courses, without offering the
+// retired courses as dictionary sections.
+const commonCategories = new Set(['Operating systems', 'Architecture', 'Languages', 'Theory']);
 const entry = (id, term, category, definition, aliases = [], example = '', source = '') =>
-  ({ id, term, category, definition, aliases, ...(example ? { example } : {}), ...(source ? { source } : {}) });
+  ({ id, term, category: commonCategories.has(category) ? 'Computing fundamentals' : category,
+    definition, aliases, ...(example ? { example } : {}), ...(source ? { source } : {}) });
 
 export const glossary = [
   entry('redis', 'Redis', 'Databases', 'A data store that keeps working data in memory for fast access. It supports structures such as strings, lists and sets, and is often used for caching, counters and messaging. It can also persist data to disk.', [], 'Cache a product lookup in Redis so repeated requests do not all query the main database.', 'https://redis.io/docs/latest/develop/get-started/'),

@@ -9,6 +9,12 @@ across the entire existing library, module by module. Audit every active lesson 
 calculation-heavy material wherever it occurs, and retain lesson/question identities and objectives.
 An untouched module needs an honest semantic audit decision, not an assumption based on formula counts.
 
+On 2026-10-26 the user removed Operating Systems, Computer Architecture, Theory & Discrete Maths,
+and Programming Languages & Compilers from the entire application. The rewrite now covers the
+remaining 60 modules only and is paused until the user resumes it. Do not restore retired subjects
+from earlier queues, baseline comparisons or review history. Preserve identities within retained
+subjects; the explicit subject removals are recorded in `content/retired-subjects.json`.
+
 For each active lesson (use `module.json`, not archival originals):
 
 - Read the whole lesson and its questions. Keep the mechanism, assumptions, limitations and useful

@@ -104,11 +104,19 @@ const legacyFile = path.join(contentDir, 'verification-legacy.json');
 const verificationLegacy = fs.existsSync(legacyFile) ? readJson(legacyFile) ?? {} : {};
 let legacyCount = 0;
 
-const index = { subjects: [] };
+const retirement = readJson(path.join(contentDir, 'retired-subjects.json'));
+if (!retirement || !Array.isArray(retirement.subjects) || retirement.subjects.some((id) => typeof id !== 'string')) {
+  throw new Error('retired-subjects.json must list subject ids');
+}
+const index = { subjects: [], retiredSubjects: retirement.subjects };
 const moduleTerms = []; // glossary terms from content/<subject>/<module>/glossary.json
 const outputs = {}; // relative path -> object
 
 for (const subjectName of dirs(contentDir)) {
+  if (index.retiredSubjects.includes(subjectName)) {
+    err(path.join(contentDir, subjectName), 'subject retired at user request; remove its source directory');
+    continue;
+  }
   const subjectPath = path.join(contentDir, subjectName);
   const subject = readJson(path.join(subjectPath, 'subject.json'));
   if (!subject) continue;
@@ -340,7 +348,7 @@ for (const [rel, obj] of Object.entries(outputs)) {
 }
 
 // App shell + data files for the service worker to precache.
-const shell = ['./', 'index.html', 'update.html', 'styles.css', 'app.js', 'practice.js', 'lesson-progress.js', 'quiz-session.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'glossary-rules.js', 'glossary-terms.js', 'formula.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
+const shell = ['./', 'index.html', 'update.html', 'styles.css', 'app.js', 'practice.js', 'lesson-progress.js', 'quiz-session.js', 'subject-retirement.js', 'markdown.js', 'examples.js', 'diagrams.js', 'glossary.js', 'glossary-data.js', 'glossary-rules.js', 'glossary-terms.js', 'formula.js', 'diagram-key.js', 'diagram-catalog.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 for (const f of shell.slice(1)) {
   const p = path.join(root, f);

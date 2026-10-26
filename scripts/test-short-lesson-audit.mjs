@@ -61,6 +61,14 @@ test('full audit rejects an unfinished course', () => fixture(({ audit }) => {
   assert.match(result.stderr, /lessons outside its migrations/);
 }));
 
+test('explicit retirement excludes a subject but an unlisted missing subject still fails', () => fixture(({ write, audit }) => {
+  write('data/index.json', { subjects: [], retiredSubjects: ['study'] });
+  write('data/questions.json', {});
+  assert.equal(audit().status, 0);
+  write('data/index.json', { subjects: [], retiredSubjects: [] });
+  assert.notEqual(audit().status, 0);
+}));
+
 test('partial release rejects a lost question in an untouched module', () => fixture(({ write, questionIndex, audit }) => {
   delete questionIndex['study/q3'];
   write('data/questions.json', questionIndex);

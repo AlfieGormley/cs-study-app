@@ -23,16 +23,16 @@ test('code and existing links stay safe and unnested', () => {
   assert.doesNotMatch(inline('<img src=x onerror=alert(1)> Redis'), /<img/);
 });
 test('escaped generic code terms link without unescaping displayed markup', () => {
-  const options = { subject: 'languages' };
-  const entry = exactTerm('Box<T>', options.subject);
+  const options = { subject: 'software-engineering' };
+  const entry = exactTerm('Result<T, E>', options.subject);
   assert.ok(entry);
-  const linked = inline('`Box<T>`', options);
+  const linked = inline('`Result<T, E>`', options);
   assert.ok(linked.includes(`data-term="${entry.id}"`));
-  assert.match(linked, /<code>Box&lt;T&gt;<\/code>/);
-  assert.equal((inline('`Box<T>` and `Box<Expr>`', { ...options, seen: new Set() }).match(/data-term=/g) || []).length, 1);
-  assert.doesNotMatch(inline('`Box&lt;T&gt;`', options), /data-term=/);
-  assert.doesNotMatch(inline('[`Box<T>`](https://doc.rust-lang.org/)', options), /data-term=/);
-  const unsafe = inline('`Box<T><img src=x onerror=alert(1)>`', options);
+  assert.match(linked, /<code>Result&lt;T, E&gt;<\/code>/);
+  assert.equal((inline('`Result<T, E>` and `Result<T, E>`', { ...options, seen: new Set() }).match(/data-term=/g) || []).length, 1);
+  assert.doesNotMatch(inline('`Result&lt;T, E&gt;`', options), /data-term=/);
+  assert.doesNotMatch(inline('[`Result<T, E>`](https://doc.rust-lang.org/)', options), /data-term=/);
+  const unsafe = inline('`Result<T, E><img src=x onerror=alert(1)>`', options);
   assert.doesNotMatch(unsafe, /<img|data-term=/);
   assert.match(unsafe, /&lt;img/);
 });

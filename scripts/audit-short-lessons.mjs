@@ -12,16 +12,21 @@ const original = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const originalQuestions = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 const current = JSON.parse(fs.readFileSync('data/index.json', 'utf8'));
 const questions = JSON.parse(fs.readFileSync('data/questions.json', 'utf8'));
+const retired = new Set(current.retiredSubjects ?? []);
+for (const subject of current.subjects) assert.ok(!retired.has(subject.id), `retired subject ${subject.id} is still active`);
+const scopedOriginalSubjects = original.subjects.filter((subject) => !retired.has(subject.id));
+const scopedOriginalQuestions = Object.fromEntries(Object.entries(originalQuestions)
+  .filter(([key]) => !retired.has(key.split('/')[0])));
 const partial = process.argv.includes('--partial');
 const reportFile = process.argv.slice(4).find((arg) => arg !== '--partial');
 const rows = [];
 const reviewedQuestionRevisions = [];
 let pendingModules = 0;
-for (const [key, [module]] of Object.entries(originalQuestions)) {
+for (const [key, [module]] of Object.entries(scopedOriginalQuestions)) {
   assert.equal(questions[key]?.[0], module, `original question ${key} was lost or moved to another module`);
 }
 for (const subject of current.subjects) assert.deepEqual(subjectMigrationProblems(subject.modules.map((module) => ({ ...module, lessons: module.lessons.map((lesson) => lesson.id) }))), []);
-for (const subject of original.subjects) for (const previous of subject.modules) {
+for (const subject of scopedOriginalSubjects) for (const previous of subject.modules) {
   const module = current.subjects.find((s) => s.id === subject.id)?.modules.find((m) => m.id === previous.id);
   assert.ok(module, `missing module ${subject.id}/${previous.id}`);
   assert.deepEqual(migrationProblems({ ...module, lessons: module.lessons.map((l) => l.id) }), []);
@@ -87,9 +92,9 @@ for (const subject of original.subjects) for (const previous of subject.modules)
   rows.push({ subject: subject.title, module: module.title, originalLessons: previous.lessons.length, shortLessons: module.lessons.length,
     questions: module.lessons.reduce((n, l) => n + l.questionCount, 0), longestMinutes: Math.max(...module.lessons.map((l) => l.minutes)) });
 }
-const report = { originalLessons: original.subjects.reduce((n, s) => n + s.modules.reduce((n, m) => n + m.lessons.length, 0), 0),
-  shortLessons: rows.reduce((n, r) => n + r.shortLessons, 0), originalQuestions: Object.keys(originalQuestions).length,
+const report = { retiredSubjects: [...retired], originalLessons: scopedOriginalSubjects.reduce((n, s) => n + s.modules.reduce((n, m) => n + m.lessons.length, 0), 0),
+  shortLessons: rows.reduce((n, r) => n + r.shortLessons, 0), originalQuestions: Object.keys(scopedOriginalQuestions).length,
   convertedOriginalLessons: rows.reduce((n, r) => n + r.originalLessons, 0),
   questions: Object.keys(questions).length, pendingModules, reviewedQuestionRevisions, modules: rows };
 if (reportFile) fs.writeFileSync(reportFile, JSON.stringify(report, null, 2) + '\n');
-console.log(`${report.convertedOriginalLessons} originals → ${report.shortLessons} short lessons across ${rows.length} modules; all ${report.originalQuestions} original course questions retained. ${pendingModules} modules awaiting conversion.`);
+console.log(`${report.convertedOriginalLessons} originals → ${report.shortLessons} short lessons across ${rows.length} modules; all ${report.originalQuestions} original questions in retained subjects preserved. ${pendingModules} modules awaiting conversion. ${retired.size} subjects explicitly retired.`);

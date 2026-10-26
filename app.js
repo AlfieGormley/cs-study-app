@@ -5,6 +5,7 @@ import { installGlossary, searchGlossary, glossary } from './glossary.js';
 import { daysSinceCompletion, normalizeCompletionRange } from './practice.js';
 import { migrateLessonProgress, migratedLessonId, updateOriginalCompletion } from './lesson-progress.js';
 import { sessionQuestion, advanceSession } from './quiz-session.js';
+import { retireSubjects } from './subject-retirement.js';
 installGlossary();
 installExampleTools();
 
@@ -73,7 +74,8 @@ const modules = new Map();
 async function getIndex() {
   if (!index) {
     index = await (await fetch('data/index.json')).json();
-    if (migrateLessonProgress(state, index)) save(true);
+    const retired = retireSubjects(state, index.retiredSubjects);
+    if (migrateLessonProgress(state, index) || retired) save(true);
   }
   return index;
 }
@@ -281,6 +283,7 @@ async function lessonView(s, m, l) {
   await getIndex();
   if (navigation !== navigationId) return;
   const meta = findModuleMeta(s, m);
+  if (!meta) return notFound();
   if (meta?.migrations?.[l]) {
     const canonical = migratedLessonId(s, meta, l, state.done);
     location.replace(`#/l/${s}/${m}/${canonical}`);

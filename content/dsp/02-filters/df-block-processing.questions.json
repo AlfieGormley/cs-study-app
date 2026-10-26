@@ -1,41 +1,95 @@
 [
   {
-    "id": "df-block-processing-q1", "level": "intermediate", "type": "single",
-    "prompt": "The equal-weight one-pole smoother processes `[1, 1]` from zero state, then `[0, 0]`. What should the second block output when the previous output is retained?",
+    "id": "df-block-processing-q1",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "A feedback smoother has a positive remembered output when a block ends. The next block contains only zeros. A program immediately outputs zeros throughout that block. Which bug should you investigate first?",
     "options": [
-      {"text": "0.375, 0.1875", "explanation": "Correct. The first block ends at 0.75, which halves on each subsequent zero input."},
-      {"text": "0, 0", "explanation": "That would result from discarding the retained state at the boundary."},
-      {"text": "0.75, 0.75", "explanation": "Zero new input does not freeze the state; the memory term still multiplies it by one half."},
-      {"text": "1, 1", "explanation": "The smoother does not replace the zero continuation with the earlier input."}
+      {
+        "text": "Its state is reset at the block boundary",
+        "explanation": "Correct. A retained positive state should decay through the zero-input block; discarding it removes that tail."
+      },
+      {
+        "text": "It preserves too much input history",
+        "explanation": "Preserving the required state is what makes block processing agree with continuous processing."
+      },
+      {
+        "text": "Zero input should freeze the previous output",
+        "explanation": "The memory weight still acts at each update, so this smoother's state decays rather than freezing."
+      },
+      {
+        "text": "It must use larger blocks",
+        "explanation": "Changing block size does not fix a recurrence whose state is discarded."
+      }
     ],
     "answer": 0,
-    "workedExample": "The first block produces 0.5 then 0.75. Carry that final output into the continuation.\n\n```formula\ny_2 = 0.5 × 0 + 0.5 × 0.75 = 0.375\ny_3 = 0.5 × 0 + 0.5 × 0.375\ny_3 = 0.1875\nwhere\ny_2: dimensionless output at sample two\ny_3: dimensionless output at sample three\nIn words: the remembered value decays through the second block rather than disappearing at its boundary.\n```",
-    "link": {"title": "SciPy: retaining filter delay state", "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lfilter.html"}
+    "workedExample": "1. The signal continues across the software boundary.\n2. The smoother still remembers a positive previous output.\n3. Zero new input lets that stored contribution decay; it does not erase it immediately.\n4. Inspect whether the final state from the first call becomes the initial state of the second call.",
+    "link": {
+      "title": "SciPy: retaining filter delay state",
+      "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lfilter.html"
+    }
   },
   {
-    "id": "df-block-processing-q2", "level": "intermediate", "type": "single",
+    "id": "df-block-processing-q2",
+    "level": "intermediate",
+    "type": "single",
     "prompt": "A stream arrives in blocks of 64 samples at 48000 samples per second. Which interpretation of the roughly 1.33-millisecond block duration is sound?",
     "options": [
-      {"text": "It guarantees total input-to-output latency is 1.33 milliseconds", "explanation": "Buffer collection, queues, filter delay and hardware add other timing components."},
-      {"text": "Any host test below that time proves every real-device deadline", "explanation": "Host timing does not cover all device conditions or scheduling variation."},
-      {"text": "It removes the need to retain state", "explanation": "Timing and numerical continuity are separate requirements."},
-      {"text": "It is a recurring arrival interval the processing pipeline must sustain", "explanation": "Correct. A simple worker needs enough processing capacity and margin to keep up, while total latency needs a broader model."}
+      {
+        "text": "It guarantees total input-to-output latency is 1.33 milliseconds",
+        "explanation": "Buffer collection, queues, filter delay and hardware add other timing components."
+      },
+      {
+        "text": "Any host test below that time proves every real-device deadline",
+        "explanation": "Host timing does not cover all device conditions or scheduling variation."
+      },
+      {
+        "text": "It removes the need to retain state",
+        "explanation": "Timing and numerical continuity are separate requirements."
+      },
+      {
+        "text": "It is a recurring arrival interval the processing pipeline must sustain",
+        "explanation": "Correct. A simple worker needs enough processing capacity and margin to keep up, while total latency needs a broader model."
+      }
     ],
     "answer": 3,
-    "workedExample": "Compute stream time represented by the block.\n\n```formula\nT_b = B / F_s\nT_b = 64 / (48000 s^{−1})\nT_b ≈ 0.001333 s\nwhere\nT_b: block duration in seconds (s)\nB: block size of 64 sample intervals\nF_s: rate of 48000 sample intervals per second\ns: second; s to the power minus one means per second\n≈: approximately equal to; the result is rounded\nIn words: a regular stream supplies another block about every one and one third milliseconds.\n```\n\nA deadline budget needs margin; end-to-end latency includes other stages.",
-    "link": {"title": "SciPy: stateful sample-sequence filtering", "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lfilter.html"}
+    "workedExample": "1. The given block duration describes how often stream data must be handled.\n2. A simple worker must sustain that arrival rate with margin, or work accumulates.\n3. Collecting samples, queues, filter delay and output hardware also contribute to total latency.\n4. The arrival interval alone therefore establishes neither total latency nor a guarantee about device deadlines.",
+    "link": {
+      "title": "PortAudio: callback intervals, overhead and latency",
+      "url": "https://github.com/PortAudio/portaudio/wiki/BufferingLatencyAndTimingImplementationGuidelines"
+    }
   },
   {
-    "id": "df-block-processing-q3", "level": "intermediate", "type": "multi",
+    "id": "df-block-processing-q3",
+    "level": "intermediate",
+    "type": "multi",
     "prompt": "Which end-of-record and block-boundary policies are correct? Select all that apply.",
     "options": [
-      {"text": "Append flushing zeros between every live block", "explanation": "That inserts an artificial signal continuation before actual samples arrive and changes the output."},
-      {"text": "Flush a direct FIR at the final end using one fewer zero than its tap count", "explanation": "Correct. This exposes the finite full-convolution tail when later input is assumed zero."},
-      {"text": "Carry the library's returned state into the next normal block", "explanation": "Correct. The continuation must preserve state in the representation expected by that implementation."},
-      {"text": "Every IIR becomes exactly zero after the same fixed number of tail samples", "explanation": "An IIR generally has no exact finite tail; stopping requires a declared duration or tolerance."}
+      {
+        "text": "Append flushing zeros between every live block",
+        "explanation": "That inserts an artificial signal continuation before actual samples arrive and changes the output."
+      },
+      {
+        "text": "Flush a direct FIR at the final end using one fewer zero than its tap count",
+        "explanation": "Correct. This exposes the finite full-convolution tail when later input is assumed zero."
+      },
+      {
+        "text": "Carry the library's returned state into the next normal block",
+        "explanation": "Correct. The continuation must preserve state in the representation expected by that implementation."
+      },
+      {
+        "text": "Every IIR becomes exactly zero after the same fixed number of tail samples",
+        "explanation": "An IIR generally has no exact finite tail; stopping requires a declared duration or tolerance."
+      }
     ],
-    "answer": [1, 2],
+    "answer": [
+      1,
+      2
+    ],
     "workedExample": "1. During a live stream, the next real block is the continuation, so preserve state without adding fictitious samples.\n2. At a finite recording's end, choose whether to retain the tail.\n3. Under a zero-after-record policy, a direct FIR needs one fewer flushing zero than its tap count to reveal its full tail.\n4. An IIR typically needs an application-specific tail duration or tolerance rather than a universal exact length.",
-    "link": {"title": "SciPy: initial and final delay states", "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lfilter.html"}
+    "link": {
+      "title": "SciPy: initial and final delay states",
+      "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lfilter.html"
+    }
   }
 ]

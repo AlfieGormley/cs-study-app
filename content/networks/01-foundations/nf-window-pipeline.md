@@ -4,38 +4,29 @@ sourceLesson: nf-error-control
 title: Size a loss-free pipeline
 level: advanced
 minutes: 3
-summary: Calculate how many outstanding frames cover a full feedback cycle.
+summary: Explain how a window covers feedback delay and why path changes alter the required flight allowance.
 ---
 
 ## Sliding windows
 
-The fix is **pipelining**: permit several frames to be outstanding (sent but not yet acknowledged). Use a loss-free fixed-frame model with no queueing, processing, ACK transmission or framing gaps. The formula defines the window size below. To keep the link busy the window must cover a full round trip, which is the bandwidth-delay product from the delay and bandwidth-delay-product units:
+The fix is **pipelining**: permit several frames to be outstanding (sent but not yet acknowledged). Use a loss-free fixed-frame model with no queueing, processing, ACK transmission or framing gaps. This is the frame-based version of the earlier data-in-flight idea: feedback takes time, and a sender needs enough unacknowledged work to cover it.
 
-```formula
-U = min(1, N(L / R) / (L / R + RTT))
+A larger window lets the sender continue while acknowledgements are in transit. To keep sending continuously, the allowed frames must span the entire feedback cycle, including the first frame's transmission. Increasing the propagation RTT requires a larger window; increasing the link rate also requires more frames because each frame now takes less time to send.
+
+```formula reference
 N_fill = ⌈(L / R + RTT) / (L / R)⌉
 where
-U: the sender's utilisation, from 0 to 1
-min: the minimum, the smaller of the two values; utilisation cannot exceed 1 (100%)
-N: the window: how many frames may be outstanding at once
-L / R: one frame's transmission time: frame size L in bits divided by link rate R in bits per second
-RTT: the round-trip propagation delay, in seconds
-N_fill: the smallest window that keeps the link continuously busy
-⌈ ⌉: the ceiling function: round up to the next whole number
-In words: N frames keep the sender busy N times longer per cycle; once the window covers a whole cycle (one frame time plus a round trip), the link never idles.
+N_fill: smallest whole-frame window that keeps this loss-free sender continuously busy
+L: complete frame size in bits
+R: link rate in bits per second
+RTT: round-trip propagation time in seconds, excluding frame transmission, ACK transmission, processing and queueing
+⌈ ⌉: ceiling, meaning round up to the next whole number
+In words: allow enough frame transmissions to cover the time until the first acknowledgement returns; more frames cannot push utilisation above full link use.
 ```
 
-Consider the preceding stop-and-wait example: a 1 Gbit/s link, 30 ms propagation round trip, and 1500-byte frames. Each frame takes 12 microseconds to transmit:
+Consider the preceding stop-and-wait example: a 1 Gbit/s link, 30 ms propagation round trip, and 1500-byte frames. Each frame takes 12 microseconds to transmit.
 
-```formula
-N_fill = ⌈(0.012 ms + 30 ms) / 0.012 ms⌉
-N_fill = ⌈30.012 / 0.012⌉ = 2,501
-where
-N_fill: the window, in frames, that fills the 1 Gbit/s, 30 ms path
-ms: milliseconds; 0.012 ms (12 µs) is one 12,000-bit frame time at 1 Gbit/s
-⌈ ⌉: the ceiling function: round up to a whole number of frames
-In words: the first ACK returns 30.012 ms after the first frame starts, enough time to send **2,501 frames**, so that many must be allowed in flight.
-```
+In this model the first acknowledgement returns 30.012 ms after sending starts. The sender can transmit 2,501 frames during that interval, so its window must allow that many to avoid becoming idle. Real framing, ACK transmission, processing, loss and queueing can change the required allowance.
 
 The next unit compares two strategies for handling a loss inside that window.
 

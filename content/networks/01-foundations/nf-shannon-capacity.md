@@ -4,64 +4,53 @@ sourceLesson: nf-physical-layer
 title: Noise, SNR and Shannon capacity
 level: basic
 minutes: 3
-summary: Convert decibels into a power ratio and calculate the capacity of a specified AWGN channel.
+summary: Explain noisy-channel capacity, decibel power ratios and bandwidth-versus-power trade-offs.
 ---
 
-### Shannon: how much can noise allow?
+A receiver must distinguish signal from noise. Choosing more modulation states cannot create unlimited reliable capacity when noise blurs those states.
 
-For the band-limited additive white Gaussian noise (AWGN) model (random noise spread evenly over all frequencies and simply added to the signal), Shannon capacity is:
+## A limit for a specified noisy channel
 
-```formula
+For a band-limited **additive white Gaussian noise (AWGN)** channel, noise is modelled as random Gaussian variation added to the signal, with equal average noise power in equal-width frequency bands across the channel. Shannon capacity gives the highest reliable information rate in this model under its average-power constraint.
+
+At rates below capacity, suitable coding can make error probability arbitrarily small as coding length grows. This is not a promise of zero errors for finite packets.
+
+```formula reference
 C = B log_2(1 + S / N)
 where
-C: the channel capacity: the highest bit rate that can be carried with arbitrarily few errors, in bits per second (bit/s)
-B: the channel bandwidth, in hertz (Hz)
-S: the average received signal power, in watts (W)
-N: the average noise power in the channel, in watts (W)
-log_2: the base-2 logarithm
-Hz: hertz, cycles per second
-W: watts, the unit of power; only the ratio S / N matters here
-In words: capacity grows in direct proportion to bandwidth, but only logarithmically with signal-to-noise ratio: doubling B doubles C, while doubling S / N adds only about one bit per second per hertz once the signal is well above the noise.
+C: Shannon capacity of the stated AWGN model, in bits per second
+B: channel bandwidth in hertz
+S: average received signal power in watts
+N: average noise power in the channel bandwidth, in watts
+log_2: base-two logarithm
+In words: holding the signal-to-noise power ratio fixed, more bandwidth raises capacity in direct proportion; at high signal-to-noise ratios, increasing signal power gives progressively smaller proportional gains.
 ```
 
-Below capacity, suitable coding can make error probability arbitrarily small in the asymptotic model; this is not a promise of zero errors with finite packets. The signal-to-noise quantity in the capacity formula is a power ratio. Engineers quote the signal-to-noise ratio (**SNR**) in decibels:
+The **signal-to-noise ratio (SNR)** compares signal power with noise power. Engineers often express it in **decibels (dB)**: every additional 10 dB multiplies the power ratio by ten. Thus 30 dB represents a signal power 1000 times the noise power. A dB value is not itself the power ratio.
 
-```formula
-SNR_dB = 10 × log_10(S / N)
+```formula reference
+SNR_dB = 10 log_10(S / N)
 S / N = 10^(SNR_dB / 10)
-S / N = 10^(30 / 10) = 1000
 where
-SNR_dB: the signal-to-noise ratio in decibels (dB)
-dB: decibels, ten times the base-10 logarithm of a power ratio
-S: the signal power
-N: the noise power
-log_10: the base-10 logarithm: the power 10 must be raised to in order to give the number (log_10(1000) = 3)
-In words: every 10 dB multiplies the power ratio by 10, so 30 dB means the signal is 1000 times stronger than the noise.
+SNR_dB: signal-to-noise ratio in decibels
+S: signal power in watts
+N: noise power in watts, measured over the same channel
+log_10: base-ten logarithm
+In words: decibels describe a power ratio logarithmically; an increase of ten decibels means ten times the ratio, rather than ten more units of signal power.
 ```
 
-> [!example] A simplified single-channel capacity model
-> Assume one flat AWGN channel (not a complete Wi-Fi/MIMO model): a 20 MHz channel with 30 dB SNR. The calculation below gives about **199 Mbit/s**. No modulation scheme, however clever, can beat that on that channel. To go faster you need more bandwidth (wider channels), more SNR, or more independent channels (more antennas, MIMO).
+## What can improve capacity?
 
-```formula
-C = 20 × 10⁶ Hz × log_2(1 + 1000)
-C ≈ 20 × 10⁶ × 9.97 bit/s
-C ≈ 1.99 × 10⁸ bit/s ≈ 199 Mbit/s
-where
-C: the Shannon capacity of the channel
-Hz: hertz; 20 MHz (megahertz) is 20 × 10⁶ Hz
-log_2: the base-2 logarithm; log_2(1001) ≈ 9.97 because 2^10 = 1024
-bit: one binary digit; bit/s is bits per second
-s: seconds
-Mbit/s: megabits per second (millions of bits per second)
-≈: approximately equal to
-In words: 20 million hertz times about 10 bits per second per hertz gives a limit of about 199 Mbit/s.
-```
+For a hypothetical single flat AWGN channel, 20 MHz at 30 dB SNR has about 199 Mbit/s capacity. At the same SNR, doubling bandwidth doubles capacity. Doubling signal power while holding noise and bandwidth fixed gives a much smaller proportional improvement at this high SNR.
 
-The model helps explain why attenuation can reduce achievable rate when transmit power, noise and other conditions are held fixed. Actual distance-to-rate behaviour also depends on interference, propagation paths, equipment and adaptation.
+Keeping SNR fixed while widening a channel is an explicit assumption. If total signal power stays fixed and noise spectral density stays constant, a wider channel admits more noise and reduces SNR.
+
+Actual Wi-Fi systems also involve multiple spatial channels, contention, pilots, coding and protocol overhead. Independent spatial channels can add capacity, but simply adding antennas does not guarantee independence. Attenuation, interference, propagation paths and equipment affect achievable rates.
 
 ## Key takeaways
-- Shannon capacity depends on bandwidth and signal-to-noise power ratio.
-- The asymptotic coding theorem does not promise zero errors in finite packets or model an entire Wi-Fi system.
+- Capacity depends on channel bandwidth and signal-to-noise power ratio.
+- More modulation levels cannot defeat the stated channel limit.
+- The asymptotic theorem does not promise error-free finite packets or model a complete Wi-Fi network.
 
 ## Further reading
 - [Shannon–Hartley theorem — Wikipedia](https://en.wikipedia.org/wiki/Shannon%E2%80%93Hartley_theorem)

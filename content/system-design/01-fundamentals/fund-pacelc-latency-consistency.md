@@ -32,7 +32,7 @@ Else (normal operation):
     choose Latency or Consistency
 ```
 
-The "else" half is the important addition. Even with a perfectly healthy network, strong consistency costs latency: a write must be acknowledged by multiple replicas (often in different zones or regions) before it's confirmed, and a linearisable read may need to contact a leader or a quorum.
+The "else" half is the important addition. Even with a healthy network, coordinating replicated data can cost latency. A design that promises acknowledged writes will survive a zone or region loss must place the required copies before confirming them; linearisable reads may also need a leader or quorum. Linearisability alone does not require every write to wait for a distant durable copy: the replication and failure-survival contract matters.
 
 ```
  EC: write -> wait for quorum ack

@@ -14,17 +14,9 @@ For a generator with degree at least one and leading and constant coefficients 1
 - **All single-bit errors**.
 - **All bursts no longer than the generator degree**: count the span from the first flipped bit through the last.
 - **All odd numbers of bit errors**, if the generator has the factor consisting of its formal variable plus one. A quick test: that is true exactly when the generator's bit pattern has an even number of 1s.
-- For suitably random long error patterns, the random-pattern miss fraction decreases exponentially with the number of check bits (formula below). This is not a guarantee for arbitrary or adversarial errors.
+- For suitably random long error patterns, the random-pattern miss fraction decreases exponentially with the number of check bits as more check bits are used. This is not a guarantee for arbitrary or adversarial errors.
 
-```formula
-P_miss ≈ 2^(−r)
-P_miss ≈ 2^(−32) ≈ 2.3 × 10⁻¹⁰
-where
-P_miss: the fraction of random error patterns that happen to leave a zero remainder and go undetected
-r: the number of CRC bits (the generator's degree); 32 for CRC-32
-≈: approximately equal to
-In words: a random corruption has about a one-in-2^r chance of producing a valid-looking frame; for CRC-32 that is about one in 4.3 billion.
-```
+For suitably random long error patterns, a 32-bit CRC has a miss fraction of about one in 4.3 billion. That estimate requires an appropriate error distribution; it does not bound structured or deliberate modifications.
 
 Ethernet's **CRC-32** uses generator `0x04C11DB7` with its degree-32 leading term implicit. It detects every burst of up to 32 bits within the protected codeword. Koopman's table gives distance at least 4 through 91,607 data bits (excluding the 32 check bits), and at least 5 through 2,974 data bits. Thus all 1–3-bit errors within the FCS-protected region of ordinary 1518-byte or 9000-byte frames are detected. This excludes preamble/SFD and assumes fixed framing, rather than inserted or deleted bits. Other generators, including CRC-32C, have different guarantees.
 

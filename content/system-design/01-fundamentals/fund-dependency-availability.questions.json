@@ -3,27 +3,27 @@
     "id": "fund-availability-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "A request passes through a load balancer (99.99%), an app server (99.9%) and a database (99.9%), all required, failing independently. What's the end-to-end availability?",
+    "prompt": "A request must pass through a load balancer, app tier and database. Each can fail independently. How does the request path's availability compare with the individual tiers?",
     "options": [
       {
-        "text": "About 99.79%",
-        "explanation": "Correct. 0.9999 × 0.999 × 0.999 ≈ 0.9979. Unavailabilities roughly add: 0.01% + 0.1% + 0.1% = 0.21%."
+        "text": "It is lower than every required tier's availability when each has a nonzero failure risk",
+        "explanation": "Correct. The request fails whenever any required tier is unavailable, creating more failure opportunities than one tier alone."
       },
       {
-        "text": "99.9%, the weakest component",
-        "explanation": "Incorrect. This is the upper bound, not the answer. Each additional component in series has its own failures, which add up, so the total is lower than the weakest link."
+        "text": "It equals the least available tier automatically",
+        "explanation": "Incorrect. That tier sets an upper bound, but the other required tiers also fail."
       },
       {
-        "text": "99.99%, the best component",
-        "explanation": "Incorrect. In series, the system needs every component up. It can't be more available than its weakest component, let alone its best."
+        "text": "It equals the most available tier",
+        "explanation": "Incorrect. A healthy load balancer cannot complete a request while the required database is down."
       },
       {
-        "text": "About 99.9999%",
-        "explanation": "Incorrect. That's the kind of number you'd get for components in *parallel* (redundancy). These are in series: all must work."
+        "text": "It improves simply because there are more components",
+        "explanation": "Incorrect. These components are required stages, rather than redundant alternatives."
       }
     ],
     "answer": 0,
-    "workedExample": "Series formula: multiply, because every component must be up.\n\n```formula\nA = A_LB × A_app × A_DB\nA = 0.9999 × 0.999 × 0.999\nA ≈ 0.99790 ≈ 99.79%\nwhere\nA: the end-to-end availability, as a fraction\nA_LB: the load balancer's availability, 0.9999\nA_app: the app server's availability, 0.999\nA_DB: the database's availability, 0.999\n≈: approximately equal to (rounded)\nIn words: the chain is up only when all three are, so multiply.\n```\n\nShortcut for high availabilities: add the unavailabilities.\n\n```formula\nU ≈ U_LB + U_app + U_DB\nU ≈ 0.0001 + 0.001 + 0.001 = 0.0021\nA = 1 − U ≈ 0.9979\nwhere\nU: the unavailability of the whole chain, 1 − A\nU_LB, U_app, U_DB: each component's unavailability, 1 minus its availability\nA: the end-to-end availability\n≈: approximately equal to; the shortcut ignores the tiny chance that two fail at the same moment\nIn words: when each component is down only rarely, their downtime fractions roughly add up.\n```\n\nThat's about 1.5 hours a month of downtime, roughly double the ~44 minutes either 99.9% component allows on its own.",
+    "workedExample": "Trace one failure at a time. A failed app tier blocks the request even if the database is healthy; a failed database also blocks it. Independent required dependencies therefore lower whole-path availability. Removing optional blocking work or adding valid redundancy changes those success conditions.",
     "link": {
       "title": "High availability (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/High_availability"
@@ -33,7 +33,7 @@
     "id": "fund-availability-q6",
     "level": "advanced",
     "type": "single",
-    "prompt": "Your checkout service must hit 99.95%. It calls 6 downstream services synchronously, each 99.9% available, plus its own tier at 99.95%. Assume independent failures for the calculations. What's the best approach?",
+    "prompt": "Checkout must meet a strict availability target but synchronously requires six downstream services, including optional recommendations. Its own tier already only just meets the target. What is the best approach?",
     "options": [
       {
         "text": "Take non-essential dependencies off the critical path (async or graceful degradation) and add redundancy to the essential ones",
@@ -41,11 +41,11 @@
       },
       {
         "text": "Ask every dependency to raise its availability to 99.95%",
-        "explanation": "Incorrect on its own. Even at 99.95% each, 0.9995 raised to the power 7 ≈ 99.65%. Worse, the service's own code is already at 99.95%, so with dependencies in series there is no budget left for them at all: the target can't be met by improving dependencies alone."
+        "explanation": "Incorrect on its own. Several required components each meeting the whole-path target still add failure opportunities; the checkout tier also needs margin."
       },
       {
         "text": "It's fine: the weakest dependency is 99.9%, close to the target",
-        "explanation": "Incorrect. Series availabilities multiply. 0.999 raised to the power 6, then multiplied by 0.9995, ≈ 99.35%, i.e. about 4.7 hours of downtime a month, nowhere near 99.95% (22 minutes)."
+        "explanation": "Incorrect. A request needs every synchronous dependency to succeed. Their additional failures cannot be ignored because each individual figure looks close to the target."
       },
       {
         "text": "Add retries to every call; this makes each dependency 100% available",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "**Current state:** the service's own tier and all 6 dependencies are in series.\n```formula\nA = a^6 × A_c\nA = 0.999^6 × 0.9995\nA ≈ 0.99401 × 0.9995 ≈ 0.99352\nwhere\nA: the checkout's end-to-end availability (≈ 99.35%)\na: one dependency's availability, 0.999\n^: \"to the power of\": a^6 means six copies of a multiplied together\nA_c: the checkout tier's own availability, 0.9995\n≈: approximately equal to (rounded)\nIn words: seven things in series, six at 99.9% and one at 99.95%, give about 99.35%.\n```\n\n**Option: make 4 of 6 dependencies non-blocking.** Now only 2 are in series:\n```formula\nA = 0.999^2 × 0.9995 ≈ 0.99750\nwhere\nA: the end-to-end availability (≈ 99.75%)\n^: \"to the power of\": 0.999^2 means 0.999 × 0.999\n≈: approximately equal to (rounded)\nIn words: two required dependencies plus the checkout tier give about 99.75%.\n```\n\n**Then add redundancy to the 2 critical ones** (e.g. two independent payment providers at 99.9% each):\n```formula\nA_p = 1 − 0.001^2 = 0.999999\nA = A_p^2 × 0.9995 ≈ 0.99950\nwhere\nA_p: the availability of one redundant pair, each member down 0.001 of the time\nA: the end-to-end availability (≈ 99.9498%)\n^: \"to the power of\": 0.001^2 means 0.001 × 0.001\n≈: approximately equal to (rounded)\nIn words: the redundant pairs are almost never both down, so the checkout tier's own 99.95% becomes the limit.\n```\n\nThat is still below the 99.95% target, and the service's own tier is now the limiting factor. To get real margin, the checkout service itself must also run redundantly (several instances across zones) and address common software/configuration failures; more instances alone do not eliminate shared bugs.",
+    "workedExample": "Classify each dependency by whether checkout must fail without it. Recommendations can often be omitted; inventory and payment still need an authoritative safe path. Move optional work off the blocking path, improve essential dependencies and recovery, and give checkout itself reliability margin. Retries need limits and safe semantics, and more replicas do not remove common software or configuration failures.",
     "link": {
       "title": "Availability and Beyond (AWS whitepaper)",
       "url": "https://docs.aws.amazon.com/whitepapers/latest/availability-and-beyond-improving-resilience/availability-and-beyond-improving-resilience.html"

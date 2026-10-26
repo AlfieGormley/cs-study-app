@@ -3,23 +3,15 @@ id: snd-integer-quantisation
 title: Integer levels and rounding error
 level: intermediate
 minutes: 3
-summary: Count sample levels and calculate quantisation steps while distinguishing rounding from clipping.
+summary: Explain how bit depth changes level spacing and distinguish rounding error from clipping.
 sourceLesson: snd-sampling
 ---
 
 ## Bit depth and quantisation
 
-Each sample must be stored with finite precision. Every extra bit doubles the number of patterns, so with **N bits** a signed integer sample has this many possible values:
+Each sample must be stored with finite precision. Every extra bit doubles the number of patterns available to represent a sample.
 
-```formula
-L = 2^N
-L = 2^16 = 65536
-where
-L: the number of distinct levels (values) a sample can take
-N: the bit depth, the number of bits per sample; here 16
-2^N: 2 raised to the power N (N copies of 2 multiplied together)
-In words: each bit doubles the number of levels, so 16 bits give 65,536 of them.
-```
+For example, 16 bits provide 65,536 distinct levels. A signed sample uses some codes for negative values, one for zero and the rest for positive values; it does not lose half its precision by being signed.
 
 | Bits | Levels | Integer range |
 |---|---|---|
@@ -29,20 +21,25 @@ In words: each bit doubles the number of levels, so 16 bits give 65,536 of them.
 
 Rounding the true value to the nearest level is **quantisation**. The levels are evenly spaced, so the step size is the width of the range divided by the number of levels, and rounding to the nearest level is wrong by at most half a step either way:
 
-```formula
+```formula reference
 Δ = 2 / 2^N
-Δ = 2 / 65536 ≈ 0.0000305
-e_max = Δ / 2 ≈ 0.0000153
+e_max = Δ / 2
 where
 Δ: delta, the quantisation step size: the gap between neighbouring levels, in full-scale units
 2: the width of the range from −1 to +1 (full scale)
 N: the bit depth, in bits; here 16
 e_max: the largest possible rounding error when rounding to the nearest level
-≈: approximately equal to (rounded)
-In words: 16 bits split the range −1 to +1 into steps of about 0.00003, and rounding is never more than half a step out.
+In words: For signed samples scaled around minus one to plus one, each extra bit halves the gap between levels. Nearest rounding stays within half a gap when the signal does not overload.
 ```
 
 This assumes the signal stays inside full scale; a value beyond the top or bottom level is clipped, and its error can be much larger.
+
+> [!analogy] Real-world analogy: Rounding a length to ruler marks
+> A ruler with finer marks lets you report a length more closely. Rounding to the nearest mark moves the report by no more than half the gap between marks.
+>
+> **How it maps:** Ruler marks are integer sample levels; adding a bit makes the marks twice as dense across the same full-scale range. Nearest rounding chooses the closest available level.
+>
+> **Where it stops:** An audio sample can be negative, and its signed endpoints are asymmetric. Values beyond the available range overload rather than simply rounding to a nearby internal mark.
 
 ## Pitfalls
 

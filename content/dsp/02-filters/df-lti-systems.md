@@ -12,9 +12,11 @@ A **discrete-time system** takes an input sequence and produces an output sequen
 
 A **linear system** preserves scaling and addition together. Processing a mixture must give the same result as processing its components separately and then mixing their outputs with the same weights. This property is **superposition**. It must hold for every allowed pair of inputs and every allowed constant weight; one successful example cannot prove it.
 
-Here is the test written compactly. The letters representing sequences mean whole sequences, rather than individual samples.
+Think of two sensors feeding a mixer. A linear filter lets you filter each sensor separately and then mix, or mix first and filter once, with the same result. This is useful because a complicated signal can be understood through simpler components. It is a property of the processing rule, not a claim that the output graph looks like a straight line.
 
-```formula
+The optional notation records that same test for entire sequences.
+
+```formula reference
 T(ax + bv) = aT(x) + bT(v)
 where
 T: the system operation, mapping an entire input sequence to an output sequence
@@ -25,7 +27,7 @@ b: a constant dimensionless weight for the second sequence
 In words: combining weighted inputs before processing must match combining the separately processed outputs with those same weights.
 ```
 
-Doubling every reading passes this test. Squaring does not: a reading of 2 produces 4, while doubling the input produces 16 rather than doubling the output to 8. Adding a constant offset of 1 also fails: zero input produces a nonzero output. Zero input producing zero output is necessary for linearity, though it is not a sufficient test by itself.
+Doubling every reading passes this test. Squaring fails because doubling an input makes its squared result four times as large, rather than twice as large. Adding a constant offset also fails: zero input produces a nonzero output. Zero input producing zero output is necessary for linearity, though it is not a sufficient test by itself. Clipping is another common failure: a quiet mixture may pass unchanged while a louder mixture hits the limit.
 
 ## Time invariance means the same rule later
 

@@ -19,7 +19,7 @@ The sender computes a few redundant bits from the data and sends them along. The
 
 How good a code is depends on its **Hamming distance**: the minimum number of bit flips needed to turn one valid codeword (a bit pattern the code allows) into another. From the distance you can read off how many flipped bits the code is guaranteed to catch or repair:
 
-```formula
+```formula reference
 t_detect = d − 1
 t_correct = ⌊(d − 1) / 2⌋
 where
@@ -27,10 +27,10 @@ d: the code's minimum Hamming distance, a whole number of bits
 t_detect: the largest number of flipped bits that is always detected
 t_correct: the largest number of flipped bits that can always be corrected
 ⌊ ⌋: the floor function: round down to the nearest whole number (⌊1.5⌋ = 1)
-In words: fewer than d flips can never turn one valid codeword into another, so they are always noticed; to fix errors, the damaged word must stay closer to its original than to any other codeword, which allows fewer than half of d flips.
+In words: detection works while damage cannot turn one valid codeword into another; guaranteed correction requires the damaged word to remain closer to its original than to every alternative.
 ```
 
-For example, a code with distance 3 detects up to 2 flipped bits, or corrects 1, by rounding half of two down.
+For example, a code with distance 3 detects up to 2 flipped bits, or corrects 1, because one flipped bit still leaves it closer to its original than to any other valid codeword.
 
 For a given worst-case number of bit errors, correction requires a larger minimum distance than detection. These are alternative decoding guarantees; a distance-3 correcting decoder cannot also promise to identify every two-bit error as uncorrectable.
 

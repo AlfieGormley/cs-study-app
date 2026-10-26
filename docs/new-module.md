@@ -4,9 +4,9 @@ everything you write.
 # Brief: write a new module
 
 You're writing one module of a personal iPhone study app that takes the reader from beginner to expert in
-computer science. Project: /Users/alfiegormley/Github/cs-study-app
+computer science. Work in the selected checkout of `cs-study-app` given in your task.
 
-1. Read /Users/alfiegormley/Github/cs-study-app/CONTENT_SPEC.md first and follow it exactly.
+1. Read that checkout's `CLAUDE.md`, `CONTENT_SPEC.md` and `docs/CONTENT_PROCESS.md` first and follow them.
 2. For the house style and depth, look at one existing lesson and its questions, e.g.
    content/system-design/03-caching/cache-eviction.md and cache-eviction.questions.json.
 3. Write ONLY inside your module directory (given in your task). The subject.json already exists; don't touch it,
@@ -14,12 +14,18 @@ computer science. Project: /Users/alfiegormley/Github/cs-study-app
 4. Write module.json, then each lesson's .md and .questions.json.
 
 Depth and quantity:
+- Follow the concept-first rule in CONTENT_SPEC.md. The reader is learning fundamentals on a bus:
+  explain meaning, behaviour, practical use and limits before notation. Keep an equation visible only
+  when essential (`formula essential`); useful reference formulas use `formula reference` and collapse in lessons.
+  Remove redundant maths and repeated substitutions. Keep the visible explanation complete without
+  optional panels. This rule supersedes older subject briefs requesting calculation-heavy coverage.
 - Each lesson covers one coherent learning objective in roughly 3–5 minutes. Preserve depth by using
   several short lessons for a large topic. Use intuition, mechanics, real-world use, trade-offs, worked
   examples, code (Python unless the topic needs C/SQL/etc.), diagrams, tables and callouts as relevant.
 - Aim for 2–4 focused questions per lesson. Use `multi` where useful. Favour applied questions:
   "what does this code output?", "what's the complexity of...?", "trace this
-  algorithm", scenario and calculation questions. Every workedExample walks through the reasoning step by step.
+  algorithm", prediction, diagnosis and practical choices. Avoid pure formula recall and routine arithmetic.
+  Every workedExample walks through the reasoning step by step; calculations are not required.
   Every option explanation names the specific misconception.
 - Lessons in a module go basic → advanced.
 - Apply the real-world analogy rule in `CONTENT_SPEC.md`: use a concise `[!analogy]` callout where a familiar

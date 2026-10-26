@@ -11,20 +11,11 @@ sourceLesson: snd-pitch
 
 Play a sine and a sawtooth at 220 Hz. They have the **same pitch** but sound completely different. The difference is **timbre**, often loosely called "tone colour".
 
-A sawtooth at 220 Hz contains sine components at 220, 440, 660, 880 Hz and so on: the **harmonic series**, every whole-number multiple of the fundamental. In an ideal sawtooth their amplitudes fall off steadily:
+A sawtooth at 220 Hz contains sine components at 220, 440, 660, 880 Hz and so on: the **harmonic series**, every whole-number multiple of the fundamental. In an ideal sawtooth their amplitudes fall off steadily.
 
-```formula
-f_k = k × f_0
-a_k = 1 / k
-where
-f_k: the frequency of harmonic number k, in hertz (Hz)
-k: the harmonic number, a whole number 1, 2, 3, …; k = 1 is the fundamental
-f_0: the fundamental frequency, in hertz (Hz); here 220 Hz
-a_k: the amplitude of harmonic k, relative to the fundamental (no unit)
-In words: harmonic k sits at k times the fundamental and, in a sawtooth, has 1/k of its amplitude: the 3rd harmonic of 220 Hz is at 660 Hz with a third of the amplitude.
-```
+The second harmonic is twice the fundamental frequency, the third is three times it, and so on. In an ideal sawtooth, the second has half the fundamental’s amplitude and the third one third. Higher harmonics grow weaker but enrich the waveform’s shape.
 
-A sine has only the 220 Hz component. Because all the extra components are exact multiples, the waveform still repeats every 1/220 s, and the ear still hears 220 Hz.
+A sine has only the 220 Hz component. Because all the extra components are exact multiples, the waveform still repeats 220 times per second, and the ear still hears 220 Hz.
 
 The harmonic series is also where just ratios come from: harmonics 2, 3, 4, 5 give an octave, a fifth above that, another octave, and a major third. The 5th harmonic of 110 Hz is 550 Hz, about 14 cents below the 12-TET C♯5 (554.37 Hz).
 

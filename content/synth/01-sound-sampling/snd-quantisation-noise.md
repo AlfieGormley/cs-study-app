@@ -3,7 +3,7 @@ id: snd-quantisation-noise
 title: Predict and measure quantisation noise
 level: intermediate
 minutes: 4
-summary: Derive the full-scale-sine SQNR rule and see where coarse quantisation breaks its assumptions.
+summary: Use the six-decibel-per-bit rule and recognise when coarse quantisation violates its assumptions.
 sourceLesson: snd-sampling
 ---
 
@@ -11,10 +11,8 @@ sourceLesson: snd-sampling
 
 For a busy signal much larger than one step, the error behaves like a small random noise added to the signal: **quantisation noise**. How far that noise sits below the signal is the **SQNR**, the signal-to-quantisation-noise ratio, measured in decibels (dB, a logarithmic scale for ratios explained in the decibel-gain unit). The standard result, for a full-scale sine wave, is:
 
-```formula
+```formula reference
 SQNR ≈ 6.02 × N + 1.76 dB
-SQNR ≈ 6.02 × 16 + 1.76 dB
-SQNR ≈ 98.1 dB
 where
 SQNR: signal-to-quantisation-noise ratio: the RMS (average) level of a full-scale sine compared with the RMS level of the rounding noise, in decibels
 N: the bit depth, in bits; here 16
@@ -25,30 +23,7 @@ In words: each bit adds about 6 dB of distance between a full-scale sine and the
 
 **Each extra bit adds about 6 dB**, because it halves the step size and halving an amplitude is −6.02 dB. 16 bits gives about 98 dB; 24 bits about 146 dB.
 
-Where do the two numbers come from? The rounding error is spread evenly across one step, which gives it a predictable RMS (root-mean-square, a kind of average size; the peak-and-RMS unit). A full-scale sine spans all the steps, so its peak is half of that span, and a sine's RMS is its peak divided by about 1.414. Putting those together:
-
-```formula
-S = (2^N × Δ / 2) / √2
-E = Δ / √12
-S / E = 2^N × √1.5
-SQNR = 20 × log_10(S / E)
-SQNR = 20 × N × log_10(2)
-     + 20 × log_10(√1.5)
-SQNR ≈ 6.02 × N + 1.76 dB
-where
-S: the RMS size of the full-scale sine, in full-scale units (the same units as Δ)
-SQNR: the signal-to-quantisation-noise ratio, in decibels (dB)
-E: the RMS size of the quantisation error, in the same units, assuming it is spread evenly within ±Δ/2
-Δ: delta, the quantisation step size
-N: the bit depth, in bits
-√: square root
-log_10: the base-10 logarithm, used by the decibel scale; 20 × log_10 of an amplitude ratio gives decibels
-dB: decibels
-≈: approximately equal to (rounded)
-In words: the signal-to-noise ratio is 2^N times a constant; in decibels, the 2^N becomes 6.02 dB per bit and the constant becomes 1.76 dB.
-```
-
-The derivation shows the assumptions: a sine that fills full scale without overloading, and an error that is evenly spread and unrelated to the signal. A quieter signal gets proportionally less SQNR, and very coarse quantisation breaks the second assumption.
+The six-decibel rule assumes a sine that nearly fills full scale without overloading and rounding error that is approximately uniform and unrelated to the signal. A quieter signal sits closer to the same quantisation floor. Coarse periodic signals can instead produce correlated distortion. The Analog Devices tutorial derives the result in detail.
 
 You can check this in a few lines:
 
@@ -87,7 +62,7 @@ for bits in (4, 8, 12, 16):
 At 12 and 16 bits the formula agrees closely. At 4 bits this example also **overloads the positive endpoint**: its largest code is 7/8, below the sine's 0.999 peak. That clipping contributes substantial error. In addition, the uniform, signal-independent error model is only an approximation; low-resolution periodic quantisation can produce distortion rather than a gentle hiss.
 
 > [!note] Why 997 Hz?
-> Test tones are often slightly "odd" frequencies like 997 Hz rather than 1000 Hz. With 1000 Hz at 48 kHz, each cycle is exactly 48 samples, so the same few quantisation errors repeat every cycle and pile up at harmonic frequencies. An odd frequency spreads them out.
+> Test tones are often slightly "odd" frequencies like 997 Hz rather than 1000 Hz. With 1000 Hz at 48 kHz, each cycle is exactly 48 samples, so the same few quantisation errors repeat every cycle and pile up at harmonic frequencies. A tone without that short repeating sample pattern can distribute quantisation error more broadly; the relation between test frequency and sample rate matters, rather than whether a number is odd.
 
 ## Key takeaways
 

@@ -40,8 +40,8 @@
         "explanation": "Incorrect. The headroom is over the *miss* traffic only. With no cache, every read becomes a miss."
       },
       {
-        "text": "The databases would see about 100,000 reads/s, over 12x their capacity, so you need a plan: spread the cache across many nodes, shed load, or provision for it",
-        "explanation": "Correct. Normal DB load is 5% of 100k = 5k/s. Without the cache it is the full 100k/s, which is 12.5x the 8k/s capacity. A cache that the database can't survive losing must be treated as critical infrastructure."
+        "text": "Cache loss sends the full read load to replicas that cannot handle it; plan capacity, admission control or a degraded response",
+        "explanation": "Correct. The database normally receives only misses. With the cache gone, all 100,000 reads/s can reach replicas sized for 8,000 reads/s."
       },
       {
         "text": "The databases would see about 10,000 reads/s, a modest overload",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Work out the database load in each state:\n\n```formula\nR_db = R × (1 − h)\nh = 0.95: R_db = 5,000 /s\nh = 0: R_db = 100,000 /s\nk = R / C = 100,000 / 8,000 = 12.5\nwhere\nR_db: reads per second reaching the databases (the cache misses)\nR: all reads per second at peak, 100,000 /s\nh: the cache hit rate, the fraction of reads the cache answers: 0.95 normally, 0 when the cache has failed\nC: the read capacity of the replicas, 8,000 reads per second\nk: the overload factor, how many times the replicas' capacity the cacheless load is\ns: second\nIn words: the database sees only the misses; with no cache every read is a miss, which is 12.5 times what the replicas can handle.\n```\n\nOptions include a cache cluster spread over many nodes and zones (so one failure loses a slice, not all of it), request coalescing, load shedding or rate limiting, and warming a replacement cache before sending it traffic. The point of the deep dive is to *find* this cliff before production does.",
+    "workedExample": "Compare request paths. A cache hit ends without a database read; a miss reaches a replica. Removing the cache turns every request into a miss, so ordinary miss-traffic headroom is irrelevant. Treat the cache as critical infrastructure if the database cannot survive its loss. Spread cache failures, coalesce repeated misses, bound retries and shed excess work before it overloads the replicas.",
     "link": {
       "title": "Caching best practices (AWS)",
       "url": "https://aws.amazon.com/caching/best-practices/"
@@ -120,7 +120,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Compare demand with the bottleneck:\n\n```formula\nD / C = 10,000 / 2,000 = 5\nD − C = 8,000 /s\nwhere\nD: demand during the spike, 10,000 checkout attempts per second\nC: the inventory store's capacity, 2,000 atomic reserve operations per second\ns: second\nIn words: the spike asks for five times what the inventory store can do, leaving 8,000 attempts every second with nowhere to go.\n```\n\nNo amount of app-tier scaling changes the 2,000/s limit, and a cache must not be the sole authority for confirming a sale; cached availability displays can still be useful. The remaining lever is **admission**: hold the excess in a waiting room and release users at, say, 1,500/s for headroom. This is why the lesson's worked example jumps straight to a queue in front of checkout.",
+    "workedExample": "The inventory store is the measured bottleneck: the incoming spike exceeds its sustainable atomic reservation rate. More app servers cannot increase that rate, and a stale cache cannot authorise a sale safely. A waiting room admits work below the store's limit while keeping the atomic reserve-if-free decision authoritative. Bound the queue and retries, and tell users honestly when demand cannot be served.",
     "link": {
       "title": "Waiting Room (Cloudflare docs)",
       "url": "https://developers.cloudflare.com/waiting-room/"

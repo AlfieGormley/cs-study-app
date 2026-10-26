@@ -6,10 +6,16 @@ You are an independent technical reviewer. Another author wrote this module and 
 is to find anything inaccurate, invented or misleading, and fix it. The module teaches someone who will build real
 hardware, so mistakes have real consequences.
 
-Do the work yourself, without starting sub-agents. Read `/Users/alfiegormley/Github/cs-study-app/CONTENT_SPEC.md`
-first so your fixes keep to the format.
+Do the work yourself, without starting sub-agents. Read `CLAUDE.md`, `CONTENT_SPEC.md` and
+`docs/CONTENT_PROCESS.md` in the selected checkout given in your task so your fixes keep to its rules.
 
 For every lesson `.md` and `.questions.json` in your module:
+
+Apply the concept-first rule in CONTENT_SPEC.md even when an older brief requests more maths.
+Challenge each retained equation: essential (`formula essential`), useful reference (`formula reference`), or
+redundant (remove). The main lesson and every question must make sense with optional maths closed.
+Prefer conceptual prediction, diagnosis and decisions to formula recall and routine arithmetic.
+Do not require calculations in a workedExample when a reasoning walkthrough is sufficient.
 
 1. **Check every factual claim**: numbers, formulas, units, voltages, MIDI byte values, protocol details,
    component behaviour, product capabilities, historical statements and attributions. Check each against a

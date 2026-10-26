@@ -2,33 +2,36 @@
 id: dp-downsampling
 title: Reduce sample rate without folding signals
 level: intermediate
-minutes: 5
+minutes: 4
 summary: Set a new Nyquist limit, low-pass first and understand why keeping every second sample is insufficient.
 ---
 
-Keeping every second or third sample is simple. Keeping the meaning of those samples takes more care. **Decimation** combines low-pass filtering with retaining samples at a lower rate. Frequencies that were safe at the original rate can exceed the new Nyquist limit and alias into the wanted band.
+Keeping every second or third sample lowers the sample rate. It also lowers the range of frequencies that can be represented without ambiguity. A tone that was safe at the original rate can exceed the new Nyquist limit and appear as a different, lower-frequency tone.
 
-## Design for the new rate first
+**Decimation** combines low-pass filtering with retaining samples at a lower rate. The order matters: suppress the unwanted high frequencies before discarding samples.
 
-For an integer reduction factor, both the output sample rate and its Nyquist limit decrease.
+## Design for the output rate
 
-```formula
+Reducing a 1200-sample-per-second signal by a factor of three gives 400 samples per second. Its new Nyquist boundary is 200 Hz, even though the original boundary was 600 Hz. Design the prefilter for the reduced rate.
+
+```formula reference
 F_o = F_i / D
 f_N = F_o / 2
-F_o = 1200 Hz / 3 = 400 Hz
-f_N = 400 Hz / 2 = 200 Hz
 where
-F_o: output sample rate, in hertz (Hz)
-F_i: input sample rate, here 1200 Hz
-D: positive integer decimation factor, here 3
-f_N: output Nyquist frequency, in Hz
-Hz: hertz, cycles per second
-In words: keeping every third sample reduces a 1200-sample-per-second record to 400 samples per second, so the new Nyquist boundary is 200 hertz.
+F_o: output sample rate, in samples per second, expressed in hertz
+F_i: input sample rate, in samples per second, expressed in hertz
+D: positive integer reduction factor
+f_N: output Nyquist boundary, in hertz
+In words: divide the input sample rate by the reduction factor, then halve the output rate to find its Nyquist boundary.
 ```
 
-Wanted baseband content must lie strictly below the new Nyquist frequency. A practical low-pass filter also needs a transition band: do not place the wanted passband edge exactly at Nyquist and expect an instantaneous cut-off. Choose stopband attenuation from how much aliased interference the application can tolerate.
+Wanted baseband content must lie strictly below that boundary. A practical low-pass also needs a transition band in which its response falls from passing wanted content to rejecting unwanted content. Do not put the wanted passband edge exactly at Nyquist and expect an instantaneous cut-off. Choose enough stopband attenuation for the alias level the application can tolerate.
 
-Filtering after retaining samples cannot generally undo aliasing. Different original frequencies have already become indistinguishable. This digital prefilter protects a later digital rate reduction; it cannot repair aliasing that already happened at the original analogue-to-digital conversion.
+## Why filtering afterwards is too late
+
+A 350 Hz cosine is below the original Nyquist boundary in this example. Keep every third sample without filtering, and it appears as a 50 Hz cosine at the output. Discarding samples has folded the unwanted tone into the useful band; it has not erased it.
+
+Now an actual 50 Hz input and the aliased 350 Hz input can be indistinguishable from the output samples alone. A later low-pass cannot selectively remove the alias while preserving every genuine 50 Hz component. Filter before the ambiguity occurs.
 
 > [!analogy] Real-world analogy: checking before a narrow doorway
 > Remove oversized items before sending a mixed delivery through a narrow doorway. Sorting afterwards cannot recover information lost when items were forced together.
@@ -37,34 +40,19 @@ Filtering after retaining samples cannot generally undo aliasing. Different orig
 >
 > **Where it stops:** Aliasing is an exact ambiguity between sampled oscillations, not physical damage or a queue. A real filter only attenuates unwanted components by a finite amount.
 
-## Complete Python example
+## Specify the whole rate-change operation
 
-A 350 Hz cosine sampled at 1200 Hz is initially below Nyquist. Retaining every third sample without filtering gives a 50 Hz alias at the 400 Hz output rate. `resample_poly(x, 1, 3)` instead applies a low-pass FIR filter before reduction. Its documented zero-phase alignment is an offline boundary-handling choice; it is not the delayed output of a causal streaming filter.
+SciPy's `decimate` filters before reducing. `resample_poly` also combines FIR filtering and rate conversion efficiently. An API is useful, but its default filter is not evidence that your required passband and stopband specification has been met. Test across the unwanted band and inspect finite-record edges.
 
-```python
-import numpy as np
-from scipy.signal import resample_poly
+Record the timing convention too. A causal streaming filter has delay and startup behaviour; an offline centred or zero-phase operation has different alignment and boundary assumptions. Neither should silently substitute for the other when event times matter.
 
-fs = 1200
-n = np.arange(1200)
-x = np.cos(2 * np.pi * 350 * n / fs)
-bad = x[::3]
-good = resample_poly(x, 1, 3)
-f = np.fft.rfftfreq(len(bad), 1 / 400)
-print(f[np.argmax(abs(np.fft.rfft(bad)))])
-# Exclude edges of the finite FIR result.
-print(round(np.sqrt(np.mean(bad**2)), 3))
-print(np.sqrt(np.mean(good[40:-40]**2))
-      < 0.002)
-```
-
-The outputs are `50.0`, `0.707` and `True`. The final check is specific to this synthetic signal, filter and interior segment. It is not a guaranteed stopband specification for every rate or input. Production work needs a filter specification, transient policy and tests across the unwanted band.
+This digital prefilter protects a later digital rate reduction. It cannot repair aliasing that already happened at the original analogue-to-digital conversion, which needs its own anti-alias protection.
 
 ## Key takeaways
 
-- Work out the output rate and Nyquist boundary before discarding samples.
-- Low-pass before decimation, leaving room for a real filter's transition band.
-- Record causal delay or offline alignment and boundary assumptions explicitly.
+- The output rate sets the relevant Nyquist boundary.
+- Filter before reducing, leaving a transition band and enough unwanted-band rejection.
+- Record timing and edge assumptions, and keep original ADC aliasing separate from later decimation.
 
 ## Further reading
 

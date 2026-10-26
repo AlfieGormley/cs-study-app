@@ -27,6 +27,18 @@ const TOKEN = new RegExp(String.raw`(?:[Ͱ-Ͽµ]|[A-Za-z][A-Za-z0-9]*)['′]*` +
 export const CONNECTIVES = new Set(('for all some each every any as so when whenever if iff then else otherwise means gives ' +
   'and or not is are be such that where with to of at in on by until since let per').split(' '));
 
+// Classify reviewed maths explicitly; unmarked legacy formulas retain their visible presentation.
+export function formulaFence(language) {
+  const [name, ...flags] = String(language).trim().toLowerCase().split(/\s+/);
+  return {
+    isFormula: name === 'formula',
+    essential: flags.length === 1 && flags[0] === 'essential',
+    reference: flags.length === 1 && flags[0] === 'reference',
+    problems: name === 'formula' && flags.length && (flags.length !== 1 || !['essential', 'reference'].includes(flags[0]))
+      ? ['formula fence only supports an "essential" or "reference" marker'] : [],
+  };
+}
+
 export function parseFormula(source) {
   const lines = String(source).replace(/\r\n?/g, '\n').split('\n');
   const split = lines.findIndex((l) => /^\s*where:?\s*$/i.test(l));
@@ -207,7 +219,7 @@ function mathHtml(text, context, compact = true, scopes = [false]) {
   return tokens.map((token) => token.html).join('');
 }
 
-export function renderFormula(source, inline) {
+export function renderFormula(source, inline, { collapsed = false, interactive = true, detailInline = inline } = {}) {
   const { eq, defs, words } = parseFormula(source);
   const defined = new Set(defs.flatMap((d) => symbols(d.key)));
   // Units, sets, vectors and matrices need their explicit product notation.
@@ -218,10 +230,14 @@ export function renderFormula(source, inline) {
   const context = { defined, explicit, named: [...defined].filter((s) => /^[A-Za-z]{2,}$/.test(s)),
     keepProducts: !!nonScalar.length || /\b(?:Cartesian|cross|dot|inner|outer|scalar|Kronecker|tensor|Hadamard) product\b/i.test(words + ' ' + defs.map((d) => d.text).join(' ')) };
   const scopes = [false];
-  return `<figure class="formula"><figcaption>Formula</figcaption>` +
-    `<div class="formula-eq" tabindex="0" role="region" aria-label="Equation">${eq.map((l) => `<div>${mathHtml(l.trim(), context, true, scopes)}</div>`).join('')}</div>` +
+  // Render the visible explanation first so optional definitions do not consume its glossary links.
+  const renderExplanation = () => words ? `<p class="formula-words"><b>In words</b> ${inline(words)}</p>` : '';
+  const explanation = collapsed && interactive ? renderExplanation() : '';
+  const maths = `<div class="formula-eq"${interactive ? ' tabindex="0" role="region" aria-label="Equation"' : ''}>${eq.map((l) => `<div>${mathHtml(l.trim(), context, true, scopes)}</div>`).join('')}</div>` +
     (defs.length ? `<div class="formula-where-label">where</div><dl class="formula-where">${defs.map((d) =>
-      `<div><dt>${mathHtml(d.key, context, false)}</dt><dd>${inline(d.text)}</dd></div>`).join('')}</dl>` : '') +
-    (words ? `<p class="formula-words"><b>In words</b> ${inline(words)}</p>` : '') +
-    `</figure>`;
+      `<div><dt>${mathHtml(d.key, context, false)}</dt><dd>${detailInline(d.text)}</dd></div>`).join('')}</dl>` : '');
+  return `<figure class="formula"><figcaption>${collapsed && interactive ? 'The idea' : 'Formula'}</figcaption>` +
+    (collapsed && interactive
+      ? explanation + `<details class="formula-details"><summary>Show the maths</summary>${maths}</details>`
+      : maths + renderExplanation()) + '</figure>';
 }

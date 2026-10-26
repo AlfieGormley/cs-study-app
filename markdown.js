@@ -1,6 +1,6 @@
 import { linkTerms } from './glossary.js';
 import { findDiagram, renderDiagram } from './diagrams.js';
-import { renderFormula } from './formula.js';
+import { renderFormula, formulaFence } from './formula.js';
 // Small Markdown renderer for the subset described in CONTENT_SPEC.md.
 // Content is authored by us, but we still escape everything and only emit known tags.
 
@@ -94,8 +94,14 @@ export function render(md, options = {}) {
       // Text written on the closing fence line ("``` Then…") is a new paragraph, not something to drop.
       const after = i < lines.length ? lines[i].replace(/^\s*```/, '').trim() : '';
       if (after) lines[i] = after; else i++;
-      out += language === 'formula'
-        ? renderFormula(body.join('\n'), (t) => inline(t, options))
+      const formula = formulaFence(language);
+      const detailOptions = { ...options, seen: new Set() };
+      out += formula.isFormula
+        ? renderFormula(body.join('\n'), (t) => inline(t, options), {
+          collapsed: options.collapseFormulas === true && formula.reference,
+          interactive: options.interactive !== false,
+          detailInline: (t) => inline(t, options.collapseFormulas && formula.reference ? detailOptions : options),
+        })
         : renderExample(body.join('\n'), language, options);
       continue;
     }

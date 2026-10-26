@@ -3,7 +3,7 @@ id: fund-latency-percentiles
 title: Measure percentiles without hiding slow requests
 level: basic
 minutes: 4
-summary: Calculate mean and percentile latency, then aggregate and collect measurements correctly across a service.
+summary: Interpret typical and tail latency, then aggregate and collect measurements correctly across a service.
 sourceLesson: fund-latency-throughput
 ---
 
@@ -11,30 +11,9 @@ A single average can hide the slow experience that matters to users. Percentiles
 
 ## Why averages lie: percentiles
 
-Suppose 100 requests take these times: 98 of them take 10 ms, and 2 take 2,000 ms. The mean (the ordinary average) adds up every time and divides by the count:
+Suppose 100 requests take these times: 98 take 10 ms, and 2 take 2,000 ms. The mean adds all durations and divides by the request count. It is 49.8 ms, which describes neither group's experience well.
 
-```formula
-t_mean = (98 × 10 + 2 × 2,000) ms / 100
-t_mean = 4,980 ms / 100 = 49.8 ms
-where
-t_mean: the mean (average) latency, in milliseconds (ms)
-ms: millisecond, one thousandth of a second
-In words: total time spent by all requests divided by the number of requests.
-```
-
-A **percentile** instead sorts the requests from fastest to slowest and reads off one position. One common convention (the nearest-rank method) is:
-
-```formula
-r = ⌈ (p / 100) × n ⌉
-p = 50: r = ⌈ 0.5 × 100 ⌉ = 50
-p = 99: r = ⌈ 0.99 × 100 ⌉ = 99
-where
-r: the rank, the position in the sorted list (1 = fastest) whose value is the percentile
-p: the percentile wanted, greater than 0 and at most 100; p50 is the median, p99 the 99th percentile
-n: the number of measurements; here 100
-⌈ ⌉: ceiling: round up to the next whole number (2.1 becomes 3; a whole number stays as it is)
-In words: to find the p-th percentile, sort the values and take the one p% of the way along the list.
-```
+A **percentile** instead identifies a position after sorting requests from fastest to slowest. Under the nearest-rank convention, p50 picks the 50th request out of these 100 and p99 picks the 99th. Other percentile conventions can interpolate, so state the method when small samples matter.
 
 Applied to our 100 requests:
 

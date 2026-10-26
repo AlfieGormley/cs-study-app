@@ -3,71 +3,51 @@ id: nf-flight-window
 sourceLesson: nf-performance
 title: Data in flight and window limits
 level: basic
-minutes: 4
-summary: Calculate bandwidth-delay product and understand a receive-window throughput bound.
+minutes: 3
+summary: Explain why long, high-capacity paths need more data in flight and can be window-limited.
 ---
 
-## The bandwidth-delay product
+A sender learns that data arrived only when an acknowledgement (**ACK**) returns. A high-capacity path with a long round trip can therefore hold a lot of sent-but-unacknowledged data.
 
-For a steady window-limited flow, how much unacknowledged data corresponds to a target payload rate? A sender learns that data arrived only when an acknowledgement (ACK) comes back, one round trip after sending it. To keep sending throughout that round trip, it needs a full round trip's worth of data in flight. Multiply the rate by the acknowledgement round-trip time, using consistent units:
+## Keeping enough data in flight
 
-```formula
+To sustain a target payload rate, a steady sender needs permission to keep roughly a round trip's worth of payload in flight. This is the **bandwidth-delay product**. A higher target rate or longer acknowledgement round-trip time increases the required flight allowance.
+
+```formula reference
 BDP = R RTT
 where
-BDP: the bandwidth-delay product, in bits: the amount of data sent but not yet acknowledged when the path is kept full
-R: the target payload rate, in bits per second
-RTT: the round-trip time: from sending data until its acknowledgement arrives, in seconds
-In words: a fast or long path holds a lot of data "in the pipe" at once; double either the rate or the RTT and the data in flight doubles.
+BDP: bandwidth-delay product, the target amount of unacknowledged payload in bits
+R: target payload rate in bits per second
+RTT: acknowledgement round-trip time in seconds, from sending data until its acknowledgement returns
+In words: sustaining a higher payload rate or waiting longer for feedback requires more data in flight; doubling either doubles the steady flight-size target.
 ```
 
-For a hypothetical payload rate of 1 Gbit/s and a 70 ms RTT:
+At a hypothetical 1 Gbit/s payload rate and 70 ms acknowledgement RTT, about 8.75 MB would be unacknowledged. This is a payload target, not a universal socket-memory setting: actual operating-system buffer accounting differs.
 
-```formula
-BDP = 10⁹ bit/s × 0.070 s
-BDP = 7 × 10⁷ bit = 70 Mbit
-BDP = 70 Mbit / 8 = 8.75 MB
-where
-BDP: the bandwidth-delay product
-bit: one binary digit; bit/s is bits per second
-s: seconds; 70 ms is 0.070 s
-Mbit: megabits; 1 Mbit is 1,000,000 bits
-MB: megabytes; 1 MB is 1,000,000 bytes, and there are 8 bits in a byte
-In words: to keep a 1 Gbit/s, 70 ms path full, about 8.75 MB must be sent and still awaiting acknowledgement at any moment.
-```
+## A window can be the bottleneck
 
-That is how much a sender must have sent but not yet had acknowledged to keep the pipe full. If the sender's **TCP send window** (the amount it may have unacknowledged) is smaller than the BDP, it sits idle waiting for acknowledgements. It can send at most one window per round trip, so throughput is capped at:
+The **TCP send window** limits how much data may remain unacknowledged. If it is too small for the target rate and RTT, the sender must wait even when the path has spare capacity.
 
-```formula
+ACKs can advance a sliding window continuously; the sender need not stop after each batch. Nevertheless, in a steady window-limited model, its delivered rate is bounded by about one window's worth per round trip.
+
+```formula reference
 X ≤ W / RTT
 where
-X: the throughput, in bits per second
-W: the window: the most data the sender may have sent but not yet had acknowledged, in bits
-RTT: the round-trip time, in seconds
-≤: less than or equal to (this is an upper limit, not a prediction)
-In words: one window per round trip is the most a window-limited sender can manage, however fast the link is.
+X: steady payload throughput in bits per second
+W: the active allowance for unacknowledged payload in bits
+RTT: acknowledgement round-trip time in seconds
+≤: less than or equal to; this is an upper bound rather than a throughput prediction
+In words: a fixed flight allowance supports less throughput when acknowledgements take longer to return, even if link capacity is plentiful.
 ```
 
-> [!example] The original TCP window limit
-> Without negotiated window scaling, TCP’s 16-bit advertised receive window cannot represent more than 65,535 bytes. This bounds steady new-data throughput when that window is the active constraint. Over a 70 ms RTT the calculation below caps throughput at about **7.5 Mbit/s**, no matter how fast the link is. The TCP **window scale** option (RFC 7323) allows larger receive windows when both endpoints negotiate it; support and configuration must be checked.
+Without negotiated **window scaling**, TCP's 16-bit receive-window field represents at most 65,535 bytes. If this is the active limit over a 70 ms RTT, it caps steady payload throughput near 7.5 Mbit/s. Window scaling allows larger advertised receive windows when negotiated; sender congestion limits, receiver space and other constraints still apply.
 
-```formula
-X ≤ (65,535 B × 8 bit/B) / 0.070 s
-X ≤ 524,280 bit / 0.070 s
-X ≤ 7.5 × 10⁶ bit/s = 7.5 Mbit/s
-where
-X: the throughput limit
-B: bytes; one byte is 8 bits, so bit/B is bits per byte
-bit: one binary digit
-s: seconds; 70 ms is 0.070 s
-Mbit/s: megabits per second (millions of bits per second)
-In words: a 65,535-byte window delivered once every 70 ms is about 7.5 Mbit/s, under 1% of a gigabit link.
-```
-
-Paths with a large BDP are called **long fat networks**. They need large windows, large socket buffers and loss recovery that copes with many packets in flight. The error-control units and the TCP module build on this.
+Paths with large bandwidth-delay products are called **long fat networks**. They need adequate flight allowances, appropriate buffering and recovery that handles many packets in flight. Simply increasing a physical link's rate may leave the limiting window unchanged.
 
 ## Key takeaways
-- The target payload rate times acknowledgement RTT gives a steady flight-size target.
-- An active window limit can constrain throughput even on a high-capacity path.
+- Higher target rates and longer feedback delays need more payload in flight.
+- A small active window can limit throughput despite spare link capacity.
+- Window scaling increases representable receive windows; it does not remove all throughput limits.
 
 ## Further reading
 - [Primer on Latency and Bandwidth — High Performance Browser Networking](https://hpbn.co/primer-on-latency-and-bandwidth/)

@@ -4,32 +4,19 @@ sourceLesson: nf-error-control
 title: Compute a CRC by XOR division
 level: advanced
 minutes: 3
-summary: Work through the polynomial model and execute a bitwise remainder calculation.
+summary: Explain XOR division, execute a small CRC and distinguish no detected error from proof of correctness.
 ---
 
 ## Cyclic redundancy checks
 
 A **CRC** treats the bits as the coefficients of a polynomial over GF(2), arithmetic where addition and subtraction are both XOR (exclusive or: 1 when exactly one input is 1) and there are no carries. Each bit is a coefficient of a power of a formal polynomial variable. For example, `1001` has a cubic term and a constant term. Sender and receiver agree on a **generator polynomial**. Its degree (highest power) determines the check-bit count. The CRC is a remainder after division:
 
-```formula
-R = (D x^r) mod G
-T = D x^r + R
-T mod G = 0
-where
-R: the CRC: the r-bit remainder the sender appends
-D: the data bits, read as a polynomial
-x: a placeholder: each power of x marks one bit position, and its coefficient (0 or 1) is that bit; multiplying by x^r shifts the bits r places left (appends r zeros)
-r: the degree of the generator, which is also the number of CRC bits; 3 for 1001, 32 for CRC-32
-G: the generator polynomial both ends agree on
-mod: the remainder after division, done with XOR in place of subtraction
-T: the transmitted bits: the data followed by the CRC
-In words: append r zeros to the data, divide by the generator, and send the data with the remainder in place of the zeros. The result divides exactly by the generator, so any change that leaves a non-zero remainder is detected.
-```
 
-1. Append *r* zeros to the data *D*.
-2. Divide by *G* using XOR long division.
-3. The *r*-bit remainder *R* is the CRC. Send *D* followed by *R*.
-4. The receiver divides everything it got by *G*. A remainder of zero means "no detected error" in this unreflected, zero-initialised model. Real protocols can use other initialisation and final-XOR conventions.
+
+1. Append as many zero bits as the generator's degree.
+2. Divide by the generator using XOR long division.
+3. Replace those zero positions with the remainder to form data followed by check bits.
+4. The receiver divides the complete received bit pattern by the generator. A remainder of zero means "no detected error" in this unreflected, zero-initialised model. Real protocols can use other initialisation and final-XOR conventions.
 
 ### A worked division
 
@@ -75,6 +62,8 @@ def crc_remainder(data, gen):
 print(crc_remainder("101110", "1001"))
 # 011
 ```
+
+A check can pass even when data changed: some errors turn one valid codeword into another. A zero remainder means only that this particular check detected no error.
 
 ## Key takeaways
 - GF(2) division uses XOR without carries.

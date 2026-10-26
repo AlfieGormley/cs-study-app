@@ -13,32 +13,13 @@ When a signal exceeds what a stage can represent, it **clips**.
 
 **Hard clipping** flattens anything beyond the limit:
 
-```formula
-y = min(max(x, −1), 1)
-y = min(max(1.7, −1), 1) = 1
-where
-y: the output sample
-x: the input sample; here 1.7
-max: the larger of the two values (this stops x going below −1)
-min: the smaller of the two values (this stops it going above +1)
-In words: values between −1 and +1 pass unchanged; anything beyond is flattened to the limit. NumPy writes this as np.clip(x, −1, 1).
-```
+Values within minus one to plus one pass unchanged; values beyond either endpoint are held at that limit. For example, an input of 1.7 becomes 1.0.
 
 Explicit saturating conversion does this. A raw integer cast is not a clipper: out-of-range conversion can wrap or be undefined, so clamp before converting to the DAC format. It creates a sharp corner where the wave meets the ceiling, and sharp corners mean strong high harmonics. A symmetric clip of a sine, or another input with half-wave symmetry, creates only odd harmonics before sampling. Symmetry of the clipper alone does not remove even harmonics already in an arbitrary input.
 
 **Soft clipping** bends the wave gradually towards the limit. A common choice is the hyperbolic tangent:
 
-```formula
-y = tanh(x)
-tanh(0.1) ≈ 0.0997
-tanh(2.0) ≈ 0.964
-where
-y: the output sample, always between −1 and +1
-x: the input sample, any size
-tanh: the hyperbolic tangent function: an S-shaped curve that is almost a straight line near 0 and flattens out towards ±1 for large inputs
-≈: approximately equal to (rounded)
-In words: small values pass almost unchanged (0.1 becomes 0.0997), while large ones are squashed smoothly towards the limit (2.0 becomes 0.964).
-```
+The `tanh` function is almost straight near zero and flattens towards minus one and plus one. It changes 0.1 only slightly, to about 0.0997, but compresses 2.0 to about 0.964.
 
 Small signals pass almost unchanged; big ones are squashed smoothly. It still distorts, but its high harmonics fall away much faster.
 

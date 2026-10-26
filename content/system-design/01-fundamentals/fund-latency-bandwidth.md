@@ -2,7 +2,7 @@
 id: fund-latency-bandwidth
 title: Separate latency from bandwidth and capacity
 level: basic
-minutes: 5
+minutes: 4
 summary: Identify whether parallel capacity, fewer round trips or a faster link addresses the actual performance limit.
 sourceLesson: fund-latency-throughput
 ---
@@ -16,7 +16,12 @@ They are related but not the same thing, and confusing them leads to bad designs
 
 ## The pipe analogy
 
-Think of a water pipe. Latency is how long a drop takes to travel from one end to the other. Throughput is how much water comes out per second.
+> [!analogy] Real-world analogy: parallel water pipes
+> A longer pipe delays the first arriving drop. More pipes can carry more water at once.
+>
+> **How it maps:** Latency is the travel time; throughput is the amount delivered each second. Parallel servers can add capacity without shortening one request's journey.
+>
+> **Where it stops:** Networks carry packets and servers queue work; their delays depend on contention and processing as well as distance.
 
 ```
  latency: travel time along the pipe
@@ -27,30 +32,13 @@ Think of a water pipe. Latency is how long a drop takes to travel from one end t
          carries 1,000 req/s
 ```
 
-You can increase throughput by adding more pipes in parallel (more servers) without changing latency at all. For an illustrative London–New York link, assume a 70 ms round trip. Adding servers cannot remove its propagation delay, because distance sets a floor on latency. The time a signal needs just to travel a distance is:
-
-```formula
-t = d / v
-t = 5,570 km / 200,000 km/s
-t ≈ 0.028 s = 28 ms
-where
-t: the one-way propagation delay, the time the signal spends travelling, in seconds (s) or milliseconds (ms)
-d: the distance travelled, in kilometres (km); here 5,570 km, the great-circle (shortest over the globe) distance from London to New York
-v: the speed of light in optical fibre, about 200,000 km/s, roughly two-thirds of its 300,000 km/s speed in a vacuum
-km: kilometre, 1,000 metres
-s: second
-ms: millisecond, one thousandth of a second
-≈: approximately equal to (the result is rounded)
-In words: the further the signal travels, the longer it takes, and nothing but a shorter path or faster medium can change that. London to New York costs at least 28 ms each way.
-```
-
-So a round trip (there and back) costs at least 2 × 28 = 56 ms before any processing. Real cable routes are longer than the great circle and pass through routers; the assumed 70 ms includes some of those additional costs. Adding servers changes none of this.
+You can increase throughput by adding servers without shortening a lightly loaded request. For an illustrative London–New York link, assume a 70 ms round trip. A signal still has to travel there and back; adding servers cannot remove that propagation delay. Moving work closer or avoiding an exchange can help.
 
 ## Bandwidth-bound or latency-bound?
 
 The pipe analogy gives a simple model for how long one transfer takes: a fixed cost for each round trip, plus the time to push the bytes through the pipe.
 
-```formula
+```formula reference
 T ≈ k × RTT + D / B
 where
 T: the total time for the transfer or exchange, in seconds (s)
@@ -59,10 +47,10 @@ RTT: round-trip time, the time for a message to go to the other end and a reply 
 D: the amount of data to send, in bits (multiply bytes by 8)
 B: the bandwidth of the link, in bits per second (bps)
 ≈: approximately equal to; the model ignores server processing time and protocol overhead
-In words: time is the round trips paid one after another plus the data divided by how fast the pipe carries it.
+In words: transfer time includes the round trips that must finish one after another, plus the time needed to send all the data at the available bandwidth.
 ```
 
-Example: fetching a 1 MB file (8,000,000 bits) in one round trip over a 100 Mbps link with a 70 ms RTT takes about 70 ms + 8,000,000 / 100,000,000 s = 70 ms + 80 ms = 150 ms. Both terms matter here; in the two extreme cases below, one term swamps the other.
+For example, under this simplified model a 1 MB file over a 100 Mbps link with one 70 ms round trip takes about 150 ms. Sending the bytes and waiting for the reply both matter; server processing, protocol overhead and congestion would add more delay.
 
 Big transfers are **bandwidth-bound**: the size term dominates, so a fatter pipe or compression helps. Many small, sequential exchanges are **latency-bound**: the round-trip term dominates, so bandwidth upgrades do nothing and you must cut round trips (batching, parallelism, moving closer).
 

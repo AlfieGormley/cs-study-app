@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Timeline of one commit:\n\n```\non:  write WAL -> fsync -> ack\noff: write WAL -> ack\n     ... fsync later\n```\n\nWith `off`, if the machine crashes between the ack and the background flush, that transaction disappears. The window is bounded:\n\n```formula\nt_loss ≈ 3 × d_w = 3 × 200 ms = 600 ms\nwhere\nt_loss: the longest stretch of acknowledged commits a crash can lose, roughly\nd_w: the `wal_writer_delay` setting, how often the background WAL writer flushes; 200 ms by default\nms: millisecond, one thousandth of a second\n≈: approximately equal to; the Postgres documentation gives three times the delay as the worst case\nIn words: with the default settings, a crash can lose up to about the last 0.6 seconds of commits.\n```\n\nWhen it's acceptable: click logs, metrics, session touches. When it isn't: payments, orders. Postgres lets you set it per transaction, so you can use `off` only where losing a moment's data is tolerable.",
+    "workedExample": "Follow the acknowledgement. With synchronous commit, the normal local durability promise waits for the WAL flush. With asynchronous commit, the client can receive success before that flush. A crash in between may therefore remove recently acknowledged transactions without corrupting the database. PostgreSQL documents an exposure window up to three times wal_writer_delay, around 600 ms with its 200 ms default. Use this only where that loss is acceptable; it can be chosen per transaction.",
     "link": {
       "title": "Asynchronous commit (PostgreSQL docs)",
       "url": "https://www.postgresql.org/docs/current/wal-async-commit.html"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Sequence with `acks=1`:\n\n1. Producer sends event E to the leader (broker 1).\n2. Broker 1 appends E and acks.\n3. Broker 1 crashes before brokers 2 and 3 fetch E.\n4. Broker 2 becomes leader without E. **E is lost**, though the producer believes it succeeded.\n\nWith `acks=all` + `min.insync.replicas=2`:\n\n- The leader acks only after E is on at least 2 in-sync replicas.\n- Losing any one broker still leaves a copy.\n- Cost: extra in-cluster replication round trip (~1–2 ms across zones), and if fewer than 2 replicas are in sync, writes are rejected (choosing consistency over availability).\n\nNote: since Kafka 3.0 the producer defaults to `acks=all`, so `acks=1` here is an explicit choice someone made for speed. `min.insync.replicas` still defaults to 1 and must be raised on the topic.",
+    "workedExample": "Sequence with `acks=1`:\n\n1. Producer sends event E to the leader (broker 1).\n2. Broker 1 appends E and acks.\n3. Broker 1 crashes before brokers 2 and 3 fetch E.\n4. Broker 2 becomes leader without E. **E is lost**, though the producer believes it succeeded.\n\nWith `acks=all` + `min.insync.replicas=2`:\n\n- The leader acks only after E is on at least 2 in-sync replicas.\n- Losing any one broker still leaves a copy.\n- Cost: waiting for replication, with latency determined by placement and load. If fewer than 2 replicas are in sync, writes are rejected. Replicated acknowledgement is not a guarantee that every copy was synchronously flushed to durable media.\n\nNote: since Kafka 3.0 the producer defaults to `acks=all`, so `acks=1` here is an explicit choice someone made for speed. `min.insync.replicas` still defaults to 1 and must be raised on the topic.",
     "link": {
       "title": "Apache Kafka documentation",
       "url": "https://kafka.apache.org/documentation/"
@@ -93,27 +93,27 @@
     "id": "fund-tradeoffs-q10",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A database's log disk takes **2 ms** per fsync. Each commit must be durable before it's acknowledged. Roughly how many commits per second can one log handle **without** group commit, and with batches of 50 commits per fsync?",
+    "prompt": "A database must flush its log before acknowledging commits. How can group commit improve throughput without weakening that requirement?",
     "options": [
       {
-        "text": "500/s without; 25,000/s with",
-        "explanation": "Correct. One fsync per commit: 1 / 0.002 s = 500/s. Fifty commits per fsync: 500 × 50 = 25,000/s, at the cost of each commit waiting for the next batch flush."
+        "text": "Make one flush durable for several commits, acknowledging them only after it completes",
+        "explanation": "Correct. Several commits share the expensive flush while retaining the required acknowledgement order."
       },
       {
-        "text": "2,000/s without; 4,000/s with",
-        "explanation": "Incorrect. 2 ms means 500 fsyncs per second, not 2,000. And batching multiplies by the batch size, not by 2."
+        "text": "Acknowledge every commit before flushing and call it a batch",
+        "explanation": "Incorrect. That changes the durability promise rather than implementing durable group commit."
       },
       {
-        "text": "500/s in both cases, because the disk speed is unchanged",
-        "explanation": "Incorrect. The disk does the same number of fsyncs, but each now makes 50 commits durable at once. That's the whole point of group commit."
+        "text": "Skip all future flushes once the first batch succeeds",
+        "explanation": "Incorrect. Later commits still need their data persisted before acknowledgement."
       },
       {
-        "text": "Unlimited with group commit, because fsync is skipped",
-        "explanation": "Incorrect. Group commit still fsyncs; it just shares each one between many commits. Disabling synchronous commit acknowledges before the required WAL flush; it does not eliminate background flushing."
+        "text": "Guarantee zero waiting regardless of the batch trigger",
+        "explanation": "Incorrect. A commit may wait for batching, queueing and flush completion."
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nX = b / t_f\nb = 1: X = 1 / 0.002 s = 500 /s\nb = 50: X = 50 / 0.002 s = 25,000 /s\nwhere\nX: the maximum commits per second the log can make durable\nb: commits made durable by each fsync (the batch size)\nt_f: the time one fsync takes, 2 ms = 0.002 s\ns: second\nIn words: the log manages 500 fsyncs a second; each one can carry one commit or fifty.\n```\n\nThe extra wait per commit depends on the batch trigger, queueing and flush completion; 2 ms is the assumed fsync duration, not a bound on the batch wait.\n\nThis is the latency-versus-throughput trade-off in miniature, and why durable systems like Kafka and Postgres can still sustain high write rates.",
+    "workedExample": "Compare the work per flush. One-at-a-time commit gives each flush to one transaction; group commit lets one completed flush cover several. Every covered commit still waits for durable completion. The throughput gain depends on enough waiting work and the rest of the system; batching policy may add latency.",
     "link": {
       "title": "WAL configuration (PostgreSQL docs)",
       "url": "https://www.postgresql.org/docs/current/wal-configuration.html"
@@ -138,12 +138,12 @@
         "explanation": "Incorrect. Waiting can improve throughput by filling batches, but the benefit depends on traffic, batch size and the existing bottleneck."
       },
       {
-        "text": "Larger batches mean higher throughput and less overhead, but the batching timer can wait up to 50 ms in total (45 ms more than the old setting), unless the batch fills sooner",
-        "explanation": "Correct. Batching amortises per-request overhead (and compresses better), raising throughput at the cost of per-message latency."
+        "text": "Potentially larger, more efficient batches, at the cost of extra waiting before a batch is sent",
+        "explanation": "Correct. A larger linger setting can amortise request overhead and improve compression. A full batch can send sooner, and backpressure or broker delay can add waiting beyond the linger timer."
       }
     ],
     "answer": 3,
-    "workedExample": "Assume one partition receives 1,000 messages/s, batches never fill before the timer, and no backpressure:\n\n```formula\nn = 1 / t_l\nm = r × t_l\nt_l = 5 ms: n = 200 /s, m = 5\nt_l = 50 ms: n = 20 /s, m = 50\nwhere\nn: batches sent per second, one per linger period\nm: messages in each batch\nr: the message rate, 1,000 messages per second\nt_l: the linger time (linger.ms), how long the producer waits to fill a batch: 5 ms = 0.005 s or 50 ms = 0.05 s\nms: millisecond, one thousandth of a second\ns: second\nIn words: waiting ten times longer sends ten times fewer, ten times bigger batches.\n```\n\nTen times fewer requests, better compression, and up to ~45 ms more latency per message. Good for log shipping; bad for a latency-sensitive request path.",
+    "workedExample": "The timer controls how long the producer may wait to collect more records before sending an incomplete batch. A higher setting gives more opportunity to share overhead, but a latency-sensitive message may wait longer. The batch can send sooner when full, and actual latency also includes queueing, backpressure, transmission and broker processing. Measure whether batching helps the real bottleneck before increasing the setting.",
     "link": {
       "title": "Apache Kafka documentation",
       "url": "https://kafka.apache.org/documentation/"

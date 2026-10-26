@@ -3,102 +3,44 @@ id: nf-complete-hop-delay
 sourceLesson: nf-performance
 title: Combine the four delays
 level: basic
-minutes: 4
-summary: Add processing, queueing, transmission and propagation across store-and-forward hops.
+minutes: 3
+summary: Diagnose four delay components and explain store-and-forward packet pipelining.
 ---
 
-## The four components of delay
+A packet can be delayed before transmission, during transmission, while travelling, and while a device examines it. Separating these costs helps identify which change could improve a slow path.
 
-When a packet crosses one hop (a link plus the device at the far end), its delay has four parts.
+## Four contributions
 
-```
- queue    transmit     propagate
-[ | | ]-> [=====]  ~~~~~~~~~~~~~~> router
- d_queue   d_trans      d_prop      d_proc
-```
+- **Queueing:** waiting behind traffic that shares the output link. An idle link can have no queueing delay; a congested one can add hundreds of milliseconds.
+- **Transmission:** putting every packet bit onto the link. Packet size and link rate determine this.
+- **Propagation:** the signal travelling along the route. Distance and medium determine this.
+- **Processing:** examining headers, checking errors and deciding what to do. Hardware, software, enabled features and load affect the time.
 
-The labels are the four delays explained below: queueing (d_queue), transmission (d_trans), propagation (d_prop) and processing at the far end (d_proc).
+Variation in packet delay is commonly called **jitter**. Queueing contributes to jitter, but is not its only possible source.
 
-### 3. Queueing delay
+To model one hop, add the relevant waiting, transmission, propagation and processing times. For a whole path, account for each link and each device once at the chosen timing boundary.
 
-If packets arrive at a router faster than its output link can send them, they wait in a buffer. Queueing delay can be zero on an idle link and hundreds of milliseconds on a congested one. Variation in packet delay is commonly called **jitter**; queueing is one contributor, not the only possible source.
+## Store-and-forward and pipelining
 
-### 4. Processing delay
+With **store-and-forward**, a device receives the complete packet before sending it onward. One packet crossing two such links therefore pays a transmission delay on each link. **Cut-through** forwarding can overlap reception with onward transmission and needs a different model.
 
-The time for a device to examine the header, look up where to send the packet and check for errors. The value depends on the hardware, software, configured processing and load; no universal per-router timing is established here.
+For a concrete two-link example, assume a 1500-byte packet, two 100 Mbit/s links spanning 200 km and 800 km, one router taking 20 microseconds, no queues and no framing overhead. At the assumed 5 microseconds per kilometre, propagation contributes 5 ms; both transmissions and processing together contribute 0.26 ms. The total is about 5.26 ms. Increasing link rate addresses only part of this example's delay.
 
-### Putting it together
+Splitting a message into packets lets different links work on different packets simultaneously. On equal-rate, initially idle links, later packets can follow the first one at one packet-transmission interval apart. For this illustration, ignore propagation and processing; each row is one packet-transmission interval:
 
-The delay for one hop is the sum of the four parts:
+| Interval | Link 1 | Link 2 | Link 3 |
+|---|---|---|---|
+| First | P1 | — | — |
+| Second | P2 | P1 | — |
+| Third | P3 | P2 | P1 |
+| Fourth | — | P3 | P2 |
+| Fifth | — | — | P3 |
 
-```formula
-d_hop = d_proc + d_queue + d_trans + d_prop
-where
-d_hop: the total delay for one hop (one link plus the device at its far end), in seconds
-d_proc: the processing delay: time to examine the header and decide where the packet goes
-d_queue: the queueing delay: time spent waiting in a buffer behind other packets; zero on an idle link
-d_trans: the transmission delay, packet length divided by link rate
-d_prop: the propagation delay, distance divided by signal speed
-In words: a packet's time across one hop is the time it waits, plus the time to put it on the wire, plus the time to travel, plus the time to be examined. Add the hops together for the whole path.
-```
-
-The calculations below assume **store-and-forward**: a packet must arrive completely before it can be sent on, so the transmission delay is paid again on every link. Cut-through forwarding can overlap reception with onward transmission and needs a different model.
-
-> [!example] Two-hop calculation
-> Ignore framing overhead and assume store-and-forward. Host A sends a 1500-byte packet to host B through one router. Both links run at 100 Mbit/s; they are 200 km and 800 km long. The router takes 20 µs to process the packet and there is no queue.
-
-Store-and-forward means the packet is transmitted twice, once on each link. Propagation covers the 1,000 km of the two links together:
-
-```formula
-d_trans = 12,000 bit / (10⁸ bit/s)
-d_trans = 120 µs
-d_prop = 1,000 km × 5 µs/km = 5,000 µs
-d_total = 2 × d_trans + d_prop + d_proc
-d_total = (240 + 5,000 + 20) µs
-d_total = 5,260 µs ≈ 5.26 ms
-where
-d_trans: the transmission delay on one 100 Mbit/s link for a 1500-byte (12,000-bit) packet
-bit: one binary digit; bit/s is bits per second
-s: seconds
-d_prop: the propagation delay over both links together, at about 5 µs per kilometre
-km: kilometres
-µs: microseconds, millionths of a second
-d_total: the end-to-end delay from A starting to send until B has the whole packet
-d_proc: the router's processing delay, 20 µs
-ms: milliseconds, thousandths of a second
-≈: approximately equal to
-In words: of the 5.26 ms total, 5 ms is the signal travelling 1,000 km; transmission and processing are small by comparison.
-```
-
-When a message is split into several equal-size packets, different links can work on different packets at once. This is packet pipelining: the first packet still pays transmission at every store-and-forward hop, but later packets can follow at one packet time apart on equal-rate, initially idle links. This overlaps work across links without allowing two packets to transmit simultaneously on one link. Extra headers are excluded from this simple comparison.
-
-The same arithmetic in Python:
-
-```python
-def hop_delay(bits, rate, km, proc=0.0,
-              queue=0.0, speed=2e8):
-    if (rate <= 0 or speed <= 0
-            or min(bits, km, proc,
-                   queue) < 0):
-        raise ValueError("invalid delay")
-    # Serialise all bits at the link rate.
-    trans = bits / rate
-    # Convert distance to metres first.
-    prop = km * 1000 / speed
-    return proc + queue + trans + prop
-
-
-# Add two links; processing occurs once.
-bits = 1500 * 8
-total = (hop_delay(bits, 100e6, 200)
-         + hop_delay(bits, 100e6, 800,
-                     proc=20e-6))
-print(f"{total * 1e3:.2f} ms")  # 5.26 ms
-```
+Each router still receives a whole packet before forwarding it; work overlaps across links. Two packets do not transmit simultaneously on the same serial link. Extra per-packet headers are excluded from this illustration: splitting too finely can waste capacity.
 
 ## Key takeaways
-- A store-and-forward device receives a whole packet before sending it onward.
-- Sum each relevant link’s transmission and propagation plus processing and queueing.
+- Different delay components respond to different improvements.
+- Store-and-forward repeats transmission per link; packet pipelining overlaps work across links.
 
 ## Further reading
 - [Primer on Latency and Bandwidth — High Performance Browser Networking](https://hpbn.co/primer-on-latency-and-bandwidth/)

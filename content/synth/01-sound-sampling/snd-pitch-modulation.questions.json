@@ -26,7 +26,7 @@
       0,
       2
     ],
-    "workedExample": "Pitch is heard as ratios, so modulation should be a ratio too.\n\n- Multiplying by 2 to the power (cents/1200) multiplies the frequency by the same ratio on every note. ✓\n- ±5 Hz is a different interval on different notes. ✗ Measure it in cents:\n\n```formula\nc = 1200 × log_2(f_2 / f_1)\nc_110 = 1200 × log_2(115 / 110) ≈ +77\nc_880 = 1200 × log_2(885 / 880) ≈ +9.8\nwhere\nc: the size of a pitch change, in cents\nc_110: the cents swing of +5 Hz on a 110 Hz note\nc_880: the cents swing of +5 Hz on an 880 Hz note\nlog_2: the base-2 logarithm\nf_1: the original frequency, in hertz (Hz)\nf_2: the frequency after adding 5 Hz, in hertz (Hz)\n≈: approximately equal to (rounded)\nIn words: the same 5 Hz is a big wobble on a low note and a barely audible one on a high note.\n```\n\n- Note-space addition is the same multiplication, just written in semitones. ✓\n\n```formula\nf(n + d) = 440 × 2^((n + d − 69) / 12)\nf(n + d) = f(n) × 2^(d / 12)\nwhere\nf(n): the frequency of (possibly fractional) note number n, in hertz (Hz)\nn: the note number being played\nd: the vibrato offset in semitones at this instant (the depth in semitones times the LFO output)\nIn words: adding d semitones to the note number multiplies its frequency by 2 to the power d/12, the same ratio on every note.\n```\n\n- 1 V/oct is an exponential control law in hardware. ✗",
+    "workedExample": "Fixed-cents vibrato applies the same frequency ratio at every note. A fixed hertz offset occupies a much larger fraction of a low note than of a high one. Adding the modulation in semitones before conversion implements the ratio behaviour cleanly. A one-volt-per-octave oscillator follows the same exponential pitch relationship in hardware.",
     "link": {
       "title": "Cent (music) — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cent_(music)"
@@ -36,27 +36,27 @@
     "id": "snd-pitch-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "Your synth receives note 69. The pitch bend range is ±2 semitones and the wheel is at +50% of its upward travel. A per-voice detune adds +15 cents. What frequency should the oscillator produce?",
+    "prompt": "Your synth combines a pitch bend and a cents detune for each voice. Which implementation keeps their musical meaning consistent across notes?",
     "options": [
       {
-        "text": "About 466.2 Hz",
-        "explanation": "This applies the bend (+1 semitone → 466.16 Hz) but forgets the +15 cent detune."
+        "text": "Convert bend to hertz, then add the cents value directly as hertz",
+        "explanation": "This mixes interval units with frequency and gives a register-dependent error."
       },
       {
-        "text": "About 470.2 Hz",
-        "explanation": "Correct. The total offset is +1 semitone (50% of 2) plus 0.15 semitones (15 cents), 1.15 semitones in all, and 440 Hz raised by 1.15 semitones is about 470.2 Hz."
+        "text": "Express both as semitone offsets, add them to the note number, then convert once to hertz",
+        "explanation": "Correct. Pitch offsets add in note space, preserving their ratios across the keyboard."
       },
       {
-        "text": "About 481.2 Hz",
-        "explanation": "This treats +15 cents as +15 Hz added after the bend: 466.2 + 15. Cents are a ratio, not hertz."
+        "text": "Apply only the largest offset",
+        "explanation": "Bend and detune are independent requested changes; discarding one changes the pitch."
       },
       {
-        "text": "About 493.9 Hz",
-        "explanation": "That's +2 semitones, the full bend range. The wheel is only at 50%."
+        "text": "Round the combined note number before conversion",
+        "explanation": "Rounding discards fine bend and detune offsets."
       }
     ],
     "answer": 1,
-    "workedExample": "Sum everything in note space, convert once.\n\n1. Bend: 50% × 2 semitones = +1.00.\n2. Detune: +15 cents = +0.15 semitones.\n3. Total pitch: 69 + 1.15 = 70.15, a fractional note number.\n\n```formula\nf = 440 × 2^((n − 69) / 12)\nf = 440 × 2^((70.15 − 69) / 12)\nf = 440 × 2^0.09583\nf ≈ 440 × 1.0687 ≈ 470.2 Hz\nwhere\nf: the frequency, in hertz (Hz)\nn: the MIDI note number; here 70.15, a fractional note number including bend and detune\n440: the frequency of the reference note A4 (note 69), in hertz\n69: the note number of A4\n12: semitones per octave\nHz: hertz, cycles per second\n≈: approximately equal to (rounded)\nIn words: the bent, detuned note is 1.15 semitones above A4, which multiplies 440 Hz by about 1.0687.\n```\n\nMultiplying ratios gives the same: the bend ratio (one semitone, about 1.0595) times the detune ratio (15 cents, about 1.0087) is about 1.0687. Doing it in note space avoids mistakes such as adding hertz.",
+    "workedExample": "Convert cents to a fractional semitone offset and combine it with bend in the same pitch units. Preserve the fractional note number through conversion. Finally derive the phase increment using the actual sample rate.",
     "link": {
       "title": "MIDI Tuning Standard — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/MIDI_tuning_standard"

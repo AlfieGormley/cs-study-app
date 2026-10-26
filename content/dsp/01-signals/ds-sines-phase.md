@@ -2,7 +2,7 @@
 id: ds-sines-phase
 title: Sines, cycles and phase
 level: basic
-minutes: 5
+minutes: 3
 summary: Describe a sampled sinusoid using amplitude, frequency and phase.
 ---
 
@@ -12,9 +12,15 @@ A **sinusoid** is a smooth repeating wave described by sine or cosine. It is use
 
 ## A wave sampled at regular instants
 
-Use a sine function whose input is an angle in radians. The expression inside sine advances the angle as the index increases.
+Imagine sampling one complete cycle at four equally spaced positions. A unit-amplitude sine starting at zero phase gives approximately `[0, 1, 0, -1]`. The next sample begins the next cycle.
 
-```formula
+Changing amplitude scales the height without changing the repetition rate. Changing frequency changes how far through a cycle each new sample advances. Changing starting phase chooses a different starting point without changing that advance. A quarter-turn starting phase makes this sine start at its positive maximum.
+
+A finite set of samples need not hit the ideal wave’s maximum. Its largest recorded sample can therefore be smaller than the stated amplitude. That alone does not show that the generator used the wrong amplitude.
+
+This reference expression describes the same three controls for a sampled sine:
+
+```formula reference
 x[n] = A sin(2πfn / F_s + φ)
 0 ≤ n ≤ N − 1
 where
@@ -28,10 +34,8 @@ F_s: sample rate, in samples per second
 φ: starting phase, in radians
 N: positive number of samples
 Hz: hertz, one cycle per second
-In words: The sine’s angle advances by a fixed amount each sample, while amplitude scales its height.
+In words: Amplitude controls wave height, frequency controls progress through each cycle, and starting phase chooses the initial position. At a fixed sample rate, increasing frequency advances farther through the cycle between samples.
 ```
-
-A unit-amplitude 1 Hz sine at 4 samples per second, starting at zero phase, gives approximately `[0, 1, 0, -1]` for its first four samples. The next sample would begin the next cycle. Changing amplitude scales these values; changing phase moves the starting point around the cycle. A finite set of samples need not hit the ideal wave’s maximum.
 
 > [!analogy] Real-world analogy: A hand on a clock
 > Picture a hand turning at a steady rate.
@@ -44,40 +48,13 @@ A unit-amplitude 1 Hz sine at 4 samples per second, starting at zero phase, give
 
 **Normalised frequency** must name its convention. Here it means cycles per sample; some other texts instead use radians per sample or a fraction of the Nyquist frequency. Never transfer a bare number between these conventions.
 
-```formula
-ν = f / F_s
-ω = 2πν
-ν = (1 Hz) / (4 / s) = 0.25
-ω = 0.5π
-where
-ν: normalised frequency, in cycles per sample, here 0.25
-f: frequency, in hertz (Hz)
-F_s: sample rate, in samples per second
-ω: angle advance, in radians per sample, here half pi
-π: pi, about 3.14159
-Hz: hertz, one cycle per second
-s: second, the unit of time
-In words: One quarter of a cycle per sample advances the angle by a quarter turn each time.
-```
+One cycle every four sample intervals means one quarter of a cycle per sample. At a fixed frequency in hertz, sampling more often reduces the advance between samples. At a fixed cycles-per-sample frequency, interpreting the same sequence at a higher sample rate makes it repeat faster in physical time.
 
-This complete standard-library example calculates the four samples above. `math.sin` expects radians. `round` makes tiny numerical residues display as zero; floating-point arithmetic does not make every theoretical zero exact.
-
-```python
-import math
-fs, freq, amp = 4.0, 1.0, 1.0
-phase = 0.0
-x = [amp * math.sin(
-    2 * math.pi * freq * n / fs + phase)
-    for n in range(4)]
-print([round(v, 6) for v in x])
-# [0.0, 1.0, 0.0, -1.0]
-```
-
-A waveform’s appearance alone is insufficient: the same sequence played or interpreted at another sample rate has another physical frequency. Sampling also creates ambiguities, explored next.
+Always keep the sample rate with a test signal. A waveform’s appearance alone cannot establish its frequency in hertz, and sampling can make different continuous waves look identical, as the next lesson explains.
 
 ## Key takeaways
 - Amplitude controls height, frequency controls repetition and phase controls the cycle’s starting point.
-- Sine and cosine functions in Python use radians.
+- Recorded samples can miss the ideal wave’s maximum.
 - Always label a normalised-frequency convention.
 
 ## Further reading

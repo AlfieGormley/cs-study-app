@@ -2,23 +2,34 @@
 id: df-convolution
 title: Convolution as overlapping contributions
 level: basic
-minutes: 5
-summary: Compute finite linear convolution, including zero extension and the output tail.
+minutes: 4
+summary: Predict convolution by following overlapping responses, including zero extension and the output tail.
 ---
 
 **Linear convolution** combines an input with an impulse response to predict the output of a zero-state LTI system. Each input sample launches a scaled copy of the response. When copies overlap, add their contributions. Unlike correlation, convolution models a system's response; it is not a template-similarity score.
 
 ## First add the copies
 
-Take input `[2, 1, 3]` and impulse response `[1, 0.5]`, both starting at sample zero. The first input launches `[2, 1]`. The next launches `[1, 0.5]` one sample later. The third launches `[3, 1.5]` two samples later. Adding aligned entries produces `[2, 2, 3.5, 1.5]`.
+Suppose each input reading contributes its full value immediately and half its value one sample later. A single reading of 2 therefore produces 2 now and 1 next time. If another reading arrives before that response ends, the new response overlaps the old one. The output at that moment includes both contributions; the newer reading does not erase the earlier reading's influence.
+
+There are two useful views of the same operation. Follow one input forward to see every output it affects, or stand at one output position and collect the input contributions that reach it. Keeping the timing aligned is what makes these views agree.
 
 The last output remains after the final nonzero input. That **filter tail** is part of full convolution. This is linear convolution with zero extension: values outside either stored sequence are treated as zero. There is no wrapping from one end of an array to the other.
 
-## Then write the weighted sum
+> [!analogy] Real-world analogy: overlapping payment plans
+> Each purchase creates a payment today and a smaller payment next month. Several purchases can contribute to the same month's bill.
+>
+> **How it maps:** A purchase maps to an input sample; its fixed payment pattern maps to the impulse response. Adding the bills due in one month maps to adding overlapping contributions at one output sample.
+>
+> **Where it stops:** Real payment plans can include fees or changing terms. Convolution here assumes the same fixed linear response to every input, and sample values may also be negative.
 
-The capital Greek letter sigma means “add the following terms”. The lower limit starts the counter at zero; the upper limit includes the last coefficient. The counter changes inside the sum while the output index stays fixed.
+## Keep the tail and the timing
 
-```formula
+If an input record contains four readings and each reading launches a three-position response, the last reading still has two positions of influence left after the record ends. Full convolution keeps those positions. Some may happen to contain zero; the full output length describes positions, not a count of nonzero values.
+
+The optional reference below writes the output-side view. It also gives the full array length for two nonempty finite sequences.
+
+```formula reference
 y[n] = Σ_{k=0}^{M−1} h[k]x[n − k]
 L = N + M − 1
 where
@@ -31,25 +42,10 @@ M: the positive integer number of impulse-response coefficients
 N: the positive integer number of input samples
 L: the number of samples in the full output array, including its tail
 Σ_{k=0}^{M−1}: finite summation; evaluate the following product for each integer k from zero through M minus one and add the results
-In words: multiply each response weight by the appropriately delayed input, add the contributions, and keep enough output samples for every overlap.
+In words: each output adds the response weights applied to the input readings that reach that moment; full convolution keeps the tail after the last input.
 ```
 
-Some final output values may happen to be zero; the length formula describes the full array, not the number of nonzero results. For three input samples and two weights it gives four output positions. At output sample two, the present input contributes 3 and the previous input contributes 0.5.
-
-## Implement the input-side view
-
-This complete example starts an all-zero output and adds one shifted response for each input sample. Python `enumerate` supplies each index alongside its value.
-
-```python
-x = [2.0, 1.0, 3.0]
-h = [1.0, 0.5]
-y = [0.0] * (len(x) + len(h) - 1)
-for i, sample in enumerate(x):
-    for k, weight in enumerate(h):
-        y[i + k] += sample * weight
-print(y)
-# [2.0, 2.0, 3.5, 1.5]
-```
+## Choose which outputs to retain
 
 NumPy's `convolve` with `mode="full"` computes this discrete linear convolution for one-dimensional arrays. Other modes select fewer output positions; they do not create a physically different filter. Always choose which part of the full result your application needs. In particular, “same” length is an array-selection policy, not a guarantee of causal alignment.
 

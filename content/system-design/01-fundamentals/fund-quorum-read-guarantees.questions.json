@@ -3,34 +3,34 @@
     "id": "fund-cap-pacelc-q8",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "A Cassandra table has replication factor **3**: every row is stored on 3 replicas. Which (write level, read level) combinations guarantee that a read overlaps with at least one replica holding the latest successful write? Select all that apply.",
+    "prompt": "A Cassandra key has three replicas. Consider a completed write followed by a read over that same fixed replica set, with no concurrent updates. Which combinations force the read replica group to overlap the write acknowledgement group? Select all that apply.",
     "options": [
       {
         "text": "Write `QUORUM`, read `QUORUM`",
-        "explanation": "Correct. 2 replicas written plus 2 replicas read is 4, more than the 3 replicas, so every read set shares at least one replica with every write set."
+        "explanation": "Correct. Any group of two replicas must share at least one member with any other group of two from this same three-replica set."
       },
       {
         "text": "Write `ONE`, read `ONE`",
-        "explanation": "Incorrect. 1 + 1 = 2 ≤ 3. The read can land on a replica the write hasn't reached yet. Fast and highly available (PA/EL), but reads can be stale."
+        "explanation": "Incorrect. The writer can acknowledge on one replica while the reader consults a different one."
       },
       {
         "text": "Write `ALL`, read `ONE`",
-        "explanation": "Correct. 3 + 1 > 3: every replica has the write, so any one replica will do. The cost is availability: a write fails if any single replica is down."
+        "explanation": "Correct. If all three acknowledged the write, a read from any one shares a member with that group. Requiring every replica also makes writes unavailable when one cannot acknowledge."
       },
       {
         "text": "Write `ONE`, read `QUORUM`",
-        "explanation": "Incorrect. 1 + 2 = 3, which is not greater than 3. The write may sit on the one replica the quorum read skips."
+        "explanation": "Incorrect. The write may acknowledge on the one replica that the two-replica read skips."
       },
       {
         "text": "Write `QUORUM`, read `ONE`",
-        "explanation": "Incorrect. 2 + 1 = 3, not greater than 3. The single replica read may be the one that missed the write."
+        "explanation": "Incorrect. A single-replica read can choose the replica absent from the two-replica write acknowledgement group."
       }
     ],
     "answer": [
       0,
       2
     ],
-    "workedExample": "The overlap rule:\n\n```formula\nW + R > N\nwhere\nW: the number of replicas that must acknowledge a write (ONE = 1, QUORUM = 2, ALL = 3 here)\nR: the number of replicas a read consults\nN: the replication factor, the number of replicas holding each row, 3\n>: is greater than\nIn words: if the replicas written plus the replicas read add up to more than the total, the two groups must share at least one replica.\n```\n\n| W | R | W+R | Overlap? |\n|---|---|---|---|\n| 2 | 2 | 4 | Yes |\n| 1 | 1 | 2 | No |\n| 3 | 1 | 4 | Yes |\n| 1 | 2 | 3 | No |\n| 2 | 1 | 3 | No |\n\nOverlap is necessary but not sufficient for linearisability: with last-write-wins timestamps and concurrent writes, Cassandra needs lightweight transactions for that. In PACELC terms, higher W and R move you from EL towards EC, paying latency on every request.",
+    "workedExample": "Label the replicas A, B and C. A write acknowledged by A and B intersects either A/B, A/C or B/C: every two-replica read contains A or B. A single-replica read can choose C and miss that acknowledgement group. This establishes intersection only. Cassandra's timestamp reconciliation, concurrent updates and partially applied writes mean overlap alone does not establish linearisability; lightweight transactions provide additional coordination.",
     "link": {
       "title": "Dynamo-style replication and tunable consistency (Apache Cassandra docs)",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html"

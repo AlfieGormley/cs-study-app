@@ -3,8 +3,8 @@ id: nf-stop-wait-recovery
 sourceLesson: nf-error-control
 title: FEC, ARQ and stop-and-wait
 level: advanced
-minutes: 4
-summary: Compare repair with retransmission and calculate the cost of waiting for each acknowledgement.
+minutes: 3
+summary: Compare repair with retransmission and explain stop-and-wait's idle time on long paths.
 ---
 
 ## Recovering: FEC or ARQ?
@@ -27,7 +27,7 @@ The simplest ARQ: send one frame, wait for its ACK, then send the next. If no AC
 
 Assume ordered channels, detectable corruption, no arbitrarily delayed duplicates surviving sequence-number reuse, and retry behaviour that eventually permits delivery. For the loss-free timing model, ignore ACK transmission, processing, queueing and framing gaps. Each cycle the sender spends one frame time transmitting, then a round trip waiting for the ACK. Its **utilisation** is the fraction of time it is actually sending:
 
-```formula
+```formula reference
 U = (L / R) / (L / R + RTT)
 where
 U: the sender's utilisation: the fraction of time the link is busy sending data, from 0 to 1
@@ -41,26 +41,7 @@ In words: the sender is busy for one frame time out of every frame time plus rou
 > [!example] Stop-and-wait across a country
 > 1 Gbit/s, 30 ms RTT, 1500-byte frames (12,000 bits). The utilisation comes out at about **0.04%**, so throughput is only about **400 kbit/s** on a gigabit link.
 
-```formula
-L / R = 12,000 bit / (10⁹ bit/s) = 12 µs
-U = 0.012 ms / (0.012 ms + 30 ms)
-U = 0.012 / 30.012 ≈ 0.0004 = 0.04%
-X = L / (L / R + RTT)
-X = 12,000 bit / 30.012 ms ≈ 400 kbit/s
-where
-L: the frame size, 12,000 bits
-R: the link rate, 1 Gbit/s = 10⁹ bits per second
-bit: one binary digit; bit/s is bits per second
-s: seconds
-µs: microseconds; 12 µs = 0.012 ms
-ms: milliseconds, thousandths of a second
-U: the utilisation
-RTT: the round-trip propagation delay, 30 ms
-X: the throughput: one frame delivered per cycle
-kbit/s: kilobits per second; 1 kbit is 1,000 bits
-≈: approximately equal to
-In words: the sender transmits for 12 µs and then waits 30 ms, so the gigabit link is busy only 0.04% of the time and carries about 400 kbit/s.
-```
+
 
 ## Key takeaways
 - FEC and ARQ can be combined; ordinary Ethernet MAC handling does not request every damaged frame again.

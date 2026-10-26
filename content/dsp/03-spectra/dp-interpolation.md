@@ -2,51 +2,19 @@
 id: dp-interpolation
 title: Increase sample rate with interpolation
 level: intermediate
-minutes: 5
+minutes: 4
 summary: Follow zero insertion, spectral images and the low-pass gain needed to reconstruct between samples.
 ---
 
-**Interpolation** estimates samples at new time positions from an existing sampled signal. It does not recover frequencies already lost to aliasing. Integer-rate interpolation can be understood as inserting zeros between samples and then applying a reconstruction low-pass filter.
+**Interpolation** estimates samples at new time positions from an existing record. Increasing the output sample rate gives more values to pass to another system, but they are computed estimates, not extra physical measurements. It cannot recover frequency distinctions already lost to aliasing.
 
-The inserted zeros are placeholders, not claims that the physical signal was zero at those instants. Interpreting the longer sequence at the increased rate preserves the original sample times.
+Integer-rate interpolation has two conceptual steps: insert zero placeholders between the original samples, then apply a reconstruction low-pass filter. Efficient implementations can combine these steps without explicitly calculating every zero.
 
-## Insert first, filter second
+## New positions preserve the original times
 
-For a factor of two, the sequence `[1, 1, 1]` becomes `[1, 0, 1, 0, 1, 0]` if we allocate six output positions. An efficient implementation may avoid calculating the explicit zeros, but this model explains the operation.
+To double the rate, put each original sample in every other output position. Interpret the result at twice the original sample rate. Original values then retain their original time positions; the extra positions fall between them.
 
-```formula
-F_o = L F_i
-F_o = 2 × 100 Hz = 200 Hz
-where
-F_o: output sample rate, in hertz (Hz)
-L: positive integer interpolation factor, here 2
-F_i: original sample rate, here 100 Hz
-Hz: hertz, cycles per second
-In words: doubling the number of time positions per original interval doubles the sample rate, while the original values keep their original times.
-```
-
-Zero insertion produces **spectral images**: repeated copies of the original baseband spectrum in the enlarged frequency range. A reconstruction low-pass filter suppresses those images while retaining the wanted band. Unlike decimation aliasing, the separated images can be removed before they are folded onto the baseband.
-
-For a constant input, the zero-inserted sequence's average is reduced by the insertion factor. A unity-gain low-pass would retain that reduced average. The interpolation filter therefore needs DC gain equal to the insertion factor, when the zeros are inserted explicitly without another scale correction. Its passband should have the corresponding gain where faithful reconstruction is required.
-
-## A transparent toy interpolator
-
-The three coefficients below implement linear interpolation for a factor of two. Their sum is two. The causal full convolution includes one high-rate-sample delay and edge transients. It is a teaching example: its frequency response is too gradual for demanding image suppression.
-
-```python
-import numpy as np
-
-x = np.ones(3)
-z = np.zeros(2 * len(x))
-z[::2] = x
-h = np.array([0.5, 1.0, 0.5])
-y = np.convolve(z, h, mode="full")
-print(z.tolist())
-print(y.tolist())
-# The interior returns to the constant 1.
-```
-
-The outputs are `[1.0, 0.0, 1.0, 0.0, 1.0, 0.0]` and `[0.5, 1.0, 1.0, 1.0, 1.0, 1.0, 0.5, 0.0]`. The explicitly allocated zero at the end explains the final zero. Different full-output length policies can omit that unnecessary last position.
+For a constant sequence of ones, the intermediate sequence alternates ones and zeros. Those zeros do not claim the physical signal stopped between observations. They reserve positions for the filtering step.
 
 > [!analogy] Real-world analogy: filling a timetable
 > Put the known appointments into a timetable with twice as many time slots. Empty slots reserve positions; they do not mean the activity stopped.
@@ -55,17 +23,27 @@ The outputs are `[1.0, 0.0, 1.0, 0.0, 1.0, 0.0]` and `[0.5, 1.0, 1.0, 1.0, 1.0, 
 >
 > **Where it stops:** Signal interpolation depends on a bandwidth assumption and a numerical filter, not judgement about appointments. It cannot invent unknown high-frequency information.
 
-## Rational rate conversion
+## Filter images and restore the scale
 
-**Resampling** can increase by one integer factor and decrease by another. SciPy's `resample_poly` combines zero insertion, low-pass FIR filtering and reduction efficiently using **polyphase** computation. It supplies the required internal scaling; do not manually multiply its default output by the insertion factor again.
+Zero insertion produces **spectral images**: copies of the original baseband spectrum within the enlarged frequency range. A reconstruction low-pass retains the wanted band and suppresses those images. They are still separated from the wanted baseband, so filtering can remove them before any later reduction folds them together.
 
-Its default boundaries assume zeros beyond the finite input, and its filter alignment differs from a causal full-convolution stream. Inspect edges and timing before comparing results. A filter for the intermediate increased rate must satisfy both image suppression and the final output's anti-alias requirements.
+The filter must also have appropriate gain. With one zero after every original sample, the constant sequence's average is halved. A unity-DC-gain low-pass would keep that reduced average. If no other scale correction is present, a factor-two interpolator needs a filter with DC gain two. More generally, the required DC gain equals the zero-insertion factor, with corresponding passband gain where faithful reconstruction is wanted.
+
+A three-coefficient filter with weights `[0.5, 1.0, 0.5]` illustrates this for doubling. Their sum is two. It fills the interior constant sequence back to one and provides linear interpolation between successive original values after accounting for delay. Its image suppression is too gradual for demanding applications; it is a useful model rather than a production specification.
+
+## Compare implementations fairly
+
+That toy filter used causally has one high-rate-sample delay and edge transients. An offline centred API can produce different timing and edge values while still performing its documented operation. Match the filter, scaling, output-length and boundary conventions before comparing arrays.
+
+**Resampling** can increase by one integer factor and decrease by another. SciPy's `resample_poly` combines zero insertion, FIR filtering and reduction using **polyphase** computation. It supplies the required internal amplitude scaling, so do not multiply its default output by the insertion factor again.
+
+Its default boundary model assumes zeros beyond the finite input. A filter for the intermediate increased rate must both suppress interpolation images and protect the final reduced rate from aliasing. Inspect timing and boundary behaviour as well as the interior frequency response.
 
 ## Key takeaways
 
-- Zero insertion creates positions and spectral images; low-pass filtering produces the interpolated signal.
-- An explicitly zero-inserted interpolator needs the appropriate gain, not just image rejection.
-- A library's scaling, boundary extension and time alignment are part of its contract.
+- Zero placeholders reserve time positions; low-pass filtering forms the interpolated signal.
+- Reconstruction needs the right gain as well as image suppression.
+- More output values cannot undo original aliasing or replace new measurements.
 
 ## Further reading
 

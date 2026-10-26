@@ -46,24 +46,13 @@ An IIR generally has no exact finite tail length. A finite application chooses a
 
 ## A deadline is not total latency
 
-For a regular incoming stream, one block's sample duration gives a recurring processing interval.
+For a regular incoming stream, one block's sample duration gives a recurring processing interval. At 48000 samples per second, each 64-sample block represents about 1.33 milliseconds of stream time. Larger blocks arrive less often but contain more work; raising the sample rate while keeping the block size fixed makes the interval shorter.
 
-```formula
-T_b = B / F_s
-T_b = 64 / (48000 s^{−1})
-T_b ≈ 0.001333 s
-where
-T_b: the duration represented by one block, in seconds (s)
-B: the number of sample intervals per block, here 64
-F_s: the sample rate, here 48000 sample intervals per second
-s: second, the unit of time; s to the power minus one means per second
-≈: approximately equal to; the result is rounded
-In words: at 48000 samples per second, a new 64-sample block represents about 1.33 milliseconds of stream time.
-```
-
-In a simple single-worker pipeline, sustained processing must keep up with this arrival interval, with margin for other work and scheduling variation. A host timing test cannot guarantee a real device will meet every deadline.
+In a simple single-worker pipeline, sustained processing must keep up with this arrival interval, with margin for other work and scheduling variation. A worker that regularly takes longer accumulates a backlog even if each individual result is numerically correct. A host timing test cannot guarantee a real device will meet every deadline.
 
 End-to-end **latency** also includes collecting samples into buffers, queues, computation, filter delay and output hardware. Smaller blocks reduce some buffering delay but increase call overhead. State continuity establishes numerical correctness; timing measurements and a complete pipeline model address separate requirements.
+
+The Python example allocates lists and prints results to make state passing visible. It is a teaching example, not an audio callback to copy into a live device. Real-time callbacks need bounded work and must avoid operations such as allocation or console output that can take unpredictable time on their platform.
 
 ## Key takeaways
 - Retain state across normal blocks and use explicit startup and tail policies.

@@ -48,7 +48,7 @@ Reading the file back and comparing is the important habit. The sample rate, for
 
 Notes:
 
-- `sf.read` returns float64 in ±1.0 by default. Pass an integer type, as in `sf.read(path, dtype="int16")` (or `"int32"`), to get integers instead. These are scaled to fill the integer type, not the file's raw values: a 16-bit file read as int16 gives its stored samples, but a 24-bit file read as int32 comes back multiplied by 256.
+- `sf.read` returns float64 by default; integer PCM files are scaled around ±1.0. Float-format files can contain values outside that range. Pass an integer type, as in `sf.read(path, dtype="int16")` (or `"int32"`), to get integers instead. These are scaled to fill the integer type, not the file's raw values: a 16-bit file read as int16 gives its stored samples, but a 24-bit file read as int32 comes back multiplied by 256.
 - Use `sf.write(path, x, fs, subtype="FLOAT")` to keep a 32-bit float file with headroom above 1.0 for analysis. Use `PCM_16` or `PCM_24` for files to share or import into a DAW.
 - `soundfile` switches on libsndfile's clipping option whenever it opens a file, so in testing it clipped 1.7 to full scale when writing PCM rather than wrapping it. **Clip explicitly** anyway, so your output never depends on a library setting.
 - The fades matter: a file that starts or ends mid-wave clicks, which is easy to mistake for a synth bug.

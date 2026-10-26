@@ -4,45 +4,40 @@ sourceLesson: nf-physical-layer
 title: The ideal Nyquist limit
 level: basic
 minutes: 3
-summary: Apply the real-baseband zero-intersymbol-interference model and state its assumptions.
+summary: Explain the ideal symbol-rate limit, bandwidth conventions and limits of adding levels.
 ---
 
-## Two hard limits
+A physical channel passes a limited range of frequencies. Here **bandwidth** means that frequency range in hertz, rather than a network's advertised bit rate.
 
-### Nyquist: how fast can you send symbols?
+## Symbols must remain distinguishable
 
-A channel's **bandwidth** in this sense is the width of the frequency range it passes, in hertz. For ideal zero-intersymbol-interference signalling (each symbol's pulse is shaped so it does not smear into its neighbours at the sampling instants) over a real low-pass channel with a specified one-sided bandwidth in hertz, Nyquist gives a maximum real symbol rate of twice that bandwidth. With M levels the corresponding uncoded rate is:
+Pulses can spread into neighbouring symbol intervals, causing **intersymbol interference**. Ideal pulse shaping can arrange for neighbouring pulses to contribute zero at the receiver's sampling instants.
 
-```formula
+For a noiseless real low-pass channel, one-sided bandwidth is measured from zero frequency to the upper limit. The ideal Nyquist zero-intersymbol-interference model supports a maximum real symbol rate of twice that bandwidth. This is a model with particular bandwidth and signalling conventions, not a universal factor to apply to every radio rate.
+
+More distinguishable levels allow more bits in each symbol. Four levels carry two bits per symbol; increasing the number of levels does not increase bits per symbol in direct proportion.
+
+```formula reference
 C = 2B log_2(M)
 where
-C: the maximum bit rate of the noiseless channel, in bits per second (bit/s)
-B: the channel's bandwidth, in hertz (Hz): the width of the frequency range it passes, starting from zero (baseband)
-M: the number of distinguishable signal levels
-log_2: the base-2 logarithm; log_2(M) is the bits per symbol
-Hz: hertz, one cycle per second
-In words: a channel B hertz wide can carry at most 2 × B symbols per second, each carrying log_2(M) bits. More levels add bits only logarithmically.
+C: maximum uncoded bit rate in the stated noiseless real-baseband model, in bits per second
+B: one-sided low-pass bandwidth in hertz, measured from zero frequency to the upper limit
+M: number of distinguishable signal levels; a power of two for a fixed whole-bit mapping
+log_2: base-two logarithm; it gives bits per symbol for this mapping
+In words: the stated ideal model limits the symbol rate through bandwidth, while the number of distinguishable levels determines how many bits each symbol carries.
 ```
 
-For a hypothetical noiseless baseband channel 3.1 kHz wide with four levels:
+For example, a hypothetical noiseless 3.1 kHz baseband channel with four levels permits 6,200 real symbols per second, each carrying two bits, for 12.4 kbit/s. These values illustrate the assumptions; finite implementations and overhead require separate accounting.
 
-```formula
-C = 2 × 3,100 Hz × log_2(4)
-C = 2 × 3,100 × 2 = 12,400 bit/s
-where
-C: the noiseless channel's maximum bit rate
-Hz: hertz; 3.1 kHz (kilohertz) is 3,100 Hz
-log_2: the base-2 logarithm; log_2(4) = 2 because 2^2 = 4
-bit: one binary digit; bit/s is bits per second
-s: seconds
-In words: 6,200 symbols per second at 2 bits each gives 12.4 kbit/s.
-```
+## Noise changes the problem
 
-In practice noise, not the Nyquist rate, sets how many levels can be told apart. That is Shannon's limit.
+The noiseless model does not decide how many closely spaced levels a real receiver can reliably distinguish. Noise can blur them together. Shannon's noisy-channel limit addresses that additional constraint.
+
+Increasing the number of levels on an unchanged noisy channel therefore does not guarantee a usable rate increase. Both bandwidth and reliable distinction matter.
 
 ## Key takeaways
-- The stated Nyquist model bounds real symbols per second by twice one-sided baseband bandwidth.
-- More distinguishable levels carry more bits per symbol, but noise constrains usable levels.
+- The Nyquist zero-ISI model constrains real symbol rate for its stated one-sided baseband bandwidth.
+- More levels carry more bits per symbol, but noise constrains usable signalling.
 
 ## Further reading
 - [Shannon–Hartley theorem — Wikipedia](https://en.wikipedia.org/wiki/Shannon%E2%80%93Hartley_theorem)

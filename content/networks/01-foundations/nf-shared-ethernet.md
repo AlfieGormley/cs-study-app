@@ -3,7 +3,7 @@ id: nf-shared-ethernet
 sourceLesson: nf-ethernet
 title: Collisions, backoff and full duplex
 level: intermediate
-minutes: 5
+minutes: 4
 summary: Explain legacy CSMA/CD timing and why full-duplex links use different rules.
 ---
 
@@ -14,9 +14,9 @@ Original Ethernet put every host on one shared coaxial cable (later, one hub). O
 1. **Carrier sense**: listen; if someone is transmitting, wait.
 2. When the line is idle, transmit.
 3. **Collision detect**: while transmitting, listen. If the signal on the wire doesn't match what you're sending, another host started at nearly the same moment. Stop and send a 32-bit **jam signal** so everyone notices.
-4. **Binary exponential backoff**: after each collision, wait a random whole number of **slot times** before retrying, still obeying carrier-sense rules. The range of possible waits doubles with every collision on this frame, up to a cap (formula below). At 10/100 Mbit/s the slot is 512 bit-times; historical half-duplex Gigabit uses 4096 bit-times. Give up after 16 attempts.
+4. **Binary exponential backoff**: after each collision, wait a random whole number of **slot times** before retrying, still obeying carrier-sense rules. The range of possible waits doubles with every collision on this frame, up to a cap. At 10/100 Mbit/s the slot is 512 bit-times; historical half-duplex Gigabit uses 4096 bit-times. Give up after 16 attempts.
 
-```formula
+```formula reference
 K ∈ {0, 1, …, 2^{min(n, 10)} − 1}
 t_wait = K t_slot
 where
@@ -25,8 +25,8 @@ K: the number of slot times to wait, chosen at random (each value equally likely
 …: and every whole number in between
 n: how many collisions this frame has suffered so far (1 after the first)
 min: the minimum, the smaller of the two values; it stops the range growing after the 10th collision
-t_wait: the backoff wait before trying again
-t_slot: the slot time: 512 bit-times, which is 51.2 µs (microseconds) at 10 Mbit/s
+t_wait: the backoff wait before trying again, in seconds
+t_slot: the duration of one slot, in seconds: 512 bit-times, or 51.2 µs (microseconds), at 10 Mbit/s
 In words: after the first collision wait 0 or 1 slots, after the second 0–3, after the third 0–7, and so on, doubling up to 0–1023 slots from the 10th collision onwards.
 ```
 
@@ -36,19 +36,14 @@ Backoff adapts to load: with two hosts colliding, after the first collision each
 
 A sender only knows about a collision if it is still transmitting when the colliding signal gets back to it. The worst case is a collision at the far end of the network: the signal must travel there and back. So the transmission time of the shortest frame must be at least the maximum round-trip time:
 
-```formula
+```formula reference
 L_min / R ≥ (2d_max) / v
-L_min / R = 512 bit / (10⁷ bit/s)
-L_min / R = 51.2 µs
 where
 L_min: the minimum frame length, in bits; 64 bytes = 512 bits
 R: the link rate, in bits per second; 10 Mbit/s = 10⁷ bits per second
 d_max: the largest distance between two hosts on the shared segment, in metres
 v: the signal speed in the cable, in metres per second (about 2 × 10⁸ m/s)
 ≥: greater than or equal to
-bit: one binary digit; bit/s is bits per second
-s: seconds
-µs: microseconds, millionths of a second
 In words: sending the smallest frame must take at least as long as a signal needs to reach the far end and come back, so faster links need shorter networks or longer minimum frames.
 ```
 

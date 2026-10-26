@@ -2,30 +2,31 @@
 id: dp-fast-convolution
 title: FFT convolution without wrapping the tail
 level: intermediate
-minutes: 5
+minutes: 4
 summary: Turn circular FFT multiplication into full linear convolution and preserve block tails with overlap-add.
 ---
 
-Convolution can be calculated by taking both inputs' FFTs, multiplying corresponding coefficients and taking an inverse FFT. The catch is the boundary model: a fixed-length DFT treats its input as repeating. Multiplication therefore produces **circular convolution**, where output contributions beyond the chosen length wrap back to the beginning.
+FFT multiplication can calculate convolution efficiently, but the transform's boundary model matters. A fixed-length DFT treats its input as repeating. Multiplying the transforms and taking an inverse FFT therefore gives **circular convolution**: contributions beyond the chosen length wrap back to the beginning.
 
-For ordinary finite filtering with zero extension, we want linear convolution. Make enough room for its entire tail before transforming.
+Ordinary finite filtering with zero extension needs linear convolution instead. The solution is to reserve space for the complete output, including its filter tail, before transforming.
 
-## Pad both inputs to a sufficient length
+## Make room before multiplying
 
-```formula
+For a four-sample input and a three-coefficient FIR, the full output occupies six positions. Pad both transforms to at least that full length. Using only the length of the longer input generally leaves too little room.
+
+```formula essential
 Q = N + K − 1
 M ≥ Q
-Q = 4 + 3 − 1 = 6
 where
-Q: full linear-convolution output length in samples
-N: first input length, here 4 samples
-K: second input or FIR coefficient length, here 3 samples
-M: shared FFT length for both inputs, at least Q
+Q: full linear-convolution output length, in samples
+N: input record length, in samples
+K: FIR coefficient count
+M: shared FFT length used for both inputs
 ≥: greater than or equal to
-In words: four samples convolved with three coefficients require six output positions; pad both transforms to at least six points.
+In words: the full output needs the input length plus the filter length minus one positions; both FFTs must be at least that long to avoid wrapping the tail into the beginning.
 ```
 
-After the inverse transform, retain the full linear-convolution length. A larger FFT length may be chosen for efficiency, but the extra positions are not extra physical output. Small floating-point errors are expected. Choosing an FFT length equal only to the longer input is generally insufficient.
+A longer FFT can be chosen for efficiency. After the inverse transform, keep the full linear output length; extra padded positions are not additional physical output. Small floating-point errors can remain.
 
 > [!analogy] Real-world analogy: a circular calendar
 > Write a long task schedule on a repeating weekly calendar. Anything that spills past Sunday appears back under Monday unless you reserve enough distinct dates.
@@ -34,40 +35,25 @@ After the inverse transform, retain the full linear-convolution length. A larger
 >
 > **Where it stops:** The FFT combines numeric contributions by addition, and its wrap is an exact mathematical boundary rule. Padding removes that wrap for finite linear convolution; it does not remove a filter's actual tail.
 
-## Complete Python example
+## Recognise wraparound in a result
 
-`ifft` is NumPy's inverse transform; with the default convention it includes the reciprocal-length scaling. These inputs are dimensionless, so their convolution is dimensionless. `.real` discards only tiny numerical imaginary errors expected for real inputs here.
+For input `[1, 2, 3, 4]` and FIR `[1, 1, 1]`, full linear convolution is `[1, 3, 6, 9, 7, 4]`. A four-point FFT product instead returns `[8, 7, 6, 9]`. The final tail has been added into the beginning, not discarded or substituted for the first samples.
 
-```python
-import numpy as np
+This gives a useful diagnosis: if the end of a filtered record contaminates its beginning, inspect transform length and padding before changing the filter coefficients. Compare with direct full convolution on a small input to check the boundary behaviour.
 
-x = np.array([1., 2., 3., 4.])
-h = np.array([1., 1., 1.])
-def fft_product(size):
-    X = np.fft.fft(x, n=size)
-    H = np.fft.fft(h, n=size)
-    return np.fft.ifft(X * H).real
+## Add block responses at their original positions
 
-print(np.round(fft_product(4), 6))
-print(np.round(fft_product(6), 6))
-print(np.convolve(x, h, mode="full"))
-```
+For a long signal, **overlap-add** processes input blocks separately with the same FIR. Each block needs sufficient FFT padding for its own full convolution. Place that result at the output position corresponding to the block's original start.
 
-The short transform gives `[8. 7. 6. 9.]`: the final linear values 7 and 4 have wrapped into the first two positions. The padded transform and direct convolution both give `[1. 3. 6. 9. 7. 4.]`.
+Adjacent results overlap because each block keeps producing a filter tail after its last input sample. Add contributions at shared positions. Concatenating full block outputs shifts later responses; overwriting the overlap loses contributions.
 
-## Overlap-add for long signals
-
-**Overlap-add** splits the input into blocks, computes each block's full linear convolution with the same FIR, and adds it into the output at that block's original starting index. Adjacent results overlap because each block has a filter tail. They must be added, not concatenated or overwritten.
-
-For a four-sample input split into `[1, 2]` and `[3, 4]`, the three-tap example produces `[1, 3, 3, 2]` and `[3, 7, 7, 4]`. Start the second result two positions after the first and add the overlap: the full result is again `[1, 3, 6, 9, 7, 4]`.
-
-Each block's FFT length must accommodate that block plus the FIR tail. Retain the last tail after the final input block when the application requests full output. Streaming implementations need a policy for buffering, latency and flushing; overlap-add is not a promise of zero latency. SciPy's `fftconvolve(..., mode="full")` handles full finite convolution, while `oaconvolve` uses overlap-add. Actual speed depends on lengths and hardware.
+When full finite output is requested, retain the last tail after the final input block. A streaming implementation also needs buffering, latency and flushing policies. Overlap-add does not guarantee zero latency. SciPy provides `fftconvolve` for FFT convolution and `oaconvolve` for overlap-add; actual speed depends on lengths and hardware.
 
 ## Key takeaways
 
-- FFT multiplication naturally has circular boundaries.
-- Pad to at least the full linear output length to prevent wraparound.
-- Overlap-add adds neighbouring tails and flushes the final tail when full output is required.
+- FFT multiplication naturally uses circular boundaries.
+- Pad both transforms for the full linear output to prevent wraparound.
+- Overlap-add combines shared positions and keeps the final tail when full output is required.
 
 ## Further reading
 

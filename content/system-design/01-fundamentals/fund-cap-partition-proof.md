@@ -44,14 +44,14 @@ There is no third option. That's the whole theorem.
 
 ## Why “pick two of three” misleads
 
-The Venn-diagram version suggests you can pick CA, CP or AP like menu items. But **you don't get to choose whether partitions happen**. Networks drop packets, switches fail, GC pauses make nodes unreachable, cloud zones lose connectivity.
+The Venn-diagram version suggests you can pick consistency plus availability, consistency plus partition tolerance, or availability plus partition tolerance like menu items. But **you don't get to choose whether partitions happen**. Networks drop packets, switches fail, GC pauses make nodes unreachable, cloud zones lose connectivity.
 
 So for any system spread over a network, P isn't optional. The real statement is:
 
 > [!note] The useful form
 > *When a partition happens*, choose between consistency and availability. *When there's no partition*, you can have both.
 
-A "CA" system is one that just doesn't handle partitions, which in practice means a single node, or a system whose behaviour during a partition is undefined.
+A design claiming both consistency and availability by excluding partitions has left that failure case outside its promise. A single node avoids inter-replica partitions, but remains a single point of failure.
 
 ## CAP consistency and ACID invariants
 

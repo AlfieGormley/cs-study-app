@@ -2,7 +2,7 @@
 id: fund-estimation-units
 title: Keep units and orders of magnitude straight
 level: intermediate
-minutes: 5
+minutes: 4
 summary: Convert daily counts, powers of ten and network bits into consistent estimation units.
 sourceLesson: fund-estimation
 ---
@@ -11,48 +11,22 @@ Back-of-the-envelope estimation is quick, approximate arithmetic that tells you 
 
 The goal is not precision. Being within a factor of 2–3 is fine. Being off by 1,000x because you confused MB with GB is not.
 
-## Numbers to memorise
+## Reference units, not a memory test
 
-### Powers of ten
+### Large counts and time
 
-Estimates juggle very large numbers, so they are written as powers of ten: 10^3 means 10 × 10 × 10 = 1,000, i.e. a 1 followed by three zeros. Multiplying powers of ten adds the exponents (10^3 × 10^6 = 10^9); dividing subtracts them (10^9 / 10^5 = 10^4). That turns most estimation arithmetic into counting zeros.
+Use thousand, million and billion consistently. Moving between decimal size prefixes changes the scale by a thousand each step. Write the units beside estimates so a missed prefix is visible.
 
-```formula
-10^3 = 10 × 10 × 10 = 1,000
-10^6 = 1,000,000
-10^a × 10^b = 10^{a + b}
-10^a / 10^b = 10^{a − b}
-where
-10^3, 10^6: ten to the power 3 and ten to the power 6: that many copies of ten multiplied together, which is a 1 followed by that many zeros
-^: "to the power of"; the small raised number (the exponent) counts the tens multiplied together
-a, b: any two exponents
-In words: a power of ten is a 1 followed by that many zeros; multiplying adds the zeros, dividing takes them away.
-```
+For daily counts, a day contains 86,400 seconds. Dividing a count per day by that duration gives an **average** per-second rate, not the busiest-second demand. A 365.25-day year contains about 31.6 million seconds; rounded estimates should say which convention they use.
 
-### Time
-
-```formula
-1 day = 86,400 s ≈ 10^5 s
-1 month ≈ 2.6 M s ≈ 2.5 × 10^6 s
-1 year ≈ 31.5 M s ≈ 3 × 10^7 s
-where
-day: 24 hours = 24 × 60 × 60 = 86,400 seconds
-month: an average month, a twelfth of a 365.25-day year, about 30.4 days
-year: 365.25 days
-s: second
-M: million (10^6)
-≈: approximately equal to; rounded to keep the arithmetic easy
-In words: a day is about a hundred thousand seconds, a month about two and a half million, and a year about thirty million.
-```
-
-A handy shortcut follows: divide a daily count by 86,400 to get an average rate per second.
-
-| Per day | Per second (avg) |
+| Daily events | Average events/s |
 |---|---|
-| 1 million | ~12 |
-| 10 million | ~120 |
-| 100 million | ~1,200 |
-| 1 billion | ~12,000 |
+| 1 million | About 12 |
+| 10 million | About 120 |
+| 100 million | About 1,200 |
+| 1 billion | About 12,000 |
+
+Use these as a scale check, then allow for the measured traffic peak.
 
 ### Size
 
@@ -80,23 +54,9 @@ These are exercise inputs, not measured universal sizes. Content gap: no represe
 
 ### Bandwidth
 
-Network speeds are quoted in bits per second; storage and file sizes in bytes. A byte is 8 bits, so:
+Network speeds are quoted in bits per second; storage and file sizes in bytes.
 
-```formula
-R_B = R_b / 8
-1 Gbps / 8 = 125 MB/s
-10 Gbps / 8 = 1.25 GB/s
-where
-R_B: the rate in bytes per second
-R_b: the rate in bits per second
-Gbps: gigabits per second, 10^9 bits per second
-MB/s: megabytes per second, 10^6 bytes per second
-GB/s: gigabytes per second, 10^9 bytes per second
-MB: megabyte, 1,000,000 bytes
-GB: gigabyte, 10^9 bytes
-s: second
-In words: divide a network speed in bits by 8 to get bytes per second.
-```
+A byte contains **eight bits**. A 1 Gbps link therefore has a raw rate equivalent to 125 MB/s, and a 10 Gbps link to 1.25 GB/s. Application throughput is lower once protocol overhead and other limits are included. A claim that a 10 Gbps link sends 10 GB/s confuses bits with bytes.
 
 ## Key takeaways
 - Estimate the order of magnitude and state what you rounded.

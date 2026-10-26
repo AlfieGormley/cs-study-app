@@ -1,39 +1,88 @@
 [
   {
-    "id": "dp-fast-convolution-q1", "level": "basic", "type": "single",
-    "prompt": "You want full linear convolution of a four-sample input and a three-coefficient FIR using FFT multiplication. What is the minimum sufficient shared FFT length?",
+    "id": "dp-fast-convolution-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You implement finite linear filtering using FFT multiplication. How should you choose the shared transform length?",
     "options": [
-      {"text": "Six", "explanation": "Correct. The full linear output has six positions, which must fit before any wrap occurs."},
-      {"text": "Four", "explanation": "The length of the longer input alone leaves no room for the complete convolution tail."},
-      {"text": "Three", "explanation": "This is shorter than the input and the full output; it cannot hold their linear convolution."}
+      {
+        "text": "Make room for the entire linear output, including the filter tail",
+        "explanation": "Correct. Both padded transforms must be long enough that the linear response finishes before circular repetition begins."
+      },
+      {
+        "text": "Always use only the longer input's length",
+        "explanation": "That generally leaves no room for the full convolution tail and allows it to wrap into the beginning."
+      },
+      {
+        "text": "Use the coefficient count regardless of input length",
+        "explanation": "The filter length alone cannot generally hold the input and its complete response."
+      }
     ],
     "answer": 0,
-    "workedExample": "Determine the full output length before choosing both FFT lengths.\n\n```formula\nQ = N + K − 1\nQ = 4 + 3 − 1 = 6\nwhere\nQ: full linear-convolution length, in samples\nN: input length, here 4 samples\nK: FIR coefficient count, here 3\nIn words: six positions are sufficient; longer shared FFTs are also valid if the result is trimmed to six.\n```",
-    "link": {"title": "SciPy FFT convolution output lengths", "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.fftconvolve.html"}
+    "workedExample": "1. Finite filtering can continue after the last input sample because delayed coefficients still contribute.\n2. FFT multiplication otherwise wraps contributions at its chosen length.\n3. Reserve space for the full linear-convolution length in both transforms.\n4. Trim any extra efficiency padding after the inverse transform, while keeping the requested tail.",
+    "link": {
+      "title": "SciPy FFT convolution output lengths",
+      "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.fftconvolve.html"
+    }
   },
   {
-    "id": "dp-fast-convolution-q2", "level": "intermediate", "type": "single",
-    "prompt": "Input `[1, 2, 3, 4]` and FIR `[1, 1, 1]` have full linear convolution `[1, 3, 6, 9, 7, 4]`. Instead, their four-point FFTs are multiplied and inverted. Which circular result follows?",
+    "id": "dp-fast-convolution-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "An FFT-based filter produces a suspicious extra contribution at the beginning when the expected response extends beyond the transform length. What is the likely fault?",
     "options": [
-      {"text": "[1, 3, 6, 9]", "explanation": "This discards the tail, whereas circular convolution adds wrapped contributions into the beginning."},
-      {"text": "[7, 4, 6, 9]", "explanation": "This overwrites the beginning with the tail rather than adding the overlapping contributions."},
-      {"text": "[8, 7, 6, 9]", "explanation": "Correct. Seven wraps onto the first position and four onto the second, and each is added to the existing value."}
+      {
+        "text": "The tail was silently discarded, leaving the beginning unaffected",
+        "explanation": "Circular convolution adds wrapped tail contributions into earlier positions rather than merely truncating them."
+      },
+      {
+        "text": "The FFT has replaced the first input samples with the final input samples",
+        "explanation": "Wraparound adds convolution contributions; it is not a substitution of input values."
+      },
+      {
+        "text": "Circular wraparound from insufficient padding",
+        "explanation": "Correct. An undersized transform makes the tail wrap into the start, changing samples that should belong to the beginning alone."
+      }
     ],
     "answer": 2,
-    "workedExample": "1. A four-point circular result has only four distinct positions.\n2. Linear position four wraps to position zero, so add seven to one, giving eight.\n3. Linear position five wraps to position one, so add four to three, giving seven.\n4. The final two positions stay six and nine. The result is `[8, 7, 6, 9]`.",
-    "link": {"title": "Smith: FFT convolution", "url": "https://www.dspguide.com/CH18.PDF"}
+    "workedExample": "1. FFT multiplication uses circular boundaries at the shared transform length.\n2. A linear response longer than that length cannot fit before repetition.\n3. Its tail adds into early output positions.\n4. Increase padding for both transforms and compare with direct full convolution on a short test record.",
+    "link": {
+      "title": "Smith: FFT convolution",
+      "url": "https://www.dspguide.com/CH18.PDF"
+    }
   },
   {
-    "id": "dp-fast-convolution-q3", "level": "intermediate", "type": "multi",
+    "id": "dp-fast-convolution-q3",
+    "level": "intermediate",
+    "type": "multi",
     "prompt": "A long signal is filtered using overlap-add. Which steps are necessary for full finite linear output? Select all that apply.",
     "options": [
-      {"text": "Pad each block and FIR enough for that block's full linear convolution", "explanation": "Correct. Every block must avoid circular wrap before its contribution is added."},
-      {"text": "Add overlapping block tails at their original output positions", "explanation": "Correct. Separate block responses contribute to the same output samples."},
-      {"text": "Concatenate block outputs without overlap", "explanation": "This shifts later responses and fails to combine overlapping contributions."},
-      {"text": "Keep the final FIR tail after the last input block", "explanation": "Correct. Full output includes the response after the final non-zero input sample."}
+      {
+        "text": "Pad each block and FIR enough for that block's full linear convolution",
+        "explanation": "Correct. Every block must avoid circular wrap before its contribution is added."
+      },
+      {
+        "text": "Add overlapping block tails at their original output positions",
+        "explanation": "Correct. Separate block responses contribute to the same output samples."
+      },
+      {
+        "text": "Concatenate block outputs without overlap",
+        "explanation": "This shifts later responses and fails to combine overlapping contributions."
+      },
+      {
+        "text": "Keep the final FIR tail after the last input block",
+        "explanation": "Correct. Full output includes the response after the final non-zero input sample."
+      }
     ],
-    "answer": [0, 1, 3],
+    "answer": [
+      0,
+      1,
+      3
+    ],
     "workedExample": "1. Split only the input into blocks.\n2. Calculate each block's full linear convolution with the same FIR.\n3. Place each result at the input block's starting output index.\n4. Add shared positions and preserve the last tail. Concatenation or early truncation changes the requested result.",
-    "link": {"title": "Smith: overlap-add", "url": "https://www.dspguide.com/CH18.PDF"}
+    "link": {
+      "title": "Smith: overlap-add",
+      "url": "https://www.dspguide.com/CH18.PDF"
+    }
   }
 ]

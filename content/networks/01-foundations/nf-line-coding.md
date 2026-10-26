@@ -4,7 +4,7 @@ sourceLesson: nf-physical-layer
 title: Line codes and clock recovery
 level: basic
 minutes: 3
-summary: Trace Manchester coding and account for block-code overhead and signal properties.
+summary: Trace clock-recovery coding and explain why coded line bits exceed payload bits.
 ---
 
 ## Line coding: why not just send the bits?
@@ -56,20 +56,9 @@ Some faster links use **block codes**, sometimes combined with scrambling and a 
 | 8b/10b | 1000BASE-X, SATA, PCIe 1–2 | 25% |
 | 64b/66b | 10GBASE-R | 3.125% |
 
-The name says how many line bits replace how many data bits: 8b/10b sends 10 bits on the line for every 8 bits of data. The line must therefore run faster than the data rate:
+The name says how many line bits replace how many data bits: 8b/10b sends 10 bits on the line for every 8 bits of data. The coded-bit rate must therefore exceed the uncoded data-bit rate.
 
-```formula
-R_line = R_data (n / m)
-R_line = 10 Gbit/s × 66 / 64
-R_line = 10.3125 Gbit/s
-where
-R_line: the rate of coded bits on the line, in bits per second
-R_data: the rate of data bits before coding, in bits per second
-m: the data bits in each block (the first number in the name, 64 for 64b/66b)
-n: the coded bits sent for each block (the second number, 66 for 64b/66b)
-Gbit/s: gigabits per second; 1 Gbit is 10⁹ bits
-In words: the overhead is (n − m) / m: 2/64 = 3.125% for 64b/66b, and 2/8 = 25% for 8b/10b, so 10 Gbit/s of data needs 10.3125 Gbit/s on the line.
-```
+For example, 10 Gbit/s of data with 64b/66b coding needs 10.3125 Gbit/s of coded line bits. Those additional bits support the code; they are not extra application payload.
 
 Specifically, 100BASE-TX maps its 4B/5B-coded stream to MLT-3 at 125 million symbol intervals/s. Serial binary 10GBASE-R uses 10.3125 Gbaud. Other Fast/Gigabit Ethernet PHYs need not use those rates. Good line codes also leave unused code words that can be used for control, such as marking the start of a frame.
 

@@ -3,6 +3,24 @@
 A personal iPhone study app: a static PWA. Content is in `content/`, gets compiled to `data/` by
 `node scripts/build.mjs`, and is served with `./scripts/serve.sh`.
 
+## Concept-first teaching (mandatory)
+
+The reader is learning fundamentals on a phone, often on a bus. Lead with meaning, mechanism, practical
+use and limitations. Questions should test prediction, explanation, diagnosis and choices. Do not require
+formula memorisation or routine arithmetic that a reader could look up when needed.
+
+Keep an equation visible only when seeing its relationship is essential to understanding the lesson;
+mark that fence `formula essential`. Keep useful reference maths in a `formula reference` fence: the lesson
+reader shows its standalone `In words:` explanation and collapses the equation and symbol definitions.
+Remove redundant formulas, repeated substitutions and long derivations. Do not add a calculation merely
+because a question requires a `workedExample`; a clear reasoning walkthrough satisfies that field.
+Preserve important assumptions, safety guidance, units, trade-offs and facts needed for questions in the
+visible prose. Optional maths must never be a prerequisite for answering a conceptual question.
+
+This rule applies to all future additions and edits, including advanced lessons, and supersedes older
+briefs that request calculations or derivations for their own sake. It changes how depth is taught;
+all retained maths still requires complete symbol definitions and independent verification.
+
 ## Content rule (mandatory)
 
 **Any new or changed study content must follow `docs/CONTENT_PROCESS.md`.** This applies to new subjects,

@@ -3,7 +3,7 @@ id: fund-fanout-tail-latency
 title: Control the tail amplified by fan-out
 level: intermediate
 minutes: 3
-summary: Calculate the chance that one slow backend delays a whole request, and choose remedies for variability.
+summary: Explain why more parallel backends increase exposure to slow responses, and choose remedies for variability.
 sourceLesson: fund-latency-throughput
 ---
 
@@ -13,20 +13,18 @@ The previous unit introduced p99 and p99.9: thresholds near the slow end of a la
 
 **Your heaviest users hit the tail most.** A user loading a page that makes 50 backend calls is much more likely to experience at least one slow call. Amazon's Dynamo paper describes service-level targets set at p99.9 rather than the mean or median, so that *every* customer gets a good experience, including those with the longest histories and so the most expensive requests.
 
-**Fan-out amplifies the tail.** If a request fans out to several servers in parallel and must wait for all of them, it's as slow as the slowest. The easiest way to get the chance that *at least one* is slow is to work out the chance that *none* is, and subtract it from 1:
+**Fan-out amplifies the tail.** If a request fans out to several servers in parallel and must wait for all of them, it's as slow as the slowest. With independent 1%-slow backends, one call is rarely slow, but about 63% of requests waiting for 100 calls encounter at least one slow response. More calls create more opportunities for delay.
 
-```formula
+The reference relationship is useful when estimating that exposure:
+
+```formula reference
 P_slow = 1 − (1 − q)^n
-n = 1: 1 − 0.99^1 = 0.01 (1%)
-n = 10: 1 − 0.99^10 ≈ 0.096 (~10%)
-n = 100: 1 − 0.99^100 ≈ 0.63 (63%)
 where
 P_slow: the probability that a user request is slow, i.e. at least one of its backend calls is slow, from 0 to 1
-q: the probability that any one server responds slowly; here 0.01 (1%), which is what "the p99 is slow" means
+q: the probability that any one server exceeds the chosen slow-response threshold; here 0.01 (1%)
 n: the number of servers the request fans out to in parallel
 ^: "to the power of": 0.99^10 means 10 copies of 0.99 multiplied together
-≈: approximately equal to (rounded)
-In words: each call is fast with probability 0.99; all n are fast with probability 0.99 raised to the power n; anything else means the user waits for a slow one.
+In words: when a request needs every backend, more independent backend calls make it more likely to encounter at least one slow response.
 ```
 
 The formula assumes each server is slow independently of the others. Correlated slowness (a shared overloaded database, say) changes the numbers.

@@ -1,3 +1,35 @@
+# Concept-first library rewrite: IN PROGRESS (2026-10-26)
+
+The user explicitly requested rewriting the entire library for fundamentals-focused reading on a phone.
+This is 86 modules, 2,717 active lessons and 5,881 questions, starting from published commit
+`5b8fb6f2709893396373ba979ba194aacf5cb034`. Follow `docs/concept-first-brief.md`; do not declare the
+library finished from a renderer change or a partial module audit.
+
+- Task checkout: `/tmp/cs-study-concept-first-20261026`. The user's primary checkout contains unrelated
+  drafts and must remain untouched. Working queue: `/tmp/concept-first-queue.json`.
+- Six modules have current independent concept-first reviews: all three DSP modules, network foundations,
+  system-design fundamentals and sound sampling (123 lessons). Embedded foundations is next. All other
+  modules still need their semantic audit. See `docs/concept-first-report.md` for current review details.
+- Rules in `CLAUDE.md`, `CONTENT_SPEC.md`, `AGENTS.md` and the content process apply to future work.
+  Mark essential relationships `formula essential`, useful optional maths `formula reference`, and remove
+  redundant arithmetic. Unreviewed legacy formulas remain visible. Quiz information remains expanded.
+- Preserve all active lesson and question IDs, archived originals and progress migrations. A changed
+  question needs its independent review reason under `conceptFirstReview.lessons[id].questionsRewritten`.
+- The independent verifier must review each active lesson/question, retained code/maths and analogy
+  decisions before updating hashes. Root never self-stamps. See the brief for review provenance.
+- Run `node scripts/audit-concept-first.mjs docs/concept-first-audit.json --require-complete
+  --baseline-commit 5b8fb6f2709893396373ba979ba194aacf5cb034` before calling the whole rewrite complete.
+- Working browser harnesses: `/tmp/check-concept-first.mjs` (real navigation, controls, progress/offline)
+  and `/tmp/check-concept-first-library.mjs` (every compiled lesson/question at phone and desktop widths).
+  Re-run against the final verified build; passing renders do not certify content review.
+- The six-module checkpoint builds as version `532cf4b25d9b`; all 78 Node tests and the original
+  short-lesson migration audit pass. Original migration snapshots are in `/tmp/concept-first-migration/`.
+- Nothing from this rewrite has been published yet. Finish independent review, build/tests/audits,
+  commit and publish the verified result, and check the public app matches the tested release.
+
+The sections below describe earlier completed work and its historical environment. They do not replace
+the current task or the current sandbox/approval instructions.
+
 # Short lessons and code comments: COMPLETE (2026-10-16)
 
 All 76 modules are converted, independently reviewed and published. Every short unit has its own

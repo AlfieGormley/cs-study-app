@@ -3,50 +3,28 @@ id: snd-sharp-waveform-aliases
 title: Why naive sawtooths and squares alias
 level: intermediate
 minutes: 4
-summary: Predict the frequencies and levels of harmonics that fold from sharp digital waveforms.
+summary: Explain why waveform edges create aliases and why folded harmonics can fall below the note.
 sourceLesson: snd-aliasing
 ---
 
 ## Why sharp waveforms alias
 
-A sine has one frequency. A sawtooth has harmonics at every whole-number multiple of its frequency, and their amplitudes fall slowly:
+A sine has one frequency. A sawtooth has harmonics at every whole-number multiple of its frequency, and their amplitudes fall slowly.
 
-```formula
-f_k = k × f_0
-a_k = 1 / k
-L_k = 20 × log_10(1 / k)
-L_20 = 20 × log_10(1 / 20) ≈ −26 dB
-where
-f_k: the frequency of harmonic number k, in hertz (Hz)
-k: the harmonic number, a whole number 1, 2, 3, …; k = 1 is the fundamental
-f_0: the fundamental frequency of the note, in hertz (Hz)
-a_k: the amplitude of harmonic k, relative to the fundamental
-L_k: the level of harmonic k relative to the fundamental, in decibels (dB)
-L_20: that level for the 20th harmonic
-log_10: the base-10 logarithm; 20 × log_10 of an amplitude ratio gives decibels (the peak-and-RMS unit)
-dB: decibels
-≈: approximately equal to (rounded)
-In words: harmonic k is k times the frequency and has 1/k of the amplitude, so even the 20th harmonic is only about 26 dB quieter than the fundamental.
-```
+A sawtooth’s second harmonic has half the fundamental’s amplitude, its third one third and so on. Even the twentieth is only about 26 dB below the fundamental, so very high harmonics cannot simply be assumed inaudible.
 
 A square has only the odd harmonics (1st, 3rd, 5th, …), whose amplitudes also fall as one over the harmonic number. That fall-off is slow, so a lot of energy sits in very high harmonics.
 
-The cause is the waveform's **sharp edge**. A discontinuity (an instant jump) needs infinitely many harmonics to describe, and a waveform with a jump has harmonics that fall off at 1/k (6 dB per octave). A triangle wave has corners but no jumps, and its harmonics fall as 1/k² (12 dB per octave), so it aliases far less.
+The cause is the waveform's **sharp edge**. A discontinuity (an instant jump) needs infinitely many harmonics to describe, and a waveform with a jump has harmonic amplitudes that halve per octave of harmonic number (about 6 dB). A triangle wave has corners but no jumps; its harmonic amplitudes fall fourfold per octave (about 12 dB), so it aliases far less.
 
-A **naive sawtooth** is generated directly from the phase accumulator (the phase-accumulator unit) by rescaling the phase:
+A **naive sawtooth** is generated directly from the phase accumulator (the phase-accumulator unit) by rescaling the phase.
 
-```formula
-s = 2 × p − 1
-where
-s: the sawtooth output sample, from −1 to +1
-p: the oscillator phase, in cycles, from 0 up to 1 (it wraps back to 0 every cycle)
-In words: stretch the phase from 0..1 to −1..+1. The output ramps up and then jumps straight back down when the phase wraps.
-```
+Rescaling the wrapped phase from zero-to-one into minus-one-to-plus-one creates a rising ramp. At each wrap it jumps straight from the top back to the bottom: that is the naive sawtooth’s sharp edge.
 
 That jump makes it a sample of the ideal infinite-bandwidth sawtooth. Every harmonic above Nyquist folds back. Take a high note, 1760 Hz (A6), at 48 kHz:
 
-- Harmonics up to k = 13 (22,880 Hz) are below 24 kHz and fine.
-- Harmonics 14 and up fold back, and they **aren't at multiples of 1760 Hz**.
+- Harmonics up to the thirteenth (22,880 Hz) are below 24 kHz and fine.
+- Harmonics 14 and up fold back; **many land away from multiples of 1760 Hz**. Some higher aliases can also coincide with genuine harmonic bins.
 
 Which aliases land low, where they are most audible?
 

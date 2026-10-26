@@ -2,8 +2,8 @@
 id: fund-redundancy-failure-domains
 title: Model redundancy with capacity and shared failures
 level: intermediate
-minutes: 5
-summary: Calculate parallel and two-of-three availability, then test the independence, failover and survivor-capacity assumptions.
+minutes: 4
+summary: Explain how redundancy depends on independent failures, working failover and enough survivor capacity.
 sourceLesson: fund-availability
 ---
 
@@ -13,18 +13,12 @@ Redundancy helps when another component can take over. Model that benefit using 
 
 If the system works as long as **at least one** of several redundant components works, they're in **parallel**. The system fails only if *all* fail, so work out the chance that every one is down and subtract it from 1:
 
-```formula
-A_total = 1 − (1 − A_1) × … × (1 − A_n)
-A_total = 1 − ∏(1 − A_i)
+```formula reference
+A_total = 1 − (1 − A_1)(1 − A_2)
 where
-A_total: the availability of the redundant group, as a fraction from 0 to 1
-A_1, A_n: the availability of the first and last (n-th) component, each as a fraction
-A_i: the availability of component number i, where i runs from 1 to n
-1 − A_1: the unavailability of component 1, the fraction of time it is down
-n: the number of redundant components
-…: and so on: one factor for every component in between
-∏: capital pi, "multiply together": the product of the bracket over every component i; the second line is just a compact way of writing the first
-In words: the group is down only when every member is down at once, so multiply their down-fractions and subtract from 1.
+A_total: availability of a pair when either member alone can carry the load, as a fraction from 0 to 1
+A_1, A_2: availability of the first and second member, each as a fraction from 0 to 1
+In words: either member can keep the service running, so the pair is unavailable only when both are down. This estimate assumes independent failures and immediate, successful failover.
 ```
 
 ```
@@ -33,40 +27,16 @@ client ->LB-|                |-> ok
             +--> [App 99%] --+
 ```
 
-```formula
-A = 1 − (1 − A_s) × (1 − A_s)
-A = 1 − (0.01 × 0.01)
-A = 1 − 0.0001 = 0.9999 = 99.99%
-where
-A: the availability of the pair of app servers, as a fraction
-A_s: the availability of one app server, 99% = 0.99, so it is down 1 − 0.99 = 0.01 of the time
-In words: two servers that are each down 1% of the time are both down only 1% of 1% of the time.
-```
-
-Two 99% servers give 99.99%; three give 99.9999%. Redundancy is enormously powerful, which is why replication across availability zones is standard practice.
+For two independent 99%-available servers, with immediate switching and either able to carry the load, the model gives 99.99% availability. A third reduces the chance of all being down further. The gain depends on those assumptions.
 
 > [!warning] Redundancy needs spare capacity
 > The parallel formula assumes **one survivor can carry the whole load**. If peak traffic needs both servers, losing either one at peak overloads the other, and the pair behaves like two components in series. Plan for **N+1** (or N+2): enough servers that the system still meets its load with one, or one zone, gone.
 
 When some number of identical servers are needed out of a larger group (written "k of n"), the system is up while at least that many are up. For three 99% servers where any two can carry peak load, add up the chances of the states that work: all three up, or exactly two up.
 
-```formula
-P_3 = a^3 = 0.99^3 = 0.970299
-P_2 = 3 × a^2 × (1 − a)
-P_2 = 3 × 0.99^2 × 0.01 = 0.029403
-A = P_3 + P_2 = 0.999702 ≈ 99.97%
-where
-P_3: the probability that all three servers are up
-P_2: the probability that exactly two are up and one is down
-a: the availability of one server, 0.99
-^: "to the power of": a^3 means a × a × a
-3: the number of ways to pick which one of the three servers is the one that is down
-A: the availability of the tier, the probability at least two servers are up
-≈: approximately equal to (rounded)
-In words: the tier works when all three are up or when exactly one is down; add the probabilities of those two situations.
-```
+For three independent 99%-available servers where any two can carry the load, the model gives about 99.97% availability. This is lower than the any-one-of-three case because states with only one survivor now count as failures.
 
-That's a big step down from the 99.9999% you'd get if any *one* could cope, and a big step up from the 97.03% of needing all three.
+The useful question is which survivor combinations can actually serve peak traffic, rather than how many copies exist.
 
 ## The big caveat: independence
 

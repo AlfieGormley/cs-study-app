@@ -3,8 +3,8 @@ id: nf-fibre-power-speed
 sourceLesson: nf-physical-layer
 title: Fibre reach, loss and pulse speed
 level: basic
-minutes: 4
-summary: Compare fibre modes, calculate attenuation and use group index for pulse propagation.
+minutes: 3
+summary: Compare fibre modes, interpret optical loss and explain how group index affects pulse speed.
 ---
 
 ## Fibre
@@ -13,49 +13,31 @@ An optical fibre is a glass **core** surrounded by **cladding** of slightly lowe
 
 - **Multi-mode fibre** has a wide core (50 or 62.5 µm). Light takes many paths ("modes") of slightly different length, so pulses spread out (modal dispersion). It is cheap with 850 nm optics and good for a few hundred metres: 10GBASE-SR reaches about 300 m on OM3 and 400 m on OM4.
 - **Single-mode fibre** supports one spatial mode over its specified wavelength range; it is not literally one geometrical ray. Core diameter and mode-field diameter are distinct properties. With 1310 or 1550 nm lasers it reaches tens of kilometres directly, and thousands with amplifiers.
-- For a hypothetical fibre loss of **0.2 dB/km**, an 80 km span loses 0.2 × 80 = 16 dB before connectors/splices (the calculation below turns that into a fraction of the power). Actual loss is product- and wavelength-dependent; amplifier spacing also depends on the optical power/noise budget, not a universal distance.
+- For a hypothetical fibre loss of **0.2 dB/km**, an 80 km span loses 16 dB before connectors/splices. Actual loss is product- and wavelength-dependent; amplifier spacing also depends on the optical power/noise budget, not a universal distance.
 - **Wavelength-division multiplexing** (DWDM) sends dozens of wavelengths through one fibre, each its own channel. Total capacity depends on channel count, modulation, coding, equipment and reach; no universal capacity figure is implied.
 - The optical signal is not subject to electromagnetic pickup like copper wiring, but fibre can still be tapped or physically damaged. Fibre is not a substitute for encryption. Both optical and copper links are used in data centres.
 
-Fibre loss is quoted in decibels because losses along a route then simply add. To turn a loss in dB back into the fraction of power that survives:
+Fibre loss is quoted in decibels because losses along a route then simply add. The surviving power fraction changes multiplicatively.
 
-```formula
+The hypothetical 80 km span has 16 dB loss, leaving about 2.5% of its launched optical power before connector and splice losses. A fixed number of decibels represents a multiplicative power change, rather than a fixed percentage of the original launch power.
+
+```formula reference
 A = αd
-A = 0.2 dB/km × 80 km = 16 dB
 P_out / P_in = 10^(−A / 10)
-P_out / P_in = 10^(−1.6) ≈ 0.025
 where
-A: the total attenuation (loss) along the span, in decibels (dB)
-α: alpha, the fibre's loss per kilometre, in dB per kilometre (dB/km); 0.2 here
-d: the span length, in kilometres (km)
-dB: decibels, a logarithmic measure of a power ratio: every 10 dB is a factor of 10
-km: kilometres
-P_out: the optical power arriving at the far end
-P_in: the optical power launched into the fibre
-≈: approximately equal to
-In words: 16 dB of loss leaves about 2.5% of the launched light, roughly a fortieth, at the far end of the 80 km span.
+A: total distributed attenuation in decibels
+α: loss per kilometre, in decibels per kilometre, for the specified fibre and wavelength
+d: span length in kilometres
+P_out: received optical power in watts after the modelled span loss
+P_in: launched optical power in watts
+In words: distributed loss adds in decibels as the span gets longer; each additional ten decibels leaves one tenth of the power that would otherwise remain.
 ```
 
-### Why fibre is only about two-thirds of c
+### Why pulses travel slower in glass
 
-For pulse propagation, use the fibre’s **effective group index**, not simply the bulk phase refractive index. Corning’s July 2025 SMF-28 Ultra data sheet lists a typical group index of 1.4682 at 1550 nm. Rounding to 1.47 gives:
+For pulse propagation, use the fibre’s **effective group index**, not simply the bulk phase refractive index. Corning’s July 2025 SMF-28 Ultra data sheet lists a typical group index of 1.4682 at 1550 nm. Rounding to 1.47 means that the pulse speed is the vacuum speed of light divided by 1.47.
 
-```formula
-v_group = c / n_group
-v_group ≈ (3 × 10⁸ m/s) / 1.47
-v_group ≈ 2.04 × 10⁸ m/s ≈ 0.68 × c
-t_km = 1000 m / v_group ≈ 4.9 µs
-where
-v_group: the group velocity: the speed at which a pulse (and so the data) travels along the fibre, in metres per second (m/s)
-c: the speed of light in a vacuum, about 3 × 10⁸ m/s
-n_group: the fibre's effective group index: how many times slower than c a pulse travels; about 1.47 at 1550 nm (no unit)
-t_km: the time a pulse takes to cross one kilometre of this fibre
-m: metres; m/s is metres per second
-s: seconds
-µs: microseconds, millionths of a second
-≈: approximately equal to
-In words: dividing the speed of light by about 1.47 gives about two-thirds of it, so light in this fibre needs about 4.9 µs per kilometre.
-```
+Pulses therefore travel at about 68% of the vacuum speed of light in this example, taking about 4.9 microseconds per kilometre. A higher group index means slower pulse propagation.
 
 Wavelength and fibre construction matter.
 

@@ -9,13 +9,10 @@ sourceLesson: snd-pitch
 
 ## MIDI note numbers
 
-MIDI identifies notes with a number from **0 to 127**. Note **60 is middle C**, and **69 is the A above it**, which is tuned to **440 Hz** by convention. Each step of 1 is one semitone. Your synth needs to turn a note number into a frequency, and the standard conversion (the Wikipedia article on the MIDI Tuning Standard gives it) is:
+MIDI identifies notes with a number from **0 to 127**. Note **60 is middle C**, and **69 is the A above it**, which is tuned to **440 Hz** by convention. Each step of 1 is one semitone. Your synth needs to turn a note number into a frequency, and the usual equal-tempered conversion follows those ratios:
 
-```formula
+```formula reference
 f = 440 × 2^((n − 69) / 12)
-f = 440 × 2^((60 − 69) / 12)
-f = 440 × 2^(−0.75)
-f ≈ 261.63 Hz
 where
 f: the frequency to play, in hertz (Hz)
 n: the MIDI note number, 0 to 127 (or a fractional value once bends and detune are added); here 60, middle C
@@ -23,16 +20,13 @@ n: the MIDI note number, 0 to 127 (or a fractional value once bends and detune a
 69: the note number of A4, the reference note
 12: semitones per octave
 Hz: hertz, cycles per second
-≈: approximately equal to (rounded)
-In words: count semitones away from A4 (n − 69), divide by 12 to get octaves, raise 2 to that power to get a frequency ratio, and multiply by 440 Hz.
+In words: With equal-tempered tuning and A4 at 440 hertz, count semitones from note 69, turn them into octave steps, then apply that frequency ratio to 440 hertz.
 ```
 
 Going the other way, a tuner or a pitch detector turns a frequency back into a (usually fractional) note number:
 
-```formula
-n = 69 + 12 × log_2(f / 440)
-n = 69 + 12 × log_2(880 / 440)
-n = 69 + 12 × 1 = 81
+```formula reference
+n = 69 + 12 log_2(f / 440)
 where
 n: the note number, fractional in general; the nearest whole number is the nearest note
 f: the measured frequency, in hertz (Hz); here 880 Hz
@@ -40,10 +34,10 @@ log_2: the base-2 logarithm, which counts doublings
 440: the reference frequency of A4, in hertz
 69: the note number of A4
 12: semitones per octave
-In words: count how many octaves the frequency is above or below 440 Hz, turn that into semitones (× 12), and add it to 69. 880 Hz is exactly one octave up, note 81.
+In words: To estimate a note number, count octave ratios from the reference A, turn those into semitones and add them to note 69. The nearest whole number is the nearest equal-tempered note.
 ```
 
-Both formulas assume 12-TET and A4 = 440 Hz; another tuning system or reference pitch changes the constants.
+Both conversions assume 12-TET with A4 at 440 Hz. Changing the reference pitch changes the frequency scale; a different tuning system may require a different mapping altogether.
 
 ```python
 def midi_to_hz(n, a4=440.0):
@@ -90,3 +84,4 @@ Keep the 440 as a parameter (`a4` above). A "master tune" control is just a diff
 - [Piano key frequencies — Wikipedia](https://en.wikipedia.org/wiki/Piano_key_frequencies)
 - [Sampler key range — Ableton Live 12 manual](https://www.ableton.com/en/live-manual/12/live-instrument-reference/)
 - [Tuning reference and note mapping — MIDI Association](https://midi.org/microtuning-and-alternative-intonation-systems)
+- [Notes, MIDI numbers and frequencies — UNSW](https://www.phys.unsw.edu.au/jw/notes.html)

@@ -3,11 +3,11 @@
     "id": "fund-estimation-q5",
     "level": "intermediate",
     "type": "multi",
-    "prompt": "A colleague's estimate for a photo app concludes: \"1 M uploads/day × 2 MB = 2 TB/day, so a 4 TB database disk lasts two days; we need to shard Postgres.\" Which criticisms are valid? Select all that apply.",
+    "prompt": "A colleague estimates 2 TB of photo uploads per day and concludes: \"A 4 TB database disk lasts two days, so we need to shard Postgres.\" Assume the daily payload estimate is correct. Which criticisms are valid? Select all that apply.",
     "options": [
       {
         "text": "At this scale, consider object storage for photo blobs and keep metadata in the database before deciding to shard",
-        "explanation": "Correct. Blobs in a relational database bloat backups, replication and the buffer cache. Store images in S3-style object storage and keep a ~1 KB metadata row per photo: 1 M × 1 KB = 1 GB/day, which Postgres handles easily."
+        "explanation": "Correct. Keeping large media in object storage and references and searchable metadata in the database separates two different storage and access workloads. The metadata database still needs measured capacity checks."
       },
       {
         "text": "The estimate ignores replication of the stored photos",
@@ -15,7 +15,7 @@
       },
       {
         "text": "The arithmetic is wrong: 1 M × 2 MB is 2 GB",
-        "explanation": "Incorrect. 1 million × 2 million bytes = 2,000,000,000,000 bytes = 2 TB. The arithmetic is right; the architectural conclusion is what's wrong."
+        "explanation": "Incorrect. The stated daily photo payload of 2 TB is correct using decimal units. The questionable step is treating all photo bytes as database-disk growth."
       },
       {
         "text": "The estimate doesn't consider multiple resized versions (thumbnails) per photo",
@@ -27,7 +27,7 @@
       1,
       3
     ],
-    "workedExample": "1. **Check the arithmetic:** 1 million × 2 MB = 2 million MB = 2 TB a day. Correct.\n2. **Check the architecture:** large blobs go to object storage + CDN; the database holds metadata.\n```formula\nV_d = 1 M × 1 KB = 1 GB\nV_y = 1 GB × 365 ≈ 365 GB\nwhere\nV_d: metadata added per day: 1 million rows of about 1 KB\nV_y: metadata added per year\nM: million\nKB: kilobyte, 1,000 bytes\nGB: gigabyte, 10^9 bytes\n≈: approximately equal to\nIn words: a kilobyte of metadata per photo is only a gigabyte a day, small for one database.\n```\n   This storage estimate alone does not establish a need for sharding; validate query throughput, maintenance, backups and retention.\n3. **Check multipliers:** the configured redundancy scheme and measured rendition sizes. Any numerical overhead factor must be stated as an assumption rather than a universal property of object stores.\n\nSo the problem isn't the maths; it's putting the wrong data in the wrong store.",
+    "workedExample": "Accept the stated payload total, then challenge where the bytes belong. Object storage with CDN delivery is a useful starting point for photo objects, while a database stores references and metadata. Include measured rendition sizes and the actual redundancy policy, remembering that managed-service pricing may already include redundant storage. Check retention, queries, backups and maintenance before deciding whether the metadata database needs sharding.",
     "link": {
       "title": "The System Design Primer (GitHub)",
       "url": "https://github.com/donnemartin/system-design-primer"
@@ -37,27 +37,27 @@
     "id": "fund-estimation-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A video platform receives 500,000 uploads a day, averaging 100 MB each. What **average ingress bandwidth** must it handle?",
+    "prompt": "A video platform knows its average uploaded bytes per day. A colleague uses that alone to size peak network capacity for both uploads and playback. What is missing?",
     "options": [
       {
-        "text": "About 500 Mbps",
-        "explanation": "Incorrect. 500 is the figure in megabytes per second. Network bandwidth is quoted in bits, so multiply by 8."
+        "text": "Nothing; ingress and playback always carry identical volumes",
+        "explanation": "Incorrect. Stored videos can be played repeatedly and uploads can be bursty."
       },
       {
-        "text": "About 40 Gbps",
-        "explanation": "Incorrect. That's 10x too high. Re-check the division: 50 TB/day spread over ~86,400 seconds."
+        "text": "Only the database's number of columns",
+        "explanation": "Incorrect. Schema alone does not determine upload or streaming network demand."
       },
       {
-        "text": "About 4–5 Gbps",
-        "explanation": "Correct. 500k × 100 MB = 50 TB/day. 50 TB / 86,400 s ≈ 580 MB/s, and × 8 ≈ 4.6 Gbps (the 100,000-seconds-a-day shortcut gives 4 Gbps)."
+        "text": "Peak upload shape plus simultaneous playback demand and bitrate, with bits and bytes kept distinct",
+        "explanation": "Correct. Average ingress, peak ingress and playback egress are different demands."
       },
       {
-        "text": "About 4 Tbps",
-        "explanation": "Incorrect. This is 1,000x too high, probably from mixing up MB and GB somewhere along the way."
+        "text": "Only the number of videos ever uploaded",
+        "explanation": "Incorrect. A historical count does not reveal current upload or viewing rates."
       }
     ],
     "answer": 2,
-    "workedExample": "```formula\nV = 5 × 10^5 × 10^8 B = 5 × 10^13 B\nV = 50 TB\nR_B = 5 × 10^13 B / 86,400 s ≈ 580 MB/s\nR_b = 580 MB/s × 8 ≈ 4.6 Gbps\nwhere\nV: bytes uploaded per day: 500,000 (5 × 10^5) uploads of 100 MB (10^8 bytes)\nB: byte\nTB: terabyte, 10^12 bytes\nR_B: average ingress in bytes per second\ns: second; a day has 86,400 s\nMB/s: megabytes per second\nR_b: average ingress in bits per second (8 bits per byte)\nGbps: gigabits per second\n10^n: powers of ten, n copies of ten multiplied together: 10^5 = 100,000, 10^6 = a million, 10^9 = a billion\n≈: approximately equal to (rounded)\nIn words: 50 TB a day is about 580 MB every second, which is about 4.6 gigabits per second.\n```\n\nThen apply a peak factor (say 3x, about 14 Gbps). Design implication: uploads should go straight to object storage (e.g. presigned URLs) rather than through app servers, and transcoding workers pull from there.",
+    "workedExample": "Separate the directions. Ingress receives new objects; egress repeatedly delivers them to viewers. A daily total gives an average only after choosing a time unit. Peak viewing depends on simultaneous viewers and stream bitrate, while upload peaks require their own measured traffic shape.",
     "link": {
       "title": "Data-rate units (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Data-rate_units"

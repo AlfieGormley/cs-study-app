@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "Users get randomly logged out as requests land on servers that don't hold their session",
-        "explanation": "Correct. In-memory sessions make the app secretly stateful. With round-robin, ~75% of a user's requests hit a server without their session. Fix: move sessions to a shared store (Redis, database) or use signed tokens."
+        "explanation": "Correct. A request routed to a different server cannot find a session stored only in the original server's memory. Share authoritative sessions or use an appropriate self-contained token design."
       },
       {
         "text": "Everything works; sessions are copied automatically",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. User logs in; request hits server 1, which stores the session in its memory.\n2. Next request: round-robin sends it to server 2. Server 2 has no session, so the user appears logged out.\n3. With 4 servers, each request has a 3/4 chance of missing.\n\nFixes, best first:\n\n- Store sessions in Redis or the database (stateless app tier).\n- Use self-contained signed tokens (e.g. JWT), accepting harder revocation.\n- Sticky sessions at the load balancer, a stop-gap: sessions are lost when a server dies, and load balances unevenly.",
+    "workedExample": "The login reaches server 1, which stores the session locally. A later request reaches server 2, which has no copy and treats the user as unauthenticated. More servers do not copy process memory automatically. Put sessions in a shared store or use self-contained signed tokens with an explicit policy for invalidating issued tokens. Sticky routing can hide the issue temporarily, but server failure still loses the session.",
     "link": {
       "title": "The Twelve-Factor App: Processes",
       "url": "https://12factor.net/processes"
@@ -33,15 +33,15 @@
     "id": "fund-scalability-q2",
     "level": "basic",
     "type": "multi",
-    "prompt": "Which are genuine **advantages of vertical scaling** over horizontal scaling? Select all that apply.",
+    "prompt": "A small team is considering a larger database machine before distributing the data across nodes. Which advantages could justify that first step? Select all that apply.",
     "options": [
       {
         "text": "No need to partition data or deal with cross-node consistency",
-        "explanation": "Correct. One bigger machine avoids distributed data entirely: no sharding, no replication lag between partitions, no network partitions between nodes."
+        "explanation": "Correct. Keeping the data on one machine avoids introducing cross-node replication and partitioning into this scaling step."
       },
       {
         "text": "Usually requires no application changes",
-        "explanation": "Correct. Moving a database to a larger instance type doesn't change how the application talks to it."
+        "explanation": "Correct. A larger instance often keeps the same database interface, although configuration, limits and performance still need checking."
       },
       {
         "text": "Eliminates single points of failure",
@@ -49,14 +49,14 @@
       },
       {
         "text": "Cost scales linearly forever",
-        "explanation": "Incorrect. There's a hard ceiling (eventually no bigger machine exists), top-end hardware costs disproportionately more, and you pay for the big machine's full size even at quiet times."
+        "explanation": "Incorrect. Machines have size limits, and price curves vary by hardware, instance family, region and purchase model."
       }
     ],
     "answer": [
       0,
       1
     ],
-    "workedExample": "List what each approach gives you:\n\n| | Vertical | Horizontal |\n|---|---|---|\n| Code changes | Few | Often many |\n| Distributed data | No | Yes |\n| Ceiling | Hard limit | Very high |\n| SPOF | One host unless replicated | Depends on shared components and redundancy |\n| Cost at the top | Steep | ~Linear |\n\nSo the true advantages of vertical are simplicity: no distribution, no code changes. Its weaknesses are the ceiling, cost at the top end and the single point of failure.",
+    "workedExample": "Compare the work introduced by each option. A larger machine can preserve the existing application's data access and avoid new distributed coordination. It still has a hardware ceiling and remains a single point of failure without a separate recovery design. Compare actual prices and measured capacity; neither vertical nor horizontal scaling has a universal cost curve.",
     "link": {
       "title": "Scalability (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Scalability"
@@ -66,27 +66,27 @@
     "id": "fund-scalability-q7",
     "level": "advanced",
     "type": "single",
-    "prompt": "A rate limiter allows 100 requests/min per user, implemented as an in-memory counter in each app instance. You scale from 1 to 10 instances behind a round-robin load balancer. What's the effective limit per user now, and the right fix?",
+    "prompt": "A rate limiter stores a separate per-user counter in each app instance. More instances are added behind a load balancer. Why can users now exceed the intended global limit?",
     "options": [
       {
-        "text": "Still 100/min; each instance enforces it",
-        "explanation": "Incorrect. Each instance only sees ~1/10 of a user's requests, so each counter allows 100 before blocking: about 1,000/min in total."
+        "text": "Each instance automatically receives the other instances' counters",
+        "explanation": "Incorrect. Ordinary process memory is not shared between servers."
       },
       {
-        "text": "About 10/min; the limit is split between instances",
-        "explanation": "Incorrect. The counters don't coordinate, so nothing divides the limit. Each instance independently allows 100."
+        "text": "Adding servers divides one global counter automatically",
+        "explanation": "Incorrect. There is no shared counter in the stated design."
       },
       {
-        "text": "About 1,000/min; move the counter to a shared store such as Redis (e.g. atomic INCR with expiry)",
-        "explanation": "Correct. Hidden per-instance state multiplies the limit by the instance count. A shared atomic counter restores a single global limit; alternatively, route each user consistently to one instance, at the cost of uneven load."
+        "text": "Each instance grants its own allowance; coordinate an authoritative limit across instances",
+        "explanation": "Correct. Independent local state permits several allowances for the same user."
       },
       {
-        "text": "Unlimited; in-memory counters reset on every request",
-        "explanation": "Incorrect. Counters persist for the life of the process; they just aren't shared across instances."
+        "text": "Counters necessarily reset after every request",
+        "explanation": "Incorrect. They can persist locally; the problem is that instances do not coordinate."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Round-robin spreads a user's requests evenly: each instance sees ~1/10.\n2. Each instance's counter permits 100/min before blocking.\n3. Total allowed ≈ 10 × 100 = **1,000/min**.\n\nFix with a shared counter (illustrative counter operations):\n\n```\n# One key per user and minute.\nkey = rl:{user}:{minute}\n# All instances increment this key.\nn = INCR key\n# First request starts key expiry.\nif n == 1: EXPIRE key 60\n# n = 101 means the limit is exceeded.\nif n > 100: reject\n```\n\nRedis performs `INCR` atomically, so all 10 instances share one count. (In production, set the expiry in the same atomic step, e.g. a Lua script, so a crash between the two commands can't leave a key that never expires.) Cost: an additional network interaction per request (measure its latency), and a dependency on Redis (decide whether to fail open or closed if it's down).",
+    "workedExample": "Trace one user across two instances. Each sees only its own requests and can approve work without knowing what the other has allowed. A shared atomic counter or another coordinated allocation scheme can enforce the intended bound. If using Redis, counter updates and expiry must be atomic, and the service needs an explicit policy when the backing store is unavailable.",
     "link": {
       "title": "The Twelve-Factor App: Processes",
       "url": "https://12factor.net/processes"
@@ -138,7 +138,7 @@
     "options": [
       {
         "text": "Shard the database across 8 nodes now, before it becomes urgent",
-        "explanation": "Incorrect. Sharding is a large, hard-to-reverse change that adds cross-shard queries and operational load. Nothing here requires it: the load is mostly reads and well within what one larger machine can do."
+        "explanation": "Incorrect. Sharding adds data-placement and operational complexity. The given read bottleneck should first be measured and compared with simpler read scaling or a larger instance."
       },
       {
         "text": "Do nothing; 70% CPU leaves enough headroom for 2x growth",
@@ -150,11 +150,11 @@
       },
       {
         "text": "Scale up to a larger instance and add a cache and read replicas for the read load; plan sharding only if writes outgrow one machine",
-        "explanation": "Correct. Vertical scaling plus read scaling handles 2x growth with minimal code change. It keeps the team's effort on the product and defers sharding until writes, not reads, require it."
+        "explanation": "Correct. Investigate larger-instance capacity and eligible read offload before introducing sharding. Validate the actual workload, freshness requirements and failure behaviour."
       }
     ],
     "answer": 3,
-    "workedExample": "Project the load:\n\n```formula\nc_now = 0.7 × 16 vCPU ≈ 11 vCPU\nc_2x = 2 × 11 vCPU ≈ 22 vCPU\nu_32 = 22 / 32 ≈ 0.69\nu_64 = 22 / 64 ≈ 0.35\nwhere\nc_now: vCPUs of work at today's peak, 70% of 16\nc_2x: vCPUs of work after traffic doubles, more than the 16 the server has\nvCPU: a virtual CPU, one schedulable core (or hardware thread) of a cloud server\nu_32: utilisation on a 32-vCPU instance, about 69%, the same as today\nu_64: utilisation on a 64-vCPU instance, about 35%\n≈: approximately equal to (rounded)\nIn words: doubled load needs about 22 vCPUs, which overloads today's 16 but fits comfortably on a bigger machine.\n```\n\nA larger instance alone buys time, and because the load is read-heavy, a cache and read replicas take most of it off the primary. Sharding solves *write* scaling, at a high cost in complexity. Use the cheapest technique that matches the bottleneck.",
+    "workedExample": "The existing machine already uses much of its CPU at peak, so doubled traffic needs a capacity plan. The load is mostly reads: benchmark a larger instance, cache repeated eligible reads and use replicas where their freshness contract is acceptable. Measure query and index improvements too. Sharding becomes a candidate if simpler changes cannot meet write, storage or other requirements; the CPU percentage alone does not prove a particular larger machine is enough.",
     "link": {
       "title": "Read replicas (Amazon RDS)",
       "url": "https://aws.amazon.com/rds/features/read-replicas/"

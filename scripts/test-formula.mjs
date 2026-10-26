@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkFormula, symbols, parseFormula } from '../formula.js';
+import { checkFormula, symbols, parseFormula, formulaFence } from '../formula.js';
 import { render } from '../markdown.js';
 
 const good = 'f = c / (2 × π × a)\nwhere\nf: beaming frequency, in hertz\nc: speed of sound, metres per second\nπ: pi, about 3.14159\na: cone radius, in metres\nIn words: bigger cones beam lower.';
@@ -34,6 +34,47 @@ test('formula blocks render equation, definitions and plain reading', () => {
   assert.match(html, /<dt><i>f<\/i><\/dt>/);
   assert.match(html, /In words/);
   assert.match(render('```formula\nV_{out} = x^2\nwhere\nV_{out}: out\nx: in\n```'), /<i>V<\/i><sub>out<\/sub> = <i>x<\/i><sup>2<\/sup>/);
+});
+
+test('lesson reading shows the idea before closed reference maths', () => {
+  const html = render('```formula reference\n' + good + '\n```\n\nThe main explanation continues.', { collapseFormulas: true });
+  assert.match(html, /<p class="formula-words"><b>In words<\/b> bigger cones beam lower\.<\/p><details class="formula-details"><summary>Show the maths<\/summary>/);
+  assert.doesNotMatch(html, /<details[^>]*\bopen\b/);
+  assert.match(html, /<dl class="formula-where">/);
+  assert.match(html, /<\/details><\/figure><p>The main explanation continues\.<\/p>/);
+});
+
+test('essential relationships and quiz formula data remain expanded', () => {
+  const essential = render('```formula essential\n' + good + '\n```', { collapseFormulas: true });
+  assert.match(essential, /class="formula-eq"/);
+  assert.doesNotMatch(essential, /<details/);
+  assert.doesNotMatch(render('```formula reference\n' + good + '\n```'), /<details/);
+  assert.doesNotMatch(render('```formula\n' + good + '\n```', { collapseFormulas: true }), /<details/);
+  const answer = render('```formula reference\n' + good + '\n```', { interactive: false, collapseFormulas: true });
+  assert.match(answer, /class="formula-eq"/);
+  assert.doesNotMatch(answer, /<button|<details|tabindex=/);
+});
+
+test('reference definitions do not consume glossary links in visible prose', () => {
+  const source = formula('x = 1', 'x: Redis example', 'Redis keeps useful data nearby.');
+  const html = render('```formula reference\n' + source + '\n```\n\nRedis is used here.', { collapseFormulas: true });
+  assert.equal((html.match(/data-term="redis"/g) || []).length, 2);
+  assert.match(html, /<p class="formula-words"><b>In words<\/b> <button[^>]*data-term="redis"/);
+  assert.match(html, /<dd><button[^>]*data-term="redis"/);
+  const hiddenOnly = render('```formula reference\n' + formula('x = 1', 'x: Redis example') + '\n```\n\nRedis is used here.', { collapseFormulas: true });
+  assert.match(hiddenOnly, /<\/figure><p><button[^>]*data-term="redis"/);
+});
+
+test('essential marker cannot bypass formula validation or silently accept misspellings', () => {
+  assert.deepEqual(formulaFence('formula essential'), { isFormula: true, essential: true, reference: false, problems: [] });
+  assert.deepEqual(formulaFence('formula reference'), { isFormula: true, essential: false, reference: true, problems: [] });
+  assert.equal(formulaFence('formula').isFormula, true);
+  assert.equal(formulaFence('python').isFormula, false);
+  for (const lang of ['formula optional', 'formula essential typo', 'formula essentials']) {
+    assert.equal(formulaFence(lang).isFormula, true);
+    assert.equal(formulaFence(lang).problems.length, 1);
+  }
+  assert.match(checkFormula('x = y\nwhere\nx: output\nIn words: An output.').join(), /undefined symbol/);
 });
 
 const formula = (equation, defs, words = 'The quantities are related by this equation.') =>

@@ -12,15 +12,7 @@ A **moving average** gives equal weight to a fixed number of neighbouring sample
 
 This causal version includes the present reading and two older ones. It starts with zero history, and its divisor stays three even during startup.
 
-```formula
-y[n] = (x[n] + x[n − 1] + x[n − 2]) / 3
-where
-y: the smoothed output sequence, in the same units as the input
-x: the input sequence; samples before index zero are zero
-n: the integer sample index, starting at zero
-3: the number of equally weighted samples in this average, including zero history during startup
-In words: add the current reading and the two previous readings, then divide by three.
-```
+At every update, add the current reading and the two previous readings, then divide by three. When a new sample enters, the oldest leaves. A one-sample spike therefore affects three successive outputs before leaving the window completely. A sustained change gradually replaces every old reading.
 
 Suppose a sensor suddenly changes from zero to 6 and stays there. The first outputs are 2, 4 and 6. The filter needs three nonzero input samples to fill its window. This **startup transient** follows from the declared zero history; it is not a calculation error.
 
@@ -39,17 +31,9 @@ The three coefficients are symmetric, so this filter has a linear phase response
 
 At 100 samples per second, one sample is 0.01 seconds. An abrupt event spreads across three output samples. For an alarm, that spreading can matter more than how quiet the line looks on a plot. A longer average generally smooths more rapid variation and spreads a change over more samples.
 
-Complete Python example: NumPy is imported as `np`, and `convolve` includes the tail after the four input samples. The first four outputs are the causal outputs while readings arrive; the remaining two come from feeding zero input afterwards.
+Choose a window by asking how much rapid fluctuation you can suppress while still noticing useful changes promptly. A quiet-looking trace can conceal a brief event that matters. If useful signal and interference occupy the same frequencies, averaging reduces both; it cannot recognise which source you wanted.
 
-```python
-import numpy as np
-
-x = [6.0, 6.0, 6.0, 6.0]
-h = np.ones(3) / 3
-y = np.convolve(x, h, mode="full")
-print(y.tolist())
-# [2.0, 4.0, 6.0, 6.0, 4.0, 2.0]
-```
+The end of a stored record also needs a policy. Assuming later input is zero reveals a falling tail as the last readings leave the window. A live block boundary is different: the next block continues the signal, so its first outputs must still include the previous block's history.
 
 ## Key takeaways
 - A causal moving average uses present and past readings.

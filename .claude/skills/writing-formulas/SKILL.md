@@ -5,6 +5,29 @@ description: Write mathematical formulas, equations and worked calculations in c
 
 # Writing formulas
 
+## Select the maths before writing it (mandatory)
+
+Teach fundamentals for someone reading on a phone or a bus. Explain the concept in ordinary language
+first. Keep only equations that earn their place:
+
+- Use `formula essential` when seeing the relationship is necessary to understand the lesson's objective.
+  It stays visible. Give its practical meaning and assumptions in the main prose.
+- Use a `formula reference` fence for useful reference maths. In lessons its `In words:` explanation stays
+  visible and the equation and definitions sit inside “Show the maths”, closed by default. Make that
+  explanation intelligible without hidden symbols. Quizzes keep all formula content expanded.
+- Remove equations that repeat the prose, repeated arithmetic and long derivations. Link to further
+  reading when readers may need the detail later. Do not translate prose into maths just to add depth.
+
+Questions should test interpretation, predictions, diagnosis and choices. Avoid memorising formulas
+and routine substitution. A `workedExample` is a reasoning walkthrough; no calculation is required.
+If a numerical question is essential, provide the necessary relationship and test its interpretation.
+All prerequisites, safety guidance and facts needed for questions must remain in the visible lesson.
+
+These selection rules supersede calculation-heavy requirements in older briefs. The formatting and
+verification requirements below apply to every equation that remains, including optional reference maths.
+Unmarked legacy `formula` blocks remain expanded until individually reviewed; choose an explicit
+essential/reference marker for every new or revised block.
+
 The reader is studying on a phone. **Assume they can read basic algebra**, including ordinary arithmetic,
 brackets, powers and implicit multiplication such as `2x`, `IR` and `a(b + c)`. Do not explain those conventions
 or put multiplication signs between every factor. Still define what each variable represents, its units and
@@ -114,9 +137,10 @@ The same symbol appearing in several blocks is defined in **each** block: every 
 - Numbers aren't symbols, so `343`, `1e-3` and `0x1F` need no definitions. Quoted text such as `hash("key")` is
   treated as literal and is skipped too.
 
-## Rule 4: worked calculations
+## Rule 4: genuinely useful worked calculations
 
-Show substitution step by step as extra equation lines, **with units on every line**. Define the units in
+Only show substitution when it helps the learning objective. Do not repeat routine arithmetic across
+examples. For a calculation that earns its place, show the steps as extra equation lines, **with units on every line**. Define the units in
 `where`:
 
 ````
@@ -140,8 +164,8 @@ In words: a 1 kΩ resistor with a 100 nF capacitor starts cutting frequencies ab
 ## Rule 5: surround the formula with explanation
 
 - **Before the block:** one or two sentences on what problem the formula answers and when you'd use it.
-- **After the block:** a worked example with real numbers, unless the block already includes one. Also say where
-  it stops being true: its assumptions and limits.
+- **After the block:** explain the implication and assumptions or limits. Use a brief concrete example
+  if helpful; a numerical substitution is not required.
 - In prose, a symbol may be mentioned again only **after** the block that defines it, in the same lesson section
   (for example "so doubling *a* halves *f_beam*").
 
@@ -162,7 +186,8 @@ Everything else gets a formula block.
 Each question is read on its own, out of lesson context:
 - Define symbols again inside the question's own formula blocks; never write "see the lesson".
 - Keep option text short. Put formulas in the `workedExample` and in the explanations.
-- The worked example must show the calculation in a formula block, with every symbol defined.
+- A worked example should explain the reasoning. When a calculation is necessary, put it in a formula
+  block with every symbol defined; do not add arithmetic to an otherwise conceptual answer.
 
 ## Checking your work
 

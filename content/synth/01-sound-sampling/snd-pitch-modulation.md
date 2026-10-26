@@ -14,7 +14,7 @@ Suppose an LFO adds vibrato. Two ways to do it:
 1. **Linear (in Hz):** add a fixed number of hertz.
 2. **Exponential (in pitch):** multiply by a fixed ratio, set in cents.
 
-```formula
+```formula reference
 f_lin = f_0 + D × L
 f_exp = f_0 × 2^(d × L / 1200)
 where
@@ -27,24 +27,13 @@ d: the exponential vibrato depth, in cents; for example 39 cents
 In words: linear vibrato swings the frequency by the same number of hertz on every note; exponential vibrato swings it by the same musical interval on every note.
 ```
 
-With D of 10 Hz, a 440 Hz note swings about ±39 cents. At 110 Hz the same ±10 Hz swings about +151 and −165 cents, a much wider wobble. With exponential vibrato, d sets the depth in cents, and it sounds equally deep on every note.
+A fixed 10 Hz swing is a much larger fraction of a 110 Hz bass note than of a 440 Hz note. Its musical interval is therefore wider in the bass. Specifying a fixed cents depth instead gives the same pitch interval in each register.
 
 Option 2 is what players expect for vibrato and pitch bend. MIDI pitch bend, for example, is normally interpreted as a number of semitones (the bend range), added in note space.
 
 Analogue synths face the same problem in hardware. The common **1 volt per octave** standard, used by Moog instruments, makes control voltage linear in pitch: each extra volt doubles the oscillator frequency, using an exponential converter inside the oscillator.
 
-```formula
-f = f_0 × 2^V
-f = 110 × 2^2 = 440 Hz
-where
-f: the oscillator frequency, in hertz (Hz)
-f_0: the frequency the oscillator plays at 0 V, in hertz (Hz); here 110 Hz
-V: the control voltage, in volts (V); here 2 V. Strictly it's V divided by 1 volt, so the exponent has no unit
-Hz: hertz, cycles per second
-In words: every extra volt of control voltage raises the pitch one octave, and 1/12 V raises it one semitone.
-```
-
-Real oscillators only follow this law over a limited range, which is why analogue synths need calibrating.
+For example, two extra volts request two octaves: a 110 Hz oscillator would ideally become 440 Hz. A semitone needs one twelfth of a volt. Real oscillators follow this law only over a limited range, which is why analogue synths need calibrating.
 
 ## Pitfalls
 

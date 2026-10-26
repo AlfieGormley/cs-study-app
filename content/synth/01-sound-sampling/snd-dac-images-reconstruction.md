@@ -9,23 +9,11 @@ sourceLesson: snd-aliasing
 
 ## Reconstruction: the DAC side
 
-A DAC is given one number per sample period. A crude converter holds each value until the next (a **zero-order hold**), producing a staircase. That staircase contains the wanted signal plus **image frequencies**: copies of the spectrum mirrored around every multiple of the sample rate.
+A DAC is given one number per sample period. A crude converter holds each value until the next (a **zero-order hold**), producing a staircase. That staircase contains the wanted signal plus **image frequencies**: copies of the spectrum mirrored around multiples of the sample rate.
 
-```formula
-f_img = m × fs ± f
-f_img = 1 × 48 − 1 = 47 kHz
-f_img = 1 × 48 + 1 = 49 kHz
-where
-f_img: the frequency of an image component, in kilohertz (kHz) here
-m: a whole number 1, 2, 3, …, picking which multiple of the sample rate the image sits around
-fs: the sample rate; here 48 kHz
-f: the frequency of the wanted tone; here 1 kHz
-±: plus or minus: each multiple gives two images, one below it and one above
-kHz: kilohertz, thousands of cycles per second
-In words: a 1 kHz tone played at 48 kHz also produces images at 47 and 49 kHz, then 95 and 97 kHz, and so on.
-```
+For a 1 kHz tone at a 48 kHz sample rate, the first images sit at 47 and 49 kHz: one kilohertz either side of the sample rate. More sit at 95 and 97 kHz, either side of twice the rate.
 
-Images are not aliases. An alias is a wrong frequency *inside* the audio band, created when sampling; images sit *above* Nyquist, created when converting back to analogue, and a filter can remove them.
+Images are not aliases. An alias is a folded component *inside* the represented band, created when sampling; images sit *above* Nyquist, created when converting back to analogue, and a filter can remove them.
 
 A **reconstruction filter** (anti-imaging filter) removes the images, leaving the smooth wave the theorem promises. Most modern audio converters are **delta-sigma** designs that internally oversample and do much of this filtering digitally, so their external analogue filtering can be simple. Follow the converter or codec datasheet's recommended output circuit.
 

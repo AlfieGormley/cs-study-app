@@ -11,20 +11,7 @@ sourceLesson: snd-waves
 
 The **phase of a wave** says *where in its cycle* it is at a given moment. You can measure it in fractions of a cycle (0 to 1), degrees (0° to 360°), or **radians** (0 to 2π). Maths libraries use radians, so get comfortable with them.
 
-A radian comes from the unit circle (a circle of radius 1). Walk around it: a full lap is a distance of 2π, so one cycle is 2π radians. Converting is a single multiplication:
-
-```formula
-θ = 2 × π × p
-θ = 2 × π × 0.25
-θ ≈ 1.571 rad
-where
-θ: theta, the phase as an angle, in radians (rad)
-p: the phase as a fraction of a cycle, from 0 up to 1; here a quarter of a cycle, 0.25
-π: pi, the ratio of a circle's circumference to its diameter, about 3.14159
-rad: radians, the angle unit maths libraries use; 2π rad is one full cycle, the same as 360°
-≈: approximately equal to (rounded)
-In words: to turn a fraction of a cycle into radians, multiply by 2π. A quarter of a cycle is π/2, about 1.571 radians, which is 90°.
-```
+A radian measures an angle by comparing arc length with circle radius. One full turn is about 6.283 radians. Cycle fractions, degrees and radians are three units for the same position:
 
 | Cycles | Degrees | Radians |
 |---|---|---|
@@ -38,7 +25,7 @@ Phase on its own, for a single steady tone, is mostly inaudible. Your ear can't 
 
 ## Pitfalls
 
-- **Degrees passed to `sin`.** `math.sin(90)` is about 0.894, not 1. The argument is radians.
+- **Degrees passed to `sin`.** If phase is in degrees, convert it with `math.radians` before calling `math.sin`. A quarter-cycle should reach the positive peak, rather than an arbitrary value.
 
 ## Key takeaways
 

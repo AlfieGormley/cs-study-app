@@ -2,93 +2,62 @@
 id: dp-dft-bins
 title: What a Fourier bin measures
 level: basic
-minutes: 5
+minutes: 4
 summary: Turn a finite sample record into frequency components and label its bins correctly.
 ---
 
-A time plot shows when samples rise and fall. A **discrete Fourier transform**, or **DFT**, describes the same finite record using regularly spaced sinusoidal components. Each **frequency bin** stores a complex coefficient: two numbers that preserve both magnitude and phase. A large magnitude means a strong match to that bin's rotating pattern; raw magnitude is not yet a calibrated tone amplitude.
+A time plot shows when samples rise and fall. A **discrete Fourier transform**, or **DFT**, describes that same finite record as a combination of regularly spaced sinusoidal patterns. Each **frequency bin** tests one of those patterns across the whole record.
 
-The **fast Fourier transform**, or **FFT**, is an efficient algorithm for calculating a DFT. It does not create a different kind of spectrum. NumPy's default forward transform uses the following unnormalised sum.
+A strong match produces a large coefficient. Each coefficient is complex: its two parts preserve both magnitude and phase. The raw magnitude is not yet a calibrated tone amplitude. The **fast Fourier transform**, or **FFT**, is an efficient way to calculate these same DFT coefficients; it adds no observations.
 
-## A finite sum, not a calculus prerequisite
+## What a bin tells you
 
-For each bin, multiply each input sample by a rotating complex number, then add all those contributions. The cosine gives its real component and the negative sine its imaginary component.
-
-```formula
-θ = (2πkn) / N
-X[k] = Σ x[n](cos(θ) − j sin(θ))
-where
-θ: rotation angle for the current sample and bin, in radians
-π: pi, approximately 3.14159
-k: integer frequency-bin index, from 0 through N − 1
-n: integer sample index, from 0 through N − 1
-N: number of input samples and DFT bins, a positive integer
-X[k]: complex coefficient at bin k; with this unnormalised sum its numerical scale grows with N, in the input sample's units
-Σ: add the displayed term once for every n from 0 through N − 1, keeping k fixed
-x[n]: input sample at index n, in the signal's units
-cos: cosine function, accepting an angle in radians and returning a unitless real number
-sin: sine function, accepting an angle in radians and returning a unitless real number
-j: imaginary unit, whose square is −1; it distinguishes the imaginary component
-In words: each bin measures how well the whole record matches one particular rotating pattern.
-```
-
-This is a representation of a finite record. It does not prove that an observed machine or sensor contains only these exact frequencies. A tone between bins can contribute to many bins.
+Imagine comparing the samples with a steady oscillation. At the matching rhythm, contributions reinforce each other. At many mismatched rhythms, positive and negative contributions cancel. The DFT does this with both cosine and sine components, so it can also describe where the oscillation is within its cycle.
 
 > [!analogy] Real-world analogy: checking a rhythm
-> Tap at a chosen steady rhythm while watching a repeating movement. A matching rhythm stays aligned; a mismatched rhythm drifts.
+> Clap at a chosen steady rhythm while watching a repeating movement. A matching rhythm stays aligned; a mismatched rhythm drifts.
 >
 > **How it maps:** Each DFT bin tests one rhythm across the full record. Adding contributions reinforces a matching pattern and cancels many mismatched ones.
 >
-> **Where it stops:** A DFT uses signed and complex arithmetic to measure phase as well as strength; simply counting taps cannot reproduce it.
+> **Where it stops:** A DFT uses signed and complex arithmetic to measure phase as well as strength; simply counting claps cannot reproduce it.
+
+The transform describes the finite record exactly, within numerical error. It does not establish that a physical machine contains only the bin frequencies. A single tone between bins can produce several large coefficients. Do not count non-zero bins as separate physical oscillators.
 
 ## Label the frequency axis
 
-For the non-negative bins, the physical frequency depends on both the sample rate and the record length.
+The sample rate sets the physical time scale. The transform length sets how many frequency positions share that scale. With no padding, recording more samples at the same rate gives closer bin labels. Changing the sample rate without updating the labels gives the wrong frequency axis.
 
-```formula
+```formula essential
 Δf = F_s / N
 f_k = kΔf
-Δf = 800 Hz / 8 = 100 Hz
 where
-Δf: spacing between adjacent DFT bins, in hertz (Hz)
-F_s: sample rate, here 800 samples per second, expressed in Hz
-N: record length, here 8 samples
+Δf: spacing between neighbouring DFT bins, in hertz (Hz)
+F_s: sample rate, in samples per second, expressed in Hz
+N: number of acquired samples and transform points, with no zero padding
 f_k: frequency of non-negative bin k, in Hz
-k: non-negative bin index; for this even-length real record, 0 through N / 2
+k: non-negative integer bin index
 Hz: hertz, cycles per second
-In words: eight samples at 800 samples per second produce non-negative bin labels 0, 100, 200, 300 and 400 hertz.
+In words: bin spacing is the sample rate divided by the unpadded record length; each non-negative bin is another step along that grid.
 ```
 
-For real input, negative-frequency coefficients are complex conjugates of the corresponding positive-frequency coefficients. This redundancy lets `np.fft.rfft` return only the non-negative half. For eight samples it returns five coefficients, including DC and the 400 Hz Nyquist endpoint. An odd-length real record has no bin exactly at Nyquist.
+Eight samples taken at 800 samples per second give non-negative labels of 0, 100, 200, 300 and 400 Hz. These labels exist even when a bin's coefficient is zero.
 
-For arbitrary complex input, use `np.fft.fft`: its negative frequencies can contain independent information. `np.fft.fftfreq` labels the full output in its stored order: zero, positive frequencies, then negative frequencies. For even lengths it labels the Nyquist slot as negative; `rfftfreq` labels that endpoint positive. These are representations of the same sampled endpoint.
+## Choose the transform for the input
 
-## Complete Python example
+For real input, the negative-frequency coefficients are complex conjugates of the positive-frequency coefficients: they carry redundant information. NumPy's `rfft` keeps the non-negative half. Interior coefficients can still be complex even though the samples are real.
 
-`np.arange` creates the integer indices. NumPy's cosine operates element by element; `rfftfreq` takes the sample interval in seconds. Values here are dimensionless.
+An even-length real record includes DC and an exact Nyquist endpoint; an odd-length record has no bin exactly at Nyquist. For arbitrary complex input, negative frequencies can hold independent information, so use the full `fft`.
 
-```python
-import numpy as np
-
-n = np.arange(8)
-x = np.cos(2 * np.pi * n / 8)
-f = np.fft.rfftfreq(8, d=1 / 800)
-X = np.fft.rfft(x)
-print(f.tolist())
-print(np.round(abs(X), 6).tolist())
-# Bin 1 has raw magnitude 4, not 1.
-```
-
-The outputs are `[0.0, 100.0, 200.0, 300.0, 400.0]` and `[0.0, 4.0, 0.0, 0.0, 0.0]`, allowing tiny floating-point errors. The next lesson converts that raw 4 into the cosine's peak amplitude of 1.
+Use matching frequency-label functions. `rfftfreq` labels the real-input output; `fftfreq` labels the full output in stored order: zero, positive frequencies, then negative frequencies. For an even length, the full transform labels its Nyquist slot negative while the real-input transform labels it positive. Both describe the same sampled endpoint.
 
 ## Key takeaways
 
-- A DFT represents a whole finite record; an FFT computes that transform efficiently.
-- A bin contains a complex coefficient, not just a frequency label.
-- Use the sample rate and transform length to label bins, and use the real-input transform only for real input.
+- A bin measures a pattern across a finite record; it is not proof of a separate physical tone.
+- An FFT calculates a DFT efficiently, with no extra information.
+- Match the frequency axis to the sample rate, transform length and real or complex input.
 
 ## Further reading
 
-- [NumPy: DFT definitions, conventions and frequency order](https://numpy.org/doc/stable/reference/routines.fft.html)
+- [NumPy: DFT definitions and conventions](https://numpy.org/doc/stable/reference/routines.fft.html)
 - [NumPy: real-input FFT](https://numpy.org/doc/stable/reference/generated/numpy.fft.rfft.html)
 - [NumPy: real-input frequency labels](https://numpy.org/doc/stable/reference/generated/numpy.fft.rfftfreq.html)

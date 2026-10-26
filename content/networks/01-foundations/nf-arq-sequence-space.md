@@ -4,7 +4,7 @@ sourceLesson: nf-error-control
 title: Loss recovery and sequence-number reuse
 level: advanced
 minutes: 4
-summary: Trace Go-Back-N and Selective Repeat and derive safe windows in the stated textbook model.
+summary: Trace loss recovery and explain why reused sequence numbers must not confuse old frames with new data.
 ---
 
 ### Go-Back-N
@@ -31,9 +31,9 @@ It costs memory and bookkeeping on both sides, and it avoids retransmitting corr
 
 ### Window size versus sequence numbers
 
-A fixed-width sequence field has a finite number of values, after which counting wraps back to zero. With two bits the numbers go 0, 1, 2, 3, 0, 1, …. The formula below defines the sequence-width variable and corresponding window bounds. In the textbook model used here, assume ordered channels and a bound on how long old duplicates can survive. Under those assumptions, window limits avoid confusing retransmissions from the outstanding window with new data. Finite sequence numbers alone cannot handle packets delayed across arbitrary numbers of wraps. The table assumes equal sender and receiver windows for Selective Repeat.
+A fixed-width sequence field has a finite number of values, after which counting wraps back to zero. With two bits the numbers go 0, 1, 2, 3, 0, 1, …. In the textbook model used here, assume ordered channels and a bound on how long old duplicates can survive. Under those assumptions, window limits avoid confusing retransmissions from the outstanding window with new data. Finite sequence numbers alone cannot handle packets delayed across arbitrary numbers of wraps. The table assumes equal sender and receiver windows for Selective Repeat.
 
-```formula
+```formula reference
 W_GBN ≤ 2^k − 1
 W_SR ≤ 2^(k − 1)
 where
@@ -59,20 +59,7 @@ With a window of 3 the receiver would be expecting 3 when the old 0 reappears, a
 
 Selective Repeat is stricter because the receiver accepts a whole window of numbers. After receiving 0, 1, 2 with window 3, it accepts {3, 0, 1}. If the ACKs are lost and the sender resends the old 0, it falls inside the new window and is wrongly accepted. Keeping the window at no more than half the sequence space separates the old retransmissions from the next receive window in this scenario.
 
-> [!example] Sizing sequence numbers
-> The 2,501-frame window above needs 12-bit sequence numbers for Go-Back-N, but 13 bits for Selective Repeat. TCP numbers bytes using 32 bits and constrains window sizes; negotiated timestamps support PAWS rejection of old segments. Byte numbering alone does not remove wraparound concerns.
-
-```formula
-k = 11: 2^11 − 1 = 2,047 < 2,501
-k = 12: 2^12 − 1 = 4,095 ≥ 2,501
-k = 12: 2^(12 − 1) = 2,048 < 2,501
-k = 13: 2^(13 − 1) = 4,096 ≥ 2,501
-where
-k: the number of sequence-number bits being tried
-<: less than (too small)
-≥: greater than or equal to (big enough)
-In words: Go-Back-N's limit of 2^k − 1 first reaches 2,501 at k = 12; Selective Repeat's limit of 2^(k − 1) is only half as big, so it needs one more bit, k = 13.
-```
+TCP numbers bytes using 32 bits and constrains window sizes; negotiated timestamps support PAWS rejection of old segments. Byte numbering alone does not remove wraparound concerns.
 
 ## Key takeaways
 - Go-Back-N discards frames after a gap; Selective Repeat buffers them and acknowledges individually.

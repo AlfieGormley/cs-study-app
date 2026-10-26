@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { plainText } from '../markdown.js';
 import { compileCatalogue } from './diagram-compiler.mjs';
 import { checkVerification, lessonHash, readGlossary } from './verification.mjs';
-import { checkFormula } from '../formula.js';
+import { checkFormula, formulaFence } from '../formula.js';
 import { migrationProblems, subjectMigrationProblems } from '../lesson-progress.js';
 import { glossary as coreGlossary } from '../glossary-data.js';
 import { aliasKey } from '../glossary-rules.js';
@@ -54,8 +54,9 @@ function parseLesson(file) {
 // In formula blocks only the equation lines count; the "where" definitions are prose and wrap.
 const fences = (text) => [...String(text ?? '').matchAll(/```([^\n]*)\n([\s\S]*?)```/g)].map((m) => ({ lang: m[1].trim().toLowerCase(), body: m[2] }));
 const codeLines = (text) => fences(text).flatMap(({ lang, body }) =>
-  (lang === 'formula' ? body.split(/^\s*where:?\s*$/im)[0] : body).split('\n'));
-const formulaProblems = (text) => fences(text).filter((f) => f.lang === 'formula').flatMap((f) => checkFormula(f.body));
+  (formulaFence(lang).isFormula ? body.split(/^\s*where:?\s*$/im)[0] : body).split('\n'));
+const formulaProblems = (text) => fences(text).filter((f) => formulaFence(f.lang).isFormula)
+  .flatMap((f) => [...formulaFence(f.lang).problems, ...checkFormula(f.body)]);
 const analogyProblems = (text) => inspectAnalogies(String(text ?? '')).blocks.flatMap((b) => b.problems);
 const tooWide = (text, max) => codeLines(text).filter((l) => [...l].length > max);
 

@@ -3,27 +3,27 @@
     "id": "fund-scalability-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A batch job takes 100 minutes on one worker. Profiling shows 10 minutes is a serial step (merging results on one node) and the rest parallelises perfectly. Using Amdahl's law, how long does it take with 10 workers, and what's the best achievable with unlimited workers?",
+    "prompt": "A fixed batch job contains a serial merge step and a large parallel stage. After adding many workers, the merge dominates the runtime. What is the most useful next improvement?",
     "options": [
       {
-        "text": "10 minutes with 10 workers; approaching 0 with unlimited",
-        "explanation": "Incorrect. This assumes the whole job parallelises. The 10-minute serial step runs at the same speed regardless of worker count."
+        "text": "Keep doubling workers indefinitely",
+        "explanation": "Incorrect. Extra workers shorten only the parallel stage; they cannot remove the unchanged serial merge."
       },
       {
-        "text": "28 minutes with 10 workers; 19 minutes with unlimited",
-        "explanation": "Incorrect. The arithmetic doesn't follow Amdahl's law. The unlimited-worker limit is simply the serial portion, 10 minutes."
+        "text": "Treat the serial merge as free because it was small initially",
+        "explanation": "Incorrect. Its absolute time remains as the parallel stage shrinks."
       },
       {
-        "text": "55 minutes with 10 workers; 50 minutes with unlimited",
-        "explanation": "Incorrect. This halves the job rather than dividing the parallel part by the worker count."
+        "text": "Assume every worker adds the same speed-up forever",
+        "explanation": "Incorrect. Fixed serial work causes diminishing returns even before coordination overhead."
       },
       {
-        "text": "19 minutes with 10 workers; 10 minutes with unlimited",
-        "explanation": "Correct. Serial 10 min + parallel 90/10 = 9 min → 19 min (5.3× speed-up). With infinite workers the parallel part → 0, leaving the 10-minute serial step: at most 10× speed-up."
+        "text": "Reduce or restructure the serial merge, then remeasure the whole job",
+        "explanation": "Correct. Once serial work dominates, improving it can help more than adding parallel capacity."
       }
     ],
     "answer": 3,
-    "workedExample": "Amdahl's law splits the job into a serial part and a parallel part. Here 90 of the 100 minutes parallelise (a parallel fraction of 0.9) and the 10-minute merge is serial (a serial fraction of 0.1).\n\n**10 workers:**\n```formula\nt_N = t_ser + t_par / N\nt_N = 10 min + 90 min / 10 = 19 min\nS = 100 min / 19 min ≈ 5.3\nwhere\nt_N: the job's running time with N workers, in minutes (min)\nt_ser: the serial part's time, 10 min, which no extra worker can shorten\nt_par: the parallelisable part's time on one worker, 90 min\nN: the number of workers, here 10\nS: the speed-up, one-worker time divided by the new time\nmin: minute\n≈: approximately equal to (rounded)\nIn words: the parallel part is shared out between the workers, the serial part isn't, and the speed-up compares the old time with the new.\n```\n\nCheck with Amdahl's formula:\n```formula\nS(N) = 1 / ((1 − p) + p / N)\nS(10) = 1 / (0.1 + 0.9 / 10)\nS(10) = 1 / 0.19 ≈ 5.26\nwhere\nS(N): the speed-up with N workers\np: the parallel fraction, 0.9\nN: the number of workers, 10\n≈: approximately equal to (rounded)\nIn words: the same answer from the general formula: the job runs in 0.19 of its original time.\n```\n\n**Unlimited workers:**\n```formula\nt_N → 10 min + 0 = 10 min\nS_max = 1 / (1 − p) = 1 / 0.1 = 10\nwhere\nt_N: the running time, which approaches the serial part as N grows\n→: \"tends to\": gets as close as you like as N grows without limit\nmin: minute\nS_max: the maximum possible speed-up, 10×\np: the parallel fraction, 0.9\nIn words: with endless workers the parallel part takes no time, leaving the 10-minute merge, so the job can never be more than 10 times faster.\n```\n\nLesson: to go faster, shrink the serial merge (e.g. tree-shaped merging), not add workers.",
+    "workedExample": "Imagine the parallel stage becoming almost instantaneous. The merge still remains. This thought experiment exposes the floor on runtime for a fixed job. Profile the serial work and consider a different merge structure; measure coordination overhead and correctness before assuming the new structure scales.",
     "link": {
       "title": "Amdahl's law (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Read the curve:\n\n```\nservers: 1    2    4    8    16\nreq/s:   1k   2k   4k   4.2k 4.3k\n```\n\nLinear growth then a plateau means a **shared** resource saturated at ~4k req/s. Each request needs one write on the primary, so the primary caps throughput at ~4k writes/s however many app servers sit in front.\n\nDiagnose: primary CPU, I/O or lock waits near 100% at the plateau.\nFix: reduce writes per request, batch, scale the primary vertically, or shard writes across several primaries.",
+    "workedExample": "Read the curve:\n\n```\nservers: 1    2    4    8    16\nreq/s:   1k   2k   4k   4.2k 4.3k\n```\n\nLinear growth then a plateau means a **shared** resource saturated at about 4,000 req/s. Each request needs one write on the primary, so the primary caps throughput at about 4,000 writes/s however many app servers sit in front.\n\nDiagnose: primary CPU, I/O or lock waits near 100% at the plateau.\nFix: reduce writes per request, batch, scale the primary vertically, or shard writes across several primaries.",
     "link": {
       "title": "Amdahl's law (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"
@@ -70,7 +70,7 @@
         "explanation": "Incorrect. Pure contention makes throughput flatten towards a ceiling. It never makes throughput *fall* when you add nodes."
       },
       {
-        "text": "Coherence overhead, as the Universal Scalability Law predicts: all-to-all invalidation traffic grows roughly with N², so adding nodes eventually reduces throughput",
+        "text": "All-to-all coordination overhead grows faster than capacity and can eventually reduce throughput",
         "explanation": "Correct. With 16 nodes there are 120 node pairs, against 28 with 8 nodes. Coordination work grows faster than capacity, so the curve goes retrograde."
       },
       {
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Count the coordination paths:\n\n```formula\nP = N × (N − 1) / 2\nN = 4: P = 4 × 3 / 2 = 6\nN = 8: P = 8 × 7 / 2 = 28\nN = 16: P = 16 × 15 / 2 = 120\nwhere\nP: the number of node pairs that may exchange invalidation messages\nN: the number of nodes\nIn words: each node pairs with every other node, and dividing by 2 avoids counting each pair twice; the count grows roughly with the square of N.\n```\n\nDoubling from 8 to 16 nodes doubles capacity but more than quadruples pairwise chatter. Once that overhead outgrows the extra capacity, throughput falls.\n\nFixes: partition the cache so each key has one owner, use short TTLs instead of broadcasts, or send invalidations through a shared log that nodes consume.",
+    "workedExample": "Each new node both adds capacity and creates more communication partners. With per-node write generation fixed and broadcasts to every peer, coordination work grows faster than the node count. That mechanism fits the measured fall in throughput. Check invalidation volume and resource waits, then consider ownership by key, narrower invalidation or a shared log. A falling curve is a clue, not proof of a cause on its own.",
     "link": {
       "title": "Neil J. Gunther and the Universal Scalability Law (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Neil_J._Gunther"
@@ -93,27 +93,27 @@
     "id": "fund-scalability-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A data pipeline is 95% parallelisable and 5% serial. The business wants it **8x** faster. Using Amdahl's law, what is the minimum number of workers, and could it ever reach 25x?",
+    "prompt": "A fixed pipeline has a small serial stage. A capacity model says extra workers can meet today's speed-up goal, but a more ambitious goal lies beyond the serial-stage limit. Which plan is sound?",
     "options": [
       {
-        "text": "8 workers; yes, with about 25 workers",
-        "explanation": "Incorrect. 8 workers give a speed-up of only 1 / (0.05 + 0.95 / 8) ≈ 5.9x, because the serial 5% doesn't speed up. And 25x is above the 20x ceiling."
+        "text": "Buy enough workers and the serial-stage limit disappears",
+        "explanation": "Incorrect. More workers do not shorten work that still runs serially."
       },
       {
-        "text": "13 workers; no, the ceiling is 20x",
-        "explanation": "Correct. With 13 workers the speed-up is 1 / (0.05 + 0.95 / 13) ≈ 8.1x, while 12 workers give ≈ 7.7x. With unlimited workers it approaches 1 / 0.05 = 20x, so 25x is impossible without shrinking the serial part."
+        "text": "Use measured workers for the reachable goal and redesign serial work for the larger goal",
+        "explanation": "Correct. Worker count and serial work address different constraints; coordination overhead must also be measured."
       },
       {
-        "text": "160 workers; yes, with about 500 workers",
-        "explanation": "Incorrect. 160 workers would give about 17.9x, far more than needed for 8x, and no number of workers can exceed 20x."
+        "text": "Reject all parallelism because one stage is serial",
+        "explanation": "Incorrect. Parallel work can still provide useful speed-up below the limit."
       },
       {
-        "text": "It can't reach 8x at all",
-        "explanation": "Incorrect. The ceiling is 20x, so 8x is reachable with a modest number of workers."
+        "text": "Grow the job's input until the original fixed-job target is met",
+        "explanation": "Incorrect. Changing problem size does not demonstrate the required speed-up for the original job."
       }
     ],
     "answer": 1,
-    "workedExample": "Set Amdahl's formula equal to the target and solve for the number of workers:\n\n```formula\nS(N) = 1 / ((1 − p) + p / N)\n8 = 1 / (0.05 + 0.95 / N)\n0.05 + 0.95 / N = 1 / 8 = 0.125\n0.95 / N = 0.075\nN = 0.95 / 0.075 ≈ 12.67\nwhere\nS(N): the speed-up with N workers, here the target 8\np: the parallel fraction, 0.95; the serial fraction 1 − p is 0.05\nN: the number of workers; round 12.67 up to 13, since you can't run part of a worker\n≈: approximately equal to (rounded)\nIn words: work out what share of the original time the job must shrink to (an eighth), subtract the serial part, and see how many workers shrink the parallel part enough.\n```\n\nCheck: 1 / (0.05 + 0.95 / 13) ≈ 8.12.\n\nThe ceiling with unlimited workers:\n```formula\nS_max = 1 / (1 − p) = 1 / 0.05 = 20\n1 − p < 1 / 25 = 0.04\nwhere\nS_max: the largest possible speed-up, 20×\np: the parallel fraction\n<: is less than\nIn words: the speed-up can never beat one over the serial fraction, so 25× needs a serial share below 4%.\n```\n\nTo reach 25x you must cut the serial share below 4%, for example by parallelising the merge step.",
+    "workedExample": "For the same fixed input, additional workers divide the parallel work while the serial stage remains. First verify whether the practical target fits beneath that floor, including overhead. A target beyond it requires reducing the serial work or changing the algorithm, rather than solving for a larger worker count.",
     "link": {
       "title": "Amdahl's law (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Amdahl%27s_law"

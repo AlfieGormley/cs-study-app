@@ -4,55 +4,37 @@ sourceLesson: nf-performance
 title: Throughput and useful goodput
 level: basic
 minutes: 3
-summary: Account for bottlenecks and overhead when translating link speed into useful payload rate.
+summary: Separate bottleneck capacity, achieved throughput and useful payload goodput.
 ---
 
-## Throughput and goodput
+A link's nominal capacity, the traffic it actually carries, and the useful data delivered to an application are different measurements.
 
-**Throughput** is the rate at which data actually gets through, as opposed to the link's nominal rate. End to end, it is limited by the slowest link on the path, the **bottleneck**:
+## The bottleneck sets a ceiling
 
-```formula
-X ≤ min(R_1, R_2, …, R_n)
-where
-X: the end-to-end throughput, in bits per second
-R_1, R_2, R_n: the rates of the first, second and last links on the path, in bits per second
-n: the number of links on the path
-…: and so on, for every link in between
-min: the minimum: the smallest of the values in the brackets
-≤: less than or equal to
-In words: a path can never carry data faster than its slowest link.
-```
+**Throughput** is the rate actually achieved at a stated boundary. A path cannot carry traffic faster than its slowest link, the **bottleneck**. A 1 Gbit/s home LAN behind a 100 Mbit/s broadband link can reach the internet at no more than 100 Mbit/s through that route.
 
-A 1 Gbit/s home network behind a 100 Mbit/s broadband line gives at most 100 Mbit/s to the internet, the smaller of the two rates. Throughput is also limited by the window/RTT bound above, and by competition with other flows sharing the bottleneck.
+Competition with other flows, active window limits, host performance and congestion can make the achieved rate lower still. A bottleneck capacity is a ceiling, not a promised result.
 
-**Goodput** is throughput counting only useful application data. It excludes:
+## Goodput counts useful data once
 
-- headers at every layer (Ethernet, IP, TCP, TLS records)
-- preamble and inter-frame gap on Ethernet
-- retransmitted copies of lost packets
-- protocol messages that carry no data (pure ACKs, handshakes)
+**Goodput** counts useful application data delivered per second. It excludes headers, duplicate transmission attempts, pure acknowledgements and handshakes. State the boundary: TCP payload rate can still include TLS or application-protocol overhead that file goodput excludes.
 
-In a one-direction untagged full-duplex 1 Gbit/s Ethernet model with 1500-byte IPv4 packets, minimal headers and nominal preamble/gap accounting, each full frame carries 1460 TCP payload bytes in 1538 byte-times (the earlier encapsulation units):
+For the earlier one-direction, untagged full-duplex Ethernet model, a 1500-byte IPv4 packet with minimal TCP/IP headers carries 1460 bytes of TCP payload in 1538 byte-times of wire occupancy. On 1 Gbit/s Ethernet that allows about 949 Mbit/s of TCP payload. Twelve bytes of TCP options lower it to about 941 Mbit/s.
 
-```formula
-G = (D / W)R
-G = (1460 / 1538) × 1000 Mbit/s
-G ≈ 949 Mbit/s
-where
-G: the goodput, the rate of TCP payload delivered, in megabits per second (Mbit/s)
-D: the TCP data per frame, 1460 bytes
-W: the wire time per frame, 1538 byte-times (the 1500-byte IP packet plus 38 bytes of Ethernet header, FCS, preamble and gap)
-R: the link rate, 1000 Mbit/s (1 Gbit/s)
-Mbit/s: megabits per second; 1 Mbit is 1,000,000 bits
-≈: approximately equal to
-In words: about 95% of the gigabit link's time carries TCP payload, so about 949 Mbit/s of it is useful data.
-```
+These are ideal framing ceilings. They assume hosts, acknowledgement handling, congestion and loss do not constrain the rate, and exclude additional application/TLS overhead.
 
-Twelve bytes of TCP options reduce that to about 941 Mbit/s. These exclude application/TLS overhead and assume hosts, ACKs and congestion do not limit the rate. If 2% of equal-sized transmissions represent extra attempts, a saturated-link accounting model loses another 2% of useful rate; actual loss can also trigger congestion control.
+## What retransmissions change
+
+A retransmission may finally deliver data that was lost, but delivering that payload then consumed more than one attempt. Goodput counts the useful payload once.
+
+In a saturated-link accounting model with equal payload sizes and 2% of attempts being extra retransmissions, useful rate falls by another 2% after framing overhead. Real loss can additionally trigger congestion control, idle time or timeouts, so this accounting is not a general loss-to-throughput prediction.
+
+When a transfer is slow, measure the bottleneck, retries, window limits and host work. A higher line-rate label alone does not explain the outcome.
 
 ## Key takeaways
-- The bottleneck bounds end-to-end throughput.
-- Goodput excludes headers, retransmissions and control messages at the chosen accounting boundary.
+- Bottleneck capacity bounds throughput; other constraints can reduce it further.
+- Goodput excludes overhead and counts useful delivered bytes only once.
+- Retransmission accounting alone does not predict TCP's congestion response.
 
 ## Further reading
 - [Primer on Latency and Bandwidth — High Performance Browser Networking](https://hpbn.co/primer-on-latency-and-bandwidth/)

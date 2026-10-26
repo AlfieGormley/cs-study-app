@@ -13,29 +13,24 @@ A traffic estimate becomes a fleet estimate only after you specify what consumes
 
 **Assumptions:** 50,000 req/s peak, each request uses ~20 ms of CPU, servers have 16 cores, target 60% utilisation.
 
-```formula
-C = Q × t_cpu
-C = 50,000 /s × 0.020 s = 1,000
-c_use = 16 × 0.6 = 9.6
-n_s = C / c_use = 1,000 / 9.6 ≈ 105
+```formula reference
+n_s = (Q × t_cpu) / (c × u)
 where
-C: the number of CPU cores kept busy on average (CPU-seconds of work arriving per second)
-Q: requests per second at peak, 50,000
-t_cpu: CPU time each request uses, 20 ms = 0.020 s
-s: second
-c_use: usable cores per server: 16 cores, of which we plan to use 60%
-n_s: the number of servers needed
-≈: approximately equal to (rounded up)
-In words: work arriving per second divided by the work one server can comfortably do per second gives the number of servers. This is Little's law again: busy cores = arrival rate × CPU time per request.
+n_s: server count before adding failure redundancy; round up to whole servers
+Q: peak requests per second
+t_cpu: measured CPU time per request, in seconds
+c: CPU cores per server
+u: target CPU utilisation as a fraction, such as 0.6 for 60%
+In words: compare the CPU work arriving each second with the work one server can do at the chosen utilisation. Then check memory, I/O, latency and survivor capacity separately.
 ```
 
-Add N+2 or zone redundancy: if you run across 3 zones and must survive losing one, the two surviving zones must carry the whole load, so each zone needs half of the 105 servers' worth (about 53). Provision 3 × 53 ≈ 160 servers.
+These assumptions require about 105 servers before zone redundancy. If three evenly sized zones must survive losing one, the two remaining zones together need that capacity. Rounding to 53 servers per zone gives **159 servers total**. This is an illustrative CPU estimate, not a guarantee about I/O, memory or tail latency.
 
 ## Common pitfalls
 
-- **Bits vs bytes.** Network speeds are in bits; storage is in bytes. 1 Gbps = 125 MB/s, not 1 GB/s.
+- **Bits vs bytes.** Network speeds are in bits; storage is in bytes. A 1 Gbps raw link rate corresponds to 125 MB/s before overhead.
 - **Forgetting peaks.** Average QPS sizes nothing; capacity must handle the peak.
-- **Forgetting concurrency.** For connections and sessions, use Little's law: the number connected at once is the arrival rate multiplied by the time each stays online. 50 M DAU online 30 minutes a day is about 1 M connected at once on average (50 M × 30 / 1,440 minutes in a day), not 50 M.
+- **Forgetting concurrency.** For connections and sessions, use Little's law: the number connected at once is the arrival rate multiplied by the time each stays online. For example, 50 million daily users connected for 30 minutes each implies about one million connections on average, before the peak factor.
 - **Forgetting replication and overhead.** Three replicas triple storage; index and metadata overhead depends on the schema and storage engine; state an explicit allowance or measure it.
 - **Forgetting growth.** Plan for at least the next 1–2 years.
 - **False precision.** "4,629.6 QPS" signals you've missed the point. Say "about 5k".

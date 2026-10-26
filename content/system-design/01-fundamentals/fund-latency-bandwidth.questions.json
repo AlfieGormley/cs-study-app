@@ -3,7 +3,7 @@
     "id": "fund-latency-throughput-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "You double the number of identical, stateless app servers behind a load balancer. The servers were lightly loaded before. What happens most likely?",
+    "prompt": "You double the number of identical, stateless app servers behind a load balancer. The servers were lightly loaded before, requests divide evenly, and the load balancer and downstream systems have spare capacity. What happens most likely?",
     "options": [
       {
         "text": "Latency halves and throughput doubles",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Use the pipe analogy:\n\n- Latency = length of the pipe (the work and hops per request).\n- Throughput = width of the pipe (how many requests can be in flight).\n\nAdding servers adds pipes in parallel. Before: 4 servers × 500 req/s = 2,000 req/s capacity. After: 8 × 500 = 4,000 req/s. A single request still takes, say, 40 ms. Latency only drops if the servers were previously queueing (high utilisation), because the queue time shrinks.",
+    "workedExample": "A single lightly loaded request still performs the same work and network exchanges after more servers are added. Extra servers let more requests run at once, so capacity can rise if downstream systems are not the limit. Latency may improve when adding capacity removes queueing; the question explicitly excludes that starting condition.",
     "link": {
       "title": "Latency (engineering) (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Latency_(engineering)"
@@ -41,7 +41,7 @@
       },
       {
         "text": "Backup: more bandwidth or compression. Requests: batch them or send them in parallel",
-        "explanation": "Correct. The backup is bandwidth-bound (10 GB × 8 / 1 Gbps = 80 s). The requests are latency-bound (1,000 × 80 ms = 80 s; the bytes take only ~8 ms). Each needs the fix for its own bottleneck."
+        "explanation": "Correct. The backup spends most of its time transmitting bytes, while the sequential tiny requests repeatedly wait for replies. Each needs a remedy for its own bottleneck."
       },
       {
         "text": "Move both to a lower-latency route",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Use the transfer-time model:\n\n```formula\nT ≈ k × RTT + D / B\nT_b ≈ 80 Gbit / 1 Gbps = 80 s\nT_r ≈ 1,000 × 80 ms + 8 Mbit / 1 Gbps\nT_r ≈ 80 s + 0.008 s ≈ 80 s\nwhere\nT: the time a job takes, in seconds (s)\nk: the number of round trips made one after another\nRTT: round-trip time, here 80 ms\nD: the data to send, in bits (bytes × 8)\nB: the link bandwidth, here 1 Gbps\nT_b: the backup's time: one long stream, so round trips are negligible, and D = 10 GB × 8 = 80 Gbit\nT_r: the requests' time: k = 1,000 sequential round trips, carrying 1,000 × 1 KB = 1 MB = 8 Mbit\nGbit: gigabit, 10^9 bits\nMbit: megabit, 10^6 bits\nGbps: gigabits per second\ns: second\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: the backup's time is almost all data divided by bandwidth; the requests' time is almost all round trips multiplied by RTT.\n```\n\nSame duration, opposite causes. Sending the 1,000 requests in one batch takes about one round trip (~80 ms plus ~8 ms of data). A 10 Gbps link would cut the backup to about 8 s.",
+    "workedExample": "Ask what occupies the elapsed time. The backup is one large stream: faster transmission or fewer bytes can shorten it. The tiny requests send very little data but wait for a separate long round trip each time. Batch them, overlap independent requests, or move the work closer. This simplified comparison ignores processing, protocol overhead and congestion; those must be measured before predicting an exact speed-up.",
     "link": {
       "title": "Latency (engineering) (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Latency_(engineering)"
@@ -63,27 +63,27 @@
     "id": "fund-latency-throughput-q10",
     "level": "basic",
     "type": "single",
-    "prompt": "A mobile app in London builds its home screen by making **12 sequential** API calls to a server in a US region, with a round-trip time of about 70 ms. Server processing is negligible. Roughly how long does the screen take, and what's the best fix?",
+    "prompt": "A mobile app makes 12 tiny API calls one after another to a distant region. Each waits for the previous reply, server processing is negligible, and traces show network waiting dominates. Which change best addresses the cause?",
     "options": [
       {
-        "text": "About 70 ms; it's already fine",
-        "explanation": "Incorrect. 70 ms is one round trip. Sequential calls pay the round trip once each."
+        "text": "Add more app servers in the same distant region",
+        "explanation": "Incorrect. The servers are not the measured bottleneck, and this leaves the sequential long-distance exchanges intact."
       },
       {
-        "text": "About 840 ms; add one server-side endpoint that makes the 12 calls inside the datacentre and returns one response",
-        "explanation": "Correct. 12 × 70 ms = 840 ms. Moving the chatty calls server-side, where a round trip is ~0.5 ms, cuts it to about one 70 ms trip plus ~6 ms of internal calls."
+        "text": "Provide one aggregation endpoint close to the data and return one response to the phone",
+        "explanation": "Correct. This replaces repeated long-distance exchanges with one; internal processing and local exchanges still take time."
       },
       {
-        "text": "About 840 ms; upgrade users to faster broadband",
-        "explanation": "Incorrect. More bandwidth doesn't shorten round trips, which are limited by distance and the speed of light in fibre."
+        "text": "Upgrade the phone's bandwidth without changing the calls",
+        "explanation": "Incorrect. The tiny payloads spend most of their time waiting for replies, not transmitting bytes."
       },
       {
-        "text": "About 12 ms; round trips overlap automatically",
-        "explanation": "Incorrect. Sequential calls wait for each response before sending the next, so nothing overlaps."
+        "text": "Raise the client timeout",
+        "explanation": "Incorrect. A longer timeout permits more waiting without shortening any exchange."
       }
     ],
     "answer": 1,
-    "workedExample": "Sequential calls add up; aggregating on the server (a 'backend for frontend' endpoint) pays the long round trip once:\n\n```formula\nT_c = 12 × 70 ms = 840 ms\nT_s ≈ 70 ms + 12 × 0.5 ms ≈ 76 ms\nwhere\nT_c: screen load time with 12 sequential calls from the phone, each paying the London–US round trip\nT_s: load time with one call to a server-side endpoint that makes the 12 calls inside the datacentre\nms: millisecond, one thousandth of a second; 70 ms is the London–US round trip, 0.5 ms a round trip inside the datacentre\n≈: approximately equal to\nIn words: twelve long round trips cost twelve times as much as one; moving the chatter inside the datacentre makes each extra call almost free.\n```\n\nThe lesson's rule: chatty protocols are deadly over distance. Fix them by batching, parallelising, or moving the chatter close to the data.",
+    "workedExample": "Trace the dependencies: the phone cannot send the next call until the previous reply arrives. Each call therefore pays the distant round trip. Aggregating near the data pays that long journey once. Parallelising independent calls is another option, but dependent calls need an aggregation or protocol change.",
     "link": {
       "title": "Latency (engineering) (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Latency_(engineering)"

@@ -1,9 +1,9 @@
 ---
 id: fund-dependency-availability
-title: Calculate the availability of a request path
+title: Find availability risks along a request path
 level: intermediate
-minutes: 4
-summary: Multiply required dependencies in series, combine redundant groups, and remove optional work from the critical path.
+minutes: 3
+summary: Identify required dependencies, distinguish redundant alternatives, and move optional work off the critical path.
 sourceLesson: fund-availability
 ---
 
@@ -13,14 +13,14 @@ The previous unit modelled redundant components in parallel. A real request usua
 
 If a request needs **every** component to work, the components are in **series**. Assuming independent failures, the chance that all of them are up at once is the product of their availabilities:
 
-```formula
+```formula reference
 A_total = A_1 × A_2 × … × A_n
 where
 A_total: the availability of the whole chain, as a fraction from 0 to 1
 A_1, A_2, A_n: the availability of the first, second and last (n-th) component, each as a fraction (99.9% = 0.999)
 n: the number of components the request needs
 …: and so on: one factor for every component in between
-In words: the chain is up only when every link is up, so multiply the links' availabilities together.
+In words: the chain works only when every required link works. With independent failures, multiplying their availabilities estimates how often they all work together.
 ```
 
 ```
@@ -28,20 +28,9 @@ client -> [LB] -> [App] -> [DB]
          99.99%  99.9%   99.95%
 ```
 
-```formula
-A = A_LB × A_App × A_DB
-A = 0.9999 × 0.999 × 0.9995
-A ≈ 0.99840 ≈ 99.84%
-where
-A: the end-to-end availability of the chain, as a fraction
-A_LB: the load balancer's availability, 99.99% = 0.9999
-A_App: the app tier's availability, 99.9% = 0.999
-A_DB: the database's availability, 99.95% = 0.9995
-≈: approximately equal to (rounded)
-In words: multiplying three high availabilities gives one that is lower than any of them.
-```
+In this example, all three tiers must be healthy. Their independent modelled availability is about 99.84%, below each individual tier.
 
-The chain is **less** available than its weakest link. Every synchronous dependency you add lowers the ceiling. With independent failures, a service requiring 10 dependencies at 99.9% each has modelled availability of 0.999 raised to the power 10, about 0.990 (99.0%), i.e. about 3.65 days of downtime a year.
+A required dependency creates another way for the request to fail. The chain cannot be more available than its least available required tier; with independent imperfect tiers it is less available. Adding synchronous dependencies therefore consumes the request path's reliability budget.
 
 This is the mathematical reason to:
 
@@ -53,21 +42,7 @@ This is the mathematical reason to:
 
 Real systems mix both. Compute parallel groups first, then multiply the groups in series:
 
-```formula
-A_LB = 1 − 0.001^2 = 0.999999
-A_App = 1 − 0.01^3 = 0.999999
-A_DB = 1 − 0.005^2 = 0.999975
-A = A_LB × A_App × A_DB
-A ≈ 0.999973 ≈ 99.997%
-where
-A_LB: the availability of a pair of load balancers, each 99.9% available (down 0.001 of the time)
-A_App: the availability of three app servers, each 99% available (down 0.01 of the time), where any one can carry the load
-A_DB: the availability of a pair of databases, each 99.5% available (down 0.005 of the time)
-A: the availability of the whole system, the three groups in series
-^: "to the power of": 0.001^2 means 0.001 × 0.001
-≈: approximately equal to (rounded)
-In words: work out each redundant group with the parallel formula, then multiply the groups together because a request needs all three.
-```
+First identify the redundant alternatives inside each tier. Check that survivors have capacity and that failover works. Then treat the tiers the request still needs as a chain. Redundant app servers do not remove the database as a required dependency, and a shared failure can still affect several tiers together.
 
 ## Key takeaways
 - A request needing every independent dependency has availability equal to the product of their availabilities.

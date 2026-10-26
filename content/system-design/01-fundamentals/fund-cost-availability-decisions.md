@@ -18,23 +18,9 @@ Cost is a first-class requirement, not an afterthought.
 - **Storage tiers.** Hot SSD, object storage and archive tiers have different storage, request and retrieval prices; compare current provider pricing for the expected workload. Lifecycle policies move cold data down.
 - **Over-provisioning vs autoscaling.** Headroom costs money; too little costs outages.
 
-To price an availability target, multiply the downtime it allows by what an hour of downtime costs:
+To price a time-based availability target, combine its downtime allowance with an explicit cost per hour. A request-based target needs a model of affected requests and their impact.
 
-```formula
-C = (1 − A) × H × c
-C_{99.9} = 0.001 × 8,766 h × £20k/h ≈ £175k
-C_{99.99} = 0.0001 × 8,766 h × £20k/h ≈ £18k
-where
-C: the modelled yearly cost of downtime, in pounds (£), if you use the whole allowed downtime
-A: the availability as a fraction (99.9% = 0.999)
-H: the hours in a year, 365.25 × 24 = 8,766 hours (h)
-h: hour
-c: the cost of one hour of downtime, in pounds per hour (£/h)
-k: thousand (£20k = £20,000)
-C_{99.9}, C_{99.99}: the yearly downtime cost at 99.9% and at 99.99%
-≈: approximately equal to (rounded)
-In words: the downtime a target allows, times the price of an hour of downtime, is the yearly bill for being down.
-```
+This is a **budget scenario**, not a prediction that the service will use every minute it is allowed. Compare the plausible reduction in downtime losses with the full extra infrastructure, staffing and operational cost. Include contractual and reputational consequences when they matter.
 
 > [!example] Pricing the trade-off
 > Suppose an outage costs £20k per hour. 99.9% allows about 8.8 hours a year (about £175k of downtime cost if you use the whole budget); 99.99% allows about 53 minutes (about £18k). The upgrade saves roughly £157k a year. If moving to 99.99% costs £300k/year in extra infrastructure and staff, it isn't worth it on these numbers, unless downtime also causes reputational or regulatory damage.

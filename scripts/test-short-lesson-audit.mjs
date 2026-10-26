@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { lessonHash } from './verification.mjs';
 
 const script = fileURLToPath(new URL('./audit-short-lessons.mjs', import.meta.url));
 
@@ -86,5 +87,40 @@ test('audit rejects duplicate questions and absent compiled questions', () => {
     const result = audit();
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, duplicate ? /duplicate question q1/ : /q1 is absent from compiled lessons/);
+  });
+});
+
+test('intentional question revisions require current independent review and matching compiled content', () => {
+  for (const staleCompiled of [false, true]) fixture(({ root, write, compiled, audit }) => {
+    compiled.lessons[0].questions[0].answer = 1;
+    const directory = 'content/study/01-converted';
+    const lessons = {};
+    const editorial = {};
+    for (const lesson of compiled.lessons) {
+      const markdown = path.join(root, directory, `${lesson.id}.md`);
+      fs.writeFileSync(markdown, 'The main concept and reasoning stay visible.');
+      write(`${directory}/${lesson.id}.questions.json`, lesson.questions);
+      const hash = lessonHash(path.join(root, directory), lesson.id);
+      lessons[lesson.id] = { confidence: 'high', hash };
+      editorial[lesson.id] = { hash, rationale: 'Reviewed the scenario, its conceptual objective and every answer option.',
+        questionsRewritten: lesson.id === 'new-one' ? { q1: 'Replaced routine arithmetic with diagnosis of the same underlying concept.' } : {} };
+    }
+    const author = { agent: 'editor', date: '2026-10-26' };
+    const verifier = { agent: 'reviewer', date: '2026-10-26', independent: true, sources: ['https://example.test/primary'] };
+    write(`${directory}/verification.json`, { module: 'converted', author, verifier,
+      summary: { claimsChecked: 2, errorsCorrected: 0, hedgedOrRemoved: 0 }, corrections: [], gaps: [], lowConfidence: [],
+      lessons, glossary: {}, conceptFirstReview: { ruleVersion: 1, author, verifier, lessons: editorial } });
+    if (staleCompiled) compiled.lessons[0].questions[0].options.push({ text: 'Unreviewed choice' });
+    write('data/study/converted.json', compiled);
+    const result = audit();
+    if (staleCompiled) {
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /changed its answer key/);
+    } else {
+      assert.equal(result.status, 0, result.stderr);
+      const report = JSON.parse(fs.readFileSync(path.join(root, 'report.json'), 'utf8'));
+      assert.equal(report.reviewedQuestionRevisions.length, 1);
+      assert.equal(report.reviewedQuestionRevisions[0].question, 'q1');
+    }
   });
 });

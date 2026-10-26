@@ -17,26 +17,22 @@ PACELC classifications summarise choices, but a concrete operation needs a concr
 
 ## Quorum overlap
 
-In a leaderless store like Cassandra, each key is copied to several replicas. A write is reported successful once some of them acknowledge it, and a read asks some of them and takes the newest answer. A read is guaranteed to include at least one replica holding the latest successful write when the two groups must overlap:
+In a leaderless store like Cassandra, each key is copied to several replicas. A write is reported successful once some of them acknowledge it, and a read asks some of them and takes the newest answer. For a completed write and a subsequent read over the same fixed replica set, the groups must overlap when their combined replica counts exceed the number of replicas. This is an intersection guarantee; timestamps, concurrent updates and partially applied writes still affect which value is returned.
 
-```formula
+```formula reference
 W + R > N
 Q = ⌊N / 2⌋ + 1
-N = 3: Q = ⌊1.5⌋ + 1 = 2
-W = R = 2: 2 + 2 = 4 > 3
-W = R = 1: 1 + 1 = 2 < 3
 where
-N: the replication factor, the number of replicas holding each key
-W: the number of replicas that must acknowledge a write before it counts as successful
-R: the number of replicas a read consults
-Q: the size of a majority quorum, what Cassandra's QUORUM level uses
-⌊ ⌋: floor: round down to the whole number below (1.5 becomes 1)
+N: number of replicas for the key in the fixed replica set
+W: number of replicas acknowledging the completed write
+R: number of replicas consulted by the subsequent read
+Q: number in a majority quorum
+⌊ ⌋: floor, rounding down to a whole number
 >: is greater than
-<: is less than
-In words: if the replicas you write to plus the replicas you read from add up to more than the total, the two groups must share at least one replica, so the read sees the write.
+In words: read and write groups must overlap if their combined sizes exceed the replica count. Majority reads and writes force that intersection, but intersection alone is not linearisability.
 ```
 
-With three replicas, `ONE` reads and `ONE` writes each involve one replica. Their combined count is two, below three, so the groups can be disjoint and a read can miss the latest write. Overlap is necessary but not sufficient for linearisability: concurrent writes, last-write-wins timestamps and failed writes that partly landed still need extra machinery such as lightweight transactions.
+With three replicas, `QUORUM` reads and writes each require two, so every read group intersects every successful write group. `ONE` reads and writes can use different replicas and miss an update. Overlap is necessary but not sufficient for linearisability: concurrent writes, last-write-wins timestamps and failed writes that partly landed still need extra machinery such as lightweight transactions.
 
 > [!tip] The everyday question
 > PACELC's "E" half is the one you face daily. Partitions are rare; latency is paid on every request. "Do we need this read to be strongly consistent, at the cost of a cross-zone round trip?" is a question you'll ask constantly.

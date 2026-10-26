@@ -11,8 +11,6 @@ Ears are good at telling you *something* is wrong and bad at telling you *what*.
 
 The tools are standard: **numpy** for arrays and the FFT, **matplotlib** for plots, **soundfile** for WAV files. You're *using* an FFT, not writing one; FFT implementation is deliberately deferred.
 
-
-
 ## Set up
 
 Use a virtual environment so the experiments are reproducible from a clean checkout:
@@ -64,7 +62,7 @@ Each check has a reason:
 - **Length:** 1 s at 48 kHz must be 48,000 samples. Off-by-one-block errors show up here.
 - **Peak** 0.5 is −6.02 dBFS, as requested.
 - **RMS** 0.3536 is the peak divided by 1.414 (the square root of 2), the sine's crest factor (the peak-and-RMS unit).
-- **DC offset** (the mean) should be essentially zero for this whole-cycle capture. Partial cycles can have a non-zero mean even when the underlying wave is centred correctly. A non-zero mean means the waveform is shifted off centre, which wastes headroom and can thump when audio starts and stops.
+- **DC offset** (the mean) should be essentially zero for this whole-cycle capture. Partial cycles can have a non-zero mean even when the underlying wave is centred correctly. A persistent offset over complete cycles means the waveform is shifted off centre, which wastes headroom and can thump when audio starts and stops.
 
 Other cheap sanity checks are worth wrapping in a function: `np.isfinite(x).all()` (NaN or infinity anywhere means a bug, often a filter blowing up), and the number of samples at or beyond ±1.0.
 
@@ -123,21 +121,9 @@ print(f"{1 / np.mean(periods):.2f} Hz")
 997.01 Hz
 ```
 
-The frequency is one over the average period, where each period is measured in samples and converted to seconds:
+The frequency is one over the average period, where each period is measured in samples and converted to seconds.
 
-```formula
-f ≈ 1 / T_avg
-T_avg = D_avg / fs
-f ≈ 48000 / 48.144 ≈ 997.0 Hz
-where
-f: the estimated frequency, in hertz (Hz)
-T_avg: the average time between upward zero crossings, in seconds (s)
-D_avg: the average spacing between upward zero crossings, in samples; about 48.144 for 997 Hz at 48 kHz
-fs: the sample rate, in samples per second; here 48,000
-Hz: hertz, cycles per second
-≈: approximately equal to (an estimate, then rounded)
-In words: count the average number of samples between upward crossings, turn it into seconds, and take one over that.
-```
+Average the gaps between upward crossings to estimate one cycle’s length. More samples between crossings mean a lower frequency; a higher sample rate makes the same sample gap represent less time.
 
 This counts whole samples, so it's only accurate to a fraction of a sample per period (here 0.01 Hz after averaging many periods). It's fooled by noise and by waveforms with several crossings per cycle. For anything richer than a sine, use the spectrum.
 

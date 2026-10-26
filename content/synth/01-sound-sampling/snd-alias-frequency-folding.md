@@ -1,13 +1,13 @@
 ---
 id: snd-alias-frequency-folding
-title: Calculate where aliases fold
+title: Predict where aliases fold
 level: intermediate
 minutes: 4
 summary: Wrap a component by the sample rate, reflect it below Nyquist and trace rising-frequency sweeps.
 sourceLesson: snd-aliasing
 ---
 
-## Calculating the alias frequency
+## Following an alias frequency
 
 Picture the frequency axis folded back and forth like a paper fan, with creases at every multiple of the Nyquist frequency (fs/2 in the drawing, where fs is the sample rate):
 
@@ -24,13 +24,11 @@ Any frequency maps to the point directly below it on the first segment, from 0 u
 1. Divide the frequency by the sample rate and keep the remainder (this is "modulo"), giving a value from 0 up to the sample rate.
 2. If the result is above the Nyquist frequency, subtract it from the sample rate.
 
-As a formula:
+This reference rule implements that procedure. It predicts the folded frequency; phase still affects the signed waveform and special fold-point samples.
 
-```formula
+```formula reference
 r = f mod fs
 f_a = min(r, fs − r)
-r = 30000 mod 48000 = 30000
-f_a = min(30000, 18000) = 18000 Hz
 where
 f: the true frequency being sampled, in hertz (Hz); here 30 kHz
 fs: the sample rate, in hertz (Hz); here 48 kHz
@@ -66,12 +64,7 @@ for f in (1_000, 23_000, 30_000, 47_000,
  97000 Hz ->   1000 Hz
 ```
 
-Worked through:
-
-- **30 kHz:** 30k mod 48k = 30k, above 24k, so 48k − 30k = **18 kHz**. It folded back off the Nyquist "wall".
-- **47 kHz:** just under fs. Folds to 48k − 47k = **1 kHz**: an ultrasonic tone has become a low, obvious one.
-- **50 kHz:** 50k mod 48k = **2 kHz**. Just above fs it appears as a low frequency, without folding.
-- **97 kHz:** 97k mod 48k = 1k. Two cycles round the fan.
+The examples show that a very high input can appear near the bottom of the audio band. Removing whole sample-rate multiples first handles frequencies beyond the first fold.
 
 Notice the behaviour as an input sweeps upwards: the alias rises to 24 kHz, then **falls** to 0 at 48 kHz, then rises again. A rising pitch whose alias falls is the unmistakable sound of aliasing.
 

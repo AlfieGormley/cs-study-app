@@ -3,76 +3,47 @@ id: nf-queue-utilisation
 sourceLesson: nf-performance
 title: Why busy queues become slow
 level: basic
-minutes: 4
-summary: Use the stated M/M/1 assumptions to relate utilisation to waiting time and bufferbloat.
+minutes: 3
+summary: Explain why queues grow near capacity and why high throughput can hide bufferbloat.
 ---
 
-## Why queues explode near full load
+A link with spare capacity on average can still build queues. Bursts temporarily arrive faster than the link can serve them; spare capacity between bursts is what lets that backlog drain.
 
-The question here is "how busy is this link, and how long will packets wait?" The **traffic intensity** compares the bits arriving each second with the bits the link can send each second:
+## Why delay grows near full load
 
-```formula
-ρ = (La) / R
-where
-ρ: rho, the traffic intensity (also called utilisation or load): the fraction of the link's capacity being asked for; it has no unit
-L: the mean packet length, in bits
-a: the average packet arrival rate, in packets per second
-R: the link's transmission rate, in bits per second
-In words: bits arriving per second divided by bits the link can send per second. At ρ = 1 traffic arrives exactly as fast as the link can send it; above 1 it arrives faster.
-```
+**Traffic intensity**, often called utilisation in the simple model, compares the average incoming work with the link's service capacity. Traffic asking for 90 Mbit/s on a 100 Mbit/s link represents 90% load.
 
-For example, 7,500 packets per second of 1500-byte packets on a 100 Mbit/s link:
+With sustained offered work above service capacity, an ideal infinite queue has no stable finite backlog. A real finite buffer eventually fills and drops or rejects excess traffic. Below capacity, the average load alone still does not determine delay: burstiness, packet sizes, scheduling and competing traffic matter.
 
-```formula
-ρ = 12,000 bit × 7,500 /s / (10⁸ bit/s)
-ρ = 9 × 10⁷ / 10⁸ = 0.9
-where
-ρ: rho, the traffic intensity (no unit)
-bit: one binary digit; each 1500-byte packet is 12,000 bits
-s: seconds; /s means "per second"
-In words: the traffic asks for 90 Mbit/s of a 100 Mbit/s link, a load of 0.9 (90%).
-```
+Near full load there is little spare service capacity to drain bursts. A small rise in average traffic can therefore produce a much larger rise in waiting time.
 
-With sustained offered load above service capacity, an ideal infinite queue has no stable finite backlog; a finite buffer instead reaches capacity and drops or otherwise rejects excess traffic. More surprisingly, the queue is already long well *before* ρ reaches 1.
+## An illustrative queue model
 
-Queueing theory's simplest model, the **M/M/1 queue**, shows why. It assumes Poisson arrivals (packets arrive independently at random, at a steady average rate), independent exponential service times (packet transmission times vary randomly around their mean), one server (one output link), infinite waiting space and ρ < 1. Its mean wait in the queue is:
+The **M/M/1 queue** makes this effect precise under particular assumptions: Poisson arrivals (independent random arrivals at a steady average rate), independent exponentially distributed service times, one server, infinite waiting space and offered load below capacity.
 
-```formula
+In that model the mean queueing wait is one mean packet-service time at 50% load, four at 80%, nine at 90% and 99 at 99%. Delay grows much faster than the offered load near capacity. The mean is finite below full load under these assumptions.
+
+```formula reference
 W_q = (ρ / (1 − ρ)) T_s
 where
-W_q: the mean time a packet waits in the queue before its own transmission starts, in seconds
-ρ: rho, the traffic intensity, between 0 and 1; the formula only holds for ρ < 1
-T_s: the mean service time: the average time the link takes to transmit one packet, in seconds
-In words: the wait, measured in packet times, is ρ / (1 − ρ). The bottom of the fraction shrinks towards zero as the load approaches 100%, so the wait shoots up.
+W_q: mean time spent waiting before transmission starts, in seconds
+ρ: traffic intensity, the average arriving work divided by service capacity; a unitless fraction between zero and one, strictly below one for this model
+T_s: mean service time, the average transmission time of a packet, in seconds
+In words: in this particular random-arrival, random-service queue model, waiting grows sharply as offered work approaches service capacity because less spare capacity remains to clear bursts.
 ```
 
-At 90% load, for example:
+Fixed-size packets have fixed transmission times rather than exponential ones. Real arrival patterns and schedulers also differ. This model is neither a universal prediction nor a bound for routers.
 
-```formula
-W_q = 0.9 / (1 − 0.9) × T_s
-W_q = 0.9 / 0.1 × T_s = 9 × T_s
-where
-W_q: the mean queueing wait
-T_s: the mean service time (one packet time)
-In words: at 90% load an average packet waits as long as it takes to send 9 packets before it even starts transmitting.
-```
+## Bufferbloat
 
-Fixed-size packets have deterministic rather than exponential transmission times, so this table is an illustrative queue model:
+Very large buffers can keep throughput high while allowing hundreds of milliseconds of persistent queueing. This **bufferbloat** hurts calls and games during a bulk upload. Active queue management, including CoDel and FQ-CoDel, addresses persistent queues; FQ-CoDel also separates traffic into flow queues.
 
-| Utilisation ρ | Average wait (packet times) |
-|---|---|
-| 50% | 1 |
-| 80% | 4 |
-| 90% | 9 |
-| 99% | 99 |
-
-Real traffic, packet lengths and scheduling differ; this model is neither a universal prediction nor a bound. This is why network engineers treat links running near 100% as a problem, and why a link at 95% "average" utilisation can feel terrible.
-
-A related failure is **bufferbloat**: routers and home modems with very large buffers let queues grow to hundreds of milliseconds rather than dropping packets early. Throughput looks fine but latency becomes awful, ruining video calls and games while a large upload runs. Active queue management (CoDel, FQ-CoDel) addresses this.
+Measure latency under load as well as throughput. An impressive bulk-transfer rate does not establish that interactive traffic is responsive.
 
 ## Key takeaways
-- The M/M/1 mean wait grows nonlinearly as load approaches capacity.
-- Its random-service, infinite-buffer assumptions do not describe every real router.
+- Average spare capacity does not prevent transient queues.
+- Near capacity, waiting can grow sharply; exact values depend on the queue model.
+- Throughput and latency under load reveal different aspects of a link.
 
 ## Further reading
 - [Primer on Latency and Bandwidth — High Performance Browser Networking](https://hpbn.co/primer-on-latency-and-bandwidth/)

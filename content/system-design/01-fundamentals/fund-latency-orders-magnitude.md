@@ -3,58 +3,55 @@ id: fund-latency-orders-magnitude
 title: Compare latency orders of magnitude carefully
 level: basic
 minutes: 3
-summary: Use explicitly hypothetical timing inputs to reason about memory, storage and distance without treating them as benchmarks.
+summary: Use hypothetical timings to spot important differences, then measure the actual workload before designing around them.
 sourceLesson: fund-latency-throughput
 ---
 
-An estimate should distinguish nanoseconds, microseconds and milliseconds before it chooses an architecture. These examples practise that comparison while keeping their measurement limits explicit.
+A useful estimate distinguishes nanoseconds, microseconds and milliseconds. Otherwise a small-looking number can hide a much slower operation. A microsecond is a thousand nanoseconds; a millisecond is a thousand microseconds.
 
-## Latency numbers every programmer should know
+## Use a timing table as a hypothesis
 
-The table below supplies illustrative assumptions for practising unit conversions and comparing orders of magnitude. These are not verified contemporary measurements, and the ratios also vary by hardware and workload.
+The following values are **hypothetical exercise inputs**, not current hardware benchmarks:
 
-> [!note] Content gap: latency measurements
-> No reproducible hardware/workload record supports this mixed historical latency table. Its values are retained only as hypothetical exercise inputs; benchmark your system before using them for design.
-
-| Operation | Hypothetical exercise time |
+| Operation | Assumed time |
 |---|---|
 | L1 cache reference | 1 ns |
-| Branch mispredict | 3–5 ns |
-| L2 cache reference | 4–7 ns |
-| Mutex lock/unlock | 20 ns |
 | Main memory reference | 100 ns |
-| Compress 1 KB (Snappy) | 2 µs |
-| Send 1 KB over 10 Gbps | 1 µs |
-| Random 4 KB SSD read | 20–150 µs |
-| Round trip, same datacentre | 0.5 ms |
-| Read 1 MB sequentially, SSD | 0.2–1 ms |
+| Random SSD read | 100 µs |
+| Same-datacentre round trip | 0.5 ms |
 | HDD seek | 10 ms |
-| Read 1 MB sequentially, HDD | 5–20 ms |
-| Round trip, same region (AZs) | 1–2 ms |
-| Round trip, London–New York | ~70 ms |
-| Round trip, CA–Netherlands–CA | 150 ms |
+| Distant-region round trip | 70 ms |
 
-### What to take away
+Converting to a common unit shows that these operations can occupy very different scales. Under these assumptions, memory access is much cheaper than a random storage read, and a distant round trip costs far more than either. The useful conclusion is where to investigate, rather than a ratio to memorise.
 
-- Using a 100 µs SSD read from the exercise range, memory is **1,000x faster than SSD** in this comparison, and the assumed in-datacentre round trip costs about as much as several such SSD reads. That's why Redis (in memory, one network hop) is so popular as a cache.
-- A **disk seek** costs as much as millions of CPU instructions. Sequential I/O is vastly faster than random I/O, which is why log-structured designs like Kafka and LSM-tree databases are fast at writes.
-- **Cross-region round trips are tens to hundreds of milliseconds.** Any design that requires a synchronous cross-region round trip on every write (e.g. synchronous geo-replication) pays this on every request.
-- **Chatty protocols are deadly over distance.** 20 sequential calls at 70 ms each = 1.4 s.
+> [!note] Content gap: reproducible measurements
+> These assumed values do not come from one measured hardware and workload configuration. Do not use them as capacity promises. Measure payload size, access pattern, caching, concurrency and load on the intended system.
 
-## Bulk transfer
+A request can pay an expensive operation many times. Several sequential distant calls may dominate its latency even when each carries few bytes. Batching, overlapping independent work or moving computation near the data can avoid those repeated waits.
 
-> [!example] A lorry full of hard drives
-> A lorry carrying 1,000 × 20 TB drives (20 PB) on a 10-hour (36,000-second) drive has enormous throughput: 20 PB delivered in 36,000 s is about 556 GB every second. Its latency is terrible: 10 hours for the first byte. AWS offered exactly this for years: Snowmobile, a lorry-sized container holding up to 100 PB, since retired. Smaller physical-transfer devices use the same principle. AWS stopped accepting new Snowball Edge customers on 7 November 2025 and has announced the end of support for Snowball devices in its commercial Regions on 31 December 2026; check current service availability before choosing a product.
+## Access pattern matters
+
+A storage device does not have one latency for every operation. A mechanical disk may need to move its head before a random read, whereas sequential access can stream nearby data. SSD behaviour also depends on size, load and device details. A network cache adds a network exchange even when its own data is in RAM.
+
+Use the table to ask specific questions: is this request waiting on many random reads, a distant dependency, or a saturated resource? Validate the answer with timings and traces.
+
+## Throughput can be high while latency is poor
+
+Moving a large batch efficiently does not guarantee a fast first result. A bulk physical transfer can deliver a huge quantity per trip while taking hours to deliver any of it. That same distinction applies when buffering or batching network and storage work.
+
+> [!analogy] Real-world analogy: a lorry carrying drives
+> A lorry can carry many drives in one journey, but the recipient waits for the journey to finish.
+>
+> **How it maps:** Total data delivered per journey can imply high average throughput, while the time until delivery remains long. Bandwidth and latency answer different questions.
+>
+> **Where it stops:** Physical transfers have loading, handling and copying costs. They are useful only for suitable bulk jobs, not interactive requests.
 
 ## Key takeaways
-- The table supplies exercise assumptions; it is not a reproducible current benchmark.
-- Convert timings to the same unit before comparing orders of magnitude.
-- Distance and repeated synchronous round trips can dominate designs; validate hardware-specific costs by measuring.
+- Compare durations in consistent units before deciding which cost matters.
+- Illustrative timing tables suggest hypotheses; measure the actual workload and access pattern.
+- Repeated sequential exchanges can dominate latency even with small payloads.
+- High bulk throughput does not imply a quick first response.
 
 ## Further reading
-- [Historical latency numbers](https://gist.github.com/jboner/2841832)
-- [Interactive historical latency numbers](https://colin-scott.github.io/personal_website/research/interactive_latency.html)
 - [Service Level Objectives (Google SRE)](https://sre.google/sre-book/service-level-objectives/)
-- [AWS Snowball Edge guide](https://docs.aws.amazon.com/snowball/latest/developer-guide/)
-- [AWS Snowball service availability](https://aws.amazon.com/snowball/)
-- [AWS Snow device updates](https://aws.amazon.com/blogs/storage/aws-snow-device-updates/)
+- [The Tail at Scale (Dean and Barroso)](https://www.barroso.org/publications/TheTailAtScale.pdf)

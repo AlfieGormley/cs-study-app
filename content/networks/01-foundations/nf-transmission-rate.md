@@ -4,67 +4,45 @@ sourceLesson: nf-performance
 title: Rate, units and transmission time
 level: basic
 minutes: 3
-summary: Separate link capacity from latency and calculate how long a packet takes to transmit.
+summary: Distinguish link capacity from latency and predict how packet size and link rate affect transmission.
 ---
 
-Two words get used loosely in everyday talk about networks: "fast" and "slow". A "fast" connection might mean one that moves a lot of data per second, or one that responds quickly. These are different properties, and confusing them leads to bad decisions, such as paying for more bandwidth when the real problem is latency.
-
-This lesson gives you the vocabulary and the arithmetic. You will use it in every later lesson, especially when we reach TCP.
+A connection can move a lot of data each second yet respond slowly. Buying more bandwidth helps when capacity is the constraint; it cannot make a signal travel a fixed route faster.
 
 ## Bandwidth and latency
 
-- **Bandwidth** (or link rate, capacity) is how many bits per second a link can push onto the wire. Think of the *width* of a pipe.
-- **Latency** (delay) is how long it takes one bit, or one packet, to get from one end to the other. Think of the *length* of the pipe.
+**Bandwidth**, also called link rate or capacity here, is how many bits a link can put onto the medium per second. **Latency** is the time a bit or packet takes to reach its destination, using the timing boundary specified.
 
-A motorway analogy: bandwidth is the number of lanes, latency is how long the drive takes. Adding capacity does not shorten the physical route, but it can reduce congestion delays. Likewise, greater link rate can reduce transmission and queueing delay without changing propagation speed.
+> [!analogy] Real-world analogy: More lanes
+> Adding lanes to a road lets more vehicles travel at once. It does not shorten the route.
+>
+> **How it maps:** Link capacity is like the number of lanes; propagation time is like the journey along the route. More capacity can reduce congestion and the time needed to send a whole packet.
+>
+> **Where it stops:** Packets are serialised into signals, and routers add processing and queueing. A road journey does not model all those delays.
 
-> [!warning] Units
-> Network rates use decimal SI units and **bits**: 1 Mbit/s is 1,000,000 bits per second. File sizes are usually in **bytes**, sometimes binary (1 KiB = 1024 bytes). A "100 Mbit/s" connection downloads at most 12.5 MB/s. Mixing bits and bytes is the most common calculation mistake, so write the units down.
+> [!warning] Bits and bytes
+> Network rates use decimal SI units and bits: 1 Mbit/s is 1,000,000 bits per second. One byte is 8 bits. File sizes may use decimal bytes (MB) or binary units (KiB, with 1024 bytes per KiB). A 100 Mbit/s link has an ideal ceiling of 12.5 MB/s before overhead; a browser's displayed rate requires measurement.
 
-### 1. Transmission delay
+## Transmission delay
 
-The time to push all the packet's bits onto the link. Use it whenever the question is "how long does this link take to send this much data?":
+Transmission delay is the time to put all of one packet's bits onto the link, from its first bit to its last. Larger packets take longer. A higher link rate sends the same packet in less time. Cable length plays no part in this particular delay.
 
-```formula
+```formula reference
 d_trans = L / R
 where
-d_trans: the transmission delay, in seconds: the time from the first bit of the packet going onto the link to the last bit going on
-L: the packet length, in bits, counted at the layer being modelled
-R: the link's transmission rate (bandwidth), in bits per second
-In words: double the packet and the transmission time doubles; double the link rate and it halves. The length of the cable plays no part.
+d_trans: transmission delay, in seconds, from putting the first packet bit onto the link to putting the last bit onto it
+L: packet length in bits, counted at the layer being modelled
+R: link rate in bits per second
+In words: transmission takes longer for a larger packet and less time on a higher-rate link; doubling both packet size and link rate leaves this delay unchanged.
 ```
 
-For example, a 1500-byte packet on a 100 Mbit/s link:
+For example, putting a 1500-byte packet onto a 100 Mbit/s link takes 120 microseconds, ignoring additional framing and encoding. At 1 Gbit/s it takes 12 microseconds. The signal still needs time to travel after the first bit enters the medium.
 
-```formula
-L = 1500 B × 8 bit/B = 12,000 bit
-R = 100 Mbit/s = 10⁸ bit/s
-d_trans = 12,000 bit / (10⁸ bit/s)
-d_trans = 0.00012 s = 120 µs
-where
-L: the packet length in bits
-B: bytes; one byte is 8 bits
-bit: one binary digit, the unit link rates are counted in
-R: the link rate, in bits per second
-Mbit/s: megabits per second; 1 Mbit is 1,000,000 bits
-d_trans: the transmission delay
-s: seconds
-µs: microseconds; 1 µs is one millionth of a second (10⁻⁶ s)
-In words: a 100 Mbit/s link needs 120 millionths of a second to put a 1500-byte packet onto the wire.
-```
-
-The table repeats this for other rates. It ignores additional framing and encoding overhead, which a real link adds on top. A 1500-byte packet is 12,000 bits:
-
-| Link rate | d_trans |
-|---|---|
-| 10 Mbit/s | 1.2 ms |
-| 100 Mbit/s | 120 µs |
-| 1 Gbit/s | 12 µs |
-| 10 Gbit/s | 1.2 µs |
+Overhead, server work, congestion and host limits can make a file transfer slower than the raw rate suggests. Keep the units and the measured boundary explicit.
 
 ## Key takeaways
-- Convert bytes to bits before dividing by bit rate.
-- Transmission time depends on packet length and rate, rather than route distance.
+- Capacity describes a rate; latency describes a time.
+- Packet size and link rate determine transmission delay; route length determines a different delay.
 
 ## Further reading
 - [Primer on Latency and Bandwidth — High Performance Browser Networking](https://hpbn.co/primer-on-latency-and-bandwidth/)

@@ -4,58 +4,47 @@ sourceLesson: nf-physical-layer
 title: Symbols, baud and bits
 level: basic
 minutes: 3
-summary: Relate distinguishable symbol states to uncoded bit rate and explain the noise trade-off.
+summary: Distinguish symbol rate from bit rate and explain why denser signalling needs reliable distinction.
 ---
 
-Everything above the physical layer assumes it can hand over a string of bits and have the same bits appear at the other end. The physical layer makes that true, most of the time, by turning bits into something that can travel: voltages on copper, pulses of light in glass, or radio waves.
+The physical layer turns bits into signals that travel as voltages, light or radio waves. It chooses from distinguishable **symbols**, such as voltage levels or combinations of amplitude and phase.
 
-Software engineers rarely touch this layer. It still shapes everything above it: the fastest possible RTT, how far a cable can run, why Wi-Fi is flaky and why data centres are full of fibre. This lesson covers just enough to reason about those effects.
+## Symbols and bits measure different things
 
-## Signals, symbols and bits
+The **baud rate** counts symbols per second. The **bit rate** also depends on how much information each symbol distinguishes.
 
-A link sends **symbols**, chosen from a signal alphabet for successive symbol intervals: for example, voltage levels or combinations of amplitude and phase. Pulse shaping means the physical waveform need not remain constant throughout an interval. The number of symbols per second is the **baud rate** (symbol rate).
+With two states, one symbol can distinguish 0 from 1. With four states it can distinguish 00, 01, 10 and 11: two bits per symbol. Each extra bit requires twice as many states for an uncoded fixed mapping.
 
-Each symbol can carry more than one bit. With two possible states a symbol can say 0 or 1; with four states it can say 00, 01, 10 or 11. Each extra bit doubles the number of states needed. For an uncoded fixed mapping:
-
-```formula
-M = 2^k
-k = log_2(M)
-where
-M: the number of distinguishable symbol states (levels, or amplitude-and-phase combinations)
-k: the number of bits each symbol carries
-log_2: the base-2 logarithm: the power 2 must be raised to in order to give M (log_2(16) = 4 because 2^4 = 16)
-In words: a symbol with M states carries log_2(M) bits, so 4 states carry 2 bits, 16 carry 4 and 1024 carry 10.
-```
-
-Coding, pilots (known reference symbols for the receiver) and framing reduce the payload rate below this:
-
-| Scheme | States | Bits/symbol |
+| Scheme | States | Bits per symbol |
 |---|---|---|
 | Two voltage levels | 2 | 1 |
 | PAM-4 | 4 | 2 |
 | 16-QAM | 16 | 4 |
-| 1024-QAM (Wi-Fi 6) | 1024 | 10 |
+| 1024-QAM, used in Wi-Fi 6 | 1024 | 10 |
 
-So the bit rate is the symbol rate times the bits each symbol carries:
+A 1 Gbaud PAM-4 mapping therefore represents 2 Gbit/s before overhead. Coding, framing and pilots (known reference symbols used by the receiver) reduce the useful payload rate.
 
-```formula
+```formula reference
+k = log_2(M)
 R_b = R_s k
-R_b = 10⁹ baud × 2 bit = 2 × 10⁹ bit/s
 where
-R_b: the bit rate, in bits per second (bit/s)
-R_s: the symbol rate (baud rate), in baud: symbols per second
-k: the bits carried per symbol, log_2 of the number of states; 2 for PAM-4
-baud: one symbol per second; 1 Gbaud is 10⁹ symbols per second
-bit: one binary digit; bit/s is bits per second
-s: seconds
-In words: a 1 Gbaud PAM-4 link sends a billion symbols a second, each carrying 2 bits, so it carries 2 Gbit/s.
+k: number of bits carried by each symbol in the uncoded fixed mapping
+M: number of distinguishable symbol states; assume a power of two for the fixed whole-bit mapping
+log_2: base-two logarithm, the power to which two must be raised to obtain the argument
+R_b: raw mapped bit rate in bits per second
+R_s: symbol rate in symbols per second, also called baud
+In words: more symbol states let each symbol carry more bits, and sending more symbols each second raises the raw bit rate; coding and other overhead reduce the useful payload rate.
 ```
 
-Why not use millions of levels? Because noise blurs them. The closer together the levels are, the more likely noise pushes a symbol across a boundary and the receiver decodes the wrong one.
+## Why more levels have a cost
+
+At a fixed signal range, putting states closer together makes them harder to distinguish in noise. More states can raise bits per symbol while also making the mapping less robust.
+
+A receiver also needs suitable pulse shaping and timing: the waveform need not stay constant during a symbol interval. Choosing modulation means balancing rate against the channel conditions, coding and implementation limits.
 
 ## Key takeaways
-- Baud counts symbols per second, while bit rate also depends on bits per symbol.
-- Coding and other overhead reduce payload rate below an uncoded mapping’s raw rate.
+- Baud counts symbols; bit rate also counts the bits represented by each symbol.
+- Denser signal states increase raw rate but require reliable distinction in noise.
 
 ## Further reading
 - [Shannon–Hartley theorem — Wikipedia](https://en.wikipedia.org/wiki/Shannon%E2%80%93Hartley_theorem)

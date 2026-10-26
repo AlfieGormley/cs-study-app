@@ -2,7 +2,12 @@
 
 A personal study app for computer science, built as an offline-capable web app for the iPhone home screen.
 Each subject has modules made up of lessons (basic → advanced), and every lesson has practice questions.
-Each question has a worked example, an explanation for every option and a link to further reading.
+Each question has a reasoning walkthrough, an explanation for every option and a link to further reading.
+
+Lessons focus on understanding: practical meaning, behaviour and trade-offs. Reference formula cards
+show the idea in words, with “Show the maths” for equations and symbol definitions. Essential relationships
+remain visible, and quiz data stays expanded. Future content follows the concept-first rule in
+`CONTENT_SPEC.md`; worked examples can explain reasoning without requiring calculations.
 
 Subjects: System Design, Data Structures & Algorithms, Operating Systems, Computer Networks, Computer
 Architecture, Programming Languages & Compilers, Security & Cryptography, Software Engineering, Theory &

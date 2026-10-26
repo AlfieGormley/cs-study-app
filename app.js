@@ -302,7 +302,7 @@ async function lessonView(s, m, l) {
       <h1 class="large-title">${esc(lesson.title)}</h1>
     </div>
     <p class="term-help">Tap dotted-underlined terms for a quick definition. <a href="#/dictionary">Browse dictionary</a></p>
-    <article class="prose">${md(lesson.body, { subject: s })}</article>
+    <article class="prose">${md(lesson.body, { subject: s, collapseFormulas: true })}</article>
     <div class="section-label">Check your understanding</div>
     <button class="btn" id="practise" ${lesson.questions.length ? '' : 'disabled'}>Practise ${plural(lesson.questions.length, 'question')}</button>
     <div class="btn-row"><button class="btn ${done ? 'plain' : 'secondary'}" id="done">${done ? '✓ Completed' : 'Mark as complete'}</button></div>
@@ -448,7 +448,7 @@ async function quizView(id) {
         }).join('')}
       </div>
       ${checked ? `
-        <div class="card worked prose"><h3>Worked example</h3>${md(q.workedExample, { subject: item.s })}</div>
+        <div class="card worked prose"><h3>Reasoning</h3>${md(q.workedExample, { subject: item.s })}</div>
         <a class="link-card" href="${esc(q.link.url)}" target="_blank" rel="noopener">
           <span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span><b>Learn more: ${esc(q.link.title)}</b><small>${esc(new URL(q.link.url).hostname)}</small></span></a>

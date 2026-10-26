@@ -3,27 +3,27 @@
     "id": "nf-layered-models-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "A host receives an Ethernet frame whose EtherType field is `0x86DD`. Which software should the frame's payload be handed to?",
+    "prompt": "A receiver's EtherType table maps `0x86DD` to IPv6. An incoming Ethernet frame has that value. What should the receiver do next?",
     "options": [
       {
-        "text": "The ARP module",
-        "explanation": "ARP's EtherType is `0x0806`. Mixing these up is a common slip; each protocol carried directly in Ethernet has its own value."
+        "text": "Pass the entire frame directly to ARP",
+        "explanation": "ARP is a different EtherType; the supplied mapping identifies IPv6."
       },
       {
-        "text": "The IPv4 stack",
-        "explanation": "IPv4 is `0x0800`. `0x86DD` identifies a different network-layer protocol."
+        "text": "Treat the payload as IPv4 because every Ethernet payload is IPv4",
+        "explanation": "Ethernet can carry different protocols, and this frame explicitly selects IPv6."
       },
       {
-        "text": "The IPv6 stack",
-        "explanation": "Correct. EtherType `0x86DD` means the payload is an IPv6 packet, so the link layer passes it up to IPv6."
+        "text": "Pass the Ethernet payload to IPv6, which interprets its own next-header information",
+        "explanation": "Correct. Selection proceeds one layer at a time; an EtherType does not identify every inner header."
       },
       {
-        "text": "The TCP stack",
-        "explanation": "In the specified standard IP stack, TCP is inside IP and selected by protocol number 6; EtherType 0x86DD selects IPv6 first."
+        "text": "Pass the payload straight to an HTTPS application",
+        "explanation": "Application delivery requires further IP and transport interpretation; Ethernet does not establish HTTPS merely from this EtherType."
       }
     ],
     "answer": 2,
-    "workedExample": "Demultiplexing happens one layer at a time:\n\n| Header | Field | Value | Meaning |\n|---|---|---|---|\n| Ethernet | EtherType | 0x86DD | IPv6 |\n| IPv6 | Next Header | 6 | TCP |\n| TCP | Dest port | 443 | Conventionally HTTPS |\n\nEtherType selects the encapsulated protocol, which need not always be IP (ARP is another example). So `0x86DD` goes to IPv6, and IPv6 then decides where its own payload goes.",
+    "workedExample": "Use the supplied mapping to select IPv6. IPv6 then interprets its Next Header field, which may select a transport or an extension header. Transport endpoint information helps select the final recipient. Each layer interprets its own context; port conventions alone do not prove an application protocol.",
     "link": {
       "title": "EtherType — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/EtherType"
@@ -71,27 +71,27 @@
     "id": "nf-layered-models-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A packet travels from a laptop to a server, crossing three routers. Every link is Ethernet. How many distinct Ethernet frames (each with its own header) carry this one IP packet? Assume no tunnelling, fragmentation, retransmission or frame duplication.",
+    "prompt": "An ordinary router forwards an IP packet between two Ethernet links. Assume no NAT, tunnel, fragmentation or retransmission. Why does it build a new Ethernet frame?",
     "options": [
       {
-        "text": "1",
-        "explanation": "That would be true only if the frame survived end to end. Routers terminate the link layer: they strip the frame and build a new one for the next link."
+        "text": "The original destination MAC identifies the final server on every routed link",
+        "explanation": "Ethernet addresses identify local link delivery; the final server may be many routed links away."
       },
       {
-        "text": "3",
-        "explanation": "This counts routers rather than links. There is one more link than there are routers in the chain."
+        "text": "Every router must change the IP destination to its own address",
+        "explanation": "Ordinary forwarding preserves the final IP destination under these assumptions."
       },
       {
-        "text": "4",
-        "explanation": "Correct. Three routers in a line create four links (laptop–R1, R1–R2, R2–R3, R3–server), and each link gets its own frame."
+        "text": "The next Ethernet link needs local source and next-hop MAC addresses",
+        "explanation": "Correct. The router terminates incoming link framing and creates framing suitable for its outgoing link."
       },
       {
-        "text": "6",
-        "explanation": "This counts each router twice (receive and send). A frame received on one link and a new frame sent on the next are two of the four links' frames, not extra ones."
+        "text": "TCP ports are different on every Ethernet link",
+        "explanation": "Plain forwarding does not rewrite TCP ports."
       }
     ],
     "answer": 2,
-    "workedExample": "```\nlaptop -1- R1 -2- R2 -3- R3 -4- server\n```\n\n1. The link layer is hop-by-hop, so each numbered link has its own frame.\n2. Each frame has the MAC of that link's sender as source and that link's receiver as destination.\n3. The IP packet inside keeps the same source and destination IP throughout.\n\nSo: 3 routers, 4 links, 4 frames, 1 IP packet. (Ordinary bridges within a LAN do not create another routed IP hop; VLAN tags and per-link FCS handling may still change frame representation.)",
+    "workedExample": "First separate the boundaries: the IP packet describes delivery across the path; an Ethernet frame describes delivery over the current link or LAN. The router chooses a next hop, then addresses a frame for that next link. IP addresses remain the same here, while TTL and the IPv4 checksum need the appropriate forwarding updates.",
     "link": {
       "title": "Internet protocol suite — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Internet_protocol_suite"

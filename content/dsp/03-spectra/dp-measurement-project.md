@@ -2,109 +2,55 @@
 id: dp-measurement-project
 title: A reproducible vibration measurement
 level: intermediate
-minutes: 5
+minutes: 4
 summary: Combine known timing, RMS, causal filtering and a calibrated spectrum with explicit synthetic checks.
 ---
 
-Build a small synthetic vibration experiment before trusting a real measurement chain. The input contains a fixed acceleration offset, a wanted 64 Hz tone and a 192 Hz interferer. Its values are in metres per second squared. We know the truth because we generated the record; a physical sensor would add calibration uncertainty, noise, drift and timing error.
+Before trusting a measurement chain, test it on a synthetic signal with known truth. A real vibration sensor adds calibration uncertainty, noise, drift and timing error. A generated record lets you first ask whether the processing behaves as intended.
 
-The aim is to preserve the wanted tone, reduce the interferer and check that the measured output matches the chosen filter. These are calculations on a host computer, not a device benchmark or evidence that a sensor is accurate.
+This experiment uses an acceleration offset, a wanted 64 Hz tone and a 192 Hz interferer. The task is to preserve the wanted tone, reduce the interferer and explain the measured output. It tests numerical processing on a host computer; it does not establish physical sensor accuracy or device timing performance.
 
-## State the experiment's contract
+## State a reproducible contract
 
-Use 1024 samples per second and acquire 1280 samples. Remove the measured mean, apply a causal three-tap moving average with zero initial state, then discard the first 256 outputs and analyse the next 1024. This removes the filter's startup from the analysed segment. The remaining tones complete whole cycles in that segment.
+Use the following fixed setup, with no random noise or external files. Acceleration values are in metres per second squared.
 
-The symmetric three-tap filter has one input-sample delay. Keep that delay when interpreting time events. We estimate amplitudes here, not aligned transient times, and do not substitute an offline zero-phase filter.
+| Setting | Choice |
+|---|---|
+| Sample rate | 1024 samples per second |
+| Acquired length | 1280 samples |
+| Constant offset | 0.4 |
+| Wanted cosine peak | 2 at 64 Hz |
+| Interfering cosine peak | 0.6 at 192 Hz |
 
-## Complete Python experiment
+Start both cosines at their positive peak at sample zero. They complete whole cycles over this acquired record, so their mean is zero and the measured mean should be the stated offset, allowing numerical rounding.
 
-`lfilter` applies the stated coefficients causally and starts with zero state when no initial state is supplied. `mean` and `sqrt(mean(...))` calculate the offset and RMS. `allclose` checks approximate equality with an explicit absolute tolerance. No random noise or external files are involved.
+Remove that measured mean before analysing AC RMS, so the constant offset does not count as vibration around the mean. Both oscillating tones remain. RMS describes average squared size followed by a square root; it is not the sum or average of the tone peaks. For these whole-cycle, orthogonal cosines, mean-square contributions add because their cross-products average to zero.
 
-```python
-import numpy as np
-from scipy.signal import lfilter
-from scipy.signal.windows import hann
+## Separate filter behaviour from measurement behaviour
 
-fs = 1024
-n = np.arange(1280)
-x = 0.4 + 2 * np.cos(
-    2 * np.pi * 64 * n / fs)
-x += 0.6 * np.cos(
-    2 * np.pi * 192 * n / fs)
-offset = x.mean()
-ac = x - offset
-h = np.ones(3) / 3
-y = lfilter(h, [1.0], ac)
-v = y[256:1280]
-w = hann(len(v), sym=False)
-A = abs(np.fft.rfft(v * w)) / w.sum()
-A[1:-1] *= 2
-print(round(offset, 6))
-print(round(np.sqrt(np.mean(ac**2)), 6))
-print(np.round(A[[64, 192]], 6))
-# Direct sinusoidal filter gains.
-freq = np.array([64, 192])
-gain = abs((1 + 2 * np.cos(
-    2 * np.pi * freq / fs)) / 3)
-expect = np.array([2.0, 0.6]) * gain
-assert np.allclose(A[[64, 192]], expect,
-                   atol=1e-10, rtol=0)
-```
+Apply a causal three-tap moving average with equal weights and zero initial state. Each output averages the current input and two preceding inputs. SciPy's `lfilter` can implement this causal operation; an offline zero-phase filter would be a different contract.
 
-The outputs are `0.4`, `1.476482` and `[1.898506 0.353073]`. Acceleration amplitudes and RMS share the input unit. The interferer is reduced, not eliminated. The wanted tone is also attenuated, so reading its output peak as its original input amplitude would be wrong.
+Discard the first 256 outputs, then analyse the remaining 1024. This keeps filter startup outside the analysed segment. Both tones complete whole cycles there too. The symmetric three-tap filter has one input-sample delay: discarding startup does not remove that delay when interpreting time events.
 
-## Explain the expected values
+Apply a periodic Hann to the analysed segment. Use its actual weight sum for coherent-tone amplitude calibration, doubling only paired interior bins. Both test tones are interior bins, well away from DC and Nyquist. Use a separate frequency-response calculation to predict each output tone before comparing with the measured spectrum.
 
-For this three-tap moving average, the steady sinusoidal magnitude gain follows from adding the three delayed complex contributions. Its magnitude is dimensionless.
+## Interpret the checks
 
-```formula
-G(f) = |1 + 2 cos((2πf) / F_s)| / 3
-A_o = A_i G(f)
-where
-G: magnitude gain function of this specific equal-weight three-tap moving average
-f: sinusoid frequency, in hertz (Hz)
-cos: cosine function with an angle in radians
-π: pi, approximately 3.14159
-F_s: sample rate, here 1024 Hz
-| |: absolute value of the real expression between the bars
-A_o: steady output peak amplitude, in metres per second squared
-A_i: input peak amplitude of the same sinusoid, in metres per second squared
-Hz: hertz, cycles per second
-In words: multiply each input tone's peak by the filter's gain at that frequency to predict its steady output peak.
-```
+The wanted output peak is approximately 1.899 and the interferer's approximately 0.353, in the same acceleration units as the input. The interferer is reduced, not eliminated. The wanted tone is also attenuated, so its output peak must not be reported as the original input peak.
 
-This formula checks magnitude only. The causal filter also changes phase. The analyser uses a periodic Hann and corrects coherent gain using its actual sum; the analysed frequencies are interior bins, well away from both endpoints.
+Make separate checks for mean removal, RMS, filter response and spectrum scaling. A coherent-amplitude assertion can reveal a scaling or filtering error, but it cannot by itself prove time alignment, physical calibration or real-time performance. Inspect time events as well if timing matters.
 
-The input's AC RMS can also be predicted because the two cosines have zero mean and are orthogonal over the complete record: their cross-products sum to zero.
-
-```formula
-R = √((a^2 + b^2) / 2)
-R = √(((2 u)^2 + (0.6 u)^2) / 2)
-R ≈ 1.476482 u
-where
-R: RMS of this zero-mean two-tone input over whole cycles, in acceleration units u
-a: wanted tone's peak amplitude, here 2 u
-b: interferer's peak amplitude, here 0.6 u
-u: acceleration unit, one metre per second squared
-√: non-negative square-root function
-≈: approximately equal to, after rounding
-In words: the mean-square contributions of these orthogonal whole-cycle tones add before taking the square root.
-```
-
-## What the checks establish
-
-The assertion checks this implementation against a separate analytical gain expression. Also check timing, offset and units; one passing spectrum assertion cannot prove every part of a measurement system. A longer filter could better suppress the interferer, at a cost in delay and transition behaviour.
-
-On a real signal, record the sample-clock accuracy, calibration, detrending, window, bandwidth and transient policy. A peak's bin label alone does not supply an uncertainty interval.
+A longer, suitably designed filter may reject the interferer better, with different delay and transition behaviour. On a real record, document sample-clock accuracy, calibration, detrending, window, bandwidth and transient handling. A peak's bin label alone does not supply an uncertainty interval.
 
 ## Key takeaways
 
-- A reproducible synthetic signal supplies known truth for checking a DSP chain.
-- Predict the filter's effect before interpreting the measured output spectrum.
-- Numerical agreement does not establish physical calibration, timing accuracy or real-time performance.
+- Known synthetic input lets you check each processing stage against a stated contract.
+- Predict the filter's effect before interpreting an output peak as an input measurement.
+- Numerical agreement establishes the tested behaviour; physical calibration and timing need their own evidence.
 
 ## Further reading
 
 - [SciPy: causal filtering and initial conditions](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.lfilter.html)
+- [SciPy: frequency response of a digital filter](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.freqz.html)
 - [SciPy: periodic and symmetric Hann windows](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.windows.hann.html)
 - [NumPy: FFT conventions](https://numpy.org/doc/stable/reference/routines.fft.html)

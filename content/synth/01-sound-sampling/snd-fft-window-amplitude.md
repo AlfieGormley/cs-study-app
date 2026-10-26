@@ -11,36 +11,26 @@ Analyse a real sample array with NumPy's `rfft`. In this unit, the capture lengt
 
 ## Window and scale an FFT
 
-The Hann window numpy uses is a single raised cosine, zero at both ends and 1 (or, for an even number of samples, just under 1) in the middle:
+The Hann window NumPy uses is a smooth raised-cosine taper.
 
-```formula
-w[n] = 0.5 − 0.5 × cos(2 × π × n / (N − 1))
-where
-w[n]: the window value for sample n, between 0 and 1
-n: the sample index, 0 to N − 1
-N: the number of samples in the capture
-cos: the cosine function, taking radians
-π: pi, about 3.14159
-In words: the window rises smoothly from 0 at the first sample to 1 in the middle and falls back to 0 at the last, so the capture has no abrupt start or end.
-```
+The window tapers the capture towards zero at both ends, reducing the artificial jump caused by analysing a finite segment. For an even-length Hann window, the centre gets just below one rather than exactly one.
 
-And the scaling that turns a bin's raw magnitude into a sine's amplitude:
+Windowing also reduces the measured magnitude. To recover a bin-centred sine’s amplitude, account for the actual window sum. Ordinary positive-frequency bins need doubling because the real sine has a mirrored negative-frequency contribution:
 
-```formula
+```formula reference
 A = 2 × |X[k]| / Σ w[n]
-A = 2 × 12000 / 48000 = 0.5
 where
 A: the amplitude of a sine whose frequency sits on bin k
 X[k]: the raw complex FFT output for bin k
 |X[k]|: its magnitude (size), which numpy gives with np.abs
 k: the bin index
-Σ w[n]: the sum of all the window values; N for no window, about N/2 for Hann
+Σ w[n]: sigma means add all the window values: the sample count without a taper, and about half that count for Hann
 w[n]: the window value for sample n
 n: the sample index
-In words: double the bin's magnitude (half the sine's energy sits in a mirrored negative frequency that rfft doesn't return) and divide by the sum of the window. Here, no window, 48,000 samples and a raw magnitude of 12,000 give an amplitude of 0.5.
+In words: To measure a bin-centred sine, divide its FFT magnitude by the sum of the window and double ordinary positive-frequency bins. Do not double zero frequency or the even-length Nyquist bin.
 ```
 
-The 0 Hz bin and (for even N) the Nyquist bin have no mirror, so they are not doubled; the `spectrum` function below halves them back.
+The 0 Hz bin and, for even capture lengths, the Nyquist bin have no separate mirror, so they are not doubled; the `spectrum` function below halves them back.
 
 ```python
 import numpy as np

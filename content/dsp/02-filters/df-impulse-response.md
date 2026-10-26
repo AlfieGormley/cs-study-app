@@ -12,33 +12,13 @@ The **impulse response** is the output produced by this input when a system star
 
 ## Reveal the weights
 
-Consider a system that combines the present sample and the previous one. All input values before sample zero are zero.
-
-```formula
-y[n] = 0.75x[n] + 0.25x[n − 1]
-where
-y: the output sequence, with dimensionless sample values
-x: the input sequence, with dimensionless sample values
-n: the integer sample index; n starts at zero for this record
-0.75: the dimensionless weight on the present input
-0.25: the dimensionless weight on the previous input
-In words: each output is three quarters of the current reading plus one quarter of the previous reading.
-```
+Consider a system that takes three quarters of the present reading and one quarter of the previous reading, then adds them. All input values before sample zero are zero.
 
 The impulse produces 0.75 at sample zero, 0.25 at sample one, then zeros. That two-sample response exposes the two weights directly. A pulse with amplitude 4 produces 3, then 1. A pulse arriving five samples later produces that same pair five samples later. The output depends on both the pulse and what the system remembers, so the system must start in zero state for this interpretation.
 
-This complete Python example uses a list for the input and one variable for its remembered previous sample. It prints the first four response values.
+This reveals **filter memory** without a long test signal. The first response value tells you how much acts immediately; later values show how an input continues to matter. Here the influence ends after two outputs. Other systems have longer responses, including tails that decay without reaching exact zero in the mathematical model.
 
-```python
-x = [1.0, 0.0, 0.0, 0.0]
-previous = 0.0
-y = []
-for sample in x:
-    y.append(0.75*sample + 0.25*previous)
-    previous = sample
-print(y)
-# [0.75, 0.25, 0.0, 0.0]
-```
+For an established LTI system, doubling a pulse doubles its whole response, and delaying the pulse delays the whole response. If either prediction fails, the measured response cannot serve as one fixed description of all its behaviour.
 
 ## Causality is about available information
 

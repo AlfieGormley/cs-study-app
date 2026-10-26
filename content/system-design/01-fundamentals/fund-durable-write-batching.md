@@ -32,25 +32,15 @@ Real knobs that control this:
 
 Batching (group commit) softens this trade-off: fsync once for many writes. A log that does one fsync at a time can only do so many per second, and each one can make a whole batch durable:
 
-```formula
-X = b / t_f
-b = 1: X = 1 / 0.002 s = 500 /s
-b = 50: X = 50 / 0.002 s = 25,000 /s
-where
-X: the maximum commits per second one log can make durable
-b: the batch size, the number of commits made durable by each fsync
-t_f: the time one fsync takes, in seconds (s); here 2 ms = 0.002 s
-s: second
-In words: a log that can fsync 500 times a second commits 500 transactions a second one at a time, or fifty times as many if each fsync carries fifty.
-```
+For an illustrative log whose flush takes 2 ms, serial one-commit flushes allow about 500 commits/s. If each flush makes 50 commits durable, that same flush capacity can cover about 25,000 commits/s. The improvement comes from sharing the expensive flush, rather than weakening the durability acknowledgement.
 
-The ceiling assumes fsyncs happen one after another and that there are always enough commits waiting to fill a batch. The price is latency: a commit may wait for the next batch, by an amount set by the batching policy, queueing and flush completion time. Kafka and most databases do this, which is why throughput can be high even with durable writes.
+These illustrative ceilings assume flushes happen one after another and that there are always enough commits waiting to fill a batch. The price is latency: a commit may wait for the next batch, by an amount set by the batching policy, queueing and flush completion time. Kafka and most databases do this, which is why throughput can be high even with durable writes.
 
 ## Throughput vs latency
 
-Batching, buffering and compression raise throughput at the cost of per-item latency:
+Batching, buffering and compression can improve throughput while adding waiting or CPU work. End-to-end latency can still improve if they reduce a bottleneck:
 
-- Kafka's `linger.ms` waits a few milliseconds to fill a batch, giving far higher throughput. Recent versions default it to 5 ms (it was 0 before Kafka 4.0); high-volume producers often raise it further.
+- Kafka's `linger.ms` can wait to fill an incomplete batch, reducing per-request overhead; measure whether that improves throughput for the workload. Recent versions default it to 5 ms (it was 0 before Kafka 4.0); high-volume producers often raise it further.
 - Nagle's algorithm in TCP delays small packets to coalesce them (often disabled with `TCP_NODELAY` for interactive traffic).
 - Running servers at high utilisation is cheaper but increases queueing latency, as the latency lesson showed.
 

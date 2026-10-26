@@ -10,9 +10,13 @@ summary: Trace a one-pole feedback smoother and distinguish stored state from an
 
 ## Mix a new reading with the old result
 
-A **one-pole smoother** keeps one previous output. Here the coefficient names follow an explicit convention: the memory weight is on the previous output, and the complementary weight is on the current input.
+A **one-pole smoother** keeps one previous output. Each update takes a share of the new reading and a share of that remembered output, with positive shares that add to one. The result becomes the remembered value for the next update. Unlike a moving average's fixed window, an older input fades gradually through repeated updates instead of leaving after a fixed number of samples.
 
-```formula
+Here the coefficient names follow an explicit convention: the memory weight is on the previous output, and the complementary weight is on the current input. With equal shares, a sudden sustained change makes the output move halfway towards the new level at each update. More weight on the old output means a slower response and longer retention; more on the new input means a faster response and less smoothing.
+
+The optional recurrence records that convention precisely.
+
+```formula reference
 y[n] = (1 − a)x[n] + ay[n − 1]
 0 < a < 1
 where
@@ -20,12 +24,12 @@ y: the output sequence, with dimensionless sample values here; its value at inde
 x: the input sequence, with dimensionless sample values
 n: the integer sample index, starting at zero
 a: the dimensionless memory weight on the previous output; larger values in this range retain history longer
-In words: take part of the new reading and part of the previous output, with weights that add to one.
+In words: mix the new reading with the previous output using positive weights that add to one; a larger share of the old output retains history longer.
 ```
 
-With a memory weight of 0.5, a step from zero to 1 produces 0.5, 0.75, 0.875 and 0.9375. Each output closes half the remaining gap. It approaches 1 but does not reach it in a finite number of steps in exact arithmetic. A memory weight of 0.9 responds more slowly than 0.5; its first output is only 0.1 from zero state.
+With equal shares, the output approaches a sustained new level but does not reach it in a finite number of updates in exact arithmetic. This is different from a three-sample moving average, whose window eventually contains only the new level. Choose between them by considering both noise reduction and how promptly useful changes must be seen.
 
-For an isolated unit impulse and memory weight 0.5, the outputs are 0.5, 0.25, 0.125 and so on. The decreasing tail explains the IIR name. A real computer eventually rounds very small changes away or encounters its representation limits; “infinite” describes the mathematical response, not an infinite array stored in memory.
+After an isolated pulse, equal shares make the remaining output halve at each zero input. The decreasing tail explains the IIR name. A real computer eventually rounds very small changes away or encounters its representation limits; “infinite” describes the mathematical response, not an infinite array stored in memory.
 
 > [!analogy] Real-world analogy: a slowly updated estimate
 > A person revises an estimate halfway towards each new observation rather than replacing it immediately.
@@ -34,21 +38,9 @@ For an isolated unit impulse and memory weight 0.5, the outputs are 0.5, 0.25, 0
 >
 > **Where it stops:** A person may change their judgement rules. This filter uses fixed numerical weights, and its state is exactly specified.
 
-## Implement the remembered value
+## Check the convention before implementing
 
-Complete Python example: `state` holds the previous output and is updated after every input. This is the whole persistent state for this particular implementation.
-
-```python
-x = [1.0, 1.0, 1.0, 1.0]
-a = 0.5
-state = 0.0
-y = []
-for sample in x:
-    state = (1-a)*sample + a*state
-    y.append(state)
-print(y)
-# [0.5, 0.75, 0.875, 0.9375]
-```
+The previous output is the whole persistent state for this particular implementation. Resetting it at each input destroys the feedback history. Initialising it differently changes startup behaviour, so state must be part of the specification.
 
 SciPy's `lfilter` uses denominator coefficients with a subtraction convention. This same smoother is represented by numerator `[0.5]` and denominator `[1.0, -0.5]`. Copying a positive memory weight into the denominator without changing its sign gives a different filter. Other authors may call the current-input weight “alpha”; compare the recurrence, not just the name.
 

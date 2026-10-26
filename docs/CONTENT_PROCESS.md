@@ -19,12 +19,18 @@ anything that couldn't be checked is either removed, hedged in the text, or reco
    - the authoritative sources to rely on
    - safety constraints
    - the report the author must return
+   - for each proposed equation: why it is essential, useful reference, or unnecessary; use the
+     concept-first rule in `CONTENT_SPEC.md`, which supersedes older equation-heavy briefs
 
 ## 2. Author: one sub-agent per module
 
 - Every module is written by its own sub-agent, briefed with `docs/new-module.md`, the subject brief and
   `CONTENT_SPEC.md`.
 - Authors must:
+  - teach the concept, mechanism and practical decision before notation; keep only essential equations
+    visible (`formula essential`), make useful reference maths optional (`formula reference`), and remove repetition
+  - prefer prediction, explanation and diagnosis questions; do not require formula recall or routine
+    arithmetic, or add a calculation merely to fill `workedExample`
   - follow the two writing skills: `.claude/skills/writing-formulas/SKILL.md` (every symbol in every formula
     explained) and `.claude/skills/glossary-terms/SKILL.md` (a glossary entry for every term a beginner might not
     know; too many is better than too few)
@@ -49,6 +55,8 @@ anything that couldn't be checked is either removed, hedged in the text, or reco
   - recomputes all maths
   - runs all code
   - checks every answer key and distractor
+  - reads each lesson with reference maths closed: definitions, assumptions, safety guidance and facts
+    needed for its questions must remain visible; independently challenges each essential/reference choice
   - checks every formula block (definitions, units, "In words") and every glossary definition and alias
   - checks that every link loads and supports its claim
   - checks analogy mappings and limitations against primary sources, checks that required information stays
@@ -117,6 +125,14 @@ Run all of these before reporting:
 - `node scripts/test-*.mjs`: all pass.
 - Render the new pages at iPhone size (390 px) and check there are no errors, no horizontal overflow and no stray
   Markdown.
+- Check optional maths starts closed and opens by touch and keyboard, essential equations stay visible,
+  quiz data stays expanded, and both views work offline. Record the scope of any legacy content still
+  awaiting a semantic rewrite; a renderer change is not a claim that all old questions were reviewed.
+- For the library-wide concept-first revision, run `node scripts/audit-concept-first.mjs
+  docs/concept-first-audit.json --require-complete --baseline-commit <starting-commit>`. Every active
+  lesson needs a current independent semantic review, and every changed question needs a recorded reason.
+  The migration audit accepts an intentionally revised answer contract only when that independent
+  review is current and the compiled question exactly matches its verified source. Lost IDs still fail.
 
 ## 6. Report back to the user
 

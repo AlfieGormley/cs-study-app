@@ -45,11 +45,11 @@
     "options": [
       {
         "text": "Poor fit: microservices mainly buy independent deployment for many teams; here they'd add network hops, distributed failures and operational load without addressing performance",
-        "explanation": "Correct. With one team, the organisational benefit is minimal. A request crossing 5 services sequentially adds several ms plus tail-latency amplification, and every service adds deploy, monitoring and on-call surface. Profile the monolith to find the actual bottleneck first."
+        "explanation": "Correct. The given team has little need for independent team deployment, and distributing calls introduces network and operational failure modes. Profile the actual bottleneck before changing the architecture."
       },
       {
         "text": "Good idea: microservices are faster because each is smaller",
-        "explanation": "Incorrect. Smaller code doesn't make requests faster. Replacing in-process calls (nanoseconds) with network calls (~0.5 ms+ each, plus serialisation) usually makes latency worse."
+        "explanation": "Incorrect. Smaller services do not automatically shorten requests. Moving calls across the network adds communication and serialisation work."
       },
       {
         "text": "Good idea, as long as all services share one database",
@@ -61,7 +61,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "Quantify the latency effect. Suppose a request currently makes 5 in-process calls and would instead make 5 sequential network calls:\n\n```formula\nt_hop ≈ 0.5 ms + 0.5 ms = 1 ms\nΔ ≈ 5 × t_hop ≈ 5 ms\nwhere\nt_hop: the added cost of one network call: about 0.5 ms round trip (RTT) plus about 0.5 ms to serialise and deserialise (serde) the data\nΔ: delta, the time added to a typical (p50) request by 5 sequential hops\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: five network hops at about a millisecond each add about 5 ms to the median request.\n```\n\nAt the tail, it's worse. If each service has a 1% chance of a 50 ms hiccup:\n\n```formula\nP = 1 − 0.99^5 ≈ 0.049\nwhere\nP: the probability that at least one of the 5 services hiccups on a request\n0.99: the chance one service doesn't hiccup\n^: \"to the power of\": 0.99^5 means 5 copies of 0.99 multiplied together\n≈: approximately equal to\nIn words: about 1 request in 20 meets at least one hiccup.\n```\n\nSo these hiccups now land well inside the slowest 5% of requests and push up p99.\n\nWhat microservices *do* buy: independent deploys and scaling per team. With one team of 7, that's little benefit. Better first steps: profile, fix slow queries, add caching, and modularise the monolith internally.",
+    "workedExample": "The performance measurements do not identify a bottleneck that service boundaries would fix. Splitting one request into several required network calls adds work and more opportunities for delay or failure. Microservices can buy independent deployment, ownership and scaling where those benefits are needed. For this team, first profile slow paths, improve queries or caching where justified, and keep clear internal module boundaries.",
     "link": {
       "title": "Microservice Trade-Offs (Martin Fowler)",
       "url": "https://martinfowler.com/articles/microservice-trade-offs.html"
@@ -101,27 +101,27 @@
     "id": "fund-tradeoffs-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "You ingest 200 TB of logs a month into a managed service charging £0.50/GB, about £1.2 M a year. Self-hosting is estimated at £300k/year of infrastructure plus 4 engineers at £120k each. What is the soundest conclusion?",
+    "prompt": "A credible first estimate puts self-hosting a high-volume logging service below the managed vendor's annual bill, even after infrastructure and salaries. What should the team do next?",
     "options": [
       {
-        "text": "Self-hosting saves £1.2 M a year, so do it immediately",
-        "explanation": "Incorrect. That ignores the self-hosting costs entirely. The saving is the difference between the two totals."
+        "text": "Migrate immediately because the first estimate proves the final saving",
+        "explanation": "Incorrect. The estimate may omit transition costs, operational risk and work the engineers could otherwise deliver."
       },
       {
-        "text": "Self-hosting looks about £420k a year cheaper; it's worth considering if the team can run it reliably and you've included migration, on-call and the opportunity cost of those engineers",
-        "explanation": "Correct. £300k + 4 × £120k = £780k versus £1.2 M. At this scale vendor pricing is becoming the problem, which is when building makes sense, but the estimate must include hidden costs and the risk of running it badly."
+        "text": "Compare migration, on-call, features, reliability and opportunity cost, and consider negotiating with the vendor",
+        "explanation": "Correct. Large scale can justify building, but the full operating and transition costs determine whether it is worthwhile."
       },
       {
-        "text": "Always buy; building infrastructure is never justified",
-        "explanation": "Incorrect. The lesson's build-vs-buy table says scale can tip the balance; Dropbox's Magic Pocket is a real example."
+        "text": "Keep buying forever because infrastructure can never justify engineering time",
+        "explanation": "Incorrect. High scale or unmet requirements can change the build-versus-buy balance."
       },
       {
-        "text": "The managed service is cheaper once engineer salaries are counted",
-        "explanation": "Incorrect. Even with salaries, self-hosting (£780k) comes out below the managed bill (£1.2 M) on these numbers."
+        "text": "Exclude engineers from the comparison because salaries are already budgeted",
+        "explanation": "Incorrect. Their time has an opportunity cost even if the organisation already employs them."
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nC_m = 200,000 GB × £0.50/GB × 12\nC_m = £100k × 12 = £1.2M\nC_s = £300k + 4 × £120k = £780k\nS = C_m − C_s ≈ £420k\nwhere\nC_m: the managed service's yearly cost: 200 TB = 200,000 GB a month at £0.50 per GB, for 12 months\nGB: gigabyte, 10^9 bytes\nk: thousand\nM: million\nC_s: the self-hosted yearly cost: £300k of infrastructure plus 4 engineers at £120k\nS: the yearly saving from self-hosting\n≈: approximately equal to\nIn words: self-hosting costs about £780k against £1.2M, a saving of about £420k a year before hidden costs.\n```\n\nThen apply the template: gain (£420k), give up (engineering focus, vendor features, someone else's on-call), why acceptable (logging is high volume, well understood), what would change our mind (a big vendor discount, or losing the engineers who run it). Negotiating with the vendor using these numbers is often the first move.",
+    "workedExample": "Treat the lower estimate as a reason to investigate. Check who will build, migrate, secure, upgrade and operate the service, and which product work they would give up. Compare capability and failure recovery as well as money. A vendor discount or a change in staffing may change the conclusion, so record those assumptions.",
     "link": {
       "title": "Scaling to exabytes and beyond: Magic Pocket (Dropbox)",
       "url": "https://dropbox.tech/infrastructure/magic-pocket-infrastructure"

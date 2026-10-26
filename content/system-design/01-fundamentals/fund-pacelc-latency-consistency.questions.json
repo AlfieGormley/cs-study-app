@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "PACELC: **E**lse (no partition) → choose **L**atency or **C**onsistency.\n\nIn DynamoDB:\n\n| Read type | Capacity (≤4 KB item) | Freshness contract |\n|---|---|---|\n| Eventually consistent | 0.5 RCU | May miss recent writes |\n| Strongly consistent | 1 RCU | Reflects prior successful writes |\n\nAt 100k reads/s, that's 50k vs 100k RCUs: double the cost, plus potentially more latency. If the data is a product description that changes once a week, eventually consistent reads may be suitable if stale descriptions are acceptable.\n\nThese are provisioned read-capacity costs for ordinary item reads; transactional reads have a different cost. Strong reads are supported on tables and local secondary indexes, not global secondary indexes or streams.",
+    "workedExample": "No partition is needed for this choice. A replica may answer locally before receiving every recent write, reducing coordination but permitting stale data. For DynamoDB's ordinary provisioned reads, eventual reads use half the read capacity of strong reads for the same item size. Choose the actual API contract and whether stale descriptions are acceptable; strong reads are supported on tables and local secondary indexes, not global secondary indexes or streams.",
     "link": {
       "title": "DynamoDB read consistency (AWS docs)",
       "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/HowItWorks.ReadConsistency.html"
@@ -71,27 +71,27 @@
     "id": "fund-cap-pacelc-q6",
     "level": "advanced",
     "type": "single",
-    "prompt": "You deploy a database with replicas in London and Virginia (round trip ~80 ms). Writes must be linearisable, and no acknowledged write may be lost if either region is destroyed. What's the **minimum** write latency you should expect, and which PACELC classification applies?",
+    "prompt": "Replicas run in two distant regions. Writes must be linearisable, and every acknowledged write must survive destruction of either region. Why can writes not simply acknowledge after a local-only update?",
     "options": [
       {
-        "text": "~1 ms; PA/EL",
-        "explanation": "Incorrect. 1 ms is a local commit. Surviving loss of a whole region means another region must hold the write before it's acknowledged, which needs at least one cross-region round trip."
+        "text": "A local update proves both regions hold durable copies",
+        "explanation": "Incorrect. The remote region may not have received the write yet."
       },
       {
-        "text": "At least ~80 ms (one cross-region round trip); PC/EC",
-        "explanation": "Correct. To survive losing the region that took the write, the write must be durably replicated to another region before the ack: ≥ 1 RTT ≈ 80 ms. Choosing consistency over latency in normal operation is EC; refusing writes without a quorum during partitions is PC."
+        "text": "The write needs a durable copy in another region before acknowledgement, so confirmation adds cross-region delay",
+        "explanation": "Correct. Surviving loss of the accepting region requires the other region to hold the acknowledged data."
       },
       {
-        "text": "~40 ms (half a round trip); PC/EL",
-        "explanation": "Incorrect. The write must reach the other region *and* the confirmation must come back before acknowledging the client, so you pay a full round trip, not one way. And waiting for it is choosing C over L, i.e. EC."
+        "text": "One-way transmission without confirmation proves remote durability",
+        "explanation": "Incorrect. Sending a message alone does not establish that the remote copy is durable."
       },
       {
-        "text": "~160 ms (two round trips); PA/EC",
-        "explanation": "Incorrect. A well-designed protocol (e.g. a Paxos/Raft leader in one region, with a quorum including another) needs one round trip in the common case. And a linearisable system can't be PA."
+        "text": "Linearisability makes physical replication unnecessary",
+        "explanation": "Incorrect. Ordering guarantees do not themselves preserve data after a whole region is destroyed."
       }
     ],
     "answer": 1,
-    "workedExample": "1. **Requirement:** survive losing either region → a write must be stored in ≥2 regions before acknowledging.\n2. **Physics:** the leader in London sends the write to Virginia and waits for the ack:\n   ```\n   London -> Virginia : ~40 ms\n   Virginia -> London : ~40 ms\n   minimum commit    : ~80 ms\n   ```\n   (Practical setups often use 3 regions so a majority survives one region loss.)\n3. **Classification:**\n   - Normal operation: you accept ~80 ms to stay consistent → **EC**.\n   - During a partition: the side without a quorum refuses writes → **PC**.\n\nThis is the Spanner / CockroachDB multi-region trade-off. If 80 ms writes are unacceptable, relax a requirement: async replication (risk losing recent writes on region failure) or partition data by home region.",
+    "workedExample": "Separate operation ordering from survival. A local acknowledgement before remote persistence risks losing that acknowledged write if the local region is destroyed. Waiting for remote confirmation pays the network journey and remote work. A design preserving consistency must refuse unsafe operations when coordination is unavailable; its quorum placement and recovery policy determine which failures it can continue through.",
     "link": {
       "title": "Consistency Tradeoffs in Modern Distributed Database System Design (Abadi, PDF)",
       "url": "https://www.cs.umd.edu/~abadi/papers/abadi-pacelc.pdf"
@@ -116,8 +116,8 @@
         "explanation": "Correct. Choosing local reads trades consistency for latency. The classic fix is to route a user's reads to the primary for a short time after they write, or to read from the replica only once it has caught up to the user's last write position."
       },
       {
-        "text": "It's CA, because there's only one primary",
-        "explanation": "Incorrect. There are two nodes connected over a long network link. The system is distributed, so 'CA' doesn't apply."
+        "text": "Both linearisable and CAP-available, because there is only one primary",
+        "explanation": "Incorrect. One primary does not make asynchronous follower reads linearisable or remove network partitions. This scenario concerns stale local reads during normal operation, which is the else branch of PACELC."
       }
     ],
     "answer": 2,

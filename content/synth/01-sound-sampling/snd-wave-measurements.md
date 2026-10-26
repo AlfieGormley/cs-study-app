@@ -3,17 +3,15 @@ id: snd-wave-measurements
 title: Amplitude, period and wavelength
 level: basic
 minutes: 4
-summary: Describe a repeating wave and convert between frequency, period and wavelength.
+summary: Distinguish wave size, repetition time and wavelength, and predict how they change.
 sourceLesson: snd-waves
 ---
 
 Every sound your synth makes ends up as a speaker cone pushing air back and forth. The air pressure at your ear rises and falls around normal atmospheric pressure, and your ear turns that pattern into what you hear.
 
-Inside the synth there is no air. There is first a sequence of numbers, then a voltage on a wire. The vocabulary is the same at every stage, though. A *wave* is a quantity (pressure, voltage, or a number in memory) that changes over time, and we describe it by how big the change is, how often it repeats and where in its cycle it is.
+Inside the synth there is no air. There is first a sequence of numbers, then a voltage on a wire. The vocabulary is the same at every stage, though. Here, a *waveform* describes how a quantity (pressure, voltage, or a number in memory) changes over time, and we describe it by how big the change is, how often it repeats and where in its cycle it is.
 
 Start by distinguishing how large a wave is, how often it repeats and how far it travels.
-
-
 
 ## The four basic measurements
 
@@ -35,27 +33,12 @@ Picture one repeating cycle of a wave plotted against time:
 
 Frequency and period are two views of the same thing: if you know how long one cycle takes, you know how many fit in a second.
 
-```formula
-f = 1 / T
-f = 1 / 0.00227 s
-f ≈ 440 Hz
-where
-f: the frequency, in hertz (Hz): how many complete cycles happen each second
-T: the period, the time one complete cycle takes, in seconds (s); here about 0.00227 s (2.27 ms)
-s: seconds
-Hz: hertz, the unit of frequency: one cycle per second
-≈: approximately equal to (the numbers are rounded)
-In words: frequency is one divided by the period, so a shorter cycle means a higher frequency. Halve the period and the frequency doubles.
-```
-
-Turned round, the period is one divided by the frequency: a 440 Hz wave has a period of 1/440 s, about 2.27 milliseconds (ms). The relationship is exact for any repeating wave; it only stops being meaningful for sounds that don't repeat, such as noise.
+For scale, a 440 Hz wave completes each cycle in about 2.27 milliseconds (ms). The relationship is exact for any repeating wave; it only stops being meaningful for sounds that don't repeat, such as noise.
 
 Wavelength needs one more ingredient, the speed at which the wave travels. In the time of one period, the wave moves forward by one wavelength:
 
-```formula
+```formula reference
 λ = c / f
-λ = 343 / 440
-λ ≈ 0.78 m
 where
 λ: lambda, the wavelength: the distance one cycle occupies as it travels, in metres (m)
 c: the speed of sound in the medium, in metres per second (m/s); about 343 m/s in dry air at 20 °C
@@ -63,19 +46,18 @@ f: the frequency of the wave, in hertz (Hz)
 m: metres
 m/s: metres per second
 Hz: hertz, cycles per second
-≈: approximately equal to (rounded)
 In words: the wavelength is the speed of sound divided by the frequency, so higher notes have shorter wavelengths. A 440 Hz tone in air has a wavelength of about 0.78 m.
 ```
 
-The speed of sound depends on the medium and its temperature (it is faster in warmer air and much faster in water or steel), so λ is only defined for sound actually travelling through something.
+The speed of sound depends on the medium and its temperature (it is faster in warmer air and much faster in water or steel), so wavelength depends on the conditions in which sound travels.
 
-Wavelength matters for room acoustics and speaker design (why bass travels through walls, why rooms have resonances). Inside a synth it barely matters at all: your signals live as samples and voltages, where only time and frequency count. Don't confuse *wavelength* with *period*. One is metres, the other seconds.
+Wavelength matters for room acoustics and speaker design, including room resonances and how sound diffracts around obstacles. Inside a synth it barely matters at all: your signals live as samples and voltages, where only time and frequency count. Don't confuse *wavelength* with *period*. One is metres, the other seconds.
 
 Human hearing is usually quoted as roughly 20 Hz to 20 kHz (20,000 Hz). The top end falls with age, and that range is a rule of thumb rather than a hard limit. In air, those frequencies have wavelengths of roughly 17 m down to 1.7 cm.
 
 ## Key takeaways
 
-- Amplitude measures the size of the swing; frequency counts cycles per second.
+- Amplitude measures the size of the swing; frequency measures cycles per second.
 - Frequency and period are reciprocals: doubling one halves the other.
 - Wavelength is a distance in a medium; period is a time. Inside a synth, work with time and frequency.
 
@@ -83,3 +65,4 @@ Human hearing is usually quoted as roughly 20 Hz to 20 kHz (20,000 Hz). The top 
 
 - [Sine wave — Wikipedia](https://en.wikipedia.org/wiki/Sine_wave)
 - [Speed of sound — Wikipedia](https://en.wikipedia.org/wiki/Speed_of_sound)
+- [Sound speed, frequency and wavelength — OpenStax](https://openstax.org/books/college-physics-2e/pages/17-2-speed-of-sound-frequency-and-wavelength)

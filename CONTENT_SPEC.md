@@ -7,6 +7,36 @@ All study content lives under `content/`. Run `node scripts/build.mjs` to valida
 compile it into `data/` (which the app loads). Run `node scripts/build.mjs --check` to validate
 without writing anything.
 
+## Concept-first reading (mandatory)
+
+Design for understanding fundamentals while reading on a phone or a bus. Explain what a concept means,
+how it behaves, why it matters and when to use it. Use a short concrete example when it improves that
+understanding. Keep assumptions, limitations, trade-offs, units and safety guidance in the main prose.
+
+Choose maths deliberately for each lesson:
+
+- **Essential:** seeing the relationship is necessary to understand the objective. Use a `formula essential`
+  fence and explain its practical meaning before and after it. It stays visible in the lesson.
+- **Reference:** useful when applying the idea, but unnecessary to grasp the concept. Use a `formula reference`
+  fence. The lesson shows the `In words:` explanation with a closed “Show the maths” disclosure for the
+  equation and definitions. Write that explanation to stand alone without hidden symbol definitions.
+- **Redundant:** repeats the prose, another formula or routine arithmetic. Remove it. Link to a detailed
+  source for long derivations rather than reproducing them.
+
+Do not add a formula, code listing or worked calculation to every lesson as a template requirement.
+Keep short code where understanding the code is the objective. A useful numerical example may state
+the result and implication in ordinary language without displaying every substitution.
+
+Questions should test predictions, explanations, diagnosis and practical choices. Avoid pure formula
+recall and repetitive arithmetic. A genuinely essential numerical question must provide the relationship
+or necessary data; test interpretation, not memory. Every question must be answerable with the optional
+maths and analogies closed. The required `workedExample` is a reasoning walkthrough; it need not calculate
+anything. Formula cards in quizzes remain expanded so question data and feedback are available directly.
+
+This rule applies to all new content and edits and supersedes conflicting requirements in older briefs.
+Advanced depth comes from mechanisms, constraints, failure modes and trade-offs, with essential maths
+where needed. Retained equations still follow all formula-writing and independent-verification rules.
+
 ## Layout
 
 ```
@@ -47,8 +77,8 @@ Intro paragraph...
 ```
 
 - `level` is one of `basic`, `intermediate`, `advanced`.
-- `minutes` is an honest reading time. Keep each lesson to one manageable learning objective, usually
-  3–5 minutes. Split longer topics into neighbouring short lessons instead of removing their depth.
+- `minutes` is an honest reading time for the main explanation. Keep each lesson to one manageable learning
+  objective, usually 3–5 minutes. Remove redundant detail before splitting a longer topic.
 - When splitting an existing lesson, use new ids, put `sourceLesson: <old-id>` in each new lesson's
   frontmatter and add `"migrations": { "<old-id>": ["<new-id>", "<new-id>"] }` to `module.json`.
   Preserve original files as archival source and keep existing question ids stable when moving them.
@@ -134,7 +164,8 @@ A JSON array. Each question:
 - 3–5 options. **Every** option needs an `explanation` saying why it's correct or incorrect.
   Don't just say "Incorrect"; name the misconception.
 - `workedExample` is required. Work through the reasoning step by step, the way a tutor would, with
-  numbers and calculations where they're relevant. It can use the supported Markdown (lists, code blocks, tables).
+  numbers only when they improve understanding. Do not manufacture a calculation to fill this field.
+  It can use the supported Markdown (lists, code blocks, tables).
 - `link` is required and points to a more detailed explanation of the topic.
 - Mix the levels within each lesson's questions. Prefer scenario-based questions ("You run a
   service that... what happens when...") over recalling definitions, especially at intermediate and advanced level.
@@ -168,8 +199,8 @@ Other authors work at the same time. Put any temporary files in your own folder
 - British English spelling.
 - Accurate, specific and practical. Use real numbers, real systems ("this is how DynamoDB / Kafka /
   Postgres do it"), trade-offs and failure modes. Explain *why*, not just *what*.
-- Write for someone aiming to become an expert. Basic lessons start from first principles; advanced lessons
-  go deep, at the level of a senior or staff engineer interview or *Designing Data-Intensive Applications*.
+- Basic lessons start from first principles. Advanced lessons deepen mechanisms, constraints and decisions;
+  keep them concept-first too, without making interview arithmetic or derivations the default.
 - Short paragraphs; the app is read on a phone.
 - Accuracy matters more than anything. If you aren't sure of a specific figure or default, check the source, or
   phrase it as approximate ("around", "typically"). Don't invent statistics.
@@ -227,3 +258,9 @@ build rejects undefined symbols, unmatched grouping brackets and missing "In wor
 can read basic algebra: use implicit multiplication for unambiguous products, retain signs between numbers or
 ambiguous names, and bracket compound numerators, denominators, exponents and function arguments. Equation
 lines obey the 44/40 character limits; definitions wrap freely.
+
+Use `formula essential` for relationships that must stay visible in the main lesson. A `formula reference`
+fence keeps its In words explanation visible and collapses the equation and definitions in lesson
+reading; quiz formula blocks stay expanded. Both forms have identical correctness checks. Existing
+unmarked `formula` blocks stay expanded until individually reviewed; do not mechanically hide maths
+that older prose or questions depend on. Use an explicit essential/reference choice for new or revised blocks.

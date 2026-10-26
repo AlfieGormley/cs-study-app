@@ -1,39 +1,87 @@
 [
   {
-    "id": "dp-downsampling-q1", "level": "basic", "type": "single",
-    "prompt": "You reduce a 1200-sample-per-second record by a factor of three. What Nyquist boundary must the prefilter account for?",
+    "id": "dp-downsampling-q1",
+    "level": "basic",
+    "type": "single",
+    "prompt": "You lower a signal's sample rate by retaining every third sample after filtering. Which frequency boundary should guide the anti-alias prefilter?",
     "options": [
-      {"text": "600 Hz", "explanation": "This is the original rate's Nyquist boundary and does not protect the reduced rate."},
-      {"text": "200 Hz", "explanation": "Correct. The output rate is 400 samples per second, with a 200 Hz Nyquist boundary."},
-      {"text": "400 Hz", "explanation": "This is the output sample rate, not half of it."}
+      {
+        "text": "The original Nyquist boundary, because all original tones were safely sampled",
+        "explanation": "Some tones below the original boundary can lie above the lower output boundary and alias during reduction."
+      },
+      {
+        "text": "The lower output Nyquist boundary, with room for the filter transition",
+        "explanation": "Correct. The retained samples have a smaller unambiguous range, so rejection must be designed for that new range."
+      },
+      {
+        "text": "The output sample rate itself, leaving all lower frequencies unchanged",
+        "explanation": "The output Nyquist boundary is half the output rate, and a real filter also needs a transition band."
+      }
     ],
     "answer": 1,
-    "workedExample": "First calculate the output rate, then halve it. Leave room below the boundary for the desired passband and filter transition.\n\n```formula\nF_o = 1200 Hz / 3 = 400 Hz\nf_N = F_o / 2 = 200 Hz\nwhere\nF_o: output sample rate, in hertz (Hz)\nf_N: output Nyquist frequency, in Hz\nHz: hertz, cycles per second\nIn words: the reduction moves the relevant Nyquist boundary down to two hundred hertz.\n```",
-    "link": {"title": "SciPy decimation", "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.decimate.html"}
+    "workedExample": "1. Retaining fewer samples lowers the sample rate.\n2. The new Nyquist boundary is lower too.\n3. Components above that boundary can fold into the wanted output band.\n4. Suppress them before reduction, allowing a practical transition between the wanted passband and required rejection.",
+    "link": {
+      "title": "SciPy decimation",
+      "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.decimate.html"
+    }
   },
   {
-    "id": "dp-downsampling-q2", "level": "intermediate", "type": "single",
-    "prompt": "A 350 Hz cosine is sampled at 1200 samples per second. You retain every third sample without filtering. What apparent positive frequency remains at the 400-sample-per-second output?",
+    "id": "dp-downsampling-q2",
+    "level": "intermediate",
+    "type": "single",
+    "prompt": "After unfiltered rate reduction, a high-frequency interferer appears as a tone inside your wanted low-frequency band. Why is adding a low-pass afterwards generally insufficient?",
     "options": [
-      {"text": "50 Hz", "explanation": "Correct. At the new rate, 350 Hz is indistinguishable from a negative 50 Hz rotation; real cosine has the corresponding positive 50 Hz appearance."},
-      {"text": "350 Hz with no ambiguity", "explanation": "This exceeds the output Nyquist boundary, so it cannot remain uniquely represented in the output baseband."},
-      {"text": "The tone disappears because its samples were discarded", "explanation": "Discarding samples does not selectively erase unwanted frequencies; they can fold into the retained band."}
+      {
+        "text": "The interferer has already become indistinguishable from a genuine tone at that output frequency",
+        "explanation": "Correct. Aliasing loses the distinction; later filtering cannot selectively remove one possible origin while preserving the other."
+      },
+      {
+        "text": "The unwanted component must have disappeared when samples were discarded",
+        "explanation": "Discarding samples can fold a component into the retained band instead of erasing it."
+      },
+      {
+        "text": "All low-pass filters preserve every original high-frequency label",
+        "explanation": "A filter acts on the output samples; those samples no longer uniquely identify the original high frequency."
+      }
     ],
     "answer": 0,
-    "workedExample": "The output sampling rate is 400 samples per second. A real cosine 50 Hz below that rate has the same output samples as a 50 Hz cosine.\n\n```formula\nf_a = |350 Hz − 400 Hz| = 50 Hz\nwhere\nf_a: apparent baseband cosine frequency, in hertz (Hz), for this particular example\n| |: absolute value of the enclosed difference\nHz: hertz, cycles per second\nIn words: the unfiltered 350-hertz tone folds to fifty hertz at the reduced rate.\n```\n\nThis single subtraction is specific to these frequencies, not a universal folding formula for arbitrarily high frequencies.",
-    "link": {"title": "SciPy anti-alias filtering before reduction", "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.decimate.html"}
+    "workedExample": "1. At the original rate, the wanted tone and interferer can be distinct.\n2. Reducing the rate without suitable prefiltering can map them to the same output frequency.\n3. A later filter sees their combined output-band contribution.\n4. Prevent that ambiguity by suppressing the interferer before discarding samples.",
+    "link": {
+      "title": "SciPy anti-alias filtering before reduction",
+      "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.decimate.html"
+    }
   },
   {
-    "id": "dp-downsampling-q3", "level": "intermediate", "type": "multi",
+    "id": "dp-downsampling-q3",
+    "level": "intermediate",
+    "type": "multi",
     "prompt": "Which choices belong in a reliable decimation plan? Select all that apply.",
     "options": [
-      {"text": "Low-pass before retaining the reduced-rate samples", "explanation": "Correct. This suppresses components before the new sampling ambiguity occurs."},
-      {"text": "Leave a transition band between wanted content and required rejection", "explanation": "Correct. A practical finite filter cannot provide an ideal instantaneous transition."},
-      {"text": "Treat causal streaming and offline zero-phase outputs as identically timed", "explanation": "Their phase/delay and boundary policies differ and must be recorded."},
-      {"text": "Repair original ADC aliasing with this digital prefilter", "explanation": "Aliasing at the original sampling stage has already made distinct analogue signals indistinguishable."}
+      {
+        "text": "Low-pass before retaining the reduced-rate samples",
+        "explanation": "Correct. This suppresses components before the new sampling ambiguity occurs."
+      },
+      {
+        "text": "Leave a transition band between wanted content and required rejection",
+        "explanation": "Correct. A practical finite filter cannot provide an ideal instantaneous transition."
+      },
+      {
+        "text": "Treat causal streaming and offline zero-phase outputs as identically timed",
+        "explanation": "Their phase/delay and boundary policies differ and must be recorded."
+      },
+      {
+        "text": "Repair original ADC aliasing with this digital prefilter",
+        "explanation": "Aliasing at the original sampling stage has already made distinct analogue signals indistinguishable."
+      }
     ],
-    "answer": [0, 1],
+    "answer": [
+      0,
+      1
+    ],
     "workedExample": "1. Find the new rate and its Nyquist limit.\n2. Define the wanted passband, transition and tolerated alias level.\n3. Apply a suitable filter before rate reduction.\n4. Specify edge/transient handling and timing.\n5. Keep the original analogue anti-alias requirement separate from this later digital reduction.",
-    "link": {"title": "SciPy polyphase resampling", "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.resample_poly.html"}
+    "link": {
+      "title": "SciPy polyphase resampling",
+      "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.resample_poly.html"
+    }
   }
 ]

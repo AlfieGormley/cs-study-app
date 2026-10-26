@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { migrationProblems, subjectMigrationProblems } from '../lesson-progress.js';
+import { inspectConceptReview, canonical } from './audit-concept-first.mjs';
 
 const original = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const originalQuestions = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
@@ -14,6 +15,7 @@ const questions = JSON.parse(fs.readFileSync('data/questions.json', 'utf8'));
 const partial = process.argv.includes('--partial');
 const reportFile = process.argv.slice(4).find((arg) => arg !== '--partial');
 const rows = [];
+const reviewedQuestionRevisions = [];
 let pendingModules = 0;
 for (const [key, [module]] of Object.entries(originalQuestions)) {
   assert.equal(questions[key]?.[0], module, `original question ${key} was lost or moved to another module`);
@@ -45,15 +47,38 @@ for (const subject of original.subjects) for (const previous of subject.modules)
   assert.ok(directory, `missing source directory for ${subject.id}/${module.id}`);
   const compiled = JSON.parse(fs.readFileSync(path.join('data', subject.id, `${module.id}.json`), 'utf8'));
   const movedQuestions = new Map();
+  const questionOwners = new Map();
   for (const lesson of compiled.lessons) for (const question of lesson.questions) {
     assert.equal(movedQuestions.has(question.id), false, `duplicate question ${question.id}`);
     movedQuestions.set(question.id, question);
+    questionOwners.set(question.id, lesson.id);
   }
+  let conceptReview;
+  const approvedRevision = (question) => {
+    // Rewriting a question is distinct from splitting it. Only a current independent editorial
+    // review can justify changing a historical answer contract; saved identities still cannot change.
+    if (conceptReview === undefined) {
+      try { conceptReview = inspectConceptReview(directory, { ...module, lessons: [...active] }); }
+      catch { conceptReview = null; }
+    }
+    if (!conceptReview?.reviewed) return false;
+    const id = questionOwners.get(question.id);
+    const verification = JSON.parse(fs.readFileSync(path.join(directory, 'verification.json'), 'utf8'));
+    const reason = verification.conceptFirstReview.lessons[id]?.questionsRewritten?.[question.id];
+    if (!reason) return false;
+    const source = JSON.parse(fs.readFileSync(path.join(directory, `${id}.questions.json`), 'utf8')).find((q) => q.id === question.id);
+    if (!source || canonical(source) !== canonical(question)) return false;
+    reviewedQuestionRevisions.push({ subject: subject.id, module: module.id, lesson: id, question: question.id, reason });
+    return true;
+  };
   for (const lesson of previous.lessons) {
     const archived = JSON.parse(fs.readFileSync(path.join(directory, `${lesson.id}.questions.json`), 'utf8'));
     for (const question of archived) {
       const moved = movedQuestions.get(question.id);
       assert.ok(moved, `original question ${question.id} is absent from compiled lessons`);
+      const changed = moved.type !== question.type || canonical(moved.answer) !== canonical(question.answer)
+        || moved.options.length !== question.options.length;
+      if (changed && approvedRevision(moved)) continue;
       assert.equal(moved.type, question.type, `original question ${question.id} changed its type`);
       assert.deepEqual(moved.answer, question.answer, `original question ${question.id} changed its answer key`);
       assert.equal(moved.options.length, question.options.length, `original question ${question.id} changed its option count`);
@@ -65,6 +90,6 @@ for (const subject of original.subjects) for (const previous of subject.modules)
 const report = { originalLessons: original.subjects.reduce((n, s) => n + s.modules.reduce((n, m) => n + m.lessons.length, 0), 0),
   shortLessons: rows.reduce((n, r) => n + r.shortLessons, 0), originalQuestions: Object.keys(originalQuestions).length,
   convertedOriginalLessons: rows.reduce((n, r) => n + r.originalLessons, 0),
-  questions: Object.keys(questions).length, pendingModules, modules: rows };
+  questions: Object.keys(questions).length, pendingModules, reviewedQuestionRevisions, modules: rows };
 if (reportFile) fs.writeFileSync(reportFile, JSON.stringify(report, null, 2) + '\n');
 console.log(`${report.convertedOriginalLessons} originals → ${report.shortLessons} short lessons across ${rows.length} modules; all ${report.originalQuestions} original course questions retained. ${pendingModules} modules awaiting conversion.`);

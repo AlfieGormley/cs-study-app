@@ -2,7 +2,7 @@
 id: ds-sampling-aliasing
 title: When sampling hides frequency
 level: basic
-minutes: 5
+minutes: 3
 summary: Recognise aliases and place anti-alias filtering before sampling.
 ---
 
@@ -10,9 +10,9 @@ Uniform samples can agree even when their underlying continuous waves differ. Th
 
 ## Keep baseband content below half the rate
 
-A **baseband** signal contains frequencies from zero up to some highest frequency. A **band-limited** ideal signal has no content above that limit. For arbitrary phase at the upper edge, use a strict inequality in the ideal sampling condition:
+A **baseband** signal occupies frequencies from zero up to some highest frequency. A **band-limited** ideal signal has no content above that limit. The **Nyquist frequency** is half the sample rate. To preserve arbitrary phase at the upper edge of this baseband signal, its highest frequency must stay strictly below that boundary:
 
-```formula
+```formula essential
 F_s > 2f_max
 f_N = F_s / 2
 where
@@ -20,7 +20,7 @@ F_s: sample rate, in samples per second
 f_max: highest frequency present in the ideal baseband signal, in hertz (Hz)
 f_N: Nyquist frequency, half the sample rate, in hertz (Hz)
 Hz: hertz, cycles per second
-In words: The sample rate must exceed twice the highest baseband frequency; the endpoint is excluded here.
+In words: The sample rate must exceed twice the highest baseband frequency. Keeping the signal below half the sample rate prevents overlap in the ideal band-limited case; the endpoint is excluded here.
 ```
 
 Why exclude the endpoint? A sine at exactly half the sample rate, with zero starting phase, is sampled at its zero crossings. Every sample is zero in exact arithmetic. A cosine at that same frequency alternates positive and negative values. Merely having two samples per cycle does not preserve every possible phase and amplitude at the boundary.
@@ -29,20 +29,9 @@ A finite record is also not the infinite sequence assumed by ideal reconstructio
 
 ## An explicit fold
 
-At 1000 samples per second, a 700 Hz cosine produces the same samples as a 300 Hz cosine, with equal amplitude and zero starting phase. The higher frequency appears below the 500 Hz Nyquist limit. For this particular frequency range:
+At 1000 samples per second, a 700 Hz cosine produces the same samples as a 300 Hz cosine, with equal amplitude and zero starting phase. The higher frequency appears below the 500 Hz Nyquist limit. If both tones arrive together, their stored contributions overlap: a later analysis cannot reliably assign the combined values back to the two original tones.
 
-```formula
-f_a = F_s − f
-f_a = 1000 Hz − 700 Hz = 300 Hz
-where
-f_a: folded alias frequency, in hertz (Hz), for an input between half the sample rate and the sample rate
-F_s: sample rate, numerically expressed in hertz here
-f: input cosine frequency, in hertz (Hz)
-Hz: hertz, cycles per second
-In words: In this interval, reflect the input frequency around half the sample rate.
-```
-
-This is not a universal subtraction rule for all frequencies. Frequencies above one whole sample rate can fold repeatedly. Sine waves can also acquire a sign reversal during folding; specifying cosine and phase makes the example unambiguous.
+In this frequency interval the alias behaves like a reflection around half the sample rate. Higher frequencies can fold repeatedly, and phase can change during folding. The example specifies cosine and starting phase to avoid suggesting that every sine keeps its original sign.
 
 > [!analogy] Real-world analogy: A wheel in a film
 > A wheel turning quickly can appear to turn slowly or backwards in regularly spaced film frames.
@@ -56,20 +45,6 @@ This is not a universal subtraction rule for all frequencies. Frequencies above 
 An analogue **anti-alias filter** reduces high-frequency content before an analogue-to-digital converter (ADC) takes samples. Real filters need a transition band, so leave room between wanted frequencies and the Nyquist limit. The filter reduces unwanted content to an acceptable level rather than forming an ideal brick-wall cutoff.
 
 A digital filter after this sampling step cannot separate a wanted 300 Hz component from a 700 Hz component already folded onto it. When later reducing a digital sample rate, filtering must likewise precede the rate reduction.
-
-This complete example checks the two cosines at sixteen sample instants. The small tolerance allows for floating-point round-off.
-
-```python
-import math
-fs = 1000.0
-lo = [math.cos(2 * math.pi * 300 * n / fs)
-      for n in range(16)]
-hi = [math.cos(2 * math.pi * 700 * n / fs)
-      for n in range(16)]
-print(max(abs(a-b) for a,b in zip(lo,hi))
-      < 1e-12)
-# True: samples alone cannot choose a tone
-```
 
 ## Key takeaways
 - Different continuous frequencies can produce identical samples.

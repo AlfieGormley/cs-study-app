@@ -3,27 +3,27 @@
     "id": "fund-estimation-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A chat app has 50 M DAU. Each user sends 40 messages/day; each message is stored as ~200 bytes, replicated 3×, and kept for 5 years. Roughly how much raw storage is needed?",
+    "prompt": "A message-store estimate includes today's daily message bytes but omits five-year retention and three full replicas. Why is it too small?",
     "options": [
       {
-        "text": "About 2.2 PB",
-        "explanation": "Correct. 400 GB/day × 1,825 days ≈ 730 TB per copy; × 3 replicas ≈ 2.2 PB."
+        "text": "It counts only one day's one-copy payload instead of all retained copies",
+        "explanation": "Correct. Retention determines how many days remain stored, and full replication stores each retained record more than once."
       },
       {
-        "text": "About 150 TB",
-        "explanation": "Incorrect. That's one year of a single copy (400 GB × 365). It misses four more years of retention and the 3× replication."
+        "text": "Replication reduces the logical message size",
+        "explanation": "Incorrect. Copies improve redundancy; they do not compress the original payload."
       },
       {
-        "text": "About 730 TB",
-        "explanation": "Incorrect. That's the correct 5-year figure for **one** copy. With 3 replicas, the physical storage is three times larger."
+        "text": "Daily active users must all be connected simultaneously",
+        "explanation": "Incorrect. Active-user counts and simultaneous connections are different quantities."
       },
       {
-        "text": "About 400 GB",
-        "explanation": "Incorrect. That's one day of messages for a single replica. You still need to multiply by retention (≈1,825 days) and replication (3×)."
+        "text": "Every stored byte must also be counted as an app-server CPU core",
+        "explanation": "Incorrect. Storage volume and CPU work are different resource demands."
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nm = 50 M × 40 = 2 × 10^9\nv = 2 × 10^9 × 200 B = 4 × 10^11 B\nv = 400 GB\nd = 365 × 5 = 1,825\nV_1 = 400 GB × 1,825 ≈ 730 TB\nV_3 = 730 TB × 3 ≈ 2.2 PB\nwhere\nm: messages sent per day: 50 million users × 40 each\nM: million\nv: bytes stored per day, at 200 bytes (B) per message\nB: byte\nd: days in 5 years\nV_1: storage for one copy over 5 years\nV_3: storage with 3 replicas\nGB, TB, PB: gigabyte (10^9 bytes), terabyte (10^12 bytes), petabyte (10^15 bytes)\n10^n: powers of ten, n copies of ten multiplied together: 10^5 = 100,000, 10^6 = a million, 10^9 = a billion\n≈: approximately equal to (rounded)\nIn words: 400 GB a day for 1,825 days is about 730 TB, and three copies make about 2.2 PB.\n```\n\nDesign implication: petabyte scale means the message store must be partitioned across many nodes (e.g. a wide-column store like Cassandra, which is what Discord used for years), and old messages could be tiered to cheaper storage.",
+    "workedExample": "Identify what the estimate represents: one day and one copy. Ask how many days remain under the retention policy and how many full copies are stored. Then include indexes, metadata, backups and headroom as the design requires. A large result should prompt placement and capacity checks, not automatically select a particular database.",
     "link": {
       "title": "Back-of-the-envelope calculation (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Back-of-the-envelope_calculation"
@@ -33,27 +33,27 @@
     "id": "fund-estimation-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A news site serves 300 M page views/day. Peak traffic is 3× average. Each page view triggers 4 API calls. What peak API QPS should you plan for?",
+    "prompt": "A news-site estimate starts with page views per day. Each page triggers several API calls, and the busy period is much heavier than the average. What must the API capacity estimate account for?",
     "options": [
       {
-        "text": "About 3,500",
-        "explanation": "Incorrect. That's the average page-view rate (300 M / 86,400). It ignores both the 4 API calls per page and the 3× peak factor."
+        "text": "Only the number of pages; API calls do not consume capacity separately",
+        "explanation": "Incorrect. Multiple calls per page can multiply backend demand."
       },
       {
-        "text": "About 14,000",
-        "explanation": "Incorrect. This accounts for 4 calls per page (average API QPS) but forgets the peak multiplier. Capacity has to cover the peak, not the average."
+        "text": "Only average API traffic, because bursts average out eventually",
+        "explanation": "Incorrect. The service must handle the required peak while it occurs."
       },
       {
-        "text": "About 3.6 million",
-        "explanation": "Incorrect. That's 300 M × 4 × 3 / 1,000 or similar; dividing by the wrong time unit. Divide daily totals by 86,400 seconds."
+        "text": "The number of bytes in a database backup alone",
+        "explanation": "Incorrect. Backup size does not determine request-processing demand."
       },
       {
-        "text": "About 42,000",
-        "explanation": "Correct. 300 M / 86,400 ≈ 3,500 page views/s; × 4 calls ≈ 14,000 API req/s average; × 3 peak ≈ 42,000 req/s."
+        "text": "Calls per page and the measured peak factor, with daily and per-second units kept consistent",
+        "explanation": "Correct. Both request amplification and traffic shape affect the peak demand."
       }
     ],
     "answer": 3,
-    "workedExample": "```formula\nq_p = 300 M / 86,400 s ≈ 3,472 /s\nq_a = 3,472 /s × 4 ≈ 13,900 /s\nq_pk = 13,900 /s × 3 ≈ 41,700 /s\nwhere\nq_p: average page views per second\nM: million; 300 M page views a day\ns: second; a day has 86,400 s\nq_a: average API calls per second, 4 per page view\nq_pk: peak API calls per second, 3 times the average\n≈: approximately equal to (rounded)\nIn words: daily total to per-second, times calls per page, times the peak factor.\n```\n\nRound to ~42k req/s. If one app server handles ~2,000 req/s while staying at 60% utilisation, you need about 21 servers at peak, plus redundancy for losing a zone.",
+    "workedExample": "Trace one user action into backend operations, then convert the total into a rate using consistent time units. Distinguish the average from peak demand. Finally compare the resulting workload with measured per-server capacity and failure headroom.",
     "link": {
       "title": "The System Design Primer (GitHub)",
       "url": "https://github.com/donnemartin/system-design-primer"
@@ -63,27 +63,27 @@
     "id": "fund-estimation-q6",
     "level": "advanced",
     "type": "single",
-    "prompt": "You're sizing a Redis cache for user profiles. There are 500 M users, but on any day 60 M are active. Each cached profile is 2 KB of data, and assume a measured per-entry Redis overhead of 100 bytes for this workload. You want to cache all daily-active profiles with 30% headroom. How much primary-shard RAM, excluding replicas?",
+    "prompt": "You are sizing a profile cache. Access traces identify the distinct keys needed for the intended hit rate. What should the RAM estimate include?",
     "options": [
       {
-        "text": "About 120 GB",
-        "explanation": "Incorrect. This is the raw data for 60 M profiles but omits both the per-key overhead and the 30% headroom. Running a cache at 100% memory triggers evictions and fragmentation problems."
+        "text": "Only serialized profile payloads, with memory filled completely",
+        "explanation": "Incorrect. Entries have implementation overhead and the cache needs operational headroom."
       },
       {
-        "text": "About 1.4 TB",
-        "explanation": "Incorrect. That caches all 500 M users. The question sizes for the daily-active hot set, which is where caching pays off; inactive profiles can be read from the database on a miss."
+        "text": "Every registered user's profile, regardless of access patterns",
+        "explanation": "Incorrect. A useful cache can target a measured hot set rather than all historical users."
       },
       {
-        "text": "About 160 GB",
-        "explanation": "Correct. 60 M × (2 KB + 0.1 KB) ≈ 126 GB; × 1.3 headroom ≈ 164 GB. That's a few large nodes (or more smaller ones in a cluster), sized for the hot set rather than all users."
+        "text": "The measured hot set, per-entry overhead and headroom, with replica memory accounted for separately",
+        "explanation": "Correct. The raw hot-set payload is only one part of total provisioned memory."
       },
       {
-        "text": "About 16 GB",
-        "explanation": "Incorrect. This is off by 10×, likely from using 6 M users or 200 bytes per profile. Re-check the powers of ten."
+        "text": "The total number of daily requests treated as distinct profiles",
+        "explanation": "Incorrect. Many requests may access the same key; requests do not determine distinct-key count."
       }
     ],
     "answer": 2,
-    "workedExample": "```formula\ne = 2,000 B + 100 B = 2,100 B\nn = 60 × 10^6\nV = n × e = 60 × 10^6 × 2,100 B\nV = 1.26 × 10^11 B ≈ 126 GB\nV_h = V × 1.3 ≈ 164 GB\nwhere\ne: memory per cached entry: 2,000 bytes of profile plus 100 bytes of Redis overhead\nB: byte\nn: entries in the hot set, the 60 million daily-active users\nV: raw memory for the hot set\nV_h: memory including 30% headroom\nGB: gigabyte, 10^9 bytes\n10^n: powers of ten, n copies of ten multiplied together: 10^5 = 100,000, 10^6 = a million, 10^9 = a billion\n≈: approximately equal to (rounded)\nIn words: entries times bytes per entry, plus 30% spare, is about 164 GB.\n```\n\nDesign implications:\n\n- For illustration, 6 primary shards of ~32 GB provide 192 GB of primary memory; one equal-sized replica per shard doubles provisioned memory to 384 GB. A healthy replica can be promoted without a complete cold start, though recent asynchronous updates may be lost.\n- Measure hit rate from access traces, TTLs, eviction policy and warm-up. Content gap: DAU alone cannot support a numerical hit-rate prediction, so the prior >95% claim is omitted.\n- Compare with caching all 500 M users: 500 million × 2,100 B × 1.3 ≈ 1.4 TB, about eight times more primary RAM; the hit-rate benefit depends on access patterns.",
+    "workedExample": "Begin with distinct keys needed for the target hit rate, not daily request totals. Measure entry memory for the actual representation, include spare memory and count replicas. Validate warm-up, expiry, eviction and hit rate under realistic traces. Daily active users alone do not guarantee a cache hit rate.",
     "link": {
       "title": "Memory optimisation (Redis docs)",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/memory-optimization/"

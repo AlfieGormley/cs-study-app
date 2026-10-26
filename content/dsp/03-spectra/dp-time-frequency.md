@@ -6,35 +6,33 @@ minutes: 4
 summary: Build a short-time spectrum and distinguish frame duration, hop spacing and frequency-grid spacing.
 ---
 
-A single FFT mixes together everything that happens during its record. A sensor might vibrate at one frequency first and another later. To follow that change, analyse successive short records called **analysis frames**, or frames. A **short-time Fourier transform**, or **STFT**, is the collection of these windowed transforms.
+A single FFT describes everything in its record together. If a machine first vibrates at one frequency and later another, that spectrum does not show their order. A **short-time Fourier transform**, or **STFT**, instead analyses successive short, windowed records called **analysis frames**.
 
-A **spectrogram** displays a squared-magnitude or power-related version of the STFT, with time along one axis, frequency along another and strength represented by colour. Check its units and scaling: a coloured plot is not automatically a calibrated PSD.
+A **spectrogram** displays a squared-magnitude or power-related version of those transforms: time on one axis, frequency on another and strength shown by colour. Check what the colours mean. A coloured plot is not automatically a calibrated PSD.
 
-## Frame length and hop do different things
+## Frame length controls what gets blended
 
-The **hop** is the number of samples between neighbouring frame starts. Frames overlap when the hop is shorter than the frame length. A smaller hop gives more frequent updates; it does not shorten the observation inside each frame.
+Each frame observes a span of time. A longer frame gives narrower spectral features for steady tones, making close frequencies easier to distinguish under suitable conditions. It also combines events across a longer interval. If a tone changes inside the frame, both its earlier and later frequencies can contribute to that frame.
 
-```formula
+A shorter frame localises changes more closely in time, but broadens its frequency features. Choose the frame length for the event you want to understand rather than assuming a more detailed-looking plot has resolved everything.
+
+## Hop controls how often you look
+
+The **hop** is the distance in samples between neighbouring frame starts. A hop shorter than the frame length makes the frames overlap. Reducing the hop gives more frequent spectra by sharing more samples. It does not shorten each frame's observation or remove its time-frequency trade-off.
+
+For example, a frame can observe 125 milliseconds while another frame starts every 31.25 milliseconds. The frequent updates still each mix information over a 125-millisecond span.
+
+```formula reference
 T_w = L / F_s
 T_h = H / F_s
-Δf = F_s / M
-T_w = 128 / (1024 Hz) = 0.125 s
-T_h = 32 / (1024 Hz) = 0.03125 s
-Δf = 1024 Hz / 128 = 8 Hz
 where
-T_w: frame observation duration, in seconds (s)
-T_h: interval between consecutive frame starts, in s
-L: frame length, here 128 acquired samples
-H: hop length, here 32 samples
-F_s: sample rate, here 1024 hertz (Hz)
-M: FFT length for each frame, here 128, with no zero padding
-Δf: frequency-grid spacing for each frame, in Hz
-Hz: hertz, cycles per second
-s: second, the unit of time
-In words: each spectrum observes 125 milliseconds even though a new frame starts every 31.25 milliseconds.
+T_w: duration observed by each frame, in seconds
+T_h: interval between consecutive frame starts, in seconds
+L: number of acquired samples per frame
+H: hop length, in samples
+F_s: sample rate, in samples per second
+In words: frame duration is the frame's sample count divided by the sample rate; update spacing uses the hop count instead, so more overlap gives more updates without shortening the observation.
 ```
-
-Longer frames give narrower spectral features for steady tones but mix changes over a longer time. Shorter frames localise changes better but broaden the features. More overlap cannot undo that trade-off. An abrupt change inside a frame can contribute both frequencies to that frame.
 
 > [!analogy] Real-world analogy: overlapping snapshots
 > Take long-exposure photographs at frequent intervals. Starting another exposure sooner creates more photographs, but each photograph still blends movement over its own exposure.
@@ -43,42 +41,21 @@ Longer frames give narrower spectral features for steady tones but mix changes o
 >
 > **Where it stops:** The STFT measures oscillation components using a window, rather than brightness. A smaller hop cannot improve the window's intrinsic frequency discrimination.
 
-## Complete Python example
+## Read a spectrogram's contract
 
-This transparent STFT loop uses complete frames only: no boundary extension and no final partial frame. The first 256 dimensionless samples contain 64 Hz; the next 256 contain 192 Hz. Times label frame starts, not centres. Each row of `S` is one amplitude spectrum.
+Before comparing two plots, establish the window and frame length, hop, FFT length, time labels and boundary policy. Extra zero padding gives more frequency-grid positions inside each frame; it does not lengthen the acquired frame.
 
-```python
-import numpy as np
-from scipy.signal.windows import hann
+Some implementations label frames by their centres, others by their starts. Some extend the signal at the edges, while others omit incomplete frames. A centred window near an edge can include assumed samples outside the actual record. These choices affect apparent event timing and edge content.
 
-fs, size, hop = 1024, 128, 32
-n = np.arange(512)
-x = np.cos(2 * np.pi * 64 * n / fs)
-x[256:] = np.cos(
-    2 * np.pi * 192 * n[256:] / fs)
-w = hann(size, sym=False)
-starts = range(0, len(x) - size + 1, hop)
-rows = []
-for start in starts:
-    X = np.fft.rfft(x[start:start+size]*w)
-    a = abs(X) / w.sum()
-    a[1:-1] *= 2
-    rows.append(a)
-S = np.array(rows)
-f = np.fft.rfftfreq(size, 1 / fs)
-print(S.shape)
-print(f[np.argmax(S[[0, -1]], axis=1)])
-```
-
-The outputs are `(13, 65)` and `[ 64. 192.]`: thirteen complete frames, each with sixty-five real-spectrum bins. A production STFT API may centre frames or pad edges; choose and record those policies before comparing times. SciPy's `ShortTimeFFT` provides a configurable implementation; the loop makes the boundary and time-label choices visible.
+Finally match the strength normalisation and colour units. Amplitude, squared magnitude and PSD use different normalisations. SciPy's `ShortTimeFFT` exposes frame, hop and scaling choices; record the settings with the plot so another reader can interpret it.
 
 ## Key takeaways
 
-- An STFT applies a windowed transform to many frames.
+- An STFT follows changing spectra using successive windowed frames.
 - Frame length controls the observation span; hop controls update spacing.
-- Record frame timing, boundary handling and magnitude/power scaling with every spectrogram.
+- Match time labels, boundaries and scaling before comparing spectrograms.
 
 ## Further reading
 
-- [SciPy: short-time Fourier transform and frame parameters](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.stft.html)
+- [SciPy: short-time Fourier transform](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.stft.html)
 - [SciPy: ShortTimeFFT](https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.ShortTimeFFT.html)

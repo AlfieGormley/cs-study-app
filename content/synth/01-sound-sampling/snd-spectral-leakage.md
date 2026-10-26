@@ -44,7 +44,7 @@ for f in (1000.0, 1005.0):
 
 (−120 here means "at or below −120 dB"; the floor hides meaningless rounding noise.)
 
-- On a bin, both are perfect.
+- On this bin, both recover the expected level to the displayed precision.
 - Between bins, the **unwindowed** ("rect") capture loses 3.9 dB at the peak and leaks energy to −52 dB as far as 500 Hz away, which would mask real low-level components such as aliases.
 - The **Hann** window loses only 1.4 dB at the peak and keeps the far leakage near −118 dB.
 

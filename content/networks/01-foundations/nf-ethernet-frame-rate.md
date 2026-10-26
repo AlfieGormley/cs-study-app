@@ -3,8 +3,8 @@ id: nf-ethernet-frame-rate
 sourceLesson: nf-ethernet
 title: Ethernet frames and packet rate
 level: intermediate
-minutes: 4
-summary: Count Ethernet fields, padding and nominal wire overhead to find maximum frame rates.
+minutes: 3
+summary: Explain padding, frame boundaries and why small frames stress packet-processing capacity.
 ---
 
 The link layer moves frames across a link or bridged LAN. Ethernet is a widely used family of link technologies with a common MAC framing model. Its PHYs and optional encapsulations vary; this lesson starts with ordinary untagged Ethernet II frames.
@@ -36,20 +36,15 @@ Use a nominal **inter-frame gap** of 96 bit-times (12 byte-times) for the steady
 
 The most frames a link can carry each second is its bit rate divided by the bits each frame occupies on the wire, overhead included:
 
-```formula
-f_max = R / (8 × (F + 20))
-f_max = (10⁹ bit/s) / (8 bit/B × 84 B)
-f_max = (10⁹ bit/s) / (672 bit)
-f_max ≈ 1.49 × 10⁶ /s
+```formula reference
+f_max = R / (b(F + H))
 where
 f_max: the maximum frame rate, in Ethernet frames per second
 R: the link rate, in bits per second; 1 Gbit/s = 10⁹ bits per second
 F: the frame size from destination address to FCS, in bytes; 64 for a minimum frame, 1518 for a full-size one
-bit: one binary digit; bit/s is bits per second
-B: bytes; 8 bit/B means 8 bits per byte
-s: seconds; /s means "per second", so f_max is in Ethernet frames per second
-≈: approximately equal to
-In words: each frame costs its own bytes plus 20 bytes of preamble, SFD and gap, times 8 bits per byte. Minimum frames take 672 bits each, so a gigabit link carries up to about 1.49 million of them a second; 1538-byte-time full frames allow about 81,000.
+b: eight bits per byte, converting byte counts into bit counts
+H: nominal wire overhead beyond the frame, expressed as 20 equivalent bytes of wire time for preamble, SFD and gap
+In words: at a fixed link bit rate, smaller frames arrive more often, so processing capacity must be checked in frames per second as well as bits per second; count preamble and gap in the wire-time budget.
 ```
 
 ## Key takeaways

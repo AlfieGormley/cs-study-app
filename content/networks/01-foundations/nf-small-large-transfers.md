@@ -4,42 +4,34 @@ sourceLesson: nf-performance
 title: Optimise small and large transfers
 level: basic
 minutes: 3
-summary: Compare round-trip setup costs with sustained payload transmission for two workloads.
+summary: Choose between reducing round trips and increasing sustained goodput for different workloads.
 ---
 
-## Which one matters?
+Small exchanges are often dominated by round trips; sufficiently large transfers can be dominated by sustained goodput. Server work, congestion and host performance can dominate either, so diagnose the workload first.
 
-Small transfers are often sensitive to round trips, while sufficiently large transfers can be limited by sustained goodput. Server work, congestion and host performance can dominate either.
+## Compare two workloads
 
-> [!example] A 20 KB API response versus a 1 GB download
-> Hypothetical path: 100 Mbit/s payload rate, 40 ms RTT. Ignore DNS, server work, loss, slow start and additional overhead; use TCP plus a full TLS 1.3 handshake with no resumption, early data or retry.
-> - 20 KB: in this model TCP setup and TLS setup consume two RTTs before the request, then one more RTT for the request and response: about 120 ms before adding 1.6 ms of response transmission. Round trips account for about 99% of that simplified total.
-> - 1 GB: transmission alone takes 80 s. The handshakes are noise.
+Assume a hypothetical path with a 100 Mbit/s payload rate and a 40 ms round-trip time. Ignore DNS, server work, loss, slow start and additional overhead. Use fresh TCP plus a full TLS 1.3 handshake with no resumption, early data or retry.
 
-```formula
-t ≈ 3 × RTT + L / R
-t ≈ 3 × 40 ms + 160,000 bit / (10⁸ bit/s)
-t ≈ 120 ms + 1.6 ms ≈ 121.6 ms
-L / R = 8 × 10⁹ bit / (10⁸ bit/s) = 80 s
-where
-t: the time until the whole 20 KB response has arrived
-RTT: the round-trip time, 40 ms; three are spent on TCP setup, TLS setup and the request itself
-L: the response size in bits: 20 KB (20,000 bytes) is 160,000 bits; 1 GB (10⁹ bytes) is 8 × 10⁹ bits
-R: the payload rate, 100 Mbit/s = 10⁸ bits per second
-ms: milliseconds, thousandths of a second
-bit: one binary digit; bit/s is bits per second
-s: seconds
-≈: approximately equal to
-In words: for the small response, 120 of the 121.6 ms are round trips, so shorter RTT or fewer round trips dominate improvement in this model; for the 1 GB download, 80 s of transmission dwarfs the 120 ms of handshakes, so a higher sustained payload rate dominates improvement in this model.
-```
+- A **20 KB API response** waits through TCP setup, TLS setup and the request/response round trip. Those three round trips cost about 120 ms, while response transmission takes only about 1.6 ms.
+- A **1 GB download** needs about 80 seconds of payload transmission. The same setup cost is small beside that.
 
-For comparison, a conventional full TLS 1.2 handshake without resumption or False Start takes two TLS round trips before the client sends its request. With one TCP setup round trip and one request/response round trip, a fresh connection uses four round trips in the same simplified timing model. TLS 1.3 reduces that TLS portion to one round trip unless an additional retry is needed.
+Sending the small response at a higher payload rate removes little of its delay. Reducing RTT or avoiding repeated setup addresses the larger cost in this model. For the large download, improving sustained goodput can make a substantial difference.
 
-Connection reuse and closer servers can cut round-trip costs. TLS/QUIC handshake choices also matter: 0-RTT requires prior connection state and appropriate replay-safe application handling; it is not available for every first connection. Which improvement helps most requires a workload and path measurement. A universal bandwidth threshold beyond which pages stop benefiting is omitted because no such general threshold is established here.
+## Avoid unnecessary round trips
+
+Connection reuse avoids repeating setup for every request. A server location with a lower measured RTT shortens each required round trip.
+
+A conventional full TLS 1.2 handshake without resumption or False Start takes two TLS round trips before the request. With one TCP setup round trip and one request/response round trip, that simplified fresh-connection model needs four RTTs. TLS 1.3 reduces the TLS part to one unless retry adds another exchange.
+
+TLS/QUIC early data (**0-RTT**) requires prior connection state and replay-safe application handling. It is not available for every first connection, and replay risk matters when a request changes state.
+
+These examples isolate mechanisms. Real workloads can involve parallel requests, caching, congestion, server computation and connection limits. There is no universal bandwidth threshold beyond which pages stop benefiting.
 
 ## Key takeaways
-- Small exchanges can be dominated by handshakes and round trips.
-- Large transfers can be dominated by sustained goodput; the model explicitly omits other limits.
+- Small exchanges can benefit most from fewer or shorter round trips.
+- Large transfers can benefit most from higher sustained goodput.
+- Reuse and handshake choices depend on protocol and application constraints.
 
 ## Further reading
 - [Primer on Latency and Bandwidth — High Performance Browser Networking](https://hpbn.co/primer-on-latency-and-bandwidth/)

@@ -3,27 +3,27 @@
     "id": "nf-layered-models-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A client sends a DNS query with a 40-byte payload over UDP and IPv4 (no options) on Ethernet. UDP's header is 8 bytes. How many bytes is the Ethernet frame, counting from the destination MAC to the end of the FCS? Assume untagged Ethernet II and no additional encapsulation.",
+    "prompt": "A capture reports the size of an Ethernet frame from destination MAC through FCS. An engineer treats that byte count as its complete wire-time cost. What is missing under the lesson's nominal framing model?",
     "options": [
       {
-        "text": "68 bytes",
-        "explanation": "That is the IP packet (40 + 8 + 20). It leaves out the 14-byte Ethernet header and 4-byte FCS that the link layer adds."
+        "text": "The IP header, which is always outside the frame",
+        "explanation": "The IP packet and its header are already inside the Ethernet payload."
       },
       {
-        "text": "86 bytes",
-        "explanation": "Correct. 40 + 8 (UDP) + 20 (IPv4) + 14 (Ethernet header) + 4 (FCS) = 86 bytes."
+        "text": "Preamble/start delimiter and the inter-frame gap time",
+        "explanation": "Correct. These consume wire time beyond the counted Ethernet frame; the gap is a time allowance rather than frame payload."
       },
       {
-        "text": "98 bytes",
-        "explanation": "This uses a 20-byte TCP header instead of UDP's 8 bytes. UDP's header is just ports, length and checksum."
+        "text": "The FCS, which must be counted twice",
+        "explanation": "The reported boundary already includes the FCS once."
       },
       {
-        "text": "106 bytes",
-        "explanation": "This adds the 8-byte preamble and 12-byte inter-frame gap. Those occupy the wire but are not part of the frame itself."
+        "text": "Nothing: frame length and wire occupancy are identical",
+        "explanation": "That omits the stated framing overhead outside destination-MAC-through-FCS bytes."
       }
     ],
     "answer": 1,
-    "workedExample": "Build it from the inside out:\n\n```\nDNS payload        40\n+ UDP header        8   -> 48\n+ IPv4 header      20   -> 68\n+ Ethernet header  14   -> 82\n+ FCS               4   -> 86\n```\n\n86 bytes is above Ethernet's 64-byte minimum, so no padding is needed. On the wire, add 8 bytes of preamble and 12 bytes of gap for 106 byte-times of link occupancy, so the payload efficiency is low:\n\n```formula\nη = D / W\nη = 40 B / 106 B ≈ 0.38\nwhere\nη: eta, the payload efficiency: the fraction of the link's busy time that carries the DNS payload (0.38 = 38%)\nD: the useful DNS payload, in bytes (B); here 40\nW: the wire time of the frame, in byte-times (the time to send one byte): the 86-byte frame plus 8 bytes of preamble and SFD plus a 12-byte gap = 106\nB: bytes; one byte is 8 bits\n≈: approximately equal to (rounded)\nIn words: only 40 of the 106 byte-times this query occupies carry the DNS question itself; the rest is headers, trailer, preamble and gap.\n```",
+    "workedExample": "Identify exactly what the capture counts. The frame contains its header, payload, padding if needed and FCS. Sending consecutive frames also requires preamble/start-delimiter signalling and a nominal gap. A payload-efficiency estimate based only on frame bytes overstates the useful share of wire time.",
     "link": {
       "title": "Ethernet frame — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Ethernet_frame"
@@ -33,27 +33,27 @@
     "id": "nf-layered-models-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A full-size IPv4 TCP segment contains 12 bytes of options including negotiated timestamps. With a 1500-byte IP MTU and untagged full-duplex 1 Gbit/s Ethernet, what ideal one-direction TCP payload rate follows from the lesson’s framing model? Ignore loss, ACK contention and other limits.",
+    "prompt": "A sender adds TCP options while keeping full-size IPv4 packets within the same IP MTU. Assume the same Ethernet wire occupancy per full-size packet. What happens to the ideal TCP payload rate?",
     "options": [
       {
-        "text": "About 1000 Mbit/s",
-        "explanation": "That ignores headers entirely. Every frame carries IP, TCP and Ethernet overhead, plus preamble and inter-frame gap."
+        "text": "It reaches the full link rate because options are free",
+        "explanation": "Options consume bytes inside the packet; they do not remove Ethernet overhead."
       },
       {
-        "text": "About 965 Mbit/s",
-        "explanation": "1448 / 1500 ≈ 96.5% counts the IP/TCP overhead but omits Ethernet header, FCS, preamble and nominal gap."
+        "text": "It increases because a longer TCP header carries more application data",
+        "explanation": "TCP option bytes are control information, not additional application payload."
       },
       {
-        "text": "About 949 Mbit/s",
-        "explanation": "That is the figure without timestamps (1460 bytes of data). The 12 bytes of options reduce the data per segment further."
+        "text": "It is unchanged because the IP packet length stays fixed",
+        "explanation": "The total length stays fixed, but fewer of those bytes carry TCP data."
       },
       {
-        "text": "About 941 Mbit/s",
-        "explanation": "Correct. Data per frame is 1500 − 20 − 32 = 1448 bytes, wire time is 1538 bytes, and 1448 / 1538 × 1000 ≈ 941 Mbit/s."
+        "text": "It decreases because option bytes displace TCP data",
+        "explanation": "Correct. With the same full-packet wire-time cost, less useful payload per packet means a lower payload ceiling."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Data per frame: take the 1500-byte IP packet and subtract the IPv4 header (20 bytes) and the TCP header with timestamps (20 + 12 = 32 bytes).\n2. Wire time per frame: the 1500-byte packet plus 14 (Ethernet header), 4 (FCS), 8 (preamble and SFD) and 12 (gap).\n3. Efficiency is data per wire time; goodput is that fraction of the link rate:\n\n```formula\nD = 1500 B − 20 B − 32 B = 1448 B\nW = (1500 + 14 + 4 + 8 + 12) B\nW = 1538 B\nη = D / W = 1448 / 1538 ≈ 0.9415\nG = ηR\nG = 0.9415 × 1000 Mbit/s ≈ 941 Mbit/s\nwhere\nD: the TCP data per frame, in bytes (B): the 1500-byte IP packet minus the 20-byte IPv4 header and the 32-byte TCP header (20 bytes plus 12 bytes of timestamp options)\nW: the wire time per frame, in byte-times (the time to send one byte): IP packet + 14 Ethernet header + 4 FCS + 8 preamble and SFD + 12 inter-frame gap\nη: eta, the efficiency: the fraction of wire time carrying TCP data\nG: the goodput, the rate of useful TCP payload, in megabits per second (Mbit/s)\nR: the link rate, 1000 Mbit/s (1 Gbit/s)\nB: bytes; one byte is 8 bits\nMbit/s: megabits per second; 1 Mbit is 1,000,000 bits\n≈: approximately equal to (rounded)\nIn words: each frame spends 1448 of its 1538 byte-times on data, so a 1000 Mbit/s link delivers about 941 Mbit/s of TCP payload.\n```\n\n4. Goodput is about **941 Mbit/s**.\n\nThis is an ideal framing calculation, not a promise of an iperf result; actual throughput depends on the path, hosts and negotiated options.",
+    "workedExample": "Hold the outer budget fixed. The IP header, TCP header and TCP data must fit inside the IP MTU. Enlarging the TCP header leaves less space for data, while the Ethernet frame's total occupancy stays the same in this comparison. Real throughput also depends on the hosts, path and behaviour enabled by the options.",
     "link": {
       "title": "Ethernet frame — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Ethernet_frame"

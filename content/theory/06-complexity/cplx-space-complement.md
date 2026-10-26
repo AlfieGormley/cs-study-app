@@ -11,9 +11,9 @@ NL is nondeterministic logarithmic working space, with input kept separately rea
 
 ## NL equals coNL
 
-**Immerman–Szelepcsényi theorem (proved independently, 1987–88)**:
+**Immerman–Szelepcsényi theorem (proved independently, 1987–88)** applies to the standard space-constructible bounds at least logarithmic in input length used here:
 
-```formula
+```formula essential
 NSPACE(s) = coNSPACE(s)   for s ≥ log n
 NL = coNL
 where

@@ -2,7 +2,7 @@
 id: auto-pumping-loops
 title: Why a long accepting run contains a loop
 level: intermediate
-minutes: 5
+minutes: 4
 sourceLesson: auto-pumping
 summary: The first pumping-length symbols visit more states than a DFA has.
 ---
@@ -13,18 +13,9 @@ You cannot try them all. Instead you find a property that every regular language
 
 ## The pigeonhole idea
 
-Count the states a run visits. Reading each symbol moves to the next state, and the start state counts too, so a run is always one state longer than the string.
+Count state visits, including the start. Repeated visits count separately: the run does not gain new states when it loops.
 
-```formula
-n ≥ p
-n + 1 > p
-where
-p: the number of states in the DFA
-n: the length of the input string, in symbols; an integer count, non-negative unless a positive lower bound is stated
-≥: is greater than or equal to
->: is greater than
-In words: if the string is at least as long as the number of states, the run visits more states than exist, so some state must appear twice.
-```
+Reading as many symbols as the DFA has states visits one extra state, because the start counts too. Some visit must repeat an earlier state. This already happens within that initial portion of the run.
 
 This is the **pigeonhole principle**: put more than p pigeons into p holes and some hole holds two. It also tells you where the repeat happens. The first p symbols already give p + 1 visits, so some state repeats within the first p symbols.
 
@@ -42,7 +33,7 @@ Look at what happens between the two visits. The machine read some non-empty chu
 
 Cut the string into three pieces around the loop:
 
-```formula
+```formula essential
 s = x · y · z
 δ̂(q₀, x) = q
 δ̂(q, y) = q
@@ -66,7 +57,14 @@ i: how many times you go round the loop, 0, 1, 2, …
 In words: x leads to q, y goes from q back to q, and z leads from q to acceptance. Because y returns to q, the machine cannot tell how many times it went round, so repeating y, or deleting it, leaves a string the machine still accepts.
 ```
 
-So xz (skip the loop), xyz, xyyz and xyyyz all end in the same state. If one is accepted, they all are.
+Skip the loop, follow it once or follow it repeatedly: after the unchanged suffix, every run ends in the same state. If one is accepted, they all are.
+
+> [!analogy] Real-world analogy: An extra lap
+> On a walking route, a lap returns you to the same junction before you continue to your destination.
+>
+> **How it maps:** The junction is the repeated DFA state, the lap is the non-empty pumped piece, and the remaining route is the unchanged suffix. Taking zero or several laps still lets you follow that suffix.
+>
+> **Where it stops:** A physical walk may track elapsed time or tiredness. A DFA stores only its current state, so completing the loop leaves no extra memory of how often it happened.
 
 ### A concrete loop
 
@@ -77,27 +75,11 @@ state:  0  1  0  1  0
 read:     1  1  1  1
 ```
 
-State 0 repeats after `11`. So the pieces are:
+State 0 repeats after `11`.
 
-```formula
-x = ε     y = "11"     z = "11"
-x · y^0 · z = "11"         (3)
-x · y^1 · z = "1111"       (15)
-x · y^2 · z = "111111"     (63)
-v_k = 4^k − 1
-where
-x, y, z: the three pieces of 1111 around the loop at state 0
-ε: Greek epsilon: the empty string
-"11": the two-symbol string 1 then 1 (the quotes mark a string of bits, not the number eleven)
-·: concatenation: one string straight after another
-y^i: i copies of y in a row
-i: a non-negative integer repetition count
-k: the number of pairs of 1s in the string after pumping; with i copies of y it is i + 1, because z adds one more pair; an integer count, non-negative unless a positive lower bound is stated
-v_k: the value, in ordinary numbers, of a binary string of k pairs of 1s, that is 2k ones
-In words: deleting the loop gives 11 (three), keeping it gives 1111 (fifteen), doubling it gives 111111 (sixty-three). In general k pairs of 1s is worth 4^k − 1, and all of these are divisible by 3.
-```
+The loop reads `11`. Skip it and the remaining input is `11`; take it once and the input is `1111`; take it twice and the input is `111111`. Each run returns to the same state before reading the final `11`, so all three strings are accepted.
 
-The DFA says so, and arithmetic agrees: 4 leaves remainder 1 when divided by 3, so every power of 4 does too, and subtracting 1 leaves a multiple of 3.
+The state path is enough to explain why all repetitions work; converting each binary string to a number adds no new justification.
 
 ## Key takeaways
 - The first pumping-length symbols visit more states than a DFA has.

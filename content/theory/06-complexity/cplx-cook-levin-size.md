@@ -11,48 +11,27 @@ Continue the Cook–Levin encoding: each cell in a time-by-tape tableau has a fi
 
 ### Why it's a polynomial reduction
 
-The `exactly_one` encoding gives each cell one "at least one" clause plus one "not both" clause per pair of symbols:
-
-```formula
-N_clauses = 1 + C(C − 1) / 2
-N_clauses = 1 + 4 × 3 / 2 = 7   for C = 4
-where
-N_clauses: the number of clauses φ_cell uses for one cell
-C: the number of possible cell symbols (tape symbols and state markers); a constant fixed by the machine N, not by the input
-In words: one clause says "at least one symbol", and each of the C × (C − 1) / 2 pairs of symbols gets a "not both" clause, so the count grows like C squared but never depends on the input.
-```
+The `exactly_one` encoding adds an at-least-one clause and forbids every pair of symbols from coexisting. The alphabet and machine rules are fixed, so this is a constant amount of work per cell as the input grows.
 
 Add it up over the whole grid:
 
-```formula
-N_cells = n^k n^k = n^{2k}
-N_cells = 100^3 × 100^3 = 10^12
+```formula essential
+N_cells = O(n^{2k})
 |φ| = O(C^2 n^{2k}) = O(n^{2k})
 where
-N_cells: the number of cells in an unpadded reference grid; actual start-row and boundary padding preserve the same asymptotic growth
-n: the length of the input w, in symbols; 100 in the second line
-k: the fixed exponent of N's running time n^k; 3 in the second line
-C: the number of possible cell symbols, a constant fixed by N
+N_cells: the number of tableau cells, including start-row and boundary padding
+n: the input length, in symbols
+k: the fixed exponent of the machine's polynomial time bound
+C: the number of possible cell symbols, a constant fixed by the machine
 φ: phi, the Boolean formula the reduction builds
 |φ|: the size of the formula φ: how many symbols it takes to write down
 O(...): Big O: grows at most as fast as a constant times the expression inside, for large n
-In words: every cell contributes a constant amount of formula (its exactly-one clauses plus a constant number of window constraints), so the formula's size is a constant times n^{2k}: a polynomial in n.
+In words: each grid dimension is bounded by the polynomial runtime, so their product is still polynomial. A fixed amount of local formula per cell preserves that polynomial size bound.
 ```
 
-The second line is the example of a machine running in cubic time (exponent three) on an input of 100 symbols (100 input symbols): a trillion cells. That is enormous, but it is a polynomial, and the formula can be written out mechanically.
+Squaring a polynomial bound keeps it polynomial. This is a validity argument for the reduction, not a claim that materialising the tableau is an efficient practical SAT encoding.
 
-A satisfying assignment *is* an accepting computation, read off cell by cell; and an accepting computation gives a satisfying assignment:
-
-```formula
-w ∈ L  iff  φ ∈ SAT
-where
-w: the input to the original problem
-L: the NP problem (language) being reduced: the set of inputs whose answer is yes
-φ: the Boolean formula built from w
-SAT: the set of Boolean formulas that have at least one satisfying assignment
-∈: "is a member of"
-In words: w is a yes-instance of L exactly when the formula built from it can be satisfied, which is what makes the construction a reduction from L to SAT.
-```
+A satisfying assignment *is* an accepting computation, read off cell by cell; and an accepting computation gives a satisfying assignment. Thus the input is accepted exactly when the constructed SAT instance is satisfiable.
 
 > [!note] What the nondeterminism becomes
 > N's guesses turn into the freedom the SAT solver has in choosing variable values. The formula is fixed; the "guessing" is the existential "is there an assignment?".

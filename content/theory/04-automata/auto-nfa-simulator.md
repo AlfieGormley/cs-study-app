@@ -47,7 +47,7 @@ def run_nfa(delta, start, accept, w):
 
 Here ε is the empty string `""`. Each step looks at every current state and every arrow out of it at most once, and there is one closure for the start plus one step per input symbol. That gives this cost:
 
-```formula
+```formula reference
 T = O((n + 1) × (m + e))
 T = O((n + 1) × m)   when e = O(m)
 where
@@ -59,7 +59,9 @@ e: the number of transitions (arrows) in the NFA; an integer count, non-negative
 In words: the work is at most the input length plus one, times the size of the machine. When each state has a bounded number of arrows out of it, the number of arrows is proportional to the number of states, and the bound simplifies to input length plus one, times states.
 ```
 
-It needs O(m) working memory for the current set, excluding the stored automaton. A Thompson-style NFA (the Thompson-construction units) has at most two arrows out of each state, so the second line applies. For example, a 200-state NFA scanning a 1,000,000-symbol input does at most about 200 × 1,000,001 ≈ 200 million state visits, times a constant. That bound is exactly what makes linear-time regex engines possible: Thompson's algorithm tracks reachable states; modern RE2 and Go regexp use related automaton techniques alongside other optimizations.
+In words, the simulator stores at most one copy of each machine state, however many paths lead there. Each input symbol may require examining the whole machine, but it never enumerates all paths. For a fixed machine, doubling a sufficiently long input roughly doubles this worst-case work bound. A larger machine can still be expensive.
+
+Writing m for the number of states, it needs O(m) working memory beyond the stored automaton. A Thompson-style NFA has at most two outgoing arrows per state, so its edges cannot add a separate large factor. This is the mechanism behind input-linear set simulation; it is a bound on growth, not a stopwatch prediction.
 
 ## Key takeaways
 - Take epsilon closure initially and after each consumed symbol.

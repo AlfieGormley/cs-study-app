@@ -15,21 +15,14 @@ The pay-off is Rice's theorem, one of the most practically important results in 
 
 "A reduces to B" means: **A is no harder than B**. If you had an algorithm for B, you could build an algorithm for A by translating each A-question into a B-question.
 
-The logic you use to prove undecidability is the contrapositive:
+The logic is a contrapositive: if a solver for the target would solve an impossible source problem, the target cannot have a solver either. For example, machine acceptance reduces to halting, so a halting decider would contradict the already-proved impossibility of an acceptance decider.
 
-```formula
-A ≤ B  and  B ∈ R   ⇒   A ∈ R
-A ≤ B  and  A ∉ R   ⇒   B ∉ R
-where
-A, B: two decision problems, each written as a language: the set of inputs whose answer is "yes"
-≤: "reduces to": an algorithm for B can be turned into an algorithm for A, so A is no harder than B
-R: the class of decidable languages: those some always-halting Turing machine decides
-∈, ∉: is a member of, is not a member of
-⇒: implies
-In words: if B can be decided, so can anything that reduces to it; so if A cannot be decided, nothing that A reduces to can be decided either.
-```
-
-The second line is the first one turned round (its contrapositive). For example, A_TM (does machine M accept input w?) is undecidable and reduces to HALT_TM (does M halt on w?), so HALT_TM is undecidable too, as Example 1 shows.
+> [!analogy] Real-world analogy: A plug adaptor
+> An adaptor lets an appliance use an outlet with a different shape. The appliance works only when the adaptor and a working outlet are both available.
+>
+> **How it maps:** The reduction adapts a source question into a target question. A working target solver plus that terminating adaptation supplies a source solver.
+>
+> **Where it stops:** Reductions must preserve both yes and no answers exactly. Physical compatibility alone does not establish that logical guarantee or a bound on running time.
 
 > [!warning] The direction is everything
 > To prove B undecidable, reduce a **known undecidable** problem A **to** B. Reducing B to A shows only that B is no harder than A, which alone does not prove B undecidable. Getting this backwards is the most common mistake in computability proofs.
@@ -38,7 +31,7 @@ The second line is the first one turned round (its contrapositive). For example,
 
 A is **mapping reducible** to B when a total computable function transforms every source input while preserving its yes/no answer. The notation and condition are:
 
-```formula
+```formula essential
 x ∈ A   ⇔   f(x) ∈ B
 where
 A, B: two languages (decision problems as sets of yes-instances)
@@ -60,7 +53,7 @@ Useful properties, all following from the definition:
 - The same map works when both languages are complemented.
 - Maps compose, so mapping reducibility is transitive.
 
-```formula
+```formula reference
 A ≤_m B  and  B ∈ R   ⇒  A ∈ R
 A ≤_m B  and  B ∈ RE  ⇒  A ∈ RE
 A ≤_m B  ⇔  Ā ≤_m B̄

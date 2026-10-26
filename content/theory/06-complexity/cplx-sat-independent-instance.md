@@ -3,7 +3,7 @@ id: cplx-sat-independent-instance
 title: "Tracing a SAT-to-graph instance"
 level: intermediate
 minutes: 4
-summary: "Count triangle and consistency edges separately."
+summary: "Choose compatible literal occurrences to translate between an assignment and an independent set."
 sourceLesson: cplx-reductions
 ---
 
@@ -11,7 +11,7 @@ sourceLesson: cplx-reductions
 
 Here is a formula with three clauses over four Boolean variables:
 
-```formula
+```formula essential
 φ = (x1 ∨ x2 ∨ ¬x3)
   ∧ (¬x1 ∨ x3 ∨ x4)
   ∧ (¬x2 ∨ ¬x3 ∨ ¬x4)
@@ -39,41 +39,15 @@ In words: three clauses, C1, C2 and C3 in order; φ is satisfiable if some true/
   C2.x4  -- C3.¬x4
 ```
 
-Counting the graph:
+The graph has nine vertices, one per occurrence, and target size three. Triangle edges enforce one choice per clause; the five listed consistency edges prevent contradictory choices.
 
-```formula
-|V| = 3m = 3 × 3 = 9
-|E| = 3m + 5 = 9 + 5 = 14
-k = m = 3
-where
-|V|: the number of vertices
-m: the number of clauses, here 3
-|E|: the number of edges: 3 triangle edges per clause plus the 5 consistency edges drawn above
-k: the independent-set size asked for
-In words: 9 vertices, 14 edges, and we ask for an independent set of size 3, one vertex per clause.
-```
-
-Set the first and third variables true and the second false (the fourth can be anything). Each clause then has a true literal:
-
-```formula
-C1 = x1 ∨ x2 ∨ ¬x3 = T ∨ F ∨ F = T
-C2 = ¬x1 ∨ x3 ∨ x4 = F ∨ T ∨ x4 = T
-C3 = ¬x2 ∨ ¬x3 ∨ ¬x4 = T ∨ F ∨ ¬x4 = T
-where
-C1, C2, C3: the three clauses of φ
-x1, x2, x3, x4: Boolean variables; here x1 = T, x2 = F, x3 = T, x4 either
-T: true
-F: false
-¬: NOT: flips true and false
-∨: OR: true when at least one part is true
-In words: with x1 true, x2 false and x3 true, every clause contains a true literal whatever x4 is, so φ is satisfied.
-```
+Set the first and third variables true and the second false (the fourth can be anything). The first clause is satisfied by the first variable, the second by the third variable, and the last by the negation of the second variable.
 
 Pick one true literal from each clause: x1 from C1, x3 from C2, ¬x2 from C3. These three vertices are in different triangles, and no two are complementary, so they form an independent set of size 3.
 
 ## Key takeaways
 
-- Count triangle and consistency edges separately.
+- Triangle edges enforce clause choices; consistency edges forbid contradictory choices.
 - Choose a true literal from each clause to obtain an independent set.
 - Picked nonconflicting literals can be extended to an assignment.
 

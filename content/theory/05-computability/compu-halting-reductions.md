@@ -24,7 +24,7 @@ Map ⟨M, w⟩ to ⟨M′, w⟩. Then:
 - If M rejects w, the edited machine loops on w.
 - If M loops on w, the edited machine also loops on w.
 
-```formula
+```formula essential
 f(⟨M, w⟩) = ⟨M′, w⟩
 ⟨M, w⟩ ∈ A_TM  ⇔  ⟨M′, w⟩ ∈ HALT_TM
 where
@@ -55,7 +55,7 @@ def f(M, w):
 
 ## Example 2: the blank-tape halting problem
 
-```formula
+```formula essential
 HALT_ε = { ⟨M⟩ : M(ε)↓ }
 f(⟨M, w⟩) = ⟨M_w⟩
 where

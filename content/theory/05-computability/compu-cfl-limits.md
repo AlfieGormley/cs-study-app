@@ -13,7 +13,7 @@ sourceLesson: compu-pda-pumping
 
 **Proof.** Suppose L is context-free with CFL pumping length p. Choose the string s below:
 
-```formula
+```formula essential
 L = { a^n b^n c^n : n ≥ 0 }
 s = a^p b^p c^p
 |s| = 3p ≥ p
@@ -31,7 +31,7 @@ In words: pick the string with p a's, p b's and p c's; it is in L and is long en
 
 The lemma supplies five consecutive pieces, as defined below: their middle three-piece window is at most the pumping length, and the two pumped pieces are not both empty.
 
-```formula
+```formula essential
 s = u v x y z
 |v x y| ≤ p     |v y| ≥ 1
 where
@@ -53,7 +53,7 @@ Every allowed split fails, contradicting the lemma. So L is not context-free. �
 
 The same style of proof shows that the "copy" language is not context-free:
 
-```formula
+```formula essential
 L_copy = { w w : w ∈ {a, b}* }
 s = a^p b^p a^p b^p
 where

@@ -11,7 +11,7 @@ sourceLesson: compu-halting
 
 Define the acceptance problem as a language of encoded machine-input pairs:
 
-```formula
+```formula essential
 A_TM = { ⟨M, w⟩ : w ∈ L(M) }
 where
 A_TM: the acceptance problem for Turing machines, as a set of strings
@@ -30,21 +30,7 @@ A_TM is **recognisable**: the universal TM U simulates M on w and accepts if M d
 
 **Theorem.** A_TM is not decidable.
 
-**Proof.** Suppose, for contradiction, that some TM H decides A_TM:
-
-```formula
-H(⟨M, w⟩) = 1   if ⟨M, w⟩ ∈ A_TM
-H(⟨M, w⟩) = 0   otherwise
-where
-H: the hypothetical decider for A_TM
-M: any Turing machine
-w: any input string
-⟨M, w⟩: the encoding of M and w as one string
-A_TM: the acceptance problem: all pairs where M accepts w
-1, 0: H's answer: 1 means accept ("yes"), 0 means reject ("no")
-∈: is a member of
-In words: H always stops and correctly answers whether M accepts w.
-```
+**Proof.** Suppose, for contradiction, that a machine H always halts and correctly answers whether any given machine accepts its given input. H must say no both when the simulated machine rejects and when it runs forever.
 
 H always halts. Use it to build a TM D that takes a machine description and flips H’s answer to whether that machine accepts its own description:
 

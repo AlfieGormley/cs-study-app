@@ -13,7 +13,7 @@ A problem is in **NP** if every yes-instance has a short **certificate** (a witn
 
 Formally, a problem L is in NP if there is a polynomial-time **verifier** V (a checking algorithm) and a polynomial p such that:
 
-```formula
+```formula essential
 x ∈ L   iff   ∃ c with
   |c| ≤ p(|x|)   and   V(x, c) = 1
 where
@@ -47,17 +47,7 @@ print(verify_subset_sum(S, T, {0, 1}))
 # False: 3 + 34 = 37
 ```
 
-The verifier never searches. It only checks. Finding a good certificate by brute force means trying subsets, and the number of subsets explodes:
-
-```formula
-N_sub = 2^n
-N_sub = 2^6 = 64   for n = 6
-where
-N_sub: the number of different subsets of the list (including the empty subset)
-n: how many numbers are in the list; the example S above has n = 6
-2^n: n copies of 2 multiplied together: each number is either in or out of a subset
-In words: every extra number doubles the subsets to search. Six numbers give 64 subsets; 60 numbers give about 10^18. Checking any one subset still takes only one addition per element.
-```
+The verifier never searches. It only checks. Finding a good certificate by brute force means trying subsets: each extra input item doubles the number of choices. Checking one proposed subset still needs only polynomial work.
 
 > [!note] NP does not stand for "not polynomial"
 > NP means **nondeterministic polynomial time**. The equivalent original definition: a nondeterministic Turing machine (one that can "guess" at each step) accepts in polynomial time. Guess the certificate, then run the verifier. Every problem in P is also in NP, so "NP" is not a label for hard problems.
@@ -71,18 +61,16 @@ Other NP problems and their certificates:
 | 3-colouring | A colour per vertex |
 | Composite number | A factor other than 1 and itself |
 
-For the last row the check is a single division:
+For the last row, check that the supplied factor is strictly between one and the input number and divides it exactly. For example, seven is a certificate that 91 is composite.
 
-```formula
-1 < d < N   and   N mod d = 0
-91 mod 7 = 0   for N = 91, d = 7
-where
-N: the whole number being tested for compositeness (having a factor other than 1 and itself)
-d: the certificate: a proposed factor of N
-mod: the remainder after division, so N mod d = 0 means d divides N exactly
-<: is less than
-In words: to prove N is composite, hand over a factor strictly between 1 and N; anyone can confirm it by one division. 91 = 7 × 13, so the certificate 7 proves 91 is composite.
-```
+To check a Hamiltonian-cycle certificate, confirm its list contains every graph vertex exactly once, then check each consecutive edge and the last-to-first edge. With expected constant-time hash look-ups this takes expected linear work in the vertex count. A deterministic polynomial-time implementation also suffices for NP membership; finding the cycle is a different task.
+
+> [!analogy] Real-world analogy: A completed jigsaw
+> Checking a proposed arrangement is different from finding one among all possible arrangements.
+>
+> **How it maps:** The completed arrangement acts as a certificate. A checker inspects whether it obeys the rules without having to search for that arrangement.
+>
+> **Where it stops:** The analogy does not prove any puzzle is hard. NP requires a precise polynomial bound on certificate length and checking time, and includes easy problems too.
 
 The Python demonstration expects its certificate argument to have been decoded as a set of distinct integer positions, with an encoded size bounded polynomially in the input. A full verifier first rejects malformed encodings; a list containing repeated positions is not that certificate format. The examples use sets, so an input element cannot be counted twice.
 

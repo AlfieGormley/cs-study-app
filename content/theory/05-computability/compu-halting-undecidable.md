@@ -9,7 +9,7 @@ sourceLesson: compu-halting
 
 ## The halting problem
 
-```formula
+```formula essential
 HALT_TM = { ⟨M, w⟩ : M(w)↓ }
 where
 HALT_TM: the halting problem for Turing machines, as a set of strings

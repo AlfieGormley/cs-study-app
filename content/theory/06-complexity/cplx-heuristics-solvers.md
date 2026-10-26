@@ -11,7 +11,7 @@ sourceLesson: cplx-coping
 
 Heuristics generally give up a universal quality guarantee and must be measured on the intended workload:
 
-- **Local search**: start somewhere, make small improving changes. 2-opt for TSP swaps two edges when that improves the tour. Its quality depends on the initial route and instance; it has no universal few-percent guarantee. **Content gap:** numerical tour-quality and runtime claims are omitted because no reproducible benchmark for the stated inputs was available.
+- **Local search**: start somewhere, make small improving changes. 2-opt for TSP swaps two edges when that improves the tour. Its quality depends on the initial route and instance; it has no universal few-percent guarantee.
 - **Metaheuristics**: simulated annealing, tabu search, genetic algorithms. Tunable, but the label alone gives no polynomial-time worst-case quality guarantee.
 - **CDCL SAT solvers** (MiniSat, CaDiCaL, Kissat) and **MIP solvers** solve many large industrial instances for hardware verification, scheduling and planning; measure them on the intended workload.
 

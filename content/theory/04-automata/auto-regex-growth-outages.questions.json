@@ -3,27 +3,27 @@
     "id": "auto-regex-engines-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Suppose a benchmark of re.search(r\"\\s+$\", s) takes 0.23 seconds for 10,000 spaces followed by x. Assuming quadratic scaling with negligible fixed overhead, roughly how long for 40,000 spaces followed by x? This is hypothetical data, not a measured runtime claim.",
+    "prompt": "An unoptimised search for `\\s+$` tries each space as a new starting point in a long run of spaces followed by x. Why can the total work be quadratic?",
     "options": [
       {
-        "text": "About 0.9 s",
-        "explanation": "That assumes linear growth (×4 input, ×4 time). This pattern is quadratic."
+        "text": "Only the final character is examined",
+        "explanation": "Each attempt first scans spaces before failing at x."
       },
       {
-        "text": "About 3.7 s",
-        "explanation": "Correct. The work is about half the square of the number of spaces; quadrupling the number of spaces multiplies it by 16: 0.23 × 16 ≈ 3.7 s."
+        "text": "Many starts each rescan a long overlapping suffix",
+        "explanation": "Correct. Longer input creates more starts and more scanning per start."
       },
       {
-        "text": "About 0.23 s; it does not depend on length",
-        "explanation": "Each additional whitespace character is another starting position, and each start scans to the end. Length matters a lot."
+        "text": "The engine has exponentially many nested repetitions",
+        "explanation": "This example needs no nested repetition; repeated starts are enough for polynomial growth."
       },
       {
-        "text": "Many hours, because it is exponential",
-        "explanation": "A single regex repetition operator can try linearly many match lengths at one start. A regex scan restarted at every position yields quadratic rather than exponential work."
+        "text": "A single pass stores every substring",
+        "explanation": "The work comes from revisiting text, not necessarily storing substrings."
       }
     ],
     "answer": 1,
-    "workedExample": "A repeated-start regex search starts at each space and revisits the remaining spaces, producing a triangular work sum, about half the square of the input length. Under the explicitly assumed quadratic timing model:\n\n```formula\nt_2 = t_1 × (n_2 / n_1)^2\nt_2 = 0.23 s × (40000 / 10000)^2\nt_2 = 0.23 s × 16 ≈ 3.68 s\nwhere\nt_1: the measured time for the smaller input, 0.23 seconds (s)\nt_2: the predicted time for the larger input, in seconds (s)\nn_1: the smaller input length, 10,000 spaces\nn_2: the larger input length, 40,000 spaces\ns: seconds\n≈: is approximately equal to\nIn words: four times the input gives four squared, 16 times the work, so about 3.7 seconds.\n```\n\nActual measurements depend on engine, optimization and hardware.",
+    "workedExample": "At the first space, the attempt scans the whole run and fails at x. The next attempt repeats most of that work, then the next repeats slightly less. Summing the overlapping scans gives quadratic growth. A pattern can therefore be costly even without exponential ambiguity. Actual optimisations may change a particular implementation’s behaviour.",
     "link": {
       "title": "Regular expression matching — Russ Cox",
       "url": "https://swtch.com/~rsc/regexp/regexp1.html"
@@ -71,27 +71,27 @@
     "id": "auto-regex-engines-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "A hypothetical benchmark gives 1 ms, 7 ms and 47 ms when input length doubles from 200 to 400 to 800. Which proposed scaling model is most consistent with those three measurements? These illustrative data are not a verified Cloudflare or Python benchmark.",
+    "prompt": "A regex benchmark is fast on successful examples but slows sharply on longer almost-matches. What is the most useful next investigation?",
     "options": [
       {
-        "text": "Linear: about 2× per doubling",
-        "explanation": "Each doubling multiplied the time by about 7, far more than 2."
+        "text": "Treat the successful timings as a worst-case guarantee",
+        "explanation": "Success may be found early while failure explores many alternatives."
       },
       {
-        "text": "Quadratic: about 4× per doubling",
-        "explanation": "Each doubling cost about 7×, which is more than quadratic."
+        "text": "Infer an exact complexity class from three timings",
+        "explanation": "A few timings cannot establish asymptotic behaviour or isolate fixed overhead."
       },
       {
-        "text": "Exponential in n",
-        "explanation": "Three timings cannot rule out every exponential model, but among these coarse candidate descriptions, roughly cubic growth best fits the observed doubling ratios."
+        "text": "Assume every regex engine uses the same algorithm",
+        "explanation": "Libraries and APIs use different strategies and optimisations."
       },
       {
-        "text": "Roughly cubic: about 8× per doubling",
-        "explanation": "Correct among the proposed models: ratios 7 and 47/7≈6.7 are closer to 8 than to 2 or 4. More evidence is needed to establish asymptotic complexity."
+        "text": "Inspect ambiguous paths and restart behaviour, then test bounded failing inputs",
+        "explanation": "Correct. Explain the repeated work and check it under the actual engine and API."
       }
     ],
     "answer": 3,
-    "workedExample": "Compare the observed growth per doubling with what each model predicts:\n\n```formula\nt ∝ n^c\nt(2 × n) / t(n) = 2^c\n2^3 = 8     7 / 1 = 7     47 / 7 ≈ 6.7\nwhere\nt: the running time\nn: the input length; a non-negative integer count unless a positive lower bound is stated\nc: the exponent of the assumed power law: 1 for linear, 2 for quadratic, 3 for cubic\n∝: is proportional to: equal up to a constant factor\nt(n): the time for input length n\n≈: is approximately equal to\nIn words: under a power law, doubling the input multiplies the time by 2 to the power c. The observed ratios, 7 and about 6.7, are closest to the cubic prediction of 8.\n```\n\nSo cubic is the closest proposed model, not a proof. Separately, a naive unanchored search for .*.*=.*; on x= followed by a long x suffix can take cubic work: at starts after the only equals sign, two leading stars try a quadratic number of allocations before failing to find =; summing over starts gives cubic work. Exact engine optimizations can alter observed behavior.",
+    "workedExample": "Construct controlled almost-matches that force the late failure. Check whether the engine revisits equivalent state/position pairs or restarts searches across overlapping suffixes. Use bounded tests and resource limits. Measurements help test the explanation, but documented guarantees and the mechanism are needed before generalising.",
     "link": {
       "title": "Details of the Cloudflare outage on July 2, 2019",
       "url": "https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/"
@@ -101,27 +101,27 @@
     "id": "auto-regex-engines-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "For `(a|aa)*$` on n a's followed by `!`, the number of paths a backtracker explores grows like the number of ways to write n as an ordered sum of 1s and 2s. Roughly how much does the work grow per extra a? Assume full-string matching by a path-enumerating implementation without memoization or simplifying optimizations.",
+    "prompt": "In full matching by a path-enumerating backtracker, `(a|aa)*` can consume an a-run in one- or two-character pieces. A final ! makes every complete decomposition fail. What explains the growth?",
     "options": [
       {
-        "text": "×2",
-        "explanation": "Doubling per character is the rate for `(a|a)*` or `(a+)+`. Here the number of ways follows the Fibonacci sequence."
+        "text": "There is exactly one path because both alternatives use a",
+        "explanation": "The same input can be divided into different piece lengths."
       },
       {
-        "text": "About ×1.6",
-        "explanation": "Correct. The count is a Fibonacci number, and consecutive Fibonacci numbers have ratio approaching φ ≈ 1.618."
+        "text": "Each choice leaves a shorter run with the same branching problem",
+        "explanation": "Correct. One-character and two-character first pieces lead to overlapping subproblems, giving Fibonacci growth."
       },
       {
-        "text": "×1, it is linear",
-        "explanation": "The count is still exponential, just with a smaller base. For 30 a's there are 1,346,269 ways."
+        "text": "Removing nested quantifiers guarantees linear time",
+        "explanation": "Overlapping alternatives under a repetition can still create exponential ambiguity."
       },
       {
-        "text": "×n",
-        "explanation": "Multiplying by ever-larger factors (×2, ×3, ×4, …) gives factorial growth. Here the ratio instead approaches the constant 1.618; merely depending on the input length does not imply super-exponential growth."
+        "text": "The letters must be permuted into different orders",
+        "explanation": "Their order never changes; only the boundaries between repetitions differ."
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nW(n) = W(n − 1) + W(n − 2)\n  for n ≥ 2\nW(0) = W(1) = 1\nW(n + 1) / W(n) → φ\nφ = (1 + √(5)) / 2 ≈ 1.618\nW(30) = 1346269\nwhere\nn: the number of a's; a non-negative integer count unless a positive lower bound is stated\nW(n): the number of ways to write n as an ordered sum of 1s and 2s\n→: approaches, as n grows larger and larger\nφ: Greek phi: the golden ratio\n√( ): the non-negative square-root function; the square root of 5 is about 2.236\n≥: is greater than or equal to\n≈: is approximately equal to\nIn words: the first part is 1 (leaving n − 1) or 2 (leaving n − 2), so the counts are the Fibonacci numbers 1, 1, 2, 3, 5, 8, …, and each extra a multiplies the count by about 1.618.\n```\n\nThese are decomposition counts, not measured timings. This overlap produces exponential path counts in the assumed matcher; it is not a theorem that every overlap defeats every optimized engine.",
+    "workedExample": "For four a characters, possible groupings include four single pieces, two double pieces, or a double piece and two singles in several orders. A longer run can begin with either a single or double piece; each remainder branches again. Without merging or memoisation this produces exponentially many decompositions, even though the growth factor is smaller than doubling.",
     "link": {
       "title": "Regular Expression Matching Can Be Simple And Fast — Russ Cox",
       "url": "https://swtch.com/~rsc/regexp/regexp1.html"

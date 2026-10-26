@@ -17,7 +17,7 @@ That is a **nondeterministic finite automaton** (NFA). The surprise, proved by R
 
 An NFA is described by the same five ingredients as a DFA (states, alphabet, transition function, start state, accepting states). Only the transition function changes: instead of naming one next state, it names a whole set of possible next states, and it may also move without reading anything.
 
-```formula
+```formula reference
 DFA:  δ : Q × Σ → Q
 NFA:  δ : Q × (Σ ∪ {ε}) → P(Q)
 δ(1, a) = ∅
@@ -69,7 +69,7 @@ State 0 loops on everything, waiting. On an a it can also guess "this a starts t
 ## Two ways to think about nondeterminism
 
 1. **Guessing.** The machine magically picks the right move every time. If any sequence of choices leads to acceptance, it accepts. This is the view that makes NFAs easy to design.
-2. **Parallel copies.** At each choice the machine clones itself. All clones run in lockstep. Accept if any clone ends in F. This is the view that tells you how to **run** an NFA.
+2. **Parallel copies.** At each choice the machine clones itself. All clones run in lockstep. Accept if any clone consumes the full input and ends in an accepting state. This is the view that tells you how to **run** an NFA.
 
 For efficient simulation, merge all copies at the same state and input position: keep the set of possible states, rather than one clone per path.
 

@@ -2,7 +2,7 @@
 id: compu-grammar-rules
 title: Rewrite rules and context-free grammars
 level: basic
-minutes: 5
+minutes: 3
 summary: A rewrite rule replaces one variable without inspecting its surroundings.
 sourceLesson: compu-cfg
 ---
@@ -17,24 +17,11 @@ A grammar is a set of rewrite rules. You start from a start symbol and keep repl
 
 First, the notation `aⁿbⁿ`. A superscript on a letter means "repeat it that many times", and a **formal language** is just a set of strings. So `aⁿbⁿ` names this language:
 
-```formula
-L = { a^n b^n : n ≥ 0 }
-L = { ε, "ab", "aabb", "aaabbb", … }
-where
-L: the language being described: a set of strings
-a, b: the two characters (letters) the strings are made of
-n: a whole number 0, 1, 2, … saying how many copies
-a^n: the letter a written n times in a row, so a^3 is "aaa" and a^0 is the empty string
-ε: epsilon, the empty string: a string with no characters at all
-{ … : … }: set-builder notation: the set of everything of the form before the colon, for every value allowed by the condition after it
-≥: is greater than or equal to
-…: and so on, following the same pattern
-In words: L is every string made of some number of a's followed by exactly the same number of b's, including the empty string.
-```
+The examples are the empty string, `ab`, `aabb`, `aaabbb`, and so on. The empty string, written ε (epsilon), contains no characters. All the a's come first, and the number of b's must match.
 
 Here is a grammar for that language, as two rewrite rules, and a derivation that uses them:
 
-```formula
+```formula essential
 S → a S b
 S → ε
 S ⇒ a S b ⇒ a a S b b ⇒ a a b b
@@ -49,17 +36,16 @@ In words: S may be replaced by a S b or deleted; using the first rule twice and 
 
 Read the rules as: "an S is either an `a`, then another S, then a `b`; or it is the empty string ε". A vertical bar between alternatives is the usual shorthand for “or”; it combines the two displayed rules on one line. Inside a grammar, letters written side by side (`aSb`) simply follow each other; nothing is multiplied.
 
-Each `⇒` in the derivation is one rule application, called a **derivation step**. For `aabb` that is three steps: two enclosing-pair rules, then one empty-string rule. In general:
-
-```formula
-D(n) = n + 1
-where
-D(n): the number of rule applications in this grammar
-n: the nonnegative number of a symbols, equal to the number of b symbols
-In words: Each enclosing pair uses one rule and finishing uses one empty-string rule.
-```
+Each `⇒` in the derivation is one rule application, called a **derivation step**. Wrapping adds a pair but leaves a variable in the middle. Deleting that final variable is necessary: `aaSbb` is unfinished, whereas `aabb` contains only terminals.
 
 Every time an `a` is added, a matching `b` is added on the other side. The grammar never has to count; the structure of the rule does the matching for it.
+
+> [!analogy] Real-world analogy: Nested gift boxes
+> Put a small box inside a larger box, then repeat; eventually choose a box with nothing more inside.
+>
+> **How it maps:** Each wrapping rule adds a matching outer pair around unfinished contents. The empty rule ends the nesting.
+>
+> **Where it stops:** Real boxes have limited depth. A grammar permits arbitrarily deep finite nesting, and its symbols are characters rather than physical objects.
 
 ## Key takeaways
 

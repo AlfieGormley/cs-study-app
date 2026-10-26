@@ -15,19 +15,7 @@ SAT is in NP: the assignment is the certificate. The hard part is showing every 
 
 ### The tableau
 
-An accepting run of N on an input w is a sequence of configurations (snapshots of the state, head position and tape), one per step. Write them as the rows of a square grid, the **tableau**. Each cell holds one symbol: a tape symbol, or a state marker showing where the head is.
-
-```formula
-N_rows = O(n^k)
-N_cols = O(n^k)
-where
-N_rows: the number of rows of the tableau: one per step (configuration) of the run
-N_cols: the number of columns: tape cells the run can touch, since in n^k steps the head can visit at most n^k cells
-n: the length of the input w, in symbols
-k: the fixed exponent of N's polynomial running time n^k; a constant set by the machine, not by the input
-O(...): Big O, an upper bound up to a fixed factor for sufficiently large n
-In words: allowing the initial configuration, boundary markers and input cells changes only constant factors: a run of at most n^k steps fits in a grid with both dimensions O(n^k), assuming the time bound is at least the input length. For a machine running in n^3 steps on a 100-symbol input, the unpadded reference dimensions are 1,000,000 rows by 1,000,000 columns, with the actual tableau allowing the extra rows and boundary cells.
-```
+An accepting run of N on an input w is a sequence of configurations (snapshots of the state, head position and tape), one per step. Write them as the rows of a square grid, the **tableau**. Each cell holds one symbol: a tape symbol, or a state marker showing where the head is. With a time bound at least the input length, both the number of rows and the number of tape positions are at most proportional to that bound. Initial and boundary cells add only constant-factor overhead.
 
 ```
        cell 1  2  3  4  5 ...
@@ -40,14 +28,14 @@ row t   #  .  . qacc   ...   #  accept
 
 The formula has one Boolean variable per (cell, symbol) pair, and is the AND of four parts:
 
-```formula
+```formula essential
 x_{i,j,s} = 1  iff  T_{i,j} = s
 φ = φ_cell ∧ φ_start ∧ φ_accept ∧ φ_move
 where
 x_{i,j,s}: a Boolean variable, one for each cell and each possible symbol; 1 means true, 0 means false
 T_{i,j}: the symbol written in the tableau cell at row i, column j
-i: the row number (the time step), from 1 up to n^k
-j: the column number (the tape cell), from 1 up to n^k
+i: the row number, naming a configuration in the run
+j: the column number, naming a tape position
 s: one symbol from the fixed set of possible cell symbols (tape symbols and state markers)
 φ: phi, the whole Boolean formula the reduction outputs
 φ_cell, φ_start, φ_accept, φ_move: the four parts of φ, described in the list below

@@ -19,23 +19,11 @@ Three conventions make the theory work.
 2. **Input size n is measured in bits.** A positive integer takes roughly its base-two logarithm in bits to write down; its numeric value is not its encoded length.
 3. **Worst case, asymptotically.** We count the steps an algorithm takes on its *worst* input of a given size, and only care how that count grows as the size grows.
 
-Convention 2 in symbols: the number of bits needed to write a whole number grows with its logarithm, not with its value.
+A thousand needs only ten bits in binary. Doubling a positive integer adds one bit to its encoding: a small increase in written input can represent a much larger numeric value.
 
-```formula
-b ≈ log_2(N)
-b ≈ log_2(1000) ≈ 10 bits   for N = 1000
-where
-b: the number of bits (binary digits) needed to write the number down
-N: the number itself, a positive whole number
-log_2: logarithm base 2: log_2(N) is the power you must raise 2 to in order to get N, so log_2(1024) = 10
-≈: approximately equal to (the exact count is log_2(N) rounded down, plus 1)
-bits: the unit of the result: binary digits, each 0 or 1
-In words: a number about a thousand needs only about 10 bits. Doubling N adds just one bit, so an input's size in bits can be tiny compared with the values written in it.
-```
+**Big O** describes an eventual upper bound on growth, allowing a fixed multiplying constant. The formal definition below is useful reference; it does not predict a stopwatch time.
 
-Convention 3 in symbols is **Big O** notation. It is how the rest of this module states running times.
-
-```formula
+```formula reference
 T(n) = O(f(n))   means
 T(n) ≤ cf(n)   for all n ≥ n_0
 where
@@ -47,12 +35,12 @@ c: a fixed positive constant that does not depend on n
 n_0: a threshold size; the bound only has to hold for inputs at least this big
 ≤: is less than or equal to
 ≥: is greater than or equal to
-In words: the running time is O(f(n)) when, beyond some input size, it never exceeds a fixed constant times f(n). An algorithm that takes 3 × n^2 + 5 × n steps is O(n^2), because with c = 4 the bound holds for every n ≥ 5.
+In words: beyond some input size, the running time never exceeds a fixed constant times the chosen growth benchmark. This is an eventual upper bound, not an exact count or a claim that the bound is tight.
 ```
 
 Big O ignores constant factors and small inputs on purpose: it describes the shape of the growth, not the exact time on a particular machine.
 
-For problems such as integer-weight TSP with a known finite cost range, a threshold decision procedure lets you recover the optimum cost by binary search. Each answer halves the remaining range: costs from zero to one million require at most twenty calls. This uses a polynomial number of calls when the cost bound has polynomial bit length. Finding an actual solution additionally needs a suitable self-reduction; the statement is not a universal equivalence for arbitrary optimisation problems.
+For problems such as integer-weight TSP with a known finite cost range, a threshold decision procedure lets you recover the optimum cost by binary search. The answers are monotone: once a budget is sufficient, every larger budget is sufficient. Each query can therefore discard half the remaining range. This uses a polynomial number of calls when the cost bound has polynomial bit length. Finding an actual solution additionally needs a suitable self-reduction; the statement is not a universal equivalence for arbitrary optimisation problems.
 
 ## Key takeaways
 

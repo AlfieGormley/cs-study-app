@@ -11,9 +11,11 @@ The previous unit generated equal a and b blocks by wrapping a start variable in
 
 ## The formal definition
 
-A context-free grammar is a 4-tuple (a list of four parts in a fixed order):
+A context-free grammar has four finite parts: placeholder variables, terminal symbols, rewrite rules and one designated start variable. Variables and terminals are disjoint. Each rule replaces exactly one variable with a string of variables and terminals, possibly empty. Its language contains every all-terminal string reachable from the start.
 
-```formula
+The tuple below is a compact reference for those parts:
+
+```formula reference
 G = (V, Σ, R, S)
 A → w   with A ∈ V
 L(G) = { w ∈ Σ* : S ⇒* w }

@@ -3,45 +3,15 @@ id: compu-grammar-trees
 title: Generating strings and reading parse trees
 level: basic
 minutes: 3
-summary: Bounded breadth-first generation works for the displayed parentheses grammar; arbitrary grammars need a terminating parser.
+summary: Parse trees record grouping; grammar structure controls precedence and associativity.
 sourceLesson: compu-cfg
 ---
 
-## Simulating a grammar in Python
+## Generating a string is not the same as parsing it
 
-For the balanced-parentheses grammar below, breadth-first search over **sentential forms** (partly rewritten strings), always expanding the leftmost variable, enumerates all strings up to the bound. Terminals are single characters, and all variables must be keys of G. This routine is not a terminating enumerator for arbitrary CFGs: a rule replacing S with two copies of S can grow variables indefinitely without exceeding a terminal-count bound. For general CFGs, enumerate the finitely many candidate terminal strings and decide membership with a parser.
+A grammar generates a string by rewriting variables until only terminals remain. A partly rewritten string is a **sentential form**. Searching these forms can find derivations, but a bound on terminal characters alone does not always make the search terminate: rules may keep adding variables without adding terminals.
 
-```python
-from collections import deque
-
-def generate(G, start, maxlen):
-    out, seen = set(), set()
-    q = deque([(start,)])
-    while q:
-        f = q.popleft()
-        if f in seen:
-            continue
-        # Avoid re-expanding the same form.
-        seen.add(f)
-        terms = [x for x in f if x not in G]
-        if len(terms) > maxlen:
-            continue
-        i = next((k for k, x in enumerate(f)
-                  if x in G), None)
-        if i is None:   # all terminals
-            out.add("".join(f))
-            continue
-        # Expand only the leftmost variable.
-        for rhs in G[f[i]]:
-            q.append(f[:i] + rhs + f[i+1:])
-    return sorted(out, key=lambda s:
-                  (len(s), s))
-
-P = {"S": [("(", "S", ")", "S"), ()]}
-print(generate(P, "S", 6))
-```
-
-The displayed grammar chooses either an opening bracket, a nested S, a closing bracket and another S, or the empty string. It describes balanced parentheses. The output lists all 9 balanced strings of length at most 6: `''`, `()`, `(())`, `()()`, and the five of length 6. (The counts 1, 1, 2, 5 for lengths 0, 2, 4, 6 are the Catalan numbers, which turn up all over grammar theory.)
+To decide membership for an arbitrary context-free grammar, use a terminating parser such as CYK, introduced shortly. To understand the grouping of a particular derivation, inspect its parse tree.
 
 ## Parse trees
 
@@ -49,7 +19,7 @@ A derivation is a sequence; a **parse tree** shows the structure. Each internal 
 
 For arithmetic, a classic grammar is:
 
-```formula
+```formula essential
 E → E "+" T | T
 T → T "*" F | F
 F → "(" E ")" | "id"
@@ -83,7 +53,7 @@ A **leftmost derivation** always rewrites the leftmost variable. There is a one-
 
 ## Key takeaways
 
-- Bounded breadth-first generation works for the displayed parentheses grammar; arbitrary grammars need a terminating parser.
+- A terminal-length bound alone does not make arbitrary derivation search terminate.
 - Parse trees record grouping; precedence and associativity depend on grammar structure.
 
 ## Further reading

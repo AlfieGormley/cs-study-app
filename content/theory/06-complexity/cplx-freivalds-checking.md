@@ -13,19 +13,18 @@ sourceLesson: cplx-randomised-quantum
 
 Multiplying two n × n matrices naively costs about n³ multiplications; subcubic algorithms also exist. The comparison below is with naive multiplication, not a claim about the current best exponent. Checking a claimed product is cheaper: using exact integer arithmetic or arithmetic in a field, pick a random vector of 0s and 1s and multiply it through both sides.
 
-```formula
+```formula essential
 A × (B × r) = C × r
-cost = 3 × n^2
-cost = 3 × 1000^2 = 3 × 10^6
 where
 A, B: the two n × n input matrices
 C: the claimed product of A and B, an n × n matrix
-r: a random column vector of n entries, each 0 or 1 with probability 1/2
+r: a random column vector of n independently sampled entries, each uniformly 0 or 1
 B × r: a matrix–vector product: n^2 multiplications, giving a vector of n numbers
-n: the number of rows (and columns) of each matrix; 1000 in the last line
-cost: the number of multiplications in one trial (three matrix–vector products)
-In words: if C really is A times B, both sides agree for every r. Each trial costs three matrix–vector products, about 3 million multiplications for 1000 × 1000 matrices, against about 10^9 to redo the product naively.
+n: the number of rows and columns of each square matrix
+In words: multiply the random vector by the second matrix, then the first, and compare with multiplying it by the claimed product. Correct products agree for every vector; each trial needs only three matrix–vector products.
 ```
+
+Each trial uses quadratically many arithmetic operations in the matrix side length, instead of the cubic work of naive full multiplication.
 
 If C is wrong, a single trial exposes it with probability at least 1/2, so the chance that t independent trials all miss is at most 2 to the power −t (about one in a million for t = 20).
 
@@ -58,8 +57,7 @@ print(freivalds(A, B, bad))
 
 For `bad`, the only wrong entry is at row 1, column 1 (0-indexed), so a trial catches it exactly when the random vector's entry `r[1]` is 1, with probability exactly 1/2.
 
-> [!note] Content gap: empirical measurement
-> The previous measured detection-rate claim has been omitted because no reproducible run record was available to verify it. The probability calculation above follows directly from the two equally likely values of `r[1]`. With 20 trials, `bad` slips through with probability 2 to the power −20, about one in a million.
+For any incorrect product, choose a nonzero row of the difference from the true product and a nonzero coefficient in that row. Hold all other random-vector entries fixed. At most one of the two choices for this coefficient’s entry can make the row’s dot product zero. Thus at least half the vectors detect an error, without needing an empirical benchmark.
 
 These are arithmetic-operation counts, not a claim that unbounded integer multiplication costs one bit operation. Intermediate integer lengths and input encoding matter for bit complexity. Floating-point rounding can also invalidate the exact one-sided guarantee. Python’s random module illustrates ideal independent draws in the mathematical model; a finite pseudorandom generator is not itself a proof of independent randomness.
 

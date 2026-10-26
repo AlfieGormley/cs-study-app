@@ -13,7 +13,7 @@ Languages recognised by DFAs are called **regular languages**. They are closed u
 
 ### Complement
 
-To recognise everything a complete DFA rejects, swap accepting and non-accepting states. The DFA for "odd number of 1s" is Example 1 with O accepting instead of E.
+To recognise everything a complete DFA rejects, swap accepting and non-accepting states. The DFA for "odd number of 1s" is the earlier parity DFA with O accepting instead of E.
 
 > [!warning] Complete the DFA first
 > Swapping only works if the transition function is total. In a partial DFA, strings that "fall off" are rejected both before and after the swap. Add the dead state explicitly, then swap, and the dead state becomes accepting.
@@ -22,7 +22,11 @@ To recognise everything a complete DFA rejects, swap accepting and non-accepting
 
 Take two complete DFAs over the same alphabet. To recognise the strings both of them accept, run the two machines **in parallel**. A state of the product machine is a pair: where the first machine is, and where the second machine is. This is the **product construction**:
 
-```formula
+For intersection, accept only when both component states accept. For union, accept when either does. Both use the same pairs and transitions; changing the final test changes the combined language.
+
+The notation records this construction for reference:
+
+```formula reference
 Q = Q₁ × Q₂
 δ((p, q), c) = (δ₁(p, c), δ₂(q, c))
 q₀ = (q₁, q₂)
@@ -48,20 +52,9 @@ F_{∪}: the accepting states for union (strings at least one machine accepts)
 In words: the product machine tracks both machines at once. It moves each one on every symbol, and it accepts according to a rule: both accept for intersection, at least one accepts for union.
 ```
 
-Its number of states is the product of the two sizes, which is where the name comes from:
+Pairing the two parity states with the three remainder states gives six possible pairs. Only reachable pairs need to be built, and equivalent pairs may merge later. The product size is an upper bound on the necessary machine, not a claim of minimality.
 
-```formula
-|Q| = |Q₁| × |Q₂|
-|Q| = 2 × 3 = 6
-where
-| |: vertical bars around a set mean its cardinality, the number of elements it has
-Q: the set of states of the product machine
-Q₁: the collection of states of the first machine, here the even-count parity machine with 2 states
-Q₂: the collection of states of the second machine, here divisibility by 3 with 3 states
-In words: the product of the parity machine and the divisible-by-3 machine has 2 × 3 = 6 states before minimisation.
-```
-
-It accepts 0 and other all-zero strings; positive-value examples without leading zeroes include 11 (3), 110 (6), 1001 (9) and 1100 (12). Each has an even number of 1s and a value divisible by 3.
+For the intersection, `1001` is accepted: it has an even number of 1s and represents nine, divisible by three. A pair with even parity but nonzero remainder fails the intersection and passes the union. Acceptance still happens only after the whole input.
 
 Because the sizes multiply, intersecting k machines multiplies all k of their sizes together. This blow-up is real and shows up in model checking and in regex engines that support intersection.
 

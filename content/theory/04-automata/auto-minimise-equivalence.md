@@ -2,7 +2,7 @@
 id: auto-minimise-equivalence
 title: Equivalent states and distinguishing suffixes
 level: advanced
-minutes: 4
+minutes: 3
 sourceLesson: auto-minimisation
 summary: Equivalent states agree on every possible continuation, including empty input.
 ---
@@ -15,7 +15,7 @@ Do it until nothing more can be merged and you reach the **minimal DFA**. A rema
 
 Two states are **equivalent states** if every possible future input gives the same verdict from both. They are **distinguishable states** if some input string (a **distinguishing suffix**) takes one to an accepting state and the other to a non-accepting state.
 
-```formula
+```formula reference
 p ≡ q   iff   ∀ z ∈ Σ* :
   δ̂(p, z) ∈ F   ⟺   δ̂(q, z) ∈ F
 where
@@ -36,17 +36,7 @@ Two observations drive every algorithm:
 1. An accepting and a non-accepting state are distinguished by the empty string: you are already there, and one accepts.
 2. If two states move, on some symbol, to a pair of states already known to be distinguishable, then the two states are distinguishable too: by that symbol followed by the old distinguishing string.
 
-```formula
-δ̂(p, c · z) = δ̂(δ(p, c), z)
-where
-p: a state
-c: one input symbol
-z: a string that already distinguishes δ(p, c) from the other state's successor
-·: concatenation: c followed by z
-δ: the transition function: δ(p, c) is the state p moves to on c
-δ̂: the extended transition function: the state reached after reading a whole string
-In words: reading c then z from p is the same as first stepping on c and then reading z. So a distinguishing string for the successors, with c put in front, distinguishes the original pair.
-```
+If a symbol sends the two states to distinguishable successors, put that symbol before the suffix which separates the successors. That longer suffix now separates the original states too.
 
 For example, in the following refinement unit’s worked example, A and D both move to B on `a`, but on `b` they move to A (rejecting) and E (accepting). The empty string distinguishes A from E, so `b` distinguishes A from D.
 

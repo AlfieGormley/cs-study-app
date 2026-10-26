@@ -13,9 +13,13 @@ A **deterministic finite automaton** (DFA) is the mathematical version of that i
 
 ## Strings and languages
 
-First, some vocabulary used for the rest of this module. Automata theory writes it in a compact notation borrowed from set theory, so here is every symbol you will meet, spelled out once:
+An **input alphabet** supplies the allowed symbols, such as the bits 0 and 1. A **string over an alphabet** is a finite sequence of those symbols: `0110` has four symbols. A **formal language** selects which strings count as valid. The **membership problem** asks whether one particular string belongs to that selection.
 
-```formula
+The **empty string** has no symbols. It is still a string: a language containing only it has one member, whereas the empty language has none. A language may contain finitely or infinitely many strings; each individual string remains finite.
+
+The compact notation below is useful when reading later proofs. Its meaning is the same selection-of-strings idea:
+
+```formula reference
 Σ = {0, 1}   or   Σ = {a, b}
 w = 0110   so   |w| = 4
 |ε| = 0
@@ -35,14 +39,7 @@ L: a formal language: any set of strings over Σ
 In words: an alphabet is a finite set of symbols; a string is a finite row of them (0110 has length 4, ε has length 0); Σ* collects every possible string; and a language is any collection of those strings, so it is a subset of Σ*.
 ```
 
-The same ideas in words:
-
-- An **input alphabet** (usually just called the alphabet) is a finite set of symbols, such as the two bits 0 and 1, or the letters a and b.
-- A **string over an alphabet** is a finite sequence of its symbols. `0110` is a string over {0, 1}.
-- The **empty string** has no symbols and length 0.
-- A **formal language** (in this module, just "a language") is any set of strings over the alphabet. It can be finite or infinite.
-
-"Binary strings with an even number of 1s" is a language. So is "valid Python identifiers" and "binary numbers divisible by 3". The question a DFA answers is the **membership problem**: is this string in the language?
+"Binary strings with an even number of 1s" is a language. So is "valid Python identifiers" and "binary numbers divisible by 3". A DFA implements one such yes-or-no membership rule.
 
 Some textbooks require an alphabet to be non-empty; if the empty alphabet is permitted, its only finite string is the empty string. Neither convention makes the empty language the same thing as the language containing only the empty string.
 

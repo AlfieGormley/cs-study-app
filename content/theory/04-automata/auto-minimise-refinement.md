@@ -30,15 +30,7 @@ Start from the coarsest guess, two blocks: accepting and non-accepting. Then rep
 
 Round 0:
 
-```formula
-N = {A, B, D}    Acc = {C, E}
-where
-N: the initial non-accepting block of states
-Acc: the initial accepting block of states
-A, B, C, D, E: states in the transition table above
-{ }: the set containing the listed states
-In words: initially separate the three rejecting states from the two accepting states; subsequent refinement may split these blocks.
-```
+The initial non-accepting block contains A, B and D. The accepting block contains C and E. They must remain separate because the empty continuation already distinguishes the two verdicts.
 
 Round 1. For each state, note which block each transition lands in:
 
@@ -110,20 +102,7 @@ The textbook alternative (Hopcroft and Ullman) works on pairs. Draw a triangle w
 2. Repeat: mark a pair if, on some symbol, its two successors form a pair that is already marked (the rule below).
 3. When a full pass marks nothing, every unmarked pair is equivalent.
 
-```formula
-(p, q) ∈ D   if   ∃ c ∈ Σ :
-  (δ(p, c), δ(q, c)) ∈ D
-where
-D: the set of marked pairs: pairs already known to be distinguishable
-p, q: the two states of the pair being checked
-∃: there exists: at least one
-c: an input symbol
-Σ: the input alphabet
-∈: is an element of
-δ: the transition function: δ(p, c) is the state p moves to on c
-( , ): an unordered pair of states, one cell of the triangle
-In words: a pair becomes distinguishable as soon as some single symbol sends it to a pair that is already known to be distinguishable.
-```
+Propagate a distinction backwards: if one symbol leads to a marked pair, mark the original pair. Prepending that symbol to the known distinguishing suffix explains why the new mark is justified.
 
 For our five states:
 

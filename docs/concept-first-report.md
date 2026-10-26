@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 19/86 modules and 399/2717 active lessons have current independent editorial reviews.
+Status: **in progress**. 22/86 modules and 510/2717 active lessons have current independent editorial reviews.
 
 The user requested the whole library. This report counts only active lesson IDs from module.json. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -8,7 +8,7 @@ The rule for future content is in [the authoring brief](concept-first-brief.md),
 
 Comparison baseline: `5b8fb6f2709893396373ba979ba194aacf5cb034`. Lesson IDs, question IDs and question ownership must match this baseline. Archived originals and progress migrations remain unchanged.
 
-Focused dictionary integration corrections and exact-definition equivalence reviews are recorded in [the integration review](concept-first-integration-review.json). A focused glossary correction does not count as a completed module rewrite. Reviewer records retain checks that were pending at handoff; subsequent compiled-check closure is recorded separately in that integration report.
+Focused dictionary integration corrections and exact-definition equivalence reviews are recorded in [the integration review](concept-first-integration-review.json). The [theory dictionary review](concept-first-theory-dictionary-review.json) records independently accepted exact definitions for shared theory terms. A focused glossary correction does not count as a completed module rewrite. Reviewer records retain checks that were pending at handoff; subsequent compiled-check closure is recorded separately in the integration report.
 
 “Review units” below retain each independent reviewer’s stated counting method. Some are grouped claim sets, not atomic assertions; counts must not be compared as a quality score. The linked verification records preserve earlier factual/glossary history and define the fresh review scope.
 
@@ -97,9 +97,9 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | [theory / Logic & Proofs](../content/theory/01-logic-proofs/verification.json) | Reviewed | 37 | 74 | 80 → 34 | 32 / 2 | 91 → 4 | 278 | 43 | 15 |
 | [theory / Discrete Structures](../content/theory/02-discrete-structures/verification.json) | Reviewed | 40 | 75 | 119 → 56 | 34 / 22 | 110 → 2 | 344 | 123 | 13 |
 | [theory / Probability for Computer Science](../content/theory/03-probability/verification.json) | Reviewed | 41 | 70 | 95 → 27 | 5 / 22 | 82 → 0 | 217 | 118 | 20 |
-| theory / Automata & Regular Languages | Pending review | 32 | — | — | — | — | — | — | — |
-| theory / Context-Free Languages & Computability | Pending review | 32 | — | — | — | — | — | — | — |
-| theory / Complexity Theory | Pending review | 47 | — | — | — | — | — | — | — |
+| [theory / Automata & Regular Languages](../content/theory/04-automata/verification.json) | Reviewed | 32 | 73 | 47 → 20 | 9 / 11 | 45 → 0 | 170 | 36 | 6 |
+| [theory / Context-Free Languages & Computability](../content/theory/05-computability/verification.json) | Reviewed | 32 | 67 | 45 → 32 | 21 / 11 | 42 → 14 | 175 | 100 | 4 |
+| [theory / Complexity Theory](../content/theory/06-complexity/verification.json) | Reviewed | 47 | 77 | 90 → 49 | 32 / 17 | 84 → 3 | 255 | 133 | 11 |
 
 The report certifies editorial provenance only. Build, migration, rendering, offline and deployed-version evidence must be checked separately before publication.
 
@@ -748,6 +748,111 @@ None recorded in this editorial review.
 - No exact finite-filter Bloom false-positive derivation, exact A/B power calculation or unrestricted sequential-testing procedure is taught; approximation/model limits are explicit.
 - Real operational independence, traffic intensities, detector rates and latency distributions require measurement; supplied numerical scenarios are hypothetical models.
 - Historical attribution and original unreplicable simulations remain omitted with explicit evidence-gap notes; no unsupported population or hardware-failure comparisons restored.
+
+**Low-confidence areas, including preserved qualifications:**
+
+None recorded in this editorial review.
+
+
+## theory / Automata & Regular Languages
+
+38 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- {"kind":"question-context","detail":"auto-pumping-q10 referred to an undefined five-symbol s after the prompt rewrite; the distractor now reasons about any non-empty member and pumping length one."}
+- {"kind":"question-definition","detail":"auto-minimisation-q9 feedback introduced an undefined n in an unnecessary pair-count expression; replace it with the conceptual difference between state pairs and scheduled blocks."}
+- {"kind":"dictionary-bound","detail":"Thompson construction definition now states that linear size is measured after shorthand expansion, matching the visible compiled-size caveat."}
+- {"kind":"dictionary-scope","detail":"Counted-repetition definition no longer universalises a separate-copy representation across all engines and gives RE2’s precise minimum/maximum limit."}
+- {"kind":"dictionary-routing","detail":"Removed generic minimisation/minimise variants from the DFA-only entry so NFA minimisation and unrelated optimisation do not open a DFA-specific definition."}
+- {"kind":"dictionary-routing","detail":"Verified author removal of the PSPACE alias from PSPACE-complete: the class belongs to theory06 pspace, whereas completeness retains its separate definition."}
+
+**Scope gaps and exclusions:**
+
+- The original fixed grep throughput figure, exact incomplete backtracker call counts/laptop timing, and detailed unavailable Stack Overflow postmortem claims remain explicitly omitted. No replacement performance measurement was invented.
+- Native code checks run all5lesson programs and4question snippets with supplied fixtures on Python3.14 and Docker Python3.12. No Go,Rust,JavaScript,.NET,PCRE2,RE2 or Ruby runtime integrations were needed by the Python-only executable examples. Product claims were checked against official documentation.
+- Bounded exhaustive tests support worked examples only. DFA invariants, subset correctness, pumping quantifier order and all legal split cases, arithmetic witness inequalities, lower bounds and coarsest acceptance-respecting refinement were separately reviewed mathematically.
+- This is the concept-first editorial and affected-definition pass. All active lessons/questions were read; unchanged glossary entries retain historical factual provenance and are not represented as 170 new primary-source verifications.
+- The original Jiang/Ravikumar abstract was retrieved by web search, but direct publisher access returned 403. The stronger DFA-input hardness claim is additionally supported by the freshly fetched primary MFCS 2021 paper, theorem 5.9 and its explicit account of the reduction; the full 1993 proof was not rederived.
+- The default all-file URL check has two preserved archival-only failures: the Stanford Hopcroft HTTP PDF in auto-minimisation and the Ullman HTTP page in auto-dfa. Active lesson/question links pass separately (27/27).
+- Whole-project build, 390px browser interaction, offline and deployed checks remain coordinating-agent integration responsibilities; this pass performs scoped validation and scratch production compiler/lookup checks.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, auto-nfa-lazy-tradeoffs: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- medium confidence, auto-regex-automaton-engines: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- medium confidence, auto-regex-backtracking: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- medium confidence, auto-regex-defences: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- medium confidence, auto-regex-growth-outages: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+- medium confidence, auto-thompson-practice: Current regex implementation composition, supported syntax or documented API guarantees. Verified against freshly fetched official documentation; implementation details can change. Wording distinguishes supported fixed-pattern single searches, version-specific features and conceptual path counts from runtime measurements.
+
+
+## theory / Context-Free Languages & Computability
+
+39 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- Oracle glossary (author correction independently accepted): distinguish fixed-language oracle from oracle TM; the answer is unit-cost after ordinary-cost query construction. Exact accepted owner wording retained.
+- Language nonemptiness complement recogniser: explicitly accept malformed encodings, matching the module’s all-string complement universe.
+- Halting-practice question feedback: include possible analyser nontermination alongside unknown answers and wrong answers; only always-finishing tools must choose between the latter limitations.
+- Bounded-runtime question feedback: make halting at step ten answer no and execution of an eleventh transition answer yes.
+- Editorial: two optional formula summaries now stand alone without hidden n/t definitions; fix two grammatical typos. These are not counted as accuracy corrections.
+- Editorial: independently accepted concept-first formula selection and question rewrites remove redundant arithmetic while preserving constructions and short proofs; reductions in formula counts are not accuracy corrections.
+- Editorial glossary routing: replace rule table with transition table and longest path with root-to-leaf path of maximum length, avoiding unrelated firewall and graph-problem definitions.
+- Editorial glossary routing: qualify all three bare computability-sense recursive references as recursive languages or general recursive functions, selecting the existing precise aliases without changing programming-recursion entries.
+
+**Scope gaps and exclusions:**
+
+- Reverse PDA-to-CFG construction remains an explicitly labelled sketch; full normalisation/rule construction is outside the retained scope.
+- Inherent ambiguity, CFG ambiguity/universality/equivalence, PCP/Hilbert/SystemF and eventual busy-beaver domination are sourced results without every full proof.
+- The unspecified six-state Collatz-like machine claim is omitted; no concrete convention or machine was provided.
+- Reading-time metadata is an estimate; no timed learner trial was conducted.
+- Finite execution tests corroborate examples and never prove universal Goldbach, totality, pumping or asymptotic claims.
+- PDA-to-CFG normalisation remains a stated construction sketch. Full inherent-ambiguity, CFG-undecidability, MRDP and eventual busy-beaver-domination proofs remain further reading; the lessons do not pretend the simpler examples prove those results.
+- Universality constructions for Life, Rule 110, Magic, C++ templates and mov were checked against primary construction descriptions; their complete external implementations/proofs were not reproduced. SQL universality is explicitly conditional on suitable operations and unbounded values/storage.
+- All 175 glossary definitions/aliases were read for context. Only the changed oracle entry is freshly certified as a glossary change; unchanged historical glossary bibliography/provenance is preserved rather than claimed entirely re-fetched.
+- Whole-app mobile, offline, generated-asset and live-release checks are parent-owned. This verifier checks module build, source invariants and production glossary lookup in its own scratch snapshot.
+
+**Low-confidence areas, including preserved qualifications:**
+
+None recorded in this editorial review.
+
+
+## theory / Complexity Theory
+
+72 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- Tableau glossary: replace exact unpadded square/cell counts with asymptotic bounds including input and boundary padding.
+- DRAT glossary: verification depends on combined formula and proof size, not proof length alone.
+- Held–Karp glossary: remove numerical operation estimates inferred from an asymptotic upper bound.
+- QBF glossary: distinguish a quantified formula from a fully closed quantified formula.
+- Optimality-gap glossary: handle minimisation/maximisation and state denominator and zero conventions.
+- Degeneracy glossary: quantify over nonempty subgraphs; global sparsity does not bound dense local subgraphs.
+- Expected-time glossary: separate fixed-input random expectation from worst-case-over-input expectation.
+- Hardness/membership lesson: being an optimisation task alone does not make a problem NP-hard.
+- BPP containment lesson: RP accepting paths give NP certificates; do not assert this for every one-sided-error class.
+- FPT lesson/question: budget controls search-tree size, not its branching factor; filtering occurs per branch rather than once per call.
+- Metric-TSP answer explanation: use approximation factors strictly below123/122, avoiding an unsupported equality-boundary claim.
+- Improve standalone completeness of vertex-cover and TQBF code questions by supplying their algorithm/quantifier assumptions.
+- Clarify oracle-query writing cost in the own glossary; earlier-owner simplified definition is compatible, as documented separately.
+- Add cryptography dictionary coverage with NIST source and complexity-security caveat; preserve all existing glossary IDs.
+- Remove learner-facing audit/provenance and unsourced-benchmark gap commentary, retaining the proof distinction and limitations in this record.
+- Classify retained formulas individually and remove duplicate calculations; this editorial work is not counted as an accuracy correction.
+
+**Scope gaps and exclusions:**
+
+- No new empirical solver benchmarks or hardware reliability claims. Finite implementation tests are not proofs of general complexity theorems.
+- Generalised games are stated for the cited growing-board rule families; no claim about all commercial rulesets.
+- Quantum resource costs are dated theoretical estimates under explicit assumptions, not current available hardware; real query/oracle implementation cost is separate.
+- The module remains introductory in full gadget construction for 3-colouring/Subsetsum and in full PCP/UGC/quantum proofs; all archived depth is retained.
+- Integrated compiled glossary check remains parent-owned: ensure PSPACE opens theory06 pspace, PSPACE-complete opens theory04 pspace-complete, and cryptography opens complexity-cryptography. Source-derived routes are checked; current generated PSPACE output is stale.
+- Oracle/DRAT refinements and PSPACE-complete share earlier owners. Exact current source definitions have independent acceptance records; root must match those precise id/subject/definition fields after rebuilding. Earlier observed generated definitions are retained as snapshots, not treated as current final output.
+- Cook–Levin and TQBF hardness remain explicit proof outlines; full PCP, quantum and auxiliary gadget proofs are further reading. Finite program tests do not prove general complexity results.
+- No new empirical solver throughput or tour-quality percentages are certified; benchmark and hardware-dependent claims remain outside this pass.
+- Unchanged glossary entries were read for actual context, but their entire historical source bibliography was not freshly fetched. Earlier provenance and archived content remain preserved.
 
 **Low-confidence areas, including preserved qualifications:**
 

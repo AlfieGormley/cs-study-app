@@ -11,9 +11,9 @@ Two engines can recognise the same language while doing very different amounts o
 
 ## Matching strategies and guarantees
 
-Costs in this lesson are given in Big O notation in terms of two sizes:
+In the cost discussion, m is the compiled pattern size, including counted-repeat expansion, and n is the input length. Set simulation performs at most a machine-sized amount of work per input symbol, plus initialisation. The optional bound records that relationship:
 
-```formula
+```formula reference
 W = O(m × (n + 1))
 where
 W: the total work of one search by set simulation, in basic steps
@@ -23,7 +23,7 @@ n: the length of the input text, in characters; an integer count, non-negative u
 In words: set simulation does at most a pattern-sized amount of work per input character, plus one extra round at the start, so this upper bound grows linearly with input length for a fixed compiled pattern; it does not predict an exact time.
 ```
 
-For example, a 50-instruction pattern over a 1,000,000-character application event log is at most about 50 × 1,000,001 ≈ 5 × 10⁷ basic steps, times a constant.
+Set simulation limits each input step to work bounded by the compiled machine size. For a fixed pattern this gives input-linear growth. Changing the pattern size or repeatedly calling the search API changes the total workload.
 
 | Strategy | Idea | Important limit |
 |---|---|---|
@@ -67,26 +67,13 @@ def bt(q, w, i):
 
 This teaching function requires a supplied delta and accepting state. It has no memoization, handling of excessive call nesting or epsilon-cycle guard; do not use it as a production matcher. A successful path may be found early, but other patterns can do extensive work before eventually succeeding. Failure may require exploring all remaining choices.
 
-> [!note] Evidence gap
-> Previous exact call counts and laptop timings are omitted: the original machine fixture and reproducible benchmark configuration were unavailable. The following combinatorial analysis explains growth without claiming measured runtime.
-
 ### Why it explodes
 
 Consider full-string matching `(a+)+` against a run of n a's followed by one b (n at least 1), using an unoptimized path-enumerating backtracker.
 
 The run of a's can be split among the inner `a+` iterations in many ways: for each of the gaps between neighbouring a's, choose whether to start a new inner iteration there.
 
-```formula
-g = n − 1
-W_split = 2^{n − 1}
-W_split = 2^3 = 8   for n = 4
-where
-n: the number of a's before the b; an integer count, non-negative unless a positive lower bound is stated
-g: the number of gaps between neighbouring a's; an integer count, non-negative unless a positive lower bound is stated
-W_split: the number of ways to cut the run of a's into non-empty consecutive pieces
-2^{n − 1}: n − 1 copies of 2 multiplied together: each gap is independently "cut" or "no cut"
-In words: every extra a adds one more gap and doubles the number of splits, so the work of trying them all doubles per character.
-```
+Every gap between neighbouring a characters can either separate two inner repetitions or stay inside one. Adding another a adds a new independent cut-or-no-cut choice, doubling the number of decompositions. A matcher that retries each decomposition repeats work exponentially.
 
 `aaaa` could be (aaaa), (a)(aaa), (aa)(aa), (a)(a)(aa), and so on: 8 splits in all. With 30 a's there are two to the power twenty-nine, over 500 million. Every split reaches the b and fails. The backtracker tries them all, because it does not remember that it has already been in this NFA state at this input position and failed.
 

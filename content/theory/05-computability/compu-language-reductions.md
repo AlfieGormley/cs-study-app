@@ -9,7 +9,7 @@ sourceLesson: compu-reductions-rice
 
 ## Example 3: emptiness, E_TM
 
-```formula
+```formula essential
 E_TM = { ⟨M⟩ : L(M) = ∅ }
 where
 E_TM: the emptiness problem for Turing machines
@@ -30,7 +30,7 @@ M₁(x):
   run M on w; accept if it accepts
 ```
 
-```formula
+```formula essential
 L(M_1) = {w}   if w ∈ L(M)
 L(M_1) = ∅     if w ∉ L(M)
 w ∈ L(M)  ⇔  ⟨M_1⟩ ∈ Ē_TM
@@ -41,7 +41,7 @@ M_1: the new machine built from M and w
 L(M): the language of M: the strings it accepts
 {w}: the set containing just w
 ∅: the empty set
-Ē_TM: the complement of E_TM: the machines whose language is not empty
+Ē_TM: the complement of E_TM: valid machine encodings with nonempty language, and malformed encodings
 ∈, ∉: is a member of, is not a member of
 ⇔: if and only if
 In words: M₁ accepts only w, and only if M accepts w, so M₁ has a non-empty language exactly when M accepts w.
@@ -49,11 +49,11 @@ In words: M₁ accepts only w, and only if M accepts w, so M₁ has a non-empty 
 
 Thus M accepts w exactly when the constructed machine has nonempty language. The displayed map reduces acceptance to nonemptiness, so nonemptiness is undecidable. A language is decidable iff its complement is, so E_TM is undecidable. ∎
 
-(Ē_TM is recognisable: dovetail M on all strings and accept if any is accepted. So E_TM itself is co-recognisable but not recognisable.)
+(Ē_TM is recognisable: accept malformed encodings immediately; for a valid machine encoding, dovetail M on all strings and accept if any is accepted. So E_TM itself is co-recognisable but not recognisable.)
 
 ## Example 4: equivalence is neither
 
-```formula
+```formula essential
 EQ_TM = { ⟨M, N⟩ : L(M) = L(N) }
 where
 EQ_TM: the equivalence problem for Turing machines
@@ -69,7 +69,7 @@ Both proofs below build a machine N that ignores its own input, simulates the gi
 
 **Not co-recognisable.** Same N, but compare with a machine M_all that accepts everything: Now acceptance by M on w occurs exactly when N has the same language as the all-accepting machine. Taking complements gives a map from nonacceptance to inequivalence, so inequivalence is also unrecognisable.
 
-```formula
+```formula essential
 f_1(⟨M, w⟩) = ⟨M_rej, N⟩
 f_2(⟨M, w⟩) = ⟨M_all, N⟩
 A_TM ≤_m EQ̄_TM   so   Ā_TM ≤_m EQ_TM

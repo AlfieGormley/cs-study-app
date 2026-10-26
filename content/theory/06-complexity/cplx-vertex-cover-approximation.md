@@ -11,7 +11,7 @@ sourceLesson: cplx-coping
 
 An approximation algorithm runs in polynomial time and always returns a solution that is provably close to the best one. The closeness is measured by a factor α:
 
-```formula
+```formula reference
 ALG_min ≤ α OPT_min
 ALG_max ≥ OPT_max / α
 where
@@ -20,10 +20,10 @@ OPT_min: the cost of the best possible solution to the same input
 ALG_max: the value the algorithm achieves, for a maximisation problem (higher is better, e.g. clauses satisfied)
 OPT_max: the best possible value for the same input
 α: alpha, the approximation factor, at least 1; it may depend on input size, and α = 1 means always optimal
-In words: an α-approximation is never worse than the optimum by more than a factor α, in either direction. A 2-approximation for a route problem never returns a route more than twice the shortest.
+In words: the approximation factor limits how far a feasible answer can be from optimum. Factor two means at most twice optimum cost for minimisation, or at least half optimum value for maximisation.
 ```
 
-The guarantee holds on every input, without the algorithm ever knowing OPT. Some authors write maximisation guarantees as a factor below 1 instead (for example "0.5-approximation" for the same thing as 2 here), so check the convention.
+For nonnegative minimisation costs, factor two means at most twice the optimum cost; for maximisation it means at least half the optimum value. The algorithm must return a feasible solution. The guarantee holds on every permitted input, without knowing the optimum. Some authors write maximisation guarantees as a factor below 1 instead (for example "0.5-approximation" for the same thing as 2 here), so check the convention.
 
 ### Vertex cover: a 2-approximation in five lines
 
@@ -46,7 +46,7 @@ print(vc_2approx(path))   # {1, 2, 3, 4}
 
 Why it's within factor 2: the edges we picked form a **graph matching** M (no two share a vertex). Any cover, including the optimal one, must contain at least one endpoint of each matched edge, and those endpoints are all different. That gives a lower bound on the optimum and an exact count for our cover:
 
-```formula
+```formula essential
 OPT ≥ |M|
 |C| = 2|M|
 |C| = 2|M| ≤ 2OPT

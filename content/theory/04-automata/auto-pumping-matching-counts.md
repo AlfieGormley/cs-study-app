@@ -9,9 +9,9 @@ summary: Uniform first symbols force the pumped piece into one run.
 
 ## Example 1: a's followed by the same number of b's
 
-The language is every string of some a's followed by exactly as many b's:
+The language is every string of some a's followed by exactly as many b's. To expose the missing memory, put all the a characters first. Any legal loop near the beginning then changes the a count without touching the b count.
 
-```formula
+```formula essential
 L = { a^n b^n : n ≥ 0 }
 s = a^p b^p,   |s| = 2p ≥ p
 y = a^k,   1 ≤ k ≤ p
@@ -51,47 +51,15 @@ The choice of s did the work. Putting all the a's in the first p symbols forced 
 
 A **palindrome** reads the same forwards and backwards, like `abba` or `aabaa`. Let L be the palindromes over {a, b}.
 
-```formula
-s = a^p b a^p,   |s| = 2p + 1
-y = a^k,   1 ≤ k ≤ p
-x · y^0 · z = a^{p − k} b a^p ∉ L
-where
-s: the string we choose: p a's, one b, p a's; a palindrome
-L: the palindromes over {a, b}
-a, b: the two symbols
-a^p: p copies of a in a row
-p: the pumping length; a positive integer measured in input symbols
-| |: the length of a string
-x, y, z: the adversary's split
-k: the length of y; an integer count, non-negative unless a positive lower bound is stated
-y^0: zero copies of y, so y is deleted
-·: concatenation
-∉: is not an element of
-≤: is less than or equal to (the first comparison makes k at least 1)
-In words: y must be a block of a's from the left side, and deleting it leaves fewer a's before the b than after it, so the result is not a palindrome.
-```
+Choose a palindrome with a long a-run, one b, and the same a-run again. Make each run as long as the proposed pumping length. Every legal pumped piece lies entirely in the first run. Deleting it shortens only that side, so b is no longer in the middle and the result is not a palindrome.
 
-The b is no longer in the middle, so it is not a palindrome. Contradiction. With p = 2 and y = `a`, for example, `aabaa` becomes `abaa`.
+For example, deleting the first a from `aabaa` gives `abaa`, which no longer reads the same backwards. The general argument works regardless of how long the legal piece is.
 
 The same template works for the language of "doubled" strings, a string followed by an exact copy of itself:
 
-```formula
-L₂ = { w · w : w ∈ {a, b}* }
-s = a^p b a^p b
-where
-L₂: the language of doubled strings
-a, b: the two input symbols
-w: any string over {a, b}
-·: concatenation
-{a, b}*: every string of a's and b's, including the empty string
-∈: is an element of
-a^p: p copies of a
-p: the pumping length; a positive integer measured in input symbols
-s: the string to choose, which is w · w with w = a^p b
-In words: the doubled-string language is not regular either; choose p a's and a b, written twice.
-```
+Choose a block consisting of a pumping-length run of a characters followed by b, then write that entire block twice. This is a doubled string, and its initial run forces the pumped piece to contain only a characters.
 
-Again y must be a block of a's from the first run. Deleting it shortens the first run but not the second, so the string can no longer be split into two identical halves.
+Again the pumped piece lies entirely in the first a-run. Deleting it leaves exactly two b characters and the final character is b. If the result had two identical halves, each half would contain one b and end at that b. The two a-runs would then have to be equal, but only the first was shortened. No choice of a new halfway point repairs this mismatch.
 
 ## Key takeaways
 - Uniform first symbols force the pumped piece into one run.

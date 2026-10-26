@@ -9,9 +9,9 @@ summary: Square-length witnesses pump strictly between consecutive squares.
 
 ## Example 3: perfect squares
 
-Let L be the strings of a's whose length is a **perfect square** (0, 1, 4, 9, 16, …). Only one symbol, so the trick is arithmetic.
+Consider strings of a characters whose length is a **perfect square** (0, 1, 4, 9, 16, …). The useful observation is that gaps between squares grow. Choose a square large enough that duplicating any allowed pumped piece increases the length without reaching the next square. The following short inequality is the proof of that gap, rather than a calculation to memorise.
 
-```formula
+```formula essential
 s = a^{p²},   |s| = p²
 y = a^k,   1 ≤ k ≤ p
 |x · y^2 · z| = p² + k
@@ -38,36 +38,19 @@ So p² + k lies strictly between two consecutive squares and is not a square. Co
 
 Let L be the strings of a's then b's with more a's than b's. Pumping up only adds more a's, which keeps the string in L. So pump **down**.
 
-```formula
-L = { a^i b^j : i > j }
-s = a^{p + 1} b^p
-y = a^k,   k ≥ 1
-x · y^0 · z = a^{p + 1 − k} b^p ∉ L
-where
-L: the language
-a, b: the two symbols
-i, j: the numbers of a's and b's
->: is greater than
-s: the string we choose: one more a than b
-p: the pumping length; a positive integer measured in input symbols
-x, y, z: the adversary's split
-k: the length of y, at least 1
-y^0: zero copies of y, so y is deleted
-·: concatenation
-∉: is not an element of
-≥: is greater than or equal to
-In words: deleting y leaves at most p a's against p b's, so there are no longer more a's than b's.
-```
+Choose a string with exactly one more a than b, with the b-run as long as the proposed pumping length. Any legal pumped piece contains only a characters. Removing it loses at least the one-character lead, while leaving every b in place. The result no longer has more a characters than b characters.
 
-Since k is at least 1, the number of a's is at most p, which is not more than p. Not in L. For example, with pumping length 3, `aaaabbb` loses at least one a and becomes, say, `aaabbb`.
+For example, with pumping length three, `aaaabbb` loses at least one a and becomes, say, `aaabbb`. Equality already violates the strict requirement for more a characters.
 
 The lesson: try both directions. Different languages break under different numbers of copies.
 
 ## A prime-length witness
 
-The prime-length language is another arithmetic example. Choose a prime q at least two larger than the positive pumping length p; arbitrarily large primes exist. Any legal pumped piece has a positive length k no larger than p. Choose the repetition count after seeing k:
+The prime-length language is another arithmetic example. Choose a prime length at least two larger than the positive pumping length; arbitrarily large primes exist. Once the adversary chooses a legal non-empty piece, choose enough repetitions to make the resulting length a product of two integers greater than one. Such a product is composite, so it leaves the prime-length language. The choice is allowed to depend on the piece length; it must work for every permitted piece.
 
-```formula
+Here is the optional factorisation that supplies that repetition count:
+
+```formula reference
 q ≥ p + 2     1 ≤ k ≤ p
 i = q − k
 (q − k) + ik = (q − k)(1 + k)
@@ -78,7 +61,7 @@ p: the positive integer pumping length in symbols
 k: the integer length of the non-empty pumped piece in symbols
 i: the non-negative integer number of copies of that piece
 ≥, ≤: greater than or equal to, less than or equal to
-In words: deleting the original piece leaves q minus k symbols. Putting back q minus k copies makes the length a product of two integers at least two, hence composite rather than prime.
+In words: choose the number of copies to equal the length left after deleting the original piece. The resulting total is that remaining length multiplied by one more than the piece length; both factors are at least two, so the new length is composite.
 ```
 
 For example, prime length seven and a pumped substring of length two give five copies and a new length of fifteen. The argument works for every legal pumped-substring length, rather than relying on this one example.

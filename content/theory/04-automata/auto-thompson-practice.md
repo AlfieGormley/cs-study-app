@@ -21,9 +21,6 @@ The earlier construction builds epsilon-NFA fragments with one entry and one exi
 - **Counted repetition is expansion.** `(a|b){1000}` becomes a thousand copies of the fragment, and `x{1,1000}` likewise. RE2 limits counted repetitions for this reason: its syntax rejects `{n}` when n exceeds 1000. Other engines have different limits and representations.
 - **Star of something that matches the empty string.** `(a*)*` is legal, but the NFA has ε-cycles. Set simulation handles that fine because ε-closure visits each state once. A naive recursive backtracker without a zero-progress guard may loop; practical engines commonly detect empty repetitions, although other patterns can still cause excessive backtracking.
 
-> [!note] Evidence gap
-> A previous fixed grep throughput figure is omitted because no reproducible hardware, input and tool configuration was available.
-
 ## Key takeaways
 - Counted repetition can make a compact pattern compile into a large machine.
 - Visited-state epsilon closure terminates even when nested stars introduce epsilon cycles.

@@ -22,9 +22,9 @@ Real-world PSPACE-complete problems include **equivalence of ordinary regular ex
 
 ## What's proven, what's open
 
-The **space hierarchy theorem** says more space solves strictly more problems:
+For space-constructible bounds at least logarithmic in input length, the **space hierarchy theorem** says asymptotically more space solves strictly more problems. Space-constructibility means the machine can mark out its workspace within the stated bound; standard linear and polynomial bounds satisfy it:
 
-```formula
+```formula essential
 SPACE(s) ⊊ SPACE(s′)   when s = o(s′)
 SPACE(n) ⊊ SPACE(n^2)
 where
@@ -38,7 +38,7 @@ In words: give a machine asymptotically more memory and it can decide problems i
 
 Combined with Savitch's theorem, this proves some separations:
 
-```formula
+```formula essential
 NL ⊆ SPACE(log^2 n) ⊊ PSPACE
 PSPACE ⊊ EXPSPACE
 P ⊊ EXPTIME

@@ -11,7 +11,9 @@ The preceding unit put the positive equal-block grammar into Chomsky normal form
 
 ## Building a membership table
 
-The **CYK algorithm** (Cocke–Younger–Kasami) fills a table where `t[i][j]` holds every variable that can derive the substring from position i to j:
+The **CYK algorithm** (Cocke–Younger–Kasami) asks which grammar variables can produce each contiguous piece of the input. Start with single characters. For a longer piece, try every split into two nonempty neighbours; a binary grammar rule can combine a suitable variable from the left piece with one from the right. Keep every possible parent, so ambiguity is allowed. The input belongs to the language exactly when the start variable can produce the whole input.
+
+The code makes that combination step concrete: `t[i][j]` holds every variable that can derive the substring from position i to j. The particular grammar accepts positive equal a and b blocks, so the empty input is rejected.
 
 ```python
 RULES = [("S", "A", "T"), ("S", "A", "B"),
@@ -43,9 +45,9 @@ for w in ["ab", "aabb", "aab", "abab"]:
 # aab False / abab False
 ```
 
-The three nested loops over span, start and split point, each running up to n times, plus a loop over the rules, give the running time:
+The work comes from considering span lengths, starting positions and split points, then checking grammar rules. For input length n, the displayed implementation has an O(n³) bound when the grammar is fixed. This is a growth bound, not an exact prediction of elapsed time. Including grammar size gives this reference bound:
 
-```formula
+```formula reference
 T_CYK(n) = O(n^3 × |G|)
 where
 T_CYK(n): the number of basic steps CYK takes on an input string
@@ -55,7 +57,7 @@ O(…): big-O: grows no faster than the expression inside, up to a constant fact
 In words: CYK's work grows with the cube of the input length, times the size of the grammar.
 ```
 
-Under a cubic timing model with a fixed grammar, a tenfold longer input costs about a thousand times as much: a hundred tokens corresponds to a million cubic combinations, and a thousand tokens to a billion. Big-O is an upper growth bound, not an exact measured runtime prediction. That proves every CFL (context-free language) can be parsed in polynomial time, but it is too slow for compilers handling large files.
+This gives a polynomial-time membership algorithm for every fixed CFL. For large files, parsers exploiting a more restricted grammar can offer better bounds; CYK's generality has a cost.
 
 ## Real-world use
 

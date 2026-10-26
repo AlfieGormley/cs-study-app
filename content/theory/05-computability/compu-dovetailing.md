@@ -11,7 +11,7 @@ sourceLesson: compu-halting
 
 **Theorem.** L is decidable if and only if both L and its complement L̄ are recognisable.
 
-```formula
+```formula reference
 L̄ = Σ* − L
 L ∈ R   ⇔   L ∈ RE  and  L̄ ∈ RE
 R = RE ∩ coRE
@@ -20,7 +20,7 @@ L: any language over the alphabet Σ (sigma)
 L̄: the complement of L: every string outside L
 Σ*: every finite string over the alphabet
 −: set difference: everything on the left except what is on the right
-R: the class of decidable languages (also called recursive)
+R: the class of decidable languages (also called recursive languages)
 RE: the class of Turing-recognisable languages (also called recursively enumerable)
 coRE: the class of co-recognisable languages: those whose complement is in RE
 ∈: is a member of
@@ -34,6 +34,13 @@ In words: a language has a decider exactly when both it and its complement have 
 - Reverse direction: let R₁ recognise L and R₂ recognise L̄. On input x, run both **side by side**, alternating one step of each. Every x is in L or L̄, so one of them eventually accepts. If R₁ accepts, accept; if R₂ accepts, reject. This always halts. ∎
 
 The parallel trick is called **dovetailing**. For nonnegative integers in the example, model each recogniser as a generator that yields once per step and returns when it accepts (a recogniser that would reject just loops):
+
+> [!analogy] Real-world analogy: Taking turns at two desks
+> You have two enquiries, and one desk may keep asking you to wait. Give each desk a turn rather than waiting indefinitely at the first.
+>
+> **How it maps:** Alternating simulation steps prevents a nonterminating recogniser from starving the recogniser that will accept.
+>
+> **Where it stops:** The proof relies on an exact guarantee: every input belongs to one of the two complementary languages. Ordinary enquiries offer no such promise.
 
 ```python
 def is_square(n):        # halts iff square

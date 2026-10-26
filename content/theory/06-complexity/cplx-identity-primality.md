@@ -13,22 +13,21 @@ Given an arithmetic circuit over a specified field (a network of additions and m
 
 The **Schwartz–Zippel lemma** says a random evaluation almost never lands on a root of a nonzero polynomial:
 
-```formula
+```formula reference
 Pr[p(x_1, ..., x_n) = 0] ≤ d / |S|
-Pr ≤ 10 / 1000 = 0.01   for d = 10
 where
 p: the polynomial computed by the circuit, assumed not to be the zero polynomial
 x_1, ..., x_n: its n variables, each chosen independently and uniformly at random from S
 n: the number of variables
-d: the total degree of p (the largest sum of exponents in any term); 10 in the example
-S: a finite set of distinct values from the field of coefficients; the example uses {1, ..., 1000} over the rationals
-|S|: the number of values in S; 1000 in the example
+d: an upper bound on the total degree of p, the largest sum of exponents in any term
+S: a finite nonempty set of distinct values from the coefficient field
+|S|: the number of values in S
 Pr[...]: the probability, over the random choice of the variables, of the event in brackets
 ≤: is at most
-In words: a nonzero polynomial of degree d is zero at a random point with probability at most d divided by the number of values each variable can take. Degree 10 with 1000 choices per variable gives at most a 1 % chance.
+In words: for a nonzero polynomial, the false-zero bound is total degree divided by sample-set size. A larger sample set improves the bound; more variables alone do not worsen it.
 ```
 
-So evaluate at one random point: if the result is nonzero, the polynomial is certainly nonzero. Repeating with independent points multiplies the bounds. The lemma needs S chosen from a field of coefficients (or an integral domain) and the degree known in advance.
+So evaluate at one random point: if the result is nonzero, the polynomial is certainly nonzero. Repeating with independent points multiplies the bounds. Choose each variable independently and uniformly from the same finite set of distinct elements in the coefficient field (or integral domain). A known total-degree upper bound divided by the sample-set size bounds a false zero. The bound is useful when the sample set is larger than that degree bound. Every evaluation of an identically zero polynomial is zero.
 
 For the standard arithmetic-circuit identity-testing problem, with an effective coefficient representation, a computable degree bound and polynomial-cost exact or suitable modular evaluations, polynomial identity testing is in **coRP**, and **no deterministic polynomial-time algorithm is known**. Kabanets and Impagliazzo (2004) showed that derandomising it would imply circuit lower bounds that nobody can currently prove.
 
@@ -36,16 +35,15 @@ For the standard arithmetic-circuit identity-testing problem, with an effective 
 
 Miller–Rabin declares a composite "probably prime" with probability at most 1/4 per random base, and independent bases multiply:
 
-```formula
+```formula reference
 ε_k ≤ (1/4)^k = 2^{−2 × k}
-ε_20 ≤ 4^{−20} = 2^{−40} ≈ 9.1 × 10^{−13}
 where
-ε_k, ε_20: the probability that a composite number passes all k (or 20) rounds and is wrongly called prime
-k: the number of independent rounds, each with a fresh random base; 20 in the second line
+ε_k: the probability that a fixed odd composite passes all k independent rounds
+k: the positive number of rounds, each with a fresh uniformly sampled permitted base
 (1/4)^k: k copies of one-quarter multiplied together
 ≤: is at most
 ≈: approximately equal to
-In words: each round at least quarters the chance of being fooled, so 20 rounds leave about one chance in a trillion. A real prime is never rejected: the error is one-sided.
+In words: each independent uniformly sampled permitted base reduces a fixed odd composite’s chance of passing all tests by at least another factor of four. A prime is never rejected.
 ```
 
 This put PRIMES in coRP (composites are detected with one-sided error) decades ago. In 2002 the AKS algorithm put PRIMES in **P**. Practical libraries still use Miller–Rabin because it is efficient; actual performance depends on operand sizes and implementation. The one-quarter bound is for each fixed odd composite with independent uniformly chosen permitted bases, not the posterior probability that a generated candidate is composite after passing.

@@ -19,7 +19,7 @@ A DFA has finitely many states and one transition per input symbol. In the cost 
 
 ## What a DFA cannot do
 
-A DFA has a fixed number of states, so it can only remember a bounded amount of information. It cannot count without limit. "Equal numbers of a's and b's" or "balanced brackets" need unbounded memory, and no DFA recognises them. The pumping-lemma units proves this with the pumping lemma for regular languages.
+A DFA has a fixed number of states, so it can only remember a bounded amount of information. It cannot count without limit. "Equal numbers of a's and b's" or "balanced brackets" need unbounded memory, and no DFA recognises them. The pumping-lemma units prove this claim. A fixed bound changes the problem: matching brackets to depth three needs states for the four possible depths and a dead state for an invalid prefix.
 
 That limitation is also the strength: because memory is bounded, a fixed-machine membership scan of a string of length n takes O(n) transitions and O(1) auxiliary space (a constant amount, however long the input), and many questions about DFAs (is the language empty? are two DFAs equivalent?) are decidable and fast. For more powerful machines those same questions become hard or impossible.
 

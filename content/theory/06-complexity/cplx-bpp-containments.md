@@ -11,7 +11,7 @@ sourceLesson: cplx-randomised-quantum
 
 The proven containments:
 
-```formula
+```formula essential
 P ⊆ ZPP ⊆ RP ⊆ BPP
 RP ⊆ NP
 BPP ⊆ PSPACE
@@ -29,7 +29,7 @@ PSPACE: decision problems solvable with a polynomial amount of memory, however l
 ∩: intersection: the problems in both classes
 P/poly: problems solvable by polynomial-size circuits, one circuit per input length (equivalently, polynomial time with a polynomial-length advice string that depends only on the input length)
 ⊆: "is contained in": every problem in the left class is also in the right class (the two may turn out to be equal)
-In words: zero-error and one-sided randomness sit inside two-sided randomness; one-sided randomness is inside NP; and BPP fits inside polynomial space, inside the second level of the polynomial hierarchy, and inside polynomial-size circuits.
+In words: zero-error and one-sided classes sit inside bounded two-sided randomness. RP specifically sits inside NP because its accepting runs cannot be false positives. BPP fits inside polynomial space, the second level of the polynomial hierarchy and polynomial-size circuits.
 ```
 
 Why each holds:
@@ -37,7 +37,7 @@ Why each holds:
 - **The chain and RP inside NP.** A zero-error algorithm can be cut off and made one-sided; one-sided error is a special case of two-sided. For RP, an accepting coin sequence is a certificate, since no coin sequence makes it accept a no-instance.
 - **BPP inside PSPACE.** Try every coin sequence one after another, count acceptances and reuse the space.
 - **BPP inside Σ₂ ∩ Π₂** (Sipser, Gács and Lautemann, 1983). So if P equals NP, the whole polynomial hierarchy collapses to P and P equals BPP.
-- **BPP inside P/poly**, counted below. Adleman (1978) proved it for one-sided error (RP); Bennett and Gill (1981) extended it to BPP, and the result is often called Adleman's theorem. The coin string it finds is non-uniform advice, not a known efficient way to find it.
+- **BPP inside P/poly**, explained in the advice-string unit. Adleman (1978) proved it for one-sided error (RP); Bennett and Gill (1981) extended it to BPP, and the result is often called Adleman's theorem. The coin string it finds is non-uniform advice, not a known efficient way to find it.
 
 ## Key takeaways
 

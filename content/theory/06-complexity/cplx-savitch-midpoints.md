@@ -11,9 +11,9 @@ sourceLesson: cplx-space
 
 Does nondeterminism help for space as much as it seems to for time? Much less, it turns out.
 
-**Savitch's theorem (1970)**:
+**Savitch's theorem (1970)** applies to space-constructible bounds at least logarithmic in input length. Space-constructible means the machine can mark out the permitted workspace within that bound. The standard bounds used here meet this condition.
 
-```formula
+```formula essential
 NSPACE(s) ⊆ SPACE(s^2)   for s ≥ log n
 where
 NSPACE(s): problems a nondeterministic (guessing) machine decides using at most a constant times s work-tape cells
@@ -23,12 +23,12 @@ n: the input size, in bits
 log: logarithm base 2
 ⊆: "is contained in"
 ≥: is at least
-In words: removing guessing costs at most a squaring of the memory. A nondeterministic machine using 100 cells can be simulated deterministically in about 10,000 cells.
+In words: a deterministic simulation needs at most quadratic growth in the original space bound. This is an asymptotic guarantee with hidden constants, not an exact allocation of memory cells.
 ```
 
 The idea is a midpoint recursion:
 
-```formula
+```formula essential
 R(u, v, t)  iff  ∃ w with
   R(u, w, ⌈t/2⌉) and R(w, v, ⌊t/2⌋)
 where

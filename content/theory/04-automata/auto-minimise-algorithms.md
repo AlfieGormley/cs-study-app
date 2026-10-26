@@ -13,7 +13,7 @@ Moore refinement repeatedly splits states by their successor blocks until the pa
 
 The running times below are written in Big O notation, in terms of two sizes of the DFA:
 
-```formula
+```formula reference
 T_Moore = O(k n²)
 T_Hopcroft = O(k n log_2(n))
 where
@@ -24,31 +24,23 @@ n: the number of states in the DFA; an integer count, non-negative unless a posi
 k: the size of the alphabet (the number of different input symbols); an integer count, non-negative unless a positive lower bound is stated
 n²: n squared, n × n
 log_2(n): the base-2 logarithm of n: how many times you can halve n before reaching 1, so log_2(1024) = 10
-In words: Moore's algorithm can take time proportional to the alphabet size times the square of the state count; Hopcroft's replaces one factor of n with the much smaller log of n.
+In words: Moore's worst-case bound grows with the square of the state count and with the alphabet size. Hopcroft's bound grows with the state count times its slowly growing logarithm, again scaled by alphabet size. Careful scheduling limits repeated scanning.
 ```
 
-For a 1,000-state DFA over 2 symbols, the alphabet size times the squared state count is 2,000,000, while the alphabet size times the state count times its base-two logarithm is about 20,000: a hundredfold difference before constant factors.
+The practical distinction is repeated work. Moore's method may rescan states over many rounds. Hopcroft schedules carefully chosen splitters so large blocks do not keep causing the same work. These bounds describe growth, not measured speed on a particular machine. Table filling with a dependency worklist has the same quadratic worst-case growth as Moore; repeated full passes can be slower.
 
-| Algorithm | Worst case | Notes |
-|---|---|---|
-| Table filling | O(k n²) with a dependency worklist | repeated full passes can be slower |
-| Moore | O(k n²) | rounds of refinement |
-| Hopcroft (1971) | O(k n log n) | split by smaller half |
-| Brzozowski | exponential | det(rev(det(rev(A)))) |
-
-**Hopcroft's algorithm** is the standard choice for large automata. Its worklist rule matters: if a split block is already pending, replace it with both pieces; otherwise schedule only the smaller piece. Smaller-piece scheduling and reverse transition lists let each of the transitions be charged O(log n) times: a state can only be in a scheduled "smaller half" about log₂ n times, because each time the piece containing it at least halves.
+**Hopcroft's algorithm** is the standard choice for large automata. Its worklist rule matters: if a split block is already pending, replace it with both pieces; otherwise schedule only the smaller piece. With reverse transition lists, each transition can be charged only logarithmically many times in the number of states: each newly scheduled smaller piece is at most half its previous block's size.
 
 **Brzozowski's algorithm** is strange and elegant: reverse the automaton, determinise, reverse again, determinise again.
 
-```formula
-A_min = det(rev(det(rev(A))))
-where
-A: the input automaton (a DFA or an NFA)
-rev: reversal: flip every arrow, make the accepting states the start states and the start state the accepting state. The result recognises every string of the language written backwards
-det: determinisation by the subset construction, keeping only reachable sets
-A_min: the result, a minimal DFA for the same language as A
-In words: reverse, determinise, reverse, determinise, reading the functions from the inside out; the result is always the minimal DFA.
+```flow
+Reverse the automaton
+Build reachable subset states
+Reverse the result
+Build reachable subset states again
 ```
+
+Reversal flips every arrow and exchanges initial and accepting roles. Several initial states may result; represent them with a fresh start and epsilon arrows if a single start is required. Each determinisation keeps only reachable subsets.
 
 The result is always the minimal DFA. Its worst case is exponential because each determinisation can blow up, but it can be fast in practice and works directly on NFAs.
 
@@ -58,4 +50,3 @@ The result is always the minimal DFA. Its worst case is exponential because each
 
 ## Further reading
 - [Minimization of Automata — Berstel, Boasson, Carton and Fagnot](https://arxiv.org/abs/1010.5318)
-- [Hopcroft: minimising finite automata (1971)](http://i.stanford.edu/pub/cstr/reports/cs/tr/71/190/CS-TR-71-190.pdf)

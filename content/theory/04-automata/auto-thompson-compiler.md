@@ -69,9 +69,9 @@ start, acc = build("ab|*a.b.b.")
 print(n)  # 14
 ```
 
-The result plugs straight into `run_nfa` from the earlier epsilon-closure unit. `run_nfa(delta, start, {acc}, "babb")` is `True` and `"abba"` gives `False`. The audit compares this NFA with re.fullmatch on all strings over {a, b} up to length 10; that finite check supports the example but is not the general equivalence proof.
+The result plugs into `run_nfa` from the NFA simulator unit. `run_nfa(delta, start, {acc}, "babb")` is `True` and `"abba"` gives `False`: the expression requires the suffix abb. Testing a finite collection of strings can catch implementation mistakes; the fragment construction explains correctness for every input.
 
-Fourteen states matches the formula: five symbols, one `|` and one `*` is seven items, times two.
+The important invariant is the fragment endpoint pair: each operator replaces its operands with a fragment for the combined expression.
 
 ## Worked example: (a|b)*abb to a DFA
 
@@ -90,14 +90,7 @@ States 0 to 7 implement `(a|b)*`, including its exit at 7: 1 to 6 is the union, 
 
 Now apply the subset construction. The start state is the ε-closure of state 0: everything reachable from 0 by ε-arrows alone.
 
-```formula
-E({0}) = {0, 1, 2, 4, 7}
-where
-E: the ε-closure: a set of NFA states plus every state reachable from them by following only ε-arrows, which read no input
-{ }: the set of the states listed inside
-0, 1, 2, 4, 7: NFA states from the listing above
-In words: from 0 you can reach 1 and 7 for free, and from 1 you can reach 2 and 4. States 2, 4 and 7 are where the next symbol is read.
-```
+Before any input, state 0 can reach 1 and 7 for free; state 1 can also reach 2 and 4. The initial subset therefore contains 0, 1, 2, 4 and 7. States 2, 4 and 7 are ready to consume a symbol.
 
 | DFA | NFA states | on a | on b |
 |---|---|---|---|

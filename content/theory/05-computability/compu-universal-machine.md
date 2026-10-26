@@ -11,7 +11,7 @@ sourceLesson: compu-church-turing
 
 Turing's most important idea was not the machine but the **universal machine** U. A TM's rules are a finite table, so they can be written as a string, written ⟨M⟩. U takes ⟨M⟩ and an input w on its tape and simulates M on w:
 
-```formula
+```formula essential
 U(⟨M⟩, w) = M(w)
 where
 U: the universal Turing machine, one fixed machine

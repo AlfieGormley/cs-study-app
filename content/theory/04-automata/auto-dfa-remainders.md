@@ -7,18 +7,16 @@ sourceLesson: auto-dfa
 summary: Appending a bit doubles a binary value and adds the bit; remainders can be updated directly.
 ---
 
-## Example 2: binary numbers divisible by 3
+## Remember the remainder, not the number
 
 Read a binary number left to right, most significant bit first. Appending a bit to the right of a binary number doubles its value and adds the new bit, just as appending a digit in decimal multiplies by 10 and adds it. The machine cannot store the whole value, which grows without limit, but it does not need to: the remainder after dividing by 3 can be updated from the old remainder alone.
 
-```formula
-v′ = 2v + b
-(2v + b) mod 3
-  = (2(v mod 3) + b) mod 3
+```formula essential
+r′ = (2r + b) mod 3
 where
-v: the value of the binary number read so far (a whole number, 0 for the empty string)
+r: the remainder of the binary prefix after division by three, initially zero
 b: the next bit read, 0 or 1
-v′: "v prime": the value after appending b
+r′: the new remainder, one of zero, one and two
 mod: the remainder after whole-number division, so 7 mod 3 = 1 and 9 mod 3 = 0
 In words: the new remainder depends only on the old remainder and the new bit, never on the full value. So three states, one per possible remainder (0, 1 or 2), are enough.
 ```
@@ -31,19 +29,7 @@ For example, after reading `100` the value is 4 and the remainder is 1. Reading 
 | 1 | 2 | 0 |
 | 2 | 1 | 2 |
 
-Trace `1001` (which is 9), applying the update once per bit:
-
-```formula
-r_0 = 0
-r_1 = (2 × 0 + 1) mod 3 = 1
-r_2 = (2 × 1 + 0) mod 3 = 2
-r_3 = (2 × 2 + 0) mod 3 = 1
-r_4 = (2 × 1 + 1) mod 3 = 0
-where
-r_0, r_1, r_2, r_3, r_4: the state (the remainder) after reading the first 0, 1, 2, 3 and 4 bits of 1001
-mod: the remainder after whole-number division, so 4 mod 3 = 1
-In words: the remainders go 0, 1, 2, 1, 0. The run ends in state 0, which is accepting, so 1001 (nine) is accepted as divisible by 3.
-```
+Trace `1001` using the table: the remainders are 0, 1, 2, 1, 0. The final remainder is zero, so the machine accepts. There is no need to convert the whole input to an integer first, even when it is too long to fit in a fixed-width integer.
 
 And `101` (5) goes 0 → 1 → 2 → 2, ending in 2: reject. The same trick builds a DFA for "divisible by k" with k states, in any base.
 

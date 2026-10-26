@@ -2,7 +2,7 @@
 id: compu-counting-diagonal
 title: Counting machines and diagonalising languages
 level: advanced
-minutes: 5
+minutes: 4
 summary: Finite machine descriptions can be enumerated.
 sourceLesson: compu-halting
 ---
@@ -13,22 +13,7 @@ Turing’s 1936 work established foundational undecidability results; the modern
 
 ## Countable and uncountable
 
-A set is **countable** if it is finite or its elements can be listed in a sequence that eventually reaches every element:
-
-```formula
-e_1, e_2, e_3, …
-ℕ = {0, 1, 2, 3, …}
-ℤ = {…, −2, −1, 0, 1, 2, …}
-e_1, e_2, e_3, e_4, e_5 = 0, 1, −1, 2, −2
-where
-e_1, e_2, e_3, e_4, e_5: the 1st, 2nd, 3rd, 4th and 5th items in the list; in general e_i is the i-th item, for a whole number i = 1, 2, 3, …
-ℕ: the natural numbers: 0, 1, 2, 3, … (some books start at 1)
-ℤ: the integers: the whole numbers, negative, zero and positive
-…: and so on, following the same pattern
-In words: a set is countable when you can number its members 1st, 2nd, 3rd, … without missing any; the integers can be listed by alternating positive and negative.
-```
-
-The natural numbers are countable, and so are the integers: the list 0, 1, −1, 2, −2, … reaches any integer, say −7, at a finite position (the 15th). Countable sets are the "smallest" infinite sets: ℕ and ℤ have the same size of infinity.
+A set is **countable** if it is finite or its elements can be listed in a sequence that eventually reaches every element. The natural numbers are countable, and so are the integers: list zero, then one and minus one, then two and minus two, and continue. Every integer gets a finite position even though the list never ends. These two infinite sets have the same size of infinity.
 
 **Turing machines are countable.** Each TM M has a finite description ⟨M⟩, a string over a finite alphabet. List all strings by length, then alphabetically within a length, and skip the ones that aren't valid descriptions. Every TM appears at some finite position. The same goes for Python programs: each is a finite text file.
 
@@ -36,22 +21,7 @@ The natural numbers are countable, and so are the integers: the list 0, 1, −1,
 
 ## Cantor's diagonal argument
 
-Fix the alphabet {0, 1} and list all strings in order of length. A language L is any set of these strings, so you can describe L by an infinite row of bits:
-
-```formula
-s_1 = ε   s_2 = 0   s_3 = 1   s_4 = 00   …
-bit_i(L) = 1   if s_i ∈ L
-bit_i(L) = 0   if s_i ∉ L
-where
-s_1, s_2, s_3, s_4: the first four binary strings in the list
-s_i: the i-th string in the list (shortest first, then in numerical order within each length)
-ε: epsilon, the empty string, which comes first because it has length 0
-L: a language: any set of binary strings, finite or infinite
-bit_i(L): the i-th bit of L's row: 1 if L contains the i-th string, 0 if not
-i: a position in the list, 1, 2, 3, …
-∈, ∉: is a member of, is not a member of
-In words: every language is a yes/no answer for each string in the list, so it can be written as an infinite sequence of bits.
-```
+Fix the binary alphabet and list every finite string by length, then alphabetically within each length: the empty string, `0`, `1`, `00`, and so on. Give each string a column. A language has one bit in every column: one if it contains that string, zero otherwise. Even a finite language needs an infinite row, with zeros for all the strings it omits.
 
 For example, the language "strings that start with 1" begins 0, 0, 1, 0, … because its first member is the third listed string, the one-character string `1`.
 
@@ -70,7 +40,7 @@ For example, the language "strings that start with 1" begins 0, 0, 1, 0, … bec
 
 Build a new language D by flipping the diagonal:
 
-```formula
+```formula essential
 D = { s_i : s_i ∉ L_i }
 D ≠ L_i   for every i
 where

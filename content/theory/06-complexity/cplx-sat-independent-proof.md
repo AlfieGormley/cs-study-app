@@ -12,7 +12,7 @@ Use the same construction as the preceding units: one triangle per three-literal
 ### Checking it in Python
 
 ```python
-from itertools import combinations, product
+from itertools import combinations
 
 def sat_to_is(phi):
     # vertex = (clause, position, literal)
@@ -38,18 +38,6 @@ def has_is(V, E, k):
             return S
     return None
 
-def true_lit(a, l):
-    return a[abs(l) - 1] == (l > 0)
-
-def satisfiable(phi, n):
-    for a in product([False, True],
-                     repeat=n):
-        if all(any(true_lit(a, l)
-                   for l in c)
-               for c in phi):
-            return a
-    return None
-
 phi = [[1, 2, -3], [-1, 3, 4], [-2, -3, -4]]
 V, E, k = sat_to_is(phi)
 print(len(V), len(E), k)   # 9 14 3
@@ -59,58 +47,17 @@ print(has_is(V, E, k))
 
 Literals are integers: 3 means x3, −3 means ¬x3. The independent set found is exactly x1 from C1, x3 from C2 and ¬x2 from C3.
 
-For a no-instance, take all 8 clauses over x1, x2, x3 (each one rules out one assignment, so φ is unsatisfiable). Each variable appears plain in 4 clauses and negated in the other 4, which fixes the size of the graph:
-
-```formula
-|V| = 3m = 3 × 8 = 24
-E_tri = 3m = 24
-E_con = n × 4 × 4 = 3 × 16 = 48
-|E| = 24 + 48 = 72
-where
-|V|: the number of vertices
-m: the number of clauses, here 8
-n: the number of variables, here 3 (x1, x2, x3)
-E_tri: the number of triangle edges, 3 per clause
-E_con: the number of consistency edges: each of the 4 plain copies of a variable is joined to each of its 4 negated copies
-|E|: the total number of edges
-In words: 24 vertices and 72 edges, and since φ is unsatisfiable there is no independent set of size 8.
-```
-
-Running `has_is(V, E, 8)` on that graph returns `None`. A reproducible audit also compares both checks on 300 seeded random 3-CNF formulas over three to five variables. Finite agreement supports the implementation; the proof below establishes the reduction for every instance.
+For a no-instance, take all eight sign patterns over three distinct variables. Every assignment falsifies one clause. The construction therefore cannot have an independent set taking one vertex from every clause. Exhaustive tests can check this small case, but the two-direction proof below establishes correctness for all inputs.
 
 ### Why it's correct (both directions)
 
-The claim to prove is an "if and only if":
-
-```formula
-φ ∈ 3-SAT  iff  (G, m) ∈ IS
-where
-φ: phi, the input 3-CNF formula, with m clauses
-3-SAT: the set of satisfiable 3-CNF formulas; φ ∈ 3-SAT means φ is satisfiable
-G: the graph the reduction builds from φ
-m: the number of clauses, used as the target size k
-IS: the set of yes-instances of Independent Set: pairs (graph, k) whose graph has an independent set of size k
-∈: "is a yes-instance of"
-In words: the formula is satisfiable exactly when the graph built from it has an independent set with one vertex per clause.
-```
+The claim has two directions: the formula is satisfiable exactly when the graph has an independent set whose size equals the clause count.
 
 Each direction, and the running time:
 
 - **If φ is satisfiable, there is an independent set of size m.** Fix a satisfying assignment. Each clause has a true literal; pick its vertex. One per triangle, so no triangle edges. All picked literals are true, so none is the negation of another, so no consistency edges. Size m.
 - **If there is an independent set of size m, φ is satisfiable.** At most one vertex per triangle, and there are m triangles, so exactly one per clause. No consistency edge is inside the set, so the picked literals never include both x and ¬x. Set those literals true (others arbitrarily). Every clause has a true literal.
-- **Polynomial.** The graph is small compared with φ:
-
-```formula
-|V| = 3m
-|E| ≤ 3m × (3m − 1) / 2 = O(m^2)
-where
-|V|: the number of vertices built
-|E|: the number of edges built; at most every pair of vertices
-m: the number of clauses in φ
-O(m^2): Big O: grows at most as fast as a constant times m squared
-≤: is at most
-In words: the graph has 3 vertices per clause and at most about m squared edges, so building it takes polynomial time.
-```
+- **Polynomial.** Each clause creates three vertices. Checking each pair creates at most quadratically many edges in the clause count, so the construction is polynomial.
 
 > [!tip] Gadget pattern
 > Triangles enforce "choose exactly one" (given a budget of one vertex per clause). Edges between conflicting choices enforce consistency. You'll see this pattern again and again.

@@ -2,7 +2,7 @@
 id: auto-myhill-nerode
 title: Myhill–Nerode and DFA lower bounds
 level: advanced
-minutes: 4
+minutes: 3
 sourceLesson: auto-minimisation
 summary: Two prefixes are language-equivalent when no continuation separates them.
 ---
@@ -13,7 +13,7 @@ Minimisation rests on a theorem that describes the minimal DFA without mentionin
 
 For a language, call two strings **L-equivalent** if no suffix tells them apart:
 
-```formula
+```formula essential
 x ≡_L y   iff   ∀ z ∈ Σ* :
   x · z ∈ L   ⟺   y · z ∈ L
 where
@@ -42,22 +42,7 @@ Myhill–Nerode is an exact test, unlike the pumping lemma for regular languages
 
 Take the language of n a's followed by n b's. The strings a, aa, aaa, ... are pairwise distinguishable:
 
-```formula
-L = { a^n b^n : n ≥ 0 }
-a^i · b^i ∈ L
-a^j · b^i ∉ L   for i ≠ j
-where
-L: the language
-a, b: the two symbols
-a^n: n copies of a in a row; b^n likewise
-n: any whole number 0 or more
-i, j: two different counts of a's, both at least 1
-·: concatenation: one string straight after another
-∈, ∉: is, and is not, an element of
-≠: is not equal to
-≥: is greater than or equal to
-In words: the suffix of i b's completes i a's into a string of L but fails for any other number of a's, so every count of a's is in its own class.
-```
+Choose any two different positive lengths of initial a-run. Appending just enough b characters to match the first run accepts that prefix and rejects the other. This works for every pair, so no two different counts can share a state.
 
 For example, `aa` and `aaa` are separated by `bb`: `aabb` is in L and `aaabb` is not. Infinitely many classes, so not regular. No case analysis about splits, no choice of how many copies to pump.
 

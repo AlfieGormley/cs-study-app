@@ -11,7 +11,7 @@ TQBF asks whether a fully quantified Boolean formula is true and can be evaluate
 
 Hardness, in outline: for a machine using space p(n), write a formula saying "configuration c1 reaches configuration c2 within 2 to the power k steps", defined recursively using a midpoint:
 
-```formula
+```formula essential
 R(c1, c2, k) = ∃m ∀c3 ∀c4
   [((c3, c4) = (c1, m) ∨
     (c3, c4) = (m, c2))
@@ -33,6 +33,8 @@ p(n): the machine's polynomial space bound on an n-bit input
 O(...): Big O: at most a constant times this
 In words: one copy of the level-(k − 1) formula serves both halves, because ∀ makes it check whichever pair is plugged in. Each level adds only about p(n) symbols, so the whole formula is polynomial size.
 ```
+
+The midpoint is chosen first, and universal variables then require both endpoint pairs to pass the one shared recursive test. Other pairs make the implication automatically true.
 
 The naive version would write the sub-formula twice per level and double in size each time, giving exponentially many copies. This is Savitch's recursion written as a formula.
 

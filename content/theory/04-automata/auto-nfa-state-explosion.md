@@ -21,7 +21,7 @@ Back to "the n-th symbol from the end is 1", where n is a fixed positive whole n
 
 The pattern in the table, in symbols:
 
-```formula
+```formula essential
 m = n + 1
 d = 2^n = 2^{m − 1}
 where
@@ -39,20 +39,9 @@ For example, with n set to 3, take u as `110` and v as `100`. They differ at pos
 > [!warning] Worst case is real
 > The general subset bound is exponential in the number of NFA states, and this family comes close to it. Full determinisation can be manageable for a given workload, but engines that build full DFAs ahead of time must guard against patterns like `(a|b)*a(a|b){20}`, which needs over a million states.
 
-The general bound against this family:
+The practical consequence:
 
-```formula
-d ≤ 2^m
-d_L = 2^{m − 1}
-2^{21} = 2,097,152
-where
-d: the number of states of the DFA built from the NFA
-d_L: the minimal DFA size for the language "n-th symbol from the end is 1", whose NFA has m states
-m: the number of NFA states; an integer count, non-negative unless a positive lower bound is stated
-2^m: 2 to the power m: the number of subsets of m states, the most the subset construction can ever produce
-≤: is less than or equal to
-In words: an m-state NFA never needs more than 2^m DFA states. The n-th-from-the-end family needs exactly half that, 2^(m − 1): exponential, but not the full bound. The pattern (a|b)*a(a|b){20} asks for "21st from the end is a", so its minimal DFA has 2^21, about 2.1 million, states.
-```
+The general subset bound allows every combination of present or absent NFA states. In the position-from-end family, each extra remembered bit doubles the required DFA states. The regex `(a|b)*a(a|b){20}` therefore needs about 2.1 million states in its minimal DFA: a compact pattern can require a huge deterministic representation.
 
 ## Key takeaways
 - An NFA with m states has at most two to the power m subset states.

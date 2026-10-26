@@ -13,7 +13,7 @@ Is every language context-free? No. To prove it, you need a property every CFL h
 
 **Lemma.** If a language L is context-free, there is a whole number p, the **CFL pumping length**, such that every string s in L at least p characters long can be cut into five consecutive pieces u, v, x, y, z meeting all of these conditions:
 
-```formula
+```formula essential
 p ≥ 1     s ∈ L     |s| ≥ p
 s = u v x y z
 |v y| ≥ 1
@@ -38,23 +38,19 @@ The three conditions say: at least one of v, y is non-empty; the window vxy is a
 
 **Why it holds.** Take a Chomsky normal form grammar with k variables. A parse tree in Chomsky normal form branches into at most two at each variable, which bounds how many leaves a short tree can have:
 
-```formula
+```formula reference
 N ≤ 2^{h − 1}
 p = 2^k
-k = 3:   p = 2^3 = 8
-h ≤ 3  ⇒  N ≤ 2^2 = 4 < 8
 where
 N: the number of terminal leaves (characters) in a Chomsky normal form parse tree
 h: the largest number of variable nodes on any path from the root down to a terminal
 k: the number of variables in the grammar
 p: the CFL pumping length chosen for this grammar
-⇒: implies
 ≤: is at most
-<: is less than
-In words: a tree whose paths are short can only produce a short string, so a string of length 2^k forces some path to contain more than k variables.
+In words: a binary parse tree with short paths can produce only a short string; a sufficiently long string forces a path with more variable occurrences than the grammar has distinct variables.
 ```
 
-With three variables, any string of 8 or more characters needs a path with at least 4 variable nodes. A path with more than k variables must use some variable twice (the pigeonhole principle). Call the repeated variable R:
+A sufficiently long string forces a deep parse tree. A path with more variable occurrences than the grammar has distinct variables must repeat one (the pigeonhole principle). Call the repeated variable R:
 
 ```
           S
@@ -68,7 +64,7 @@ With three variables, any string of 8 or more characters needs a path with at le
 
 The drawing is schematic: it suppresses intervening nodes and the unchanged suffix z after the upper R subtree; it is not a complete Chomsky normal form parse tree. The pieces before and after that subtree remain fixed when pumping.
 
-Both R nodes can derive anything the other can. Replacing the lower R subtree with a copy of the upper one doubles both pumped pieces. Replacing the upper subtree with the lower one deletes both pumped pieces. Choose a longest root-to-leaf path and a repeated variable among its lowest one-more-than-k variable nodes. The upper selected subtree yields at most the pumping length in terminals, so the displayed window bound holds. Chomsky normal form, without empty or unit rules inside this nonempty derivation, guarantees that the two pumped pieces are not both empty.
+Both R nodes can derive anything the other can. Replacing the lower R subtree with a copy of the upper one doubles both pumped pieces. Replacing the upper subtree with the lower one deletes both pumped pieces. Choose the repetition near the bottom of a root-to-leaf path of maximum length: among one more variable occurrence than there are distinct variables. The upper selected subtree then has bounded height and yields at most the pumping length in terminals. Chomsky normal form, without empty or unit rules inside this nonempty derivation, guarantees that the two pumped pieces are not both empty.
 
 Compared with the regular pumping lemma, there are now **two** pumped pieces, v and y, which pump in step. That is precisely how `aⁿbⁿ` survives pumping: v takes a's and y takes b's.
 

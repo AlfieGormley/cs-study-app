@@ -2,16 +2,31 @@
 id: auto-dfa-states-runs
 title: DFA states, transitions and runs
 level: basic
-minutes: 5
+minutes: 3
 sourceLesson: auto-dfa
 summary: A complete DFA specifies exactly one transition for every state and symbol.
 ---
 
-## The formal definition
+## What the machine needs to remember
+
+A DFA carries one current state through the input. Each state summarises the past well enough to decide what to do with the next symbol. For even parity, it needs only "even so far" or "odd so far", not the entire string.
+
+Its five ingredients are the finite set of **automaton states**, an **input alphabet**, a **transition function**, one **start state** and a set of **accepting states**. The transition function gives exactly one next state for every state and input symbol.
+
+Begin each independent run in the start state. Read one symbol and follow its transition, then repeat. Test acceptance only after all input has been read. Visiting an accepting state midway does not end the run; later input can move elsewhere. On empty input, the start state itself decides.
+
+> [!analogy] Real-world analogy: A board-game counter
+> A counter marks your current square; a drawn card tells you where to move next.
+>
+> **How it maps:** The square represents the current state and each card an input symbol. A fixed rule tells you the next square. The finishing square determines acceptance.
+>
+> **Where it stops:** A DFA has no dice or player choice, and its verdict is checked when the input ends, not as soon as it visits a special square.
+
+## Reference notation
 
 Mathematicians describe a DFA by listing its five ingredients in a fixed order, a 5-tuple. Any DFA, however big, is fully pinned down by these five things:
 
-```formula
+```formula reference
 M = (Q, Σ, δ, q₀, F)
 δ : Q × Σ → Q
 q₀ ∈ Q
@@ -31,49 +46,11 @@ F: the set of accepting states (also called final states)
 In words: a DFA has a finite set of states, an alphabet, a rule giving exactly one next state for every state and symbol, one start state, and a chosen set of accepting states.
 ```
 
-For the even-parity machine in the next parity-cycle unit, the five parts are:
+For the even-parity machine in the next unit:
 
-```formula
-Q = {E, O}     Σ = {0, 1}
-q₀ = E         F = {E}
-δ(E, 1) = O    δ(O, 1) = E
-δ(E, 0) = E    δ(O, 0) = O
-where
-Q: the set of automaton states
-E: the state meaning "an even number of 1s so far"
-O: the state meaning "an odd number of 1s so far"
-Σ: the input alphabet, here the two bits
-q₀: the start state
-F: the set of accepting states
-δ: the transition function: δ(state, symbol) is the next state
-{ }: the set of the items listed inside
-In words: two states, E and O; a 1 swaps between them and a 0 leaves the state alone; start in E, and accept if you end in E.
-```
+The parity states are E (even so far) and O (odd so far). Start in E. A 1 swaps states; a 0 leaves the state alone. Only E accepts.
 
-In words, the five parts of any DFA are:
-
-- a finite set of **automaton states**;
-- the **input alphabet**;
-- the **transition function**, which, given a state and a symbol, names exactly one next state;
-- the **start state**;
-- the **accepting states** (final states).
-
-To run it on a string, begin in the start state and apply the transition function once per symbol. If you finish in an accepting state, the DFA **accepts**; otherwise it **rejects**. The set of strings it accepts is called the language of M:
-
-```formula
-L(M) = { w ∈ Σ* : δ̂(q₀, w) ∈ F }
-where
-L(M): the language recognised by the machine M: the set of strings it accepts
-M: the DFA
-{ w ∈ Σ* : … }: set-builder notation: the set of all strings w in Σ* that make the condition after the colon true. The colon reads "such that"
-w: any string over the alphabet
-Σ*: every finite string over the alphabet Σ, including the empty string
-δ̂: "delta hat": the extended transition function. δ̂(q, w) is the state you end in after starting at q and applying δ once per symbol of w, left to right. For the empty string it stays put
-q₀: the start state
-∈: is an element of
-F: the set of accepting states
-In words: the language of M is exactly the set of strings that, read from the start state, leave the machine in an accepting state.
-```
+The language of a DFA is the set of all strings whose complete runs end in accepting states.
 
 For example, the even-parity machine reads 1011 and finishes in O (traced in the next parity-cycle unit). O is not accepting, so 1011 is not in the machine's language.
 

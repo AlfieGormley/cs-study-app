@@ -13,18 +13,7 @@ sourceLesson: cplx-p-np
 
 The asymmetry is real. To convince you a formula is satisfiable, I hand you an assignment. To convince you it is *unsatisfiable*, nobody knows a short certificate in general; SAT solvers emit resolution proofs, but for some formulas (like the pigeonhole principle) every resolution proof is exponentially long.
 
-Some problems are in both classes at once, where both answers have short certificates:
-
-```formula
-L ∈ NP ∩ coNP
-where
-L: a decision problem
-∈: "is a member of"
-NP: the class NP (nondeterministic polynomial time): decision problems whose yes-answers have a short certificate checkable in polynomial time
-coNP: the class coNP: decision problems whose no-answers have a short certificate checkable in polynomial time (the complements of NP problems)
-∩: intersection: the problems that belong to both classes
-In words: L has short, quickly checkable proofs for its yes-answers and for its no-answers.
-```
+Some problems are in both NP and coNP: both yes-answers and no-answers have short, quickly checkable certificates.
 
 "Does N have a prime factor below k?" is one. For positive integers at least two, a yes-certificate is such a prime factor; a no-certificate is the full prime factorisation (each prime can itself be checked in polynomial time, by AKS). Problems in both NP and coNP are widely believed not to be NP-complete, since that would force NP and coNP to be equal.
 

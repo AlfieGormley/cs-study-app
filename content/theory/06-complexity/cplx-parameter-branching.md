@@ -9,9 +9,9 @@ sourceLesson: cplx-coping
 
 ## Option 4: parameterised algorithms
 
-Sometimes the hardness lives in one small number. A problem is **fixed-parameter tractable (FPT)** in parameter k if it can be solved in this much time:
+Sometimes the hardness lives in one small number. FPT means a computable parameter-only factor multiplied by a polynomial in total input length whose exponent is fixed independently of the parameter. A fixed parameter can make an exact algorithm useful, but neither factor is automatically small. A problem is **fixed-parameter tractable (FPT)** in parameter k if it can be solved in this much time:
 
-```formula
+```formula essential
 T(n, k) = f(k) poly(n)
 where
 T(n, k): the running time, in basic steps
@@ -50,27 +50,22 @@ print(vc_fpt([(1, 2), (2, 3), (3, 4)], 1))
 # None
 ```
 
-The recursion tree has depth at most k and branching factor 2, so at most 2 to the power k leaves, each doing work proportional to the number of edges m:
+The recursion tree has depth at most k and branching factor 2, so it has at most 2 to the power k leaves and fewer than twice as many nodes overall. Each nonterminal node filters an edge list of at most m edges for each of its two branches:
 
-```formula
+```formula reference
 T = O(2^k m)
-2^20 ≈ 1.05 × 10^6
-C(10000, 20) ≈ 4.0 × 10^{61}
-1.2738^20 ≈ 126
 where
 T: the running time, in basic steps
 O(...): Big O: grows at most as fast as a constant times the expression inside
-k: the cover-size budget, here 20
-m: the number of edges; each call filters the edge list once
+k: the nonnegative cover-size budget
+m: the original number of edges; each branch filters its current edge list
 2^k: 2 to the power k: the most leaves a binary recursion of depth k can have
-N, r: nonnegative integer counts, with r at most N; 10,000 and 20 here
-C(N, r): "N choose r": the number of ways to pick r items from N; here, all 20-vertex subsets of 10,000 vertices
-In words: with a budget of 20, the search tree has about a million leaves, while brute force would test about 4 × 10^61 subsets. Refined branching shrinks the exponential part to about 126.
+In words: the search-tree factor depends exponentially on the cover budget, while each node filters edges. Fixing the budget keeps growth polynomial in the graph size; this bound counts list work, not wall-clock seconds.
 ```
 
-So a 10,000-vertex network with a cover of size 20 has a search-tree bound of about a million leaves, each with edge-processing costs; practical runtime still requires measurement, while brute force over all 20-vertex subsets is hopeless. A representative refined algorithm (Chen, Kanj and Xia, 2010) has an exponential factor with base about 1.2738 in the budget, plus a term proportional to budget times vertex count. This is a published bound, not a claim about the current record.
+Holding the cover budget fixed leaves only polynomial growth as the graph grows. Raising the budget increases the branching part rapidly. Compare this with enumerating every vertex subset of the requested size, where the exponent of graph size grows with that size. Both the budget and edge count matter in practice.
 
-The code assumes a finite simple undirected graph and a nonnegative integer budget. It keeps Python edge lists in memory; the bound counts list operations rather than claiming that an abstract bit-packed machine runs at the same speed. Refined branching bounds cited here are representative published results, not a claim to list the latest record.
+The code assumes a finite simple undirected graph and a nonnegative integer budget. It keeps Python edge lists in memory; the displayed bound counts list operations for a nonempty graph. An empty edge list returns immediately. The bound does not predict a measured runtime.
 
 ## Key takeaways
 

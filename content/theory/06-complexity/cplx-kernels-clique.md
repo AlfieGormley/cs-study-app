@@ -16,35 +16,21 @@ A **problem kernel** is a polynomial-time shrinking step that leaves an equivale
 
 Remove isolated vertices as well. What remains is small:
 
-```formula
+```formula reference
 E_max = kk = k^2
 V_max = 2k^2
-E_max = 9,  V_max = 18   for k = 3
 where
 E_max: the most edges the remaining instance can have if a cover of size k exists
 V_max: the most vertices it can have, since each edge has two ends and no vertex is isolated
 k: the remaining cover budget, after forced vertices have been taken
-In words: k vertices, each touching at most k edges, cover at most k squared edges. So a yes-instance shrinks to at most k^2 edges and 2k^2 vertices, however large the original graph was.
+In words: after high-degree vertices are handled, the remaining budget times the maximum degree bounds how many edges any cover can touch. Reject larger instances; removing isolated vertices then bounds the remaining vertex count too. The kernel size depends only on the remaining budget.
 ```
 
 Kernels are a standard preprocessing step in practical solvers.
 
 ### Not everything is FPT
 
-Clique (a set of vertices all joined to each other) parameterised by solution size is **W[1]-hard**: no FPT algorithm is expected unless the parameterised classes FPT and W[1] coincide, and general algorithms still have an input-size exponent growing with the clique size, including speedups using fast matrix multiplication. The **Exponential Time Hypothesis** (ETH; Impagliazzo and Paturi, 2001) conjectures that 3-SAT needs exponential time:
-
-```formula
-T_3SAT(n) ≠ 2^{o(n)}
-C(n, k) ≤ n^k
-C(10^6, 10) ≈ 2.8 × 10^53
-where
-T_3SAT(n): the time the best possible algorithm needs for 3-SAT with n variables
-o(n): little o of n: an exponent whose ratio to n tends to zero; the line states the ETH exclusion of subexponential-time algorithms
-n: for 3-SAT, the number of variables; for clique, the number of vertices
-k: the clique size you are looking for
-C(n, k): "n choose k": the number of k-vertex subsets brute force checks
-In words: ETH excludes a 3-SAT algorithm whose base-two runtime exponent grows sublinearly in the variable count. It also excludes a clique algorithm with a computable parameter-only factor and an input-size exponent growing sublinearly in the requested clique size.
-```
+Clique (a set of vertices all joined to each other) parameterised by solution size is **W[1]-hard**: no FPT algorithm is expected unless the parameterised classes FPT and W[1] coincide, and general algorithms still have an input-size exponent growing with the clique size, including speedups using fast matrix multiplication. The **Exponential Time Hypothesis** (ETH; Impagliazzo and Paturi, 2001) conjectures a positive exponential rate for 3-SAT in its number of variables, ruling out subexponential-time algorithms. Under ETH, Clique has no algorithm with a computable parameter-only factor and an input-size exponent growing sublinearly in the requested clique size.
 
 ETH is a conjecture, stronger than P differs from NP.
 

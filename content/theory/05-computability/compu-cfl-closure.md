@@ -19,7 +19,7 @@ sourceLesson: compu-pda-pumping
 
 "Closed under" an operation means that applying it to CFLs always gives another CFL.
 
-```formula
+```formula essential
 L_1 = { a^n b^n c^m : n, m ≥ 0 }
 L_2 = { a^m b^n c^n : n, m ≥ 0 }
 L_1 ∩ L_2 = { a^n b^n c^n : n ≥ 0 }

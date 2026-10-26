@@ -63,22 +63,9 @@ for w in ["abc", "aabbcc", "aabbc",
 # aaabbbccc acc 46
 ```
 
-Each pass walks across the string and back, and there is one pass per a:
+Let n be the shared block length. There is one pass per a, and each pass travels a distance proportional to the block length. The tight running-time bound is therefore Θ(n²): both the number of passes and the cost per pass grow linearly. The sample step counts check the simulator's behaviour; finite measurements alone cannot prove a growth bound.
 
-```formula
-T(n) ≈ n(cn)
-T(n) = O(n^2)
-T(1) = 8    T(2) = 23    T(3) = 46
-where
-T(n): the number of steps the machine takes on the input a^n b^n c^n
-n: the number of a's (the input has 3 × n symbols)
-c: a fixed constant: each pass walks a distance proportional to n, there and back, so the cost of one pass is about c × n steps
-≈: is approximately
-O(…): big-O: grows no faster than the expression inside, up to a constant factor, for large n
-In words: n passes of about n steps each make the running time grow with the square of n.
-```
-
-The measured counts are consistent with the scan analysis: increasing the block length from one to two adds 15 steps, and from two to three adds 23. Three measurements alone cannot establish an asymptotic bound; the pass-by-pass argument supplies that bound. Doubling n roughly quadruples the time for large n. A two-tape TM could do it in O(n): copy the a's to tape 2, then match them against the b's and c's.
+A two-tape TM could do it in O(n): copy the a's to tape 2, match them against the b's while moving back along the copy, then match the c's while moving forwards. Check block order and that each comparison exhausts the copy exactly. More convenient memory access changes speed, even though one tape already suffices to decide the language.
 
 ## Key takeaways
 

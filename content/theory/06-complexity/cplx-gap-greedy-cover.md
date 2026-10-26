@@ -9,9 +9,9 @@ sourceLesson: cplx-coping
 
 Approximation guarantees compare a feasible solution with the optimum on every permitted input. A hardness gap instead separates two kinds of input so widely that a good approximation would decide an NP-hard decision problem.
 
-The general TSP trick reduces Hamiltonian cycle (is there a closed tour using only the graph's edges?) to TSP. Give each edge of an n-vertex graph weight 1 and each missing edge a huge weight w:
+Fix any proposed approximation factor at least one. The general TSP trick reduces Hamiltonian cycle (is there a closed tour using only the graph's edges?) to TSP. Give each edge of an n-vertex graph weight 1 and each missing edge a huge weight w:
 
-```formula
+```formula essential
 w = αn + 1
 OPT_yes = n
 c_no ≥ (n − 1) + w
@@ -27,18 +27,17 @@ In words: with a Hamiltonian cycle the best tour costs n, so an α-approximation
 
 This works only because non-metric weights can break the triangle inequality, which is why metric TSP escapes it.
 
-Greedy set cover's guarantee is the harmonic number:
+For unweighted Set Cover, repeatedly choose the set covering most uncovered elements. Assume the available sets cover the whole universe. Its quality bound is a harmonic number, which grows logarithmically with the number of elements. The exact reference bound is:
 
-```formula
+```formula reference
 H(n) = 1 + 1/2 + 1/3 + … + 1/n
 H(n) ≤ ln(n) + 1
-H(100) ≈ 5.19 ≤ ln(100) + 1 ≈ 5.61
 where
 H(n): the nth harmonic number: the sum of 1/1, 1/2, … up to 1/n
 n: the number of elements to cover
 ln(n): the natural logarithm of n (log to base e ≈ 2.718)
 ≈: approximately equal to
-In words: greedy uses at most about ln n + 1 times as many sets as the best cover; for 100 elements, at most about 5.2 times. Beating (1 − ε) × ln n for any fixed ε > 0 is NP-hard.
+In words: the greedy cover uses at most a harmonic-number factor more sets than the optimum; this factor grows logarithmically with the universe size. Improving the leading logarithmic factor by any fixed positive fraction is NP-hard.
 ```
 
 ## Key takeaways

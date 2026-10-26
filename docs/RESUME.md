@@ -7,11 +7,12 @@ library finished from a renderer change or a partial module audit.
 
 - Task checkout: `/tmp/cs-study-concept-first-20261026`. The user's primary checkout contains unrelated
   drafts and must remain untouched. Working queue: `/tmp/concept-first-queue.json`.
-- Nineteen modules have current independent concept-first reviews (399 lessons, 904 questions): all
+- Twenty-two modules have independent concept-first reviews (510 lessons, 1,121 questions): all
   three DSP modules, network foundations, system-design fundamentals, sound sampling, all four Embedded
-  modules, all three React modules, DSA complexity, digital logic, discrete structures, logic/proofs,
-  probability and data representation. The other 67 modules still need their semantic review;
-  automata, computability and theoretical complexity are in the author/reviewer pipeline.
+  modules, all three React modules, DSA complexity, digital logic, data representation and all six
+  theory modules. The other 64 modules still need their semantic review; synthesis DSP, electronics
+  and embedded audio are in the author/reviewer pipeline. A small sound-sampling glossary followup
+  for harmonic/overtone meanings is independently pending; its unstamped draft is excluded from releases.
   See `docs/concept-first-report.md`.
 - Rules in `CLAUDE.md`, `CONTENT_SPEC.md`, `AGENTS.md` and the content process apply to future work.
   Mark essential relationships `formula essential`, useful optional maths `formula reference`, and remove
@@ -60,6 +61,17 @@ library finished from a renderer change or a partial module audit.
   the whole-library request. Confirm public asset bytes against the committed release and check live
   navigation/offline behaviour before calling a checkpoint live. Deployment evidence is kept in the
   versioned `/tmp/concept-first-qa-<version>/` folder; do not infer publication from a local build.
+- Confirmed live: commit `1895d9fc34a97e4245a75c9ce9e95f14b92c47cf`, version `905cdda87539`.
+  All 115 public assets/reports match the committed bytes. Live DSP navigation, maths controls,
+  prior-progress preservation and offline reading pass at 390 and 1440 px. This is the nineteen-module
+  checkpoint; the remaining 67 modules are still in progress.
+- The next twenty-two-module candidate is version `ba1f363ac25a`, snapshot `/tmp/concept-first-stage-22`.
+  The theory class/completeness/oracle dependencies pass all 17 explicit production lookup checks;
+  441 changed glossary name/alias probes pass, including 14 narrowly accepted exact-definition results.
+  The independent definitions are in `docs/concept-first-theory-dictionary-review.json`. Current build,
+  87 tests, original migration and analogy-format checks pass. Full-library rendering, DSP controls,
+  saved-quiz updates and offline reading pass at both widths. Final staged-byte checks must pass before
+  publishing; do not confuse this candidate with the confirmed live release above.
 
 The sections below describe earlier completed work and its historical environment. They do not replace
 the current task or the current sandbox/approval instructions.

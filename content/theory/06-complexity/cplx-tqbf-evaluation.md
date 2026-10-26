@@ -11,7 +11,7 @@ sourceLesson: cplx-space
 
 A **quantified Boolean formula** puts quantifiers in front of a formula:
 
-```formula
+```formula essential
 ∀x ∃y ∀z ((x ∨ y) ∧ (¬y ∨ z))
 where
 x, y, z: Boolean variables, each true or false
@@ -25,7 +25,7 @@ In words: "for every x there is a y such that, for every z, (x or y) and (not y 
 
 **TQBF** asks whether a fully quantified formula is true. It is **PSPACE-complete** (Stockmeyer and Meyer, 1973). SAT is the special case where every quantifier is ∃.
 
-The obvious recursive evaluator runs in polynomial space and exponential time:
+A recursive evaluator uses polynomial space and has an exponential-time upper bound. Existential choices need one successful branch; universal choices need every branch to succeed:
 
 ```python
 def tqbf(quants, phi, a=()):
@@ -53,10 +53,9 @@ print(tqbf('AEA', g))  # False
 
 The recursion depth is the number of variables. A careful implementation keeps one shared assignment array and a constant amount of data per frame:
 
-```formula
+```formula reference
 S = O(n + |φ|)
 T = O(2^n × |φ|)
-T ≈ 2^30 × |φ| ≈ 10^9 × |φ|   for n = 30
 where
 S: the working space: a shared n-bit assignment and quantifier stack, plus linear-in-formula workspace for evaluating φ
 T: the running time, in steps
@@ -64,7 +63,7 @@ n: the number of variables (and so the recursion depth)
 φ: phi, the quantifier-free part of the formula; |φ| is its length, the cost of evaluating it once
 O(...): Big O: at most a constant times this
 ≈: approximately equal to
-In words: space linear in the assignment plus formula length, but exponential time, because the two recursive invocations run one after the other and reuse the same space. With 30 variables that is about a billion evaluations of φ, held in only 30 frames.
+In words: a shared-assignment evaluator stores only the current assignment, stack and formula. It may explore exponentially many assignments in sequence, so polynomial space does not imply polynomial time.
 ```
 
 (This Python version copies the tuple at each level, which costs space quadratic in n: still polynomial.)

@@ -13,7 +13,7 @@ Continue with finite simple undirected graphs. Exact reductions connect three di
 
 A **vertex cover** is a set C of vertices touching every edge: every edge has at least one end in C. The key observation links it to independent sets:
 
-```formula
+```formula essential
 S ∈ I(G)  iff  (V ∖ S) ∈ C(G)
 f(G, k) = (G, n − k)
 where
@@ -31,23 +31,9 @@ f(G, k): the Vertex Cover instance it outputs: the same graph, with target size 
 In words: a set is independent exactly when the vertices left over touch every edge, so asking for an independent set of size k is the same as asking for a vertex cover of size n − k.
 ```
 
-Why the first line holds: if no edge has both ends in S, every edge has at least one end outside S, and vice versa. So the reduction doesn't even change the graph; it only changes the number. For example, a 10-vertex graph with an independent set of size 4 has a vertex cover of size 10 − 4 = 6.
+Why the first line holds: if no edge has both ends in S, every edge has at least one end outside S, and vice versa. So the reduction doesn't even change the graph; it only changes the number. Increasing the independent set removes vertices from its complementary cover. A maximum independent set therefore leaves a minimum cover.
 
-A **clique** is a set of vertices all joined to each other. S is independent in G exactly when S is a clique in the **complement** graph Ḡ (same vertices, edges exactly where G has none):
-
-```formula
-f(G, k) = (Ḡ, k)
-t_build = O(n^2)
-where
-G: the input graph
-Ḡ: "G-bar", the complement graph: the same vertices as G, with an edge between two vertices exactly when G has no edge there
-k: the target size, unchanged
-f: the reduction from Independent Set to Clique
-n: the number of vertices in G
-t_build: the number of steps needed to build Ḡ
-O(n^2): Big O: grows at most as fast as a constant times n squared, because Ḡ is built by checking each of the about n²/2 vertex pairs once
-In words: to ask for an independent set of size k, ask for a clique of size k in the complement graph. Building the complement means visiting every pair of vertices, about n squared over 2 steps.
-```
+A **clique** is a set of vertices all joined to each other. S is independent in G exactly when S is a clique in the **complement** graph Ḡ (same vertices, edges exactly where G has none). Retain the target size and build the complement by examining each pair of distinct vertices: polynomial work.
 
 ```
  G: 1-2, 2-3        complement: 1-3

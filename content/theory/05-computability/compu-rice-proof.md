@@ -13,7 +13,7 @@ Language emptiness and fixed-language equality exemplify a broader theorem due t
 
 A **semantic property** of TMs is a set P of TM descriptions that depends only on the language: machines accepting the same language must either both have the property or both lack it. P is a **non-trivial property** if some TM is in P and some TM is not.
 
-```formula
+```formula reference
 L(M) = L(N)  ⇒  (⟨M⟩ ∈ P ⇔ ⟨N⟩ ∈ P)
 ⟨T⟩ ∈ P   and   ⟨T′⟩ ∉ P
 where
@@ -50,22 +50,6 @@ M′(x):
 4. If M accepts w, the constructed machine behaves like T on every input. It has the same language as T and therefore has the property.
 5. If M does not accept w, the constructed machine accepts nothing. Its empty language means it lacks the property.
 6. Thus the original machine accepts its given input exactly when the constructed machine has the property. This total computable mapping reduces the undecidable acceptance problem to the property, proving it undecidable. ∎
-
-```formula
-w ∈ L(M)  ⇒  L(M′) = L(T)  ⇒  ⟨M′⟩ ∈ P
-w ∉ L(M)  ⇒  L(M′) = ∅  ⇒  ⟨M′⟩ ∉ P
-where
-M: the given machine
-w: the given input
-M′: the new machine built in step 3
-T: a machine whose encoding is in P
-L(M): the language of M: the strings it accepts
-∅: the empty set
-P: the semantic, non-trivial property, assumed not to contain machines with empty language
-∈, ∉: is a member of, is not a member of
-⇒: implies
-In words: M′ copies T when M accepts w and accepts nothing otherwise, so asking whether M′ has the property answers whether M accepts w.
-```
 
 ```python
 def rice_map(M, w, T):

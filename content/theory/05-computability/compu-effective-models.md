@@ -7,7 +7,7 @@ summary: The Church–Turing thesis relates an informal effective procedure to a
 sourceLesson: compu-church-turing
 ---
 
-In 1936, two people independently answered the question "what does it mean for a function to be computable?" Alonzo Church used the **λ-calculus**, a system of anonymous functions. Alan Turing used his machines. Within a year, Turing proved the two definitions pick out exactly the same functions. Gödel and Herbrand's general recursive functions and Post's systems turned out to be equivalent too (Kleene proved the λ-calculus and recursive functions equal).
+In 1936, two people independently answered the question "what does it mean for a function to be computable?" Alonzo Church used the **λ-calculus**, a system of anonymous functions. Alan Turing used his machines. Within a year, Turing proved the two definitions pick out exactly the same functions. Gödel and Herbrand's general recursive functions and Post's systems turned out to be equivalent too (Kleene proved the λ-calculus and general recursive functions equal).
 
 Four different-looking definitions, one answer. That convergence is the foundation of computer science.
 
@@ -28,7 +28,7 @@ The thesis is what makes the theorems of this module matter. "No TM decides the 
 
 Church's model has only three things: variables, function definition (λx. body, "the function that takes x and returns body") and function application. No numbers, no loops. Numbers can be encoded as functions: the **Church numeral** for n means "apply f n times".
 
-```formula
+```formula reference
 c_0 = λf. λx. x
 c_2 = λf. λx. f(f(x))
 succ = λn. λf. λx. f(n(f)(x))
@@ -46,7 +46,7 @@ k: the input to g
 In words: a number is represented by the act of doing something that many times; feeding it "add 1" and 0 turns it back into an ordinary number.
 ```
 
-The Python below writes exactly these definitions with `lambda`, and `to_int` is the decoding step in the last line.
+The Python below makes that behavioural encoding concrete. `zero` leaves its starting value alone; `succ` applies the supplied function once more. Addition performs one numeral's repetitions and then the other's. Multiplication repeats a repetition. `to_int` supplies “add one” and starts at zero to decode the result.
 
 ```python
 zero = lambda f: lambda x: x

@@ -2,7 +2,7 @@
 id: compu-tm-variants
 title: Equivalent machine models and finite runs
 level: intermediate
-minutes: 5
+minutes: 3
 summary: Multiple tapes and nondeterminism preserve recognisability; simulations may change running time.
 sourceLesson: compu-turing-machines
 ---
@@ -19,18 +19,18 @@ The definition seems arbitrary. Why one tape? Why not stay put? The remarkable f
 | Nondeterministic | Fair search; exponential upper bound in a branch-time bound |
 | Random-access machine with suitable bit-cost or bounded-word operations | polynomial slowdown |
 
-The multi-tape simulation stores all k tapes on one, separated by markers, with a dot over each simulated head. Each simulated step sweeps the used tape once, which is O(t) cells after t steps:
+The multi-tape simulation stores all the tapes on one, separated by markers, with a marker for each simulated head. To simulate a step, it sweeps the representation to collect the scanned symbols and update them. The representation grows as the simulated run reaches more cells, so the sweep gets longer. For a fixed number of tapes, this gives a quadratic upper bound in simulated steps, provided the run is at least as long as the input. The reference formula records that bound:
 
-```formula
+```formula reference
 T_1(t) = t × O(t) = O(t^2)
 where
 T_1(t): the number of single-tape steps needed to simulate the multi-tape machine
 t: the number of steps the multi-tape (k-tape) machine takes, at least the input length
 O(…): big-O: grows no faster than the expression inside, up to a constant factor
-In words: t simulated steps, each costing one sweep over at most about t cells, give a quadratic slowdown.
+In words: each simulated step sweeps a representation whose length grows with the simulated runtime, giving a quadratic upper bound on the total simulation work.
 ```
 
-For example, let n be the input length. A three-tape machine taking a quadratic number of steps has an O(n⁴) single-tape simulation under this theorem. Slower, but still polynomial, which is why the variants agree on which problems are solvable at all.
+The important distinction is between computability and cost: simulation preserves what can be solved, but need not preserve runtime. This polynomial overhead also means that single-tape and fixed-multitape machines agree on which problems have polynomial-time algorithms. It is an upper bound for a general simulation, not a lower bound for every particular problem.
 
 Nondeterministic TMs are simulated by trying all branches **breadth-first**. Depth-first would be wrong: it could follow an infinite branch forever while an accepting branch sits elsewhere. This matters for power, not just speed. This simulation establishes an upper bound, not a proof that exponential slowdown is necessary. Whether every language accepted in nondeterministic polynomial time has a deterministic polynomial-time decider is P versus NP.
 
@@ -41,22 +41,10 @@ Turing-machine notation is mainly a mathematical and educational model rather th
 ## Pitfalls
 
 - **Reject is not loop.** A recogniser may never answer "no". If you want a decider, you must prove it halts on every input.
-- **The tape is infinite, but each halting run uses finitely much.** The bounds are in the formula below.
+- **The tape is infinite, but each halting run uses finitely much.** The head starts on one cell and reaches at most one new cell per step. Each step also writes at most one cell, in addition to the initially written input.
 - **Implicit reject** (no matching rule) is a common convention, as in the simulator above. Be clear which convention a textbook uses.
 
-```formula
-C_visit ≤ t + 1
-C_used ≤ |w| + t + 1
-where
-C_visit: the number of distinct cells the head visits
-C_used: the number of cells involved at all, counting cells that held input
-t: the number of steps (single-cell moves) in the run
-|w|: the length of the input w, in symbols
-≤: is at most
-In words: the head starts on one cell and reaches at most one new cell per step, so a finite run touches finitely many cells.
-```
-
-For a run of ten steps on a 4-symbol input, the head visits at most 11 cells, and at most 15 cells are involved.
+A deterministic machine that repeats its complete configuration repeats its future behaviour too. A halting run therefore cannot revisit the same configuration, although it may revisit individual states or tape cells many times.
 
 ## Key takeaways
 

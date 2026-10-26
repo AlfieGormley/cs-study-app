@@ -13,7 +13,7 @@ Regular languages are closed under intersection, union, complement and more: com
 
 Let L be the strings over {a, b} with equally many a's and b's. The same p a's then p b's witness proves non-regularity directly. Closure gives another proof:
 
-```formula
+```formula essential
 L ∩ a*b* = { a^n b^n : n ≥ 0 }
 where
 a, b: the two input symbols
@@ -50,22 +50,9 @@ Contradiction. Balanced brackets fall the same way: intersect with the regular l
 
 The pumpable but non-regular example:
 
-```formula
-L = { a^i b^j c^k : i = 0 or j = k }
-L ∩ a · b* · c* = { a b^n c^n : n ≥ 0 }
-where
-L: the language
-a, b, c: the three symbols
-i, j, k: the numbers of a's, b's and c's
-a^i: i copies of a in a row
-∩: intersection: the strings in both languages
-a · b* · c*: the regular language "one a, then any number of b's, then any number of c's"
-*: the Kleene star: zero or more copies
-·: concatenation
-n: any whole number 0 or more
-≥: is greater than or equal to
-In words: L passes the pumping test with pumping length 1 (pump the first symbol), yet intersecting it with a simple regular language leaves "one a, then equal numbers of b's and c's", which is not regular. So L is not regular either.
-```
+Consider ordered a-runs, b-runs and c-runs with this rule: either there are no a characters, or the b and c counts match. Every non-empty member can pump its first symbol: changing a positive a-run preserves matching b and c counts, while deleting its last a removes the comparison requirement. If there are no a characters, the rule allows any b and c counts. Thus pumping length one works.
+
+Nevertheless, intersect with `ab*c*`, which requires exactly one a. The result must have equal b and c counts with no bound. That is non-regular: in a pumping proof, deleting a pumped piece containing the initial a removes the required a; otherwise repeating a piece of the initial b-run unbalances the counts. Passing the pumping test does not prove regularity.
 
 ## Key takeaways
 - Intersecting with a regular language can isolate a known non-regular matching-count language.

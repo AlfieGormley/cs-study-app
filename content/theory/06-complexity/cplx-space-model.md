@@ -20,7 +20,7 @@ We use a Turing machine with a **read-only input tape** and a separate **work ta
 
 The key classes are defined by plugging particular space bounds into these:
 
-```formula
+```formula reference
 L = SPACE(log n)
 NL = NSPACE(log n)
 PSPACE = SPACE(n^k)   for some k
@@ -30,7 +30,7 @@ SPACE(s(n)): the problems a deterministic machine (no guessing) decides using at
 NSPACE(s(n)): the same, for a nondeterministic machine (one that may guess at each step)
 s(n): the space bound: a function of the input size n, counted in work-tape cells
 n: the input size, in bits
-log: the logarithm, base 2: log n is the number of bits needed to write the number n
+log: the logarithm, base 2; encoding a position among n positions takes about this many bits, with integer rounding
 k: a fixed constant exponent, such as 1, 2 or 3
 L: logarithmic space, deterministic
 NL: nondeterministic logarithmic space
@@ -46,19 +46,7 @@ In words: L and NL allow only logarithmic work memory (without and with guessing
 | PSPACE | polynomial | TQBF, generalised games |
 | EXPSPACE | exponential | Regex equivalence with squaring |
 
-Why logarithmic? It is just enough to hold a constant number of pointers into the input, or counters up to the input size. An L algorithm is roughly "a program with a fixed number of integer variables, each no bigger than the input length":
-
-```formula
-b = ⌈log_2(n)⌉
-b = log_2(2^33) = 33 bits   for n = 2^33
-where
-b: the number of bits one pointer or counter needs, in bits
-n: the input size, in bits; 2^33 bits is about 8.6 × 10^9 bits, roughly 1 GB
-log_2: logarithm base 2: the power you raise 2 to in order to get n
-⌈ ⌉: ceiling, rounding up to a whole number; n is a positive integer and pointers name zero-indexed input positions
-bits: binary digits, each 0 or 1
-In words: a pointer to any position in a 1 GB input fits in 33 bits, so a log-space algorithm on that input might use only a few hundred bits of work memory.
-```
+Why logarithmic? It is just enough to hold a constant number of pointers into the input, or counters up to the input size. Think of a log-space algorithm as keeping a fixed number of input positions and small counters while rereading the input as needed. Doubling the input length adds only about one bit per position counter.
 
 ## Key takeaways
 

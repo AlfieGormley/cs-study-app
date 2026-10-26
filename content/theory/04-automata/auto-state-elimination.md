@@ -18,7 +18,7 @@ To show every DFA has a regex, use **state elimination**:
 
 The rule for step 3, when removing state q:
 
-```formula
+```formula essential
 R_{pr}′ = R_{pq} · (R_{qq})* · R_{qr}
           | R_{pr}
 where

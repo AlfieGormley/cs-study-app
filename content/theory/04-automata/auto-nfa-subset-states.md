@@ -9,9 +9,13 @@ summary: Each DFA state represents a set of possible NFA states.
 
 ## The subset construction
 
-The earlier NFA simulator already runs a DFA in disguise. Its "state" at each moment is a set of NFA states, and there are only finitely many such sets. So build a DFA whose states are those sets. The rules, in symbols:
+The earlier NFA simulator already runs a DFA in disguise. Its "state" at each moment is a set of NFA states, and there are only finitely many such sets. Store each reached set as one named DFA state. Reaching that same set later means the same future behaviour, so its computed transitions can be reused.
 
-```formula
+Start with the epsilon closure of the NFA start. On each symbol, move every member, merge the destinations, then take epsilon closure again. A set accepts if any member accepts. If every path dies, the empty set is a rejecting state that stays empty on further input. These rules determine exactly one next set per symbol.
+
+The reference notation records those rules:
+
+```formula reference
 S₀ = E({q₀})
 T = E( ⋃_{q ∈ S} δ(q, c) )
 S ∈ F_D   if   S ∩ F ≠ ∅
@@ -37,7 +41,7 @@ Q_D: the DFA's set of states
 ≤: is less than or equal to
 m: the number of NFA states; an integer count, non-negative unless a positive lower bound is stated
 2^m: 2 to the power m: how many subsets a set of m states has
-In words: start from the closure of the NFA's start state; from any set, on any symbol, move every member and take the closure of the result; a set accepts if it contains at least one NFA accepting state. Since each DFA state is a subset of the m NFA states, there can be at most 2^m of them.
+In words: start from the closure of the NFA's start state; on each symbol, move every member and take closure again. A set accepts if it contains any accepting state. Each original state may be present or absent, so the number of possible sets grows exponentially with the NFA's state count.
 ```
 
 As a procedure:

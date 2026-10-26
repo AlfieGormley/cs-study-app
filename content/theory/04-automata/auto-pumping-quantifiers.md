@@ -14,7 +14,7 @@ summary: A non-regularity proof must handle every pumping length and every legal
 
 In symbols:
 
-```formula
+```formula essential
 L ∈ REG   ⟹   ∃ p ≥ 1 such that
 ∀ s ∈ L with |s| ≥ p,
 ∃ x, y, z with s = x · y · z and:
@@ -48,28 +48,7 @@ For example, with the 3-state divisible-by-3 DFA a pumping length of 3 works, an
 
 The lemma is a statement "if regular, then pumpable". To show L is **not** regular, show that L is not pumpable: then it cannot be regular, a **proof by contradiction**. The quantifiers ("for every", "there exists") matter, so it helps to see the proof as a game against an adversary who claims L is regular:
 
-```formula
-∀ p ≥ 1   ∃ s ∈ L with |s| ≥ p :
-∀ x, y, z with s = x · y · z,
-  |y| ≥ 1 and |x · y| ≤ p :
-∃ i ≥ 0 with x · y^i · z ∉ L
-where
-p: the pumping length, chosen by the adversary; a positive integer measured in input symbols
-s: the string you choose
-L: the language you want to prove non-regular
-x, y, z: the split, chosen by the adversary
-·: concatenation
-| |: the length of a string
-∈: is an element of
-∉: is not an element of
-≥: is greater than or equal to
-≤: is less than or equal to
-y^i: i copies of y in a row
-i: the number of copies, chosen by you; an integer count, non-negative unless a positive lower bound is stated
-∀: for all: the adversary's moves, which you must handle whatever they are
-∃: there exists: your moves, where you only need one that works
-In words: whatever p the adversary names, you name a long string in L, and whatever legal split they then make, you find a number of copies of y that throws the string out of L.
-```
+The order of choices matters: whatever pumping length is proposed, choose a sufficiently long member of the language. Then, for every permitted split of that string, show that some number of repetitions leaves the language. The repetition count may depend on the split.
 
 As a game:
 

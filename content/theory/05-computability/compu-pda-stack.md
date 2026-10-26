@@ -26,9 +26,11 @@ The stack gives unbounded memory, but with a strict restriction: you may only lo
 
 ## The formal definition
 
-One PDA convention is a 6-tuple (a list of six parts in a fixed order), starting with an empty stack. The examples abbreviate an initial epsilon move that pushes the bottom marker $, and the simulator starts after that move:
+A PDA has finite states, an input alphabet, a stack alphabet, transition rules, a start state and accepting states. A move changes state and may read one input symbol, pop one stack symbol and push a string. An epsilon move consumes no input; an epsilon pop or push means doing nothing to that side of the stack operation.
 
-```formula
+One convention collects these parts in a 6-tuple, starting with an empty stack. The examples abbreviate an initial epsilon move that pushes the bottom marker $, and the simulator starts after that move. Here is the notation as a reference:
+
+```formula reference
 P = (Q, Σ, Γ, δ, q_0, F)
 q_0 ∈ Q     F ⊆ Q
 δ(q, a, X) = { (r, Y), … }
@@ -53,7 +55,14 @@ Y: the string pushed in its place, or ε to push nothing
 In words: a PDA is a finite set of states plus a stack; each move reads an input character (or nothing), pops a stack symbol (or nothing), pushes a string and changes state.
 ```
 
-So δ(q, a, X) means "in state q, reading input a with X on top of the stack, the machine may move to r and replace X with Y". The diagram labels use that same read/pop/push convention. For example, the a-labelled loop below reads an a, pops nothing and pushes an A.
+The diagram labels use a read/pop/push convention: before the arrow, give the input symbol and the popped stack symbol; after it, give the pushed string. For example, the a-labelled loop below reads an a, pops nothing and pushes an A.
+
+> [!analogy] Real-world analogy: Stacked trays
+> You place a tray on top of a pile and can remove only the top tray.
+>
+> **How it maps:** A PDA's most recently pushed symbol is the first available to pop. This matches closing the most recently opened bracket first.
+>
+> **Where it stops:** The mathematical stack can grow without a fixed bound, and its symbols encode information. The physical pile does not prove which languages a PDA can recognise.
 
 The standard PDA is **nondeterministic**: δ returns a *set* of moves, and the PDA accepts if *any* sequence of choices ends in an accepting state with all input read.
 

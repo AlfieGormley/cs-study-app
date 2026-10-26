@@ -65,21 +65,11 @@ Add a new start and accept. From the new start you can skip R entirely or enter 
 
 ### How big is the result?
 
-Each base case (an alphabet symbol, ε or ∅), `|` and `*` adds exactly two states, and concatenation adds none (just an ε-arrow). Counting them gives the size:
+The useful size guarantee is that every added part of the expression contributes only bounded extra structure.
 
-```formula
-N = 2k
-N ≤ 2|R|
-where
-N: the number of states in the Thompson NFA (this lesson's version)
-k: the number of base-case occurrences (alphabet symbols, ε or ∅) plus the number of | and * operators in the regex; a positive integer
-R: the regex
-|R|: the length of the regex: how many symbols and operators it contains, counting concatenations as well
-≤: is less than or equal to
-In words: every base case, union and star costs exactly two states, so the NFA has twice as many states as the regex has base cases and union and star operators, and never more than twice the regex's length.
-```
+Each symbol, empty-string or empty-language base case creates two states. Union and star each add two more, while concatenation adds an arrow. Each piece therefore adds only a bounded amount of machine structure: the construction grows linearly with the expanded expression.
 
-For `(a|b)*abb` there are five symbols, one `|` and one `*`, so k is 7 and the NFA has 2 × 7 = 14 states. Each state also has at most two outgoing arrows. The NFA is **linear in the size of the regex**, which is the property everything else relies on.
+For `(a|b)*abb`, this version builds 14 states. Each state has at most two outgoing arrows. Counted repetitions must be expanded before applying the linear-size claim: a short written count can describe many copies.
 
 > [!note] Textbook variant
 > Many textbooks, including the Dragon Book (Aho, Lam, Sethi and Ullman), merge R's accept state with S's start state during concatenation instead of adding an ε-arrow. That saves one state per concatenation. Both versions accept the same language.

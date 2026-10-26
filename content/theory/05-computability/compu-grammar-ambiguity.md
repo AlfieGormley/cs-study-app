@@ -2,7 +2,7 @@
 id: compu-grammar-ambiguity
 title: Ambiguity and disambiguation
 level: basic
-minutes: 5
+minutes: 3
 summary: An ambiguous grammar gives some string more than one parse tree.
 sourceLesson: compu-cfg
 ---
@@ -11,7 +11,7 @@ sourceLesson: compu-cfg
 
 An **ambiguous grammar** is one in which some string has two or more different parse trees. The tempting short grammar for arithmetic is ambiguous:
 
-```formula
+```formula essential
 E → E "+" E | E "*" E | "id"
 where
 E: the start variable for an expression
@@ -24,61 +24,18 @@ In words: Both operators combine arbitrary expressions at the same grammar level
 
 `id + id * id` now has two trees: one groups `(id + id) * id`, the other `id + (id * id)`. The grammar alone leaves grouping unspecified; a parser needs an additional disambiguation policy or an unambiguous grammar.
 
-The problem gets worse with length. Each parse tree picks one operator as the root; the operands to its left and to its right are then grouped independently. That gives a recurrence (a formula defined in terms of smaller cases of itself):
+Longer expressions can have many groupings. A parser that merely reports “accepted” has not settled which grouping the programmer intended. Test the tree as well as the accepted string. The layered expression/term/factor grammar in the previous lesson fixes this arithmetic ambiguity by giving multiplication its own level and making repeated addition group to the left.
 
-```formula
-T(1) = 1
-T(n) = Σ T(k) × T(n − k)
-       for k = 1, …, n − 1 and n ≥ 2
-T(n) = C(n − 1)
-C(m) = (2m)! / ((m + 1)! × m!)
-where
-T(n): the number of parse trees for an expression with n operands (the ids)
-n: the number of operands, 1 or more
-k: how many operands sit left of the root operator, from 1 to n − 1
-Σ: capital sigma: add up the term after it for every listed value of k
-C(m): the m-th Catalan number, a famous counting sequence 1, 1, 2, 5, 14, 42, …
-m: the position in the Catalan sequence, starting at 0
-!: factorial: the product of all whole numbers from 1 up to that number, so 4! = 24 (and 0! = 1)
-≥: is at least
-In words: count the trees by trying every operator as the root and multiplying the ways to group each side; the totals are the Catalan numbers.
-```
-
-For four operands, the recurrence and closed form agree:
-
-```formula
-T(4) = T(1)T(3) + T(2)T(2) + T(3)T(1)
-T(4) = 2 + 1 + 2 = 5
-C(3) = 6! / (4! × 3!) = 720 / 144 = 5
-where
-T(n): the number of parse trees for an expression with n operands
-C(m): the Catalan number at nonnegative index m
-n: the positive number of operands
-m: the nonnegative Catalan index
-!: factorial; the product of positive integers up to the argument, with zero factorial equal to one
-In words: Trying each root split produces five trees; the third-index Catalan number is also five.
-```
-
-For one through seven operands the sequence is 1, 1, 2, 5, 14, 42, 132. Ratios between neighbouring terms approach four; 132 divided by 42 is already about 3.1. This short recursive count confirms it:
-
-```python
-from functools import lru_cache
-
-@lru_cache(None)
-def trees(n):          # n operands
-    if n == 1:
-        return 1
-    # split into left k and right n-k
-    return sum(trees(k) * trees(n - k)
-               for k in range(1, n))
-
-print([trees(n) for n in range(1, 8)])
-# [1, 1, 2, 5, 14, 42, 132]
-```
+> [!analogy] Real-world analogy: Attaching a phrase
+> “I saw the person with binoculars” can describe your viewing equipment or something the other person carried.
+>
+> **How it maps:** The same sequence of words permits different attachments, just as one token string can have different parse trees.
+>
+> **Where it stops:** A programming grammar specifies exact permitted trees. Human interpretation also uses context and knowledge beyond grammar.
 
 The famous real-world case is the **dangling else**:
 
-```formula
+```formula essential
 S → "if" C "then" S
   | "if" C "then" S "else" S
   | "other"

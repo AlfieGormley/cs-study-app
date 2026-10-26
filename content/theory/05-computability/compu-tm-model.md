@@ -25,9 +25,9 @@ Alan Turing described it in 1936 by imagining a human clerk working with pencil 
 - A **head** that reads one cell, writes a symbol there, and moves one cell left (L) or right (R).
 - A **finite control**: the current state.
 
-Formally, a TM is a 7-tuple (a list of seven parts in a fixed order):
+The finite transition table chooses a write, a head movement and a next state from the current state and scanned symbol. Input symbols are also tape symbols; the blank and extra markers belong only to the tape alphabet. Accept and reject are distinct halting states with no outgoing moves. The seven-part notation below records these ingredients as a reference:
 
-```formula
+```formula reference
 M = (Q, Σ, Γ, δ, q_0, q_accept, q_reject)
 Σ ⊆ Γ     _ ∈ Γ     _ ∉ Σ
 Q′ = Q − {q_accept, q_reject}
@@ -57,7 +57,7 @@ D: the direction the head then moves, L or R
 In words: a TM is a finite set of states plus a tape; in each working state, the symbol under the head decides what to write, which way to move and which state to enter next.
 ```
 
-Read the last transition line as: "in state q reading symbol a, write b, move in direction D and enter state r". In the binary increment machine below, the carry state on a one uses this move: in state C reading a 1, write 0, move left and stay in state C. (The Python dictionaries list the same three things in the order write, move, next state.)
+In the next unit's binary increment machine, the carry state on a one uses this move: write zero, move left and stay in the carry state. The Python dictionaries list the three actions in the order write, move, next state.
 
 A **TM configuration** is a snapshot: state, tape contents and head position. It is often written `1 0 q 1 1`, meaning the tape is `1011`, the machine is in state q, and the head is on the third symbol.
 
@@ -67,7 +67,7 @@ A **TM configuration** is a snapshot: state, tape contents and head position. It
 ## Recognisers and deciders
 
 - A TM M **recognises** language L if M accepts exactly the strings in L. On strings outside L it may reject *or loop*. Such languages are **Turing-recognisable** (also called recursively enumerable).
-- M **decides** L if it recognises L *and* halts on every input. Such languages are **decidable** (recursive).
+- M **decides** L if it recognises L *and* halts on every input. Such languages are **decidable** (also called recursive languages).
 
 Every decidable language is recognisable. Whether the reverse holds is the question addressed by the later undecidability lessons. (It does not.)
 

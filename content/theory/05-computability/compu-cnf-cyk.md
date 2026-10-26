@@ -17,7 +17,7 @@ A grammar is in **Chomsky normal form** if every rule is one of:
 
 Every CFG can be converted to Chomsky normal form mechanically: add a fresh start variable, remove ε-rules, remove unit rules that replace one variable with another, replace terminals in mixed/long right-hand sides with fresh variables, and break long right-hand sides into chains of pairs. For equal positive-length a and b blocks:
 
-```formula
+```formula essential
 S → A T | A B
 T → S B
 A → "a"
@@ -31,18 +31,20 @@ A, B, T: auxiliary grammar variables
 In words: Each binary production adds structure; each terminal production supplies one letter. There is no empty-string production here.
 ```
 
-Chomsky normal form matters because it makes parsing a clean dynamic programme. In Chomsky normal form, every derivation of a nonempty string has the same, predictable length:
+Chomsky normal form matters because every multi-character span can be split into two smaller spans. A parser can build answers from short spans to long ones instead of guessing arbitrary derivations.
 
-```formula
+There is also a useful structural invariant: each binary rule increases the number of variables by one, and each terminal rule finishes one character. Starting from one variable, a nonempty derivation therefore needs one fewer binary rules than characters, plus one terminal rule per character. The compact count is available as a reference:
+
+```formula reference
 D(n) = (n − 1) + n = 2n − 1   for n ≥ 1
 where
 D(n): the number of derivation steps (rule applications) needed for a string of length n in a Chomsky normal form grammar
 n: the length of the string, in characters
 ≥: is at least
-In words: you need n − 1 two-variable rules to grow one variable into n of them, then n one-terminal rules to turn each into a character.
+In words: a nonempty derivation needs one fewer binary rules than characters, followed by one terminal rule per character: twice the string length minus one steps altogether.
 ```
 
-For `aabb`, the input length is four. Apply the start rule with A and T, replace T by S and B, then replace S by A and B: three binary rules leave A, A, B, B. Four terminal rules finish the string. Twice four minus one gives seven steps. The variable skeleton is a full binary tree; terminal-production nodes still have one terminal child in the complete parse tree. The count only holds for strict Chomsky normal form; the ε-exception for the start variable is the one derivation of length 1 that produces no characters.
+The variable skeleton is a full binary tree; terminal-production nodes still have one terminal child in the complete parse tree. The count only holds for strict Chomsky normal form. The optional start-to-empty rule is a separate one-step derivation producing no characters. Normalising rule shape does not settle ambiguity: the same string may still have several trees.
 
 ## Key takeaways
 

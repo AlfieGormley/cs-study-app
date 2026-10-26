@@ -13,7 +13,7 @@ Most reductions start from **3-SAT**: CNF formulas where every clause has exactl
 
 First convert a general Boolean formula to equisatisfiable CNF with fresh gate variables (the Tseitin construction); distributing OR over AND can cause exponential blow-up. SAT in CNF then reduces to 3-SAT by splitting long clauses with fresh variables. A five-literal clause is replaced by three three-literal clauses:
 
-```formula
+```formula essential
 C_old = (l_1 ∨ l_2 ∨ l_3 ∨ l_4 ∨ l_5)
 C_new = (l_1 ∨ l_2 ∨ y_1)
   ∧ (¬y_1 ∨ l_3 ∨ y_2)
@@ -31,48 +31,15 @@ In words: C_new can be satisfied (by choosing y_1 and y_2) exactly when at least
 
 If some l_i is true, set the y's to "carry" the chain round it: y's before it true, y's after it false. If all l_i are false, y_1 must be true, which forces y_2 true, which falsifies the last clause.
 
-```formula
-N_clauses = k − 2
-N_new = k − 3
-N_clauses = 5 − 2 = 3   for k = 5
-N_new = 5 − 3 = 2   for k = 5
-where
-k: the number of literals in the original clause (at least 4)
-N_clauses: the number of three-literal clauses that replace it
-N_new: the number of fresh y variables added
-In words: a clause of k literals becomes k − 2 clauses with k − 3 new variables, so the formula grows only linearly.
-```
+Each extra original literal needs only a constant amount of extra formula, so splitting has linear growth. Short clauses are padded by repeating a literal, or with extra variables if repeats are forbidden.
 
-Short clauses are padded (by repeating a literal, or with extra variables if repeats aren't allowed).
-
-```python
-def split(clause, nxt):
-    # nxt: next unused variable number
-    # Long clauses pass truth along fresh
-    # links.
-    if len(clause) <= 3:
-        return [clause], nxt
-    y = nxt; nxt += 1
-    out = [[clause[0], clause[1], y]]
-    for lit in clause[2:-2]:
-        z = nxt; nxt += 1
-        out.append([-y, lit, z])
-        y = z
-    out.append([-y, clause[-2], clause[-1]])
-    return out, nxt
-
-print(split([1, 2, 3, 4, 5], 6))
-# ([[1, 2, 6], [-6, 3, 7],
-#   [-7, 4, 5]], 8)
-```
-
-A reproducible finite audit checks this splitting against exhaustive satisfiability, including all assignments of five original literals and 200 seeded random formulas. Such checks exercise the code; the preceding two-direction argument proves the construction generally.
+The fresh variables are local to this clause. Reusing them across unrelated clauses could introduce constraints that were never in the original formula. The new formula is equisatisfiable with the old one: assignments to original variables may need extending, rather than using the same assignment unchanged.
 
 ### The edge of tractability: 2-SAT
 
 With two literals per clause, the problem collapses into P. Each two-literal clause is the same as two implications:
 
-```formula
+```formula essential
 (a ∨ b)  ≡  (¬a → b) ∧ (¬b → a)
 where
 a, b: literals (a variable or its negation)

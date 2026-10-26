@@ -11,21 +11,20 @@ BQP contains decision problems solved with bounded error by uniform polynomial-s
 
 ### Shor and Grover
 
-- **Shor (1994)** factors integers and computes discrete logarithms in polynomial time on a quantum computer. The associated factoring decision problem is in BQP; Shor also recovers the factors. It is **not known** to be outside BPP; the leading general-purpose classical method (the general number field sieve) has a heuristic expected subexponential-time analysis. This breaks RSA and elliptic-curve cryptography once large fault-tolerant machines exist, which is why NIST standardised post-quantum schemes such as ML-KEM (FIPS 203) in 2024. Published resource estimates for RSA-2048 have fallen over time (Gidney's 2025 estimate is under a million noisy qubits running for under a week). This is a dated resource estimate under stated hardware assumptions, not a measurement of currently available machines.
+- **Shor (1994)** factors integers and computes discrete logarithms in polynomial time on a quantum computer. The associated factoring decision problem is in BQP; Shor also recovers the factors. It is **not known** to be outside BPP; the leading general-purpose classical method (the general number field sieve) has a heuristic expected subexponential-time analysis. This breaks RSA and elliptic-curve cryptography once large fault-tolerant machines exist, which is why NIST standardised post-quantum schemes such as ML-KEM (FIPS 203) in 2024. Algorithmic polynomial time does not establish that a sufficiently large fault-tolerant machine is available.
 - **Grover (1996)** searches unstructured items with about the square root of the number of queries a classical search needs (below). This is **proven optimal** for black-box search (Bennett, Bernstein, Brassard and Vazirani, 1997). For brute-force SAT it is a quadratic speed-up, still exponential.
 
-```formula
+```formula essential
 Q ≈ (π/4) × √N
-Q ≈ 0.785 × √(2^128) ≈ 1.4 × 10^19
 N = 2^n  gives  √N = 2^{n/2}
 where
 Q: the number of queries (evaluations of the black-box function) Grover's algorithm makes
-N: the number of possible items to search; 2^128 for a 128-bit key
+N: the number of possible items to search, with exactly one marked item for the approximate leading constant
 π: pi, about 3.14159, so π/4 ≈ 0.785
-√N: the square root of N; √(2^128) = 2^64 ≈ 1.8 × 10^19
+√N: the square root of the candidate count
 n: the number of bits (or Boolean variables) being searched over, so there are 2^n candidates
 ≈: approximately equal to
-In words: a classical black-box search needs about N tries; Grover needs about the square root of N. That turns 2^128 into about 2^64, and a SAT search over n variables from 2^n into about 2^{n/2}: much faster, but still exponential.
+In words: quantum black-box search uses a square-root number of queries compared with the candidate count. For all assignments to Boolean variables, the count is exponential; taking its square root reduces the exponent but leaves exponential growth.
 ```
 
 > [!warning] Quantum computers are not believed to solve NP-complete problems efficiently
@@ -48,7 +47,7 @@ In words: a classical black-box search needs about N tries; Grover needs about t
 | Factoring not in BPP | Believed, unproven |
 | NP inside BQP | Believed false |
 
-The Grover estimate assumes one marked item, ideal coherent oracle access and a sufficiently large search space. With multiple solutions the query count depends on how many are marked; with none, a search procedure needs an appropriate existence test. Cipher evaluations here mean reversible quantum oracle queries, not equal-cost classical CPU operations. Doubling a symmetric key length restores the generic query exponent in this model; physical costs, parallelism and nongeneric cryptanalysis need separate analysis. The dated factoring-resource estimate assumes a square grid with interactions only between adjacent hardware sites, a 0.1 percent gate error rate, one-microsecond surface-code cycles and a ten-microsecond control response; it describes a proposed fault-tolerant machine, not an experiment performed here.
+The Grover estimate assumes one marked item, ideal coherent oracle access and a sufficiently large search space. With multiple solutions the query count depends on how many are marked; with none, a search procedure needs an appropriate existence test. Cipher evaluations here mean reversible quantum oracle queries, not equal-cost classical CPU operations. Doubling a symmetric key length restores the generic query exponent in this model; physical costs, parallelism and nongeneric cryptanalysis need separate analysis.
 
 ## Key takeaways
 

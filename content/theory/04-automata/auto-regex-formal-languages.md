@@ -2,7 +2,7 @@
 id: auto-regex-formal-languages
 title: Formal regex languages and their limits
 level: intermediate
-minutes: 5
+minutes: 4
 sourceLesson: auto-thompson
 summary: Formal regexes combine empty language, empty string and symbols using union, concatenation and star.
 ---
@@ -13,9 +13,11 @@ A standard first step of that compiler is **Thompson's construction**, published
 
 ## What a regular expression is, formally
 
-Strip away the syntax sugar and a regular expression (regex) over an alphabet is built from six rules. Each rule says which strings the regex stands for, its language:
+Strip away the syntax sugar and a regular expression (regex) starts with three building blocks: no possible string, the empty string, or one alphabet symbol. Combine them by choosing either expression, joining one after another, or repeating zero or more times. These operations describe a language without prescribing a particular matching algorithm.
 
-```formula
+The formal notation is available as a reference:
+
+```formula reference
 L(∅) = ∅
 L(ε) = {ε}
 L(a) = {a}   for a ∈ Σ
@@ -42,24 +44,9 @@ In words: the only building blocks are "nothing", "the empty string" and single 
 
 For example:
 
-```formula
-L(a|b) = {a, b}
-L(a · b) = {ab}
-L(a*) = {ε, a, aa, aaa, …}
-where
-L( ): the language of a regex: the set of strings it matches
-a, b: two symbols of the alphabet
-ab, aa, aaa: strings of those symbols written one after another (not products)
-|: union (alternation): either side
-·: concatenation: one part straight after the other
-*: the Kleene star: zero or more copies
-ε: the empty string
-{ }: the set of the strings listed inside
-…: and so on without end
-In words: a|b matches a single a or a single b; ab matches exactly the two-symbol string ab; a* matches any run of a's, including the empty run.
-```
+`a|b` chooses one symbol; `ab` requires a followed by b; `a*` allows any number of a characters, including none.
 
-The same rules as a table:
+Read the basic syntax this way. R and S stand for smaller regular expressions; the empty string is written ε and the empty language ∅.
 
 | Regex | Language |
 |---|---|
@@ -80,17 +67,7 @@ Everything else in everyday regex syntax is shorthand, as long as it stays regul
 
 General backreferences can express non-regular languages. The pattern (a+)b\1 matches some a's, a b, then exactly the same text as the first group again:
 
-```formula
-L = { a^n b a^n : n ≥ 1 }
-where
-L: the language matched by (a+)b\1
-a, b: the two symbols
-a^n: n copies of a in a row, so a^3 = aaa
-n: any whole number, 1 or more
-≥: is greater than or equal to
-{ … : … }: the set of all strings of that form that make the condition after the colon true
-In words: a run of a's, then a b, then a run of a's of exactly the same length. Matching the two lengths needs unbounded memory, so no finite automaton can do it (the pumping-lemma units prove this kind of claim).
-```
+This pattern requires equally long a-runs on the two sides of b, with no upper bound. A finite automaton cannot remember an arbitrary first run accurately enough to compare the second.
 
 Some individual backreference patterns are still regular: (a+)\1 matches positive even-length runs of a, equivalent to (aa)+. Engines such as RE2 reject the feature syntactically rather than proving regularity separately for each pattern.
 

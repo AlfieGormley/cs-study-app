@@ -45,19 +45,7 @@ def run(delta, start, accept, w):
     return False
 ```
 
-A palindrome reads the same backwards. The even-length ones are a string followed by its own reverse:
-
-```formula
-L_pal = { w w^R : w ∈ {a, b}* }
-w = "ab"   w^R = "ba"   w w^R = "abba"
-where
-L_pal: the language of even-length palindromes over a and b
-w: any finite string of a's and b's
-w^R: the reverse of w, the same characters in the opposite order
-{a, b}*: every finite string made of a's and b's, including the empty string
-∈: is a member of
-In words: take any string of a's and b's and append its mirror image; every even-length palindrome arises this way.
-```
+A palindrome reads the same backwards. Every even-length palindrome consists of a string followed by its reverse: for example, `ab` followed by `ba` gives `abba`. The empty string is included.
 
 These even-length palindromes over the two-symbol alphabet {a,b} need nondeterminism in the PDA model, because the machine cannot see where the middle is. It *guesses*: some branch jumps to the popping state at exactly the right spot.
 

@@ -43,5 +43,5 @@ Ethereum bounds the execution of each Ethereum transaction with **gas**. Continu
 
 - [Dolan: mov is Turing-complete](https://harrisonwl.github.io/assets/courses/malware/spring2017/papers/mov-is-turing-complete.pdf)
 - [Cook: a concrete view of Rule 110 computation](https://arxiv.org/abs/0906.3248)
-- [Starlark language specification](https://github.com/bazelbuild/starlark/blob/master/spec.md)
+- [Starlark language specification](https://raw.githubusercontent.com/bazelbuild/starlark/master/spec.md)
 - [Ethereum: EVM opcode costs](https://ethereum.org/developers/docs/evm/opcodes/)

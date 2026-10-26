@@ -7,7 +7,7 @@ summary: "A many-one reduction preserves yes and no answers through one polynomi
 sourceLesson: cplx-np-completeness
 ---
 
-Thousands of problems in NP have resisted polynomial-time algorithms: scheduling, routing, packing, colouring, satisfiability. In 1971 Stephen Cook found that many of them are secretly the same problem. Solve one efficiently and you have solved them all.
+Thousands of problems in NP have resisted polynomial-time algorithms: scheduling, routing, packing, colouring, satisfiability. Cook’s 1971 theorem began a way to relate such problems: an efficient algorithm for any NP-complete problem would give one for every problem in NP.
 
 The tool that ties them together is the **polynomial-time reduction**, and the problems at the top of the pile are called **NP-complete**.
 
@@ -20,7 +20,7 @@ A **polynomial-time (many-one, or Karp) reduction** from problem A to problem B 
 
 In symbols:
 
-```formula
+```formula essential
 A ≤_p B
 x ∈ A  iff  f(x) ∈ B   for every x
 where
@@ -48,29 +48,14 @@ Two properties do most of the work:
 - **Transitive**: if A reduces to B and B reduces to C, then A reduces to C. Compose the two translations; a polynomial of a polynomial is a polynomial.
 - **Downward closure of P**: if A reduces to B and B can be solved in polynomial time, so can A.
 
-```formula
-A ≤_p B and B ≤_p C  gives  A ≤_p C
-A ≤_p B and B ∈ P  gives  A ∈ P
-where
-A, B, C: decision problems
-≤_p: "polynomial-time reduces to": A ≤_p B means a polynomial-time translation maps every instance of A to an instance of B with the same yes/no answer
-∈: "is a member of" (belongs to the class)
-P: the complexity class P: decision problems a deterministic algorithm solves in polynomial time (at most about n^k steps on an n-bit input, for some fixed k)
-In words: reductions chain together, and anything that reduces to an efficiently solvable problem is itself efficiently solvable.
-```
+Why composition stays polynomial: the first translation cannot write more output than it has time to write. The second therefore receives only polynomially many bits; a polynomial in that length is still a polynomial in the original length.
 
-Why the composition stays polynomial: the first translation f cannot write more output than it has time to write, so the second translation g runs on an input that is at most polynomially long.
-
-```formula
-t_total ≤ p(n) + q(p(n))
-t_total ≤ n^2 + (n^2)^3 = n^2 + n^6
-where
-t_total: the number of steps to compute g(f(x)), the composed translation from A to C
-n: the length of the input x, in bits
-p(n): the polynomial step bound of f on an n-bit input; here n^2
-q(m): the polynomial step bound of g on an m-bit input; here m^3
-In words: f takes at most p(n) steps and so outputs at most p(n) bits; g then takes at most q(p(n)) steps. With bounds n^2 and m^3 the total is about n^6, still a polynomial.
-```
+> [!analogy] Real-world analogy: Translating an application form
+> An office accepts only its own form. A translator copies your request into that format without changing what is being requested, then the office decides it.
+>
+> **How it maps:** The translation is the reduction, the office is the target solver, and its decision answers the original question. A better office procedure would therefore help everyone whose forms can be translated.
+>
+> **Where it stops:** A mathematical reduction must preserve both yes and no answers for every input and run in polynomial time. Ordinary paperwork does not guarantee either property.
 
 ## Key takeaways
 

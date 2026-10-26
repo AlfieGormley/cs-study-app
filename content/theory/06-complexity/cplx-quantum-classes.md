@@ -11,20 +11,19 @@ sourceLesson: cplx-randomised-quantum
 
 A quantum computer on a register of qubits has a pure state described by complex **amplitudes**, one per possible bit string. Quantum gates apply structured linear transformations to that state, and measurement returns a single outcome:
 
-```formula
+```formula essential
 N_amp = 2^n
-N_amp = 2^50 ≈ 1.1 × 10^15   for n = 50
 Pr[x] = |α_x|^2
 where
-N_amp: the number of complex amplitudes needed to describe the state
-n: the number of qubits; 50 in the second line
+N_amp: the number of entries in the general pure-state amplitude vector; some special states have shorter descriptions
+n: the number of qubits
 2^n: n copies of 2 multiplied together: one amplitude per n-bit string
 x: one possible measurement outcome, an n-bit string
 α_x: alpha sub x, the amplitude (a complex number) attached to outcome x
 |α_x|: the magnitude (size) of that complex number
 Pr[x]: the probability that measuring the register gives outcome x; these probabilities add up to 1
 ≈: approximately equal to
-In words: 50 qubits need about a million billion amplitudes to describe classically, but measuring them gives just one 50-bit outcome, chosen with probability equal to the squared size of its amplitude.
+In words: a general pure register has one amplitude per possible output bit string, but measurement yields only one string. Its probability is the squared magnitude of that string’s amplitude.
 ```
 
 The power isn't "trying everything in parallel"; measurement gives you one outcome. It is **quantum interference**: arranging for amplitudes of wrong answers to cancel and right answers to reinforce.
@@ -33,7 +32,7 @@ The power isn't "trying everything in parallel"; measurement gives you one outco
 
 What's proven:
 
-```formula
+```formula essential
 P ⊆ BPP ⊆ BQP ⊆ PP ⊆ PSPACE
 where
 P: the complexity class P: decision problems a deterministic algorithm solves in polynomial time (at most about n^k steps on an n-bit input, for some fixed k)
@@ -48,19 +47,7 @@ In words: everything a classical randomised computer can do efficiently, a quant
 - BQP inside PSPACE (Bernstein and Vazirani, 1993): sum the amplitudes path by path, reusing space.
 - BQP inside PP (Adleman, DeMarrais and Huang, 1997).
 
-That last containment is why a classical-versus-quantum separation is so hard to prove:
-
-```formula
-BPP ≠ BQP  gives  BPP ≠ PSPACE
-BPP ≠ PSPACE  gives  P ≠ PSPACE
-where
-BPP: bounded-error probabilistic polynomial time: decision problems a randomised polynomial-time algorithm answers correctly with probability at least 2/3 on every input
-BQP: bounded-error quantum polynomial time: decision problems a quantum computer solves in polynomial time with error at most 1/3
-PSPACE: decision problems solvable with a polynomial amount of memory
-P: the complexity class P: decision problems a deterministic algorithm solves in polynomial time (at most about n^k steps on an n-bit input, for some fixed k)
-≠: "is not equal to": the two classes contain different problems
-In words: BPP sits inside BQP, which sits inside PSPACE. If BQP were strictly bigger than BPP, PSPACE would be too; and since P sits inside BPP, P would then differ from PSPACE, an open problem nobody can currently touch.
-```
+Since BPP sits inside BQP and BQP inside PSPACE, separating BQP from BPP would also separate BPP from PSPACE. Because P sits inside BPP, it would also separate P from PSPACE.
 
 So proving BQP and BPP different would prove P and PSPACE different, which is far beyond current techniques. This rules out claiming a proven separation of BQP from BPP. It does not rule out proven query-complexity advantages or smaller speed-ups within polynomial time.
 

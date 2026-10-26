@@ -41,7 +41,7 @@ Do not require calculations in a workedExample when a reasoning walkthrough is s
      different meaning. Add missing terms you notice: too many is better than too few
      (`node scripts/glossary-coverage.mjs` gives the minimum list).
    - Record every glossary term in `verification.json` under `"glossary": { "<id>": { "confidence": "high" } }`.
-5. **Check the links**: each one must load (`node scripts/check-links.mjs content/<subject>/<module-dir>`) and must
+5. **Check the links**: each active lesson/question link must load (`node scripts/check-links.mjs --active content/<subject>/<module-dir>`) and must
    actually support the claim it's attached to.
 6. **Fix problems in place**:
    - Correct errors.

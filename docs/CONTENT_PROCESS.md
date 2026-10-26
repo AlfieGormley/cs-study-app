@@ -121,7 +121,9 @@ Run all of these before reporting:
 - `node scripts/build.mjs`: the whole project must pass, including the verification checks.
 - `node scripts/lint-formulas.mjs content/<subject>/<module>`: every hit converted or justified.
 - `node scripts/glossary-coverage.mjs content/<subject>/<module>`: every candidate covered or justified.
-- `node scripts/check-links.mjs content/<subject>`: 0 failing. Re-check rate-limited URLs slowly by hand.
+- `node scripts/check-links.mjs --active content/<subject>`: 0 failing active lesson/question links.
+  Re-check rate-limited URLs slowly by hand. The default all-file scan also includes archived originals;
+  preserve those files and report any archival-only failures separately. Check glossary sources separately.
 - `node scripts/test-*.mjs`: all pass.
 - Render the new pages at iPhone size (390 px) and check there are no errors, no horizontal overflow and no stray
   Markdown.

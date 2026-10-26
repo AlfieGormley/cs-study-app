@@ -124,7 +124,8 @@ See [CONTENT_SPEC.md](CONTENT_SPEC.md) for the format. After any change:
 
 ```sh
 node scripts/build.mjs          # validate + compile content/ into data/ and assets.js
-node scripts/check-links.mjs    # confirm every link still loads
+node scripts/check-links.mjs --active  # active lesson/question links + core dictionary
+node scripts/check-links.mjs           # also inventory archived and other content files
 ```
 
 Commit `data/`, `assets.js`, `diagram-catalog.js` and `docs/diagram-migration.json` along with the content. They're what the app actually loads, and the

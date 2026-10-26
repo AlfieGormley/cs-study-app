@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-// Checks every URL in content/ still loads. Usage: node scripts/check-links.mjs [path-prefix] [json-report]
+// Usage: node scripts/check-links.mjs [--active] [path-prefix] [json-report]
 import fs from 'node:fs';
 import path from 'node:path';
 import { glossary } from '../glossary-data.js';
+import { linkFiles } from './link-inventory.mjs';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
-const prefix = path.resolve(process.argv[2] || path.join(root, 'content'));
-const files = fs.readdirSync(path.join(root, 'content'), { recursive: true })
-  .map((f) => path.join(root, 'content', f))
-  .filter((f) => f.startsWith(prefix) && /\.(md|json)$/.test(f));
+const activeOnly = process.argv.includes('--active');
+const args = process.argv.slice(2).filter(arg => arg !== '--active');
+const prefix = path.resolve(args[0] || path.join(root, 'content'));
+const files = linkFiles(path.join(root, 'content'), prefix, { activeOnly });
+if (!files.length) throw new Error(`No ${activeOnly ? 'active lesson' : 'content'} files in ${prefix}`);
 
 const urls = new Map(); // url -> [files]
 for (const f of files) {
@@ -61,11 +63,14 @@ await Promise.all(Array.from({ length: 6 }, async () => {
     if (!(Number.isInteger(status) && status >= 200 && status < 300)) bad.push({ u, status });
   }
 }));
-if (process.argv[3]) fs.writeFileSync(path.resolve(process.argv[3]), JSON.stringify({
+if (args[1]) fs.writeFileSync(path.resolve(args[1]), JSON.stringify({
   checkedAt: new Date().toISOString(), scope: 'URL accessibility only; not factual corroboration',
+  fileScope: activeOnly ? 'Active lesson bodies and questions listed in module.json' : 'All matching Markdown and JSON files, including archives',
+  filesChecked: files.length,
+  includesCoreDictionary: prefix === path.join(root, 'content'),
   total: list.length, failures: bad.length,
   results: results.sort((a, b) => a.url.localeCompare(b.url)),
 }, null, 2) + '\n');
-console.log(`${list.length} unique URLs checked, ${bad.length} failing`);
+console.log(`${list.length} unique URLs checked, ${bad.length} failing (${activeOnly ? 'active lessons and questions' : 'all matching content files'})`);
 for (const { u, status } of bad) console.log(`  ${status}  ${u}\n         in ${[...urls.get(u)].join(', ')}`);
 process.exit(bad.length ? 1 : 0);

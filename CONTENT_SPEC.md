@@ -183,7 +183,11 @@ curl -s -o /dev/null -w "%{http_code}" -L --max-time 15 "<url>"
 ```
 
 It must return `200`. Wikipedia rate-limits parallel requests (429), so retry slowly with a browser user-agent
-(`-A "Mozilla/5.0"`). `node scripts/check-links.mjs content/<subject>/<module>` checks every link in a module. Prefer stable, reputable sources: Wikipedia, official docs (AWS, Google
+(`-A "Mozilla/5.0"`). `node scripts/check-links.mjs --active content/<subject>/<module>` checks the
+reading and question links in the active lessons listed in `module.json`. Without `--active`, the checker
+also inventories archived originals and other matching Markdown/JSON files. Report unavailable archival
+links separately and preserve the originals; do not describe an active-only pass as an all-file pass.
+Glossary source links and factual support still require the separate glossary review. Prefer stable, reputable sources: Wikipedia, official docs (AWS, Google
 Cloud, Azure, Redis, Kafka, PostgreSQL, MDN, IETF RFCs), original papers, engineering blogs from
 major companies, martinfowler.com, the System Design Primer on GitHub. Avoid paywalled sites
 (Medium-hosted posts are often paywalled) and sites that block curl. If a URL doesn't return 200,

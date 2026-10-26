@@ -49,7 +49,9 @@ stated outputs and complexities are right.
 Add useful comments explaining non-obvious operations and the meaning of shown outputs. Verify those outputs,
 and keep comments within the code-width limits.
 
-Links: verify every URL with curl (200 only) or `node scripts/check-links.mjs content/<subject>/<module-dir>`.
+Links: verify every active lesson/question URL with curl (200 only) or
+`node scripts/check-links.mjs --active content/<subject>/<module-dir>`. Check glossary sources separately.
+The default all-file scan includes archives; report archival-only failures without changing preserved originals.
 Use a scratch folder named after your module so you don't clash with other authors.
 
 When finished, run `node scripts/build.mjs --check content/<subject>/<module-dir>` from the project root and fix

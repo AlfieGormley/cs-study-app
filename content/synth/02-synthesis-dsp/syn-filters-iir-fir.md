@@ -9,34 +9,15 @@ sourceLesson: syn-filters
 
 ## IIR and FIR
 
-The one-pole filter feeds its own output back (the previous output). Its **impulse response** (the output when you feed in a single 1 followed by zeros) is:
+The one-pole filter feeds its own previous output back. Its **impulse response** is the output after a single input sample of one followed by zeros.
 
-```formula
-h[n] = a(1 − a)^{n}
-h[0] = 0.1227, h[1] ≈ 0.1076, h[2] ≈ 0.0944
-where
-h[n]: the impulse response: the output n samples after a single 1 was fed in
-a: the coefficient, here 0.1227
-n: the number of samples since the impulse
-≈: approximately equal to
-In words: each sample the output shrinks by the factor 1 − a, so it decays for ever without ever quite reaching zero.
-```
+After the impulse, each output feeds a fraction of itself into the next output. With the stable coefficient used here, that tail shrinks but never reaches exact zero in ideal arithmetic.
 
 That makes it an **infinite impulse response (IIR)** filter.
 
-A **finite impulse response (FIR)** filter uses only current and past *inputs*:
+A conventional feedforward **finite impulse response (FIR)** filter uses only current and past *inputs*.
 
-```formula
-y[n] = b_0 x[n] + b_1 x[n−1]
-     + … + b_N x[n−N]
-where
-y[n]: the output at sample n
-x[n]: the input at sample n; x[n−1] is one sample earlier and x[n−N] is N samples earlier
-b_0, b_1, b_N: the filter's coefficients (its **taps**), fixed numbers chosen by the design
-N: the filter's order: how many past inputs it uses
-…: and so on: one term for every delay in between
-In words: each output is a weighted sum of the current input and the last N inputs, with no feedback, so an impulse passes through in N + 1 samples and is gone.
-```
+It multiplies a finite set of recent inputs by chosen weights, called **taps**, and adds them. Once an isolated impulse has passed every tap, no copy remains to contribute to later output.
 
 For example, averaging the current and two previous input samples with equal one-third weights gives a three-tap moving average. It has a low-pass main lobe but also zeros and sidelobes; it is not a monotonic textbook one-pole.
 
@@ -47,11 +28,13 @@ For example, averaging the current and two previous input samples with equal one
 | BIBO stable with fixed finite coefficients | Depends on poles | Yes |
 | Exact non-trivial linear phase | Generally incompatible with causal stable IIR | Possible with appropriate symmetry |
 
+The table compares common direct implementations. FIR describes the finite response; equivalent feedback-based implementations of some FIR responses can also exist.
+
 Many common synth resonant filters are IIR because feedback produces sharp responses with few operations. Fixed finite-coefficient FIR filters are BIBO stable: bounded input gives bounded output. An FIR can also form a resonant magnitude peak; it simply has no infinite ringing tail. Symmetric FIR designs can give exact linear phase and are useful in resampling. Finite-precision overflow, unbounded changing coefficients and nonlinear processing need separate analysis.
 
 ## Key takeaways
 
-- A recursive one-pole has an infinite impulse response in exact arithmetic.
+- A feedback one-pole has an infinite impulse response in exact arithmetic.
 - A fixed finite FIR has bounded output for bounded input.
 - Linear-phase FIR designs are possible; do not infer all IIR responses share one phase rule.
 

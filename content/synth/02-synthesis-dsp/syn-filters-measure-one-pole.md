@@ -7,6 +7,8 @@ summary: Measuring the one-pole frequency response.
 sourceLesson: syn-filters
 ---
 
+To measure a filter, feed it steady sine waves at several frequencies and wait for startup transients to settle. Compare input and output amplitudes. This standalone offline example uses a positive cutoff and sample rate, with each test sine strictly below Nyquist.
+
 ```python
 import math
 
@@ -46,7 +48,7 @@ for f in (100, 1000, 4000, 16000):
 
 This is the roadmap exercise "measure its effect at selected frequencies": feed in sines and measure what comes out. Theory gives the same answers. The filter's magnitude response is:
 
-```formula
+```formula reference
 |H| = a / |1 − (1 − a) × e^{(−jω)}|
 ω = (2πf) / f_s
 where
@@ -60,7 +62,7 @@ j: the imaginary unit, the square root of −1 (engineers write j rather than i)
 f: the input frequency, in hertz (Hz)
 f_s: the sample rate, in Hz
 |x|: the magnitude (size) of a number, ignoring its sign or angle
-In words: the gain is a divided by the size of a complex number that grows with frequency, so higher frequencies come out quieter; at 1 kHz with a = 0.1227 it is about 0.708, which is −3.0 dB.
+In words: For this low-pass, settled higher-frequency sines emerge more quietly. The complex response predicts their amplitude independent of whether the sampled waveform happens to land exactly on a crest.
 ```
 
 The complex response predicts the steady sine amplitude; the peak-of-samples method can differ at the displayed precision, and filling in more points gives the table below. Measuring only the largest sample is generally phase-dependent; for more accurate sine amplitude estimates, fit sine/cosine coefficients or measure RMS over complete cycles.
@@ -79,16 +81,9 @@ The slope settles towards about 6 dB per octave above cutoff, then flattens as i
 > [!warning] Cutoff accuracy at high frequencies
 > The `exp` formula puts the −3 dB point very close to the set cutoff when the cutoff is well below Nyquist. At 48 kHz the half-power point (about −3.01 dB) is about 1,001.43 Hz for a 1 kHz setting, 5,188.89 Hz for 5 kHz, and 11.895 kHz for 10 kHz. A 15 kHz setting never reaches half power below Nyquist. A literal −3.000 dB crossing is slightly different; the usual “−3 dB cutoff” label is a rounded half-power convention. If you need accurate high cutoffs, use a design based on the bilinear transform with prewarping (as the RBJ cookbook does).
 
-The same structure gives a **one-pole high-pass** for free:
+The same structure gives a **one-pole high-pass** for free.
 
-```formula
-y_hp[n] = x[n] − y_lp[n]
-where
-y_hp[n]: the high-pass output at sample n
-x[n]: the input at sample n
-y_lp[n]: the one-pole low-pass output at sample n
-In words: whatever the low-pass keeps, the high-pass removes, so subtracting the low part from the input leaves the high part.
-```
+Subtracting the low-pass output from the original input rejects a constant input after settling. The result is a high-pass response whose gain depends on this design; it is not automatically unity-normalised.
 
 With a very low cutoff (a few hertz) that is a **DC blocker**, handy for removing the offset from a pulse wave.
 

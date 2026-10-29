@@ -2,7 +2,7 @@
 id: syn-envelopes-time-constants
 title: Exponential segments and time constants
 level: intermediate
-minutes: 4
+minutes: 3
 summary: Exponential segments and time constants.
 sourceLesson: syn-envelopes
 ---
@@ -13,13 +13,12 @@ Assume a positive time constant, positive sample rate and a fixed finite target.
 
 Analogue envelope generators charge and discharge a capacitor through a resistor, which gives exponential curves. Digitally, that is a **one-pole filter** moving towards a target: each sample, the level moves a fixed fraction of the remaining distance.
 
-```formula
+```formula reference
 y[n] = y[n−1] + c(g − y[n−1])
 c = 1 − exp(−1 / (τf_s))
-c = 1 − exp(−1 / (0.01 s × 48000 Hz))
-c = 1 − exp(−1/480) ≈ 0.00208
 where
 y[n]: the envelope level at sample n; y[n−1] is the level one sample earlier
+n: the sample index
 c: the coefficient: the fraction of the remaining distance covered each sample, between 0 and 1
 g: the target level the segment is heading for (the peak, the sustain level or 0)
 exp: the exponential function, e raised to a power, where e ≈ 2.71828
@@ -28,39 +27,34 @@ f_s: the sample rate, in hertz (Hz), here 48,000
 s: seconds
 Hz: hertz, per second
 ≈: approximately equal to
-In words: each sample the level closes a small fixed fraction of the gap to the target, so it moves fast when far away and slows as it gets close; a longer time constant means a smaller fraction and a slower curve.
+In words: Each sample closes a fixed fraction of the remaining gap to the target. The motion slows as it approaches; a longer time constant gives a slower curve.
 ```
 
-In the code this is `y += c * (target - y)`. The coefficient is chosen so that the remaining distance shrinks by a factor of e every τ seconds. `tau` (τ) is the **time constant**: after τ seconds the level has covered 63.2% of the distance to the target. In general:
+In the code this is `y += c * (target - y)`. The **time constant** is a fixed duration describing how quickly the remaining gap shrinks.
 
-```formula
-r(t) = 1 − exp(−t / τ)
-t = τ ln(1 / (1 − r))
-r = 0.99: t = τ ln(100) ≈ 4.6τ
-where
-r(t): the fraction of the distance to the target covered after time t, from 0 to 1
-t: the time since the segment started, in seconds (s)
-τ: tau, the time constant, in seconds
-exp: the exponential function, e raised to a power (e ≈ 2.71828)
-ln: the natural logarithm, the inverse of exp: ln(exp(x)) = x
-r: the fraction you want to reach, e.g. 0.99 for 99%
-≈: approximately equal to
-s: seconds
-In words: after one time constant the level is 63.2% of the way there (1 − 1/e); reaching 99% takes about 4.6 time constants and 99.9% about 6.9.
-```
+After one time constant, about 63.2% of the initial gap has closed. Reaching 99% takes about 4.6 time constants and reaching 99.9% takes about 6.9. A time constant describes the curve, not when the segment finishes.
 
-Measured at 48 kHz with τ = 10 ms:
+For a release towards zero, the same time constant takes the same time to reach a given fraction of its starting level, regardless of the starting amplitude. A fixed absolute stopping threshold differs: a louder start needs longer to fall to that threshold.
+
+For a 10 ms time constant at 48 kHz:
 
 | Fraction reached | Time |
 |---|---|
 | 63.2% | 10.0 ms |
-| 99% | 46.1 ms (4.6 τ) |
-| 99.9% | 69.1 ms (6.9 τ) |
+| 99% | 46.1 ms |
+| 99.9% | 69.1 ms |
 
 An exponential approach never quite arrives, which creates two practical issues:
 
 1. **Attack:** if the target is 1.0 the attack never ends. Common fix: aim *past* the peak (say 1.2) and switch to decay when the level crosses 1.0.
 2. **Release:** the level gets ever smaller without reaching 0. Stop at a threshold (e.g. 1e-5, which is −100 dB) and mark the voice idle so the voice allocator can reuse it. Very tiny floating-point values (subnormals) can also be slow on some processors.
+
+> [!analogy] Real-world analogy: Closing half the remaining gap
+> Imagine taking a fixed fraction of the remaining distance towards a door on every step. The steps become smaller as you approach.
+>
+> **How it maps:** The one-pole moves a fixed fraction of its remaining error, so it slows near the target and needs an explicit end condition.
+>
+> **Where it stops:** The fraction need not be one half, real motion is continuous, and finite arithmetic can eventually round to a target.
 
 ## Key takeaways
 

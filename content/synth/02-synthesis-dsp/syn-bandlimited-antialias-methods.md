@@ -9,7 +9,7 @@ sourceLesson: syn-bandlimited
 
 ### 3. Oversampling
 
-Run the naive oscillator at a multiple of the sample rate (say 4× or 8×), low-pass filter, then discard samples (decimate). Aliases still occur, but they fold around the higher Nyquist and most of their energy is filtered out. Simple to reason about, costly in CPU, and the decimation filter must be good.
+Run the naive oscillator at a multiple of the sample rate (say 4× or 8×), low-pass filter, then discard samples (decimate). The higher sample rate moves the folding boundary upwards. The low-pass filter removes content above the final Nyquist before decimation, but aliases that already folded into the wanted band survive; oversampling a discontinuous naive waveform does not guarantee zero aliasing. Simple to reason about, costly in CPU, and the decimation filter must be good.
 
 ### 4. BLIT: band-limited impulse train
 

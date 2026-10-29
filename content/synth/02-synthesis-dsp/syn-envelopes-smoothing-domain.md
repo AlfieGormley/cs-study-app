@@ -12,35 +12,30 @@ sourceLesson: syn-envelopes
 There's no universal value; listen and measure. Useful starting points:
 
 - **Gain and mix levels:** a few milliseconds to a few tens of milliseconds. Too short and zipper noise returns; too long and the control feels laggy.
-- **Filter cutoff:** similar, and smooth it in a perceptual unit (octaves) rather than hertz so sweeps sound even.
+- **Filter cutoff:** similar, and smooth it in a perceptual unit (octaves) rather than hertz so its motion is even in musical terms. Only a constant-rate ramp in octaves gives every octave equal time; an exponential smoother still slows near its target.
 - **Pitch:** small smoothing for knob jitter; deliberate glide is a separate musical control.
 - **Noisy ADC knobs:** combine smoothing with a small dead-band or hysteresis so a stationary knob doesn't wobble the parameter.
 
-Smoothing in the right domain matters. Gain heard in decibels, and frequency heard in octaves, are perceptually logarithmic. Smoothing a frequency linearly from 100 Hz to 10 kHz spends most of its time in the top octaves:
+Smoothing in the right domain matters. Gain heard in decibels, and frequency heard in octaves, are perceptually logarithmic. A linear ramp in hertz from 100 Hz to 10 kHz spends most of its time in the top octaves.
 
-```formula
-O = log_2(f_2 / f_1)
-O = log_2(10000 Hz / 100 Hz) ≈ 6.64
-r_1 = (200 − 100) / (10000 − 100) ≈ 0.01
-where
-O: the number of octaves between two frequencies
-log_2: the base-2 logarithm: how many doublings get from one number to the other
-f_1, f_2: the start and end frequencies, in hertz (Hz)
-r_1: the share of a linear-in-hertz sweep's time spent in the first octave, 100 to 200 Hz
-Hz: hertz, per second
-≈: approximately equal to
-In words: the sweep covers about 6.6 octaves, but a straight line in hertz spends only about 1% of its time in the first one and about half in the last.
-```
+For example, a linear-in-hertz sweep from 100 Hz to 10 kHz spends only about 1% of its duration between 100 and 200 Hz, but about half between 5 and 10 kHz. Both intervals are one octave.
 
-A sweep that is linear in octaves instead gives each octave an equal share of the time, which sounds even. JUCE’s `SmoothedValue` offers linear and multiplicative smoothing. The multiplicative form moves in equal ratios and cannot reach zero: use an appropriate finite fade or explicit threshold for silence.
+A sweep that is linear in octaves instead gives each octave an equal share of the time, rather than allocating most of the duration to the largest hertz spans. JUCE’s `SmoothedValue` offers linear and multiplicative smoothing. The multiplicative form moves in equal ratios and cannot reach zero: use an appropriate finite fade or explicit threshold for silence.
 
 > [!note] Where this fits on hardware
 > On a microcontroller, the main loop or a timer reads knobs and MIDI and writes *targets*; the audio callback runs the smoothers per sample. That split keeps slow, irregular work out of the audio path. Embedded lessons later cover how to pass those values safely.
 
+> [!analogy] Real-world analogy: Equal steps on a musical staircase
+> Treat each octave as one stair, regardless of which note you started on.
+>
+> **How it maps:** A ramp in octaves gives equal musical intervals equal time; a ramp in hertz allocates more time to the much wider hertz spans at the top.
+>
+> **Where it stops:** This is a choice of control mapping, not a claim that perceived loudness or every timbre follows a simple octave scale.
+
 ## Key takeaways
 
 - Balance responsiveness against unwanted steps.
-- Log-frequency smoothing gives equal musical intervals equal time.
+- A linear ramp in log frequency gives equal musical intervals equal time.
 - Dead-band or hysteresis can complement smoothing for noisy controls.
 
 ## Further reading

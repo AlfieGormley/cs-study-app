@@ -11,22 +11,7 @@ sourceLesson: syn-modulation
 
 The most important modulation in a subtractive synth is the **filter envelope**: a second ADSR, scaled by an *amount*, added to the cutoff. Short attack and decay with low sustain give the classic pluck or "squelch". Like pitch, cutoff should be modulated in **octaves**:
 
-```formula
-o = e A_oct
-f_c = f_base 2^{o}
-o = 0.5 × 3 = 1.5
-f_c = 500 Hz × 2^{1.5} ≈ 1414 Hz
-where
-o: the envelope's contribution, in octaves
-e: the envelope's current value, from 0 to 1
-A_oct: the envelope amount, in octaves: how far the envelope can open the filter
-f_c: the cutoff actually used, in hertz (Hz)
-f_base: the cutoff set by the knob, in Hz
-2^{o}: 2 raised to the power o: each octave doubles the cutoff
-Hz: hertz
-≈: approximately equal to
-In words: scale the envelope by the amount in octaves, then double the base cutoff once per octave; halfway up an envelope with a 3-octave amount, a 500 Hz cutoff opens to about 1,414 Hz.
-```
+Scale the envelope by the requested octave amount. A full envelope with a three-octave amount opens the filter by three doublings; a half-height envelope contributes half that musical interval. Other routes add their own signed octave contributions.
 
 Other standard sources:
 
@@ -75,32 +60,24 @@ print(round(hz, 2))
 433.69
 ```
 
-Here the envelope adds 1.5 octaves, the LFO subtracts 0.5 and velocity 100 adds about 0.787. The full-precision sum is used in the exponent: a displayed rounded octave sum should not be substituted as though it were exact. The result is approximately 1,726 Hz. As a formula:
+Here the envelope adds 1.5 octaves, the LFO subtracts 0.5 and velocity 100 adds about 0.787. The full-precision sum is used in the exponent: a displayed rounded octave sum should not be substituted as though it were exact. The result is approximately 1,726 Hz. The useful reading of that result is:
 
-```formula
-m_d = Σ v_i k_i
-m = (0.5 × 3) + (−1 × 0.5) + (100 / 127)
-m ≈ 1.787
-f_c = 500 Hz × 2^{m} ≈ 1726 Hz
-where
-m_d: the total modulation for destination d, in that destination's own unit (octaves for cutoff)
-m: that total for the cutoff destination in this example
-Σ: sigma, "sum of": add up over every route i aimed at destination d
-v_i: the current value of route i's source (env 0.5, LFO −1.0, velocity 100/127 ≈ 0.787)
-k_i: route i's amount, here in octaves
-f_c: the resulting cutoff before clamping, in hertz (Hz)
-Hz: hertz
-≈: approximately equal to
-In words: multiply each source by its amount, add everything aimed at the same destination, then convert once.
-```
+The envelope opens the filter, the negative LFO contribution partly closes it, and the positive velocity contribution opens it further. Sum those octave contributions first, then perform one frequency conversion and apply the supported-range clamp.
 
-The clamp keeps the filter within its safe range whatever combination of sources occurs, which matters because a matrix makes combinations you didn't plan for easy. (On a real filter, clamp to the range that design supports, often somewhat below Nyquist.)
+For the modest values shown, the clamp bounds the result between its illustrative endpoints. Arbitrarily large finite octave sums can overflow during exponentiation before that clamp runs; validate inputs and bound the octave sum before conversion in production code. A matrix makes combinations you did not plan for easy. (On a real filter, clamp to the range that design supports, often somewhat below Nyquist.)
 
 Design points:
 
 - Keep amounts **signed**, so any route can invert.
 - Decide which sources are **per voice** (envelopes, velocity, key tracking) and which are **global** (a shared LFO, the mod wheel).
 - Matrices cost CPU per route per update; on small hardware, keep the route list short and fixed-size.
+
+> [!analogy] Real-world analogy: Several adjustments on one thermostat
+> Several controls can ask for warmer or cooler settings, but their adjustments must share one unit before they can be combined.
+>
+> **How it maps:** Each route has a signed amount. Contributions to one destination use the same units, are added, and then converted and limited.
+>
+> **Where it stops:** A modulation matrix is not necessarily a feedback controller; its sources can change much faster than room temperature.
 
 ## Key takeaways
 

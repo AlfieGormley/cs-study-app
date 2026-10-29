@@ -32,19 +32,9 @@ level
 
 ### Linear segments
 
-The simplest implementation moves the level by a fixed step per sample. For an attack from 0 to 1 the step is the total rise divided by the number of samples the attack lasts:
+The simplest implementation moves the level by a fixed step per sample. For an attack from 0 to 1 the step is the total rise divided by the number of samples the attack lasts.
 
-```formula
-Δy = 1 / (T_a f_s)
-Δy = 1 / (0.01 s × 48000 Hz) = 1 / 480
-where
-Δy: delta y, how much the level rises each sample
-T_a: the attack time, in seconds (s); here 10 ms = 0.01 s
-f_s: the sample rate, in hertz (Hz): samples per second, here 48,000
-s: seconds
-Hz: hertz, per second
-In words: spread the rise from 0 to 1 evenly over the attack's samples; a 10 ms attack at 48 kHz lasts 480 samples, so each adds 1/480.
-```
+A longer segment spreads the same change across more samples, so each step is smaller. If a retrigger starts partway up, compute the step from the current level rather than assuming the starting level is zero.
 
 Decay and release work the same way, using the distance they have to travel. It's easy to reason about, and each segment ends at a precise time.
 

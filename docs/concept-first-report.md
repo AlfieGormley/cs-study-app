@@ -1,12 +1,12 @@
 # Concept-first library review
 
-Status: **paused by user**. 14/60 modules and 210/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 15/60 modules and 254/1845 active lessons have current independent editorial reviews.
 
-This report covers the remaining library after the user permanently removed Operating Systems, Computer Architecture, Theory & Discrete Maths, and Programming Languages & Compilers on 2026-10-26. It counts only active lesson IDs from module.json. Pending modules have not been certified by keyword scans or by renderer tests.
+This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
 The rule for future content is in [the authoring brief](concept-first-brief.md), [CONTENT_SPEC.md](../CONTENT_SPEC.md) and [the content process](CONTENT_PROCESS.md). Essential relationships remain visible; selected reference maths opens on demand. Redundant equations and routine calculation questions are removed or rewritten around interpretation, prediction and diagnosis.
 
-Comparison baseline: `5b8fb6f2709893396373ba979ba194aacf5cb034`. Within retained subjects, lesson IDs, question IDs and question ownership must match this baseline; archived originals and progress migrations remain unchanged. The four explicit subject removals are recorded in `content/retired-subjects.json`.
+Comparison baseline: `5b8fb6f2709893396373ba979ba194aacf5cb034`. Lesson IDs, question IDs and question ownership must match this baseline. Archived originals and progress migrations remain unchanged.
 
 Focused dictionary integration corrections and exact-definition equivalence reviews are recorded in [the integration review](concept-first-integration-review.json). A focused glossary correction does not count as a completed module rewrite. Reviewer records retain checks that were pending at handoff; subsequent compiled-check closure is recorded separately in the integration report.
 
@@ -57,8 +57,8 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | software-engineering / Version Control & CI/CD | Pending review | 26 | — | — | — | — | — | — | — |
 | software-engineering / Software Architecture at the Code Level | Pending review | 25 | — | — | — | — | — | — | — |
 | software-engineering / Engineering Practices | Pending review | 24 | — | — | — | — | — | — | — |
-| [synth / Sound & Digital Audio](../content/synth/01-sound-sampling/verification.json) | Reviewed | 32 | 69 | 52 → 23 | 1 / 22 | 60 → 0 | 296 | 128 | 24 |
-| synth / Synthesis & DSP | Pending review | 44 | — | — | — | — | — | — | — |
+| [synth / Sound & Digital Audio](../content/synth/01-sound-sampling/verification.json) | Reviewed | 32 | 69 | 52 → 23 | 1 / 22 | 60 → 0 | 297 | 128 | 24 |
+| [synth / Synthesis & DSP](../content/synth/02-synthesis-dsp/verification.json) | Reviewed | 44 | 82 | 56 → 18 | 4 / 14 | 60 → 0 | 112 | 234 | 18 |
 | synth / Electronics for Synth Builders | Pending review | 39 | — | — | — | — | — | — | — |
 | synth / Embedded Audio & Interfaces | Pending review | 44 | — | — | — | — | — | — | — |
 | synth / MIDI & Studio Integration | Pending review | 44 | — | — | — | — | — | — | — |
@@ -469,6 +469,81 @@ None recorded in this editorial review.
 - medium confidence, snd-dither-converter-noise: Finished-board dynamic range and noise-only ENOB estimate Chip figures verified with datasheet configurations and A-weighting; finished-board noise and SINAD were not measured. Dynamic-range substitution remains an explicitly approximate noise-only estimate.
 - medium confidence, snd-peak-rms-dbfs: AES17 convention and typical music crest-factor ranges AES authoritative reference and indexed Audio Precision primary-manual excerpt support the conventions; full normative AES17 text not obtained. Music range is programme- and averaging-dependent and is hedged.
 - medium confidence, snd-wav-write-readback: PCM flooring/clipping and library conversion behaviour Confirmed in independent experiments with soundfile 0.14.0/libsndfile 1.2.2 and inspected versioned source. Behaviour can depend on library/platform/rounding configuration; text ties it to this runtime.
+
+
+## synth / Synthesis & DSP
+
+64 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- syn-synthesis-overview-tables-models lesson and q3: 'round trip' (opened the system-design/networking round-trip definition) -> 'loop' / 'delay around the loop'.
+- syn-bandlimited-q8 workedExample: 'Precomputed tables' (opened a password-cracking precomputed-table definition) -> 'Tables built offline'.
+- syn-filters-biquad-svf: 'integrator/state structure' (opened React 'state shape') -> 'specific integrator arrangement analysed in those papers'.
+- syn-filters-iir-fir: 'recursive' (opened the core function-recursion definition) -> 'feedback', including the key takeaway.
+- syn-bandlimited-additive-tables analogy: 'spare capacity' (opened system-design capacity headroom) -> 'unused room'.
+- glossary oscillator-duty-fraction: added 'duty cycle'/'duty cycles' aliases and wording; the module's duty-cycle uses previously opened the networks radio duty-cycle entry. Id preserved.
+- glossary free-running: unconditional 'giving slight note-to-note variation' -> starting phases can vary but whole-cycle timing can revisit the same phase (matches the reset-policy correction).
+- syn-synthesis-overview-q6 workedExample: stale '(lesson 7)' pointer -> the control-rate unit.
+- syn-bandlimited-q1 workedExample: stale 'Lesson 3' pointer -> the harmonic units.
+- syn-modulation-q11 option explanation: 'as in the lesson's code' -> 'the LFO unit's code' (the code is not in that lesson).
+- syn-envelopes-retrigger-legato: 'as the code above does' referred to code in another unit -> names the exponential ADSR state-machine unit.
+- syn-envelopes-smoothing-domain: cutoff bullet implied octave-domain smoothing gives each octave equal time -> only a constant-rate octave ramp does; an exponential smoother slows near its target. 'Smoothing linearly' -> 'a linear ramp in hertz'.
+- syn-modulation-tempo-tremolo: 'Free-running LFOs drift relative to the notes' -> phase at note-on depends on timing and can differ.
+- syn-harmonics-gibbs-timbre: ambiguous 'not a mandatory 18% peak' -> an overshoot of about 18% above the flat level is not mandatory.
+- syn-harmonics-phase-headroom: phase-sensitivity dependence on 'harmonic resolution' is not established by the cited Schroeder-phase study -> 'factors such as fundamental frequency, the listener and listening conditions'; reading label 'mdft' -> 'Mathematics of the DFT'.
+- syn-harmonics-fourier-patterns: sentence comparing with a removed code example -> statement that equal magnitudes can start cycles at different-looking points.
+- syn-harmonics-fourier-foundations: overtone wording aligned with the newly verified synth/01 overtone entry (fundamental is not an overtone; inharmonic overtones exist).
+- syn-modulation-vibrato-depth: key takeaway about fixed-hertz deviation in linear FM had no supporting body text -> one sentence added.
+- Editorial (not counted as errors): dangling colons left by removed formula cards fixed in integer-phase, fourier-foundations, gibbs-timbre, alias-folding, polyblep-experiment, pulse-libraries, time-constants, smoothing-domain, response-slope, measure-one-pole, ladder, lfo-ranges and phase-shapes; PolyBLEP reading label 'finke' -> 'PolyBLEP oscillator tutorial — Martin Finke'.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-synthesis-overview-fm-pm: Qualify implementation cost and explain programming difficulty.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-envelopes-retrigger-legato: A phase reset does not necessarily cause an output-value discontinuity.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-envelopes-retrigger-legato: Distinguish constant-speed log ramps from arbitrary log-domain smoothing.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-envelopes-smoothing-domain: Only a constant-rate log ramp gives the stated constant octave speed.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-envelopes-smoother-ramp: Parameter jumps do not guarantee output-value jumps or audible noise.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-envelopes-smoother-ramp syn-envelopes-q3: Avoid the false general claim that aliasing cannot depend on moving controls.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-envelopes-smoother-ramp syn-envelopes-q3: Avoid asserting that clipping necessarily persists whenever a knob stops.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-envelopes-smoother-ramp syn-envelopes-q3: Retain 128 values rather than incorrectly calling them 128 adjacent steps.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-bandlimited-alias-folding: Aliasing can coincide with harmonic frequencies; scope statement to this example.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-bandlimited-alias-folding syn-bandlimited-q3: Avoid making inharmonicity universal.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-bandlimited-antialias-methods syn-bandlimited-q12: Avoid unsupported universal claim that most folded energy lands outside the retained band.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-bandlimited-antialias-methods syn-bandlimited-q7: Keep exactness assumptions available in the question’s own summary.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-bandlimited-polyblep-experiment syn-bandlimited-q10: Aliasing does not universally sound harsher or exclude reduced brightness.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-bandlimited-polyblep-experiment syn-bandlimited-q10: Replace listening inference and malformed wording with the measured two-part comparison.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-filters-measure-one-pole syn-filters-q9: The bare condition coefficient less than one wrongly includes unstable negative coefficients.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-modulation-matrix: Finite input does not prevent exponential overflow before the clamp.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-modulation-control-rate syn-modulation-q11: A 2 ms attack at 1.5 kHz spans three updates, not one or two.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-modulation-lfo-ranges syn-modulation-q12: Distinguish one-pole exponential motion from a linear ramp and qualify clicks.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-oscillators-reset-policy syn-oscillators-q11: Note timing can also revisit the same phase; variation is possible, not guaranteed.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-oscillators-reset-policy syn-oscillators-q11: Free running is deterministic and does not guarantee a different phase every note.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-oscillators-reset-policy syn-oscillators-q11: Resetting one phase alone does not guarantee the entire attack waveform.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-oscillators-reset-policy syn-oscillators-q11: Make repeatability conditions explicit.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): syn-oscillators-reset-policy syn-oscillators-q11: Avoid unconditional attack identity and free-running variation.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): glossary key-sync: Free running does not guarantee a different phase on every note.
+- Accepted after independent re-check (edit made by the earlier incomplete verifier pass, already present in the frozen drafts): glossary exponential-fm: The stated mean requires a sinusoidal control and complete cycles, not arbitrary swings.
+
+**Scope gaps and exclusions:**
+
+- Code is an offline Python learning bridge. Original C/DDS semantics preserved and natively exercised; no new C++ teaching introduced.
+- Host compilation of pinned libraries verifies shown algorithms and source claims, not firmware integration, hardware capacity, real-time deadlines or acoustic measurements.
+- Advanced anti-aliasing, loop-filter tuning, arbitrary time-varying filters and extreme modulation require further design analysis; approximate PolyBLEP is not certified alias-free.
+- Source dependency follow-ups have separately scoped independent records: Sound3, Soundfive/body/Q, and Audio06 linear-phase. Audio06 remains unsplit.
+- No target-hardware (Daisy/Teensy) timing, CPU budget or analogue-output measurement in this module; all experiments are host-side.
+- Wavetable interpolation error, table crossfading and hard sync are described qualitatively only.
+- BLAMP, minBLEP table construction and oversampling decimation-filter design are named but not demonstrated.
+- Stray Further-reading choices (NumPy rfft listed in the LFO and control-rate units) are harmless but weakly related; left unchanged.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, syn-harmonics-phase-headroom: Audibility of phase changes in harmonic complexes. Primary human study supports conditional sensitivity; no personal listening or universal perceptual guarantee is claimed.
+- medium confidence, syn-bandlimited-pulse-libraries: Relative implementation cost and suitability for a target board. Actual pinned DaisySP/PJRC native code executed, but host execution does not establish board CPU budgets, firmware integration or listener thresholds.
+- medium confidence, syn-modulation-control-rate: Audibility of block-rate stairs and fast-envelope artefacts. Bandwidth and step counts independently checked; playback conditions and masking determine audibility.
+- medium confidence, syn-bandlimited-pulse-libraries: DaisySP host measurements (-29.83/-55.45 dB, -1.95 dB tenth-harmonic droop) from the source compiled on a desktop host. Reproduced exactly by this verifier's float32 hand port of the pinned DaisySP Process/Polyblep code; this verifier's own compilation of the downloaded C++ was refused by the sandbox, so the compiled run rests on the author's and earlier pass's evidence. Not a target-board measurement.
+- medium confidence, syn-harmonics-phase-headroom: Harmonic phase differences can be audible in steady harmonic complexes. Supported by Drennan et al. (Schroeder-phase discrimination); wording hedged to listener, F0 and listening conditions. No listening test of the lesson's pair.
+- medium confidence, syn-envelopes-time-constants: Subnormal floating-point values can be slow on some processors. Hedged. The Intel page passes the link checker but its body could not be read by automated fetch; claim is widely documented but not re-read here.
+- medium confidence, syn-harmonics-gibbs-timbre: Piano high harmonics decay faster than the fundamental; brass brightens as it gets louder. Standard acoustics illustrations, unchanged from earlier review; not re-checked against a fetched source in this pass.
+- medium confidence, syn-harmonics-fourier-patterns: Timbre descriptors (square 'hollow, woody, clarinet-like'; triangle 'close to a sine'). Perceptual descriptors; the spectral facts behind them were recomputed, the descriptors are conventional rather than measured.
+- medium confidence, syn-synthesis-overview-tables-models: Digitakt II is a stereo sampler; library revision facts (DaisySP 2c72eaf9eac5, PJRC Audio 3039be2773e8). Time-sensitive product/library facts; manufacturer page re-fetched 2026-10-29 and pinned sources read. Lessons already tell the learner to confirm the actual model and installed library.
 
 
 ## system-design / Fundamentals

@@ -31,14 +31,7 @@ LFOs drive controls, but their update rate still limits representable modulation
 
 Convert a bipolar value to a unipolar one like this:
 
-```formula
-u = (b + 1) / 2
-u = (−0.5 + 1) / 2 = 0.25
-where
-u: the unipolar value, from 0 to 1
-b: the bipolar value, from −1 to +1
-In words: shift the range up by 1 (to 0..2), then halve it (to 0..1); −1 becomes 0, 0 becomes 0.5 and +1 becomes 1.
-```
+Shift and scale the source so its lowest value becomes zero, its centre becomes one half, and its highest value becomes one. This preserves the shape while changing the range; taking the absolute value would change the shape instead.
 
 In the code below this is the `unipolar` function.
 
@@ -96,27 +89,11 @@ print(round(min(gains), 3),
 0.5 1.0
 ```
 
-The LFO updates once per 32-sample block, so its increment is based on the block rate, not the sample rate:
+The LFO updates once per 32-sample block, so its increment is based on the block rate, not the sample rate.
 
-```formula
-f_u = f_s / B = 48000 Hz / 32 = 1500 Hz
-inc = r / f_u = 5 Hz / 1500 Hz ≈ 0.00333
-g = 1 − du
-where
-f_u: the update rate: how often the LFO's next() runs, in hertz (Hz)
-f_s: the sample rate, 48,000 Hz
-B: the block size, 32 samples
-inc: the LFO's phase increment per update, in cycles
-r: the LFO rate, 5 Hz
-g: the tremolo gain multiplier
-d: the depth, here 0.5
-u: the LFO's unipolar value, 0 to 1
-Hz: hertz, per second
-≈: approximately equal to
-In words: the increment is the LFO rate divided by the update rate; with depth 0.5 the gain moves between 1 (when u = 0) and 0.5 (when u = 1).
-```
+Base the phase increment on how often the LFO actually runs. A per-block LFO takes larger steps per call than a per-sample LFO at the same musical rate; using the audio sample rate in a per-block update would make it too slow.
 
-So the LFO updates 1,500 times a second and a 5 Hz cycle takes 300 updates. The tremolo gain swings between 0.5 and 1.0: depth 0.5 means "down to half volume", never above the original.
+So the LFO updates 1,500 times a second and a 5 Hz cycle takes 300 updates. The tremolo gain swings between 0.5 and 1.0: depth 0.5 means down to half the signal amplitude, never above the original. Half amplitude is not a guarantee of half perceived loudness.
 
 ## Key takeaways
 

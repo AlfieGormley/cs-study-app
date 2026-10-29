@@ -84,25 +84,7 @@ release ms: 2200
 
 Notice the numbers. Both follow from one rule: the time an exponential segment takes depends only on how many times smaller the remaining distance must get.
 
-```formula
-t = τ ln(d_start / d_end)
-t_a = 5 ms × ln(1.2 / 0.2) = 5 ms × ln(6)
-t_a ≈ 5 ms × 1.79 ≈ 9 ms
-t_r = 0.2 s × ln(0.6 / 0.00001)
-t_r ≈ 0.2 s × 11.0 ≈ 2.2 s
-where
-t: the time the segment takes, in seconds (s) or milliseconds (ms)
-τ: tau, the segment's time constant
-ln: the natural logarithm (inverse of the exponential function)
-d_start: the distance to the target when the segment starts
-d_end: the distance to the target when the segment stops
-t_a: the attack time: aiming at 1.2 from 0, the distance shrinks from 1.2 to 0.2 when the level reaches 1.0
-t_r: the release time: aiming at 0 from 0.6, it stops at the 0.00001 (−100 dB) threshold
-ms: milliseconds, thousandths of a second
-s: seconds
-≈: approximately equal to
-In words: the time depends on the ratio of the start and end distances, not on their size, so a release that must fall a long way in decibels lasts many time constants.
-```
+The attack aims beyond the peak, so it crosses the stopping level in finite time. Release aims at zero but stops at a small threshold. These end conditions determine stage durations together with the time constants.
 
 So with a 5 ms time constant and a 1.2 target, the attack takes about 9 ms, and a 200 ms release time constant takes 2.2 s to fall from 0.6 to −100 dB. **"Release = 200 ms" is ambiguous** unless you say what it means: time constant, time to −60 dB, or time to silence. Pick a definition, document it, and convert the knob value to a coefficient accordingly.
 

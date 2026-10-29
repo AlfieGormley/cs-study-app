@@ -17,34 +17,21 @@ Represent **phase** as a cycle fraction from zero inclusive to one exclusive: ho
 
 Each sample, advance the phase by the **phase increment**: the fraction of a cycle that passes during one sample. In one second the oscillator must complete as many cycles as its frequency, while the system produces as many samples as the sample rate, so each sample covers the frequency divided by the sample rate of a cycle:
 
-```formula
+```formula essential
 inc = f / f_s
-inc = 440 Hz / 48000 Hz ≈ 0.0091667
 where
 inc: the phase increment, in cycles per sample (a fraction of one cycle)
 f: the frequency you want the oscillator to play, in hertz (Hz)
 f_s: the sample rate, in Hz (samples per second), e.g. 48,000; written `fs` in the code
-≈: approximately equal to (the result is rounded)
 Hz: hertz, cycles (or samples) per second
-In words: each sample moves the phase on by the note's frequency divided by the sample rate, so a higher note takes bigger steps round the cycle.
+In words: The phase step is frequency divided by sample rate. Higher notes take larger steps through the cycle; doubling the sample rate requires half the step for the same note.
 ```
 
-With an increment of 0.0091667, it takes about 109 samples (48,000 / 440) for the phase to go round once, so the output repeats 440 times per second. Double the frequency and the increment doubles, so each cycle takes half as many samples.
+At 440 Hz and 48 kHz, the increment is about 0.0091667: one cycle takes about 109 samples, so the output repeats 440 times per second. Double the frequency and the increment doubles, so each cycle takes half as many samples.
 
-A waveform is then just a function of phase. Written as maths, with phase running from zero inclusive to one exclusive:
+A waveform is then just a function of phase, with phase running from zero inclusive to one exclusive.
 
-```formula
-y_sin = sin(2πp)
-y_saw = 2p − 1
-y_tri = 1 − 4|p − 0.5|
-where
-y_sin, y_saw, y_tri: the output sample of the sine, sawtooth and triangle waves, each between −1 and +1
-p: the phase, as a fraction of a cycle from 0 up to (not including) 1
-sin: the sine function; it takes an angle in radians, and one full cycle is 2π radians
-π: pi, about 3.14159; multiplying by 2π turns a fraction of a cycle into an angle in radians
-|x|: the absolute value of x: x without its sign, so |−0.3| = 0.3
-In words: the sine turns phase into an angle; the saw rises in a straight line from −1 to +1 across the cycle; the triangle is −1 at the start, +1 halfway and −1 again at the end.
-```
+A sine rises and falls smoothly, a saw rises then jumps down, and a triangle rises then falls along straight segments. The code below defines their phase positions precisely.
 
 For example, a quarter of the way through the cycle the sine is at its peak of +1, the saw is at −0.5 and the triangle is at 0. The square and pulse waves are simpler still: +1 while the phase is below a threshold (0.5 for a square, the chosen width for a pulse), otherwise −1. In code:
 

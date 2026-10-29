@@ -31,7 +31,7 @@
       2,
       4
     ],
-    "workedExample": "Go through each:\n\n| Choice | Problem? |\n|---|---|\n| Reset each block | block-grid spectrum |\n| Reset to 0 on wrap | flat pitch |\n| Wrapped float phase | small error here |\n| Float32 counter n | drift |\n| New inc per sample | no phase reset |\n\nThe float32-counter version computes each sample like this:\n\n```formula\ny[n] = sin((2πfn) / f_s)\nwhere\ny[n]: output sample number n\nn: the sample counter, counting up for ever\nsin: the sine function, taking an angle in radians\nπ: pi, about 3.14159\nf: the frequency, in hertz (Hz)\nf_s: the sample rate, in Hz\nIn words: the angle is worked out from a counter that grows without limit, so float32 rounding gets steadily worse.\n```\n\nThe common thread: phase is long-lived state and must be kept small and continuous.",
+    "workedExample": "Persistent state and arithmetic precision explain the failures. Resetting at each block repeats the block instead of continuing the tone. Resetting at each wrap throws away progress. A growing float32 counter or phase eventually loses fine resolution. Changing the increment while preserving a small wrapped phase avoids these particular resets, although abrupt modulation still needs smoothing and bandwidth checks.",
     "link": {
       "title": "Floating-point limits — NumPy",
       "url": "https://numpy.org/doc/stable/reference/generated/numpy.finfo.html"
@@ -61,7 +61,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Float32 has a 24-bit significand: precision is relative to the number's size.\n2. After 60 s at about 440 Hz the phase is roughly 26,400 cycles, which lies between 2^14 = 16,384 and 2^15 = 32,768.\n3. Work out the spacing there, and what the increment rounds to:\n\n```formula\ngap = 2^{(e − 23)}\ngap = 2^{14 − 23} ≈ 0.00195\ninc_f = round(inc / gap) × gap\ninc_f = 5 × 0.00195 ≈ 0.00977\nf_eff = inc_f f_s\nf_eff = 0.00977 × 48000 Hz ≈ 469 Hz\nwhere\ngap: the spacing between neighbouring float32 values near the phase, in cycles\ne: the binary exponent of the phase: 14, because 26,400 is at least 2^14 but below 2^15\n23: the number of stored significand bits in float32\ninc: the intended increment, 0.0091667 cycles per sample (440 / 48,000)\ninc_f: the step the float addition actually makes, a whole number of gaps\nround: rounds to the nearest whole number (0.0091667 / 0.00195 ≈ 4.69 rounds to 5)\nf_eff: the effective frequency, in hertz (Hz)\nf_s: the sample rate, 48,000 samples per second\n≈: approximately equal to\nHz: hertz, per second\nIn words: the increment can only move in steps of about 0.002 cycles, so it becomes 0.0098 and the note plays at about 469 Hz.\n```\n\n4. That matches the measured 468.8 Hz.\n\nFix: restore the wrap (or use a 32-bit integer accumulator).",
+    "workedExample": "The stored phase grows while float32 precision remains relative to magnitude. Its representable values become farther apart, so adding the intended small increment rounds to a different step. That changes the effective pitch even though sine is mathematically periodic. Restore wrapping before precision is lost, or use the integer accumulator with its finite tuning grid.",
     "link": {
       "title": "Floating-point limits — NumPy",
       "url": "https://numpy.org/doc/stable/reference/generated/numpy.finfo.html"
@@ -71,27 +71,27 @@
     "id": "syn-oscillators-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "Someone generates each audio sample as the sine of an angle computed from `n`, a float32 sample counter that counts up for ever. At 48 kHz, roughly when can float32 no longer represent every integer value of `n`, so repeated float32 additions of one can stop advancing the counter?",
+    "prompt": "A float32 sample counter is repeatedly incremented by one. After a long run, adding one no longer changes it. Which explanation and response fit?",
     "options": [
       {
-        "text": "After about 43.7 seconds",
-        "explanation": "That would be 2²¹ samples. Float32 represents every integer up to 2²⁴."
+        "text": "The audio buffer is too small; increasing block size restores the missing integers",
+        "explanation": "Buffer size does not change float32’s representable values."
       },
       {
-        "text": "After about 24 hours",
-        "explanation": "Integers stop being exact much earlier than that; the 24-bit significand runs out at 16.8 million."
+        "text": "All integers remain exact in float32, so the sine library must be broken",
+        "explanation": "Floating point has finite precision; beyond its consecutive-integer range some integers cannot be represented."
       },
       {
-        "text": "Never, because integers are always exact in floating point",
-        "explanation": "Only integers up to 2²⁴ (16,777,216) are all exactly representable in float32."
+        "text": "Changing output gain will restore the counter’s precision",
+        "explanation": "Gain is unrelated to how the counter is represented."
       },
       {
-        "text": "After about 5.8 minutes",
-        "explanation": "Correct. 2²⁴ = 16,777,216 samples; 16,777,216 / 48,000 ≈ 349.5 s ≈ 5.8 minutes. Beyond that, `n + 1` can round back to `n`."
+        "text": "At that magnitude the spacing is too coarse; use suitable integer timing and a separately wrapped oscillator phase",
+        "explanation": "Correct. A growing floating-point counter eventually loses consecutive integers; oscillator phase should stay small."
       }
     ],
     "answer": 3,
-    "workedExample": "1. Float32 significand: 24 bits (23 stored + 1 implicit).\n2. All integers up to 2²⁴ = 16,777,216 are exact; above that, only even numbers are, and so on.\n3. Time to reach it:\n\n```formula\nt = 2^{24} / f_s\nt = 16777216 / 48000 Hz ≈ 349.5 s\nwhere\nt: the time until the counter passes the last exactly representable run of integers, in seconds (s)\n2^{24}: 16,777,216, the largest integer up to which float32 can represent every whole number\nf_s: the sample rate, 48,000 samples per second\n≈: approximately equal to\nHz: hertz, per second\ns: seconds\nIn words: at 48,000 samples a second the counter reaches 16.8 million after about 350 seconds, about 5.8 minutes.\n```\n\nEven while the counter’s integer values remain exact, computing a large angle in float32 can lose fractional-phase precision. That is separate from the repeated-addition counter stall; an unwrapped phase accumulator has the additional step-rounding error demonstrated in this unit. Keep a wrapped phase instead of a growing counter.",
+    "workedExample": "A finite significand cannot represent every consecutive integer at arbitrarily large magnitudes. Once the next integer is missing, rounding can return the original value. Keep long-lived timing in a representation with an appropriate range, and keep the waveform’s phase wrapped rather than deriving it from an indefinitely growing float32 counter.",
     "link": {
       "title": "Floating-point limits — NumPy",
       "url": "https://numpy.org/doc/stable/reference/generated/numpy.finfo.html"

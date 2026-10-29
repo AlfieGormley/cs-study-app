@@ -3,27 +3,27 @@
     "id": "syn-oscillators-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An oscillator at 44.1 kHz wraps with `if p >= 1: p = 0.0` instead of subtracting 1. You ask it for 1000 Hz. What frequency does it actually produce?",
+    "prompt": "An oscillator’s ideal cycle does not fit a whole number of samples. Its wrap code sets phase to zero instead of subtracting one cycle. What systematic error does this cause?",
     "options": [
       {
-        "text": "1000 Hz exactly",
-        "explanation": "Resetting to 0 discards the overshoot, so the cycle length is rounded up to a whole number of samples."
+        "text": "No error: both versions keep phase below one",
+        "explanation": "Range alone is insufficient; the position beyond the wrap must be preserved."
       },
       {
-        "text": "About 1023 Hz (sharp)",
-        "explanation": "The overshoot is thrown away, which *lengthens* cycles, so the error is flat, not sharp."
+        "text": "The note becomes sharp because each cycle gets shorter",
+        "explanation": "Discarding the overshoot lengthens the represented cycle instead."
       },
       {
-        "text": "980 Hz, about 35 cents flat",
-        "explanation": "Correct. 1 / 0.022676 = 44.1 samples per cycle, but with reset-to-zero each cycle is rounded up to 45 samples: 44,100 / 45 = 980 Hz."
+        "text": "The note becomes flat because every cycle loses its fractional overshoot",
+        "explanation": "Correct. Resetting repeats cycles rounded up to a whole sample count rather than preserving the requested average period."
       },
       {
-        "text": "It cannot be predicted, because it depends on floating-point rounding",
-        "explanation": "The rounding up to a whole number of samples is systematic and easy to predict."
+        "text": "Only the waveform amplitude changes",
+        "explanation": "The error is in how quickly phase completes cycles, so it changes pitch."
       }
     ],
     "answer": 2,
-    "workedExample": "The increment is 1000 / 44,100 = 0.022676 cycles per sample, so an ideal cycle is 44.1 samples. The wrap fires on the first sample where the phase reaches 1, and resetting to 0 throws away the overshoot, so every cycle is rounded **up** to a whole number of samples:\n\n```formula\nN = ⌈f_s / f⌉ = ⌈44.1⌉ = 45\nf_out = f_s / N\nf_out = 44100 Hz / 45 = 980 Hz\ne = 1200 log_2(f_out / f)\ne = 1200 log_2(980 / 1000) ≈ −35\nwhere\nN: the length of each cycle, in samples, with reset-to-zero\n⌈x⌉: the ceiling of x: rounded up to the next whole number\nf_s: the sample rate, 44,100 samples per second\nf: the frequency asked for, 1000 Hz\nf_out: the frequency actually produced, in hertz (Hz)\ne: the tuning error, in cents (hundredths of a semitone); negative means flat\nlog_2: the base-2 logarithm: the power you raise 2 to to get the number\n1200: cents in an octave (12 semitones × 100)\nHz: hertz, per second\n≈: approximately equal to\nIn words: rounding each cycle up from 44.1 to 45 samples makes the note 980 Hz, about 35 cents flat, clearly out of tune.\n```\n\nSubtracting 1 keeps the 0.1-sample remainder, so cycles are 44 or 45 samples and average to 44.1.",
+    "workedExample": "A step may pass beyond the cycle boundary. Subtracting one cycle keeps the distance already travelled into the next cycle; setting zero throws it away. Repeating that lost progress lengthens the average cycle and lowers pitch.",
     "link": {
       "title": "Digital sinusoid generators — Julius O. Smith",
       "url": "https://ccrma.stanford.edu/~jos/pasp/Digital_Sinusoid_Generators.html"
@@ -67,7 +67,7 @@
     "options": [
       {
         "text": "`if p >= 1: p -= 1`",
-        "explanation": "This fails for negative phases (never wraps up) and for increments above 1 (one subtraction leaves p above 1)."
+        "explanation": "This fails for negative phases and can leave phase above one when the overshoot spans more than a complete extra cycle."
       },
       {
         "text": "`if p >= 1: p = 0`",
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "Test each candidate on a phase of 2.4 and a phase of −0.3. First the floor version:\n\n```formula\np_w = p − floor(p)\np_w = 2.4 − 2 = 0.4\np_w = −0.3 − (−1) = 0.7\nwhere\np_w: the wrapped phase, in cycles\np: the phase before wrapping, in cycles\nfloor: rounds down towards minus infinity, so floor(2.4) = 2 and floor(−0.3) = −1\nIn words: subtract the whole cycles, rounding down, which leaves a fraction from 0 up to 1 for any input.\n```\n\nThen the other two, as code traces:\n\n```text-output\nfmod(p, 1.0):\n  2.4 -> 0.4\n -0.3 -> -0.3   wrong\nif p >= 1: p -= 1\n  2.4 -> 1.4    wrong\n -0.3 -> -0.3   wrong\n```\n\nOnly `p - floor(p)` maps everything into [0, 1).",
+    "workedExample": "Try a phase above two cycles and one below zero. One subtraction cannot handle the first and never fixes the second. C `fmod` retains the dividend’s sign, so a negative phase stays negative. Subtracting `floor(p)` removes the completed whole cycles in either direction: 2.4 becomes 0.4 and −0.3 becomes 0.7. Reject non-finite values; this range operation does not restore precision already lost in enormous phases.",
     "link": {
       "title": "Digital sinusoid generators — Julius O. Smith",
       "url": "https://ccrma.stanford.edu/~jos/pasp/Digital_Sinusoid_Generators.html"

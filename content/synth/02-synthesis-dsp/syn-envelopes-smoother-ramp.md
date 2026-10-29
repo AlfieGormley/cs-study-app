@@ -15,7 +15,7 @@ Controls arrive in steps:
 - A knob read by an ADC is noisy and quantised.
 - Control values often update once per audio block. At 48 kHz with 32-sample blocks, that gives up to 1,500 update opportunities a second; an unchanged target creates no step.
 
-Each step in gain or cutoff is a small discontinuity. A sequence of them sounds like a rasping buzz while the knob moves: **zipper noise**. The fix is to let the control set a *target* and move the actual parameter towards it smoothly, every sample.
+Stepwise gain or cutoff changes can create abrupt output changes or other transients, depending on the waveform and filter structure. A sequence can sound like a rasping buzz while the knob moves: **zipper noise**. The fix is to let the control set a *target* and move the actual parameter towards it smoothly, every sample.
 
 The offline code assumes positive time constant and sample rate, and a positive integer ramp length. A zero-length ramp needs a separately handled jump. These classes demonstrate the curves; they are not synchronisation mechanisms for sharing targets between real threads.
 
@@ -72,19 +72,9 @@ print(round(yb[239], 3), round(yb[479], 3))
 1.0 1.0
 ```
 
-The printed values check out against the formulas. After 240 samples (5 ms, one time constant) the one-pole has covered 63.2% of the way; after 480 samples (two time constants) 86.5%. The linear ramp's step is the distance divided by its length:
+The output shows two different timing contracts. After 240 samples (5 ms, one time constant) the one-pole has covered 63.2% of the way; after 480 samples (two time constants) 86.5%. The linear ramp uses equal steps.
 
-```formula
-Δy = (g − y_0) / N
-Δy = (1.0 − 0) / 240 ≈ 0.00417
-where
-Δy: delta y, the change per sample
-g: the target value, here 1.0
-y_0: the value when the ramp starts, here 0
-N: the ramp length, in samples; 240 samples is 5 ms at 48 kHz
-≈: approximately equal to
-In words: the ramp covers the whole distance in exactly N equal steps, then stops.
-```
+A fixed-length ramp reaches the target after its allotted samples in exact arithmetic. A one-pole keeps closing the remaining gap and therefore needs a stopping rule when exact arrival matters.
 
 The one-pole smoother is the simplest option: one multiply-add per sample, one evolving output state, plus its target and coefficient, and it handles a target that keeps moving gracefully. The linear ramp finishes after its chosen sample count, reaching the target in exact arithmetic. Repeated floating-point addition can leave a small rounding error; explicitly assign the target on the last step when an exact stored endpoint is required. Its fixed duration is useful when you need a guaranteed time (e.g. a voice-steal fade before reuse) but needs recalculating whenever the target changes.
 

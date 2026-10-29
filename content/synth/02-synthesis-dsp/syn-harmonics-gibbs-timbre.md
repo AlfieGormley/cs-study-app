@@ -9,20 +9,11 @@ sourceLesson: syn-harmonics
 
 ## Gibbs ripple
 
-Adding up a finite number of harmonics never quite produces a perfect corner. A square wave built from odd harmonics overshoots each jump by about 9% of the jump size, in the limit of a large Fourier-series term count. A particular short finite sum differs slightly:
+Adding up a finite number of harmonics never quite produces a perfect corner. A square wave built from odd harmonics overshoots each jump by about 9% of the jump size, in the limit of a large Fourier-series term count. A particular short finite sum differs slightly.
 
-```formula
-P ≈ 1 + 0.09 × J
-P ≈ 1 + 0.09 × 2 ≈ 1.18
-where
-P: the peak value of the band-limited square, which ideally would be 1
-J: the size of the jump, from −1 to +1, so 2
-0.09: the Gibbs overshoot, about 9% (more precisely 8.95%) of the jump
-≈: approximately equal to
-In words: a ±1 square made from a finite number of harmonics peaks at about 1.18, so it needs about 1.4 dB more headroom than the ideal square.
-```
+For an ideal square spanning minus one to plus one, a hard-truncated series with many odd harmonics therefore peaks near 1.179. That is roughly 1.4 dB above unity, so scaling by the intended flat level alone can clip the output. Measure the actual implementation and leave margin.
 
-This is the **Gibbs phenomenon**. It matters later: a hard Fourier truncation of a square or saw shows this ripple even with every retained harmonic below Nyquist. Other smoothing windows and approximate oscillators can change the overshoot, so it is not a mandatory 18% peak for every anti-aliased implementation.
+This is the **Gibbs phenomenon**. It matters later: a hard Fourier truncation of a square or saw shows this ripple even with every retained harmonic below Nyquist. Other smoothing windows and approximate oscillators can change the overshoot, so an overshoot of about 18% above the flat level is not mandatory for every anti-aliased implementation.
 
 ## Timbre is more than the static spectrum
 

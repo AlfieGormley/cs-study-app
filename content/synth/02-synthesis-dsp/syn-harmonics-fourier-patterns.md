@@ -2,7 +2,7 @@
 id: syn-harmonics-fourier-patterns
 title: Fourier series and harmonic patterns
 level: intermediate
-minutes: 4
+minutes: 3
 summary: Fourier series and harmonic patterns.
 sourceLesson: syn-harmonics
 ---
@@ -18,62 +18,18 @@ A waveform’s harmonic amplitudes explain much of its steady timbre. This unit 
 | Square | Odd harmonics | Inverse harmonic number |
 | Triangle | Odd harmonics | Inverse square of harmonic number |
 
-For waves swinging between −1 and +1, the standard series are:
+The important comparison is how quickly the upper harmonics weaken.
 
-```formula
-ω = 2πf_0
-x_saw(t) = (2 / π)
-  × Σ (−1)^{(n + 1)} sin(nωt) / n
-x_sq(t) = (4 / π) Σ sin(nωt) / n
-x_tri(t) = (8 / π^2)
-  × Σ (−1)^k sin(nωt) / n^2
-where
-ω: omega, the angular frequency of the fundamental, in radians per second: 2π radians per cycle times f_0 cycles per second
-f_0: the fundamental frequency, in hertz (Hz)
-π: pi, about 3.14159
-x_saw(t), x_sq(t), x_tri(t): the ideal sawtooth, square and triangle series; at discontinuities the series takes the midpoint; finite truncations may overshoot the ideal extrema
-t: time in seconds, measured from a point where the wave crosses zero going upwards
-Σ: sigma, "sum of": for the saw add the term for every n = 1, 2, 3...; for the square and triangle add it for odd n only (1, 3, 5...)
-n: the harmonic number
-sin: the sine function, taking an angle in radians
-(−1)^{n+1}: a sign that alternates +, −, +, − for n = 1, 2, 3, 4...
-k: for the triangle, (n − 1) / 2, so (−1)^{k} alternates +, −, + for n = 1, 3, 5
-·: multiplication, the same as ×
-Hz: hertz, cycles per second
-In words: the saw has every harmonic at 1/n of the fundamental's strength, the square has only odd harmonics at 1/n, and the triangle has only odd harmonics at the much faster-falling 1/n^2.
-```
 
-The series scale factors give each ideal waveform’s fundamental amplitude:
+Peak level and harmonic level are different measurements:
 
-```formula
-A_saw = 2 / π ≈ 0.637
-A_sq = 4 / π ≈ 1.273
-A_tri = 8 / π^2 ≈ 0.811
-where
-A_saw, A_sq, A_tri: the fundamental’s peak amplitude for the ideal saw, square and triangle normalised to extrema of minus and plus one
-π: pi, about 3.14159
-≈: approximately equal to; values are rounded
-In words: equal ideal peak extrema do not imply equal fundamental strengths.
-```
+Equal waveform peaks do not imply equal fundamental strength. For ideal waves with extrema at minus and plus one, the fundamental amplitudes are about 0.637 for the saw, 1.273 for the square and 0.811 for the triangle. Other components combine with the fundamental to make the final waveform.
 
- The alternating signs are phases; they shape the waveform but not the magnitude spectrum. The saw series shown ramps upward with its jump halfway through a cycle measured from the upward zero crossing. Its shift relative to the earlier phase-function saw changes phases, not harmonic magnitudes. The triangle here also starts at an upward zero crossing, rather than at the minimum used by the earlier phase-function triangle.
+Changing where a waveform starts in its cycle changes harmonic phases, while leaving its harmonic magnitudes unchanged. Two saws with identical harmonic magnitudes can therefore begin their cycles at different-looking points.
 
 To compare harmonics by ear it helps to convert their relative amplitudes into decibels:
 
-```formula
-L = 20 log_10(A_n / A_1)
-L = 20 log_10(1/2) ≈ −6.0 dB
-L = 20 log_10(1/9) ≈ −19.1 dB
-where
-L: the level of harmonic n relative to the fundamental, in decibels (dB); negative means quieter
-A_n: the amplitude of harmonic n
-A_1: the amplitude of the fundamental
-log_10: the base-10 logarithm: the power you raise 10 to to get the number, so log_10(0.1) = −1
-20: the factor that converts an amplitude ratio to decibels
-dB: decibels
-≈: approximately equal to
-In words: halving an amplitude is about −6 dB; the saw's 2nd harmonic (1/2) is −6 dB and the triangle's 3rd (1/9) is about −19 dB.
-```
+A halving of amplitude is about a 6 dB reduction. This is why the saw’s second harmonic is about 6 dB below its fundamental, whereas the triangle’s much weaker third harmonic is about 19 dB below its fundamental.
 
 What this means for the sound:
 

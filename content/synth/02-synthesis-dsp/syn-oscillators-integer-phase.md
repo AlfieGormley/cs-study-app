@@ -11,9 +11,9 @@ The preserved C fragment below is a DDS implementation example, not a C lesson. 
 
 ## Integer phase accumulators
 
-Hardware and many embedded libraries use an unsigned 32-bit integer for phase, where the full range 0 to 2³² − 1 represents one cycle. Integer overflow then *is* the wrap, for free and with no drift:
+Hardware and many embedded libraries use an unsigned 32-bit integer for phase, where the full range 0 to 2³² − 1 represents one cycle. Storing an unsigned addition back into that 32-bit type wraps it automatically. The increment is still rounded to a finite frequency grid. The high phase bits choose the table entry; the remaining bits track progress between entries:
 
-```formula
+```formula reference
 N_inc = round((f 2^{32}) / f_s)
 P_next = (P + N_inc) mod 2^{32}
 i = floor(P_next / 2^{(32 − b)})
@@ -32,7 +32,7 @@ floor: rounds down to a whole number; dividing by 2^{(32 − b)} and rounding do
 In words: scale the frequency from cycles into counts; adding that each sample lets the register overflow to wrap, and the top bits of the phase choose the table entry.
 ```
 
-For 1000 Hz at 48 kHz the increment is 1000 × 4,294,967,296 / 48,000 ≈ 89,478,485 counts per sample. In C, using the shift operator `>>` to keep the top bits:
+For 1000 Hz at 48 kHz the rounded increment is 89,478,485 counts per sample. In C, using the shift operator `>>` to keep the top bits:
 
 ```c
 uint32_t inc = (uint32_t)llround(
@@ -41,19 +41,7 @@ phase += inc;        /* wraps at 2^32 */
 uint32_t index = phase >> (32 - BITS);
 ```
 
-The frequency resolution is the frequency that one count of increment represents:
-
-```formula
-f_res = f_s / 2^{32}
-f_res = 48000 Hz / 4294967296 ≈ 0.000011 Hz
-where
-f_res: the frequency resolution: the smallest step by which the frequency can change, in hertz (Hz)
-f_s: the sample rate, here 48,000 Hz
-2^{32}: 4,294,967,296 counts in one cycle
-≈: approximately equal to
-Hz: hertz, cycles per second
-In words: one count of increment is about a hundred-thousandth of a hertz, far finer than anyone can hear.
-```
+The frequency resolution is the frequency that one count of increment represents. At 48 kHz, changing the increment by one count changes the frequency by about 0.000011 Hz. That fine frequency grid is separate from the table resolution: using more phase bits does not create more stored waveform samples.
 
 This is the **numerically controlled oscillator** at the heart of direct digital synthesis (DDS) chips, and the PJRC Teensy Audio Library's waveform object uses a `uint32_t` phase accumulator in the same way (source checked 2026-10-04).
 

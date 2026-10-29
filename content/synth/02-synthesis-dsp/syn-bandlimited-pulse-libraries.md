@@ -7,22 +7,9 @@ summary: Pulse corrections and library oscillators.
 sourceLesson: syn-bandlimited
 ---
 
-The saw's jump is downwards (+1 to −1), so the correction is *subtracted*. A square has a rising jump at phase 0 and a falling one at the oscillator pulse width w, so it needs two corrections:
+The saw's jump is downwards (+1 to −1), so the correction is *subtracted*. A square has a rising jump at phase 0 and a falling one at the oscillator pulse width `w`, so it needs two corrections.
 
-```formula
-y = s + B(p) − B((p − w) mod 1)
-where
-y: the corrected pulse output sample
-s: the naive pulse: +1 while p < w, otherwise −1
-p: the phase, from 0 up to 1
-w: the oscillator pulse width, as a fraction of the cycle (0.5 for a square)
-B(x): the signed PolyBLEP step-correction function at the wrapped phase x, using the same fixed positive increment for both edges
-x: the function’s dummy phase argument, from zero inclusive to one exclusive
-mod: modulo, the remainder after division; (p − w) mod 1 is the phase measured from the falling edge, wrapped into 0 to 1
-In words: add a correction at the rising edge and subtract one at the falling edge, each measured from its own jump.
-```
-
-This is a Python fragment using the preceding unit’s `poly_blep` function. Supply a phase, a fixed oscillator pulse width strictly between zero and one, and a positive increment below half a cycle per sample. Extremely narrow pulses and moving edges need additional validation:
+This is a Python fragment using the preceding unit’s `poly_blep` function. Supply phase `p`, a fixed oscillator pulse width `w` strictly between zero and one, and a positive increment `dt` below half a cycle per sample. Extremely narrow pulses and moving edges need additional validation:
 
 ```python
 y = 1.0 if p < w else -1.0
@@ -34,16 +21,9 @@ y += poly_blep(p, dt)
 y -= poly_blep((p - w) % 1.0, dt)
 ```
 
-The same fixed-frequency FFT check, at oscillator pulse widths 0.5 and 0.3, gave −55.4 dB worst off-harmonic bin below 10 kHz for the corrected version (naive: −29.8 and −28.7 dB respectively). Remember that a pulse with a width other than 0.5 also has a DC offset (a non-zero average), which you may want to remove:
+The same fixed-frequency FFT check, at oscillator pulse widths 0.5 and 0.3, gave −55.4 dB worst off-harmonic bin below 10 kHz for the corrected version (naive: −29.8 and −28.7 dB respectively). Remember that a pulse with a width other than 0.5 also has a DC offset (a non-zero average), which you may want to remove.
 
-```formula
-DC = w(+1) + (1 − w) × (−1) = 2w − 1
-DC = 2 × 0.3 − 1 = −0.4
-where
-DC: the average value of the pulse over one cycle
-w: the oscillator pulse width, the fraction of the cycle spent at +1; the rest, 1 − w, is spent at −1
-In words: the average is the time-weighted mix of +1 and −1, which is zero only for a square (w = 0.5).
-```
+A pulse held high for less than half the cycle has a negative mean; held high for more than half, it has a positive mean. At a high fraction of 0.3 its mean is −0.4. Remove unwanted DC with a suitable blocker, allowing for its effect on low frequencies.
 
 Triangle waves have corners, not jumps. They can be corrected with a band-limited *ramp* (BLAMP), or made by integrating a PolyBLEP square with a leaky integrator, which is what DaisySP's `WAVE_POLYBLEP_TRI` does.
 
@@ -62,11 +42,11 @@ The fixed-note test also works with the actual checked DaisySP oscillator source
 
 | Method | CPU | Memory | Notes |
 |---|---|---|---|
-| Additive | high | low | exact; costly for low notes |
+| Additive | high | low | exact fixed-frequency sum; costly for low notes |
 | Mipmapped tables | low | medium | any waveform |
 | Oversampling | high | low | needs a good decimator |
 | PolyBLEP | low | no correction table | some top-end droop |
-| minBLEP | medium | small table | better suppression |
+| minBLEP | medium | small table | longer corrections can improve suppression |
 
 For a first subtractive voice on a microcontroller, PolyBLEP is the usual pragmatic choice.
 

@@ -32,7 +32,7 @@ A **voice** is everything needed to play one note. The textbook subtractive voic
 
 The "V" names come from analogue gear where each block was *voltage controlled*. In software the same structure holds: audio flows left to right, and control signals arrive from below.
 
-Notice there are two kinds of signal. **Audio signals** run at the sample rate and you hear them. **Control signals** (envelopes, LFOs, knob positions, MIDI) change more slowly and steer the audio blocks. Keeping these separate is central to real-time design, as later lessons show.
+Notice there are two kinds of signal. **Audio signals** run at the sample rate and you hear them. **Control signals** (envelopes, LFOs, knob positions, MIDI) steer the audio blocks. They often change more slowly, but fast modulation can require per-sample updates too. Keeping these separate is central to real-time design, as later lessons show.
 
 ## Key takeaways
 

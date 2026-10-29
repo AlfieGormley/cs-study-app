@@ -2,7 +2,7 @@
 id: syn-modulation-control-rate
 title: Control-rate and per-sample modulation
 level: intermediate
-minutes: 4
+minutes: 3
 summary: Control-rate and per-sample modulation.
 sourceLesson: syn-modulation
 ---
@@ -11,23 +11,7 @@ sourceLesson: syn-modulation
 
 Not every signal needs updating 48,000 times a second. Many synths compute modulation at a **control rate**, once per block, and only the audio path per sample.
 
-```formula
-f_ctl = f_s / B = 48000 Hz / 32 = 1500 Hz
-T_B = B / f_s = 32 / 48000 Hz ≈ 0.67 ms
-U = T f_ctl = 0.001 s × 1500 Hz = 1.5
-where
-f_ctl: the control rate, in hertz (Hz): updates per second
-f_s: the sample rate, 48,000 Hz
-B: the block size, 32 samples
-T_B: how long one block lasts, in milliseconds (ms)
-U: how many control updates happen during an event of length T
-T: the event's duration, here a 1 ms attack, 0.001 s
-s: seconds
-ms: milliseconds
-Hz: hertz, per second
-≈: approximately equal to
-In words: one update per block gives 1,500 updates a second, so a 5 Hz LFO gets 300 per cycle but a 1 ms attack only 1.5.
-```
+The important comparison is updates per event. A slow LFO gets many updates within one cycle, while a millisecond attack may span only one or two blocks. Holding one value for each block can make the fast event a handful of abrupt steps.
 
 At 48 kHz with 32-sample blocks the control rate is 1.5 kHz, and each block lasts 0.67 ms. That's plenty for a 5 Hz LFO (300 updates per cycle). It's not enough for:
 
@@ -37,17 +21,7 @@ At 48 kHz with 32-sample blocks the control rate is 1.5 kHz, and each block last
 
 For the sideband example, assume a sine carrier with constant-depth sinusoidal **linear FM**. This is not the deep exponential pitch mapping discussed next:
 
-```formula
-f_sb = f_car ± k f_mod
-where
-f_sb: the frequency of one sideband, in hertz (Hz)
-f_car: the carrier frequency (the oscillator being modulated), in Hz
-f_mod: the modulator frequency, in Hz
-k: a whole number 1, 2, 3...; each value gives one pair of sidebands
-±: plus or minus: one sideband above the carrier and one below
-Hz: hertz
-In words: sidebands sit either side of the carrier, spaced at multiples of the modulator frequency.
-```
+For constant-depth sinusoidal linear FM of a sine carrier, sidebands are spaced at whole multiples of the modulator frequency on either side of the carrier. Their levels depend on modulation depth, and components can cancel.
 
 With modest pitch depth, a 5 Hz LFO is commonly heard as vibrato. Its sidebands are spaced by 5 Hz; perception depends on carrier, depth and listening conditions rather than a universal boundary between “wobble” and “separate tones”. A 220 Hz modulator on a 440 Hz carrier puts them at 220, 660, 880 Hz and so on: new tones, which a block-rate staircase cannot produce correctly.
 

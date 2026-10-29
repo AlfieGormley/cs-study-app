@@ -2,7 +2,7 @@
 id: syn-filters-response-slope
 title: Frequency response, cutoff and slope
 level: intermediate
-minutes: 4
+minutes: 3
 summary: Frequency response, cutoff and slope.
 sourceLesson: syn-filters
 ---
@@ -39,30 +39,13 @@ For an analogue-style all-pole low-pass, far into its stopband, each pole contri
 | 2 | 12 dB/oct | two-pole, biquad |
 | 4 | 24 dB/oct | four-pole, ladder |
 
-To estimate how much a low-pass cuts a frequency well above its cutoff, count the octaves and multiply by the slope:
+To estimate how much a low-pass cuts a frequency well above its cutoff, count the octaves and multiply by the slope.
 
-```formula
-S ≈ 6 dB/oct × N_p
-A ≈ S × log_2(f / f_c)
-A ≈ 24 dB/oct × log_2(4000 Hz / 500 Hz)
-A ≈ 24 dB/oct × 3 = 72 dB
-where
-S: the slope well above cutoff, in decibels per octave (dB/oct)
-N_p: the filter's order: its number of poles
-A: the attenuation at frequency f: how much quieter the output is than the input, in decibels (dB)
-log_2: the base-2 logarithm: the number of doublings (octaves) from f_c up to f
-f: the frequency you are asking about, in hertz (Hz)
-f_c: the cutoff frequency, in Hz
-dB: decibels
-oct: octave, a doubling of frequency
-Hz: hertz, cycles per second
-≈: approximately equal to
-In words: each pole adds about 6 dB of cut per octave, and the total cut is the slope times the number of octaves above cutoff; a four-pole filter at 500 Hz cuts a 4 kHz harmonic by about 72 dB.
-```
+A steeper stopband slope reduces distant harmonics more strongly for the same frequency ratio. For example, three octaves above cutoff means three doublings, not three extra hertz. Compare measured response curves when exact rejection matters.
 
 This is an asymptote (the straight line the curve approaches): near the cutoff, and with resonance, the real curve differs, so use it only for frequencies well above cutoff.
 
-Steeper slopes sound more "synthy" and decisive; gentle slopes sound more natural.
+A steep slope separates low and high content more sharply; a gentle slope leaves more upper harmonics. Neither is inherently more natural: choose for the target sound.
 
 ## Key takeaways
 

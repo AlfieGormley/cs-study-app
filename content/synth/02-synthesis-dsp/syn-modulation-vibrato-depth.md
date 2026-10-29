@@ -13,19 +13,15 @@ sourceLesson: syn-modulation
 
 **Pitch depth belongs in cents or semitones**, because pitch is heard logarithmically. Add the modulation in semitones (or cents), then convert:
 
-```formula
-f = f_note 2^{s/12}
+```formula reference
 f = f_note 2^{c/1200}
-f = 440 Hz × 2^{50/1200} ≈ 452.89 Hz
 where
 f: the modulated frequency, in hertz (Hz)
 f_note: the note's unmodulated frequency, in Hz
-s: the pitch offset in semitones (12 to an octave), positive or negative; for vibrato, the LFO value times the depth in semitones
-c: the same offset in cents (100 to a semitone, 1200 to an octave)
+c: the signed pitch offset in cents (100 to a semitone, 1200 to an octave); for vibrato, the LFO value times the depth in cents
 2^{x}: 2 raised to the power x: +12 semitones (+1200 cents) doubles f, −12 halves it
 Hz: hertz
-≈: approximately equal to
-In words: add modulation in musical units, then convert by doubling the frequency for every 12 semitones; 50 cents above 440 Hz is about 452.89 Hz.
+In words: Specify vibrato depth in cents to keep the same musical width on every note. A rise of 1200 cents doubles frequency; the same-sized downward interval halves it.
 ```
 
 | Vibrato depth | 440 Hz swings between |
@@ -33,7 +29,7 @@ In words: add modulation in musical units, then convert by doubling the frequenc
 | ±50 cents | 427.47 – 452.89 Hz |
 | ±100 cents | 415.30 – 466.16 Hz |
 
-For vibrato intended to have the same musical interval on every note, a fixed depth in hertz is unsuitable: ±10 Hz is a wide vibrato on a bass note and barely noticeable on a high one.
+For vibrato intended to have the same musical interval on every note, a fixed depth in hertz is unsuitable: ±10 Hz is a wide vibrato on a bass note and barely noticeable on a high one. A fixed deviation in hertz is used deliberately in linear FM, where the goal is a chosen modulation index and sideband pattern rather than equal musical width.
 
 ## Key takeaways
 

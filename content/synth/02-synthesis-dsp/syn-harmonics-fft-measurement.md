@@ -13,10 +13,9 @@ The roadmap asks you to compare spectra with an existing analysis tool rather th
 
 The FFT reports the signal's content in a row of evenly spaced frequency slots called **bins**. Their spacing, and which bin holds a given frequency, follow from the sample rate and the number of samples analysed:
 
-```formula
+```formula reference
 Δf = f_s / N
 k = f / Δf = (fN) / f_s
-Δf = 48000 Hz / 48000 = 1 Hz
 where
 Δf: delta f, the spacing between neighbouring bins, in hertz (Hz)
 f_s: the sample rate, in Hz, here 48,000
@@ -24,7 +23,7 @@ N: the number of samples analysed, here 48,000 (one second)
 k: the bin index (position in the output array) that holds frequency f
 f: the frequency you want to look up, in Hz
 Hz: hertz, cycles per second
-In words: the bins are the sample rate divided by the analysis length apart; analyse one second and they are exactly 1 Hz apart, so bin number equals frequency in hertz.
+In words: Longer recordings give more closely spaced FFT bins. A one-second capture has one-hertz spacing, while a half-second capture has two-hertz spacing; a tone exactly on a bin can be read there.
 ```
 
 This is **coherent sampling**: make the test components complete whole cycles in the capture. A useful trick follows: analyse exactly **one second** at an **integer** frequency. Then the FFT bins are exactly 1 Hz apart and every harmonic lands exactly on a bin, so there is no **spectral leakage** (energy smearing into neighbouring bins) to worry about. Half a second (24,000 samples) would give 2 Hz bins, so 300 Hz would be in bin 150.
@@ -56,13 +55,14 @@ square [1. 0. 0.333 0. 0.2 0. 0.143]
 tri [1. 0. 0.111 0. 0.04 0. 0.02]
 ```
 
-(Spacing tidied to fit; values unchanged.) The inverse-harmonic-number, odd-only and reciprocal-square harmonic patterns appear to the displayed precision. These are sampled naive waveforms, so small discretisation and folded-harmonic effects remain; this experiment does not prove exact band-limiting. The absolute fundamental amplitudes come out as 0.6366, 1.2732 and 0.8106, matching the leading factors of the three series above.
+(Spacing tidied to fit; values unchanged.) The inverse-harmonic-number, odd-only and reciprocal-square harmonic patterns appear to the displayed precision. These are sampled naive waveforms, so small discretisation and folded-harmonic effects remain; this experiment does not prove exact band-limiting. The absolute fundamental amplitudes come out as 0.6366, 1.2732 and 0.8106, matching the ideal-wave fundamental strengths from the harmonic-pattern unit to the displayed precision.
+
+At a fixed sample rate, raising the fundamental raises every harmonic. Fewer harmonics then fit strictly below Nyquist, half the sample rate. A band-limited oscillator must adjust its harmonic content as pitch rises; a clean-looking low-note test does not establish high-note performance.
 
 Note the scaling: `rfft` returns sums, not amplitudes. For a coherent real sine in an interior positive-frequency bin, multiply its magnitude by twice the reciprocal of the sample count. Do not double DC or the Nyquist endpoint, which do not have separate negative-frequency partners:
 
-```formula
+```formula reference
 A = 2 × |X[k]| / N
-|X[k]| = (NA) / 2 = 48000 × 0.5 / 2 = 12000
 where
 A: the amplitude (peak height) of the sine at bin k
 X[k]: the complex number the FFT returns for bin k
@@ -70,10 +70,10 @@ k: the integer interior positive-frequency bin index; neither DC nor the Nyquist
 |X[k]|: its magnitude (size), ignoring phase
 N: the number of samples analysed, here 48,000
 2: accounts for a real sine's energy being split equally between a positive and a negative frequency
-In words: divide the raw bin magnitude by half the number of samples to get the sine's amplitude.
+In words: For a coherent real sine at an interior positive-frequency bin, divide the raw FFT magnitude by half the number of samples to recover peak amplitude. DC and the Nyquist endpoint are not doubled.
 ```
 
-So one second of a 0.5-amplitude sine gives a raw magnitude of 12,000, and 2 × 12,000 / 48,000 brings it back to 0.5. For non-coherent frequencies or real recordings, a window such as `np.hanning` reduces sidelobe leakage while broadening peaks. Correct for its coherent gain if estimating amplitudes. Finite recordings and modulated sounds need a measurement method matched to the question.
+For example, one second of a 0.5-amplitude sine at 48 kHz gives a raw magnitude of 12,000 in its coherent interior bin; amplitude normalisation recovers 0.5. For non-coherent frequencies or real recordings, a window such as `np.hanning` reduces sidelobe leakage while broadening peaks. Correct for its coherent gain if estimating amplitudes. Finite recordings and modulated sounds need a measurement method matched to the question.
 
 ## Key takeaways
 

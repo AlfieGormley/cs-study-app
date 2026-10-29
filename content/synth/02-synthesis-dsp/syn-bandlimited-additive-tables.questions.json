@@ -3,27 +3,27 @@
     "id": "syn-bandlimited-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You build mipmapped saw tables at a 48 kHz sample rate with no aliasing allowed. One table serves notes up to 3.5 kHz. What is the highest harmonic it may contain?",
+    "prompt": "A wavetable serves a range of pitches. At which pitch should you set its strict below-Nyquist source-harmonic limit?",
     "options": [
       {
-        "text": "6",
-        "explanation": "Correct. Each harmonic of a 3.5 kHz note must stay below 24 kHz: 24,000 / 3,500 ≈ 6.86, so the 6th is the highest (it is at 21 kHz; the 7th would be 24.5 kHz)."
+        "text": "The highest pitch served by that table",
+        "explanation": "Correct. That is where each retained harmonic reaches its highest frequency and has the least room below Nyquist."
       },
       {
-        "text": "13",
-        "explanation": "That uses the full 48 kHz sample rate instead of half of it: 48,000 / 3,500 ≈ 13.7. Harmonics up to 45.5 kHz would alias badly."
+        "text": "The lowest pitch, because low notes contain more harmonics",
+        "explanation": "A table built only for the lowest pitch can carry unsafe harmonics when played higher."
       },
       {
-        "text": "24",
-        "explanation": "24 kHz is exactly Nyquist for a 1 kHz top note; strictly below Nyquist would allow only 23 harmonics there."
+        "text": "Any pitch: storing samples automatically prevents aliasing",
+        "explanation": "Stored cycles do not automatically constrain playback spectrum; interpolation also needs checking."
       },
       {
-        "text": "As many as you like; tables are band-limited automatically",
-        "explanation": "Tables only become band-limited if you build them that way, with additive synthesis limited by the table's highest note."
+        "text": "Only the middle pitch, ignoring the endpoints",
+        "explanation": "The upper endpoint can violate the limit even if the middle is safe."
       }
     ],
     "answer": 0,
-    "workedExample": "Rule: every harmonic of the table's highest note must be below Nyquist.\n\n```formula\nH = ⌈(f_s / 2) / f_top⌉ − 1\nH = ⌈24000 / 3500⌉ − 1 = ⌈6.86⌉ − 1 = 6\n6 × 3500 Hz = 21000 Hz\n7 × 3500 Hz = 24500 Hz\nwhere\nH: the highest harmonic the table may contain\n⌈x⌉: the ceiling of x: rounded up to a whole number\nf_s: the sample rate, 48,000 Hz; f_s / 2 is Nyquist, 24,000 Hz\nf_top: the highest note the table serves, 3,500 Hz\nHz: hertz, per second\nIn words: the 6th harmonic (21 kHz) fits below 24 kHz; the 7th (24.5 kHz) would not.\n```\n\nLower notes in the same table lose a little brightness because they could have used more harmonics. That's the mipmap trade-off.",
+    "workedExample": "As playback pitch rises, every table harmonic rises by the same ratio. Choose source harmonics for the highest pitch in the range, then inspect playback interpolation and modulation separately. Lower notes in that range may be less bright than their own bandwidth would allow.",
     "link": {
       "title": "Alias-free classic waveforms — Stilson and Smith",
       "url": "https://ccrma.stanford.edu/~stilti/papers/blit.pdf"
@@ -33,27 +33,27 @@
     "id": "syn-bandlimited-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You consider additive saws for an 8-voice synth at 48 kHz whose lowest note is 55 Hz. In the worst case (all voices on the lowest note), roughly how many sine evaluations per output sample does that need?",
+    "prompt": "You generate saws by summing every harmonic below Nyquist separately for every voice. Which workload is likely to be most demanding at a fixed sample rate?",
     "options": [
       {
-        "text": "About 3,500",
-        "explanation": "Correct. 24,000 / 55 ≈ 436 harmonics per voice, × 8 voices ≈ 3,488 sines per sample, i.e. over 167 million per second."
+        "text": "Many low notes sounding together",
+        "explanation": "Correct. Low notes fit more harmonics, and independent voices multiply that work."
       },
       {
-        "text": "About 440",
-        "explanation": "That's one voice. Polyphony multiplies the cost."
+        "text": "One high note, because its fundamental is higher",
+        "explanation": "A high fundamental leaves room for fewer below-Nyquist harmonics."
       },
       {
-        "text": "About 7,000",
-        "explanation": "That uses the full 48 kHz sample rate as the limit instead of the 24 kHz Nyquist frequency."
+        "text": "Any note count, because the harmonic sum is computed only at note-on",
+        "explanation": "In this stated implementation the sine components must be evaluated throughout playback."
       },
       {
-        "text": "8, one per voice",
-        "explanation": "That would be a sine oscillator per voice; a saw needs every harmonic below Nyquist."
+        "text": "An idle voice pool, because unused voices contain more harmonics",
+        "explanation": "Idle voices need not perform the active per-harmonic work."
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nH = ⌈(f_s / 2) / f_0⌉ − 1\nH = ⌈24000 / 55⌉ − 1 = ⌈436.4⌉ − 1\nH = 436\nS = H × V = 436 × 8 = 3488\nS × f_s = 3488 × 48000 Hz ≈ 1.67e8\nwhere\nH: harmonics per voice below Nyquist\n⌈x⌉: the ceiling of x: rounded up to a whole number\nf_s: the sample rate, 48,000 samples per second; f_s / 2 is Nyquist, 24,000 Hz\nf_0: the lowest note, 55 Hz\nS: sine evaluations per output sample\nV: the number of voices, 8\nHz: hertz, per second\n≈: approximately equal to\nIn words: 436 sines per voice times 8 voices is about 3,500 sines every sample, or about 167 million a second.\n```\n\nThat's why additive is rarely used for plain saws on small hardware, and why tables or PolyBLEP are preferred.",
+    "workedExample": "Count the causes of work qualitatively: lower pitch permits more components, and polyphony repeats the calculation for more voices. Tables built offline move that harmonic construction out of playback, trading memory for playback cost. Measure the actual target before selecting a voice limit.",
     "link": {
       "title": "Alias-free classic waveforms — Stilson and Smith",
       "url": "https://ccrma.stanford.edu/~stilti/papers/blit.pdf"
@@ -63,27 +63,27 @@
     "id": "syn-bandlimited-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "At a 48 kHz sample rate you decide aliases are acceptable if they land at or above 20 kHz (beyond most listeners' hearing). For a mipmap table whose highest note is 2 kHz, what's the highest harmonic you can now keep?",
+    "prompt": "A table design intentionally permits aliases confined near the top of the output band to retain more brightness. Which description is honest?",
     "options": [
       {
-        "text": "12",
-        "explanation": "12 reaches Nyquist exactly at 2 kHz; the strict below-Nyquist limit is 11. The relaxed rule permits more."
+        "text": "It is strictly alias-free because many listeners cannot hear the top band",
+        "explanation": "An audibility assumption does not change whether folding occurs."
       },
       {
-        "text": "14",
-        "explanation": "Correct. A harmonic between 24 and 48 kHz folds to 48 kHz minus its frequency. For that to be at least 20 kHz the harmonic must be at most 28 kHz; 28,000 / 2,000 = 14."
+        "text": "It uses an explicit spectral-error tolerance that must be checked across its pitch range and processing chain",
+        "explanation": "Correct. The aliases remain; their audibility and later interactions depend on the application."
       },
       {
-        "text": "10",
-        "explanation": "That limits harmonics to 20 kHz itself, which is stricter than needed."
+        "text": "It is safe for arbitrary pitch modulation once one static top note passes",
+        "explanation": "Modulation creates sidebands and can change the spectral result; a fixed test is insufficient."
       },
       {
-        "text": "24",
-        "explanation": "Harmonic 24 reaches 48 kHz and can alias to DC at the top note and low frequencies nearby. DC itself is not an audible tone, but is undesirable."
+        "text": "No output equipment can respond to frequencies near the top of the band",
+        "explanation": "The output chain may respond or introduce further nonlinear products; this is not a universal guarantee."
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nf_a = f_s − f_h\nf_s − f_h ≥ 20000 Hz\nf_h ≤ 48000 Hz − 20000 Hz = 28000 Hz\nH = 28000 Hz / 2000 Hz = 14\nwhere\nf_a: the alias frequency, in hertz (Hz)\nf_s: the sample rate, 48,000 Hz\nf_h: a harmonic's frequency, between 24 and 48 kHz, in Hz\n≥, ≤: at least; at most\nH: the highest harmonic of the 2 kHz top note that may be kept\nHz: hertz, per second\nIn words: harmonics up to 28 kHz fold to 20 kHz or above, and 28 kHz is the 14th harmonic of a 2 kHz note.\n```\n\nYou gain three extra (relative to a strict 11-harmonic table) harmonics' brightness for the lowest notes in that table, and the aliases that do occur sit at 20–24 kHz. It is a deliberate engineering trade-off; check it suits your output chain (some listeners and equipment may still respond up there).",
+    "workedExample": "The design accepts some folding in exchange for brightness. State the accepted band and test the whole table range, interpolation and intended modulation. Treat hearing and output-chain assumptions as conditions rather than relabelling the result alias-free.",
     "link": {
       "title": "Alias-free classic waveforms — Stilson and Smith",
       "url": "https://ccrma.stanford.edu/~stilti/papers/blit.pdf"

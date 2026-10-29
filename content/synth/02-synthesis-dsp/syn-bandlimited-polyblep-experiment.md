@@ -11,25 +11,11 @@ This is an offline NumPy experiment requiring NumPy installed in the Python envi
 
 ## A PolyBLEP saw in Python
 
-The polynomial below is the widely circulated two-sample PolyBLEP (as used in Martin Finke's tutorial). Written as maths first:
+The code uses the common two-sample PolyBLEP also illustrated in Martin Finke’s tutorial.
 
-```formula
-y = 2p − 1 − B
-B = 2u − u^2 − 1,  u = p / dt
-B = u^2 + 2u + 1,  u = (p − 1) / dt
-where
-y: the corrected saw output sample
-p: the phase, from 0 up to 1, in cycles
-B: the PolyBLEP correction: use the first formula when p < dt (the sample just after the jump), the second when p > 1 − dt (the sample just before it), and B = 0 otherwise
-u: how far the sample is from the jump, measured in samples: between 0 and 1 just after it, between −1 and 0 just before it
-dt: the phase increment per sample (f_0 / f_s), as in the code
-f_0: the note's frequency, in hertz
-f_s: the sample rate, in hertz
-<, >: less than, greater than
-In words: away from the jump the saw is untouched; on the one sample either side of the jump, a small curve is subtracted that replaces the instant drop with a short smooth approximation with reduced aliasing, not an ideal strictly band-limited step.
-```
+The correction is zero away from the falling edge. Just before that edge it lowers the saw; just after it, it raises the saw. Spreading the transition across nearby samples reduces the unwanted high-frequency content, while also changing wanted harmonics near Nyquist.
 
-For the numeric half-sample example, a phase of 0.05 cycles with an increment of 0.1 gives a rescaled distance of 0.5. The correction is −0.25, so the corrected sample is −0.65 rather than the naive −0.9. The question’s worked card shows the substitution. The code assumes constant positive frequency strictly below Nyquist, finite values, and one sample-loop evaluation per output sample:
+The code assumes constant positive frequency strictly below Nyquist, finite values, and one sample-loop evaluation per output sample:
 
 ```python
 import numpy as np
@@ -86,7 +72,7 @@ naive 9405 -29.8 0.0
 polyblep 9405 -55.4 -1.9
 ```
 
-Reading it: the strongest alias below 10 kHz is at 9,405 Hz in both cases (harmonic 31 folded), but PolyBLEP pushes it from −29.8 dB to −55.4 dB relative to the fundamental, an improvement of about 25 dB. The last column is the 10th harmonic (12,450 Hz) relative to its ideal the reciprocal of harmonic number level: PolyBLEP softens it by 1.9 dB. In the same run the 19th harmonic (23.7 kHz) was 7.6 dB low. That is PolyBLEP's trade-off: it gently dulls the very top octave while removing most of the audible aliasing.
+Reading it: the strongest alias below 10 kHz is at 9,405 Hz in both cases (harmonic 31 folded), but PolyBLEP pushes it from −29.8 dB to −55.4 dB relative to the fundamental, an improvement of about 25 dB. The last column is the 10th harmonic (12,450 Hz) relative to its ideal inverse-harmonic-number level: PolyBLEP softens it by 1.9 dB. In the same run the 19th harmonic (23.7 kHz) was 7.6 dB low. That is PolyBLEP's trade-off: it gently dulls the very top octave while reducing the measured off-harmonic content. This fixed-note result is not a guarantee for moving pitch or every listening condition.
 
 ## Key takeaways
 
@@ -96,5 +82,5 @@ Reading it: the strongest alias below 10 kHz is at 9,405 Hz in both cases (harmo
 ## Further reading
 
 - [Oscillator implementation — DaisySP](https://raw.githubusercontent.com/electro-smith/DaisySP/2c72eaf9eac5fc0dca1919d65d606da907832618/Source/Synthesis/oscillator.cpp)
-- [finke](https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/)
+- [PolyBLEP oscillator tutorial — Martin Finke](https://www.martin-finke.de/articles/audio-plugins-018-polyblep-oscillator/)
 - [Real FFT — NumPy](https://numpy.org/doc/stable/reference/generated/numpy.fft.rfft.html)

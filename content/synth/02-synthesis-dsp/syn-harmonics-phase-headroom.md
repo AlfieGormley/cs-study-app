@@ -41,24 +41,18 @@ for ph in (0.0, np.pi / 2):  # sin vs cos
 [1.    0.5   0.333] 4.25
 ```
 
-Same harmonic amplitudes, but the cosine-phase version has a peak 2.3 times higher, because all its harmonics reach their crests together at the start of each cycle. In decibels:
+Same harmonic amplitudes, but the cosine-phase version has a peak 2.3 times higher, because all its harmonics reach their crests together at the start of each cycle. For output gain, the cosine-phase version needs about 7.4 dB more peak headroom in this experiment. That extra peak comes from timing, without increasing any component’s amplitude.
 
-```formula
-ΔL = 20 log_10(P_2 / P_1)
-ΔL = 20 log_10(4.25 / 1.81) ≈ 7.4 dB
-where
-ΔL: delta L, the difference in peak level, in decibels (dB)
-P_1: the peak of the sine-phase version, 1.81
-P_2: the peak of the cosine-phase version, 4.25
-log_10: the base-10 logarithm
-dB: decibels
-≈: approximately equal to
-In words: lining up the harmonics' crests raised the peak by about 7.4 dB without changing any harmonic's amplitude.
-```
-
-The experiment proves equal harmonic magnitudes, not equal perception. Human studies of harmonic complexes show that phase differences can be audible, with sensitivity depending on harmonic resolution, fundamental frequency and listening conditions. Listen if timbre matters; do not use a magnitude FFT as proof that two tones must sound identical. Your **headroom** does not care what it sounds like: the peak is what clips. Filters change phases, which is one reason a filtered signal can peak higher than its input.
+The experiment proves equal harmonic magnitudes, not equal perception. Human studies of harmonic complexes show that phase differences can be audible, with sensitivity depending on factors such as fundamental frequency, the listener and listening conditions. Listen if timbre matters; do not use a magnitude FFT as proof that two tones must sound identical. Your **headroom** does not care what it sounds like: the peak is what clips. Filters change phases, which is one reason a filtered signal can peak higher than its input.
 
 For a changing note, the harmonic levels and phases can evolve during the attack and decay. One static magnitude spectrum cannot describe all that articulation; the next unit returns to this broader meaning of timbre.
+
+> [!analogy] Real-world analogy: Several people pushing together
+> The largest combined push happens when everyone pushes at the same moment.
+>
+> **How it maps:** Harmonic phases determine when peaks line up. Keeping individual amplitudes unchanged can still change the largest combined sample.
+>
+> **Where it stops:** Different harmonics cycle at different rates; the analogy predicts peak alignment, not how loud or alike two sounds will seem.
 
 ## Key takeaways
 
@@ -68,5 +62,5 @@ For a changing note, the harmonic levels and phases can evolve during the attack
 ## Further reading
 
 - [FFT definitions and normalisation — NumPy](https://numpy.org/doc/stable/reference/routines.fft.html)
-- [mdft](https://ccrma.stanford.edu/~jos/mdft/)
+- [Mathematics of the DFT — Julius O. Smith](https://ccrma.stanford.edu/~jos/mdft/)
 - [Phase discrimination in harmonic complexes — Drennan and colleagues](https://pmc.ncbi.nlm.nih.gov/articles/PMC2536810/)

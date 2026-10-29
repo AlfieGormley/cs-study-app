@@ -1,3 +1,14 @@
+# Concept-first rewrite: RESUMED (2026-10-29)
+
+The user resumed the paused concept-first rewrite on 2026-10-29 using the durable handoff in
+`.handoffs/concept-first/` (HANDOFF.txt, queue.json, evidence/). Work happens in two checkouts there:
+`worktree/` holds every author/verifier draft; `release/` (tracking `main`) receives only modules
+that are frozen, independently verified and stamped, and is the only place builds are committed.
+Session progress: `.handoffs/concept-first/cf2-progress.json`; shared agent rules:
+`.handoffs/concept-first/cf2-common-brief.md`; portable release QA: `evidence/cf2-release/qa/`.
+Scope is unchanged: 10 subjects, 60 modules, 1,845 lessons, 4,029 questions. Current review status
+is generated in `docs/concept-first-report.md`. The four retired subjects stay removed.
+
 # Current application scope: four subjects removed (2026-10-26)
 
 The user permanently removed Operating Systems (`os`), Computer Architecture (`architecture`),
@@ -7,7 +18,7 @@ overrides are removed. `content/retired-subjects.json` prevents accidental reint
 review documents below describe earlier scope; they are not instructions to restore those courses.
 
 The remaining application has **10 subjects, 60 modules, 1,845 lessons and 4,029 questions**.
-The concept-first rewrite remains **PAUSED BY USER**. Of the retained modules, **14 are independently
+At removal time the concept-first rewrite was paused (resumed 2026-10-29; see above). Of the retained modules, **14 are independently
 reviewed (210 lessons and 535 questions); 46 still need review**. Recalculate progress against this
 scope rather than the old 86-module denominator. The permanent concept-first authoring rules remain.
 

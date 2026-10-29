@@ -9,7 +9,7 @@ sourceLesson: syn-synthesis-overview
 
 ## Monophonic and polyphonic
 
-A **monophonic** synth has one voice: it plays one note at a time. A **polyphonic** synth has several voices and can play chords. *Paraphonic* designs sit between: several oscillators at different pitches share one filter and amplifier.
+A **monophonic** synth has one voice: it plays one note at a time. A **polyphonic** synth has several voices and can play chords. *Paraphonic* designs share some sound-shaping stages across several pitches, commonly a filter and its envelope. Amplifier and triggering arrangements vary by instrument.
 
 ### Polyphonic: voice allocation
 
@@ -61,7 +61,14 @@ The following is an **offline policy sketch**, not callback-ready allocation cod
 
 ## Cost and choice
 
-For the illustrated design with one oscillator, one filter and two envelopes per voice, 8 independent voices require 8 oscillator states, 8 filter states and 16 envelopes. Shared LFOs and output effects need not multiply with the voice count. On a microcontroller this decides your CPU budget. A mono synth is the smallest complete instrument, and a well-structured monophonic voice becomes one voice of a poly synth later.
+For the illustrated design with one oscillator, one filter and two envelopes per voice, 8 independent voices require 8 oscillator states, 8 filter states and 16 envelopes. Shared LFOs and output effects need not multiply with the voice count. On a microcontroller, measure the busiest supported combinations on the target board, including shared effects and control handling. Leave processing headroom for variation; a desktop experiment or average voice cost does not guarantee callback deadlines. A mono synth is the smallest complete instrument, and a well-structured monophonic voice becomes one voice of a poly synth later.
+
+> [!analogy] Real-world analogy: A room with a fixed number of chairs
+> When every chair is occupied, seating someone new means asking someone else to leave.
+>
+> **How it maps:** The chairs are the voice pool. An idle voice is an empty chair; stealing chooses an occupied voice to reassign.
+>
+> **Where it stops:** A released note may still have an audible tail, and fading that tail is an audio transition problem, not just a seating policy.
 
 ## Key takeaways
 

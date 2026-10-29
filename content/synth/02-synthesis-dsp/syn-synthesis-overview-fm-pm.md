@@ -9,9 +9,9 @@ sourceLesson: syn-synthesis-overview
 
 ### FM and PM
 
-In **frequency modulation** one signal varies an oscillator’s instantaneous frequency. Here we consider sinusoidal modulation of one sine oscillator (the *carrier*) by another (the *modulator*), at constant rates and depth. More general modulation need not have this same simple sideband grid. This creates new frequency components, called **sidebands**, at the carrier frequency plus and minus multiples of the modulator frequency, so two sine oscillators can produce a complex spectrum. The formula below tells you where those sidebands land:
+In **frequency modulation** one signal varies an oscillator’s instantaneous frequency. Here we consider sinusoidal modulation of one sine oscillator (the *carrier*) by another (the *modulator*), at constant rates and depth. More general modulation need not have this same simple sideband grid. This creates new frequency components, called **sidebands**, at the carrier frequency plus and minus multiples of the modulator frequency, so two sine oscillators can produce a complex spectrum. The optional relationship records that spacing:
 
-```formula
+```formula reference
 f_sb = f_car ± k f_mod
 where
 f_sb: the frequency of one sideband, in hertz (Hz)
@@ -27,7 +27,7 @@ For example, a 400 Hz carrier modulated by a 100 Hz modulator gives sidebands at
 
 John Chowning developed FM synthesis at Stanford from 1967 and Yamaha licensed it; the DX7 (1983) made it famous.
 
-Yamaha's commercial "FM" (the DX7 included) is actually implemented as **phase modulation** (adding the modulator to the carrier's *phase* rather than its frequency). The two are mathematically closely related: phase-modulating with a signal is the same as frequency-modulating with its derivative, after converting phase units to frequency units. A practical advantage of PM is that a modulator with a DC offset only shifts the carrier's phase, whereas in true FM it shifts the carrier's pitch. FM is cheap in CPU but notoriously hard to programme by ear.
+Yamaha's commercial "FM" (the DX7 included) is actually implemented as **phase modulation** (adding the modulator to the carrier's *phase* rather than its frequency). The two are mathematically closely related: phase-modulating with a signal is the same as frequency-modulating with its derivative, after converting phase units to frequency units. A practical advantage of PM is that a modulator with a DC offset only shifts the carrier's phase, whereas in true FM it shifts the carrier's pitch. A small FM/PM oscillator network can create rich spectra with little work, but cost grows with its operators, oversampling and implementation. Predicting a patch by ear can be difficult because sideband levels change nonlinearly with index.
 
 ## Key takeaways
 

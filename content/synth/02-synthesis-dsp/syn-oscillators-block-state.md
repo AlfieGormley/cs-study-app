@@ -52,20 +52,9 @@ Output:
 0.9239 0.866
 ```
 
-You can check the printed phase by hand. After n samples the phase has advanced n increments:
+The printed phase describes where the next block will continue:
 
-```formula
-φ = (nf) / f_s
-φ = 128 × 1000 Hz / 48000 Hz ≈ 2.6667
-where
-φ: phi, the total phase travelled, in cycles, before wrapping
-n: the number of samples processed, here two blocks of 64 = 128
-f: the oscillator frequency, here 1000 Hz (1 kHz)
-f_s: the sample rate, here 48,000 Hz
-≈: approximately equal to
-Hz: hertz, cycles per second
-In words: the phase has gone round 2.6667 times; dropping the 2 whole cycles leaves 0.6667, which is what the code printed.
-```
+After both blocks, the oscillator has travelled two complete cycles and another two thirds. Its stored phase is the remaining two thirds, ready for the next block.
 
 The last sample of block A and the first of block B are consecutive points on the same sine.
 

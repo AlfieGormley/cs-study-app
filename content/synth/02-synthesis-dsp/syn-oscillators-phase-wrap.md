@@ -44,27 +44,8 @@ True 44.0 1090.9
 False 43.637 1100.0
 ```
 
-You can predict this error without running anything. With reset-to-zero, each cycle lasts the ideal number of samples rounded **up** to a whole number:
+With reset-to-zero, each cycle lasts the ideal number of samples rounded **up** to a whole number. The output therefore repeats too slowly unless the requested cycle already fits a whole number of samples.
 
-```formula
-N = ⌈f_s / f⌉
-N = ⌈48000 / 1100⌉ = ⌈43.64⌉ = 44
-f_out = f_s / N = 48000 Hz / 44 ≈ 1090.9 Hz
-e = 1200 log_2(f_out / f)
-e = 1200 log_2(1090.9 / 1100) ≈ −14
-where
-N: the length of each cycle, in samples, when the phase is reset to zero
-⌈x⌉: the ceiling of x: x rounded up to the next whole number, so ⌈43.64⌉ = 44
-f_s: the sample rate, here 48,000 Hz
-f: the frequency asked for, here 1100 Hz
-f_out: the frequency actually produced, in hertz (Hz)
-e: the tuning error, in cents (hundredths of a semitone); negative means flat
-log_2: the base-2 logarithm: the power you raise 2 to to get the number, so log_2(2) = 1 and log_2(0.5) = −1
-1200: the number of cents in an octave (12 semitones × 100 cents)
-Hz: hertz, cycles per second
-≈: approximately equal to
-In words: resetting to zero rounds every cycle up to a whole number of samples, so the note plays flat by an amount you can work out in advance.
-```
 
 So resetting makes every 1100 Hz cycle exactly 44 samples, giving 1090.9 Hz: about 14 cents flat, an audible error. The error is worst for high notes, where one extra sample is a large part of a short cycle. Subtracting 1 keeps the fraction, so cycle lengths vary between 43 and 44 samples and approach the requested average pitch in exact arithmetic; finite measurements and floating-point arithmetic introduce small errors.
 
@@ -75,18 +56,23 @@ Two more wrapping cases matter:
 
 Here is why `p - floor(p)` works in both directions:
 
-```formula
+```formula essential
 p_w = p − floor(p)
-p_w = 2.4 − floor(2.4) = 2.4 − 2 = 0.4
-p_w = −0.3 − floor(−0.3) = −0.3 + 1 = 0.7
 where
 p_w: the wrapped phase, always from 0 up to (not including) 1
 p: the phase before wrapping, in cycles; it may be above 1 or below 0
 floor: rounds down to a whole number, always towards minus infinity, so floor(2.4) = 2 and floor(−0.3) = −1
-In words: subtract the whole number of cycles, rounding down, which leaves only the fraction of a cycle, even for negative phases.
+In words: Subtract complete cycles, rounding down, to retain a position from zero up to one cycle. This also wraps negative phase upwards while keeping its fractional position.
 ```
 
 Wrapping does not make frequencies above Nyquist representable. The floor method is a finite-number range operation: reject NaN/infinity, and do not infer numerical accuracy once enormous phases have already lost their fractional bits.
+
+> [!analogy] Real-world analogy: Keeping your place on a running track
+> After passing the start line, a runner keeps the distance travelled beyond it.
+>
+> **How it maps:** A whole lap is one cycle. Wrapping removes completed laps while retaining the overshoot; resetting to zero throws away progress.
+>
+> **Where it stops:** Digital phase advances in discrete steps and does not model physical inertia. Wrapping cannot prevent spectral aliasing.
 
 ## Key takeaways
 

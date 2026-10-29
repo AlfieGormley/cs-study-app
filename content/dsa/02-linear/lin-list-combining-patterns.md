@@ -25,7 +25,7 @@ Harder problems chain these together.
 
 ### Intersection by switching routes
 
-Use node identity and finite acyclic inputs. Each pointer traverses its own list, then switches to the other head on the iteration after it reaches None. Equal total routes cancel any unequal prefix lengths. If there is no shared node, both eventually reach None together.
+Use node identity and finite acyclic inputs. Each pointer traverses its own list, then switches to the other head on the iteration after it reaches None. Equal total routes cancel out the difference between the two unshared prefixes. If there is no shared node, both eventually reach None together.
 
 ```python
 def intersection(a, b):
@@ -38,13 +38,13 @@ def intersection(a, b):
     return p
 ```
 
-For distinct prefixes of three and five nodes followed by four shared nodes, the pointers meet after thirteen loop iterations. One pointer traverses seven links to None, spends one iteration switching, then traverses the other five-node prefix. The other traverses nine links, switches, and takes three more. Equal-length inputs can meet earlier; count the explicit null transition when tracing this exact loop.
+For distinct prefixes of three and five nodes followed by four shared nodes, the pointers meet after thirteen loop iterations. One pointer traverses seven links to None, spends one iteration switching, then traverses the other five-node prefix. The other traverses nine links, switches, and takes three more. Equal-length inputs can meet earlier; count the extra iteration spent on None when tracing this exact loop.
 
 For the palindrome pattern, split so the second half excludes an odd middle node, reverse that second half, compare corresponding values, and reverse it back even after a mismatch. Restoring the original links is part of the function’s contract, rather than an optional cosmetic step. An implementation must also reconnect any link it detached during splitting.
 
 ## Key takeaways
 - Split, reverse and compare can test a palindrome with fixed extra space.
-- Switching list heads equalises two intersection-search routes, including their null transition.
+- Switching to the other list's head equalises the two intersection-search routes, including the step through None.
 
 ## Further reading
 - [Cycle detection — Wikipedia](https://en.wikipedia.org/wiki/Cycle_detection)

@@ -38,7 +38,7 @@ An **origin shield** is a designated PoP (or small set) that all edges go throug
 
 - **Fewer origin requests:** many edge misses become one shield miss.
 - **Higher effective hit ratio,** because the shield's cache aggregates demand from every edge.
-- **Request collapsing:** when 1,000 users request the same cacheable key at once, a shield configured to coalesce those requests can send **one** request to the origin and fans the response out. This prevents a **thundering herd** after a purge or at a live-event start.
+- **Request collapsing:** when 1,000 users request the same cacheable key at once, a shield configured to coalesce those requests can send **one** request to the origin and fan the response out to all of them. This prevents a **thundering herd** after a purge or at a live-event start.
 
 Pick a shield region close to the origin, so the shield→origin hop is short.
 

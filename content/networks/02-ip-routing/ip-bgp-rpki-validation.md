@@ -4,10 +4,10 @@ title: Validate route origins with RPKI
 level: advanced
 minutes: 4
 sourceLesson: ip-bgp
-summary: Classify route origins, choose precise ROAs and separate origin validation from path assurance.
+summary: Predict route-origin validation states, choose precise ROAs and separate origin validation from path assurance.
 ---
 
-Classify route origins, choose precise ROAs and separate origin validation from path assurance.
+BGP believes announcements unless someone filters them. RPKI gives routers signed evidence about which AS may originate which prefixes, so they can spot one common kind of hijack.
 
 ## RPKI: authorising route origins
 
@@ -25,19 +25,14 @@ The **Resource Public Key Infrastructure** adds cryptographic evidence about who
 | Invalid | Covering validated records exist, but none authorises both origin and length |
 | NotFound | No validated record covers it |
 
-For a route covered by a ROA, the check is two comparisons, and both must pass:
+For a route covered by a ROA, two checks must both pass: the route's origin AS (the last ASN in its AS_PATH) must be the AS the ROA names, and its prefix length must be no longer than the ROA's max length. A covered route that fails either check against every covering ROA is Invalid.
 
-```formula
-a = a_ROA
-p ≤ L
-where
-a: the route's origin AS: the last ASN in its AS_PATH
-a_ROA: the AS the ROA authorises to originate the prefix
-p: the route's prefix length, for example 24 for a /24
-L: the ROA's max length: the longest prefix it allows
-≤: is at most
-In words: a covered route is Valid when its origin is the authorised AS and its prefix is no longer than the max length; if no covering ROA passes both checks it is Invalid.
-```
+> [!analogy] Real-world analogy: A signed collection authorisation
+> A warehouse keeps letters signed by each property's owner: "Only Acme Removals may collect from this address, in loads no smaller than a full van." When a lorry arrives, the guard checks the company name on the final paperwork and the load size against the letter.
+>
+> **How it maps:** The signed letter is a ROA, the property is the prefix, the named company is the authorised origin AS, and the load-size limit is maxLength. The guard is a router doing route origin validation; turning lorries away is a local policy of dropping Invalid routes.
+>
+> **Where it stops:** The guard checks only the name of the final company. A forger who writes "Acme Removals" at the end of fake paperwork passes, just as a forged AS_PATH ending in the right ASN passes origin validation. And an address with no letter on file (NotFound) is not turned away.
 
 Operators choose how to use validation states; **dropping Invalid** routes is a filtering policy, not an automatic effect of computing ROV. Had YouTube's /22 had a ROA with max length 22, Pakistan Telecom's /24 would have been Invalid twice over: the origin AS 17557 is not YouTube's, and 24 is more than 22.
 
@@ -62,17 +57,7 @@ ROV checks the **origin only**. An attacker who announces your prefix with a fak
 - ROV does not prove the path or stop all leaks; BGPsec, ASPA and filtering address different evidence.
 
 ## Further reading
-- [RFC 4271: A Border Gateway Protocol 4 (BGP-4)](https://www.rfc-editor.org/rfc/rfc4271)
-- [Border Gateway Protocol — Wikipedia](https://en.wikipedia.org/wiki/Border_Gateway_Protocol)
-- [Understanding how Facebook disappeared from the Internet — Cloudflare blog](https://blog.cloudflare.com/october-2021-facebook-outage/)
-- [How Verizon and a BGP Optimizer Knocked Large Parts of the Internet Offline — Cloudflare blog](https://blog.cloudflare.com/how-verizon-and-a-bgp-optimizer-knocked-large-parts-of-the-internet-offline-today/)
 - [RFC 6811: BGP Prefix Origin Validation](https://www.rfc-editor.org/rfc/rfc6811)
-- [BGP hijacking — Wikipedia](https://en.wikipedia.org/wiki/BGP_hijacking)
-- [MANRS](https://www.manrs.org/)
-
-- [RIPE NCC: YouTube hijacking presentation and timeline](https://ripe56.ripe.net/presentations/Refice-YouTube_Prefix_Hijacking.pdf)
-- [Meta: October 2021 outage details](https://engineering.fb.com/2021/10/05/networking-traffic/outage-details/)
-- [Cloudflare: BGP leaks and cryptocurrencies](https://blog.cloudflare.com/bgp-leaks-and-crypto-currencies/)
-- [Cisco: BGP best-path algorithm](https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/13753-25.html)
-- [IETF: ASPA verification draft](https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-verification/)
 - [RFC 9319: RPKI maxLength](https://www.rfc-editor.org/rfc/rfc9319)
+- [MANRS](https://www.manrs.org/)
+- [IETF: ASPA verification draft](https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-verification/)

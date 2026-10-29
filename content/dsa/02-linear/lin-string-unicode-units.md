@@ -7,7 +7,7 @@ sourceLesson: lin-strings
 summary: Byte length, code-unit length and visible-character length can differ.
 ---
 
-A string represents text, but byte storage and visible characters are different layers. This unit follows the encoding from a byte representation through runtime indexing to grapheme clusters, so you can choose the length limit your application actually needs.
+A string represents text, but byte storage and visible characters are different layers. This unit follows text from its stored bytes through runtime indexing to grapheme clusters, so you can choose the length limit your application actually needs.
 
 ## Encoding basics
 

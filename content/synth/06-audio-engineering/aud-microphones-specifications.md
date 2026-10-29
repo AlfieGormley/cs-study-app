@@ -16,21 +16,18 @@ The output voltage for a given sound pressure, normally at 1 kHz and **1 Pa (94 
 - **mV/Pa**: millivolts of output per pascal of sound pressure, or
 - **dBV/Pa**: the same figure in decibels relative to 1 volt per pascal.
 
-Converting between the two is a voltage-ratio decibel calculation:
+Both describe the same thing. dBV/Pa is a voltage ratio in decibels, so every factor of 10 in mV/Pa is 20 dB, and a less negative dBV/Pa figure means more output.
 
-```formula
+```formula reference
 S_dBV = 20 log_10(S / (1 V/Pa))
-S_dBV = 20 log_10((0.028 V/Pa) / (1 V/Pa))
-S_dBV ≈ −31.1 dBV/Pa
 where
-S_dBV: the sensitivity in decibels relative to 1 volt per pascal (dBV/Pa); negative for these two microphones; a less negative value means greater output, and sufficiently sensitive active designs need not be negative
-S: the sensitivity as a voltage ratio, in volts per pascal (V/Pa); here 28 mV/Pa = 0.028 V/Pa (a Neumann U 87 Ai)
+S_dBV: the sensitivity in decibels relative to 1 volt per pascal (dBV/Pa); negative for typical passive and studio microphones, and less negative means more output
+S: the sensitivity as a voltage ratio, in volts per pascal (V/Pa); for example 28 mV/Pa = 0.028 V/Pa
 log_10: the base-10 logarithm
 V: volt, the unit of voltage
 Pa: pascal, the unit of pressure; 1 Pa is about 94 dB SPL
 dBV: decibels relative to 1 volt
-≈: approximately equal to (the result is rounded)
-In words: sensitivity in dBV/Pa is 20 times the base-10 log of the output voltage per pascal; 28 mV/Pa comes out at about −31 dBV/Pa.
+In words: dBV/Pa expresses a microphone's output per pascal as a voltage ratio against one volt per pascal, so 28 millivolts per pascal is about −31 dBV/Pa and 1.6 millivolts per pascal is about −56 dBV/Pa.
 ```
 
 | Mic (manufacturer's figures) | mV/Pa | dBV/Pa |
@@ -38,28 +35,9 @@ In words: sensitivity in dBV/Pa is 20 times the base-10 log of the output voltag
 | Shure SM58 (dynamic) | 1.6 | −56.0 |
 | Neumann U 87 Ai, cardioid | 28 | ≈ −31 |
 
-(The SM58 figures follow Shure’s user guide version 6.4 (2024-F), checked October 2026; the −56.0 dBV/Pa figure corresponds to about 1.585 mV/Pa, rounded to 1.6 mV/Pa. Older specifications quote different values, so confirm the revision for the microphone being used. Supercardioid definitions also vary a little between sources; an omni share of 0.366 is one common choice.)
+(The SM58 figures follow Shure’s user guide version 6.4 (2024-F), checked October 2026; the −56.0 dBV/Pa figure corresponds to about 1.585 mV/Pa, rounded to 1.6 mV/Pa. The U 87 Ai figures are Neumann's published technical data. Older specifications quote different values, so confirm the revision for the microphone being used.)
 
-How much more preamp gain does the less sensitive mic need for the same output? Take the ratio of the two sensitivities and convert it to decibels:
-
-```formula
-G = 20 log_10(S_A / S_B)
-G = 20 log_10((28 mV/Pa) / (1.6 mV/Pa))
-G = 20 log_10(17.5)
-G ≈ 24.9 dB
-where
-G: the extra preamp gain mic B needs to match mic A's output, in decibels (dB)
-S_A: the sensitivity of the more sensitive mic (here the U 87 Ai), in millivolts per pascal (mV/Pa)
-S_B: the sensitivity of the less sensitive mic (here the SM58), in mV/Pa
-log_10: the base-10 logarithm; 20 × log_10 because these are voltage ratios
-mV: millivolt, a thousandth of a volt
-Pa: pascal, the unit of pressure
-dB: decibel
-≈: approximately equal to (the result is rounded)
-In words: the condenser puts out about 17.5 times the voltage, which is about 24.9 dB, so the dynamic needs about 25 dB more preamp gain.
-```
-
-So the dynamic needs about **25 dB** more preamp gain for the same output. Gain raises signal and input noise together. For quiet sources, compare microphone sensitivity, its own noise and the preamp’s equivalent input noise; a low-noise condenser often performs well.
+The condenser puts out about 17.5 times the voltage of the dynamic, which is about **25 dB**. So for the same recorded level, the dynamic needs about 25 dB more preamp gain. That gain raises the preamp's own input noise along with the signal, so on a quiet source a low-output microphone can leave audible hiss even though the microphone itself is quiet. For quiet sources, compare microphone sensitivity, its own noise and the preamp’s equivalent input noise together; a low-noise condenser often performs well. On a loud source the difference rarely matters: there is plenty of signal above the preamp's noise.
 
 ### Self-noise
 
@@ -69,21 +47,9 @@ Passive dynamics and ribbons have no active electronics, but their winding and t
 
 ### Maximum SPL and dynamic range
 
-Max SPL is the level at which distortion reaches a stated figure (often 0.5% or 1% THD). Neumann gives **117 dB SPL** for the U 87 Ai (127 dB with its pre-attenuation pad). The dynamic range is the gap between self-noise and max SPL:
+Max SPL is the level at which distortion reaches a stated figure (often 0.5% or 1% THD). Neumann gives **117 dB SPL** for the U 87 Ai at 0.5 % THD (127 dB with its pre-attenuation pad).
 
-```formula
-DR = L_max − L_noise
-DR = 117 dB SPL − 12 dB SPL = 105 dB
-where
-DR: the microphone's dynamic range, in decibels (dB): how far the loudest clean sound is above its own noise
-L_max: the maximum SPL, the sound level at which distortion reaches the stated limit, in dB SPL
-L_noise: the self-noise expressed as an equivalent sound level, in dB SPL (A-weighted here)
-dB: decibel
-SPL: sound pressure level, measured relative to 20 µPa
-In words: subtract the noise floor from the overload point; both are already in decibels, so subtraction gives the range.
-```
-
-Because the self-noise figure is A-weighted, this is an approximate, A-weighted range; with the pad engaged the top end rises to 127 dB SPL.
+The **dynamic range** is the gap between the self-noise and the max SPL. Both are already decibel levels on the same SPL scale, so the range is simply their difference: about 117 − 12 = 105 dB for the U 87 Ai in cardioid. Because the self-noise figure is A-weighted, this is an approximate, A-weighted range. The pad raises the top end to 127 dB SPL so that very loud sources do not overload the microphone's electronics.
 
 ## Key takeaways
 - Sensitivity relates output voltage to acoustic pressure, commonly at one kilohertz and one pascal.

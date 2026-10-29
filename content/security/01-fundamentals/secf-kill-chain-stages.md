@@ -25,6 +25,13 @@ In 2011, Lockheed Martin researchers (Hutchins, Cloppert and Amin) adapted the m
 | 6 | Command and control | Remote control channel |
 | 7 | Actions on objectives | Steal, encrypt, destroy |
 
+> [!analogy] Real-world analogy: a burglary in stages
+> A burglar watches a house, buys tools, gets in through a window, hides a spare key for a later visit, phones an accomplice and finally takes the jewellery. Stopping any one step can foil that particular plan.
+>
+> **How it maps:** Watching the house is reconnaissance; buying tools is weaponisation; reaching and forcing the window are delivery and exploitation; the hidden key is installation (persistence); the phone call is command and control; taking the jewellery is actions on objectives.
+>
+> **Where it stops:** A burglar who already has a key, like an attacker with valid credentials or an insider, skips several stages. Digital intruders can also loop through stages many times inside one network, and much of their preparation happens where you cannot watch.
+
 The paper's key insight was **intelligence-driven defence**: map what you know about an adversary onto the stages, and plan a defensive action for each. Its course-of-action matrix uses six verbs, borrowed from military doctrine: **detect, deny, disrupt, degrade, deceive, destroy**.
 
 | Stage | Detect | Deny |
@@ -46,7 +53,7 @@ The kill chain was designed around malware delivered to a perimeter. It fits les
 - the target is **cloud** infrastructure, where "installation" may mean creating an access key;
 - the attack loops (privilege escalation and lateral movement repeat many times inside the network).
 
-Later models address this. The **Unified Kill Chain** (Paul Pols, 2017) combines the kill chain with ATT&CK into 18 phases grouped as getting in, getting through and getting out.
+Later models address this. The **Unified Kill Chain** (Paul Pols, first published in 2017) combines the kill chain with ATT&CK into 18 phases, grouped as In (gaining a foothold), Through (spreading through the network) and Out (acting on the objective).
 
 ## Key takeaways
 - The model has seven named stages.

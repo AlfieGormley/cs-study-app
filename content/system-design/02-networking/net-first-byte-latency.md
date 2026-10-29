@@ -3,70 +3,43 @@ id: net-first-byte-latency
 title: "Count the trips before the first byte"
 level: basic
 minutes: 4
-summary: "Calculate cold-request latency and explain how a nearby edge changes hits and misses."
+summary: "See why setup round trips dominate a small first request, and what a nearby edge does and does not remove."
 sourceLesson: net-request-lifecycle
 ---
-The handshake path gives us a useful first-byte budget. The following timings are hypothetical inputs, with no loss, retry or additional processing unless a row explicitly includes it.
+For a small page, the server's work and the bytes on the wire are usually not where the time goes. The time goes on **round trips**: each step that must wait for a reply before the next can start.
 
 ## Where the time goes
 
-Let's add up a cold first request from London to a single server in Virginia, with a round-trip time of 80 ms:
+A cold first request over HTTPS on TCP with TLS 1.3 waits for a DNS answer, then for three round trips to the server: the TCP handshake, the TLS handshake, and finally the request and its response. Only the last of those carries the page; the rest are setup.
 
-| Step | Cost |
-|---|---|
-| DNS (uncached) | ~100 ms |
-| TCP handshake | 80 ms (1 RTT) |
-| TLS 1.3 | 80 ms (1 RTT) |
-| HTTP request/response | 80 ms + server time |
-| **Total before first byte** | **~340 ms + server** |
-
-The table follows a simple model: one DNS lookup, then a fixed number of round trips to the server, then the server's own work. Adding it up gives the **time to first byte**:
-
-```formula
-T = T_DNS + n × RTT + T_server
-T = 100 ms + 3 × 80 ms + T_server
-T = 340 ms + T_server
+```formula essential
+T ≈ T_DNS + n × RTT + T_server
 where
-T: the time to first byte: from pressing Enter until the first byte of the response arrives, in milliseconds (ms)
-T_DNS: the time to resolve the name with DNS; about 100 ms here, because nothing is cached
-n: the number of round trips to the server before the first byte arrives: 1 for the TCP handshake, 1 for TLS 1.3 and 1 for the request and response, so 3
-RTT: the round-trip time to the server, here 80 ms from London to Virginia
-T_server: the time the server spends building the response, in ms
-ms: millisecond, one thousandth of a second
-In words: a cold first request pays for the DNS lookup and three full round trips before the server's own work even counts.
+T: the time to first byte: from starting the request until the first byte of the response arrives, in milliseconds (ms)
+T_DNS: the time to resolve the name; near zero when cached, often tens of ms or more when not
+n: the number of sequential round trips to the server before the first byte: 3 on a new TCP + TLS 1.3 connection (TCP, TLS, request), 4 with a full TLS 1.2 handshake, 1 on a reused connection
+RTT: the round-trip time to whichever server terminates the connection, in ms
+T_server: the time the server spends producing the response, in ms
+≈: approximately equal to (loss, retries and queueing are ignored)
+In words: a small request's wait is mostly the number of round trips times the length of each trip, plus DNS and the server's own work.
 ```
 
-Only the last of those round trips actually carries the page; the rest are setup. (The DNS round trips go to resolvers, not to Virginia, which is why that row isn't exactly one RTT.) If the server used TLS 1.2, add another 80 ms.
+Two consequences follow directly:
 
-Now put a CDN edge in London, with an RTT of 10 ms:
+- Bandwidth barely matters here. A faster link shortens the time to push bytes onto the wire, which for a small response is already a tiny fraction of one round trip. It does not shorten any round trip.
+- There are only two levers. Make fewer trips (reuse connections, TLS 1.3, QUIC, caching) or make each trip shorter (put the endpoint nearer the user).
 
-| Step | Cost |
-|---|---|
-| DNS (cached at resolver) | ~5 ms |
-| TCP | 10 ms |
-| TLS 1.3 | 10 ms |
-| HTTP (cache hit) | 10 ms |
-| **Total** | **~35 ms** |
+## What a nearby edge changes
 
-The same model, with the shorter round trip to the edge and the edge's own trip to the origin on a miss:
+Take an illustrative London user and a single origin in Virginia with an 80 ms RTT, compared with a CDN edge in London 10 ms away that already keeps a warm connection open to the origin. The direct path also pays an uncached DNS lookup (about 100 ms), while the edge path uses an answer already cached at the resolver (about 5 ms). These are assumed figures, not measurements.
 
-```formula
-T_hit = T_DNS + n × RTT_edge
-T_hit = 5 ms + 3 × 10 ms = 35 ms
-T_miss = T_hit + RTT_origin
-T_miss = 35 ms + 80 ms = 115 ms
-where
-T_hit: the time to first byte when the London edge already has the response cached (a cache hit), in milliseconds (ms)
-T_DNS: the DNS lookup time, about 5 ms when the recursive resolver already has the answer cached
-n: the round trips to the edge before the first byte: TCP, TLS 1.3 and the request itself, so 3
-RTT_edge: the round-trip time to the nearby edge, here 10 ms
-T_miss: the time to first byte when the edge doesn't have the response (a cache miss) and must fetch it from the origin
-RTT_origin: the round-trip time from the edge to the origin in Virginia, 80 ms, over a connection the edge already holds open
-ms: millisecond
-In words: a nearby edge makes every handshake cheap, and a miss adds just one long trip because the edge's connection to the origin is already open.
-```
+| Path | Round trips that cross the Atlantic | Rough first byte |
+|---|---|---|
+| Direct, cold DNS | all three | ~340 ms + server |
+| Edge, cache hit | none | ~35 ms |
+| Edge, cache miss | only the request | ~115 ms + server |
 
-In these illustrative assumptions the total is about ten times lower (340 ms versus 35 ms, ignoring server time), combining a nearer endpoint, a faster DNS lookup and a cache hit. Note the hidden assumption: the edge had the response cached. On a miss, the edge must still fetch from Virginia, adding one 80 ms trip over a connection it keeps warm, so the total is closer to 115 ms. That's still about three times better than going direct.
+On a **hit**, every trip is short, so the user sees roughly a tenth of the direct time (part of that gap is the assumed DNS difference; with equal DNS times the hit is still about seven times faster). On a **miss**, the handshakes still happen on the short hop, and the edge forwards just the request over its already-open origin connection: one long trip instead of three. The edge cannot remove that last trip, because the data lives in Virginia.
 
 Most of this module is about techniques that shrink, skip or move these round trips.
 
@@ -75,9 +48,9 @@ Most of this module is about techniques that shrink, skip or move these round tr
 
 ## Key takeaways
 
-- A cold TCP/TLS 1.3 request pays DNS plus three server round trips and server work in the simplified model.
-- A nearby CDN makes connection setup cheap; a miss still needs an origin trip.
-- Reuse, caching and endpoint placement solve different parts of the latency budget.
+- A small first request is dominated by the number of sequential round trips and the length of each, not by bandwidth.
+- A nearby edge makes setup trips short; a cache miss still needs one trip to wherever the data lives.
+- Reuse, caching and endpoint placement attack different parts of the same latency budget.
 
 ## Further reading
 

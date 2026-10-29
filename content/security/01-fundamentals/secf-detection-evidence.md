@@ -9,7 +9,7 @@ summary: Dwell time is an evidence-dependent incident interval.
 
 ## Dwell time and why speed matters
 
-**Dwell time** measures the interval between initial compromise and detection, subject to the evidence available. Mandiant's M-Trends 2025 reports a global median of **11 days for its 2024 investigations**, compared with 10 days for 2023. This is a historical incident-response sample, not a live estimate for every organisation or a safe log-retention target. The source reports five days for adversary-notified cases in that sample.
+**Dwell time** measures the interval between initial compromise and detection, subject to the evidence available. Mandiant's M-Trends 2026 (checked October 2026) reports a global median of **14 days for its 2025 investigations**, up from 11 days in 2024. This is a historical incident-response sample, not a live estimate for every organisation or a safe log-retention target. Medians also hide long tails: some intrusions stay undetected for months.
 
 The shape of the kill chain explains why dwell time matters: the further along the chain you detect, the more the attacker already has. Stopping a malicious delivery can avoid compromise, while detection after destructive impact may require extensive recovery. Actual response cost is not a fixed function of stage.
 
@@ -29,6 +29,13 @@ David Bianco's **Pyramid of Pain** (2013) ranks indicators by how much pain it c
 Changing a file generally changes its cryptographic hash, so exact-hash blocking can be evaded by a functional variant. An IP change need not require a new server. Robust behavioural detection can impose more adaptation effort, but the Pyramid of Pain is a heuristic: effectiveness depends on telemetry, rule coverage and attacker options.
 
 This is why mature detection programmes map to ATT&CK techniques rather than relying only on **indicators of compromise (IoCs)**.
+
+> [!analogy] Real-world analogy: spotting a shoplifter
+> A store guard can watch for one shoplifter's red coat, or learn how shoplifting is done: lingering at blind spots, removing tags, using a foil-lined bag.
+>
+> **How it maps:** The red coat is a hash value or IP address: precise, but easy to change. The way the thief works is the TTP at the top of the pyramid: changing it means learning a new method, which costs the thief far more.
+>
+> **Where it stops:** Shoppers who linger are usually innocent, so watching behaviour produces false alarms; behavioural detection rules have the same problem and need tuning and testing. A rule also sees only what the telemetry records.
 
 ## Putting it together
 
@@ -50,7 +57,7 @@ They complement each other. STRIDE finds weaknesses in what you build; ATT&CK de
 5. **Unprotected backups.** If compromised credentials permit backup deletion, ransomware operators can target those copies before or during the attack. Keep independently protected offline or immutable copies and test restoration.
 
 > [!note] Evidence limits
-> Timelines and detection examples are illustrative, not executed intrusion exercises. No production SIEM, EDR or backup system was tested. Dwell-time figures are tied to the named historical report; they are not current universal benchmarks.
+> The timelines and detection examples here are illustrative. Dwell-time figures belong to the named historical report and change each year; they are not universal benchmarks for your organisation.
 
 ## Key takeaways
 - Dwell time is an evidence-dependent incident interval.
@@ -58,6 +65,6 @@ They complement each other. STRIDE finds weaknesses in what you build; ATT&CK de
 - A rule existing is not evidence that a relevant test will be detected.
 
 ## Further reading
-- [Mandiant M-Trends 2025](https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2025)
+- [Mandiant M-Trends 2026](https://cloud.google.com/blog/topics/threat-intelligence/m-trends-2026)
 - [David Bianco: Pyramid of Pain](https://detect-respond.blogspot.com/2013/03/the-pyramid-of-pain.html)
 - [MITRE ATT&CK Enterprise tactics](https://attack.mitre.org/tactics/enterprise/)

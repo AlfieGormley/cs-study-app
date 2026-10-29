@@ -38,6 +38,13 @@ TCP delivers A1, B1, then WAITS.
 A2 and C2 arrived but are stuck.
 ```
 
+> [!analogy] Real-world analogy: One shared parcel conveyor
+> Several shoppers' items travel to the packing bench on one conveyor belt, in the order they were scanned. If one item falls off and has to be fetched again, the belt stops, so every shopper waits, even those whose items are already sitting on the belt.
+>
+> **How it maps:** the shoppers are HTTP/2 streams and the single belt is the one TCP connection, which hands bytes to the application strictly in order. The fallen item is a lost packet, and stopping the belt until it is replaced is TCP head-of-line blocking across unrelated streams.
+>
+> **Where it stops:** TCP does not physically halt the network; later packets still arrive and wait in the receiver's buffer, and the sender also slows down because of congestion control. HTTP/2 does solve the separate problem of one slow *response* holding up others.
+
 On a clean network this rarely matters. On lossy mobile or Wi-Fi links (a few per cent loss), HTTP/2 over one connection can perform *worse* than HTTP/1.1 over six, for two reasons:
 
 - A single loss stalls every stream instead of one-sixth of the traffic.

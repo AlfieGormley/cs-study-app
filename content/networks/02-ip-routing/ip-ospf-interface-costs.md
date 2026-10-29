@@ -1,22 +1,20 @@
 ---
 id: ip-ospf-interface-costs
-title: Calculate OSPF interface costs
+title: OSPF interface costs and reference bandwidth
 level: intermediate
 minutes: 3
 sourceLesson: ip-interior-routing
-summary: Compute costs under the stated Cisco reference-bandwidth model and compare resulting paths.
+summary: Predict OSPF path choices under a reference-bandwidth cost model and spot when the default makes fast links look equal.
 ---
 
-Compute costs under the stated Cisco reference-bandwidth model and compare resulting paths.
+OSPF picks the path whose interface costs add up to the smallest sum, so whatever sets the costs effectively sets the paths. A common default quietly makes all modern links look the same.
 
 ### Cost
 
-Each interface has an **OSPF cost**, and a path's cost is the sum along it. Some implementations derive the interface cost from configured bandwidth:
+Each interface has an **OSPF cost**, and a path's cost is the sum along it. Some implementations derive the interface cost from configured bandwidth: faster links get lower costs, until they hit a floor of 1.
 
-```formula
+```formula reference
 C = max(1, ⌊R / B⌋)
-C = max(1, ⌊100 / 10⌋) = 10
-C = max(1, ⌊100 / 1000⌋) = max(1, 0) = 1
 where
 C: the OSPF cost of the interface: a whole number with no unit; lower means more attractive
 R: the reference bandwidth, in megabits per second (Mbit/s); 100 Mbit/s by default in classic Cisco IOS
@@ -24,7 +22,7 @@ B: the interface's configured bandwidth, in Mbit/s (1 Gbit/s = 1,000 Mbit/s)
 ⌊ ⌋: floor: round down to a whole number, since costs are integers
 max(1, …): the larger of 1 and the value after it, so the cost never falls below 1
 Mbit/s: megabits per second: millions of bits per second
-In words: divide the reference by the link's bandwidth, drop any fraction, and use 1 if that gives 0. A 10 Mbit/s link costs 10, but a 1 Gbit/s link also only costs 1, the same as 100 Mbit/s.
+In words: the cost is the reference bandwidth divided by the link's bandwidth, rounded down, but never below 1. Any link at least as fast as the reference therefore gets the minimum cost of 1.
 ```
 
 Classic Cisco IOS documentation uses a **100 Mbit/s** default reference, with a minimum positive interface cost of 1. Other platforms have different defaults, and cost can be manually configured; OSPF itself does not mandate this bandwidth formula. So:

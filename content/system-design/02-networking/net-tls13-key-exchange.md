@@ -42,6 +42,13 @@ Step by step:
 3. **Certificate + CertificateVerify.** The server proves it owns the private key matching its certificate by signing the handshake transcript.
 4. **Finished.** Both sides confirm the handshake wasn't tampered with. The client can send its HTTP request immediately alongside its Finished message.
 
+> [!analogy] Real-world analogy: Mixing paint in public
+> Two people openly agree on a common base colour. Each secretly picks a colour of their own, mixes it into the base and hands the mixture over in public. Each then adds their own secret colour to the mixture they received, and both end up with the same final colour. An onlooker saw the base and both mixtures but cannot practically un-mix them to find either secret.
+>
+> **How it maps:** the base colour is the agreed key-exchange group, each secret colour is an ephemeral private key and each public mixture is a key share sent in the ClientHello or ServerHello. The final colour is the secret both endpoints derive, from which the session keys come. Because the secret colours are fresh for every connection, stealing the certificate key later does not reveal them: that is forward secrecy.
+>
+> **Where it stops:** mixing paint does not tell you who you are mixing with; an attacker in the middle could mix separately with each side. That is why the server also signs the handshake with its certificate key (CertificateVerify). The real protection rests on mathematical problems that are hard to reverse, not on colours being hard to separate.
+
 **A full TLS 1.2 handshake takes two round trips.** In the first, the client offers options and the server replies with its choice, certificate and key-exchange parameters. Only in the second does the client send its key share and both sides exchange Finished. (Extensions like TLS False Start let a TLS 1.2 client send data a round trip early, and a resumed TLS 1.2 session takes one round trip, but a full handshake is two.)
 
 If the server doesn't support the group the TLS 1.3 client guessed, it replies with a **HelloRetryRequest** and the client tries again, costing an extra round trip. Clients offer supported groups such as X25519; the exact preference and use of hybrid post-quantum groups depend on implementation and version.

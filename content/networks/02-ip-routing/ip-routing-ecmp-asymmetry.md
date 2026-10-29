@@ -2,12 +2,12 @@
 id: ip-routing-ecmp-asymmetry
 title: ECMP, asymmetry and route failures
 level: intermediate
-minutes: 4
+minutes: 5
 sourceLesson: ip-routing-basics
 summary: Explain flow hashing, path churn and legitimate asymmetric routing, then organise failure checks.
 ---
 
-Explain flow hashing, path churn and legitimate asymmetric routing, then organise failure checks.
+Real networks often have several equally good paths, and replies need not follow the same path as requests. Both facts are normal, and both surprise anyone who assumes one fixed path.
 
 ## Multiple paths: ECMP
 
@@ -21,9 +21,9 @@ The trade-offs:
 - Reusing correlated hashes with similarly ordered next-hop groups can make downstream routers repeat the same path choices (**hash polarisation**). Different hash seeds can reduce correlated choices, without guaranteeing perfect balance.
 - When a path is added or removed, naive modulo hashing remaps many flows. **Resilient hashing** limits the churn.
 
-Naive modulo hashing picks a next hop like this:
+Naive modulo hashing picks a next hop by hashing the flow and taking the remainder after dividing by the number of paths:
 
-```formula
+```formula reference
 i = H(f) mod k
 where
 i: the index of the chosen next hop, from 0 to k − 1
@@ -31,10 +31,17 @@ H(f): a hash function applied to f, giving a large whole number that looks rando
 f: the flow's identifying fields, such as the 5-tuple of addresses, ports and protocol
 mod: modulo: the remainder after whole-number division, so 14 mod 4 = 2 and 14 mod 3 = 2
 k: the number of next hops in the equal-cost group
-In words: hash the flow and take the remainder after dividing by the number of paths; the same flow always lands on the same path while k stays the same.
+In words: hash the flow and take the remainder after dividing by the number of paths. The same flow always lands on the same path while the number of paths stays the same; change that number and most flows are reassigned.
 ```
 
 Changing the path count can remap many flows. For the specific change from four paths to three, assume roughly uniform hashes, remove the last-indexed path, and keep the surviving path indices unchanged. A flow keeps its path only when its hash gives the same remainder in both groups: one quarter of possible residues over the shared twelve-value cycle. About three quarters of flows therefore move, although only the quarter on the removed path needed a new path. Different group reordering or nonuniform traffic changes the observed result.
+
+> [!analogy] Real-world analogy: Checkout lanes by surname
+> A shop with four tills sends each family to a till chosen from the first letter of their surname, so a family always queues together and its shopping is never split across tills. When one till closes, the manager redraws the letter ranges across the remaining three.
+>
+> **How it maps:** Each family is a flow, the surname rule is the hash, and the tills are the equal-cost next hops. Keeping a family at one till is flow affinity, which reduces the chance of packets of one connection arriving out of order. Redrawing the ranges moves many families who were not at the closed till: the churn of naive modulo hashing.
+>
+> **Where it stops:** A shop can see one family with a huge trolley and move it; a simple hash cannot tell an elephant flow from a small one. Resilient hashing keeps the surviving assignments fixed, which the redrawn-letters picture does not capture.
 
 ## Asymmetric routing
 

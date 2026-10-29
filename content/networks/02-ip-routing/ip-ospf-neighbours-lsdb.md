@@ -17,6 +17,13 @@ Instead of sharing distances, every router shares the raw facts about its own li
 
 **Open Shortest Path First** includes OSPFv2 (RFC 2328) for IPv4 and OSPFv3, originally for IPv6. OSPFv3 address-family extensions also support IPv4 (RFC 5838).
 
+> [!analogy] Real-world analogy: A shared road atlas
+> Instead of trusting signposts, every council publishes a sheet describing only its own roads and their lengths, and copies of every sheet are delivered to every council in the county. Each council binds the sheets into the same atlas and plans its own best routes from it.
+>
+> **How it maps:** A council's sheet is a router's link-state advertisement, the delivery of copies is flooding, the bound atlas is the link-state database, and route planning is each router running Dijkstra with itself as the starting point.
+>
+> **Where it stops:** Councils can plan from a slightly out-of-date atlas for a while; routers can too, which is why brief forwarding loops can occur while new LSAs spread. And OSPF limits each atlas to an area, so routers do not see the internal roads of every other area.
+
 ### How OSPF builds its map
 
 1. **OSPF Hellos.** On enabled non-passive broadcast OSPFv2 interfaces, routers send Hello packets to 224.0.0.5. A common Cisco Ethernet configuration uses a 10-second Hello interval; other network types and configurations differ. Routers that hear each other and agree on parameters (area, timers, subnet) become **OSPF neighbours**. If no Hello arrives for the dead interval (40 seconds in that Cisco Ethernet configuration), the neighbour is declared down.

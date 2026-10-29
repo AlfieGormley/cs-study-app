@@ -10,7 +10,7 @@ sourceLesson: aud-amplifiers
 Your synth's line output can swing a volt or two into 10 kΩ or more (module 5). A loudspeaker needs tens of volts into a few ohms: amps of current and tens or hundreds of watts. A **power amplifier** bridges that gap.
 
 > [!warning] Safety: conceptual lesson only
-> Power amplifiers contain **mains wiring** and, inside, **high-voltage supply rails and large capacitors** that can stay charged after unplugging. Valve (tube) amps run at hundreds of volts. Speaker terminals on a large amp can carry voltages that are dangerous to touch at full power. This lesson is about understanding and choosing amplifiers. **Don't open, modify or build mains-powered amplifiers.** Connect speakers with the amp switched off and the volume down, and leave repairs to qualified technicians.
+> Power amplifiers contain **mains wiring** and, inside, **high-voltage supply rails and large capacitors** that can stay charged after unplugging. Valve (tube) amplifiers run at hundreds of volts. Speaker terminals on a large amp can carry voltages that are dangerous to touch at full power. This lesson is about understanding and choosing amplifiers. **Don't open, modify or build mains-powered amplifiers.** Connect speakers with the amp switched off and the volume down, and leave repairs to qualified technicians.
 
 ## What a power amp does
 
@@ -20,13 +20,11 @@ A power amp is a **voltage amplifier with a very low output impedance** that can
 - It holds that output voltage steady whatever the speaker's impedance does (within its limits), by supplying whatever current the load demands.
 - Power is a *result*. The amp sets the voltage; the speaker's impedance decides the current and so the power.
 
-For a resistive load, Ohm's law and the power formula tell you the current and power from the voltage:
+For a resistive load, Ohm's law gives the current from the voltage, and the power follows:
 
-```formula
+```formula essential
 I_rms = V_rms / R
 P = V_rms^2 / R
-I_rms = 20 V / 8 Ω = 2.5 A
-P = (20 V)^2 / 8 Ω = 400 / 8 = 50 W
 where
 I_rms: the RMS current through the speaker, in amperes (A)
 V_rms: the RMS (root-mean-square, an "effective average") output voltage, in volts (V)
@@ -39,40 +37,22 @@ W: watts, the unit of power
 In words: power rises with the square of voltage, so doubling the voltage gives four times the power, and halving the resistance doubles it.
 ```
 
-That's exact only for a resistor. A real speaker has complex impedance, so sinusoidal real power also depends on the voltage–current phase difference.
+For example, 20 V RMS across 8 Ω pushes 2.5 A and delivers 50 W. The same 20 V across 4 Ω pushes 5 A and delivers 100 W, provided the amplifier can supply that current. That's exact only for a resistor. A real speaker has complex impedance, so sinusoidal real power also depends on the voltage–current phase difference.
+
+> [!analogy] Real-world analogy: a water main and a tap
+> The water main holds its pressure steady. Open a narrow tap and a little water flows; open a wide one and much more flows, from the same pressure. How much water you get, and how hard the main has to work, depends on the tap, not just the main.
+>
+> **How it maps:** The amplifier is the main holding a steady voltage (pressure). The speaker's impedance is the tap's narrowness: a lower impedance is a wider tap that draws more current (flow). Power is pressure times flow, so a 4 Ω speaker draws more power than an 8 Ω one at the same voltage.
+>
+> **Where it stops:** A speaker's impedance changes with frequency and stores and returns energy, so current and voltage do not stay in step the way water flow and pressure do through a simple tap. And a real amplifier's "main" has a hard limit on how much current it can supply.
 
 ### Voltage gain vs power
 
-Amplifier gain is usually quoted in dB (voltage), or as **input sensitivity**: the input voltage that produces full rated output. To use a dB gain, turn it back into a multiplier:
+Amplifier gain is usually quoted in dB (voltage), or as **input sensitivity**: the input voltage that produces full rated output. Gain in voltage decibels converts back to a multiplier exactly as in module 1: 6 dB is about ×2, 20 dB is ×10, and 26 dB is about ×20.
 
-```formula
-G = 10^{G_dB / 20}
-G = 10^{26 / 20} ≈ 19.95
-V_in = 0.7746 V × 10^{4 / 20} ≈ 1.228 V
-V_out = V_in G
-V_out = 1.228 V × 19.95 ≈ 24.5 V
-P = (24.5 V)^2 / 8 Ω ≈ 75 W
-V_sens = √(P_max R) / G
-V_sens = √(100 W × 8 Ω) / 19.95 ≈ 1.42 V
-where
-G: the voltage gain as a plain multiplier (no unit)
-G_dB: the voltage gain in decibels (dB), here 26 dB
-V_in: the RMS input voltage, in volts (V); +4 dBu (professional line level) is 0.7746 V × 10^(4/20) ≈ 1.228 V
-V_out: the RMS output voltage, in volts (V)
-P: the average power into the load, in watts (W)
-R: the load resistance, 8 ohms (Ω)
-V_sens: the input sensitivity: the input voltage that gives the rated maximum power, in volts (V)
-P_max: the rated maximum power, here 100 W
-√: square root
-≈: approximately equal to
-V: volts
-W: watts
-Ω: ohms
-dB: decibel; dividing by 20 converts a voltage decibel figure back to a ratio
-In words: 26 dB is a voltage gain of about 20, so a +4 dBu line signal comes out at about 24.5 V, which is 75 W into 8 Ω; you'd need about 1.42 V in to reach 100 W.
-```
+So an amplifier with 26 dB of gain fed a +4 dBu line signal (about 1.23 V RMS) puts out about 24.5 V RMS: about 75 W into 8 Ω. To reach a 100 W rating into 8 Ω it would need about 1.4 V in; that figure is its input sensitivity.
 
-So an amp with 26 dB gain fed a +4 dBu signal gives about 24.5 V RMS: 75 W into 8 Ω. Gain and maximum output power are separate specifications. Higher power may require greater voltage swing, greater current capacity or both; different models may also have different gain. (26 dB is used here as an illustration: real amps range widely, and many quote sensitivity instead. Read the manual.)
+The key point is that **gain and maximum output power are separate specifications**. Below clipping, two amplifiers with the same gain play the same signal at the same level, whatever their power ratings; the bigger one simply has more headroom before it clips. Higher power may require greater voltage swing, greater current capacity or both; different models may also have different gain. (26 dB is used here as an illustration: real amplifiers range widely, and many quote sensitivity instead. Read the manual.)
 
 ## Key takeaways
 - An amplifier supplies output voltage and the current required by its load within its limits.

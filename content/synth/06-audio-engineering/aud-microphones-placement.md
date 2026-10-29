@@ -18,42 +18,21 @@ sourceLesson: aud-microphones
 
 When several mics are open at once, a source reaches its own mic and, more weakly and later, its neighbours. When the signals are mixed, the delayed copy comb-filters the direct one. The **3:1 rule** says the distance *between* mics should be at least **three times** the distance from each mic to its source.
 
-Why it works: by the inverse square law, sound pressure falls in proportion to distance, so the leakage level drops by:
+Why it works: by the inverse square law, sound pressure falls in proportion to distance. A neighbouring mic three times further away picks up the source about **9.5 dB** quieter than its own mic does (assuming similar pickup and channel gains).
 
-```formula
+```formula reference
 L_leak = 20 log_10(d_far / d_near)
-L_leak = 20 log_10(3d / d)
-L_leak = 20 log_10(3) ≈ 9.5 dB
 where
 L_leak: how far the leaked copy is below the direct sound, in decibels (dB)
 d_far: the distance from the source to the neighbouring mic, in metres (m)
 d_near: the distance from the source to its own mic, in metres (m)
-d: the source-to-own-mic distance; the 3:1 rule makes d_far at least 3 × d
 log_10: the base-10 logarithm; 20 × log_10 because pressure is an amplitude
 dB: decibel
 m: metre
-≈: approximately equal to (the result is rounded)
-In words: three times further away means about a third of the pressure, which is about 9.5 dB quieter.
+In words: The leaked copy is quieter than the direct sound by 20 times the logarithm of how many times further away the neighbouring mic is; three times further gives about 9.5 dB.
 ```
 
-When a copy that much quieter is mixed with the direct sound, it can only nudge the sum up or down a little:
-
-```formula
-g = 10^{−L_leak/20} = 10^{−9.5/20} ≈ 0.335
-L_peak = 20 log_10(1 + g) ≈ +2.5 dB
-L_notch = 20 log_10(1 − g) ≈ −3.5 dB
-where
-g: the leaked copy's amplitude as a fraction of the direct sound, a pure number
-L_leak: how far the leak is below the direct sound, in decibels (dB); here 9.5 dB
-L_peak: the biggest boost, at frequencies where the copy arrives in phase, in dB
-L_notch: the deepest cut, at frequencies where the copy arrives out of phase, in dB
-log_10: the base-10 logarithm
-dB: decibel
-≈: approximately equal to (the result is rounded)
-In words: convert the 9.5 dB gap back to an amplitude fraction, then add or subtract it from 1 to find the worst peak and notch.
-```
-
-That is about +2.5 dB at a peak and −3.5 dB at a notch, rather than the +6 dB peaks and perfect notches of equal-amplitude delayed copies.
+A copy that much quieter cannot cancel or double the direct sound. Mixed in, it can only nudge the sum: the comb filter's peaks are about +2.5 dB and its notches about −3.5 dB, instead of the +6 dB peaks and deep notches of two equal copies. The comb is still there, but shallow enough that it is rarely objectionable. The quieter the leak, the shallower the comb.
 
 ```diagram
   src A      src B

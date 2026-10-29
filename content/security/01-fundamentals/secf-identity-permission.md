@@ -39,6 +39,13 @@ The system verifies a claimed identity, using something you know (password), hav
 
 Note the distinction between **identification** (claiming to be `alice`) and **authentication** (checking evidence for that claim). Typing a username is identification; the password is authentication.
 
+> [!analogy] Real-world analogy: checking into a hotel
+> At reception you give your name, show your passport and receive a key card. The card opens your room and no other, and the door lock records each time it is used.
+>
+> **How it maps:** Giving your name is identification. Checking the passport is authentication. The card opening only room 214 is authorisation for one specific object. The lock's entry record is accounting.
+>
+> **Where it stops:** The key card works for whoever holds it, and reception never sees who uses it later. A web session token behaves the same way after login, so a stolen token bypasses the passport check.
+
 ### Authorisation: what may you do?
 
 Once the system knows who you are, it decides whether *this* identity may perform *this* action on *this* resource. Alice may read her own payslip but not Bob's. This is **access control**, covered in its own lesson.

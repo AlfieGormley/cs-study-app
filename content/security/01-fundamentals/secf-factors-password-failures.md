@@ -19,7 +19,14 @@ Authentication answers one question: *is this really the account holder?* Everyt
 
 **Multi-factor authentication (MFA)** combines factors from *different* categories. A password plus a security question is still single-factor: both are knowledge, and both can be phished or found in a data breach together.
 
-The point of MFA is independence: stealing a password from a breach dump doesn't give the attacker your phone. Its effectiveness depends on the authenticator and attack path; recovery and session theft need separate protection.
+The point of MFA is independence: stealing a password from a breach dump doesn't give the attacker your phone. Its effectiveness depends on the authenticator and attack path; account recovery and session theft need separate protection.
+
+> [!analogy] Real-world analogy: a bank card and PIN
+> A cash machine needs your card and your PIN. A pickpocket with your card lacks the PIN; someone who watched you type the PIN lacks the card.
+>
+> **How it maps:** The card is a possession factor and the PIN a knowledge factor. They are usually stolen in different ways, so one theft alone is not enough: that independence is the point of MFA. Asking for a PIN and then your postcode would add a prompt, not a factor.
+>
+> **Where it stops:** A skimmer fitted to a fake or tampered cash machine can capture the card data and the PIN in one go, much as a real-time phishing page can collect a password and a one-time code together. Independence depends on the attack path, not only on the factor labels.
 
 > [!note] Biometrics are not secrets
 > Your face is on social media and your fingerprints are on every glass you hold. Biometrics work well as a *local* unlock (the phone checks your fingerprint, then uses a key stored in secure hardware). They work badly as a password sent to a server, because you can't change them after a leak.

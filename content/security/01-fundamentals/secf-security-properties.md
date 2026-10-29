@@ -19,6 +19,13 @@ Security people use two small frameworks to make that question precise. The **CI
 | Integrity | Can it be changed undetected? | Tampering |
 | Availability | Can it be used when needed? | DDoS, ransomware |
 
+> [!analogy] Real-world analogy: a contract sent by post
+> You post a signed contract to a solicitor. You want nobody else to read it, nobody to swap a page on the way, and the letter to arrive before the deadline.
+>
+> **How it maps:** Keeping other readers out is confidentiality. Noticing a swapped page is integrity. Delivery in time is availability. A tamper-evident seal plays the role of an integrity check, and a postal strike plays the role of a denial of service.
+>
+> **Where it stops:** A digital file can be copied without the original going missing, so a confidentiality breach can leave no visible trace, unlike a torn envelope. A seal also helps only if you know what the genuine seal looks like: that is the trusted-reference problem with hashes below.
+
 ### Confidentiality
 
 Only authorised parties can **read** the information. Breaches of confidentiality are the ones that make headlines: a leaked customer database, an S3 bucket left public, a laptop stolen from a car.

@@ -2,9 +2,9 @@
 id: ip-routing-longest-prefix
 title: Find a route with longest-prefix match
 level: intermediate
-minutes: 5
+minutes: 4
 sourceLesson: ip-routing-basics
-summary: Separate routing from forwarding and implement destination lookup over an installed prefix table.
+summary: Separate routing from forwarding and predict which installed route longest-prefix match selects.
 ---
 
 A router does two different jobs, on two very different timescales.
@@ -72,45 +72,29 @@ Trace a few destinations:
 
 Why "most specific wins"? It lets aggregation and exceptions coexist. A provider announces one big block, and a customer who moved elsewhere announces a smaller piece of it. The smaller, more precise announcement takes priority for its addresses without anyone having to delete the big one.
 
+> [!analogy] Real-world analogy: A mail-sorting rulebook
+> A sorting office has rules of different precision: "anything for the UK goes to the national hub", "anything for one postcode area goes to that city's sorting centre", "anything for one district within that area goes to its local delivery office". A letter for that district matches all three, and the clerk follows the most precise one.
+>
+> **How it maps:** Each rule is a route; the precision of the rule is the prefix length; "anything at all goes to the hub" is the default route 0.0.0.0/0. The order rules were written in does not matter, only their precision.
+>
+> **Where it stops:** Routers compare binary prefixes of a fixed-length number, not names, and a rule's "precision" is exactly its count of matching bits. And the chosen rule only picks the next hop; the next router repeats the decision with its own table.
+
 > [!warning] More specific always beats "better"
 > An eligible /24 installed in the selected forwarding table takes precedence over an installed /16. Rejected routes or unresolved next hops do not participate, and policy can select a different table. Metrics and protocol preferences only break ties between routes for the **same prefix**. This catches people out when a stray static route or a leaked more-specific steals traffic.
 
-### LPM in Python
+### What if nothing matches?
 
-A direct translation: find every matching entry and take the longest.
+If no entry, not even a default route, contains the destination, the router has nowhere to send the packet. It discards it and normally returns ICMP Destination Unreachable (network unreachable), subject to rate limits and suppression rules. A host with no default route behaves similarly: connections to off-link destinations fail immediately with "network unreachable".
 
-```python
-import ipaddress as ip
+### How fast is the lookup?
 
-table = [
-    ("0.0.0.0/0",   "isp"),
-    ("10.0.0.0/8",  "core"),
-    ("10.1.0.0/16", "dc1"),
-    ("10.1.2.0/24", "rack7"),
-]
-routes = [(ip.ip_network(p), hop)
-          for p, hop in table]
-
-def lookup(addr):
-    a = ip.ip_address(addr)
-    # Keep matches, then prefer longest.
-    hits = [(n.prefixlen, hop)
-            for n, hop in routes if a in n]
-    if not hits:
-        return None
-    return max(hits, key=lambda x: x[0])[1]
-
-print(lookup("10.1.3.1"))   # dc1
-print(lookup("8.8.8.8"))    # isp
-```
-
-It compares the address with every route, so a table of N routes costs N prefix comparisons per lookup. In Big-O notation that is O(N), where N is the number of routes: the work grows in direct proportion to the table size. It also allocates a list of matches. The example assumes routes already selected by the control plane and one entry per prefix; it does not implement metrics, ECMP or policy routing. None means no matching route. Large tables motivate structures that avoid scanning every entry.
+The simplest lookup compares the destination with every route and keeps the longest match. That work grows in proportion to the table size, which is fine for a home router's handful of routes but not for a router holding hundreds of thousands. The next lessons cover structures that avoid scanning every entry.
 
 ## Key takeaways
 - The control plane selects routing state; the data plane forwards packets.
 - Connected, static and dynamic routes can populate a table; /0 is the fallback match.
 - Among installed eligible prefixes in the selected table, the longest matching IP prefix wins.
-- The teaching lookup returns None when nothing matches and scans the whole table.
+- With no matching route at all, the packet is discarded, normally with an ICMP Destination Unreachable.
 
 ## Further reading
 - [Longest prefix match — Wikipedia](https://en.wikipedia.org/wiki/Longest_prefix_match)

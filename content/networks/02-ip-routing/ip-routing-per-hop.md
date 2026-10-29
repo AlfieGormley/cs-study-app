@@ -36,6 +36,13 @@ Frame 2 (R1 to B)
   src ip 10.0.0.5 dst ip 10.9.0.7
 ```
 
+> [!analogy] Real-world analogy: A parcel and its courier stickers
+> A parcel's address label names the final recipient and never changes. For each leg of the journey, the depot sticks a fresh routing sticker on top saying only "to the next depot" and peels off the previous one.
+>
+> **How it maps:** The address label is the IP header with its source and destination; the per-leg sticker is the Ethernet frame with the next hop's MAC address. Each router (depot) reads the label, picks the next leg from its table, and writes a new sticker.
+>
+> **Where it stops:** A router also changes the label slightly at every hop, decrementing TTL and updating the header checksum. NAT and tunnels change much more, and links that are not Ethernet may use no MAC addresses at all.
+
 A host does the same LPM decision. If the selected route marks the destination as on-link on Ethernet, it ARPs for the destination itself. For a route via a gateway, it resolves that route's next hop. That may be a more-specific gateway route rather than the default; no matching route is also possible.
 
 ## Key takeaways

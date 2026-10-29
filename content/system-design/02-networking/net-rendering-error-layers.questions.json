@@ -33,7 +33,7 @@
     "id": "net-request-lifecycle-q6",
     "level": "advanced",
     "type": "single",
-    "prompt": "A page loads resources from three additional unrelated origins. Assume they cannot coalesce connections, RTT to each is 40 ms, each DNS lookup independently takes 40 ms, and each uses a new TLS 1.3/TCP connection without early data or retry. What setup cost does each origin add, and what helps?",
+    "prompt": "A page loads fonts and scripts from three additional unrelated origins. They cannot share or coalesce connections with the main site, and each uses a new TCP + TLS 1.3 connection. What does each extra origin cost before its first request can be sent, and what helps?",
     "options": [
       {
         "text": "The browser has to download the TLS certificate chain three extra times, which costs about 1 MB",
@@ -44,8 +44,8 @@
         "explanation": "HTTP/2 multiplexes requests within one connection to **one origin**. It can't carry requests for unrelated hostnames on different servers."
       },
       {
-        "text": "Each origin needs DNS, TCP and TLS setup (about 120 ms under the stated timing); consolidate onto fewer origins or use `preconnect` hints",
-        "explanation": "Correct. Connections can't be shared across different hostnames (without certificate and IP coalescing), so each new origin pays its own setup. Fewer origins or early `preconnect` hides or removes that cost."
+        "text": "Its own DNS lookup, TCP handshake and TLS handshake; consolidate onto fewer origins or use `preconnect` hints",
+        "explanation": "Correct. Connections cannot be shared across unrelated hostnames (without certificate and IP coalescing), so each new origin pays its own setup round trips. Fewer origins remove that cost; an early `preconnect` overlaps it with downloading the HTML."
       },
       {
         "text": "Browsers block third-party scripts, so the scripts never load",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "A new origin means a new hostname, so a new DNS lookup (~1 RTT to a resolver), a new TCP handshake (1 RTT) and a new TLS handshake (1 RTT):\n\n```formula\nT_setup ≈ 3 × RTT = 3 × 40 ms = 120 ms\nwhere\nT_setup: the setup time each new origin adds before its first request can be sent, in milliseconds (ms)\n3: the round trips needed: DNS, TCP and TLS 1.3, one each\nRTT: the round-trip time to that origin (and here also the DNS lookup time), 40 ms\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: every extra origin costs three round trips of setup before it delivers anything.\n```\n\nThat's about **120 ms** per origin. The browser does these in parallel, but they start only once the HTML has been parsed far enough to discover them, so they sit on the critical path.\n\nFixes: self-host fonts and scripts on the main origin (it's reusing a warm connection), or add `<link rel=\"preconnect\" href=\"https://fonts.cdn-a.net\">` so the setup starts while the HTML is still downloading.",
+    "workedExample": "1. A new origin means a new hostname, so the browser needs a new DNS lookup, a new TCP handshake and a new TLS handshake before it can send anything there: several round trips of pure setup.\n2. The browser can set up the three origins in parallel, so their costs overlap rather than add end to end. But setup only starts once parsing reveals each resource, so it often sits on the critical path.\n3. Certificate size (a few kilobytes) and browser blocking are not the issue; HTTP/2 multiplexing works within one origin's connection, not across unrelated hosts.\n\nFixes: self-host fonts and scripts on the main origin so they reuse its warm connection, or add a hint such as `<link rel=\"preconnect\" href=\"https://fonts.example.net\">` so setup starts while the HTML is still downloading.",
     "link": {
       "title": "How browsers work (MDN)",
       "url": "https://developer.mozilla.org/en-US/docs/Web/Performance/Guides/How_browsers_work"

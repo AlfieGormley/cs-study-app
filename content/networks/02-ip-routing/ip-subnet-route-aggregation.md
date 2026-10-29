@@ -4,10 +4,10 @@ title: Aggregate aligned routes
 level: basic
 minutes: 4
 sourceLesson: ip-subnetting
-summary: Build exact summary prefixes and explain the routing consequences of an aggregate.
+summary: Recognise when aligned prefixes can be summarised exactly and predict what an aggregate does to traffic.
 ---
 
-Build exact summary prefixes and explain the routing consequences of an aggregate.
+Every route a router advertises costs table space in every router that hears it. Summarising many prefixes into one keeps tables small, but changes which traffic a router attracts.
 
 ## Supernetting and route aggregation
 
@@ -24,20 +24,9 @@ Suppose an ISP has customers on `200.10.0.0/24`, `200.10.1.0/24`, `200.10.2.0/24
 
 The first 22 bits match (16 from the first two octets, 6 here), so the ISP advertises one route: **200.10.0.0/22**. The rest of the Internet needs one entry instead of four.
 
-The general rule: merging a power-of-two number of equal, adjacent blocks shortens the prefix by that power.
+The general rule: merging two equal, adjacent blocks takes one bit off the prefix, four take two bits, eight take three. So four /24s become a /22 and two /25s become a /24.
 
-```formula
-p_agg = p − log_2(k)
-p_agg = 24 − log_2(4) = 24 − 2 = 22
-where
-p_agg: the prefix length of the summary route
-p: the prefix length of each block being merged, here 24
-k: how many equal-size, adjacent blocks are merged; must be a power of 2 (2, 4, 8 …), here 4
-log_2(k): the base-2 logarithm of k: how many copies of 2 must be multiplied together to make k, so log_2(4) = 2 and log_2(8) = 3
-In words: four /24s need 2 fewer prefix bits to cover them all, so they combine into one /22, provided the blocks are aligned as explained next.
-```
-
-Aggregation requires **prefix alignment**. The block must start on a multiple of its size: for k blocks, the first one's number (here the third octet) must be a multiple of k. `200.10.1.0` to `200.10.4.0` is also four /24s, but no single /22 covers exactly them. The best summary is `200.10.1.0/24`, `200.10.2.0/23` and `200.10.4.0/24`:
+Aggregation requires **prefix alignment**. The block must start on a multiple of its size: to merge four /24s, the first one's number (here the third octet) must be a multiple of four. `200.10.1.0` to `200.10.4.0` is also four /24s, but no single /22 covers exactly them. The best summary is `200.10.1.0/24`, `200.10.2.0/23` and `200.10.4.0/24`:
 
 ```python
 import ipaddress as ip
@@ -54,6 +43,15 @@ Aggregation reduces entries advertised to other networks, saving routing/forward
 
 The catch is that a summary can attract traffic for addresses that don't exist, or that live elsewhere. A more-specific route wins by **longest-prefix match**, but only if it exists. An aggregate can still attract traffic for unavailable destinations. The advertising router needs appropriate component routes and discard handling for unmatched portions to avoid forwarding loops.
 
+For example, a router that advertises 10.1.0.0/21 but only has routes for 10.1.4.0/22 attracts traffic for 10.1.0.0 to 10.1.3.255 too. With no more-specific route for those addresses, it either discards them (with a discard or "null" route for the aggregate) or, if its own default route points back towards the sender, bounces them in a loop until TTL expires.
+
+> [!analogy] Real-world analogy: Telephone area codes
+> A caller abroad does not need a list of every London subscriber. Their phone network only needs "numbers starting +44 20 go to the London exchange". The London exchange holds the detailed list.
+>
+> **How it maps:** The area code is the aggregate prefix; the detailed subscriber list is the set of more-specific routes held only by the router that summarises them. Distant routers keep one entry instead of thousands.
+>
+> **Where it stops:** A call to an unassigned London number still travels to the London exchange before it fails, just as an aggregate attracts traffic for unused addresses. And unlike area codes, prefixes can only be summarised when the blocks are numerically aligned on a power-of-two boundary.
+
 ## Address exhaustion
 
 IPv4 has 2³² possible address values (32 copies of 2 multiplied together: 4,294,967,296, about 4.3 billion), and special-purpose ranges reduce the pool available for globally unique assignments. Address sharing, transfers and allocation policies address scarcity in different ways; IPv6 provides a much larger address space.
@@ -69,11 +67,5 @@ IPv4 has 2³² possible address values (32 copies of 2 multiplied together: 4,29
 
 ## Further reading
 - [RFC 4632: Classless Inter-domain Routing (CIDR)](https://www.rfc-editor.org/rfc/rfc4632)
-- [RFC 1918: Address Allocation for Private Internets](https://www.rfc-editor.org/rfc/rfc1918)
-- [RFC 3021: Using 31-Bit Prefixes on Point-to-Point Links](https://www.rfc-editor.org/rfc/rfc3021)
 - [Classless Inter-Domain Routing — Wikipedia](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing)
-- [Subnet — Wikipedia](https://en.wikipedia.org/wiki/Subnet)
 - [ipaddress module — Python docs](https://docs.python.org/3/library/ipaddress.html)
-
-- [RFC 3927: IPv4 link-local addressing](https://www.rfc-editor.org/rfc/rfc3927.html)
-- [RFC 6598: Shared address space](https://www.rfc-editor.org/rfc/rfc6598.html)

@@ -4,7 +4,7 @@ title: Mandatory confidentiality and integrity labels
 level: intermediate
 minutes: 3
 sourceLesson: secf-access-control
-summary: mandatory access control limits ordinary owners through a central policy.
+summary: Mandatory access control limits ordinary owners through a central policy.
 ---
 
 DAC lets an object owner choose permissions. Mandatory access control adds centrally enforced restrictions that ordinary owners cannot waive. The following directional rules are simplified level-only models; real policies can include compartments and trusted exceptions.

@@ -45,7 +45,7 @@ On the five-node chain with values one through five, requesting the last node le
 
 The extra initial step is intentional: back must end before the target, not on it. Advancing beyond the available chain raises the explicit error before any link is changed. An empty list has no valid positive removal distance. A zero or negative distance is rejected, rather than silently removing an unrelated node.
 
-Python treats bool as an int subclass, so the shown type check accepts True as distance one. Callers that must reject Boolean arguments need a stricter validation contract. This teaching example otherwise leaves all non-target node identities intact.
+Python treats bool as an int subclass, so the shown isinstance check accepts True as distance one. Callers that must reject Boolean arguments need a stricter validation contract. This teaching example otherwise leaves all non-target node identities intact.
 
 ## Key takeaways
 - A dummy supplies a predecessor even for the real head.

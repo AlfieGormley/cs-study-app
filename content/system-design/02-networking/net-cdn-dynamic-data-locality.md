@@ -3,10 +3,10 @@ id: net-cdn-dynamic-data-locality
 title: "Dynamic acceleration and edge data locality"
 level: advanced
 minutes: 3
-summary: "Calculate warm-origin acceleration and decide whether edge compute keeps data access close enough."
+summary: "Explain how an edge speeds up uncacheable requests and decide whether edge compute keeps data access close enough."
 sourceLesson: net-cdn
 ---
-An edge can improve dynamic traffic without caching it. Keep the round-trip assumptions explicit, and distinguish moving the handshake from moving the data.
+An edge can improve dynamic traffic without caching it. The key distinction is between moving the handshakes and moving the data.
 
 ## Dynamic content acceleration
 
@@ -17,35 +17,16 @@ Not everything is cacheable: checkout pages, API calls, search results. CDNs sti
 3. **Optimised routing** over the CDN's private backbone or chosen paths, often faster and less lossy than default internet routing.
 4. **Protocol upgrades** at the edge: HTTP/3 to the user even if your origin only speaks HTTP/1.1.
 
-Worked example: a user in Singapore, origin in Frankfurt (RTT 160 ms), edge in Singapore (RTT 5 ms), TLS 1.3, and an edge that already holds a warm connection to the origin:
+Illustrative example (assumed figures, not measurements): a user in Singapore, origin in Frankfurt with a 160 ms RTT, a Singapore edge 5 ms away that already holds a warm connection to the origin, and TLS 1.3 on a new user connection:
 
-| | Direct | Via CDN |
+| Step | Direct | Via CDN edge |
 |---|---|---|
-| TCP | 160 ms | 5 ms |
-| TLS 1.3 | 160 ms | 5 ms |
-| Request | 160 ms | 5 + 160 ms |
+| TCP handshake | 160 ms | 5 ms |
+| TLS 1.3 handshake | 160 ms | 5 ms |
+| Request and response | 160 ms | 5 + 160 ms |
 | **Total** | **480 ms** | **175 ms** |
 
-As a formula:
-
-```formula
-T_direct = 3 × RTT_origin
-T_direct = 3 × 160 ms = 480 ms
-T_cdn = 3 × RTT_edge + RTT_origin
-T_cdn = 3 × 5 ms + 160 ms = 175 ms
-T_direct / T_cdn = 480 / 175 ≈ 2.7
-where
-T_direct: the time to the first response byte when the user connects straight to the origin, in milliseconds (ms)
-T_cdn: the same time through the CDN edge
-RTT_origin: the round-trip time to the origin in Frankfurt, 160 ms from Singapore in this example
-RTT_edge: the round-trip time from the user to the Singapore edge, 5 ms
-3: the round trips on a new connection: TCP handshake, TLS 1.3 handshake and the request itself
-ms: millisecond, one thousandth of a second
-≈: approximately equal to
-In words: going direct pays all three round trips over the long path; via the CDN, only the request itself crosses it, because the edge's connection to the origin is already open.
-```
-
-Even with zero caching, a cold request is ~2.7× faster. The remaining 160 ms is the assumed origin RTT, not a proven speed-of-light minimum. Better routes may reduce it; moving data or caching it nearby avoids the long origin round trip.
+Even with nothing cached, the edge cuts the wait to roughly a third, because only the request itself crosses the long path; the handshakes happen on the short hop. What it cannot remove is that one remaining trip to the origin. Better routes over the CDN's backbone may shorten it somewhat, but only moving or caching the data nearer the user avoids it.
 
 ## Edge compute
 

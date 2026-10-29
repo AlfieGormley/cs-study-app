@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Worst case: a resolver cached the record at 08:59 on Monday, with a TTL of 86,400 s.\n2. Lowering the TTL at 09:00 doesn't reach that cache; it only affects answers given *after* 09:00.\n3. That cache keeps the old IP until the old TTL runs out:\n\n```formula\nt_expire = t_fetch + TTL_old\nt_expire = 08:59 + 86,400 s\nt_expire = 08:59 + 24 h\nwhere\nt_expire: the clock time at which the cached copy expires; here 08:59 on Tuesday\nt_fetch: the clock time at which the resolver cached the record, 08:59 on Monday\nTTL_old: the TTL the record had when it was cached, 86,400 seconds (s), which is 24 hours (h)\ns: second\nh: hour, 3,600 seconds\nIn words: a cached copy lives out the TTL it was given, counted from when it was fetched.\n```\n\nSo the old IP can be served until **08:59 Tuesday**. Correct playbook: lower the TTL, **wait the old TTL** (24 h), then make the change. Then caches converge within ~60 s. Even then, keep the old servers up for a while: some clients ignore TTLs.",
+    "workedExample": "1. Worst case: a resolver fetched the record at 08:59 on Monday, when its TTL was still 86,400 s (24 hours).\n2. Lowering the TTL at 09:00 changes only the answers handed out *after* 09:00. It cannot reach copies already sitting in caches.\n3. That resolver keeps its old copy for the full lifetime it was given, so it can keep serving the old IP until about 08:59 on Tuesday, whatever you change in the meantime.\n4. Changing the `A` record at 09:30 does not shorten that wait either.\n\nCorrect playbook: lower the TTL, **wait out the old TTL** (24 hours), then make the change. After that, caches converge within about a minute. Even then, keep the old servers up for a while: some clients ignore TTLs, and serve-stale or long-lived connections create a tail.",
     "link": {
       "title": "RFC 1035: Domain names, implementation and specification",
       "url": "https://www.rfc-editor.org/rfc/rfc1035"
@@ -67,27 +67,27 @@
     "id": "net-dns-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A developer runs `dig new.example.com` before the record exists, then creates it. The zone's `SOA` record has a TTL of 900 s and a `MINIMUM` field of 3,600 s. For roughly how long might the resolver they used keep saying the name doesn't exist?",
+    "prompt": "A developer runs `dig new.example.com` before the record exists, then creates it. For a while their resolver keeps answering \"doesn't exist\", while a colleague using a different resolver sees the new record immediately. The zone's `SOA` record has a TTL of 900 s and a `MINIMUM` field of 3,600 s. What explains this, and roughly how long can it last?",
     "options": [
       {
-        "text": "Up to about 15 minutes",
-        "explanation": "Correct. Under RFC 2308 the negative-caching TTL is the smaller of the SOA record’s own TTL and its MINIMUM field. Here 900 s is smaller than 3,600 s, so the cached negative answer lasts 900 s."
+        "text": "Their resolver cached the \"doesn't exist\" answer; it can keep it for up to the smaller of the two values, about 15 minutes",
+        "explanation": "Correct. Under RFC 2308 a negative answer is cached for the smaller of the SOA record's own TTL and its MINIMUM field. The colleague's resolver never cached the miss, so it asks the authoritative server and gets the new record."
       },
       {
-        "text": "Up to about an hour",
-        "explanation": "That uses the MINIMUM field alone. RFC 2308 caps the negative TTL at the SOA record's own TTL as well, so the smaller value wins."
+        "text": "Their resolver cached the \"doesn't exist\" answer for the MINIMUM field, about an hour",
+        "explanation": "That uses the MINIMUM field alone. RFC 2308 also caps the negative TTL at the SOA record's own TTL, and the smaller value wins."
       },
       {
-        "text": "Not at all, because negative answers are never cached",
-        "explanation": "They are cached, precisely to stop repeated lookups for non-existent names hammering authoritative servers."
+        "text": "Negative answers are never cached, so the colleague's resolver must be faulty",
+        "explanation": "Negative answers are cached, precisely so that repeated lookups for non-existent names do not hammer authoritative servers. The colleague's resolver is behaving correctly."
       },
       {
-        "text": "Until the registrar propagates the change, usually 24 to 48 hours",
-        "explanation": "Adding a record happens on your authoritative servers; the registrar isn't involved. The '48 hours to propagate' folklore is really just TTLs expiring."
+        "text": "The registrar is still propagating the change, which usually takes 24 to 48 hours",
+        "explanation": "Adding a record happens on your authoritative servers; the registrar is not involved. The \"48 hours to propagate\" folklore is really just cached answers expiring."
       }
     ],
     "answer": 0,
-    "workedExample": "1. The `NXDOMAIN` response includes the zone's `SOA` record.\n2. RFC 2308 sets the negative TTL:\n\n```formula\nTTL_neg = min(TTL_SOA, MINIMUM)\nTTL_neg = min(900 s, 3,600 s) = 900 s\nwhere\nTTL_neg: how long a resolver may cache the \"doesn't exist\" (NXDOMAIN) answer, in seconds (s)\nmin: the minimum function: whichever value in the brackets is smaller\nTTL_SOA: the TTL of the zone's SOA record, 900 s\nMINIMUM: the MINIMUM field inside the SOA record, 3,600 s\ns: second\nIn words: the smaller of the two values wins, so 900 s, which is 15 minutes.\n```\n\nSo that resolver may answer 'doesn't exist' for up to 15 minutes after the record is created. Other resolvers that never cached the miss see the new record immediately. Lesson: create records *before* anything starts querying them, or keep the negative TTL short.",
+    "workedExample": "1. The developer's query reached the authoritative server before the name existed, so the resolver received `NXDOMAIN` along with the zone's `SOA` record.\n2. Resolvers cache that \"no\" (negative caching, RFC 2308) for the smaller of the SOA record's TTL and its MINIMUM field. Here that is 900 s, 15 minutes.\n3. Until it expires, that resolver repeats \"doesn't exist\" without asking again. A resolver that never cached the miss asks the authoritative server and sees the new record at once.\n4. Practical fixes: create records *before* anything queries them, keep the zone's negative TTL short if names are created often, or flush the affected resolver's cache where you control it.",
     "link": {
       "title": "RFC 2308: Negative caching of DNS queries",
       "url": "https://www.rfc-editor.org/rfc/rfc2308"
@@ -97,27 +97,27 @@
     "id": "net-dns-q9",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A recursive resolver fetched `api.example.com` (TTL 300 s) from the authoritative server at 10:00:00. A laptop asks that resolver for the name at 10:04:00. What TTL does the laptop receive, and when does its own cached copy expire?",
+    "prompt": "A recursive resolver fetched `api.example.com` (TTL 300 s) from the authoritative server at 10:00:00. A laptop asks that resolver for the name at 10:04:00. A colleague claims each layer of caching adds its own 5 minutes, so after a change the laptop could serve the old answer until about 10:09:00. What actually happens?",
     "options": [
       {
-        "text": "300 s; the laptop's copy expires at 10:09:00",
-        "explanation": "Resolvers don't reset the TTL when they hand out a cached answer. They pass on the time remaining."
+        "text": "The colleague is right: the laptop receives a fresh 300 s TTL",
+        "explanation": "Resolvers do not reset the TTL when they hand out a cached answer. They pass on only the time remaining."
       },
       {
-        "text": "0 s; the laptop must ask again immediately",
-        "explanation": "The resolver's entry still has 60 s left, so it hands that remaining time on."
+        "text": "The laptop must ask again immediately, because cached answers carry a TTL of 0",
+        "explanation": "The resolver's copy still has about a minute left, and it hands that remaining time on."
       },
       {
-        "text": "60 s; the laptop's copy expires at 10:05:00, the same moment as the resolver's",
-        "explanation": "Correct. The TTL counts down in the resolver's cache. Every downstream cache inherits the remaining time, so they all expire together."
+        "text": "The resolver hands out the remaining time (about 60 s), so the laptop's copy expires at about 10:05:00, the same moment as the resolver's; caching layers don't stack",
+        "explanation": "Correct. The TTL counts down in the resolver's cache, and every downstream cache inherits the remaining time, so they all expire together."
       },
       {
         "text": "It depends on the laptop's clock, so it can't be known",
-        "explanation": "TTLs are relative durations in seconds, not absolute timestamps, so clock skew doesn't change the result."
+        "explanation": "TTLs are relative durations in seconds, not absolute timestamps, so clock differences do not change when the copy expires."
       }
     ],
     "answer": 2,
-    "workedExample": "Work out when the resolver's copy dies and how much life it has left at 10:04:00:\n\n```formula\nt_exp = t_fetch + TTL\nt_exp = 10:00:00 + 300 s = 10:05:00\nTTL_left = TTL − t_age\nTTL_left = 300 s − 240 s = 60 s\nwhere\nt_exp: the clock time at which the resolver's cached copy expires\nt_fetch: the clock time at which the resolver fetched the record, 10:00:00\nTTL: the record's time to live, 300 seconds (s)\nTTL_left: the remaining TTL the resolver hands to the laptop\nt_age: how long the resolver has held the record when the laptop asks: from 10:00:00 to 10:04:00 is 240 s\ns: second\nIn words: the resolver passes on only the 60 s its copy has left, so the laptop's copy expires at the same moment, 10:05:00.\n```\n\nThe resolver answers with TTL 60; the laptop caches it for 60 s, so its copy expires at **10:05:00**.\n\nConsequence: after you change a record, the worst-case wait is about one TTL from the most recent fetch of the old answer before the change, not one TTL per layer of caching.",
+    "workedExample": "1. The resolver's copy was fetched at 10:00:00 with a 300 s lifetime, so it expires at 10:05:00.\n2. At 10:04:00 the copy has about a minute left. The resolver answers with that remaining TTL, not the original 300 s.\n3. The laptop caches the answer for the time it was given, so its copy expires at about 10:05:00 too.\n\nConsequence: after you change a record, well-behaved caches converge about one TTL after the most recent fetch of the old answer, not one TTL per layer of caching. Clients that ignore TTLs, serve-stale behaviour and long-lived connections are the exceptions to plan for.",
     "link": {
       "title": "Time to live (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Time_to_live"

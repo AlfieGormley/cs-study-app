@@ -17,6 +17,13 @@ A protection mechanism can require **two independent conditions**, so compromise
 
 Closely related is **separation of duties**: the person who raises a payment shouldn't be the person who approves it.
 
+> [!analogy] Real-world analogy: a two-key safe deposit box
+> A traditional safe deposit box needs two keys: the customer's and the bank's. Neither key opens the box alone.
+>
+> **How it maps:** Each key is an independent condition, as in separation of privilege. A thief who steals the customer's key still lacks the bank's key, just as a stolen password alone does not satisfy multi-factor authentication or a single clerk cannot both raise and approve a payment.
+>
+> **Where it stops:** Two keys help only if different people hold them and the lock cannot be bypassed. In software, both approvals can sometimes be completed through one compromised account or a workflow bypass, so enforcement and independence need checking.
+
 ## Least common mechanism
 
 Minimise mechanisms **shared** between users, because each shared mechanism is a channel for one user to affect another. A shared `/tmp` directory, a shared cache keyed only by URL, or a multi-tenant database without tenant isolation are all examples. Cache poisoning and cross-tenant data leaks often come down to this.
@@ -51,9 +58,6 @@ Principles conflict with each other and with delivery:
 - Fail-closed protects confidentiality and integrity at the cost of availability.
 
 The skill is applying them in proportion to the value of what you protect.
-
-> [!note] Example limits
-> Python permission and failure branches were exercised with test objects. The privileged C race example is a source-reviewed fragment, not an executed setuid program. Cloud policy and cache examples require deployment-specific configuration; they were not tested against live services.
 
 ## Key takeaways
 - Independent conditions and separate approvers limit unilateral misuse.

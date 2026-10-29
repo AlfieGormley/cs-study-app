@@ -15,37 +15,20 @@ A frequency response plot shows on-axis SPL (at a fixed input) against frequency
 - **Smoothness**: narrow peaks often come from cone breakup or cabinet resonance.
 - **Off-axis curves**: how the response changes at 30° or 60°. Because of diffraction, a driver radiates widely when its wavelength is large compared with the cone, and shows **beaming** (narrower dispersion) when the wavelength becomes comparable with the cone.
 
-Where does beaming start? Treat the cone as a flat, rigid disc (a "piston"). Directivity becomes significant when the cone's circumference is about one wavelength, which corresponds to a dimensionless wavenumber-radius product of one:
+Where does beaming start? Treat the cone as a flat, rigid disc (a "piston"). Directivity becomes significant roughly when the cone's circumference reaches one wavelength. So the bigger the cone, the lower the frequency at which it starts beaming: double the radius and beaming starts an octave lower.
 
-```formula
-ka = 1
-k = (2πf) / c
+```formula reference
 f_beam = c / (2πa)
 where
-k: the wavenumber, 2π divided by the wavelength, in radians per metre (rad/m); higher frequency means bigger k
-a: the effective radius of the cone (half its effective diameter), in metres (m)
-f: the frequency, in hertz (Hz)
 f_beam: the frequency above which the cone starts to focus sound forwards instead of spreading it, in hertz (Hz)
 c: the speed of sound in air, about 343 metres per second (m/s) at 20 °C
 π: pi, about 3.14159
-In words: the bigger the cone, the lower the frequency at which it starts beaming. Double the radius and beaming starts an octave lower.
+a: the effective radius of the cone (half its effective diameter), in metres (m)
+Hz: hertz, cycles per second
+In words: In the rigid-piston model, beaming becomes significant when the cone's circumference is about one wavelength, so a cone of twice the radius starts beaming an octave lower.
 ```
 
-Worked for a woofer with a 13 cm effective diameter and a 25 mm tweeter dome:
-
-```formula
-f_beam = 343 / (2π × 0.065) ≈ 840 Hz
-f_beam = 343 / (2π × 0.0125) ≈ 4.4 kHz
-where
-f_beam: the frequency where beaming becomes significant, in hertz (Hz)
-π: pi, about 3.14159
-Hz: hertz, cycles per second; kHz is a thousand hertz
-kHz: kilohertz
-≈: approximately equal to (rounded)
-In words: the 6.5 cm-radius woofer beams from about 840 Hz; the 12.5 mm-radius tweeter stays wide up to about 4.4 kHz.
-```
-
-(343 is the speed of sound in m/s; 0.065 m and 0.0125 m are the two radii.) The piston model stops being reliable once the cone breaks up (below), so check measured off-axis curves.
+For a woofer with a 13 cm effective diameter this gives about 840 Hz; for a 25 mm tweeter dome, about 4.4 kHz, roughly five times higher because the dome is roughly five times smaller. The piston model stops being reliable once the cone breaks up (below), so check measured off-axis curves.
 
 That beaming is one reason multi-way speakers hand high frequencies to smaller drivers.
 

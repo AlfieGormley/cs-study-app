@@ -13,6 +13,13 @@ An address together with a prefix length divides into a **network prefix** and r
 
 Where the split falls is the whole subject of this lesson.
 
+> [!analogy] Real-world analogy: Street name and house number
+> A postal address has a street part, which gets the letter to the right road, and a house number, which picks one door on it. Everyone on the same street shares the street part.
+>
+> **How it maps:** The network prefix is the street: routers use it to deliver to the right network. The host bits are the house number within it. Hosts that share a prefix are on the same "street" and normally deliver to each other directly, without a router.
+>
+> **Where it stops:** On a letter you can see where the street name ends. In IPv4 the boundary is invisible in the address itself; the prefix length or mask tells you where it falls, and it can sit in the middle of an octet. Moving the boundary by one bit halves or doubles every "street".
+
 ## From classes to CIDR
 
 Originally the split was fixed by the first bits of the address (**classful** addressing):
@@ -36,7 +43,7 @@ A **subnet mask** is the same information written as an address: 1-bits for the 
     = 255.255.255.192
 ```
 
-A contiguous subnet-mask octet can be 0, 128, 192, 224, 240, 248, 252, 254 or 255. Full 255 octets precede at most one partly filled octet; any later octets are 0. Learn this table and subnetting becomes arithmetic:
+A contiguous subnet-mask octet can be 0, 128, 192, 224, 240, 248, 252, 254 or 255. Full 255 octets precede at most one partly filled octet; any later octets are 0. You do not need to memorise every row; the pattern matters more. Each step down the table adds one prefix bit and halves the block:
 
 | Prefix | Mask (last octet) | Block size | Usable hosts |
 |---|---|---|---|
@@ -48,24 +55,19 @@ A contiguous subnet-mask octet can be 0, 128, 192, 224, 240, 248, 252, 254 or 25
 | /29 | 248 | 8 | 6 |
 | /30 | 252 | 4 | 2 |
 
-The **block size** in the interesting octet is 256 minus the mask value. The size of the whole network comes from counting host bits: every host bit doubles the number of addresses.
+The **block size** in the interesting octet is 256 minus the mask value. The relationship underneath the whole table is that every host bit doubles the number of addresses, so each extra prefix bit halves the block:
 
-```formula
-h = 32 − p
-N = 2^h
-N = 2^(32 − 26) = 2^6 = 64
-N = 2^(32 − 20) = 2^12 = 4,096
+```formula essential
+N = 2^(32 − p)
 where
-h: the number of host bits: the bits after the prefix
-p: the prefix length, the number after the slash (/26 means p is 26); a whole number from 0 to 32
 N: the number of addresses in the network, including the network and broadcast addresses
-2^h: h copies of 2 multiplied together, so 2^6 = 2 × 2 × 2 × 2 × 2 × 2 = 64
-In words: an IPv4 address has 32 bits; the prefix uses p of them, and the remaining h bits can take 2^h different patterns, one per address. A /26 has 64 addresses and a /20 has 4,096.
+p: the prefix length, the number after the slash (/26 means p is 26); a whole number from 0 to 32. The remaining 32 − p bits are host bits, and the power of 2 doubles the count once per host bit
+In words: a longer prefix leaves fewer host bits and a smaller block. A /26 has 64 addresses, a /25 twice as many (128), a /27 half as many (32), and a /20 has 4,096.
 ```
 
-For conventional IPv4 subnets through /30, reserve the all-zero host pattern as the network address and the all-one pattern as directed broadcast. Subtracting those two gives the conventional usable-host capacity; special-purpose ranges and provider reservations can reduce assignability further. A /28 therefore has 16 addresses and conventionally 14 usable. Point-to-point /31s and single-address /32s follow different rules, taught in the VLSM unit.
+Notice the direction: a **bigger** prefix number means a **smaller** network. A /28 is smaller than a /24, not larger.
 
-Each extra prefix bit halves the network: a /25 has 128 addresses, a /26 has 64, a /27 has 32.
+For conventional IPv4 subnets through /30, reserve the all-zero host pattern as the network address and the all-one pattern as directed broadcast. Subtracting those two gives the conventional usable-host capacity; special-purpose ranges and provider reservations can reduce assignability further. A /28 therefore has 16 addresses and conventionally 14 usable. Point-to-point /31s and single-address /32s follow different rules, taught in the VLSM unit.
 
 To find the network an address belongs to, a host ANDs the address with the mask. With the same configured mask, equal results identify the same numerical subnet. Actual next-hop selection uses routes and policy; a subnet comparison alone does not prove layer 2 connectivity or exclude a more-specific route.
 

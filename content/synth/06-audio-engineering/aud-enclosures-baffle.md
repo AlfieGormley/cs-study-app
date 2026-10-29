@@ -9,7 +9,7 @@ sourceLesson: aud-enclosures
 
 Hold a bare woofer in the air, play a bass line through it, and you get a thin, tinny sound. Mount the same driver in a box and the bass appears. This lesson explains why, and how the box's design shapes the bass response.
 
-It's a deep subject with decades of published theory. The goal here is the concepts and enough of the maths to read a driver datasheet and understand what box-modelling software tells you.
+It's a deep subject with decades of published theory. The goal here is the concepts you need to read a driver datasheet and understand what box-modelling software tells you.
 
 ## The acoustic short circuit
 
@@ -24,6 +24,13 @@ At high frequencies the wavelength is short compared with the path from front to
                   longer path, less cancel
 ```
 
+> [!analogy] Real-world analogy: a paddle in a pond
+> Push a small paddle slowly back and forth in a pond and very little water goes anywhere: it just swirls round the paddle's edges from the high side to the low side. Fix the paddle in a wide wall, or put it in a pipe, and the water has to move along instead.
+>
+> **How it maps:** The paddle is the cone, the water swirling round its edge is the air sloshing from the compressed front to the rarefied back, and the wall or pipe is the baffle or box that stops the short circuit. Slow strokes correspond to low frequencies, where there is plenty of time for the swirl.
+>
+> **Where it stops:** Water barely compresses, but air does: the air sealed in a box acts as a spring on the cone. And at high frequencies sound has no time to get round the edge at all, which is why a bare driver still has treble.
+
 The cure is to separate front from back:
 
 - A **baffle** (a flat board) lengthens the path, so cancellation starts at a lower frequency.
@@ -33,34 +40,9 @@ The cure is to separate front from back:
 
 Even in a box, the front baffle has a finite size. At high frequencies, where the baffle is large compared with the wavelength, the driver radiates into the **half-space** in front: half a sphere of directions. At low frequencies, where the wavelength is much larger than the baffle, sound diffracts around the cabinet and radiates into the **full space**: the whole sphere.
 
-Engineers often call these "2π" and "4π" radiation, after the solid angle each one covers:
+Engineers often call these "2π" and "4π" radiation, after the solid angle (in steradians) that half a sphere and a whole sphere cover.
 
-```formula
-Ω_full = 4π sr
-Ω_half = 2π sr
-where
-Ω_full: the solid angle of a whole sphere, which a driver fills when it radiates in all directions (full space)
-Ω_half: the solid angle of half a sphere, which a driver on a large flat baffle fills (half-space)
-π: pi, the ratio of a circle's circumference to its diameter, about 3.14159
-sr: steradian, the unit of solid angle: how much of the space around a point a cone of directions covers
-In words: half-space is exactly half of all possible directions, so "2π" means "in front of a big wall" and "4π" means "floating in free space".
-```
-
-For the same cone motion, radiating into half-space gives twice the sound pressure of full space: the baffle acts like a mirror, adding a coherent "image" source. Doubling pressure is a 6 dB rise, because sound pressure level is 20 times the base-10 logarithm of a pressure ratio:
-
-```formula
-ΔL = 20 log_10(p_half / p_full)
-ΔL = 20 log_10(2)
-ΔL ≈ 6.02 dB
-where
-ΔL: the difference in on-axis level between half-space and full-space radiation, in decibels (dB)
-p_half: the on-axis sound pressure for fixed cone volume velocity when radiating into ideal half-space, in pascals (Pa)
-p_full: the on-axis sound pressure for the same cone motion in full space, in pascals (Pa); here p_half = 2 × p_full
-log_10: the base-10 logarithm: log_10(x) is the power you raise 10 to in order to get x; log_10(2) ≈ 0.301
-≈: approximately equal to
-dB: decibel, a logarithmic unit for comparing two levels
-In words: twice the pressure is about 6 dB louder, so losing the baffle's mirror effect costs about 6 dB.
-```
+For the same cone motion, radiating into half-space gives twice the on-axis sound pressure of full space: the baffle acts like a mirror, adding a coherent "image" source. Doubling pressure is a rise of about 6 dB.
 
 So as frequency falls and the radiation spreads into full space, a speaker's on-axis response steps down by up to **6 dB** going from high to low frequencies. The transition happens where the wavelength is comparable with the baffle width: a few hundred hertz for a typical bookshelf speaker. This is the ideal figure: the real step is smoother, and nearby walls and floors change it.
 

@@ -44,23 +44,22 @@ Merge is the core of **merge sort on linked lists**, which is the standard way t
 
 ### Several sorted lists
 
-Sequentially merging each new list into the whole accumulated result repeatedly revisits earlier nodes. Balanced pairwise rounds instead roughly halve the number of lists per round. With equal-length lists, the total merge-input sizes have the following costs:
+Sequentially merging each new list into the whole accumulated result keeps re-walking the earlier nodes: the first list's nodes take part in every merge. Balanced pairwise rounds instead halve the number of lists each round, and every round touches each node once, so each node takes part in only as many merges as there are halving rounds.
 
-
-```formula
+```formula reference
 W_seq ≈ kN / 2
 W_pair = N log_2(k)
 where
 W_seq: cumulative merge-input size in a sequential schedule, in nodes
-W_pair: cumulative merge-input size for balanced pairwise rounds, in nodes; the equality assumes a power-of-two list count
+W_pair: cumulative merge-input size for balanced pairwise rounds, in nodes; the equality assumes a power-of-two list count and equal-length lists
 N: total nodes across all lists
 k: number of lists, at least two
 log_2: base-two logarithm, giving the halving-round count
 ≈: approximate equality omitting lower-order terms
-In words: Sequential merging scales with the list count times the total input, while balanced rounds scale with the number of halving rounds.
+In words: sequential merging grows with the number of lists times the total size, while balanced rounds grow with the total size times the number of halving rounds, which is far smaller when there are many lists.
 ```
 
-For eight lists of one thousand nodes each, sequential merge-input sizes total thirty-five thousand nodes; three balanced rounds total twenty-four thousand. Actual comparisons can be fewer because merge attaches an untouched suffix. For non-power-of-two list counts, balanced round counts are rounded up and some lists sit out a round. A heap of current heads also gives O(N log k), with N and k as defined above, but its mechanics belong to the later heaps module.
+For eight lists of one thousand nodes each, sequential merging handles thirty-five thousand node inputs in total; three balanced rounds handle twenty-four thousand. The gap widens quickly as the list count grows. Actual comparisons can be fewer because merge attaches an untouched suffix. For non-power-of-two list counts, balanced round counts are rounded up and some lists sit out a round. A heap of current heads also gives O(N log k), with N and k as defined above, but its mechanics belong to the later heaps module.
 
 ## Key takeaways
 - Relink node-disjoint sorted inputs and attach an untouched suffix.

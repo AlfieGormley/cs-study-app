@@ -3,27 +3,27 @@
     "id": "net-proxies-gateways-mesh-q6",
     "level": "advanced",
     "type": "single",
-    "prompt": "A request path is: API gateway → service A → service B. The gateway retries up to 3 attempts, A's mesh sidecar retries up to 3 attempts, and A's HTTP client retries up to 3 attempts. B starts timing out under load. In the worst case, how many requests can one user call generate against B, and what's the fix?",
+    "prompt": "A request path is: API gateway → service A → service B. The gateway retries up to 3 attempts, A's mesh sidecar retries up to 3 attempts, and A's HTTP client retries up to 3 attempts. B starts timing out under load. Predict what happens to the load on B, and choose the fix.",
     "options": [
       {
-        "text": "3, because retries don't multiply",
+        "text": "Load on B stays close to the user request rate, because retries don't multiply",
         "explanation": "Retries at each layer are independent: every attempt from an outer layer triggers a full set of attempts at the inner layers, so they multiply."
       },
       {
-        "text": "9",
-        "explanation": "That counts only two layers (3 × 3). There are three retrying layers in this path."
+        "text": "Up to 9 attempts per user call, because only the gateway and the sidecar multiply",
+        "explanation": "That counts only two layers (3 × 3). A's HTTP client is a third independent retrying layer in this path."
       },
       {
-        "text": "27; retry at one layer only, with a retry budget and backoff with jitter",
-        "explanation": "Correct. 3 × 3 × 3 = 27 attempts against an already overloaded B: a retry storm. Retrying at one layer with a budget (e.g. ≤ 10% extra load) keeps amplification bounded."
+        "text": "Up to 27 attempts per user call, prolonging the overload; retry at one layer only, with a retry budget and backoff with jitter",
+        "explanation": "Correct. Three layers of three attempts multiply to 27 against an already overloaded B: a retry storm. Retrying at one layer with a budget (for example at most 10–20% extra load) keeps amplification bounded."
       },
       {
-        "text": "Infinite, because retries loop",
-        "explanation": "Each layer is capped at 3 attempts, so the total is finite. It's just much larger than intended."
+        "text": "Unbounded load, because retries loop forever",
+        "explanation": "Each layer is capped at 3 attempts, so the total is finite. It is just much larger than intended."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Gateway makes up to **3** attempts to A.\n2. For each of those, A's HTTP client makes up to **3** attempts to B.\n3. Each of those passes through A's outbound sidecar, which makes up to **3** attempts.\n4. The attempts multiply:\n\n```formula\nA_total = a^L = 3^3 = 3 × 3 × 3 = 27\nwhere\nA_total: the worst-case attempts against B for one user call\na: the attempts each layer may make, 3\nL: the number of independently retrying layers, 3 (gateway, A's HTTP client and A's sidecar)\nIn words: every outer attempt triggers a full set of inner attempts, so three layers of three make 27.\n```\n\nIf B is failing because it's overloaded, up to 27× the attempts can prolong the overload. Fix: retry only at the innermost caller (or one chosen layer); use budgets, exponential backoff with jitter, and deadlines that propagate so outer layers don't retry work that's already doomed.",
+    "workedExample": "1. The gateway makes up to **3** attempts to A.\n2. For each of those, A's HTTP client makes up to **3** attempts to B.\n3. Each of those passes through A's outbound sidecar, which makes up to **3** attempts.\n4. Each outer attempt triggers a full set of inner attempts, so the counts multiply: 3 × 3 × 3 = 27 attempts against B for one user call.\n\nIf B is failing because it is overloaded, that amplification prolongs the overload. Fix: retry at one chosen layer (usually closest to the caller), use a retry budget and exponential backoff with jitter, and propagate deadlines so outer layers don't retry work that is already doomed.",
     "link": {
       "title": "What is a service mesh? (Linkerd)",
       "url": "https://linkerd.io/what-is-a-service-mesh/"
@@ -63,27 +63,27 @@
     "id": "net-proxies-gateways-mesh-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A service receives 1,000 requests per second, and a downstream dependency starts failing 50% of calls. Compare retrying every failure once with a retry budget capping retries at 20% of normal traffic. How many retry requests per second reach the dependency in each case?",
+    "prompt": "A service sends 1,000 requests per second to a dependency that starts failing. Option 1 retries every failure once. Option 2 uses a retry budget capping retries at 20% of normal traffic. Predict what happens to the extra load on the dependency as its failure rate climbs from 10% towards 100%.",
     "options": [
       {
-        "text": "500 per second with blind retries, 200 per second with the budget",
-        "explanation": "Correct. 50% of 1,000 = 500 failures, each retried once. The budget caps retries at 20% of 1,000 = 200 per second, so the struggling dependency sees 1,200 rps instead of 1,500."
+        "text": "With blind retries the extra load grows with the failure rate, up to doubling the traffic; with the budget it never exceeds 20% extra, however many calls fail",
+        "explanation": "Correct. Blind retries add one request per failure, so the dependency gets the most extra load exactly when it is weakest. The budget caps retries at a fixed slice of normal traffic."
       },
       {
-        "text": "500 per second in both cases",
-        "explanation": "The budget's whole purpose is to cap retries below what blind retrying would send."
+        "text": "Both options add the same extra load, because each failure is retried at most once",
+        "explanation": "The budget's whole purpose is to cap retries below what blind retrying would send once failures exceed the budget."
       },
       {
-        "text": "200 per second with blind retries, 500 per second with the budget",
+        "text": "Blind retries stay at 20% extra, while the budget grows with failures",
         "explanation": "This reverses the two: blind retries follow the failure rate, while the budget is a fixed fraction of normal traffic."
       },
       {
-        "text": "0 per second with the budget, because budgets disable retries during failures",
+        "text": "The budget stops all retries as soon as failures begin",
         "explanation": "A budget still allows retries up to its limit; it just stops them growing with the failure rate."
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nR_blind = p × λ\nR_blind = 0.5 × 1,000 rps = 500 rps\nL_blind = λ + R_blind = 1,500 rps\nR_max = b × λ\nR_max = 0.2 × 1,000 rps = 200 rps\nL_budget = λ + R_max = 1,200 rps\nwhere\nR_blind: retries per second when every failure is retried once, in requests per second (rps)\np: the fraction of calls that fail, 0.5 (50%)\nλ: lambda, the normal request rate, 1,000 rps\nL_blind: the total load on the dependency with blind retries\nR_max: the most retries per second the budget allows\nb: the retry budget as a fraction of normal traffic, 0.2 (20%)\nL_budget: the total load on the dependency with the budget\nrps: requests per second\nIn words: blind retries add load in proportion to failures; a budget caps the extra at a fixed slice of normal traffic.\n```\n\nSo the dependency sees **1,500 rps** (+50%) with blind retries, just as it's struggling, but **1,200 rps** with the budget. If failures rise to 100%, blind retries double the load (2,000 rps), while the budget still caps it at 1,200.\n\nBudgets keep retries useful for occasional blips but stop them amplifying a real overload.",
+    "workedExample": "1. **Blind retry-once:** each failure produces one retry, so extra load is proportional to the failure rate. At 50% failures that is 500 extra requests per second (1,500 in total); at 100% it doubles the traffic to 2,000.\n2. **Retry budget at 20%:** retries are capped at 200 per second (20% of 1,000), so the dependency never sees more than about 1,200 per second, whatever the failure rate.\n3. Below 20% failures both behave alike; the difference appears exactly when the dependency is struggling.\n\nBudgets keep retries useful for occasional blips but stop them amplifying a real overload.",
     "link": {
       "title": "Handling overload (Google SRE book)",
       "url": "https://sre.google/sre-book/handling-overload/"

@@ -3,7 +3,7 @@ id: net-anycast-bgp-routing
 title: "Anycast prefixes and BGP decisions"
 level: advanced
 minutes: 3
-summary: "Explain same-prefix announcements, address counts and why the selected site need not be geographically closest."
+summary: "Explain same-prefix announcements, prefix sizes and why the selected site need not be geographically closest."
 sourceLesson: net-global-traffic
 ---
 Anycast makes the destination address stable across locations. The internet’s routing decision then chooses a site using network policy, which is different from choosing the shortest measured RTT.
@@ -12,17 +12,7 @@ Anycast makes the destination address stable across locations. The internet’s 
 
 With anycast, **many locations advertise the same IP prefix** via BGP. Internet routers send each packet to the "nearest" location by BGP's measure, which isn't distance or latency. Each network first applies its own **policy** (typically preferring routes learnt from paying customers over peers, and peers over paid transit), and only then breaks ties on the shortest **AS path** (the number of networks to cross).
 
-Anycast relies on BGP announcing *prefixes*, and in practice the smallest IPv4 prefix most networks will accept is a /24 (256 addresses), so anycast is done with whole /24s (or /48s in IPv6). The number after the slash says how many leading bits of the address are fixed; the rest are free:
-
-```formula
-count = 2^{32 − p}
-count = 2^{32 − 24} = 2^8 = 256
-where
-count: how many IPv4 addresses the prefix contains
-p: the prefix length, the number after the slash: how many of the address's leading bits are fixed; 24 for a /24
-32: the number of bits in an IPv4 address
-In words: each bit left free doubles the block, so a /24 leaves 8 free bits and holds 256 addresses.
-```
+Anycast relies on BGP announcing *prefixes* (blocks of addresses), not single addresses. In practice the most specific IPv4 prefix most networks will accept is a /24, a block of 256 addresses (the number after the slash is how many leading bits are fixed), so anycast is done with whole /24s, or /48s in IPv6. That is why even a service that needs one address announces a whole block.
 
 ```
       203.0.113.1 announced
@@ -32,6 +22,13 @@ In words: each bit left free doubles the block, so a /24 leaves 8 free bits and 
      |          |         |
   EU users   US users  JP users
 ```
+
+> [!analogy] Real-world analogy: One emergency number, many call centres
+> Everyone in a country dials the same short emergency number, yet a caller in one city usually reaches a different call centre from a caller in another. The phone network, not the caller, decides which centre answers, using how calls are routed rather than a map of distances.
+>
+> **How it maps:** the shared number is the anycast address announced from every site, the call centres are the sites, and the phone network's routing rules play the part of BGP policy choosing a route. If one centre goes offline, calls are rerouted to another without anyone learning a new number.
+>
+> **Where it stops:** BGP makes its choice per network and per route announcement, guided by commercial policy, and a route change part-way through a TCP connection can deliver its packets to a site that has no record of it. A rerouted phone call is set up afresh; an anycast flow is not.
 
 Advantages:
 
@@ -45,7 +42,7 @@ This is how DNS root servers, public resolvers (1.1.1.1, 8.8.8.8), Cloudflare's 
 ## Key takeaways
 
 - Anycast announces the same prefix from several locations; BGP policy chooses the route.
-- IPv4 prefix length fixes leading bits; a /24 leaves 256 addresses.
+- Anycast is done with whole prefixes, in practice at least a /24 (256 IPv4 addresses).
 - Anycast avoids DNS-change delay, but convergence and attack distribution depend on the network.
 
 ## Further reading

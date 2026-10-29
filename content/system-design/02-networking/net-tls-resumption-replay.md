@@ -3,30 +3,16 @@ id: net-tls-resumption-replay
 title: "Resumption, setup cost and replay"
 level: intermediate
 minutes: 4
-summary: "Count TLS setup trips, support tickets across a fleet and decide which requests tolerate early data."
+summary: "Choose ways to cut TLS setup, make tickets work across a fleet and decide which requests tolerate early data."
 sourceLesson: net-tls
 ---
-Once certificate trust and termination are understood, count the setup rounds and choose what to reuse. All timings below exclude DNS and assume no handshake retry, loss or extra processing.
+Once certificate trust and termination are understood, the remaining question is how to pay for fewer or shorter handshakes. The figures below exclude DNS and assume no handshake retry, loss or extra processing.
 
 ## The latency cost, and how to reduce it
 
-In the simplified model with no DNS delay, TCP Fast Open, handshake retry, loss or processing delay, a new HTTPS connection over TCP costs **one TCP round trip and one TLS 1.3 round trip** before the request goes out. Setup time is a count of round trips multiplied by the round-trip time:
+A new HTTPS connection over TCP waits for **one TCP round trip and one TLS 1.3 round trip** before the request can go out. The time spent on setup is simply that number of round trips multiplied by the round-trip time, so there are two ways to cut it: do fewer round trips, or make each one shorter. At an illustrative 100 ms RTT that is 200 ms of pure setup; at a CDN edge 10 ms away the same two trips cost about 20 ms.
 
-```formula
-T_setup = (n_TCP + n_TLS) × RTT
-T_setup = (1 + 1) × 100 ms = 200 ms
-T_edge = (1 + 1) × 10 ms = 20 ms
-where
-T_setup: the time spent on handshakes before the first request byte can leave the client, in milliseconds (ms)
-n_TCP: the round trips for the TCP handshake: 1 (QUIC folds it into its own handshake)
-n_TLS: the round trips for the TLS handshake: 1 for TLS 1.3, 2 for a full TLS 1.2 handshake, 0 with 0-RTT early data
-RTT: the round-trip time between the client and whichever server terminates TLS, in ms
-T_edge: the same setup when TLS terminates at a CDN edge only 10 ms away
-ms: millisecond, one thousandth of a second
-In words: you can cut handshake cost in two ways, by doing fewer round trips or by making each round trip shorter.
-```
-
-At 100 ms RTT, that's 200 ms of pure setup. Ways to cut it:
+Ways to cut it:
 
 1. **Use TLS 1.3.** Saves a full RTT over TLS 1.2.
 2. **Session resumption.** The server hands the client a *session ticket*; next time, the handshake skips certificate exchange and verification (less CPU and fewer bytes).

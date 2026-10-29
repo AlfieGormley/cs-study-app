@@ -3,27 +3,27 @@
     "id": "ip-nat-ipv6-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Using documentation addresses for a hypothetical delegation of `2001:db8:ab00::/56`, how many /64 subnets fit?",
+    "prompt": "A small office's ISP delegates a single /64. The office wants separate SLAAC-configured Ethernet subnets for staff, guests and IoT devices, each with its own prefix. What is the problem, and what would solve it?",
     "options": [
       {
-        "text": "8",
-        "explanation": "That would be 3 bits of subnet space. 64 − 56 = 8 *bits*, not 8 subnets."
+        "text": "No problem: split the /64 into three /66 prefixes for SLAAC",
+        "explanation": "Ethernet SLAAC needs a /64 prefix with a 64-bit interface identifier, so the /64 cannot be subdivided into SLAAC-capable subnets."
       },
       {
-        "text": "256",
-        "explanation": "Correct. There are 64 − 56 = 8 bits between the delegated prefix and the /64 boundary, and 8 copies of 2 multiplied together is 256."
+        "text": "A /64 provides exactly one SLAAC subnet; ask for a larger delegation such as a /56, which contains 256 /64 subnets",
+        "explanation": "Correct. Each bit between the delegated length and /64 doubles the subnet count: a /56 has 8 such bits, enough for 256 /64s."
       },
       {
-        "text": "65,536",
-        "explanation": "That's what a /48 gives you (16 bits of subnet space: 16 copies of 2 multiplied together). A /56 has only 8."
+        "text": "Use NAT66 so all three networks can share one /64 without any trade-off",
+        "explanation": "The standardised stateless form, NPTv6 (experimental RFC 6296), maps each internal address to exactly one external address, so it cannot squeeze three internal subnets into one external /64. Only a stateful, port-translating NAT66 could, which brings back NAT's state and end-to-end problems. Neither is a trade-off-free fix for an undersized delegation."
       },
       {
-        "text": "2⁷² − 2",
-        "explanation": "This counts host addresses in the whole /56 (2⁷², 72 copies of 2 multiplied together, since 128 − 56 = 72 bits are left) and subtracts two as if it were IPv4. IPv6 has no broadcast address, and the question asks for /64 subnets."
+        "text": "Ask for a /72, which is larger than a /64",
+        "explanation": "A longer prefix is smaller. A /72 is a fraction of a /64, not a bigger block."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Subnets are /64, so the subnet ID sits in bits 57 to 64.\n\n```formula\nS = 2^(64 − p)\nS = 2^(64 − 56) = 2^8 = 256\nwhere\nS: the number of /64 subnets in the delegation\np: the delegated prefix length, 56\n2^8: 8 copies of 2 multiplied together\nIn words: 8 bits lie between /56 and /64, and 8 bits can number 256 subnets.\n```\n\n2. They run from `2001:db8:ab00::/64` to `2001:db8:ab00:ff::/64`.\n3. For comparison, a /48 has 16 such bits: 65,536 subnets.",
+    "workedExample": "1. Ethernet SLAAC forms addresses from a /64 prefix plus a 64-bit interface identifier.\n2. So each SLAAC subnet consumes a whole /64, and a /64 cannot be split into smaller SLAAC subnets.\n3. Three separate networks need at least three /64s.\n4. A /56 leaves 8 bits between /56 and /64, numbering 256 subnets; a /48 leaves 16 bits, numbering 65,536.\n5. Direction check: a larger prefix number means a smaller block, so a /72 would not help.",
     "link": {
       "title": "IPv6 address — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/IPv6_address"
@@ -33,27 +33,27 @@
     "id": "ip-nat-ipv6-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A host with MAC address `3c:22:fb:12:34:56` builds a modified EUI-64 interface identifier. What is it?",
+    "prompt": "A laptop's global IPv6 address at home is `2001:db8:1:1:3e22:fbff:fe12:3456`. At a café it is `2001:db8:99:5:3e22:fbff:fe12:3456`. What does the repeated second half indicate, and what reduces the privacy risk?",
     "options": [
       {
-        "text": "`3c22:fbff:fe12:3456`",
-        "explanation": "The `ff:fe` insertion is right, but you forgot to flip the universal/local bit (the 7th bit of the first byte), so 3c should become 3e."
+        "text": "Duplicate address detection failed, so the laptop reused its old address",
+        "explanation": "DAD checks for a conflict on the current link; it does not cause the same interface identifier to follow the device between networks."
       },
       {
-        "text": "`3e22:fb12:3456:fffe`",
-        "explanation": "`ff:fe` goes in the *middle*, between the third and fourth bytes of the MAC, not at the end."
+        "text": "Both are link-local addresses, so they are never seen beyond the local network",
+        "explanation": "These start with a global documentation prefix, not fe80::/10, so they are used beyond the link."
       },
       {
-        "text": "`3e22:fbff:fe12:3456`",
-        "explanation": "Correct. Split the MAC in half, insert ff:fe, and flip bit 0x02 of the first byte, which turns 0x3c into 0x3e."
+        "text": "The identifier is a MAC-derived modified EUI-64 (note the ff:fe in the middle), so the device can be recognised on every network; enable RFC 7217 stable opaque identifiers and/or temporary addresses",
+        "explanation": "Correct. A modified EUI-64 identifier comes from the hardware MAC, so it is the same wherever the laptop goes. Stable opaque identifiers change with the prefix, and temporary addresses change over time."
       },
       {
-        "text": "`3d22:fbff:fe12:3456`",
-        "explanation": "This flips the lowest bit (0x01, the multicast bit). The universal/local bit is 0x02, the 7th bit counting from the left."
+        "text": "RFC 7217 stable identifiers always produce the same identifier on every network, which is what you see here",
+        "explanation": "RFC 7217 identifiers are prefix-dependent: they stay stable on one network but differ between networks."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Split the MAC: `3c:22:fb` | `12:34:56`.\n2. Insert `ff:fe`: `3c:22:fb:ff:fe:12:34:56`.\n3. Flip the U/L bit of the first byte:\n\n```formula\ny = x XOR 0x02\ny = 0x3c XOR 0x02 = 0x3e\nwhere\nx: the MAC's first byte, 0x3c (0x means hexadecimal, base 16)\ny: the identifier's first byte\nXOR: exclusive or: each result bit is 1 where the two inputs differ, so XOR with 0x02 flips just that one bit\nIn words: flipping the U/L bit turns 3c into 3e.\n```\n\nIn binary:\n\n```\n0x3c = 0011 1100\nXOR    0000 0010\n     = 0011 1110 = 0x3e\n```\n4. Group into 16-bit chunks: **`3e22:fbff:fe12:3456`**.\n\nOpaque stable and temporary interface identifiers offer alternatives to MAC-derived identifiers; actual use depends on platform and configuration.",
+    "workedExample": "1. The first 64 bits (the prefix) differ between home and café, as expected.\n2. The last 64 bits, the interface identifier, are identical and contain `ff:fe` in the middle: the signature of modified EUI-64, built from the MAC address.\n3. A stable hardware-derived identifier lets any observer link the laptop's activity across networks.\n4. RFC 7217 opaque identifiers are derived per prefix, so they change between networks; RFC 8981 temporary addresses change over time and are used for outgoing connections.\n5. The `ff:fe` pattern suggests EUI-64 but cannot prove how an identifier was generated; check the host's configuration.",
     "link": {
       "title": "RFC 4291: IPv6 Addressing Architecture (Appendix A)",
       "url": "https://www.rfc-editor.org/rfc/rfc4291"

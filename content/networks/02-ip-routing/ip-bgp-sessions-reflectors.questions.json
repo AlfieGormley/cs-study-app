@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Peer configuration establishes addresses, ASNs and policy.\n2. A TCP session is opened to port 179.\n3. OPEN exchanges session parameters and negotiated capabilities.\n4. Initial advertisements contain the routes permitted by selection and export policy; subsequent updates normally describe changes.\n5. For a nonzero negotiated hold time, KEEPALIVE or UPDATE receipt resets the timer. Expiry closes the session. Graceful-restart mechanisms can retain stale routes under specified conditions; hold time zero disables the hold timer.",
+    "workedExample": "1. Peer configuration establishes addresses, ASNs and policy.\n2. A TCP session is opened to port 179.\n3. OPEN exchanges session parameters and negotiated capabilities.\n4. Initial advertisements contain the routes permitted by selection and export policy; subsequent updates normally describe changes.\n5. For a nonzero negotiated hold time, KEEPALIVE or UPDATE receipt resets the timer. Expiry closes the session. Graceful-restart mechanisms can retain stale routes under specified conditions; a negotiated hold time of zero disables the hold timer.",
     "link": {
       "title": "RFC 4271: BGP-4",
       "url": "https://www.rfc-editor.org/rfc/rfc4271"
@@ -33,27 +33,27 @@
     "id": "ip-bgp-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An AS has 20 BGP routers. How many iBGP sessions does a full mesh need, and how many with two route reflectors (each of the other 18 routers peers with both reflectors, and the reflectors peer with each other)?",
+    "prompt": "In AS 65010, border router R1 learns 198.51.100.0/24 from an eBGP neighbour. R1 has an iBGP session with R2, and R2 has an iBGP session with R3, but there is no R1–R3 session and no route reflection. R2 has the route; R3 does not. Why, and what are the standard fixes?",
     "options": [
       {
-        "text": "380 and 36",
-        "explanation": "380 counts each pair twice (20 × 19). Sessions are between pairs, so divide by 2. And you've left out the reflector-to-reflector session."
+        "text": "R3's IGP has not converged yet; wait a few minutes",
+        "explanation": "IGP convergence does not decide whether an iBGP route is advertised. R2 is following a BGP rule and will never send this route to R3 as configured."
       },
       {
-        "text": "190 and 20",
-        "explanation": "190 is right for the mesh. With two reflectors each client needs two sessions, not one."
+        "text": "Base iBGP does not re-advertise routes learned from one internal peer to another, so R3 needs a session with R1 (full mesh), or R2 must be configured as a route reflector with R3 as a client",
+        "explanation": "Correct. The rule exists because iBGP adds no AS to the path, so it cannot detect internal loops. A full mesh or route reflection (with ORIGINATOR_ID and CLUSTER_LIST for loop detection) restores distribution."
       },
       {
-        "text": "190 and 37",
-        "explanation": "Correct. Mesh: 20 × 19 / 2 = 190. Reflectors: 18 clients × 2 = 36, plus 1 between the reflectors = 37."
+        "text": "R2 must prepend AS 65010 before sending to R3",
+        "explanation": "iBGP does not prepend the local ASN, and prepending would not override the internal re-advertisement rule."
       },
       {
-        "text": "20 and 2",
-        "explanation": "These count routers, not sessions."
+        "text": "eBGP routes can never be shared inside an AS",
+        "explanation": "Distributing externally learned routes inside the AS is exactly what iBGP is for; the issue is the missing session or reflector."
       }
     ],
-    "answer": 2,
-    "workedExample": "**Full mesh**\n\n```formula\nS = n(n − 1) / 2\nS = 20 × 19 / 2 = 190\nwhere\nS: the number of iBGP sessions in a full mesh\nn: the number of BGP routers, 20\nIn words: each router pairs with the 19 others, and dividing by 2 counts each session once.\n```\n\nAdding a 21st router means configuring 20 new sessions.\n\n**Route reflectors**\n1. 18 clients, each with 2 sessions: 36.\n2. The reflectors peer with each other: +1.\n3. Total **37**. A new client needs just 2 sessions.\n\nTwo suitably designed reflectors can tolerate one reflector failing; shared infrastructure and configuration faults can still affect both.",
+    "answer": 1,
+    "workedExample": "1. R1 learns the route over eBGP and sends it to its iBGP peer R2.\n2. RFC 4271: a speaker receiving an UPDATE from an internal peer shall not redistribute it to other internal peers, unless it is a route reflector.\n3. So R2 keeps the route but does not tell R3.\n4. Fix A: add an R1–R3 session. Taken to every router, this is the full mesh, whose session count grows roughly with the square of the number of routers.\n5. Fix B: make R2 a route reflector with R3 (and R1 as needed) as clients, so each client needs sessions only to its reflectors.",
     "link": {
       "title": "RFC 4456: BGP Route Reflection",
       "url": "https://www.rfc-editor.org/rfc/rfc4456"

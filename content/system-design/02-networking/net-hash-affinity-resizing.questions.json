@@ -3,27 +3,27 @@
     "id": "net-load-balancers-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "You route requests to 10 cache servers using `hash(user_id) % N`. You add an 11th server. Roughly what fraction of users now map to a different server?",
+    "prompt": "You route requests to 10 cache servers using `hash(user_id) % N`, where N is the number of servers. You add an 11th server during a traffic peak. Predict what happens next.",
     "options": [
       {
-        "text": "About 91% (10/11)",
-        "explanation": "Correct. A key keeps its server only if `h % 10 == h % 11`, which holds for about 1 in 11 keys. So about 10/11 ≈ 91% move, and the caches are effectively flushed."
+        "text": "Nearly every user (about 10 in 11) maps to a different server, so the caches are effectively flushed and the database behind them takes a surge of misses",
+        "explanation": "Correct. A key keeps its server only if its hash leaves the same remainder for 10 and for 11, which is true for about 1 key in 11. Adding capacity this way causes a cold-cache stampede."
       },
       {
-        "text": "About 9% (1/11)",
-        "explanation": "That's what consistent hashing achieves: only the keys that move to the new server change. Modulo hashing reshuffles nearly everything."
+        "text": "Only about 1 user in 11 moves, to the new server, so caches stay mostly warm",
+        "explanation": "That is what consistent hashing achieves. With modulo hashing, every key's server is recomputed with the new N, and most change."
       },
       {
-        "text": "About 50%",
-        "explanation": "There's no reason for exactly half; the actual fraction depends on how the moduli line up and is much higher."
+        "text": "About half the users move",
+        "explanation": "There is no reason for half. For a key to stay, its remainders for 10 and 11 must match, which is rare, so far more than half move."
       },
       {
-        "text": "0%, because existing keys stay where they are",
-        "explanation": "With modulo hashing, every key's server is recomputed with the new N, so existing keys do move."
+        "text": "No users move, because existing keys keep their servers until they expire",
+        "explanation": "Modulo hashing has no memory of earlier placements: the next request for every key is routed using the new N."
       }
     ],
     "answer": 0,
-    "workedExample": "1. A key stays put only if `h % 10 == h % 11`.\n2. Considering hash values from 0 through 109 (the least common multiple is 110), this holds only for values 0 through 9: 10 out of 110 values.\n3. So ~1/11 ≈ 9% stay and **~91% move**.\n4. With consistent hashing (with virtual nodes), the new server takes over ~1/11 of the ring, so only **~9% move**.\n5. That difference decides whether adding capacity causes a cache stampede on the database.\n\nAs fractions:\n\n```formula\nf_stay = 1 / (N + 1) = 1 / 11 ≈ 9%\nf_move = N / (N + 1) = 10 / 11 ≈ 91%\nwhere\nf_stay: the fraction of keys that keep their server under modulo hashing when one server is added\nf_move: the fraction of keys that move to a different server\nN: the number of servers before the change, 10\n≈: approximately equal to\n%: per cent\nIn words: only 1 key in 11 lands on the same server, so about 91% of the cache is effectively lost.\n```",
+    "workedExample": "1. Under `hash % N`, a key stays put only if dividing its hash by 10 and by 11 leaves the same remainder.\n2. Across a full cycle of hash values, that happens for only about 1 in 11 of them, so roughly 10 in 11 keys (about 91%) move.\n3. Each moved key now looks for its data on a server that has never cached it: a miss that falls through to the database. Doing this at peak can overload the database.\n4. With consistent hashing (and virtual nodes), the new server takes over only about 1/11 of the ring, so only about 9% of keys move, all of them to the new server.\n\nThat difference decides whether adding capacity relieves load or triggers a stampede.",
     "link": {
       "title": "Consistent hashing (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"

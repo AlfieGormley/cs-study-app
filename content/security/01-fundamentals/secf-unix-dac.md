@@ -22,19 +22,13 @@ $ ls -l report.txt
 
 The permission bits are often written in **octal** (base 8), one digit per class. Each class has three on/off bits, and three bits can count from 0 to 7, which is exactly one octal digit. Read is worth 4, write 2 and execute 1:
 
-```formula
+```formula reference
 d = 4r + 2w + x
-d_owner = 4 × 1 + 2 × 1 + 1 × 0 = 6
-d_group = 4 × 1 + 2 × 0 + 1 × 0 = 4
-d_other = 4 × 0 + 2 × 0 + 1 × 0 = 0
 where
 d: one octal digit of the mode, from 0 to 7, for one class (owner, group or other)
 r: 1 if the class may read (an r in the string), 0 if not (a -)
 w: 1 if the class may write (a w), 0 if not
 x: 1 if the class may execute (an x), 0 if not
-d_owner: the owner's digit for rw-
-d_group: the group's digit for r--
-d_other: the digit for everyone else, for ---
 4: the place value of the read bit; 2 and 1 are the place values of the write and execute bits, the base-2 place values of the bit patterns 100, 010 and 001
 In words: add 4 for read, 2 for write and 1 for execute in each class, so rw-r----- becomes the digits 6, 4 and 0.
 ```

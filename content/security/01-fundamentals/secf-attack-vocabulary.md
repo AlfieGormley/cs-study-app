@@ -11,11 +11,11 @@ summary: Tactics describe goals; techniques describe methods.
 
 **MITRE ATT&CK** is a public knowledge base of adversary behaviour built from real incident reports. Instead of a strict sequence, it is a matrix:
 
-- **ATT&CK tactics** are the *why*: the attacker's goal for an activity. The live Enterprise tactics page consulted for this review lists 15; counts and names are version-dependent.
+- **ATT&CK tactics** are the *why*: the attacker's goal for an activity. The Enterprise tactics page (ATT&CK v20, checked October 2026) lists 15; counts and names change between versions.
 - **ATT&CK techniques** (and sub-techniques) are the *how*, at a level of abstraction that is useful to defenders, each with an ID such as T1078 (Valid Accounts).
 - Technique entries can link procedure examples, mitigations and detection guidance. Available coverage varies; a listed technique does not imply complete detection.
 
-The consulted Enterprise list below is a taxonomy, not a required chronological sequence:
+The v20 Enterprise list below is a taxonomy, not a required chronological sequence:
 
 ```
 Reconnaissance

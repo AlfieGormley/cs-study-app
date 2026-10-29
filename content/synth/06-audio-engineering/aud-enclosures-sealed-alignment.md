@@ -11,29 +11,25 @@ sourceLesson: aud-enclosures
 
 ### Efficiency bandwidth product
 
-A rough rule of thumb uses the **efficiency bandwidth product** (EBP):
+A rough first sort uses the **efficiency bandwidth product** (EBP): the free-air resonance divided by the electrical Q. Purdue's rule of thumb is that drivers with an EBP around 50 tend to suit sealed boxes and those around 100 suit ported ones. A driver with a high resonance and a strong motor (low electrical Q) therefore leans towards ported. It's a starting point, not a design method: always model the full parameter set.
 
-```formula
+```formula reference
 EBP = Fs / Qes
-EBP = 30 Hz / 0.5
-EBP = 60 Hz
 where
 EBP: the efficiency bandwidth product, in hertz (Hz)
-Fs: the free-air resonance, in hertz (Hz); here 30 Hz
-Qes: the electrical Q (no unit); here 0.5
+Fs: the free-air resonance, in hertz (Hz)
+Qes: the electrical Q (no unit)
 Hz: hertz, cycles per second
-In words: drivers with an EBP around 50 tend to suit sealed boxes and those around 100 suit ported ones.
+In words: Divide the free-air resonance by the electrical Q; values around 50 suggest a sealed box and around 100 a ported one, as a first guess only.
 ```
-
-An EBP of 60 Hz sits near the sealed end. It's a starting point, not a design method: always model the full parameter set.
 
 Manufacturing tolerances are loose: Purdue's notes give typical factory tolerances of about ±15% for Fs and ±20–30% for Vas. Measure your own driver if accuracy matters.
 
-### The sealed-box equations
+### The sealed-box relationships
 
-Put a driver in a sealed box. The air trapped in the box is a second spring pushing on the cone, alongside the suspension. A smaller box is a stiffer spring. The **compliance ratio** says how stiff the box air is compared with the suspension, and both the resonance and its Q rise with the square root of the total stiffness. These are the closed-box results (Small, 1972), used when you choose a box size:
+Put a driver in a sealed box. The air trapped in the box is a second spring pushing on the cone, alongside the suspension. A smaller box is a stiffer spring. The **compliance ratio** says how stiff the box air is compared with the suspension, and both the resonance and its Q rise with the square root of the total stiffness. These closed-box results (Small, 1972) are the core of choosing a box size:
 
-```formula
+```formula reference
 α = Vas / Vb
 Fc = Fs √(1 + α)
 Qtc = Qts √(1 + α)
@@ -48,42 +44,12 @@ Qts: the driver's total Q in free air (no unit)
 √: square root
 L: litre, a unit of volume; 1 L = 0.001 m^3
 Hz: hertz, cycles per second
-In words: a smaller box (bigger α) pushes the resonance up and makes it less damped, both by the same factor √(1 + α).
+In words: The smaller the box compared with the driver's Vas, the stiffer the trapped air, and the more the resonance and the Q in the box both rise above the driver's free-air values, by the same factor.
 ```
 
-Consider a driver with 30 Hz free-air resonance, total Q of 0.35 and 60 L equivalent compliance volume, in a 20 L box:
+The important consequence is that **resonance and Q move together**. You cannot make a sealed box smaller without also raising its resonance and making it peakier, and a bigger box gives lower, more damped bass. These relationships ignore box losses and stuffing, and they assume the box is small compared with the wavelength (true in the bass).
 
-```formula
-α = 60 L / 20 L = 3
-√(1 + α) = √(4) = 2
-Fc = 30 Hz × 2 = 60 Hz
-Qtc = 0.35 × 2 = 0.70
-where
-α: alpha, the compliance ratio (no unit)
-√: square root
-L: litre, a unit of volume
-Fc: the in-box resonance, in hertz (Hz)
-Qtc: the in-box total Q (no unit)
-Hz: hertz, cycles per second
-In words: a 20 L box makes this driver resonate at 60 Hz with a Q of 0.70, close to maximally flat.
-```
-
-These equations ignore box losses and stuffing, and they assume the box is small compared with the wavelength (true in the bass).
-
-The sealed-box **total Q** sets the shape of the bass roll-off. The box-and-driver is a second-order high-pass filter, and for that filter the level exactly at Fc depends only on Qtc:
-
-```formula
-L_Fc = 20 log_10(Qtc)
-L_Fc = 20 log_10(0.707)
-L_Fc ≈ −3 dB
-where
-L_Fc: the response at Fc, relative to the flat level well above Fc, in decibels (dB)
-Qtc: the in-box total Q (no unit); here 0.707
-log_10: the base-10 logarithm: log_10(x) is the power you raise 10 to in order to get x
-≈: approximately equal to
-dB: decibel, a logarithmic unit for comparing levels
-In words: A total Q of 0.5 gives −6 dB at resonance, 0.707 gives −3 dB, and 1.0 gives 0 dB with a hump above resonance.
-```
+The sealed-box **total Q** sets the shape of the bass roll-off. The box-and-driver is a second-order high-pass filter, and the level exactly at Fc depends only on Qtc:
 
 | Qtc | Behaviour |
 |---|---|
@@ -91,30 +57,15 @@ In words: A total Q of 0.5 gives −6 dB at resonance, 0.707 gives −3 dB, and 
 | 0.707 | Butterworth: maximally flat, −3 dB at Fc |
 | ~1.0–1.1 | Peak before roll-off, "boomier" |
 
-The same sum for three box sizes, as code:
+For example, take a driver with a 30 Hz free-air resonance, total Q of 0.35 and a 60 L equivalent compliance volume:
 
-```python
-import math
+| Box | Fc | Qtc | Character |
+|---|---|---|---|
+| 10 L | about 79 Hz | about 0.93 | peaky, less deep |
+| 20 L | 60 Hz | 0.70 | near-Butterworth |
+| 40 L | about 47 Hz | about 0.55 | deeper, well damped |
 
-def sealed(fs, qts, vas, vb):
-    a = vas / vb
-    # Box air raises resonance and total Q.
-    k = math.sqrt(1 + a)
-    return fs * k, qts * k
-
-for vb in (10, 20, 40):
-    fc, qtc = sealed(30, 0.35, 60, vb)
-    print(f"{vb:>2} L: Fc={fc:5.1f} Hz,"
-          f" Qtc={qtc:.2f}")
-```
-
-```
-10 L: Fc= 79.4 Hz, Qtc=0.93
-20 L: Fc= 60.0 Hz, Qtc=0.70
-40 L: Fc= 47.4 Hz, Qtc=0.55
-```
-
-The 20 L box gives a near-Butterworth alignment (a Qtc of about 0.7) with a 60 Hz resonance. A smaller box gives higher, peakier bass; a bigger one lower, more damped bass. Deep bass extension, reference efficiency and enclosure volume are coupled. “Pick two” summarizes the trade-off; real driver excursion, losses and power limits still constrain the design.
+Deep bass extension, reference efficiency and enclosure volume are coupled. “Pick two” summarizes the trade-off; real driver excursion, losses and power limits still constrain the design.
 
 (Filling the box with absorbent material can make it behave as if it were somewhat larger: Purdue's notes say up to about 15% in apparent volume, while also adding some effective moving mass.)
 

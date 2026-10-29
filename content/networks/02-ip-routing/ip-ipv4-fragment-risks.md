@@ -7,7 +7,7 @@ sourceLesson: ip-ipv4
 summary: Explain fragment loss, reassembly state and Identification wrap-around, then contrast IPv6.
 ---
 
-Explain fragment loss, reassembly state and Identification wrap-around, then contrast IPv6.
+Fragmentation lets an oversized IPv4 datagram cross a small-MTU link, but it creates problems that make networks and hosts avoid it where they can.
 
 ### Why fragmentation is avoided
 
@@ -18,20 +18,9 @@ Fragmentation works, but it is bad news in practice:
 - **Reassembly costs memory** at the receiver and is a classic denial-of-service target (overlapping-fragment attacks, fragment floods).
 - **ID wrap-around.** At high speeds the 16-bit Identification wraps quickly, risking fragments from different datagrams being stitched together.
 
-How quickly? A 16-bit counter has 65,536 values, so if a sender uses one per datagram:
+How quickly? The field has 65,536 possible values. If a sender takes one per datagram to the same destination with the same protocol, the time before values repeat is simply 65,536 divided by the sending rate. At about 15,000 datagrams a second (roughly 8 KB datagrams at 1 Gbit/s) the counter wraps in about 4 seconds.
 
-```formula
-t_wrap = 2^16 / r
-t_wrap = 65,536 / (15,000 / s)
-t_wrap ≈ 4.4 s
-where
-t_wrap: the time before the Identification counter repeats a value, in seconds (s)
-2^16: 16 copies of 2 multiplied together, 65,536: the number of different values the 16-bit Identification field can hold
-r: the rate at which the sender sends datagrams to the same destination with the same protocol, in datagrams per second; about 15,000 for 8 KB datagrams at 1 Gbit/s
-≈: approximately equal to (the result is rounded)
-s: seconds
-In words: the faster the sender, the sooner Identification values repeat. If reassembly state lasts longer than this (often tens of seconds), an old fragment can be mistaken for part of a new datagram.
-```
+That is far shorter than reassembly state can last at a receiver (often tens of seconds). If a fragment of an old datagram is still waiting when a new datagram reuses its Identification value, the receiver can stitch pieces of two different datagrams together. The IPv4 header checksum does not cover the payload, and a transport checksum may not catch every such corruption.
 
 IPv6 takes the lesson to heart: routers **never** fragment. Only the sending host may, using an extension header, and every IPv6 link must present an MTU of at least 1,280 bytes to IPv6, using fragmentation below IPv6 if the physical link needs it.
 
@@ -43,14 +32,6 @@ IPv6 takes the lesson to heart: routers **never** fragment. Only the sending hos
 
 ## Further reading
 - [RFC 791: Internet Protocol](https://www.rfc-editor.org/rfc/rfc791)
-- [RFC 792: Internet Control Message Protocol](https://www.rfc-editor.org/rfc/rfc792)
-- [RFC 1191: Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc1191)
-- [RFC 4821: Packetization Layer Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc4821)
-- [IP fragmentation — Wikipedia](https://en.wikipedia.org/wiki/IP_fragmentation)
-- [Traceroute — Wikipedia](https://en.wikipedia.org/wiki/Traceroute)
-
 - [RFC 8900: IP Fragmentation Considered Fragile](https://www.rfc-editor.org/rfc/rfc8900.html)
 - [RFC 6864: IPv4 Identification field](https://www.rfc-editor.org/rfc/rfc6864)
-- [RFC 4638: Larger PPPoE MTUs](https://www.rfc-editor.org/rfc/rfc4638.html)
-- [RFC 6691: TCP options and MSS](https://www.rfc-editor.org/rfc/rfc6691.html)
-- [RFC 1812: IPv4 router requirements](https://www.rfc-editor.org/rfc/rfc1812.html)
+- [RFC 8200: IPv6 Specification](https://www.rfc-editor.org/rfc/rfc8200)

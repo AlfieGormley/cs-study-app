@@ -35,7 +35,7 @@ How it's built varies:
 
 - **CPython's `deque`** is a doubly linked list of fixed-size blocks (64 items each), so both ends are O(1) with no resizing, and access near the middle is O(n). Its docs note that appends and pops from either end are thread-safe.
 - **Java's `ArrayDeque`** is a growable circular array. It's the recommended general-purpose queue and stack in Java, and usually faster than `LinkedList`.
-- **C++'s `std::deque`** uses an array of pointers to fixed-size chunks. It offers O(1) indexing as well as O(1) pushes at both ends.
+- **C++'s `std::deque`** is typically implemented as an array of pointers to fixed-size chunks. The standard guarantees constant-time indexing (random-access iterators) as well as constant-time insertion and removal at both ends.
 
 ### Bounded deques
 

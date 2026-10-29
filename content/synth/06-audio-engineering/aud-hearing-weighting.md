@@ -15,9 +15,24 @@ Sound level meters apply a **frequency weighting** to make a single number track
 - **C-weighting** (dB(C)) is nearly flat from about 31.5 Hz to 8 kHz (−3 dB points). It is used for **peak level** measurements, and for loud, bass-heavy sound where A-weighting would hide the low end.
 - **Z-weighting** is flat ("zero").
 
-The A-weighting curve is defined by a formula in IEC 61672-1. It describes a set of simple filters: two that cut below about 20 Hz, one each near 108 Hz and 738 Hz that shape the low-mid roll-off, and two that cut above about 12.2 kHz. You don't need to memorise it, but it shows that "dB(A)" is a precisely defined filter, not a vague idea:
+In Great Britain, the Control of Noise at Work Regulations 2005 express daily or weekly exposure in dB(A) and peak sound pressure in dB(C) (the next lessons cover the limits).
 
-```formula
+Because a weighting removes part of the spectrum before the meter measures, the same sound gives different readings under different weightings. Approximate A-weighting values, from the IEC 61672-1 definition:
+
+| Frequency | A-weighting |
+|---|---|
+| 31.5 Hz | about −39 dB |
+| 50 Hz | about −30 dB |
+| 100 Hz | about −19 dB |
+| 1 kHz | 0 dB |
+| 2–4 kHz | about +1 dB |
+| 10 kHz | about −2.5 dB |
+
+So a 100 Hz tone read on an A-weighted meter shows about 19 dB less than its unweighted sound pressure level. A dB(A) figure is therefore a statement about a *filtered* measurement, and two sounds with the same dB(A) can have very different amounts of bass.
+
+The curve is not a vague idea: IEC 61672-1 defines it exactly, as a fixed combination of simple filters. You do not need the formula to read meters, but it is the starting point if you build an A-weighted meter in software:
+
+```formula reference
 R_A = 12194^2 f^4 / D
 D = (f^2 + 20.6^2)(f^2 + 12194^2)
   √((f^2 + 107.7^2)(f^2 + 737.9^2))
@@ -31,52 +46,7 @@ D: the denominator, written on its own lines only to keep them short
 log_10: the base-10 logarithm: the power you raise 10 to in order to get the number
 2.00: a rounded correction in decibels that makes the weighting approximately 0 dB at 1 kHz
 A: the A-weighting at frequency f, in decibels (dB); negative means the meter reduces that frequency
-In words: a fixed filter shape, turned into decibels and nudged so that 1 kHz is unchanged; it cuts deep bass and extreme treble and slightly lifts 2–4 kHz.
-```
-
-Worked example at 100 Hz:
-
-```formula
-R_A = (1.487 × 10^16) / (1.696 × 10^17)
-R_A ≈ 0.0877
-A = 20 log_10(0.0877) + 2.00
-A = 20 × (−1.057) + 2.00
-A ≈ −19.1 dB
-where
-R_A: the A-weighting gain ratio at 100 Hz (no unit)
-A: the A-weighting at 100 Hz, in decibels (dB)
-log_10: the base-10 logarithm
-dB: decibels
-≈: approximately equal to (rounded)
-In words: an A-weighted meter reads a 100 Hz tone about 19 dB lower than its true sound pressure level.
-```
-
-The same formula as a program, evaluated at several frequencies:
-
-```python
-import math
-
-def a_weight(f):
-    # f is in Hz; the gain is dimensionless.
-    f2 = f * f
-    ra = (12194**2 * f2**2) / (
-        (f2 + 20.6**2)
-        * math.sqrt((f2 + 107.7**2)
-                    * (f2 + 737.9**2))
-        * (f2 + 12194**2))
-    return 20 * math.log10(ra) + 2.00
-
-for f in (50, 100, 1000, 4000, 10000):
-    a = a_weight(f)
-    print(f"{f:>5} Hz: {a:6.1f} dB")
-```
-
-```output
-   50 Hz:  -30.3 dB
-  100 Hz:  -19.1 dB
- 1000 Hz:    0.0 dB
- 4000 Hz:    1.0 dB
-10000 Hz:   -2.5 dB
+In words: A-weighting is a fixed filter defined in the standard: two stages cut below about 20 Hz, stages near 108 Hz and 738 Hz shape the low-mid roll-off, two stages cut above about 12 kHz, and an offset sets 1 kHz to 0 dB.
 ```
 
 > [!note] Why live engineers watch dB(C) as well as dB(A)

@@ -3,27 +3,27 @@
     "id": "ip-subnetting-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An organisation has four private networks to summarise internally: `10.1.4.0/24`, `10.1.5.0/24`, `10.1.6.0/24` and `10.1.7.0/24`. Which single route summarises exactly these four and nothing else?",
+    "prompt": "Branch router B has routes for `10.1.4.0/24` through `10.1.7.0/24` only. To keep things simple it advertises the summary `10.1.0.0/21` to the core. B's own default route points to the core, and B has no discard route for the summary. A core router forwards a packet for 10.1.2.9 to B. What happens?",
     "options": [
       {
-        "text": "10.1.4.0/23",
-        "explanation": "A /23 covers only two /24s (10.1.4 and 10.1.5)."
+        "text": "B delivers it, because the summary covers 10.1.2.9",
+        "explanation": "The summary only advertises reachability; B still needs a specific route. It has none for 10.1.0.0 to 10.1.3.255."
       },
       {
-        "text": "10.1.0.0/21",
-        "explanation": "That covers 10.1.0.0 to 10.1.7.255: eight /24s, including four the listed networks do not include."
+        "text": "B's longest match is its default route, so it sends the packet back to the core, which sends it to B again: a loop until TTL expires",
+        "explanation": "Correct. The /21 is eight /24s, so it claims 10.1.0–3 that B does not have. Without a discard route for the aggregate, B's default sends the traffic back up. Advertising the exact 10.1.4.0/22, or adding a discard route, avoids this."
       },
       {
-        "text": "10.1.4.0/24",
-        "explanation": "That's just the first network; the other three aren't covered."
+        "text": "The core rejects the summary because 10.1.0.0/21 is not aligned",
+        "explanation": "10.1.0.0/21 is a valid aligned prefix. The problem is that it covers more than B actually has."
       },
       {
-        "text": "10.1.4.0/22",
-        "explanation": "Correct. 4–7 in binary are 000001|00 to 000001|11: the first 6 bits match, giving 16 + 6 = 22 prefix bits. 4 is a multiple of 4, so the block is aligned."
+        "text": "Nothing changes, because aggregation never affects which router receives traffic",
+        "explanation": "Advertising a covering prefix is exactly what attracts traffic for every address inside it."
       }
     ],
-    "answer": 3,
-    "workedExample": "1. Third octets 4, 5, 6, 7:\n\n```\n4 = 000001|00\n5 = 000001|01\n6 = 000001|10\n7 = 000001|11\n```\n\n2. Common prefix: 16 bits (first two octets) + 6 = **22**. The same answer from counting blocks:\n\n```formula\np_agg = p − log_2(k)\np_agg = 24 − log_2(4) = 22\nwhere\np_agg: the summary's prefix length\np: the prefix length of each network, 24\nk: how many equal adjacent networks are merged, 4\nlog_2(k): the base-2 logarithm: how many copies of 2 are multiplied together to make k; log_2(4) = 2\nIn words: merging four /24s takes two bits off the prefix.\n```\n\n3. Alignment check: a /22 block in the 3rd octet has size 4, and 4 is a multiple of 4 ✓.\n4. Summary: **10.1.4.0/22** = 10.1.4.0 to 10.1.7.255.",
+    "answer": 1,
+    "workedExample": "1. 10.1.0.0/21 covers third octets 0 to 7; B only has 4 to 7, which together form the aligned block 10.1.4.0/22.\n2. The core follows the /21 to B for 10.1.2.9.\n3. On B, no specific route matches, so its longest match is the default via the core.\n4. The packet bounces between core and B until TTL runs out.\n5. RFC 4632's rule: a router that originates an aggregate must discard packets that match it but none of its more-specific routes, normally with a discard (null) route for the aggregate. Better still, advertise exactly 10.1.4.0/22.",
     "link": {
       "title": "RFC 4632: Classless Inter-domain Routing",
       "url": "https://www.rfc-editor.org/rfc/rfc4632"

@@ -9,9 +9,9 @@ sourceLesson: aud-acoustics
 
 ## The inverse square law
 
-A small source in open space (a **free field**, with no reflections) spreads its power over the surface of a growing sphere. The area of a sphere grows with the square of its radius, so the same power is shared over more and more air:
+A small source in open space (a **free field**, with no reflections) spreads its power over the surface of a growing sphere. A sphere's area grows with the square of its radius, so at twice the distance the same acoustic power is shared over four times the area. The **sound intensity** (power per square metre) therefore falls to a quarter, and because intensity is proportional to pressure squared, the RMS pressure halves.
 
-```formula
+```formula reference
 I = P_ac / (4πr^2)
 p ∝ 1 / r
 where
@@ -21,12 +21,19 @@ P_ac: the acoustic power the source radiates, in watts (W); this is sound power,
 r: the distance from the source, in metres (m)
 p: the RMS sound pressure at distance r, in pascals (Pa)
 ∝: "is proportional to": when one side is multiplied by some factor, the other is multiplied by the same factor
-In words: 4 × π × r² is the area of a sphere of radius r, so intensity falls with the square of distance. Intensity is proportional to pressure squared, so pressure falls in proportion to 1/r: double the distance and the intensity quarters while the pressure halves.
+In words: The same acoustic power is spread over a sphere whose area grows with the square of the distance, so intensity falls with distance squared and pressure falls in proportion to distance.
 ```
 
-This is the **inverse square law**. Turning the pressure ratio into decibels (20 × log, because pressure is a field quantity) gives the working form, which predicts the level at one distance from a level measured at another:
+> [!analogy] Real-world analogy: a spray can
+> Hold a spray can close to a wall and you get a small, dense patch. Step back to twice the distance and the same spray covers a patch twice as wide and twice as tall: four times the area, so each square centimetre gets a quarter of the paint.
+>
+> **How it maps:** The paint per second is the source's acoustic power, the patch is the sphere the sound spreads over, and paint per square centimetre is intensity. Doubling distance quarters intensity in both cases.
+>
+> **Where it stops:** Paint droplets fly in straight lines and stick. Sound reflects off walls and bends round objects, so indoors the reflected sound tops the level up and the simple quartering no longer holds.
 
-```formula
+This is the **inverse square law**. In decibels it becomes a rule about *ratios* of distance, which is what makes it easy to use:
+
+```formula reference
 L_2 = L_1 − 20 log_10(r_2 / r_1)
 where
 L_1: the measured level at distance r_1, in dB SPL
@@ -34,59 +41,17 @@ L_2: the predicted level at distance r_2, in dB SPL
 r_1: the distance where you know the level, in metres (m)
 r_2: the distance you want the level at, in metres (m)
 log_10: the base-10 logarithm
-In words: the level falls by 20 times the logarithm of the distance ratio, so it depends only on how many times further away you are, not on the distance in metres.
+In words: In decibels the loss depends only on how many times further away you are, not on the extra metres: about 6 dB for every doubling of distance and 20 dB for every tenfold increase.
 ```
 
-Each **doubling of distance** therefore loses the same amount:
+Two landmarks cover almost every estimate:
 
-```formula
-ΔL = 20 log_10(2)
-ΔL = 20 × 0.30103
-ΔL ≈ 6.02 dB
-where
-ΔL: the drop in level for a doubling of distance, in decibels (dB); Δ (delta) means "change in"
-log_10: the base-10 logarithm
-dB: decibels
-≈: approximately equal to
-In words: in a free field, every doubling of distance costs about 6 dB, usually rounded to 6 dB.
-```
+- Each **doubling of distance** costs about **6 dB**: 1 m to 2 m loses the same as 10 m to 20 m.
+- Each **tenfold increase** in distance costs **20 dB**.
 
-```python
-import math
+So a speaker giving 100 dB SPL at 1 m gives about 94 dB at 2 m, 88 dB at 4 m and 80 dB at 10 m. Counting doublings is usually all you need. The flip side matters for noise problems: walking a few metres further from a source that is already far away barely changes the level, because a few metres is a small *ratio*.
 
-# The 1 m reference must be in the far
-# field.
-L1 = 100.0  # dB SPL at 1 m
-for r in (1, 2, 4, 8, 10, 25):
-    L = L1 - 20 * math.log10(r / 1)
-    print(f"{r:>2} m: {L:6.2f} dB SPL")
-```
-
-```output
- 1 m: 100.00 dB SPL
- 2 m:  93.98 dB SPL
- 4 m:  87.96 dB SPL
- 8 m:  81.94 dB SPL
-10 m:  80.00 dB SPL
-25 m:  72.04 dB SPL
-```
-
-Worked example: a speaker gives 100 dB SPL at 1 m. What does a listener at 25 m get?
-
-```formula
-L_2 = 100 − 20 log_10(25 m / 1 m)
-L_2 = 100 − 20 × 1.398
-L_2 = 100 − 27.96
-L_2 ≈ 72 dB SPL
-where
-L_2: the level at 25 m, in dB SPL
-log_10: the base-10 logarithm
-m: metres
-dB: decibels
-SPL: sound pressure level (relative to 20 µPa)
-≈: approximately equal to
-In words: 25 times further away loses about 28 dB, leaving about 72 dB SPL. Ten times the distance would cost exactly 20 dB.
-```
+These figures assume the same direction from the source, measurement in its far field (a later lesson explains), negligible air absorption and no reflections. Outdoors, ground reflection, wind and temperature gradients change real results, so treat predictions as first estimates.
 
 > [!warning] Where the law doesn't hold
 > - **Indoors**, reflections build a *reverberant field*. Beyond a certain distance (the critical distance) the level stops falling at 6 dB per doubling and levels off. The room-acoustics units cover rooms.

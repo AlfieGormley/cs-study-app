@@ -2,9 +2,9 @@
 id: ip-nat-port-mappings
 title: Translate ports and expire mappings
 level: intermediate
-minutes: 5
+minutes: 4
 sourceLesson: ip-nat-ipv6
-summary: Trace a NAPT mapping in Python and distinguish mapping reuse, filtering and idle expiry.
+summary: Trace a NAPT translation table and distinguish mapping reuse, filtering and idle expiry.
 ---
 
 IPv4 has 2³² possible address values (32 copies of 2 multiplied together), about 4.3 billion, with some reserved for special purposes. **NAT** shares or translates address space; **IPv6** provides a much larger address space. They address different aspects of connectivity and coexist in deployed networks.
@@ -37,54 +37,23 @@ inside              NAT        outside
         table: (priv ip, port) <-> pub port
 ```
 
-A toy version for one transport protocol, one public address and endpoint-independent mapping. It omits timeouts, packet/checksum processing, remote-peer filtering, port reuse and high availability:
+The heart of NAPT is its translation table. After the two laptops above open connections, a simplified table for one protocol and one public address looks like this:
 
-```python
-import ipaddress
+| Inside endpoint | Public endpoint |
+|---|---|
+| 192.168.1.10:51000 | 203.0.113.7:40000 |
+| 192.168.1.11:51000 | 203.0.113.7:40001 |
 
-class NAPT:
-    def __init__(self, public_ip):
-        addr = ipaddress.IPv4Address
-        self.ip = str(addr(public_ip))
-        self.next_port = 40000
-        self.out = {}   # (ip, port) -> pub
-        self.back = {}  # pub -> (ip, port)
+Both laptops happen to use source port 51000, so the router gives them different public ports to tell their replies apart. A reply to 203.0.113.7:40001 matches the second row and goes to 192.168.1.11. An unsolicited packet to 203.0.113.7:8080 matches no row, so in this simple model it is dropped: there is nobody inside to send it to.
 
-    def outbound(self, src, sport):
-        addr = ipaddress.IPv4Address
-        src = str(addr(src))
-        if (type(sport) is not int
-                or not 1 <= sport <= 65535):
-            raise ValueError("invalid port")
-        key = (src, sport)
-        # Reuse this endpoint's mapping.
-        if key not in self.out:
-            if self.next_port > 65535:
-                raise ValueError(
-                    "ports exhausted")
-            p = self.next_port
-            self.next_port += 1
-            self.out[key] = p
-            # Save the reverse mapping.
-            self.back[p] = key
-        return self.ip, self.out[key]
+Real routers can add rows deliberately, with static mappings (port forwarding), a configured fallback host or services listening on the router itself. Translation lookup and firewall policy are distinct functions.
 
-    def inbound(self, dport):
-        # None means: drop the packet
-        return self.back.get(dport)
-
-nat = NAPT("203.0.113.7")
-print(nat.outbound("192.168.1.10", 51000))
-print(nat.outbound("192.168.1.11", 51000))
-print(nat.inbound(40001))
-print(nat.inbound(8080))
-# ('203.0.113.7', 40000)
-# ('203.0.113.7', 40001)
-# ('192.168.1.11', 51000)
-# None
-```
-
-The toy drops inbound packets without a mapping. Real routers may also have static mappings, an explicitly configured fallback host or locally listening services. Translation lookup and firewall policy are distinct.
+> [!analogy] Real-world analogy: An office switchboard
+> An office has one public phone number. When a member of staff makes an outside call, the receptionist notes "line 40000 is extension 10's call" so that when the other party rings back on that line, the call is put through to the right desk. An unexpected call on a line nobody has used gets no answer.
+>
+> **How it maps:** The public number is the shared public IP address, the lines are public ports, the extensions are private addresses and ports, and the receptionist's notebook is the translation table. Entries made by outgoing calls are dynamic mappings; a standing instruction to put all calls on one line through to the sales desk is a static port forward.
+>
+> **Where it stops:** A receptionist does not rewrite anything, whereas a NAT changes addresses, ports and checksums in every packet. NAT entries also expire after idle periods, and some NATs accept a return call only from the exact party that was called, which is a filtering rule rather than part of the mapping.
 
 Real NATs expire state. RFC 4787 requires UDP mappings to last at least two idle minutes, with a specific exception for certain well-known destination ports; it recommends a default of at least five minutes. RFC 5382 specifies at least 2 hours 4 minutes for idle established TCP connections when the NAT cannot determine whether endpoints remain active. These are protocol requirements, not measurements of every router. Keepalive choices must account for the application, state-refresh rules and actual network.
 
@@ -101,15 +70,11 @@ Older literature uses "full cone", "restricted cone", "port-restricted cone" and
 
 ## Key takeaways
 - NAPT can share a public address by translating transport ports.
-- The toy translation table omits packet checksums, filtering and expiry.
+- An inbound packet with no matching mapping has no inside destination unless a static rule exists.
 - Mapping reuse and inbound filtering describe different properties.
 - Idle-state requirements differ by protocol; application keepalives need the actual refresh rules.
 
 ## Further reading
 - [RFC 4787: NAT Behavioral Requirements for Unicast UDP](https://www.rfc-editor.org/rfc/rfc4787)
-- [RFC 8445: Interactive Connectivity Establishment (ICE)](https://www.rfc-editor.org/rfc/rfc8445)
-- [RFC 8200: IPv6 Specification](https://www.rfc-editor.org/rfc/rfc8200)
-- [RFC 4862: IPv6 Stateless Address Autoconfiguration](https://www.rfc-editor.org/rfc/rfc4862)
-- [RFC 8305: Happy Eyeballs Version 2](https://www.rfc-editor.org/rfc/rfc8305)
+- [RFC 5382: NAT Behavioral Requirements for TCP](https://www.rfc-editor.org/rfc/rfc5382)
 - [Network address translation — Wikipedia](https://en.wikipedia.org/wiki/Network_address_translation)
-- [IPv6 adoption statistics — Google](https://www.google.com/intl/en/ipv6/statistics.html)

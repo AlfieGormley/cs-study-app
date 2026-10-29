@@ -3,10 +3,10 @@ id: net-region-data-headroom
 title: "Replication risk and failover headroom"
 level: advanced
 minutes: 4
-summary: "Compare active regional layouts and size survivors for both even and uneven inherited traffic."
+summary: "Compare active regional layouts and plan survivor headroom for both even and uneven inherited traffic."
 sourceLesson: net-global-traffic
 ---
-A routing change only helps if the surviving region has the data and spare capacity to serve it. Work out the replication failure model before calculating how much load can move.
+A routing change only helps if the surviving region has the data and spare capacity to serve it. Decide what the replication model can lose, then check that survivors can absorb the traffic that will actually arrive.
 
 ## Multi-region failover
 
@@ -28,24 +28,19 @@ Routing is the easy part. The hard part is what happens to **data and capacity**
 
 ### Capacity planning for failover
 
-If you run three regions at 70% utilisation and one fails, its traffic lands on the other two. In an ideal model with equal region capacities, proportional work, no extra failover overhead and even redistribution, the arithmetic is:
+If you run three equal regions at 70% utilisation and one fails, its traffic lands on the other two. Spread evenly, each survivor takes an extra 35 points and runs at about 105%: overloaded, before autoscaling has had time to react. The rule behind this is that the total load must still fit into one region fewer:
 
-```formula
-u_after = N × u / (N − 1)
-u_after = 3 × 70% / 2 = 105%
-u_max = (N − 1) / N × 100%
-u_max = 2 / 3 × 100% ≈ 66.7%
+```formula essential
+u_max = (N − 1) / N
 where
-u_after: the utilisation of each surviving region after one region fails and its load is shared evenly, as a percentage of that region's capacity
-N: the number of regions, all with the same capacity; here 3
-u: each region's utilisation before the failure, as a percentage of its capacity; here 70%
-u_max: the highest utilisation you can run each region at and still stay at or below 100% after losing one region
-%: per cent of a region's capacity
-≈: approximately equal to
-In words: the total load (here 210% of one region) must fit in one region fewer, so each region can normally run at most (N − 1)/N full.
+u_max: the highest normal utilisation, as a fraction of each region's capacity, that still fits after losing one region
+N: the number of regions, all with equal capacity
+In words: to survive losing one of N equal regions with an even spread, each may normally run at most (N − 1)/N full: about two-thirds with three regions, half with two and 80% with five.
 ```
 
-So three regions at 70% each become two regions at 105%: overloaded. The formula gives the ideal no-overload ceiling before losing one region: **about 66% for three regions**, 50% for two and 80% for five. Use a lower target when latency SLOs, cold caches or other bottlenecks require spare capacity. (This assumes traffic redistributes evenly. With GeoDNS or anycast it often doesn't: a failed EU region's users may mostly land in the next-nearest region, which needs more headroom than the average.)
+This is an ideal ceiling. It assumes equal capacities, load proportional to work, no extra failover overhead and an even redistribution. Use a lower target when latency SLOs, cold caches or other bottlenecks need spare capacity. Above all, redistribution is rarely even: with GeoDNS, latency routing or anycast, a failed EU region's users may mostly land in the *next-nearest* region, which then needs far more headroom than the average suggests. Plan each region for the traffic it would actually inherit.
+
+### Acknowledged writes at risk
 
 For loss of the primary region, writes acknowledged before reaching an asynchronous standby may be lost; the lag window and write rate determine how many are at risk. Acknowledging only after the write is durably recorded in a surviving region can protect that failure model, while adding remote coordination latency and availability coupling. This does not guarantee survival of correlated loss, corruption or mistaken deletion; RPO remains a time objective, not a write count.
 

@@ -9,9 +9,18 @@ sourceLesson: aud-hearing
 
 ## Noise dose and listening guidance
 
-**NIOSH (US) recommended exposure limit:** **85 dB(A)** averaged over an eight-hour day, with a **3 dB noise-dose exchange rate**: every 3 dB increase halves the allowed time. A 3 dB increase doubles the sound energy, so halving the time keeps the total energy (the dose) the same:
+**NIOSH (US) recommended exposure limit:** **85 dB(A)** averaged over an eight-hour day, with a **3 dB noise-dose exchange rate**: every 3 dB increase halves the allowed time. A 3 dB increase doubles the sound energy, so halving the time keeps the total energy (the dose) the same.
 
-```formula
+| Steady level | Time to reach the NIOSH reference dose |
+|---|---|
+| 85 dB(A) | 8 hours |
+| 88 dB(A) | 4 hours |
+| 91 dB(A) | 2 hours |
+| 94 dB(A) | 1 hour |
+| 97 dB(A) | 30 minutes |
+| 100 dB(A) | 15 minutes |
+
+```formula reference
 T = 480 / 2^{(L − 85) / 3}
 where
 T: the time to reach the NIOSH reference daily dose, in minutes (min)
@@ -20,41 +29,17 @@ L: the steady A-weighted exposure level, in dB(A)
 85: the NIOSH recommended exposure limit for eight hours, in dB(A)
 3: the noise-dose exchange rate, in decibels: each 3 dB step halves the time
 2^{(L − 85) / 3}: 2 raised to the number of 3 dB steps above 85 dB(A)
-In words: start from 8 hours at 85 dB(A) and halve the time for every 3 dB louder.
+In words: Start from eight hours at 85 dB(A) and halve the time for every 3 dB louder.
 ```
 
-Worked example at a steady 100 dB(A):
+So a steady 100 dB(A), a level easily reached near a PA or in loud headphones, reaches the NIOSH reference daily dose in **15 minutes**, before adding any other exposure that day. Exposures add up: an hour at 94 dB(A) in the afternoon and another at a gig in the evening make two full doses. This is a risk-management limit, not a guarantee of no hearing damage.
 
-```formula
-T = 480 / 2^{(100 − 85) / 3}
-T = 480 / 2^5
-T = 480 / 32 = 15 min
-where
-T: the time to reach the reference dose, in minutes
-min: minutes
-In words: 100 dB(A) is five 3 dB steps above 85, so the time halves five times, from 480 to 15 minutes.
-```
-
-The same calculation for several levels, as a program:
-
-```python
-# Reference-dose time, not guaranteed safe.
-for level in (85, 88, 91, 94, 97, 100):
-    minutes = 480 / 2 ** ((level - 85) / 3)
-    print(f"{level} dBA: "
-          f"{minutes:5.0f} min")
-```
-
-```output
-85 dBA:   480 min
-88 dBA:   240 min
-91 dBA:   120 min
-94 dBA:    60 min
-97 dBA:    30 min
-100 dBA:    15 min
-```
-
-A steady 100 dB(A) exposure reaches the NIOSH reference daily dose in **15 minutes**, before adding other exposure that day. This is a risk-management limit, not a guarantee of no hearing damage.
+> [!analogy] Real-world analogy: a daily spending allowance
+> Imagine a fixed daily allowance. At one shop you can browse all day before it runs out; at a pricier shop, where everything costs twice as much, it lasts half as long, and every visit anywhere that day comes out of the same allowance.
+>
+> **How it maps:** The allowance is the reference daily noise dose. Each 3 dB louder is a shop with double the prices: the same dose is used up in half the time. Time spent at several loud places adds up against one total.
+>
+> **Where it stops:** A spending allowance is a hard rule that guarantees nothing bad happens below it. A noise dose is a population risk guideline: staying under it does not guarantee no damage for every person, and the ear does not simply reset at midnight.
 
 **WHO:**
 - The WHO–ITU standard for personal audio devices sets a reference weekly allowance of **80 dB for 40 hours a week** for adults (75 dB for children).

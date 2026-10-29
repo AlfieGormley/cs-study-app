@@ -21,7 +21,7 @@ IP was designed so any host could send a packet to any other. NAT breaks that:
 > [!note] NAT is not a firewall
 > Translation does not define a complete security policy. Missing mappings can prevent delivery, while filtering determines which traffic may use existing mappings. IPv6 can apply stateful firewall rules without network address translation.
 
-## application NAT traversal: STUN, TURN and ICE
+## Application NAT traversal: STUN, TURN and ICE
 
 Video calls, WebRTC, games and VPN meshes (Tailscale, for example) want direct peer-to-peer paths. Three protocols, used together, make that work:
 
@@ -37,6 +37,13 @@ Video calls, WebRTC, games and VPN meshes (Tailscale, for example) want direct p
 2. **Exchange** candidates through signalling. WebRTC can include candidates in SDP descriptions and convey additional candidates later using Trickle ICE.
 3. **Connectivity checks**: try candidate pairs in priority order with STUN requests.
 4. **Nominate** a valid pair under ICE priorities and application policy. A direct pair is commonly preferred, but relays can be deliberately preferred and nomination does not benchmark every path for optimal performance.
+
+> [!analogy] Real-world analogy: Two callers behind switchboards
+> Two people each sit behind an office switchboard and want to talk directly. Each first rings a friend outside and asks "what number did my call come from?", then they swap those numbers through a mutual contact and both dial at about the same time, so each receptionist sees the other's call as expected. If the switchboards still refuse, they both dial into a conference bridge instead.
+>
+> **How it maps:** Asking the outside friend is a STUN request revealing the server-reflexive address; the mutual contact is the signalling server; dialling at once is hole punching through connectivity checks; the conference bridge is a TURN relay; working through the options in order and settling on one that connects is ICE.
+>
+> **Where it stops:** A switchboard that gives each outside call a different line (destination-dependent mapping) makes the number your friend saw useless to anyone else, which phone systems rarely do. And ICE works through many candidate pairs in priority order, with several checks in flight, rather than strictly one call at a time.
 
 ```
          signalling server

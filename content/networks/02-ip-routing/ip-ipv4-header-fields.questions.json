@@ -3,27 +3,27 @@
     "id": "ip-ipv4-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "The first byte of an IPv4 packet is `0x46`. How long is its header?",
+    "prompt": "A home-made packet parser always reads the TCP header starting at byte 20 of each IPv4 packet. Most packets decode correctly, but packets whose first byte is `0x46` (version 4, IHL 6) show nonsense port numbers. What is going wrong?",
     "options": [
       {
-        "text": "70 bytes",
-        "explanation": "0x46 is 70 in decimal, but the byte isn't a length: it is two 4-bit fields, and the IHL unit is 4-byte words."
+        "text": "The parser ignores the IHL: these headers are 24 bytes long, so byte 20 is still inside the IPv4 options",
+        "explanation": "Correct. IHL counts 4-byte words, so 6 means 24 bytes. The TCP header starts at byte 24; reading from byte 20 treats 4 bytes of options as the start of TCP."
       },
       {
-        "text": "6 bytes",
-        "explanation": "This reads the IHL nibble as a byte count. IHL counts 32-bit (4-byte) words, and 6 bytes is smaller than the 20-byte minimum header anyway."
+        "text": "IHL 6 means the packet is IPv6, so the whole layout differs",
+        "explanation": "The first nibble, 4, is the version; the second nibble is the IHL. An IPv6 packet would start with version 6."
       },
       {
-        "text": "24 bytes",
-        "explanation": "Correct. The high nibble 4 is the version; the low nibble 6 is the IHL, meaning 6 × 4 = 24 bytes: the 20 fixed bytes plus 4 bytes of options/padding."
+        "text": "The Total Length field is wrong, so the payload is truncated",
+        "explanation": "The Total Length field counts the whole datagram in bytes; nothing here suggests it is wrong. The fault is where the parser thinks the header ends."
       },
       {
-        "text": "46 bytes",
-        "explanation": "This treats the whole byte as a decimal length. The byte packs two fields, version and IHL, into one."
+        "text": "IHL counts bytes, so the header is only 6 bytes and TCP starts at byte 6",
+        "explanation": "IHL counts 4-byte words, not bytes, and no IPv4 header is shorter than 20 bytes (IHL 5)."
       }
     ],
-    "answer": 2,
-    "workedExample": "1. Split the byte into nibbles (4-bit halves, one hexadecimal digit each): `0x46` → `4` and `6`.\n2. The high nibble is the Version: 4, so this is IPv4.\n3. The low nibble is the IHL: 6, counted in 32-bit (4-byte) words.\n\n```formula\nL_hdr = IHL × 4 B\nL_hdr = 6 × 4 B = 24 B\nwhere\nL_hdr: the IPv4 header length, in bytes (B)\nIHL: Internet Header Length, the 4-bit field counting the header in 4-byte words; 5 to 15\nB: bytes; one byte is 8 bits\nIn words: four bytes per IHL unit, so an IHL of 6 means a 24-byte header.\n```\n\n4. A header without options is 20 bytes (IHL 5), so this packet carries 4 bytes of options or padding. The largest IHL, 15, gives 60 bytes.",
+    "answer": 0,
+    "workedExample": "1. The first byte packs two 4-bit fields: version (4) and IHL (6).\n2. IHL counts 4-byte words, so the header is 24 bytes: the fixed 20 bytes plus 4 bytes of options or padding.\n3. The transport header begins where the IP header ends, at byte 24.\n4. A parser that hard-codes 20 bytes reads the last 4 option bytes as TCP ports, so ports look random.\n5. Fix: compute the header length from IHL on every packet (IHL 5 gives 20 bytes; the maximum, 15, gives 60).",
     "link": {
       "title": "RFC 791: Internet Protocol",
       "url": "https://www.rfc-editor.org/rfc/rfc791"

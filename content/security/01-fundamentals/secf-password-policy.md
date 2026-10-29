@@ -12,7 +12,7 @@ Online password policy shapes both resistance to guessing and whether people can
 
 ## Modern password policy (NIST SP 800-63B)
 
-NIST SP 800-63B-4 distinguishes mandatory requirements (SHALL) from recommendations (SHOULD). The following concerns centrally verified passwords, not local device-unlock PINs:
+NIST SP 800-63B-4, the 2025 revision (checked October 2026), distinguishes mandatory requirements (SHALL) from recommendations (SHOULD). The following concerns centrally verified passwords, not local device-unlock PINs:
 
 - **Length over complexity.** At least **15 characters** when the password is the only factor; at least 8 when it's part of MFA. Permitting at least 64 characters, printable ASCII and spaces, and Unicode are SHOULD recommendations.
 - **No composition rules.** Don't demand "one uppercase, one symbol".

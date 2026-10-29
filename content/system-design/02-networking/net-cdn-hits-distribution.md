@@ -3,7 +3,7 @@ id: net-cdn-hits-distribution
 title: "CDN hits, misses and content placement"
 level: advanced
 minutes: 4
-summary: "Trace edge routing, calculate origin misses and choose pull or pre-positioned content."
+summary: "Trace edge routing, see why origin load follows the miss rate, and choose pull or pre-positioned content."
 sourceLesson: net-cdn
 ---
 A content delivery network (CDN) is a globally distributed fleet of reverse proxies, called **edge servers** or **PoPs** (points of presence), that sit between users and your **origin server** (usually just called the *origin*). Examples include Akamai, Cloudflare, Fastly, Amazon CloudFront and Google Cloud CDN; footprint and terminology vary by provider.
@@ -40,24 +40,25 @@ User --> Edge (London)
         Edge stores it, serves user
 ```
 
-The key metric is the **cache hit ratio** (CHR): the fraction of requests served from the edge. In a simplified single-cache model where each miss causes one origin fetch and hits cause none, 95% CHR means 1 origin fetch per 20 user requests; 99% means 1 per 100. Shields, coalescing, background revalidation and bypass traffic change that relationship. The origin only sees the misses:
+The key metric is the **cache hit ratio** (CHR): the fraction of requests served from the edge. In a simplified single-cache model, each miss causes one origin fetch and hits cause none, so the origin sees only the misses:
 
-```formula
+```formula reference
 R_origin = (1 − CHR) × R_total
-R_95 = (1 − 0.95) × 10,000 rps = 500 rps
-R_99 = (1 − 0.99) × 10,000 rps = 100 rps
-R_95 / R_99 = 500 / 100 = 5
 where
 R_origin: the request rate reaching the origin, in requests per second (rps)
-CHR: the cache hit ratio as a fraction between 0 and 1; 0.95 means 95% of requests are served from the edge
-R_total: the total request rate from users to the CDN; here 10,000 rps
-R_95: the origin load at a 95% hit ratio
-R_99: the origin load at a 99% hit ratio
-rps: requests per second
-In words: the origin's load is set by the miss rate, so going from 5% misses to 1% misses cuts it five times over.
+CHR: the cache hit ratio, a fraction between 0 and 1; 0.95 means 95% of requests are served from the edge
+R_total: the total request rate from users to the CDN, in rps
+In words: origin load is set by the miss rate, not the hit rate, so a few points of hit ratio near the top make a large difference to the origin.
 ```
 
-Going from 95% to 99% cuts origin load by **5×**, so small CHR improvements matter a lot.
+That is why a move from 95% to 99% hit ratio, which sounds like a 4% improvement, cuts origin load five-fold: misses fall from 1 in 20 requests to 1 in 100. The same logic warns that a small drop in hit ratio (a bad cache key, a purge) can multiply origin load. Shields, request coalescing, background revalidation and traffic that bypasses the cache all change the exact relationship.
+
+> [!analogy] Real-world analogy: Local shops stocked from one warehouse
+> A chain has one central warehouse and many local shops. Customers buy from the nearest shop; only when a shop has run out does it send an order back to the warehouse, which then restocks that shop.
+>
+> **How it maps:** the shops are CDN edge PoPs, the warehouse is the origin and a shopper finding the item on the shelf is a cache hit. The warehouse's workload depends on how often shops run out, which is the miss rate.
+>
+> **Where it stops:** a cached response is copied, not sold, so one stored copy can serve any number of requests until it expires or is evicted. A cache also follows freshness rules: it can serve out-of-date content if those rules are wrong, and it must never hand one user's personalised response to another.
 
 ## Pull vs push
 
@@ -76,7 +77,7 @@ Going from 95% to 99% cuts origin load by **5×**, so small CHR improvements mat
 ## Key takeaways
 
 - A CDN routes requests to distributed edge proxies using DNS, anycast or both.
-- In the one-fetch-per-miss model, origin load follows the miss rate rather than the hit rate.
+- Origin load follows the miss rate: going from 95% to 99% hits cuts origin traffic about five-fold.
 - Pull fills on demand; push and pre-positioning suit large files with predictable launch demand.
 
 ## Further reading

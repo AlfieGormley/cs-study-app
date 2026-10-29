@@ -13,24 +13,20 @@ sourceLesson: aud-room-acoustics
 
 Sound radiates backwards from a monitor at low frequencies (it's omnidirectional there; the driver and enclosure units). That rear sound reflects off the front wall and returns. Where the reflected travel delays it by half a period, which happens when the distance to the wall is a **quarter wavelength**, it cancels the direct sound: **speaker boundary interference response (SBIR)**.
 
-The reflected sound travels to the wall and back, an extra distance of twice the speaker-to-wall gap. The first cancellation happens when that extra distance is half a wavelength, so the wave comes back upside down:
+The reflected sound travels to the wall and back, an extra distance of twice the speaker-to-wall gap. The first cancellation happens when that extra distance is half a wavelength, so the wave comes back upside down. That puts the notch at the frequency whose quarter wavelength equals the gap: **move the speaker closer to the wall and the notch moves up in frequency**; move it further away and the notch moves down.
 
-```formula
-2d = λ / 2
-λ = c / f_notch
+```formula reference
 f_notch ≈ c / (4d)
-f_notch ≈ 343 / (4 × 0.5) ≈ 172 Hz
 where
 f_notch: the frequency of the first (lowest) cancellation notch, in hertz (Hz)
-d: the distance from the speaker's acoustic source to the wall behind it, in metres (m); here 0.5 m
-λ: lambda, the wavelength, in metres (m)
+d: the distance from the speaker's acoustic source to the wall behind it, in metres (m)
 c: the speed of sound in air, about 343 metres per second (m/s)
 ≈: approximately equal to; this simple model only counts the straight-back-and-forth path
 Hz: hertz, cycles per second
-In words: the notch sits at the frequency whose quarter wavelength equals the speaker-to-wall distance, so moving the speaker closer to the wall pushes the notch up in frequency.
+In words: The first boundary notch sits at the frequency whose quarter wavelength equals the speaker-to-wall distance, so halving the distance moves the notch up an octave.
 ```
 
-This assumes the wall is rigid and the reflection travels straight back (the wall-perpendicular path). Real notches are shallower than a perfect cancellation and are partly filled by other paths. The same calculation for other distances:
+This assumes the wall is rigid and the reflection travels straight back (the wall-perpendicular path). Real notches are shallower than a perfect cancellation and are partly filled by other paths. Typical distances:
 
 | Speaker to front wall | First notch |
 |---|---|
@@ -42,7 +38,9 @@ This assumes the wall is rigid and the reflection travels straight back (the wal
 Genelec’s guide describes deep cancellation notches and advises against fixing them by boosting EQ. EQ scales both direct and reflected sound: a perfect null remains zero, while a finite dip can be raised locally only at the cost of headroom and potentially worse sound elsewhere. EQ does not remove the reflection or its geometry. Their remedies:
 
 - **Flush-mount** the monitors in a hard wall, which removes the rear reflection.
-- **Place them close to the wall**: typically with the front of the monitor less than 60 cm from the wall, so the notch moves up to frequencies where the speaker radiates less backwards, while leaving at least 5 cm clearance for a rear port.
+- **Place them close to the wall**: typically with the front of the monitor less than 60 cm from the wall, so the notch moves up to frequencies where the speaker has already become forward-directing and sends less sound backwards, while leaving at least 5 cm clearance for a rear port.
+
+A nearby wall also reinforces the bass below the notch (Genelec quotes about 6 dB for one close wall), so a monitor placed close to the wall or flush-mounted needs its low-frequency output turned down, for example with its room-response or bass-tilt controls.
 
 The same cancellation happens with side walls, the floor and the desk at different distances, so varying those distances spreads the notches rather than stacking them.
 
@@ -72,4 +70,4 @@ A practical workflow:
 - [Driving room modes — Dan Russell, Penn State](https://www.acs.psu.edu/drussell/Demos/RoomModes/driving.html)
 - [Measured reverberation and Sabine’s equation — Dan Russell](https://www.acs.psu.edu/drussell/demos/rt60/rt60.html)
 - [REW help — Room EQ Wizard](https://www.roomeqwizard.com/help/help_en-GB/html/index.html)
-- [Acoustic treatment and boundary interference — Genelec](https://store.genelec.com/web/site/improving-room-acoustics)
+- [Acoustic treatment and boundary interference — Genelec](https://www.genelec.com/improving-room-acoustics)

@@ -4,10 +4,10 @@ title: Renew and rebind a DHCP lease
 level: intermediate
 minutes: 3
 sourceLesson: ip-dhcp
-summary: Calculate nominal lease thresholds and distinguish renewal, rebinding, expiry and reservations.
+summary: Predict what a client does at each lease threshold and distinguish renewal, rebinding, expiry and reservations.
 ---
 
-Calculate nominal lease thresholds and distinguish renewal, rebinding, expiry and reservations.
+A DHCP address is borrowed, not owned. This lesson follows what a client does as its lease ages, and what happens when its server disappears.
 
 ## Leases
 
@@ -18,36 +18,16 @@ For a finite lease, nominal default timers are below. Servers can supply differe
 - **T1**, at 50% of the lease: start **renewing**. Unicast a Request directly to the server that granted the lease.
 - **T2**, at 87.5% of the lease: if the server hasn't answered, start **DHCP rebinding**. Broadcast a Request so another server with sufficient state and authority may extend it.
 
-If the lease expires with no answer, the client must stop using the address. Ignoring timing variation and explicit overrides, the two timers are fixed fractions of the lease, measured from the lease-start reference (not simply from delayed ACK arrival):
+If the lease expires with no answer, the client must stop using the address and start again from Discover. The timers are measured from the lease-start reference (not simply from delayed ACK arrival).
 
-```formula
-T_1 = 0.5L
-T_2 = 0.875L
-T_1 = 0.5 × 24 h = 12 h
-T_2 = 0.875 × 24 h = 21 h
-where
-T_1: the renewal time (T1): how long after the lease starts the client begins renewing with its own server
-T_2: the rebinding time (T2): how long after the lease starts the client asks any server
-L: the lease length granted by the server, here 24 hours
-0.5, 0.875: the default fractions, 50% and 87.5% (seven eighths) of the lease
-h: hours
-In words: a client tries its own server halfway through the lease, tries any server when seven eighths has passed, and gives the address up when the lease runs out.
-```
+For a 24-hour lease starting at midnight, with the nominal defaults, that means renewing from 12:00, rebinding from 21:00 and expiry at 24:00. The design asks the original server first, from halfway through, and only from seven eighths onwards lets any other server that shares the lease state extend it, leaving a final window before the client loses its address.
 
-For a 24-hour lease starting at midnight, that means renewing from 12:00, rebinding from 21:00 and expiry at 24:00. The same calculation in seconds:
-
-```python
-def timers(lease):
-    # Nominal defaults for finite seconds.
-    # 0xffffffff represents infinity.
-    if (type(lease) is not int
-            or not 0 < lease < 0xffffffff):
-        raise ValueError("bad finite lease")
-    # Seconds since the lease start.
-    return lease * 0.5, lease * 0.875
-
-print(timers(86400))  # (43200.0, 75600.0)
-```
+> [!analogy] Real-world analogy: A library loan
+> You borrow a book for four weeks. Halfway through, you ask the branch that lent it to extend the loan. If that branch is closed, near the end you ask any branch in the network, which can see the shared records. If nobody extends it by the due date, the book must go back.
+>
+> **How it maps:** The loan period is the lease; asking the lending branch is renewal at T1 (a unicast request to the original server); asking any branch is rebinding at T2 (a broadcast request any authorised server can answer); returning the book is expiry, when the client stops using the address.
+>
+> **Where it stops:** A late library book earns a fine; a DHCP client simply loses its address and rediscovers. Libraries may refuse extensions to some borrowers; DHCP servers decide using pool availability and policy, and often hand the same client the same address again.
 
 A client leaving cleanly can send **DHCPRELEASE**, but many just disappear and let the lease expire.
 
@@ -63,13 +43,4 @@ Servers usually hand the same client the same address again where they can, keye
 
 ## Further reading
 - [RFC 2131: Dynamic Host Configuration Protocol](https://www.rfc-editor.org/rfc/rfc2131)
-- [RFC 2132: DHCP Options and BOOTP Vendor Extensions](https://www.rfc-editor.org/rfc/rfc2132)
-- [Dynamic Host Configuration Protocol — Wikipedia](https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol)
-- [DHCP snooping — Wikipedia](https://en.wikipedia.org/wiki/DHCP_snooping)
-- [RFC 5227: IPv4 Address Conflict Detection](https://www.rfc-editor.org/rfc/rfc5227)
-- [RFC 9915: DHCP for IPv6 (replaces RFC 8415)](https://www.rfc-editor.org/rfc/rfc9915.html)
-
-
-- [RFC 3396: long DHCPv4 options](https://www.rfc-editor.org/rfc/rfc3396)
-- [RFC 3927: IPv4 link-local addressing](https://www.rfc-editor.org/rfc/rfc3927)
-- [RFC 3118: DHCP authentication](https://www.rfc-editor.org/rfc/rfc3118)
+- [RFC 2132: DHCP Options](https://www.rfc-editor.org/rfc/rfc2132)

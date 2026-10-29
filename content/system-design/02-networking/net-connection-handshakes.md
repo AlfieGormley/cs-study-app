@@ -22,25 +22,18 @@ Client                     Server
 
 Without TCP Fast Open, the client waits **one round trip (RTT)** before sending application data. Use 80 ms as an illustrative London–Virginia RTT, not a guaranteed route measurement.
 
-Most of that is physics. Light in fibre travels at roughly 200,000 km/s (about two-thirds of its speed in a vacuum), and London to Virginia is roughly 5,900 km in a straight line. The shortest possible round trip is the distance there and back divided by that speed, which is called the **propagation floor**:
+Most of that is physics. Light in optical fibre travels at roughly 200,000 km/s, about two-thirds of its speed in a vacuum, and a round trip covers the distance twice. So every 1,000 km of fibre path adds at least about 10 ms of round-trip time. London to Virginia is roughly 5,900 km in a straight line, which sets a **propagation floor** of about 59 ms before any equipment does anything.
 
-```formula
-RTT_min = 2 × d / v
-RTT_min = 2 × 5,900 km / 200,000 km/s
-RTT_min = 0.059 s ≈ 59 ms
+```formula reference
+RTT_min = 2d / v
 where
-RTT_min: the propagation floor: the shortest possible round-trip time (RTT) allowed by distance alone, in seconds (s) or milliseconds (ms)
-d: the one-way distance between client and server, in kilometres (km); here about 5,900 km from London to Virginia in a straight line
-v: the speed of the signal in the cable, in kilometres per second (km/s); light in optical fibre travels at about 200,000 km/s
-km: kilometre, 1,000 metres
-km/s: kilometres per second
-s: second
-ms: millisecond, one thousandth of a second
-≈: approximately equal to
-In words: a round trip covers the distance twice, so double the distance and divide by the speed of light in fibre; London to Virginia can never take less than about 60 ms.
+RTT_min: the propagation floor: the shortest round-trip time (RTT) that distance alone allows, in milliseconds (ms)
+d: the one-way length of the path between client and server, in kilometres (km)
+v: the signal speed in the cable, in kilometres per millisecond (km/ms); about 200 km/ms (200,000 km per second) for light in fibre
+In words: a round trip crosses the path twice at the speed of light in fibre, so each 1,000 km of path adds at least about 10 ms of round-trip time.
 ```
 
-The 2 is there because a round trip goes out and comes back. The result is a floor, not a prediction: real cables don't follow the great-circle route (the shortest path over the Earth's surface), and routers add a little queueing, so measured RTTs are higher. For this assumed fibre path, software cannot beat that propagation floor, which is why putting servers (or CDN edges) close to users matters so much.
+The result is a floor, not a prediction. Real cables don't follow the great-circle route (the shortest route over the Earth's surface), and routers add queueing, so measured RTTs are higher. Faster servers or a newer protocol can cut the *number* of round trips, but nothing in software makes each trip shorter than this. Only moving the endpoint (a nearer region or CDN edge) does that.
 
 ## The TLS handshake
 

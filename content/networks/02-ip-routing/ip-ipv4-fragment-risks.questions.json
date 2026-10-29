@@ -3,27 +3,27 @@
     "id": "ip-ipv4-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A hypothetical sender emits 8,192-byte IPv4 datagrams at 1 Gbit/s measured before link and fragmentation overhead, all with the same source/destination/protocol. It increments one 16-bit Identification counter per datagram and fragments every datagram. Reassembly state can persist for 30 seconds. Roughly when does the ID wrap, and what risk follows?",
+    "prompt": "A sender fragments every datagram and takes one value per datagram from a single 16-bit Identification counter for this source, destination and protocol. At its rate the counter wraps about every 4 seconds. The receiver keeps incomplete reassembly state for up to 30 seconds. One fragment of the datagram with ID 7 is lost. What risk follows?",
     "options": [
       {
-        "text": "About 4 seconds; IDs repeat well within the 30 s reassembly window, so fragments of different datagrams can be mis-assembled",
-        "explanation": "Correct. 125,000,000/8,192 ≈ 15,258.79 datagrams/s; 65,536/15,258.79 ≈ 4.295 seconds. ID reuse with matching source, destination and protocol can conflict with old reassembly state. Actual acceptance depends on fragment layout and checks."
+        "text": "A later datagram that reuses ID 7 can have its fragments combined with the stale leftover pieces, producing corrupted data",
+        "explanation": "Correct. The leftovers of the old ID 7 are still held when the counter wraps, so fragments with matching source, destination, protocol and ID can be mis-assembled. Whether the receiver actually accepts the mixture depends on fragment layout and later checks."
       },
       {
-        "text": "About 65 seconds; it never overlaps the reassembly window",
-        "explanation": "This assumes about 1,000 datagrams per second. At 1 Gbit/s with 8 KB datagrams it's around 15,000 per second."
+        "text": "None: TTL stops fragments from different datagrams being mixed",
+        "explanation": "TTL limits forwarding hops; it does not label which datagram a fragment belongs to."
       },
       {
-        "text": "About 0.5 seconds; but it doesn't matter because TTL prevents mixing",
-        "explanation": "The arithmetic is off by roughly 8×, and TTL limits hops, not fragment identity."
+        "text": "The receiver asks the sender to retransmit only the lost fragment",
+        "explanation": "IP has no fragment retransmission. The incomplete datagram is eventually discarded; any recovery is up to TCP or the application."
       },
       {
-        "text": "It never wraps, because each destination gets its own counter",
-        "explanation": "The question fixes one sequential 16-bit counter for this traffic tuple. A separate counter for a different destination does not enlarge its sequence space."
+        "text": "No risk while the receiver's timeout is longer than the wrap time, because longer timeouts are always safer",
+        "explanation": "It is the reverse: a reassembly timeout longer than the wrap time is what lets stale fragments meet a reused ID."
       }
     ],
     "answer": 0,
-    "workedExample": "Convert the bit rate into datagrams per second, then see how long 65,536 Identification values last:\n\n```formula\nR_B = (10^9 bit/s) / (8 bit/B)\nR_B = 1.25 × 10^8 B/s\nr = R_B / S\nr ≈ (1.25 × 10^8 B/s) / (8192 B)\nr ≈ 15,258.79 / s\nt_wrap = 2^16 / r\nt_wrap ≈ 65,536 / (15,258.79 / s)\nt_wrap ≈ 4.295 s\nwhere\nR_B: the sending rate in bytes per second; 1 Gbit/s is 10^9 bits per second, and 8 bits make a byte\n10^9, 10^8: 1 followed by 9 or 8 zeros\nbit/s: bits per second\nB/s: bytes per second\nbit/B: bits per byte, 8\nB: bytes\ns: seconds\nr: datagrams sent per second\nS: the size of each datagram, 8,192 bytes\n2^16: 16 copies of 2 multiplied together, 65,536: the number of values a 16-bit counter can take\nt_wrap: the time until the counter repeats a value, in seconds (s)\n≈: approximately equal to (the result is rounded)\nIn words: about 15,000 datagrams a second use up all 65,536 IDs in a little over 4 seconds.\n```\n\nThat is shorter than the assumed 30-second reassembly-state lifetime. Reused IDs with the same source, destination and protocol can create ambiguity if old fragments remain. This is a hypothetical sequential-ID model; real ID selection, packet overhead and receiver checks affect the risk (RFC 4963 and RFC 6864).",
+    "workedExample": "1. A lost fragment leaves the rest of datagram ID 7 waiting at the receiver.\n2. The counter wraps in about 4 seconds, so ID 7 is reused long before the 30-second state expires.\n3. Fragments are grouped by source, destination, protocol and Identification, so pieces of the new and old datagrams can look like parts of one.\n4. The IPv4 header checksum does not cover payload, so a mixed datagram is not automatically caught at the IP layer.\n5. This is why RFC 4963 and RFC 6864 warn about high-rate fragmentation, and why protocols prefer to avoid fragmenting at all.",
     "link": {
       "title": "IP fragmentation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/IP_fragmentation"

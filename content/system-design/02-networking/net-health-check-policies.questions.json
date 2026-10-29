@@ -33,27 +33,27 @@
     "id": "net-load-balancers-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An active checker starts a probe every 10 seconds and marks a backend unhealthy after three failures. Assume probe failures and state changes are instantaneous. One of ten backends, receiving 200 requests/s, crashes just after a passing check. With no retries or passive checks, roughly how many requests fail before removal?",
+    "prompt": "An active checker probes each backend every 10 seconds and marks it unhealthy after three consecutive failures. One backend, receiving 200 requests per second, crashes just after a passing check. With no retries or passive checks, its share of traffic keeps failing for roughly 30 seconds, thousands of requests. Which change most directly cuts the number of failed user requests without tripling probe traffic?",
     "options": [
       {
-        "text": "About 200",
-        "explanation": "That's one second's worth of traffic. Detection takes three failed probes 10 s apart, so it's closer to 30 s."
+        "text": "Raise the healthy threshold so recovered backends return more slowly",
+        "explanation": "The healthy threshold controls how a backend *returns* to service. It does nothing to detect this crash sooner."
       },
       {
-        "text": "About 6,000",
-        "explanation": "Correct. Three 10 s probe intervals give about 30 s of detection delay. At 200 requests per second to the dead backend, that leaves about 6,000 failed requests."
+        "text": "Add passive outlier detection on real traffic, and let the balancer retry idempotent requests on another backend",
+        "explanation": "Correct. Passive checks notice consecutive connection failures or 5xx responses from real requests without waiting for the next probes, and retries of idempotent requests turn many of the remaining failures into successes elsewhere."
       },
       {
-        "text": "About 60,000",
-        "explanation": "That would be the whole fleet's traffic (2,000 rps) for 30 s. Only the dead backend's share fails."
+        "text": "Raise the unhealthy threshold to five failures to avoid false alarms",
+        "explanation": "A higher threshold lengthens the detection window (roughly interval times threshold), so more requests fail before removal."
       },
       {
-        "text": "None, because the balancer notices instantly",
-        "explanation": "Active checks only notice at the next probe; the balancer has no instant signal unless passive outlier detection is enabled."
+        "text": "Make `/healthz` query the database and every downstream service",
+        "explanation": "A deeper check does not run more often, so it detects this crash no faster, and it risks marking every backend unhealthy when a shared dependency blips."
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nt_detect ≈ interval × threshold\nt_detect ≈ 10 s × 3 = 30 s\nN_fail ≈ t_detect × r\nN_fail ≈ 30 s × 200 rps = 6,000\nwhere\nt_detect: the worst-case time until the balancer marks the dead backend unhealthy (it crashed just after a pass), in seconds (s)\ninterval: the time between probes, 10 s\nthreshold: the unhealthy threshold, 3 consecutive failed probes\nN_fail: the number of requests sent to the dead backend before removal\nr: the request rate to that backend, 200 requests per second (rps)\ns: second\nrps: requests per second\n≈: approximately equal to\nIn words: three failed probes 10 s apart take 30 s, and 30 s of that backend's traffic is about 6,000 failed requests.\n```\n\nWays to shrink it:\n  - **Passive outlier detection:** eject after, say, 5 consecutive 5xx or connection failures, potentially quickly after completed failures accumulate; connection or request timeouts can delay those signals.\n  - **Retries** of idempotent requests to another backend.\n  - Shorter intervals, at the cost of more probe traffic.",
+    "workedExample": "1. The detection window for active checks is roughly the probe interval multiplied by the unhealthy threshold: about 30 s here, because the crash happened just after a pass.\n2. Every request the balancer sends to the dead backend in that window fails, so the number of failures grows with both the window and that backend's request rate.\n3. Two levers cut it without more probes:\n  - **Passive outlier detection** watches real responses and can eject the backend after a few consecutive failures; connection or request timeouts can still delay that signal.\n  - **Retries** of idempotent requests on another backend rescue many requests that hit the dead one.\n4. Shorter probe intervals also shrink the window, but at the cost of more probe traffic. Raising thresholds or deepening checks makes things worse.",
     "link": {
       "title": "Health checks for target groups (AWS ALB)",
       "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "```formula\nf_healthy = n_healthy / n_total\nf_healthy = 4 / 10 = 40%\nf_healthy < T_panic = 50%\nwhere\nf_healthy: the fraction of hosts currently passing health checks\nn_healthy: healthy hosts, 4\nn_total: all hosts in the cluster, 10\nT_panic: Envoy's panic threshold, 50% by default\n<: less than\n%: per cent\nIn words: only 40% of hosts look healthy, below the 50% threshold, so Envoy enters panic mode.\n```\n\n1. 40% < 50% → **panic mode**.\n2. In panic mode, Envoy balances across **all** hosts as if they were healthy.\n3. Expected success ≈ 40% of requests (those reaching good hosts), versus the risk that 4 hosts receiving 100% of the load fall over too.\n4. Trade-off: if the 6 really are dead, you serve some errors; if the checks are wrong, you avoid a self-inflicted outage.",
+    "workedExample": "1. Only 4 of 10 hosts (40%) are healthy, which is below Envoy's default 50% panic threshold.\n2. In panic mode, Envoy balances across **all** hosts as if they were healthy.\n3. Likely outcome: roughly 40% of requests reach good hosts and succeed, instead of four hosts receiving all the load and possibly falling over too.\n4. Trade-off: if the six really are dead, you serve some errors; if the checks are wrong (for example a shared-dependency blip), you avoid a self-inflicted outage.",
     "link": {
       "title": "Panic threshold (Envoy docs)",
       "url": "https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/load_balancing/panic_threshold"

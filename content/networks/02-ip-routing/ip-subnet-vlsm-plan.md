@@ -7,7 +7,7 @@ sourceLesson: ip-subnetting
 summary: Compare configured subnets, allocate aligned blocks and check /31 and /32 exceptions in Python.
 ---
 
-Compare configured subnets, allocate aligned blocks and check /31 and /32 exceptions in Python.
+Real address plans mix subnet sizes. This lesson checks whether two hosts share a subnet, carves one block into right-sized pieces, and covers the /31 and /32 exceptions.
 
 ### Worked example 3: are they on the same subnet?
 
@@ -22,22 +22,7 @@ They are on **different** numerical subnets. With only connected subnet routes a
 
 You have `192.168.1.0/24` and need subnets for 100 hosts, 50 hosts, 20 hosts and two point-to-point router links. **Variable-length subnet masking** (VLSM) gives each subnet the smallest address block (longest prefix) that fits.
 
-To size one subnet, find the fewest host bits whose usable capacity covers the need:
-
-```formula
-2^h − 2 ≥ n
-2^6 − 2 = 62 < 100
-2^7 − 2 = 126 ≥ 100
-p = 32 − h = 32 − 7 = 25
-where
-h: the number of host bits; try 1, 2, 3 … and keep the first that fits
-n: the number of hosts the subnet must hold, here 100
-2^h: h copies of 2 multiplied together: the number of addresses with h host bits
-≥: is at least (greater than or equal to)
-<: is less than, so 6 host bits are too few
-p: the resulting prefix length
-In words: keep adding host bits until the usable addresses (all addresses minus network and broadcast) reach the number you need; the prefix is whatever is left of the 32 bits.
-```
+To size one subnet, pick the smallest block whose usable count covers the need: 100 hosts do not fit a /26 (62 usable) but do fit a /25 (126 usable). Leave headroom where growth is expected, because enlarging a subnet later usually means renumbering.
 
 Doing that for each need, and starting at the aligned beginning of this unused /24, allocate largest first at the lowest available address:
 

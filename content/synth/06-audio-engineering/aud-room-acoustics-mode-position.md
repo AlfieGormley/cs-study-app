@@ -9,41 +9,15 @@ sourceLesson: aud-room-acoustics
 
 ## Room dimensions and listener position
 
-### Worked example
+### An example room
 
-A small studio of 5.0 × 3.6 × 2.4 m. Using the axial formula for each dimension:
+A small studio of 5.0 × 3.6 × 2.4 m. Each dimension has its own series of axial modes, whole-number multiples of its lowest one (the previous lesson):
 
-```formula
-f_1 = c / (2L)
-f_1 = 1 × 343 / (2 × 5.0) = 34.3 Hz
-f_1 = 1 × 343 / (2 × 3.6) ≈ 47.6 Hz
-f_1 = 1 × 343 / (2 × 2.4) ≈ 71.5 Hz
-where
-f_1: the first (lowest) axial mode along one dimension, in hertz (Hz)
-c: the speed of sound, 343 metres per second (m/s)
-L: the dimension being tested: 5.0 m length, 3.6 m width, 2.4 m height
-Hz: hertz, cycles per second
-In words: each dimension has its own lowest mode; the longest dimension gives the lowest one. Multiply each by 2, 3 … for the higher modes.
-```
-
-The same calculation in Python, for the first three modes of each dimension:
-
-```python
-c = 343
-dims = {"length": 5.0, "width": 3.6,
-        "height": 2.4}
-for name, L in dims.items():
-    # Each dimension has its own harmonics.
-    modes = [round(n * c / (2 * L), 1)
-             for n in (1, 2, 3)]
-    print(f"{name:<6} {L} m: {modes}")
-```
-
-```output
-length 5.0 m: [34.3, 68.6, 102.9]
-width  3.6 m: [47.6, 95.3, 142.9]
-height 2.4 m: [71.5, 142.9, 214.4]
-```
+| Dimension | First three axial modes |
+|---|---|
+| Length 5.0 m | 34.3, 68.6, 102.9 Hz |
+| Width 3.6 m | 47.6, 95.3, 142.9 Hz |
+| Height 2.4 m | 71.5, 142.9, 214.4 Hz |
 
 Notice that 3.6 ÷ 2.4 = 1.5, so the width's third mode and the height's second land on the **same frequency, 142.9 Hz**. Coincident modal frequencies can produce strong response peaks, depending on how the sources excite them, the listener position and damping. Rooms whose dimensions are simple multiples of each other (a cube has particularly extensive degeneracy) bunch their modes; unrelated dimensions spread them out more evenly.
 

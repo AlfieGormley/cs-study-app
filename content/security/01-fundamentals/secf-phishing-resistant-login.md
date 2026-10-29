@@ -41,7 +41,14 @@ Login:
  server verifies signature + context
 ```
 
-The browser checks the relying-party (RP) ID against the calling origin and includes the origin and challenge in client data. The authenticator signs authenticator data plus the client-data hash. The server must verify the signature, challenge, expected origin, RP ID hash and required flags. A phishing origin cannot simply use a bank RP credential through a conforming browser. This resists credential phishing, but does not prevent compromised clients, session theft or weak recovery. Stealing the stored public key does not yield the private key; a broader database compromise may still expose sessions or other secrets.
+The browser checks the relying-party (RP) ID against the calling origin and includes the origin and challenge in client data. The authenticator signs authenticator data plus the client-data hash. The server must verify the signature, challenge, expected origin, RP ID hash and required flags. A phishing origin cannot simply use a bank RP credential through a conforming browser. This resists credential phishing, but does not prevent compromised clients, session theft or weak account recovery. Stealing the stored public key does not yield the private key; a broader database compromise may still expose sessions or other secrets.
+
+> [!analogy] Real-world analogy: a code read aloud versus a key cut for one door
+> A one-time code is like a password you read aloud to whoever is at the door. A fraudster standing in front of a fake door can repeat it at the real door within the minute. A passkey is more like a key cut for one specific door: it simply does not work in a look-alike door.
+>
+> **How it maps:** The look-alike door is the phishing site. TOTP digits carry no record of which site asked for them, so a relay can replay them. The browser binds a passkey to the relying party's identity, so a phishing origin cannot obtain a signature the bank will accept.
+>
+> **Where it stops:** A physical key can be copied and used wherever it fits; a passkey's private key is never handed to the website; it stays with the user's authenticator or synced passkey provider and signs a fresh challenge each time. Neither picture covers stolen session cookies or weak account recovery, which bypass the login altogether.
 
 ## Beyond the login form
 
@@ -55,7 +62,7 @@ The browser checks the relying-party (RP) ID against the calling origin and incl
 1. **Leaking which usernames exist.** "Wrong password" versus "No such user" lets attackers enumerate accounts. Use one generic message (and similar response times).
 2. **Fast hashes, or no salt.** MD5 and SHA-1 password databases are cracked at scale after every breach.
 3. **Security questions.** Mother's maiden name is public record.
-4. **MFA on login but not recovery.** Attackers take the path without the second factor.
+4. **MFA on login but not account recovery.** Attackers take the path without the second factor.
 5. **Logging credentials**, as covered in the CIA lesson.
 
 ## Key takeaways

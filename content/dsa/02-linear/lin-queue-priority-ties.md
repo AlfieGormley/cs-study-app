@@ -41,25 +41,9 @@ Practical details:
 
 ### Model a complete insert-and-drain workload
 
-Assume random insertion ranks, constant-time key comparisons, and an initially empty descending sorted array. Each insertion shifts roughly half the items already stored. A heap instead visits a logarithmic number of tree levels per operation.
+Picture a million inserts followed by a million remove-min operations, with keys arriving in random order. A descending sorted array must shift, on average, about half of the items already stored for every insert, so the shifting adds up quadratically: hundreds of billions of moves at this size. An unsorted array is just as bad the other way round, scanning every remaining item on each remove-min. A binary heap does a logarithmic number of tree-level steps per operation, about twenty for a million items, so the whole workload is O(n log n), where n is the number of items: tens of millions of steps.
 
-```formula
-S = n(n − 1) / 4
-S ≈ n^2 / 4
-H ≈ 2n log_2(n)
-S ≈ (10^6)^2 / 4 = 2.5 × 10^11
-H ≈ 2 × 10^6 × 20 = 4 × 10^7
-where
-S: expected element shifts over all sorted-array insertions
-H: rough heap level-operation model for insertion and removal of all items
-n: the number of inserted items, here one million
-log_2: base-two logarithm; one million is about twenty halvings from one
-≈: approximate equality, with rounded logarithm and ignored lower-order terms
-2: one insertion and one removal per item
-In words: growing-array shifts sum quadratically, while the heap model grows with the item count times its tree height.
-```
-
-These are different abstract operations, so their ratio is not a measured speedup. A heap pop may compare children and the replacement item at each level; the model does not count every comparison exactly. Bulk heapify is linear and changes the workload if all items are available before processing.
+Those are different abstract operations, so their ratio is not a measured speedup. A heap pop may compare children and the replacement item at each level, and the model does not count every comparison exactly. If all items are available before processing starts, bulk heapify builds the heap in linear time, which changes the workload.
 
 ## Key takeaways
 - A heap serves the best key rather than the earliest arrival.

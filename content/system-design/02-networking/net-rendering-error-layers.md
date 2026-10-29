@@ -6,13 +6,13 @@ minutes: 3
 summary: "Relate rendering requests and error symptoms to the layer that needs investigation."
 sourceLesson: net-request-lifecycle
 ---
-Receiving HTML is the start of rendering, not the end of the page’s network activity. Apply the earlier connection budget separately to each unrelated origin, then use the error’s layer to narrow down failures.
+Receiving HTML is the start of rendering, not the end of the page’s network activity. Each unrelated origin repeats the connection setup from the earlier lessons, and when something fails, the shape of the error tells you which layer to investigate.
 
 ## Rendering and the requests it triggers
 
 The browser parses the HTML and discovers more resources: CSS, JavaScript, images, fonts and API calls. A page may make many additional requests; the count depends on the page. Many go to the same origin and reuse the connection; others go to new origins (a CDN, an analytics domain), each paying its own DNS + TCP + TLS cost.
 
-This is why front-end engineers use hints like `<link rel="preconnect">` and why consolidating origins can help.
+Setup for different origins can run in parallel, so extra origins don't simply add their costs end to end. But the browser only starts that setup once it discovers the resource while parsing, so the setup often lands on the critical path. This is why front-end engineers use hints like `<link rel="preconnect">` (start setup early) and why consolidating origins (reuse a warm connection) can help.
 
 ## Failure modes along the path
 
@@ -24,8 +24,6 @@ Every hop can fail, and each failure looks different to the user:
 - **HTTP failure:** a `502 Bad Gateway` reports an invalid upstream response; a `504 Gateway Timeout` reports an upstream timeout. Inspect backend health, the network and proxy configuration; the status alone does not prove which component is faulty.
 
 Knowing which layer produced an error is the first step in debugging production incidents.
-
-For setup questions, count only what the question asks for. DNS plus TCP plus TLS is the cost before an HTTP request can leave on a new connection; the response then needs another request/response trip and server work. Separate origins can perform setup in parallel, so adding their costs measures aggregate work rather than necessarily the elapsed page-load time.
 
 ## Key takeaways
 

@@ -25,9 +25,11 @@ In a room, you hear the direct sound plus many reflections from other directions
 
 Precedence depends on signal, level, delay, direction and listening conditions. Fusion (hearing one event), localization dominance (hearing it toward the first source), and suppression of information about the reflection are related but distinct; one can persist after another breaks down. There is no universal delay/level boundary guaranteeing all three. Exact Haas-derived limits are absent here because their original experimental conditions were not reliably established in this review.
 
-This has a direct engineering use (the sound-system units): a **delay speaker** is aligned using the difference between stage-to-listener and fill-to-listener travel times, plus any deliberately chosen precedence offset:
+This has a direct engineering use (the sound-system lessons): a **delay speaker** halfway down a field is held back electronically so that its sound arrives *with or just after* the sound from the stage. If it played undelayed, listeners near it would hear it first, localise the band to the delay tower, and then hear the stage arriving later as an echo.
 
-```formula
+The starting setting is the difference between the stage-to-listener and fill-to-listener travel times (sound covers about 34.3 m in 100 ms), plus any small precedence offset you deliberately choose so the stage wins the race:
+
+```formula reference
 t_delay = (d_main − d_fill) / c + t_off
 where
 t_delay: the electronic delay applied to the delay speaker, in seconds (s) or milliseconds (ms)
@@ -35,10 +37,10 @@ d_main: the distance from the main stage speakers to the listener, in metres (m)
 d_fill: the distance from the delay speaker to the listener, in metres (m)
 c: the speed of sound, about 343 metres per second (m/s) at 20 °C
 t_off: an extra delay, expressed in the same time unit as the path-time term, chosen so the stage sound arrives first; an example to evaluate by listening, not a fixed rule
-In words: hold back the delay speaker by the extra time the stage sound needs to reach the listener, plus a little more so the stage wins the race.
+In words: Hold back the delay speaker by the extra time the stage sound needs to reach the listener, plus a little more if you choose, so the stage wins the race.
 ```
 
-For example, if the stage path is 34.3 m longer, the travel-time difference is 34.3 m divided by 343 m/s, which is 100 ms; with a chosen 10 ms offset the starting setting is 110 ms. The formula ignores electronic latency and temperature changes. Account for electronic latency, then measure and listen across the coverage area. A large offset can cause audible echoes or comb filtering rather than guarantee stage localization.
+This starting point ignores electronic latency and temperature changes. Account for the latency of the processing in each path, then measure and listen across the coverage area. A large offset can cause audible echoes or comb filtering rather than guarantee stage localisation.
 
 ## Key takeaways
 - Time differences dominate low-frequency left–right localisation; level differences matter strongly at high frequencies.

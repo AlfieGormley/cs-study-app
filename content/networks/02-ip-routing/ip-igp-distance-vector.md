@@ -4,7 +4,7 @@ title: Learn routes with distance vectors
 level: intermediate
 minutes: 4
 sourceLesson: ip-interior-routing
-summary: Apply the Bellman–Ford neighbour rule and interpret the RIP metric and update rules.
+summary: Explain the Bellman–Ford neighbour rule and interpret the RIP metric and update rules.
 ---
 
 The forwarding lessons assumed the routing table was already full. In a network of three routers you could type the routes in by hand. In a network of three hundred, with links failing and being added, you need routers to work it out themselves.
@@ -22,7 +22,7 @@ There are two classic designs:
 
 Each router keeps a table of `destination -> (distance, next hop)`. Periodically it sends that table to its neighbours. When it hears a neighbour's table, it applies the **Bellman–Ford** rule:
 
-```formula
+```formula essential
 D(x, d) = min_n (c(x, n) + D(n, d))
 where
 D(x, d): router x's best known distance (total routing cost) to destination d; for a neighbour n, D(n, d) is the distance n advertised
@@ -34,20 +34,16 @@ min_n: the minimum over all neighbours n: the smallest of the values computed fo
 In words: my best distance to a destination is the cheapest "hop to a neighbour, then their distance", and the neighbour that gives it becomes my next hop.
 ```
 
-For example, router X hears from neighbour Y (routing link cost 2), which advertises network N at distance 7, and from neighbour Z (routing link cost 5), which advertises N at 3:
-
-```formula
-D(X, N) = min(2 + 7, 5 + 3)
-D(X, N) = min(9, 8) = 8
-where
-D(X, N): router X's best distance to network N
-X: the router doing the calculation
-N: the destination network
-min: the smallest of the values in the brackets
-In words: going via Y costs 9 and via Z costs 8, so X installs N at distance 8 with Z as its next hop, even though the link to Y is cheaper.
-```
+For example, router X hears from neighbour Y (routing link cost 2), which advertises network N at distance 7, and from neighbour Z (routing link cost 5), which advertises N at 3. Via Y the total is 2 + 7 = 9; via Z it is 5 + 3 = 8. X installs N at distance 8 with Z as next hop, even though the link to Y is cheaper: what matters is the whole journey, not the first step.
 
 Routers only ever know what their neighbours told them. It's routing by rumour.
+
+> [!analogy] Real-world analogy: Village signposts
+> Imagine each village crossroads has signposts that are repainted from what neighbouring villages say: "the castle is 7 miles via Ashby" or "3 miles via Bramley". The local painter adds the distance to that neighbour and keeps whichever sign gives the shortest total. Nobody holds a full map.
+>
+> **How it maps:** Each crossroads is a router, the signposts are its routing table (distance and next hop per destination), and the neighbours' reports are distance-vector updates. The painter's rule is the Bellman–Ford update.
+>
+> **Where it stops:** Real signposts are rarely wrong for long, but a router keeps believing a neighbour's claim until updates or timers correct it. If a bridge collapses, two villages can each point at the other, which is the count-to-infinity problem in the next lesson.
 
 ### RIP specifics
 

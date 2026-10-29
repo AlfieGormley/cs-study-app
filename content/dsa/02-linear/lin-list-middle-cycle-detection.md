@@ -65,15 +65,25 @@ def has_cycle(head):
 
 Note `is`: compare node *identity*, not values. Two different nodes can hold the same value.
 
+> [!analogy] Real-world analogy: Runners on a looped track
+> Two runners set off along a path that leads onto a circular track. One runs twice as fast as the other. If the path is a dead end, the fast runner simply reaches the end first. If it feeds into a loop, the fast runner eventually comes round and draws level with the slow one.
+>
+> **How it maps:** The path is the list, the loop is a cycle, and the runners are `slow` (one link per step) and `fast` (two links per step). Drawing level is the `slow is fast` identity check; reaching the end is `fast` becoming `None`.
+>
+> **Where it stops:** Runners move continuously and could pass between checks, but the pointers move in whole nodes. Because `fast` gains exactly one node per step, it cannot jump over `slow` and must land on the same node.
+
 ### Bound the detection phase
 
-```formula
+Slow needs the tail length in steps to reach the cycle. Once both pointers are on it, the gap closes by one node per step, so they meet within one more lap.
+
+```formula reference
 S ≤ μ + λ
 where
 S: iterations until an after-movement identity check detects a meeting
 μ: tail length, the link steps before the cycle entry
 λ: cycle length, the number of nodes around one lap
-In words: reaching the cycle takes the tail length, then the one-step relative gain gives a meeting within one additional cycle lap.
+≤: is at most
+In words: detection takes at most the tail length plus one lap of the cycle, so it is linear in the number of nodes and needs only two pointers of extra memory.
 ```
 
 The first meeting need not be at the entry. In the chain one, two, three, four, five with five linking back to two, the tail is one link and the cycle has four nodes. The pointers first meet at five. In an acyclic chain with three equal values, two different nodes can hold the same value without forming a cycle: identity is what matters. The next unit uses the meeting to locate the entry.

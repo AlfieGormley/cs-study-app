@@ -3,27 +3,27 @@
     "id": "ip-subnetting-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "What is the broadcast address of the subnet containing `10.20.30.40/27`?",
+    "prompt": "Host A is `10.20.30.40/27` and host B is `10.20.30.70/27`. Both are plugged into the same switch and VLAN, there is no router, and each host has only its connected route plus a default gateway that does not exist. A cannot reach B. Why?",
     "options": [
       {
-        "text": "10.20.30.47",
-        "explanation": "This uses a block size of 16 (a /28). A /27 mask ends in 224, so the block is 256 − 224 = 32."
+        "text": "A /27 cannot hold more than 30 hosts, so B was rejected",
+        "explanation": "Capacity is not the issue; there are only two hosts here. The issue is which block each address sits in."
       },
       {
-        "text": "10.20.30.32",
-        "explanation": "That's the network address (host bits all 0), not the broadcast (host bits all 1)."
+        "text": "A and B are in different /27 blocks (.32–.63 and .64–.95), so A treats B as off-link and sends to the missing gateway instead of ARPing for B",
+        "explanation": "Correct. /27 blocks are 32 addresses wide and start on multiples of 32. Being on the same switch does not matter: A's routing decision uses its configured subnet."
       },
       {
-        "text": "10.20.30.63",
-        "explanation": "Correct. /27 has block size 32; 40 falls in the block 32–63, so the network is .32 and the broadcast is .63."
+        "text": "10.20.30.70 is the broadcast address of A's subnet",
+        "explanation": "A's subnet is 10.20.30.32/27, whose broadcast is 10.20.30.63. .70 lies outside it altogether."
       },
       {
-        "text": "10.20.30.255",
-        "explanation": "That's the broadcast for a /24. A /27 is much smaller: only 32 addresses."
+        "text": "Hosts on the same switch always need a router between them",
+        "explanation": "Hosts in the same subnet on one switch talk directly. These two are in different subnets."
       }
     ],
-    "answer": 2,
-    "workedExample": "1. /27 → last octet of the mask is 224.\n2. Work out the block, then where 40 falls in it:\n\n```formula\nb = 256 − m = 256 − 224 = 32\nx_net = ⌊x / b⌋ × b\nx_net = ⌊40 / 32⌋ × 32 = 32\nx_bc = x_net + b − 1 = 63\nwhere\nb: the block size in the 4th octet\nm: the mask's value in that octet, 224 for a /27\nx: the address's value in that octet, 40\n⌊ ⌋: floor: round down to a whole number\nx_net: the network address's value in that octet\nx_bc: the broadcast address's value in that octet\nIn words: blocks of 32 start at 0, 32, 64…; 40 is in the block from 32 to 63, so 63 is the broadcast.\n```\n\n```\nNetwork    10.20.30.32\nHosts      .33 - .62  (30 usable)\nBroadcast  10.20.30.63\n```",
+    "answer": 1,
+    "workedExample": "1. /27 means blocks of 32 addresses: .0–.31, .32–.63, .64–.95 and so on.\n2. A (.40) is in .32–.63; B (.70) is in .64–.95.\n3. A's only matching route for B is the default, so it tries to ARP for the gateway, not for B.\n4. The gateway does not exist, so nothing is sent to B, even though both share a switch.\n5. Fix: put both hosts in one block (for example renumber B into .33–.62) or provide a working router between the two subnets.",
     "link": {
       "title": "Subnet — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Subnet"
@@ -33,27 +33,27 @@
     "id": "ip-subnetting-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A host is configured as `10.4.77.9/19`. What is the last usable host address on its subnet?",
+    "prompt": "A server is configured as `10.4.77.9/19`. A colleague wants to give another host on the same subnet one of these addresses. Which one can be assigned as an ordinary host address? Assume a conventional subnet with network and broadcast addresses reserved and no other reservations.",
     "options": [
       {
-        "text": "10.4.127.254",
-        "explanation": "This uses a block of 64 in the third octet (a /18). A /19 has block size 32."
-      },
-      {
-        "text": "10.4.95.254",
-        "explanation": "Correct. /19 → mask 255.255.224.0, block 32 in the 3rd octet. 77 is in 64–95, so the network is 10.4.64.0 and the broadcast 10.4.95.255. The last host is one below the broadcast."
-      },
-      {
-        "text": "10.4.77.254",
-        "explanation": "This assumes a /24. A /19 spans several values of the third octet."
-      },
-      {
         "text": "10.4.95.255",
-        "explanation": "That's the broadcast address, which hosts can't use."
+        "explanation": "This is the last address of the block 10.4.64.0–10.4.95.255, so it is the subnet's broadcast address."
+      },
+      {
+        "text": "10.4.96.1",
+        "explanation": "A /19 spans 32 values of the third octet. 77 sits in the block 64–95, so 10.4.96.1 belongs to the next subnet."
+      },
+      {
+        "text": "10.4.80.0",
+        "explanation": "Correct. 10.4.80.0 lies inside 10.4.64.0–10.4.95.255 and is neither its first nor last address. Ending in .0 does not make it reserved in a block this large."
+      },
+      {
+        "text": "10.4.64.0",
+        "explanation": "This is the first address of the block, so it is the network address."
       }
     ],
-    "answer": 1,
-    "workedExample": "1. /19 = 8 + 8 + 3 → mask 255.255.**224**.0. Interesting octet: the 3rd.\n2. Block size and network, in the 3rd octet:\n\n```formula\nb = 256 − 224 = 32\nx_net = ⌊77 / 32⌋ × 32 = 64\nx_bc = 64 + 32 − 1 = 95\nh = 32 − 19 = 13\nH = 2^13 − 2 = 8,190\nwhere\nb: the block size in the 3rd octet\n⌊ ⌋: floor: round down to a whole number\nx_net: the network address's 3rd octet\nx_bc: the broadcast address's 3rd octet\nh: the number of host bits for a /19\nH: usable host addresses\n2^13: 13 copies of 2 multiplied together, 8,192\nIn words: 77 sits in the block 64 to 95, so the subnet is 10.4.64.0 to 10.4.95.255.\n```\n\n3. The network is 10.4.64.0 and the broadcast 10.4.95.255 (the 4th octet is all host bits, so 255).\n4. The last usable address is **10.4.95.254**, one below the broadcast.",
+    "answer": 2,
+    "workedExample": "1. A /19 leaves the last 5 bits of the third octet and all of the fourth as host bits, so blocks are 32 wide in the third octet: 0–31, 32–63, 64–95, 96–127.\n2. 77 falls in 64–95, so the subnet runs from 10.4.64.0 to 10.4.95.255.\n3. Reserved: only 10.4.64.0 (network) and 10.4.95.255 (broadcast).\n4. Outside: 10.4.96.1 is in the next block.\n5. 10.4.80.0 is inside and is not the first or last address, so it is an ordinary host address.",
     "link": {
       "title": "Subnet — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Subnet"

@@ -11,7 +11,7 @@ sourceLesson: aud-acoustics
 
 Sound pressure is the changing pressure around the ambient value, measured in pascals (Pa). For a level measurement, we use its RMS value: an average size over a specified time interval. Because the range is so huge, we use decibels relative to a reference of **20 µPa** (20 millionths of a pascal), roughly the quietest 1 kHz tone a young, healthy listener can detect. The sound pressure level is:
 
-```formula
+```formula essential
 L_p = 20 log_10(p / p_0)
 p_0 = 20 µPa = 0.00002 Pa
 where
@@ -24,44 +24,30 @@ Pa: pascal, the unit of pressure: one newton of force per square metre
 In words: count how many times bigger than 20 µPa the pressure is, take the base-10 logarithm and multiply by 20; every tenfold increase in pressure adds 20 dB.
 ```
 
-The multiplier is 20, not 10, because pressure is a field quantity, like voltage: for a progressive wave in the same medium, sound intensity is proportional to pressure squared, and squaring a ratio doubles its logarithm (module 1 explains why). Worked example for a pressure of 1 Pa:
+The multiplier is 20, not 10, because pressure is a field quantity, like voltage: for a progressive wave in the same medium, sound intensity is proportional to pressure squared, and squaring a ratio doubles its logarithm (module 1 explains why). In practice you rarely need a calculator; a few landmarks cover most situations:
 
-```formula
-L_p = 20 log_10(1 Pa / 0.00002 Pa)
-L_p = 20 log_10(50000)
-L_p = 20 × 4.699
-L_p ≈ 93.98 dB SPL
-where
-L_p: the sound pressure level, in dB SPL
-log_10: the base-10 logarithm
-Pa: pascal, the unit of pressure
-dB: decibel, a tenth of a bel: a logarithmic way of expressing a ratio
-SPL: sound pressure level, meaning the decibel figure is relative to 20 µPa
-≈: approximately equal to
-In words: a sound pressure of 1 pascal is about 94 dB SPL.
-```
+| Pressure change | Level change |
+|---|---|
+| × 2 | about +6 dB |
+| × 10 | +20 dB |
+| × 1,000,000 | +120 dB |
+| ÷ 2 | about −6 dB |
 
-As a program, for a few pressures:
+| RMS pressure | Level |
+|---|---|
+| 20 µPa | 0 dB SPL |
+| 0.02 Pa | 60 dB SPL |
+| 1 Pa | about 94 dB SPL |
+| 20 Pa | 120 dB SPL |
 
-```python
-import math
+Because the scale is a ratio to a fixed reference, 0 dB SPL does not mean silence: it means "equal to 20 µPa". Quieter sounds have negative levels, and a reading only makes sense when you know the reference. A sound level meter also averages with a stated time weighting (IEC 61672-1 defines Fast, with a 125 ms time constant, and Slow, with 1 s), so Fast and Slow readings of the same music can differ.
 
-def spl(p_pa):
-    # Compare RMS pressure to 20
-    # micropascals.
-    return 20 * math.log10(p_pa / 20e-6)
-
-for p in (20e-6, 0.02, 1.0, 20.0):
-    print(f"{p:>8} Pa = "
-          f"{spl(p):6.2f} dB SPL")
-```
-
-```output
-   2e-05 Pa =   0.00 dB SPL
-    0.02 Pa =  60.00 dB SPL
-     1.0 Pa =  93.98 dB SPL
-    20.0 Pa = 120.00 dB SPL
-```
+> [!analogy] Real-world analogy: height above sea level
+> A mountain's height is quoted "above sea level", not from the centre of the Earth. Everyone agrees on the same zero, so two heights can be compared directly, and a place below sea level simply has a negative height.
+>
+> **How it maps:** 20 µPa is the agreed sea level of sound pressure. A dB SPL figure tells you how far above that reference a sound is, and a level below it is negative. Without the stated reference, a bare "dB" figure is as ambiguous as a height with no zero.
+>
+> **Where it stops:** Height above sea level is a linear distance in metres. Decibels count *ratios* on a logarithmic scale: each extra 20 dB means ten times the pressure, not a fixed extra amount of pressure.
 
 Remember **1 Pa ≈ 94 dB SPL**. Microphone sensitivities are quoted at 1 Pa (the microphone units) and calibrators often produce 94 dB SPL for exactly this reason.
 

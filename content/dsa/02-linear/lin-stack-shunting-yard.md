@@ -33,33 +33,26 @@ end    3 4 2 * +
 
 The result, `3 4 2 * +`, evaluates to 11, respecting precedence. Associativity matters too: `a - b - c` becomes `a b - c -` (left to right), while exponentiation is right-associative, so `2 ^ 3 ^ 2` becomes `2 3 2 ^ ^`. Grouping from the right gives a very different answer from grouping from the left:
 
-```formula
+```formula reference
 2 ^ 3 ^ 2 = 2 ^ (3 ^ 2) = 2 ^ 9 = 512
 (2 ^ 3) ^ 2 = 8 ^ 2 = 64
 where
 ^: raised to the power of: 2 ^ 3 means 2 × 2 × 2 = 8
-In words: a right-associative operator works out the rightmost pair first, so 3 ^ 2 = 9 is computed before 2 is raised to it.
+In words: grouping from the right first raises 3 to the power 2, giving 9, and then raises 2 to the power 9, giving 512. Grouping from the left would instead square 8 and give 64, so the associativity rule changes the answer.
 ```
 
 Python's `**` follows the same convention: `2 ** 3 ** 2 == 512`.
 
 ### Equal precedence is the deciding test
 
-Consider three symbolic operand tokens separated by subtraction. The second subtraction must finish the first subtraction before starting its own right operand. By contrast, a right-associative exponent operator leaves an equal-precedence exponent pending until the right-hand exponent is available.
+Precedence alone cannot decide `a - b - c`, because both operators have the same precedence. Associativity breaks the tie. Subtraction groups from the left, so when the second `-` arrives it first pops the pending `-`: the first subtraction finishes before the second starts its right operand. With `10 - 4 - 2` that gives (10 − 4) − 2, which is 4; grouping from the right would wrongly give 8. A right-associative operator such as `^` does the opposite: an equal-precedence `^` already on the stack stays there, waiting for the right-hand exponent.
 
-```formula
-E_left = (a − b) − c
-E_right = a − (b − c)
-E_left = (10 − 4) − 2 = 4
-E_right = 10 − (4 − 2) = 8
-where
-E_left: value of a left-associated subtraction expression
-E_right: value of the alternative right-associated expression
-a: the first operand, here ten
-b: the second operand, here four
-c: the third operand, here two
-In words: changing association changes subtraction’s result, so the operator-stack rule must preserve the intended grouping.
-```
+> [!analogy] Real-world analogy: A railway shunting yard
+> The algorithm is named after a railway shunting yard because it works like one. Wagons arrive in one order, and some are pushed into a dead-end siding to wait while others go straight through to the departing train. A wagon parked last in the siding is the first to come back out.
+>
+> **How it maps:** Operands are wagons that go straight to the output train. Operators are parked in the siding, which is the operator stack, and leave it, newest first, when an incoming operator of lower precedence (or equal precedence and left-associative) or a closing bracket requires them to.
+>
+> **Where it stops:** A real siding has no rules about which wagon outranks another; precedence and associativity are what make the algorithm work. Brackets also have no railway counterpart: they act as markers inside the siding that stop operators being released too early.
 
 The conversion handles each token once and each operator is pushed and popped at most once. This gives linear total stack work in the token count, assuming fixed-time token classification. The displayed rules describe binary operators; unary minus, functions and argument separators require additional grammar rules.
 

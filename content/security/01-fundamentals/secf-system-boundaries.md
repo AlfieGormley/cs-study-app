@@ -52,6 +52,13 @@ The extra ingredient is the **trust boundary**: a line where the level of trust 
 
 The browser is outside your control, so everything it sends is untrusted. The email worker trusts messages from the queue; if an attacker can write to the queue, that trust is misplaced.
 
+> [!analogy] Real-world analogy: airport security
+> An airport screens passengers and bags where the public landside meets the restricted airside. Staff entrances, catering deliveries and cargo also cross into airside, and each needs its own check.
+>
+> **How it maps:** The screening point is a trust boundary. Passengers and bags are data flows crossing it. The staff door and cargo route are the easily forgotten flows, such as the queue, a backup job or a partner feed, that also cross a boundary.
+>
+> **Where it stops:** Airside is not automatically safe, and neither is the inside of a software boundary: threats can start there too. A software trust boundary is also only a line on your diagram; nothing is checked there unless the design adds a control.
+
 > [!tip] Draw what is, not what should be
 > The most useful threat-modelling sessions find that the diagram people *thought* was true isn't. "Wait, the worker also talks to the old billing database?" is a finding.
 

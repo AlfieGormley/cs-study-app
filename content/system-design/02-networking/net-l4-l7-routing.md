@@ -44,6 +44,13 @@ Client --HTTP--> LB --> backend
 - Retries, timeouts, header rewriting, auth, rate limiting, compression.
 - Detailed metrics per route and status code.
 
+> [!analogy] Real-world analogy: A sorting office versus a mail room that opens letters
+> A postal sorting office routes each envelope by the address on the outside. It never opens anything, so it is fast and handles any kind of post. A company mail room can open each letter, read it and send it to the right department, but that takes more effort per item and the authority to open the post.
+>
+> **How it maps:** the sorting office is an L4 balancer choosing a backend from IP addresses and ports. The mail room is an L7 balancer: it terminates TLS (opens the envelope), reads the path and headers and routes each request on its merits.
+>
+> **Where it stops:** an L4 balancer decides once per connection, so every later request on that connection follows the same route, whereas post is sorted item by item. An L7 balancer also does more than read and pass on: it holds a separate connection to the backend and can retry, rewrite or reject requests.
+
 > [!tip] The common layering
 > Large deployments often stack both: an L4 tier (anycast + ECMP across many machines) spreads connections over a fleet of L7 proxies, which then do the smart per-request work. The L4 tier is simple and scales; the L7 tier is flexible.
 

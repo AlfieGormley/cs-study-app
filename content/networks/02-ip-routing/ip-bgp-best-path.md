@@ -4,10 +4,10 @@ title: Choose a BGP path by policy
 level: advanced
 minutes: 3
 sourceLesson: ip-bgp
-summary: Use local preference and the stated teaching ranking while recognising vendor-specific selection rules.
+summary: Predict which BGP route wins using local preference and a common selection order, while recognising vendor-specific rules.
 ---
 
-Use local preference and the stated teaching ranking while recognising vendor-specific selection rules.
+When a router hears several routes to the same prefix, BGP does not simply pick the shortest. It walks an ordered list of tie-breakers, and the first difference decides.
 
 ## Path attributes and best-path selection
 
@@ -30,35 +30,7 @@ Among eligible routes for the same prefix, a common Cisco-style sequence is belo
 7. Lowest IGP cost to the NEXT_HOP ("hot potato").
 8. Further implementation-dependent tie-breakers, including route age in some eBGP cases and router IDs.
 
-This executable teaching model ranks already eligible routes, assumes equal weight/local-origination status, counts AS_SEQUENCE entries, compares MED across all candidates, and uses input order for complete ties. It deliberately omits the rest of real BGP selection:
-
-```python
-def rank(r):
-    # min() should prefer higher preference.
-    return (-r["lp"],
-            len(r["path"]),
-            r["origin"],
-            r["med"],
-            0 if r["ebgp"] else 1,
-            r["igp"])
-
-routes = [
-    dict(name="transit", lp=100,
-         path=[64500, 3356, 65010],
-         origin=0, med=0,
-         ebgp=True, igp=10),
-    dict(name="peer", lp=200,
-         path=[64600, 64700, 65010],
-         origin=0, med=0,
-         ebgp=True, igp=10),
-    dict(name="customer", lp=300,
-         path=[65010, 65010, 65010],
-         origin=0, med=0,
-         ebgp=True, igp=10),
-]
-best = min(routes, key=rank)
-print(best["name"])  # customer
-```
+The key habit is to walk the list in order and stop at the first step where the routes differ. A later step, however lopsided, is never consulted.
 
 > [!example] A worked choice
 > Your AS hears 203.0.113.0/24 three ways:
@@ -68,26 +40,21 @@ print(best["name"])  # customer
 >
 > With all eligibility checks passed and earlier vendor-specific preferences equal, LOCAL_PREF decides: the customer route wins at 300. The customer's prepending was meant to push traffic away, but it only affects step 3, which is never reached.
 
+> [!analogy] Real-world analogy: Preferred suppliers
+> A buyer's company policy says "use our preferred suppliers first; only if two are equally preferred, pick the one with fewer middlemen". A supplier who pads its quote with extra middlemen to discourage orders is still chosen if it is the preferred one.
+>
+> **How it maps:** The preferred-supplier ranking is LOCAL_PREF, set inside your own AS; the number of middlemen is AS_PATH length; padding the quote is AS_PATH prepending. Because policy is checked first, the padding only matters between equally preferred options.
+>
+> **Where it stops:** Real buyers might also weigh price or delivery time on the spot. Base BGP does not measure performance at all, and each router applies a fixed, vendor-defined order rather than judgement.
+
 Note what's missing: bandwidth, latency, congestion. BGP picks paths by **policy** and AS count, not performance. The shortest AS_PATH may cross an ocean twice.
 
 ## Key takeaways
 - Higher LOCAL_PREF can decide before AS_PATH length.
 - Origin and MED have specific meanings and comparison conditions.
-- The executable tuple rank omits real selection steps and deliberately compares MED across candidates.
+- Walk the selection order and stop at the first difference; later steps never override earlier ones.
 - BGP path policy does not optimise measured latency, bandwidth or congestion.
 
 ## Further reading
 - [RFC 4271: A Border Gateway Protocol 4 (BGP-4)](https://www.rfc-editor.org/rfc/rfc4271)
-- [Border Gateway Protocol — Wikipedia](https://en.wikipedia.org/wiki/Border_Gateway_Protocol)
-- [Understanding how Facebook disappeared from the Internet — Cloudflare blog](https://blog.cloudflare.com/october-2021-facebook-outage/)
-- [How Verizon and a BGP Optimizer Knocked Large Parts of the Internet Offline — Cloudflare blog](https://blog.cloudflare.com/how-verizon-and-a-bgp-optimizer-knocked-large-parts-of-the-internet-offline-today/)
-- [RFC 6811: BGP Prefix Origin Validation](https://www.rfc-editor.org/rfc/rfc6811)
-- [BGP hijacking — Wikipedia](https://en.wikipedia.org/wiki/BGP_hijacking)
-- [MANRS](https://www.manrs.org/)
-
-- [RIPE NCC: YouTube hijacking presentation and timeline](https://ripe56.ripe.net/presentations/Refice-YouTube_Prefix_Hijacking.pdf)
-- [Meta: October 2021 outage details](https://engineering.fb.com/2021/10/05/networking-traffic/outage-details/)
-- [Cloudflare: BGP leaks and cryptocurrencies](https://blog.cloudflare.com/bgp-leaks-and-crypto-currencies/)
 - [Cisco: BGP best-path algorithm](https://www.cisco.com/c/en/us/support/docs/ip/border-gateway-protocol-bgp/13753-25.html)
-- [IETF: ASPA verification draft](https://datatracker.ietf.org/doc/draft-ietf-sidrops-aspa-verification/)
-- [RFC 9319: RPKI maxLength](https://www.rfc-editor.org/rfc/rfc9319)

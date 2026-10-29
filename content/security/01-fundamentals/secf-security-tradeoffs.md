@@ -16,6 +16,13 @@ Disconnecting a server can reduce remote exposure while taking its service offli
 - **Backups** protect availability, but each copy is another place the data can leak from.
 - **Fail-closed** behaviour (deny on error) can protect confidentiality and integrity while blocking legitimate use; **fail-open** (allow on error) can preserve access while bypassing a control. Choose based on the failure and threat model.
 
+> [!analogy] Real-world analogy: the only key to the house
+> A deadlock with a single key keeps burglars out, but if the key is lost the owners are locked out too. Leaving spare keys with neighbours fixes that, yet every spare is another key a thief could take.
+>
+> **How it maps:** The deadlock is a confidentiality control such as encryption. Losing the only key is the availability loss from a lost encryption key. The neighbours' spares are backups: they improve availability while adding places from which the data can leak.
+>
+> **Where it stops:** A locksmith can usually open a house door, but data encrypted with a strong, lost key generally has no such way back in. A thief can also copy data without taking it, so nobody notices a spare has gone.
+
 > [!example] Which property matters most?
 > Priorities depend on the system and threat model. For example:
 > - Password reset tokens: confidentiality, plus integrity of the account binding and expiry checks.

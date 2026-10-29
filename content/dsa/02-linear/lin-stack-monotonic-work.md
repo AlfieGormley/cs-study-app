@@ -35,9 +35,9 @@ next_greater([2, 1, 2, 4, 3])
 
 The stack holds indices still **waiting** for a bigger value. When `x` arrives, every waiting element smaller than `x` has found its answer and is popped.
 
-There's a `while` inside a `for`, but for n input values it's still **O(n)**. Instead of asking how long one `while` loop can run, count the work over the whole run:
+There's a `while` inside a `for`, but for n input values it's still **O(n)**. Instead of asking how long one `while` loop can run, count the work over the whole run: every index is pushed exactly once, can be popped at most once, and each pass of the `for` loop ends its `while` loop with one failed check.
 
-```formula
+```formula reference
 events = pushes + pops + exits
 events ≤ n + n + n = 3n
 where
@@ -47,10 +47,10 @@ pushes: exactly n, one per index
 pops: at most n, because each index can be popped only once after being pushed once
 exits: exactly n: each pass of the for loop ends its while loop once, when the check fails
 ≤: is less than or equal to
-In words: however the pops are spread out, the grand total can never exceed three counted events per input value. Each event takes fixed work under this model; this is not an exact count of Python instructions or individual comparisons.
+In words: however the pops are spread out, the whole run does at most three counted events per input value, each taking fixed work, so the total is linear. This is a counting bound, not an exact count of Python instructions.
 ```
 
-For the five values `[2, 1, 2, 4, 3]`, five pushes, three pops and five loop exits give thirteen counted events, within the fifteen-event bound. One step can pop many items, but then other steps pop none. This is an **amortised** argument, like dynamic array growth.
+One step can pop many items, but then other steps pop none: for `[2, 1, 2, 4, 3]` the 4 pops two waiting indices at once, while three of the five steps pop nothing. This is an **amortised** argument, like dynamic array growth.
 
 The same pattern answers "how many days until a warmer temperature", stock span problems and the largest rectangle in a histogram.
 
@@ -63,7 +63,7 @@ The same pattern answers "how many days until a warmer temperature", stock span 
 
 ## Key takeaways
 - Unresolved indices wait until a later value supplies their answer.
-- Count pushes and pops over the complete run rather than multiplying nested-loop bounds.
+- Count pushes and pops over the complete run rather than multiplying the inner and outer loop bounds.
 
 ## Further reading
 - [Stack (abstract data type) — Wikipedia](https://en.wikipedia.org/wiki/Stack_(abstract_data_type))

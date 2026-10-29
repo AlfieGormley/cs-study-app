@@ -43,4 +43,4 @@ A WebSocket can outlive the entire drain window. Do not wait for thousands of su
 
 - [Sticky sessions (AWS)](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/sticky-sessions.html)
 - [Deregistration delay and target attributes (AWS)](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/edit-target-group-attributes.html)
-- [Timeouts, retries and jitter (AWS Builders’ Library)](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html)
+- [Retry with backoff pattern (AWS Prescriptive Guidance)](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/retry-backoff.html)

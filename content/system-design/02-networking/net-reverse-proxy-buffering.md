@@ -49,6 +49,13 @@ A reverse proxy (NGINX, HAProxy, Envoy, Caddy, Traefik) typically handles:
 
 **Buffering** deserves a mention. A slow mobile client might take 10 s to upload a request or download a response. If an app server process (say a Python worker) talked to it directly, that worker would be stuck for 10 s. With request/response buffering enabled and enough buffer or temporary-file capacity, NGINX can decouple a synchronous worker from a slow client. The worker remains busy for response generation and transfer to the proxy, not necessarily only milliseconds. Streaming, buffer limits and disabled buffering change this behavior. This is why NGINX in front of Gunicorn or Puma is standard practice.
 
+> [!analogy] Real-world analogy: A waiter between the kitchen and slow diners
+> A restaurant has a few skilled chefs. If each chef had to carry every plate to the table and wait while the diner chatted before returning, most of their time would be spent standing in the dining room. Instead, the chef hands the finished plate to a waiter at the pass and starts the next dish; waiters, who are cheap to add, deal with slow diners.
+>
+> **How it maps:** the chefs are the expensive synchronous app workers, the waiter is the proxy's event loop holding many slow client connections, and the pass is the proxy's buffer. Handing over the finished response lets the worker serve the next request.
+>
+> **Where it stops:** the hand-off only works if the proxy has enough buffer or temporary-file space, and it does not apply to streamed responses, which must flow through as they are produced. Unlike a waiter, the proxy can also buffer the incoming request body so the worker doesn't wait for a slow upload.
+
 The proxy also adds headers so the app knows the real client: `X-Forwarded-For` (client IP), `X-Forwarded-Proto` (was it HTTPS?) and the standardised `Forwarded` header (RFC 7239). Each proxy *appends* the address it received the connection from, so after a CDN and a load balancer the header reads `client, CDN`, and the app sees the load balancer as the connection's source address.
 
 > [!warning] Trusting forwarded headers

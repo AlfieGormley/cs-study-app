@@ -3,27 +3,27 @@
     "id": "net-request-lifecycle-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "A user in London fetches a page from a single server in Virginia. RTT is 80 ms. DNS is already cached, and the server takes 20 ms to generate the response. Using TLS 1.3 on a brand-new connection, roughly how long until the first byte of the response arrives?",
+    "prompt": "A user in London fetches a small (20 KB) page from a single server in Virginia over a brand-new HTTPS connection with TLS 1.3. The RTT is 80 ms, DNS is cached and the server takes 20 ms. The user upgrades their broadband from 50 Mbps to 1 Gbps. Predict the effect on time to first byte.",
     "options": [
       {
-        "text": "About 100 ms",
-        "explanation": "This counts only one round trip plus server time, as if the connection were already open. A new connection must first pay for the TCP and TLS handshakes."
+        "text": "About 20 times faster, because bandwidth went up 20 times",
+        "explanation": "That would be true only if pushing bytes onto the wire dominated the wait. For a small response it is a tiny fraction of one round trip, so most of the time is untouched."
       },
       {
-        "text": "About 260 ms",
-        "explanation": "Correct. Count one 80 ms round trip each for TCP, TLS 1.3 and the request/response, then add 20 ms of server work. The total is 260 ms."
+        "text": "Almost no change: the wait is dominated by three 80 ms round trips (TCP, TLS 1.3 and the request) plus server time, which bandwidth does not shorten",
+        "explanation": "Correct. Roughly 240 ms of round trips plus 20 ms of server work stays the same. Reusing the connection (one round trip) or moving the endpoint closer would help far more."
       },
       {
-        "text": "About 340 ms",
-        "explanation": "This includes an uncached DNS lookup (~80–100 ms) or a TLS 1.2 two-RTT handshake. The question says DNS is cached and TLS 1.3 needs only one round trip."
+        "text": "Slower, because a faster link causes more packet loss",
+        "explanation": "Faster access links do not inherently cause loss. The upgrade simply leaves the dominant cost, the round trips, unchanged."
       },
       {
-        "text": "About 180 ms",
-        "explanation": "This counts two round trips plus server time, so it has dropped one of TCP, TLS or the request itself. All three are needed on a new connection."
+        "text": "It halves, because TLS can now complete in the same round trip as TCP",
+        "explanation": "Over TCP the TLS handshake still waits for the TCP handshake, regardless of link speed. Combining transport and TLS setup is what QUIC does, not a bandwidth effect."
       }
     ],
     "answer": 1,
-    "workedExample": "Count the round trips on a cold connection:\n\n| Step | RTTs | Time |\n|---|---|---|\n| DNS | 0 (cached) | 0 ms |\n| TCP SYN/SYN-ACK | 1 | 80 ms |\n| TLS 1.3 | 1 | 80 ms |\n| GET + response | 1 | 80 ms |\n| Server work | - | 20 ms |\n\nAdd the round trips and the server's work:\n\n```formula\nT = n × RTT + T_server\nT = 3 × 80 ms + 20 ms = 260 ms\nwhere\nT: the time until the first byte of the response arrives, in milliseconds (ms)\nn: the round trips needed on a new connection with cached DNS: TCP, TLS 1.3 and the request itself, so 3\nRTT: the round-trip time from London to Virginia, 80 ms\nT_server: the time the server takes to build the response, 20 ms\nms: millisecond, one thousandth of a second\nIn words: three round trips plus the server's own work.\n```\n\nTotal: **260 ms**. Notice that 160 ms of that is setup. On a reused connection only the request's round trip remains, so the same request would take 80 ms + 20 ms = 100 ms.",
+    "workedExample": "1. On a new TCP connection with TLS 1.3, the client waits for three round trips before the first byte: the TCP handshake, the TLS handshake, then the request and its response.\n2. Each of those trips costs the 80 ms RTT, which is set by distance, not by the user's bandwidth.\n3. Pushing 20 KB onto even a 50 Mbps link takes only a few milliseconds, a small slice of one round trip; 1 Gbps shrinks that slice further but leaves the round trips alone.\n4. So time to first byte stays at roughly three round trips plus server time.\n\nWhat would help: a reused connection (only the request's round trip remains), or an endpoint nearer the user so each trip is shorter.",
     "link": {
       "title": "High Performance Browser Networking: Building blocks of TCP",
       "url": "https://hpbn.co/building-blocks-of-tcp/"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. The supplied traces establish that connection-setup trips dominate. Moving TCP and TLS termination to a nearby edge removes two long setup trips.\n2. For a separate illustrative budget, assume the origin RTT is 200 ms, the direct DNS lookup takes 200 ms, and server work takes 100 ms. DNS is a separate input, not automatically a trip to the origin.\n3. Through a Sydney edge, assume DNS takes 10 ms, the client-to-edge RTT is 10 ms and the warm edge-to-origin RTT remains 200 ms. Keep the same 100 ms of server work.\n\n```formula\nT_cold = D_cold + 3 × RTT_f + T_s\nT_cold = 200 ms + 600 ms + 100 ms\nT_cold = 900 ms\nT_edge = D_edge + 3 × RTT_e\n         + RTT_f + T_s\nT_edge = 10 ms + 30 ms + 200 ms\n         + 100 ms = 340 ms\nwhere\nT_cold: the illustrative direct time to first byte, in milliseconds (ms)\nT_edge: the illustrative time through the Sydney edge, in ms\nD_cold: the assumed direct DNS lookup time, 200 ms; independent of the origin RTT\nD_edge: the assumed edge DNS lookup time, 10 ms\nRTT_f: the assumed RTT from Sydney to Virginia, 200 ms, also used for the warm edge-to-origin path\nRTT_e: the assumed user-to-edge RTT, 10 ms\nT_s: the same server processing time in both designs, 100 ms\n3: TCP setup, TLS 1.3 setup and the HTTP request/response trip\nms: millisecond, one thousandth of a second\nIn words: the edge makes two setup trips local; the origin request and the same server work remain, while DNS has its own assumed cost.\n```\n\nThis example gives 900 ms direct and 340 ms through the edge. It illustrates the mechanism; a production prediction needs measured DNS, routing and server times. Adding app servers, a bigger database or compression does not directly remove the long setup trips identified by these traces.",
+    "workedExample": "1. The traces already say where the time goes: **connection-setup round trips** to a distant origin, not server load or transfer time.\n2. From Sydney, each setup trip to Virginia crosses the Pacific. A CDN edge in Sydney terminates TCP and TLS locally, so those handshakes cost a short local round trip instead.\n3. The edge forwards the request over a connection to the origin that it already keeps open, so only the request itself crosses the Pacific: one long trip instead of three. This helps even though the HTML is uncacheable.\n4. The other options target things the traces ruled out: server capacity (more app servers), query time (a bigger database) or bytes (Brotli). New York is already fast with the same servers and database, which confirms distance is the problem.\n\nThe edge cannot remove the one remaining trip to Virginia; that needs data or compute closer to Sydney. Confirm the improvement with measurements rather than a fixed prediction.",
     "link": {
       "title": "Content delivery network (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Content_delivery_network"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Assume each response requires a round trip to Frankfurt, with a fixed 120 ms RTT. That alone exceeds the 100 ms target.\n2. A Mumbai edge with a 5 ms client RTT, a warm 120 ms origin path and a new TCP/TLS connection takes 135 ms plus server time (worked out below).\n3. Meeting the target requires changing the dependency or placing the necessary compute/data closer. Actual routing improvements could also change the assumed RTT; 120 ms is a scenario input, not a universal physical constant.\n\nThe edge calculation in step 2:\n\n```formula\nT = 3 × RTT_edge + RTT_origin + T_server\nT = 3 × 5 ms + 120 ms + T_server\nT = 135 ms + T_server\nwhere\nT: the time to first byte through a Mumbai edge, in milliseconds (ms)\n3: the round trips to the edge: TCP, TLS and the request itself\nRTT_edge: the round-trip time from the user to the Mumbai edge, 5 ms\nRTT_origin: the round-trip time from the edge to Frankfurt over a warm connection, 120 ms\nT_server: the time the origin spends building the response\nms: millisecond, one thousandth of a second\nIn words: even with every handshake at a nearby edge, the one unavoidable trip to Frankfurt already costs more than the 100 ms target.\n```",
+    "workedExample": "1. Every personalised response needs data from Frankfurt, so at least one round trip from Mumbai to Frankfurt is unavoidable in the current design. At about 120 ms, that trip alone exceeds the 100 ms target.\n2. A Mumbai edge helps: it moves the TCP and TLS handshakes onto a short local hop and reuses a warm connection to Frankfurt. But the request must still make that one long trip, so the total stays above 120 ms plus server time.\n3. 0-RTT and UDP-based transports can remove setup trips; none of them shortens the trip to Frankfurt.\n4. Meeting the target therefore means changing where the work happens: serve from an Indian region, or move the data the response needs (a replica or cache) close to the users.\n\nThe 120 ms RTT is a scenario input; real routing changes could alter it, but not enough to beat physics over that distance.",
     "link": {
       "title": "Global Accelerator overview (AWS)",
       "url": "https://docs.aws.amazon.com/global-accelerator/latest/dg/what-is-global-accelerator.html"
@@ -93,27 +93,27 @@
     "id": "net-request-lifecycle-q10",
     "level": "advanced",
     "type": "single",
-    "prompt": "A London user requests an uncacheable page through a CDN edge in London (RTT 10 ms). The origin is in Virginia (edge-to-origin RTT 80 ms) and the edge already holds a warm connection to it. DNS is cached, TLS 1.3 is used, and the origin takes 20 ms. Roughly what is the time to first byte on a new user connection?",
+    "prompt": "A London user requests an **uncacheable** page through a CDN edge in London (about 10 ms away). The origin is in Virginia (about 80 ms from the edge), and the edge already holds a warm connection to it. The user's connection to the edge is new, with TLS 1.3 and cached DNS. Which statement about where the time goes is right?",
     "options": [
       {
-        "text": "About 35 ms",
-        "explanation": "That's the cache-hit case from the lesson. On a miss, the edge still has to fetch the page from Virginia, which costs at least one 80 ms round trip."
+        "text": "It is as fast as a cache hit, because the edge is nearby",
+        "explanation": "A hit needs no origin trip. This page is uncacheable, so the edge must still forward the request to Virginia and wait for the answer."
       },
       {
-        "text": "About 340 ms",
-        "explanation": "That's going direct to Virginia with an uncached DNS lookup. The handshakes here happen with the nearby edge, not with Virginia."
+        "text": "It is slower than going direct, because the edge adds an extra hop",
+        "explanation": "The extra hop is short, and it lets the handshakes happen locally. Going direct, every handshake would cross the Atlantic."
       },
       {
-        "text": "About 130 ms",
-        "explanation": "Correct. TCP 10 + TLS 10 + request to the edge 10 + edge-to-origin round trip 80 + server 20 = 130 ms."
+        "text": "The TCP and TLS handshakes happen on the short hop to the edge, and only the request crosses the Atlantic, once, over the warm connection; the edge can't remove that one trip",
+        "explanation": "Correct. Direct, all three round trips (TCP, TLS, request) cross the Atlantic. Through the edge, two short setup trips plus one long request trip remain, roughly halving time to first byte here, but never below one origin round trip plus server time."
       },
       {
-        "text": "About 290 ms",
-        "explanation": "This charges full handshakes to Virginia as well. Because the edge reuses a warm connection, only the request itself crosses the Atlantic."
+        "text": "All three round trips still cross the Atlantic, because the edge must handshake with the origin for each user",
+        "explanation": "The edge reuses a long-lived connection to the origin, so it does not repeat TCP or TLS setup with Virginia for each user."
       }
     ],
     "answer": 2,
-    "workedExample": "Split the path into the short hop and the long hop:\n\n| Step | Time |\n|---|---|\n| TCP to edge | 10 ms |\n| TLS 1.3 at edge | 10 ms |\n| Request to edge | 10 ms |\n| Edge to origin (warm) | 80 ms |\n| Origin work | 20 ms |\n| **Total** | **130 ms** |\n\nThe same sums as a formula, compared with going direct:\n\n```formula\nT_cdn = 3 × RTT_e + RTT_o + T_s\nT_cdn = 3 × 10 ms + 80 ms + 20 ms\nT_cdn = 130 ms\nT_dir = 3 × RTT_o + T_s\nT_dir = 3 × 80 ms + 20 ms = 260 ms\nwhere\nT_cdn: the time to first byte through the London edge, in milliseconds (ms)\nT_dir: the time to first byte connecting straight to Virginia\nRTT_e: the round-trip time to the London edge, 10 ms\nRTT_o: the round-trip time to the origin in Virginia, 80 ms\nT_s: the origin's server time, 20 ms\n3: the round trips on a new connection: TCP, TLS 1.3 and the request\nms: millisecond, one thousandth of a second\nIn words: through the edge only one round trip crosses the Atlantic; direct, all three do.\n```\n\nThe edge halves it by moving the handshakes, but it can't remove the one trip to wherever the data lives.",
+    "workedExample": "Split the path into a short hop and a long hop:\n\n| Step | Which hop |\n|---|---|\n| TCP handshake | user to edge (short) |\n| TLS 1.3 handshake | user to edge (short) |\n| Request to edge | short |\n| Edge to origin and back | long, warm connection |\n| Origin work | at the origin |\n\n1. Going direct, all three round trips use the long path.\n2. Through the edge, the two setup trips become short, and the edge reuses its open origin connection, so only one long trip remains.\n3. That remaining trip is to wherever the data lives. Only caching the response, or moving the data nearer, removes it.",
     "link": {
       "title": "Content delivery network (Wikipedia)",
       "url": "https://en.wikipedia.org/wiki/Content_delivery_network"

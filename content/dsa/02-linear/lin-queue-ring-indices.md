@@ -4,7 +4,7 @@ title: Ring-buffer indices and constant pointer work
 level: advanced
 minutes: 3
 sourceLesson: lin-queues
-summary: Wrap the write position after the physical array end.
+summary: Wrap the next write slot round after the physical array end.
 ---
 
 FIFO removal should advance a front position rather than shift all waiting elements. A fixed ring keeps a positive capacity and a live count. The example assumes single-threaded access; adding concurrent producers or consumers needs a separate synchronisation protocol.
@@ -13,7 +13,7 @@ FIFO removal should advance a front position rather than shift all waiting eleme
 
 A **circular buffer** (ring buffer) is a fixed array whose end wraps round to its start. Track the index of the front (`head`) and the number of items (`count`). When the buffer is not full, the next free slot at the back is `count` places after `head`, wrapping round to slot 0 when it runs off the end:
 
-```formula
+```formula reference
 back = (head + count) mod capacity
 where
 back: the slot index where the next enqueued item is written
@@ -24,7 +24,14 @@ mod: modulo: the remainder after dividing; 6 mod 4 = 2. It makes indices wrap ro
 In words: start at the front, step forward one slot per stored item, and wrap round to the start of the array when you pass the end.
 ```
 
-With capacity 4, head 2 and count 1, the next item goes in (2 + 1) mod 4 = slot 3; the one after goes in (2 + 2) mod 4 = slot 0, back at the start. In Python this is `(head + count) % capacity`.
+With capacity 4, the front item in slot 2 and one item stored, the next item goes in slot 3; the one after that wraps round to slot 0, back at the start of the array. In Python this is `(head + count) % capacity`.
+
+> [!analogy] Real-world analogy: Hours on a clock face
+> On a 12-hour clock, five hours after 10 o'clock is 3 o'clock, not 15 o'clock: the count wraps round past 12 and starts again.
+>
+> **How it maps:** The clock positions are the buffer's slots, the current hour is `head`, and counting forward `count` hours finds the back. Wrapping past 12 is the wrap-round step (`% capacity` in Python) that keeps every index inside the array.
+>
+> **Where it stops:** A clock has no notion of empty or full slots, and its numbers run 1 to 12, whereas array slots are numbered from 0 up to one less than the capacity. The buffer must also refuse a write when every slot is in use, which the next unit covers.
 
 Dequeuing just advances `head`. Nothing shifts.
 
@@ -75,7 +82,7 @@ class RingQueue:
 ```
 
 ## Key takeaways
-- Wrap the write position after the physical array end.
+- Wrap the next write slot round after the physical array end.
 - Clear a dequeued slot so its old object need not stay alive.
 
 ## Further reading

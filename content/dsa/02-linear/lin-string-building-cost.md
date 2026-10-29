@@ -11,19 +11,7 @@ An immutable string cannot be observably changed through an alias. A full-copy c
 
 ## Concatenation cost
 
-In the full-copy model, joining two immutable strings creates a value with space for both inputs and copies their code units. Observable immutability itself does not forbid optimising an unshared internal buffer; the CPython caveat below matters:
-
-```formula
-W ∝ L_a + L_b
-where
-W: copying work to construct the joined string, in copied code units
-L_a: the left input’s code-unit length
-L_b: the right input’s code-unit length
-∝: proportional to: doubling the right-hand side roughly doubles the cost
-In words: joining two strings costs time in proportion to their combined length, because both are copied in full.
-```
-
-So `"abc" + "de"` copies 5 characters, and appending one character to a 1,000-character string copies 1,001. That is linear in the combined input lengths.
+In the full-copy model, joining two immutable strings creates a new value with space for both inputs and copies every code unit of each. So `"abc" + "de"` copies 5 characters, and appending one character to a 1,000-character string copies 1,001. One concatenation costs time in proportion to the combined length. Observable immutability does not forbid optimising an unshared internal buffer, which is why the CPython caveat below matters.
 
 Now put it in a loop:
 
@@ -33,28 +21,33 @@ for word in words:   # n words
     result += word   # full-copy model
 ```
 
-Each pass copies everything built so far plus the new word, so the cost of each pass grows. Adding up all the passes gives an arithmetic series:
+Each pass copies everything built so far plus the new word, so each pass costs more than the last. Adding up passes whose cost grows by a fixed amount gives an arithmetic series:
 
-```formula
-total = k + 2k + ... + nk
-total = kn(n + 1) / 2
+```formula reference
 total ≈ kn^2 / 2
 where
 total: the number of characters copied over the whole loop
 n: the number of words joined
 k: the length of each word, in characters (assumed all equal)
-≈: approximately equal to; for large n, n + 1 is about the same as n
-In words: pass i copies about i words' worth of characters, so the total grows with the square of the number of words.
+≈: approximately equal to; small end effects are ignored for large n
+In words: pass i copies about i words' worth of characters, so the total grows with the square of the number of words: doubling the word count roughly quadruples the copying.
 ```
 
-That's quadratic: **O(n²)** for a fixed word length. For 100,000 one-character pieces, the formula predicts about five billion character copies.
+That's quadratic: **O(n²)** for a fixed word length. For 100,000 one-character pieces, that is about five billion character copies, where a single join would copy 100,000.
+
+> [!analogy] Real-world analogy: Recopying a manuscript
+> Imagine keeping a story only as one handwritten fair copy. To add a sentence, you write out a fresh copy of the whole story plus the new sentence. Early on that is quick; by the hundredth sentence, each addition means rewriting a hundred sentences. Keeping the sentences on separate cards and copying them out once at the end avoids all that rewriting.
+>
+> **How it maps:** The fair copy is the immutable string, each fresh copy is a full-copy concatenation, and the stack of cards is the list of parts that `"".join` copies exactly once.
+>
+> **Where it stops:** A runtime that knows nobody else holds the string may quietly extend it in place, which is like being allowed to append to the last page. Copying memory is also far faster than handwriting, so the problem only shows up for large n.
 
 > [!note] CPython sometimes cheats
 > CPython can extend `result` in place when nothing else references it, which often makes this loop fast in practice. It's an implementation detail: it disappears if another reference exists, and PEP 8 says not to rely on it. It is not a portable guarantee across Python implementations.
 
 ### The fix: collect, then join
 
-Gather the pieces in a list (amortised O(1) appends), then join once. `join` measures the total length, allocates once, and copies each piece once: **O(number of pieces + total length)**.
+Gather the pieces in a list (amortised O(1) appends), then join once. `join` measures the combined length of the pieces, allocates once, and copies each piece once: **O(number of pieces + output length)**.
 
 ```python
 parts = []

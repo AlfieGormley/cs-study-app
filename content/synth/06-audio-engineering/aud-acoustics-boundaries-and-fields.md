@@ -13,18 +13,9 @@ At a boundary, sound can be reflected, transmitted or absorbed; diffraction desc
 
 **Sound reflection.** A hard, large, flat surface (a wall, a desk, a window) reflects sound like a mirror reflects light: angle in equals angle out. This only works well when the surface is large compared with the wavelength. A stiff 30 cm panel can give a directional reflection at 10 kHz (wavelength 3.4 cm). At 100 Hz (wavelength 3.4 m), diffraction around it is important; its actual reflection and transmission still depend on material and mounting.
 
-**Sound absorption.** Porous materials (mineral wool, thick fabric) turn some of the sound's energy into heat. Each material has an **absorption coefficient**, the fraction of incident energy not returned as reflected sound in the room-acoustics convention; it may include transmitted energy:
+**Sound absorption.** Porous materials (mineral wool, thick fabric) turn some of the sound's energy into heat. Each material has an **absorption coefficient**: the fraction of the arriving energy that is not returned as reflected sound, in the room-acoustics convention (it may include energy transmitted through the surface). It has no unit and runs from 0, a perfect reflector, to 1, where nothing comes back, as from an open window. A panel that reflects 30 % of the arriving energy has an absorption coefficient of 0.7.
 
-```formula
-α = 1 − E_ref / E_inc
-where
-α: alpha, the absorption coefficient of the surface; it has no unit and lies between 0 and 1
-E_ref: the sound energy reflected back from the surface
-E_inc: the sound energy arriving at (incident on) the surface
-In words: the absorption coefficient is the share of the sound that does not come back. 0 means a perfect reflector, 1 means nothing returns (as from an open window).
-```
-
-For example, a panel that reflects 30 % of the arriving energy has an absorption coefficient of 0.7. The coefficient varies with frequency, so it is quoted per octave band. Thin foam absorbs high frequencies well and does almost nothing to bass, because bass wavelengths are far longer than the foam is thick.
+The coefficient varies with frequency, so it is quoted per octave band. Thin foam absorbs high frequencies well and does almost nothing to bass, because bass wavelengths are far longer than the foam is thick.
 
 **Diffraction.** Waves bend around obstacles and spread out through openings. When an obstacle is small compared with the wavelength, sound diffracts around it with hardly a shadow. When it's large, it casts an acoustic shadow. This is why you can hear the bass, but not the cymbals, from a band round the corner; why your head shadows high frequencies but not low ones (the hearing units); and why a loudspeaker radiates almost equally in all directions at low frequencies but beams forward at high frequencies (the loudspeaker-driver units).
 
@@ -33,6 +24,13 @@ For example, a panel that reflects 30 % of the arriving energy has an absorption
 | Object much smaller | Sound diffracts round it |
 | Comparable | Partial, frequency-dependent |
 | Object much larger | Reflection and shadowing |
+
+> [!analogy] Real-world analogy: sea waves at a harbour
+> Ocean swell meets a thin mooring post and simply closes up behind it; the water just behind the post is as choppy as anywhere else. The same swell meeting a long harbour wall leaves a calm patch of water in its lee.
+>
+> **How it maps:** The post is an object much smaller than the wavelength, so the wave diffracts round it with almost no shadow, like bass passing a person or a speaker stand. The harbour wall is much larger than the wavelength, so it reflects and shadows, like a building blocking cymbals.
+>
+> **Where it stops:** Sea waves move along a surface and are easy to see; sound spreads in three dimensions as pressure. Whether a real surface reflects, transmits or absorbs sound also depends on its material and mounting, which the size comparison alone does not tell you.
 
 ## Near field and far field
 

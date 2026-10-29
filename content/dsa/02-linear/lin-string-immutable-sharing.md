@@ -7,7 +7,7 @@ sourceLesson: lin-strings
 summary: Rebinding a variable leaves other aliases pointing at the old string.
 ---
 
-A string represents a sequence of text units. Many implementations use arrays, but indexing cost depends on which units are requested and how the string is represented. But strings come with two complications that trip up beginners and experienced engineers alike:
+A string represents a sequence of text units. Many implementations store those units in an array, but strings come with two complications that trip up beginners and experienced engineers alike:
 
 1. In most modern languages they are **immutable**: you can never change one, only make a new one.
 2. A "character" is not as simple as it sounds. How many bytes it takes depends on the **character encoding**.
@@ -34,6 +34,13 @@ t = s
 s += " world"
 print(t)        # hello
 ```
+
+> [!analogy] Real-world analogy: Bookmarks in printed editions
+> Two readers keep bookmarks in the same printed edition of a guidebook. When the publisher corrects it, they print a new edition; nobody rewrites the old pages. A reader who switches to the new edition sees the change, and the other reader's bookmark still sits in the old edition.
+>
+> **How it maps:** The printed edition is the string object, and each bookmark is a variable holding a reference. `s += " world"` prints a new edition and moves only `s`'s bookmark, so `t` still reads `"hello"`.
+>
+> **Where it stops:** A runtime may hand several readers the very same copy through interning, and CPython can sometimes extend a string in place when no other reference exists, because nobody could observe the difference. Unlike a print run, making a new string costs time proportional to its length.
 
 C++ std::string and Rust String are mutable growable buffers with separate borrowed-view types, std::string_view and &str. C char arrays can be mutable but C does not provide those ownership/view types.
 

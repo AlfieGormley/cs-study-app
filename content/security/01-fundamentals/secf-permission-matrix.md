@@ -10,7 +10,7 @@ summary: An access decision concerns a subject, action and object.
 Use an access decision to separate the caller, the operation and the resource. This unit introduces the representation; later units add owner-controlled permissions, mandatory labels and policy rules.
 
 
-Once a system knows *who* you are, it must decide *what you may do*. That decision, made millions of times a day, is **access control** (authorisation). Broken access control is the number one category in the OWASP Top 10 (2021), ahead of injection.
+Once a system knows *who* you are, it must decide *what you may do*. That decision, made millions of times a day, is **access control** (authorisation). Broken access control is the first category in the OWASP Top 10:2025 (checked October 2026), as it was in the 2021 edition; injection is ranked fifth.
 
 Every access control decision has the same shape:
 
@@ -36,6 +36,13 @@ A large matrix is often sparse, so systems commonly represent permissions throug
 - **Access control lists (ACLs)** store each **column** with its object: "payroll.xlsx: alice rw, carol r". File systems, S3 bucket policies and most databases work this way. Easy to answer "who can access this file?"; hard to answer "what can Alice access?".
 - **Capabilities** (capability lists) store each **row** with the subject: Alice holds unforgeable tokens, each naming an object and rights. Can support delegation and narrow rights, but neither is automatic; revocation depends on the design. A Unix file descriptor, a signed pre-authorised URL and an OAuth access token are all capability-like.
 
+> [!analogy] Real-world analogy: a guest list versus a ticket
+> One venue keeps a guest list at the door and checks your name. Another sells tickets and lets in whoever holds one.
+>
+> **How it maps:** The guest list kept by the venue is an ACL: it is stored with the object. The ticket in the visitor's pocket is a capability: it is held by the subject. A venue's list shows who may enter that venue, but not every venue Alice may enter; with tickets it is the other way round. A ticket can also be handed to a friend, like delegated authority.
+>
+> **Where it stops:** Paper tickets can be forged or photocopied; software capabilities must be impossible to forge, for example by using a signature or kernel protection. Taking back a ticket already in someone's pocket is also hard, which is why capability designs need expiry or revocation rules.
+
 ## Key takeaways
 - An access decision concerns a subject, action and object.
 - ACLs organise permissions by object.
@@ -44,4 +51,4 @@ A large matrix is often sparse, so systems commonly represent permissions throug
 ## Further reading
 - [Saltzer and Schroeder: protection principles](https://www.cs.virginia.edu/~evans/cs551/saltzer/)
 - [RFC 4949: security terms and models](https://www.rfc-editor.org/rfc/rfc4949)
-- [OWASP Top 10 2021: Broken Access Control](https://owasp.org/Top10/A01_2021-Broken_Access_Control/)
+- [OWASP Top 10:2025: Broken Access Control](https://owasp.org/Top10/2025/A01_2025-Broken_Access_Control/)

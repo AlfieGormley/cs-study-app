@@ -32,6 +32,13 @@ def bfs(graph, start):
     return dist
 ```
 
+> [!analogy] Real-world analogy: Ripples from a stone
+> Drop a stone in a still pond and the ripples spread outwards in rings: everything one step away is reached before anything two steps away.
+>
+> **How it maps:** The stone is `start`, each ring is one more edge of distance, and the queue holds the expanding front of the ripple. Because the queue serves older discoveries first, the whole of one ring is processed before the next ring begins.
+>
+> **Where it stops:** Ripples spread continuously and in every direction at once, while BFS processes one node at a time and only along edges. The ring picture also assumes every edge has the same length; weighted graphs need a different algorithm.
+
 In an **unweighted graph**, `dist` is the shortest number of edges from `start` to every reachable node. Replacing the queue with a stack removes the shortest-path guarantee. With discovery marked on push, it is a LIFO traversal but does not necessarily reproduce recursive DFS discovery/parent order; standard DFS uses an appropriate marking or iterator-stack strategy. Graph traversal gets a full treatment in the graphs module.
 
 > [!warning] Mark nodes when you enqueue them

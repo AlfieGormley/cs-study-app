@@ -7,7 +7,7 @@ sourceLesson: ip-routing-basics
 summary: Compare bitwise trie lookup with a priority-TCAM model and recognise platform capacity limits.
 ---
 
-Compare bitwise trie lookup with a priority-TCAM model and recognise platform capacity limits.
+A backbone router may hold hundreds of thousands of routes and must look one up for every packet. Comparing the destination with every route would be far too slow, so routers use structures whose lookup cost does not grow with the table.
 
 ## Fast lookup structures
 
@@ -25,22 +25,9 @@ node 10.1/16: dc1
 node 10.1.2/24: rack7
 ```
 
-Each step down the tree consumes one bit of the destination address, so the walk can never be longer than the address:
+Each step down the tree consumes one bit of the destination address, so a lookup can never take more steps than the address has bits: at most 32 for IPv4 and 128 for IPv6, however many routes the table holds. Growing the table from a thousand routes to a million makes a linear scan a thousand times slower but leaves this bound unchanged. In Big-O notation, where W is the address width in bits, the lookup is O(W).
 
-```formula
-s ≤ W
-s_4 ≤ 32
-s_6 ≤ 128
-where
-s: the number of bit-consuming steps (edges followed from the root) in one lookup
-W: the address width, in bits
-s_4: the steps for an IPv4 lookup, whose addresses are 32 bits wide
-s_6: the steps for an IPv6 lookup, whose addresses are 128 bits wide
-≤: is at most
-In words: a binary trie lookup takes at most one step per address bit, however many routes the table holds.
-```
-
-In Big-O notation the lookup is O(W), where W is the address width, regardless of table size. Counting the root as well, a lookup visits at most 33 nodes for IPv4 or 129 for IPv6. By contrast, a million-route linear scan would make a million comparisons. **Patricia** (path-compressed) tries skip chains of single-child nodes, and **multibit** tries consume 4, 8 or more bits per step to cut memory accesses. Linux's IPv4 FIB uses an LC-trie (level- and path-compressed).
+**Patricia** (path-compressed) tries skip chains of single-child nodes, and **multibit** tries consume 4, 8 or more bits per step to cut memory accesses. Linux's IPv4 FIB uses an LC-trie (level- and path-compressed).
 
 ### TCAM
 

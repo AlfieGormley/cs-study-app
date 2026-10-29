@@ -9,7 +9,7 @@ summary: Independent controls reduce shared failure paths.
 
 ## Defence in depth
 
-No single control is perfect, so layer independent controls so an attacker has to beat several. A layered design should account for gaps and shared failure modes instead of assuming that several controls guarantee protection.
+No single control is perfect, so layer independent controls so an attacker has to beat several. A defence-in-depth design should account for gaps and shared failure modes instead of assuming that several controls guarantee protection.
 
 ```
  attack --> | o | -> |  o| -> |o  | -X
@@ -37,6 +37,13 @@ The layers must be **independent**. Controls sharing a failure mode (a library, 
 
 Start from **deny**, and grant explicitly. An allowlist ("these three roles may do this") fails safe when someone forgets to add an entry: the new role simply can't act. A denylist ("everyone except guests") fails dangerously when a new role is added and nobody updates the list.
 
+> [!analogy] Real-world analogy: a guest list at the door
+> A private party can work from a guest list, where only named people enter, or a banned list, where everyone enters except named troublemakers.
+>
+> **How it maps:** The guest list is an allowlist with a default of deny: a stranger nobody thought about stays outside. The banned list is a denylist: a new troublemaker nobody listed walks straight in.
+>
+> **Where it stops:** A doorkeeper can use judgement about an unlisted visitor; code applies the rule exactly as written. Software must also decide what happens when the list itself cannot be read, which is the fail-closed or fail-open choice below.
+
 ```python
 # Fails dangerously: new roles get access
 def can_delete(user):
@@ -48,7 +55,7 @@ def can_delete(user):
     return user.role in ALLOWED
 ```
 
-The same idea applies to error handling. If the call to the authorisation service times out, should the request be allowed? For a payments API, no: **fail closed**. Other systems may have a different safety or availability requirement. Physical exit and fire-containment design requires its own safety rules and is not specified here. Make the access-control failure policy explicit instead of letting an unhandled exception decide.
+The same idea applies when the check itself fails. If the call to the authorisation service times out, should the request be allowed? For a payments API, no: **fail closed**. Other systems may have a different safety or availability requirement. Physical exit and fire-containment design requires its own safety rules and is not specified here. Make the access-control failure policy explicit instead of letting an unhandled exception decide.
 
 ```python
 def is_allowed(user, action):

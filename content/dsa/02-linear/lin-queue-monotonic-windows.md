@@ -45,6 +45,13 @@ window_max([1, 3, -1, -3, 5, 3, 6, 7], 3)
 
 Values are removed from the **back** when a bigger value arrives (they're dominated: older *and* smaller) and from the **front** when they slide out of the window. Each index enters and leaves once, so the whole run is O(n), the same amortised argument as the monotonic stack.
 
+> [!analogy] Real-world analogy: Shortlisting for a rolling contract
+> A club picks its strongest player from those who joined within the last few months, and each player's eligibility expires after that period. When a new player arrives who is at least as strong as an older one, the older one can be crossed off the shortlist for good: they are no stronger and they will expire sooner.
+>
+> **How it maps:** The shortlist is the deque, newest at the back. Crossing off weaker, older players is popping from the back; removing a player whose eligibility has run out is popping from the front. The front of the shortlist is always the current best: the window maximum.
+>
+> **Where it stops:** A real selector might keep a weaker player for other reasons, while the algorithm compares a single number. Eligibility here is measured in array positions, not time, and equal values are resolved by keeping the newer index.
+
 ### Why discarding a candidate is safe
 
 For a three-value window over `[4, 2, 12, 3, 8, 1]`, twelve removes the older four and two from the back. They are smaller and expire earlier, so neither can beat twelve in a future window that still contains them.

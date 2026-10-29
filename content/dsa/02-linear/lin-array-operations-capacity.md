@@ -7,11 +7,11 @@ sourceLesson: lin-arrays
 summary: Interior changes shift elements; position lookup does not.
 ---
 
-An array gives direct indexed access, but its physical neighbours must move when you open or close an interior gap. In this unit n is the number of live elements and i is the zero-based position being changed.
+An array gives direct indexed access, but its physical neighbours must move when you open or close an interior gap.
 
 ## Operations and their cost
 
-In this table n is the number of elements in the array and i is the position being read or changed.
+In this table n is the number of elements in the array and i is the zero-based position being read or changed.
 
 | Operation | Cost | Why |
 |---|---|---|
@@ -34,7 +34,7 @@ print(a)          # [10, 15, 20, 30, 40]
 
 A **fixed-size array** has a size chosen when it is created; this is distinct from static storage duration. C's `int a[100]` and Java's `new int[100]` are fixed-size: you cannot append a 101st element.
 
-A **dynamic array** (resizable array) wraps a static array and tracks two numbers:
+A **dynamic array** (resizable array) wraps a fixed-size backing array and tracks two numbers:
 
 - **length**: how many elements are in use.
 - **capacity**: how many slots the underlying array has.

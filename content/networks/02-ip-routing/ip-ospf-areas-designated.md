@@ -4,10 +4,10 @@ title: Scale OSPF with areas and a DR
 level: intermediate
 minutes: 4
 sourceLesson: ip-interior-routing
-summary: Separate area topology scope from inter-area information and count broadcast-LAN adjacencies.
+summary: Separate area topology scope from inter-area information and explain how a DR keeps broadcast-LAN adjacencies manageable.
 ---
 
-Separate area topology scope from inter-area information and count broadcast-LAN adjacencies.
+Link-state routing gives every router a full map, which gets expensive as networks grow. OSPF has two scaling tools: areas, which limit how far the detailed map spreads, and designated routers, which limit how many routers on a shared LAN must synchronise with each other.
 
 ### Areas
 
@@ -27,23 +27,28 @@ An **ASBR** (autonomous system boundary router) injects routes from outside OSPF
 
 ### Designated routers
 
-On a shared segment like an Ethernet LAN, full adjacency between every pair of routers would grow quickly with their number. Instead the routers elect a **designated router** (DR) and a backup (BDR). Assume broadcast OSPF network type, compatible settings, an elected DR and BDR, and completed database synchronisation. Each other router forms full adjacencies with those two rather than with every other router; the DR and BDR are also adjacent to each other. The DR describes the shared segment in a network LSA.
+On a shared segment like an Ethernet LAN, full adjacency between every pair of routers would grow quickly with their number. Instead the routers elect a **designated router** (DR) and a backup (BDR). Assume broadcast OSPF network type, compatible settings, an elected DR and BDR, and completed database synchronisation. Each other router (a "DROther") forms full adjacencies with those two rather than with every other router; the DR and BDR are also adjacent to each other. Pairs of DROthers still exchange Hellos but deliberately stop at the **Two-Way state**, so seeing them listed as 2WAY rather than FULL is normal, not a fault. The DR describes the shared segment in a network LSA.
 
-```formula
+```formula reference
 A_mesh = n(n − 1) / 2
-A_DR = 2 × (n − 2) + 1
-A_mesh = 10 × 9 / 2 = 45
-A_DR = 2 × 8 + 1 = 17
+A_DR = 2(n − 2) + 1
 where
 A_mesh: the number of full adjacencies if every pair of routers formed one
 A_DR: the number of full adjacencies with a DR and BDR
-n: the number of OSPF routers on the shared segment, at least 2; here 10, under the broadcast/DR/BDR assumptions above
-In words: in a full mesh each of n routers pairs with the n − 1 others, and dividing by 2 stops each pair being counted twice. With a DR and BDR, each of the other n − 2 routers forms just two adjacencies, plus one between the DR and BDR.
+n: the number of OSPF routers on the shared segment, at least 2, under the broadcast/DR/BDR assumptions above
+In words: in a full mesh every router pairs with every other, so the count grows roughly with the square of the number of routers. With a DR and BDR, each other router forms just two adjacencies, plus one between DR and BDR, so the count grows only in proportion. Ten routers need 45 adjacencies as a mesh but 17 with a DR.
 ```
 
-With 10 routers, that's 17 adjacencies instead of 45; with 20 it's 37 instead of 190. The mesh grows roughly with the square of n, the DR design only in proportion to n.
+With 20 routers the gap widens to 37 adjacencies instead of 190.
 
 The election uses interface priority, then highest router ID, and is **not pre-emptive**: a newly arriving router with a higher priority does not displace an existing DR. Priority 0 makes an interface ineligible; when a DR fails an existing BDR can take over, rather than simply electing the newest highest-priority arrival.
+
+> [!analogy] Real-world analogy: A meeting chair and deputy
+> In a large meeting, nobody briefs every other attendee one by one. Everyone reports to the chair, with a deputy taking notes in case the chair leaves, and the chair circulates the combined minutes.
+>
+> **How it maps:** The chair is the DR and the deputy the BDR. Each attendee keeps a full working relationship (an adjacency) only with those two, while still recognising everyone else in the room (the Two-Way state). The minutes are the network LSA describing the shared segment. A senior latecomer does not take the chair mid-meeting, just as DR election is not pre-emptive.
+>
+> **Where it stops:** The DR does not relay data traffic for the others; it only coordinates the routing database. Routers still forward packets directly to whichever neighbour is the best next hop.
 
 ## RIP vs OSPF
 

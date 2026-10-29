@@ -7,7 +7,14 @@ sourceLesson: lin-queues
 summary: A queue serves arrivals in their original order.
 ---
 
-A **queue** is a line at a shop: people join at the back and are served from the front. The first one in is the first one out: **FIFO**. Where a stack serves the most recent arrival, a queue serves the one that has waited longest.
+A **queue** adds items at the back and removes them from the front. The first one in is the first one out: **FIFO**. Where a stack serves the most recent arrival, a queue serves the one that has waited longest.
+
+> [!analogy] Real-world analogy: A line at a shop counter
+> People join the back of the line and the cashier serves whoever is at the front. In a narrow corridor, every time someone is served, everyone behind them shuffles one step forward.
+>
+> **How it maps:** Joining is `enqueue`, being served is `dequeue`, and the first to arrive is the first to leave. The shuffling corridor is a Python list used with `pop(0)`: every removal moves all the remaining items one slot. A better design keeps people still and moves a "now serving" marker instead, which is what a circular buffer does.
+>
+> **Where it stops:** Real people can give up and leave from the middle, or be let in early; a plain FIFO queue does not allow either. People shuffle forward all at once, so the line advances in one moment however long it is; a computer moves the items one after another, so `pop(0)` takes time proportional to the number still waiting.
 
 Queues are everywhere in real systems. Print jobs, network packets in a router, tasks waiting for a thread pool, messages in broker partitions or queue services, keystrokes waiting for your program to read them: all queues. Inside algorithms, the queue is what makes **breadth-first search** explore nearest-first.
 
@@ -37,18 +44,15 @@ q.pop(0)        # dequeue, O(n)!
 
 `pop(0)` shifts every remaining element one slot left. Draining a queue of n items this way moves n − 1 elements on the first dequeue, n − 2 on the next, and so on down to 0:
 
-```formula
-moves = (n − 1) + (n − 2) + ... + 1 + 0
+```formula reference
 moves = n(n − 1) / 2
-moves ≈ n^2 / 2
 where
 moves: the total number of element moves to empty the queue
 n: the number of items in the queue at the start
-≈: approximately equal to; for large n, n − 1 is about n
-In words: each dequeue shifts everything still waiting, so the total grows with the square of the queue length.
+In words: each dequeue shifts everything still waiting, so the total grows with the square of the queue length: about half of n squared.
 ```
 
-For 100,000 items that is about 100,000² / 2 = 5 billion moves; a proper queue would do 100,000 cheap operations. That is O(n²) for the whole drain, or O(n) per dequeue. The bug is invisible in tests with 10 items and catastrophic in production with a million.
+For 100,000 items that is about five billion moves, where a proper queue would do 100,000 cheap operations. That is O(n²) for the whole drain, or O(n) per dequeue. The bug is invisible in tests with 10 items and catastrophic in production with a million.
 
 Two structures fix it: a linked list with head and tail pointers (dequeue at the head, enqueue at the tail, both O(1)), or, usually better, a **circular buffer**.
 

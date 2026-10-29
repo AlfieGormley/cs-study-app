@@ -7,7 +7,7 @@ sourceLesson: ip-ipv4
 summary: Extract IPv4 header fields in Python and interpret a TTL difference only when its assumptions hold.
 ---
 
-Extract IPv4 header fields in Python and interpret a TTL difference only when its assumptions hold.
+The previous lesson described the header on paper. Here a short parser pulls the same fields out of real bytes, and the second half asks what the TTL field can and cannot tell you.
 
 ### Reading a header in Python
 
@@ -57,23 +57,13 @@ This prints version 4, a 20-byte header, total length 84, DF set, MF clear, offs
 
 **Time To Live** is specified in seconds, but each forwarding router must decrement it by at least one. This also makes it a **hop-count limit**, without requiring a measurement of router queueing times.
 
-A forwarding router decrements TTL by at least one. If it expires, the router discards the packet and normally sends ICMP **Time Exceeded**, subject to the rules suppressing errors for certain packets and to rate limiting.
+If TTL reaches zero, the router discards the packet and normally sends ICMP **Time Exceeded**, subject to the rules suppressing errors for certain packets and to rate limiting.
 
 Why bother? Transient routing loops can occur while routers disagree about the topology (see the interior routing lesson). Without TTL, forwarding has no hop-count expiry, though congestion or faults can still drop packets. With initial TTL at most 255 and compliant forwarding, an ordinary datagram cannot be forwarded indefinitely. Tunnel encapsulation uses its own outer TTL and needs separate consideration.
 
-The sender chooses the initial TTL. If you know that starting TTL, and each router subtracts exactly one without rewriting or encapsulation, the difference counts the routers crossed:
+The sender chooses the initial TTL. If you know that starting value, and each router subtracts exactly one without rewriting or encapsulation, the amount that has gone missing counts the routers crossed: a packet sent with 64 that arrives with 52 passed 12 routers. Hosts and layer 2 switches do not decrement TTL; only forwarding routers do.
 
-```formula
-h = TTL_0 − TTL_rx
-h = 64 − 52 = 12
-where
-h: the number of forwarding hops, that is routers that decremented the TTL; a whole number with no unit
-TTL_0: the initial TTL the sender set, here 64
-TTL_rx: the TTL value in the packet when it arrives, here 52
-In words: each router takes one off, so the amount that has gone missing is the number of routers the packet passed through.
-```
-
-This only works when both assumptions hold. An observed TTL alone does not establish the starting TTL or identify an operating system.
+Both assumptions matter. An observed TTL alone does not establish the starting TTL, the path length or the sender's operating system, because the starting value is configurable and some devices rewrite TTL.
 
 > [!note] Content omitted after review
 > A universal OS-default table and Internet hop-count range are omitted because they depend on platform versions, configuration and measurements not established here.
@@ -85,14 +75,5 @@ This only works when both assumptions hold. An observed TTL alone does not estab
 
 ## Further reading
 - [RFC 791: Internet Protocol](https://www.rfc-editor.org/rfc/rfc791)
-- [RFC 792: Internet Control Message Protocol](https://www.rfc-editor.org/rfc/rfc792)
-- [RFC 1191: Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc1191)
-- [RFC 4821: Packetization Layer Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc4821)
-- [IP fragmentation — Wikipedia](https://en.wikipedia.org/wiki/IP_fragmentation)
-- [Traceroute — Wikipedia](https://en.wikipedia.org/wiki/Traceroute)
-
-- [RFC 8900: IP Fragmentation Considered Fragile](https://www.rfc-editor.org/rfc/rfc8900.html)
-- [RFC 6864: IPv4 Identification field](https://www.rfc-editor.org/rfc/rfc6864)
-- [RFC 4638: Larger PPPoE MTUs](https://www.rfc-editor.org/rfc/rfc4638.html)
-- [RFC 6691: TCP options and MSS](https://www.rfc-editor.org/rfc/rfc6691.html)
 - [RFC 1812: IPv4 router requirements](https://www.rfc-editor.org/rfc/rfc1812.html)
+- [Python struct module](https://docs.python.org/3/library/struct.html)

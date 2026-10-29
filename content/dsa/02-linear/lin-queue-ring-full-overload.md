@@ -17,26 +17,32 @@ If you store `head` and `tail` indices instead of a count, `head == tail` is amb
 2. **Waste one slot**: declare the buffer full when `(tail + 1) % cap == head`, so a full buffer holds one fewer item than the physical slot count and `head == tail` can only mean empty.
 3. Use ever-increasing head and tail counters and compare `tail - head` with the capacity, taking indices `% cap` only when touching the array.
 
-Use nonnegative logical counters for this model; fixed-width machine counters need an explicit wraparound and overflow protocol. Option 3 with a **power-of-two** capacity lets you replace `% cap` with a cheap **bit mask** `& (cap - 1)`. When the capacity is a power of two, the remainder is just the lowest bits of the counter, and a bitwise AND keeps exactly those bits:
+Use nonnegative logical counters for this model; fixed-width machine counters need an explicit wraparound and overflow protocol. Option 3 with a **power-of-two** capacity lets you replace `% cap` with a cheap **bit mask** `& (cap - 1)`:
 
-```formula
+```formula reference
 i mod cap = band(i, cap − 1)
-13 mod 8 = band(13, 7) = 5
 where
 i: an ever-increasing head or tail counter
 cap: the buffer capacity, which must be a power of two (2, 4, 8, 16, ...)
 mod: modulo: the remainder after dividing by cap
 band: the bitwise AND function: compares two numbers bit by bit, keeping a 1 only where both have a 1. Written & in C, Java and Python
-In words: for a power-of-two capacity, the remainder after dividing by the capacity is just the counter's lowest bits, which one cheap AND instruction extracts.
+In words: when the capacity is a power of two, the remainder after dividing by it is just the counter's lowest bits, which a single cheap bitwise AND instruction extracts. With any other capacity the shortcut gives wrong slots.
 ```
 
-Worked through in binary: 13 is 1101 and 7 is 0111, so the AND keeps 0101, which is 5, the same as 13 mod 8. With a capacity that isn't a power of two, such as 6, the trick fails: 13 mod 6 = 1 but the bitwise result from 13 and 5 is 5. The Linux kernel's `kfifo` works this way.
+For example, with eight slots, counter 13 (binary 1101) masked with 7 (binary 0111) keeps 0101, slot 5, the same as the remainder of 13 divided by 8. The Linux kernel's `kfifo` relies on this, which is why it rounds sizes to powers of two.
 
 ### Growing and bounding
 
 A ring buffer can grow like a dynamic array: allocate double the space and copy the items across in queue order, "unwrapping" them. Java ArrayDeque also grows a circular array, but OpenJDK 21 roughly doubles small buffers and grows larger ones by about 50%, with additional adjustments for required capacity.
 
 Often you don't want it to grow. A bounded queue configured to block or reject producers provides **backpressure**: when consumers fall behind, producers block or are refused, instead of memory growing until the process dies. Audio drivers, network card receive rings and high-throughput designs like the LMAX Disruptor all use fixed-size rings.
+
+> [!analogy] Real-world analogy: A restaurant with a small waiting area
+> A busy restaurant has a few chairs by the door. When the chairs are full, the host asks new arrivals to wait outside or come back later instead of packing the lobby until nobody can move.
+>
+> **How it maps:** The chairs are the bounded buffer, the kitchen is the consumer, and arriving diners are producers. Turning people away or making them wait outside is backpressure: blocking or rejecting `put` once the queue is full.
+>
+> **Where it stops:** A full waiting area does not make the kitchen cook faster; only more cooks, simpler dishes or fewer diners change throughput. Diners may also give up and leave, whereas a blocked producer thread simply waits unless it was given a timeout.
 
 ### Arrival rate versus service rate
 

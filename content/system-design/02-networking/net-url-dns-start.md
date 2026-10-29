@@ -54,7 +54,7 @@ The browser splits the URL into parts:
 
 Before touching the network, it checks a few things:
 
-- **HSTS list.** If the site has sent a `Strict-Transport-Security` header before (or is on the browser's preload list), the browser upgrades `http://` to `https://` itself, skipping an insecure redirect.
+- **HSTS list.** If the site has sent a `Strict-Transport-Security` header before (or is on the browser's preload list), the browser upgrades `http://` to `https://` itself, skipping an insecure redirect. HSTS is learnt over a valid HTTPS connection or from the preload list, so without a prior policy (or another browser HTTPS-first feature) an explicit first `http://` visit still travels unencrypted before being redirected.
 - **HTTP cache.** If a fresh copy of the resource is stored, the browser can use it with zero network traffic. (Cache headers are covered in the caching module.)
 - **Existing connections.** If there's already an open connection to this origin, it can be reused, skipping steps 2 to 4 entirely.
 
@@ -72,15 +72,10 @@ If the recursive resolver has no cached answer, it walks the hierarchy:
 
 The answer comes back with a **TTL**, telling every cache how long it may keep it. Latency depends on cache state, resolver placement and the authoritative path.
 
-> [!note] Measurement gap
-> No measured traces accompany this lesson. The timings below are illustrative assumptions, not measurements or universal latency bounds.
-
 > [!note] DNS is also a routing tool
 > The authoritative server doesn't have to give everyone the same answer. Large sites return different IPs depending on where you are, which is the basis of GeoDNS and CDN steering. More on that in the DNS and global traffic lessons.
 
-HSTS is learnt over a valid HTTPS connection or from a browser preload entry. Without a prior policy or another browser upgrade mechanism, an explicit first HTTP request still travels unencrypted before a redirect to HTTPS; a header received only on the later HTTPS response cannot protect that earlier request.
-
-`Content-Length` describes a content length in bytes. Changing that declared length does not remove DNS queries, handshakes or redirects; the useful shortcuts above come from cached state or a reusable connection.
+Notice what the shortcuts have in common: each reuses state from an earlier visit (a cached response, a cached DNS answer, a remembered HSTS policy or an open connection). Header values that merely describe a message, such as `Content-Length` (the body size in bytes), remove no lookups, handshakes or redirects.
 
 ## Key takeaways
 

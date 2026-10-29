@@ -41,10 +41,7 @@ Big-O makes linked lists look great for insertion-heavy work. Real hardware is l
 - **Finding the spot is O(n) anyway** (for n elements). "Insert in the middle is O(1)" assumes you already hold the node. If you have to search for the position first, that search is O(n), and on an array it is a fast linear scan.
 
 > [!example] Why locality can outweigh shifting
-> A vector can beat a linked list when both first perform a linear search for the insertion point: contiguous scanning and shifting may outweigh the cost of moving elements. Actual performance requires measurement.
-
-> [!note] Evidence gap
-> A specific historical benchmark result is omitted because its exact dataset, implementation and measurements have not been independently reproduced or sourced here.
+> A vector can beat a linked list when both first perform a linear search for the insertion point: fast contiguous scanning and shifting can outweigh the list's cheap relink, because the list's search is a chain of dependent pointer loads. No universal speed ratio applies; measure your own workload.
 
 ## When linked lists actually win
 

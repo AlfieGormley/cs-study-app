@@ -24,6 +24,13 @@ On top of reverse-proxy features, it adds **API-level concerns**:
 
 The **BFF** pattern uses a separate gateway (or thin service) per client type: one for the mobile app, one for the web app. Each aggregates and shapes data for its client, for example combining five service calls into one response so a phone on a slow network makes one round trip instead of five.
 
+> [!analogy] Real-world analogy: A reception desk and a personal assistant
+> Every visitor to a large office passes one reception desk, which checks identification, signs them in, enforces visiting rules and tells them where to go. A busy executive might instead send a personal assistant, who visits five departments in the building and comes back with one folder.
+>
+> **How it maps:** reception is the API gateway: one front door applying shared policy (authentication, quotas, routing) before requests reach the services. The assistant is a backend for frontend, making several dependent internal calls on the client's behalf so the slow outside trip happens once.
+>
+> **Where it stops:** reception checks a visitor once at the door, but a gateway checks every single request, so when it is slow or down every API suffers. A BFF serves every user of one kind of client (all phone users, say), not one person. And unlike a trusted receptionist's badge, passing the gateway does not settle access: each service must still check whether this caller may see this particular resource.
+
 ### Gateway pitfalls
 
 - **Business logic creep.** Gateways become a dumping ground for logic that belongs in services, creating a fragile, centrally owned bottleneck. Keep them about *cross-cutting* concerns.

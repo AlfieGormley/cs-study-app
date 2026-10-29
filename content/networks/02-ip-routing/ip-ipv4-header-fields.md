@@ -2,9 +2,9 @@
 id: ip-ipv4-header-fields
 title: Read the IPv4 header
 level: basic
-minutes: 5
+minutes: 4
 sourceLesson: ip-ipv4
-summary: Read the fields that describe an IPv4 datagram and calculate its header and total-length limits.
+summary: Read the fields that describe an IPv4 datagram and interpret its header-length and total-length limits.
 ---
 
 The **Internet Protocol** (IP) has one job: get a packet from one host to another, across any number of networks, on a best-effort basis. It does not promise delivery, ordering or protection against duplicates. Those are left to the layers above (TCP) or to the application.
@@ -58,29 +58,10 @@ A few details worth knowing:
 - **DSCP** (Differentiated Services Code Point) marks traffic classes, for example "expedited forwarding" for voice. **ECN**, when supported by endpoints and the network, permits congestion marking of eligible packets; it does not eliminate all packet drops.
 - The **checksum** covers the header only, not the data. Because every router decrements TTL, a forwarding router must update it, possibly incrementally. IPv6 has no corresponding header checksum.
 
-To turn the IHL field into a header length in bytes, multiply by the size of each 4-byte word:
+Two length fields use different units, and mixing them up is a classic parsing bug:
 
-```formula
-L_hdr = IHL × 4 B
-L_hdr = 5 × 4 B = 20 B
-L_hdr = 15 × 4 B = 60 B
-where
-L_hdr: the length of the IPv4 header, in bytes (B)
-IHL: Internet Header Length, the 4-bit field in the IPv4 header that counts the header in 32-bit (4-byte) words; 5 when there are no options, 15 at most
-B: bytes; one byte is 8 bits
-In words: multiply the IHL value by 4 to get the header length in bytes. The usual IHL of 5 means a 20-byte header; the largest, 15, means 60 bytes, of which 40 are options.
-```
-
-The largest datagram follows from the size of the Total Length field. A field of 16 bits can hold 65,536 different values (2 to the power 16), from 0 up to one less than that:
-
-```formula
-L_max = (2^16 − 1) B = 65,535 B
-where
-L_max: the largest value the 16-bit Total Length field can hold, and so the largest possible IPv4 datagram (header plus data), in bytes (B)
-2^16: 16 copies of 2 multiplied together, which is 65,536: the number of different values 16 bits can represent
-B: bytes; one byte is 8 bits
-In words: Total Length counts from 0, so its largest value is 65,536 − 1 = 65,535 bytes. In practice the link MTU, usually far smaller, is what limits real packets.
-```
+- **IHL** counts 4-byte words. The usual value, 5, means a 20-byte header; the largest, 15, means 60 bytes, of which 40 are options. The transport header (TCP, UDP, ICMP) starts straight after however many bytes IHL says, so software that assumes a fixed 20 bytes misreads any packet carrying options.
+- The **Total Length field** counts bytes and includes the header. Being 16 bits wide, its largest value is 65,535 bytes. In practice the link MTU, usually far smaller, is what limits real packets.
 
 ## Key takeaways
 - IPv4 provides best-effort datagrams; each packet carries its own addresses.
@@ -89,14 +70,4 @@ In words: Total Length counts from 0, so its largest value is 65,536 − 1 = 65,
 
 ## Further reading
 - [RFC 791: Internet Protocol](https://www.rfc-editor.org/rfc/rfc791)
-- [RFC 792: Internet Control Message Protocol](https://www.rfc-editor.org/rfc/rfc792)
-- [RFC 1191: Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc1191)
-- [RFC 4821: Packetization Layer Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc4821)
-- [IP fragmentation — Wikipedia](https://en.wikipedia.org/wiki/IP_fragmentation)
-- [Traceroute — Wikipedia](https://en.wikipedia.org/wiki/Traceroute)
-
-- [RFC 8900: IP Fragmentation Considered Fragile](https://www.rfc-editor.org/rfc/rfc8900.html)
-- [RFC 6864: IPv4 Identification field](https://www.rfc-editor.org/rfc/rfc6864)
-- [RFC 4638: Larger PPPoE MTUs](https://www.rfc-editor.org/rfc/rfc4638.html)
-- [RFC 6691: TCP options and MSS](https://www.rfc-editor.org/rfc/rfc6691.html)
 - [RFC 1812: IPv4 router requirements](https://www.rfc-editor.org/rfc/rfc1812.html)

@@ -3,27 +3,27 @@
     "id": "ip-interior-routing-q3",
     "level": "basic",
     "type": "single",
-    "prompt": "With the specified Cisco-style OSPF reference of 100 Mbit/s and minimum cost 1, with no manual overrides, what is the total routing cost of a path crossing a 10 Mbit/s link, a 100 Mbit/s link and a 1 Gbit/s link?",
+    "prompt": "An OSPF network uses a 100 Mbit/s reference bandwidth with minimum cost 1 and no manual cost overrides. An engineer upgrades a core link from 1 Gbit/s to 10 Gbit/s, expecting OSPF to move more traffic onto it, but the chosen paths do not change at all. Why?",
     "options": [
       {
-        "text": "12",
-        "explanation": "Correct. 100/10 = 10, 100/100 = 1, and 100/1000 = 0.1, which is raised to the minimum cost of 1. Total 10 + 1 + 1 = 12."
+        "text": "OSPF ignores link speed entirely and counts only hops",
+        "explanation": "OSPF uses configured interface costs, which in this setup are derived from bandwidth. The problem is how that derivation behaves above the reference."
       },
       {
-        "text": "11.1",
-        "explanation": "OSPF costs are integers and can't be below 1, so the gigabit routing link costs 1, not 0.1."
+        "text": "The upgrade needs a full SPF recalculation, which OSPF only runs once a day",
+        "explanation": "A cost change triggers new LSAs and SPF runs; there is no daily schedule. Here the cost simply did not change."
       },
       {
-        "text": "3",
-        "explanation": "Three is the number of links. Under the specified rule, the 10 Mbit/s interface costs 10 while the others cost 1 each."
+        "text": "With a 100 Mbit/s reference, every link of 100 Mbit/s or faster already has the minimum cost of 1, so the link's cost is 1 before and after the upgrade",
+        "explanation": "Correct. 100 divided by 1,000 or by 10,000 rounds down to 0, which is raised to the floor of 1. Raising the reference (consistently on every router) or setting costs manually lets OSPF tell these links apart."
       },
       {
-        "text": "1,110",
-        "explanation": "This treats cost as bandwidth divided by reference, the wrong way round, and mixes units."
+        "text": "Costs are only read when the routers reboot",
+        "explanation": "Interface cost changes are advertised in new LSAs without a reboot. The cost here is unchanged."
       }
     ],
-    "answer": 0,
-    "workedExample": "With this rule the cost is the reference divided by the bandwidth, rounded down, but never below 1:\n\n```formula\nC = max(1, ⌊R / B⌋)\nC_1 = max(1, ⌊100 / 10⌋) = 10\nC_2 = max(1, ⌊100 / 100⌋) = 1\nC_3 = max(1, ⌊100 / 1000⌋) = 1\nC_path = 10 + 1 + 1 = 12\nwhere\nC: one interface's cost, a whole number with no unit\nR: the reference bandwidth, 100 Mbit/s\nB: the link's bandwidth in Mbit/s (1 Gbit/s = 1,000 Mbit/s)\n⌊ ⌋: floor: round down to a whole number\nmax(1, …): the larger of 1 and the value after it\nC_1, C_2, C_3: the costs of the 10 Mbit/s, 100 Mbit/s and 1 Gbit/s links\nC_path: the path cost, the sum of its link costs\nMbit/s: megabits per second, millions of bits per second\nIn words: 100 / 1,000 = 0.1 rounds down to 0 and is raised to the minimum 1, so the gigabit link costs the same as the 100 Mbit/s one.\n```\n\nNotice the gigabit routing link costs the same as the 100 Mbit/s one: the reference bandwidth is too low.",
+    "answer": 2,
+    "workedExample": "1. Under this model the cost is the reference bandwidth divided by the link bandwidth, rounded down, with a minimum of 1.\n2. 1 Gbit/s: 100 / 1,000 = 0.1, raised to 1. 10 Gbit/s: 100 / 10,000 = 0.01, also raised to 1.\n3. The cost stays 1, so no LSA changes the path calculation.\n4. With a 100 Gbit/s reference on every router, the costs would be 100 and 10, and OSPF would prefer the faster link where it lowers the total.\n5. Change the reference consistently, or a mix of references makes costs meaningless.",
     "link": {
       "title": "Open Shortest Path First — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Open_Shortest_Path_First"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "Each cost is the reference divided by the bandwidth, rounded down, with a minimum of 1:\n\n```formula\nC = max(1, ⌊R / B⌋)\nwhere\nC: an interface's OSPF cost, a whole number\nR: the reference bandwidth, in Mbit/s\nB: the link's bandwidth, in Mbit/s\n⌊ ⌋: floor: round down to a whole number\nmax(1, …): the larger of 1 and the value after it\nMbit/s: megabits per second\nIn words: faster links get lower costs, until they hit the floor of 1.\n```\n\n**Reference 100 Mbit/s**\n- Direct: 100/100 = 1.\n- Via R3: 100/10,000 = 0.01, clamped up to the minimum of 1, twice: 2.\n- 1 < 2: the slow direct link wins.\n\n**Reference 100 Gbit/s**\n- Direct: 100,000/100 = 1,000.\n- Via R3: 100,000/10,000 = 10, twice: 20.\n- 20 < 1,000: the path over the faster links wins.\n\nChange the reference on **every** router, or costs are inconsistent.",
+    "workedExample": "The stated rule: each interface's cost is the reference bandwidth divided by its bandwidth, rounded down, with a minimum of 1. Path cost is the sum.\n\n**Reference 100 Mbit/s**\n- Direct 100 Mbit/s link: cost 1.\n- Via R3: each 10 Gbit/s link would be 0.01, raised to the minimum of 1, so 1 + 1 = 2.\n- 1 < 2: the slow direct link wins.\n\n**Reference 100 Gbit/s**\n- Direct: 100,000 / 100 = 1,000.\n- Via R3: 100,000 / 10,000 = 10 per link, so 20.\n- 20 < 1,000: the path over the faster links wins.\n\nChange the reference on **every** router, or costs are inconsistent.",
     "link": {
       "title": "RFC 2328: OSPF Version 2",
       "url": "https://www.rfc-editor.org/rfc/rfc2328"

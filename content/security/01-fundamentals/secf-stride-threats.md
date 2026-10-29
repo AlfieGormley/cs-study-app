@@ -33,7 +33,7 @@ Microsoft's classic **STRIDE-per-element** mapping focuses questions on particul
 | Data store | T, I, D (R if it holds logs) |
 | Data flow | T, I, D |
 
-Processes get all six because they are where code makes decisions. For the diagram above, walking the elements produces a list like this:
+Processes get all six because they are where code makes decisions. For the shop diagram in the previous lesson (browser, web app, orders database, queue and email worker), walking the elements produces a list like this:
 
 - **Browser (S, R)**: can someone log in as another user? Can a user deny placing an order?
 - **Browser to web app flow (T, I, D)**: does correctly validated TLS protect the intended connection endpoints, and where does TLS terminate? Can the link be flooded?

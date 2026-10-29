@@ -15,18 +15,23 @@ The previous units established contiguous slots and amortised growth. The slot m
 
 A Python list is a dynamic array of **pointers** to objects (8 bytes each on a conventional 64-bit CPython build), not of the values themselves. `[1, 2, 3]` stores three pointers to three separate `int` objects elsewhere on the heap.
 
-CPython over-allocates by about **12.5%** plus a small constant. When a list needs room for n elements, `list_resize` in the CPython source picks the new capacity like this:
+CPython over-allocates by about **12.5%** plus a small constant. When a list needs room for more elements, `list_resize` in the CPython source picks the new capacity like this:
 
-```formula
+```formula reference
 new ≈ n + n / 8 + 6
 where
 new: the new capacity (number of pointer slots) CPython allocates
 n: the number of elements the list must now hold
 ≈: approximately: in the real code n/8 is rounded down to a whole number and the result is rounded down to a multiple of 4
-In words: make room for the elements needed, plus an eighth more (12.5%), plus a few spare slots so small lists don't resize on every append.
+In words: CPython makes room for the elements needed, plus about an eighth more, plus a few spare slots so small lists don't resize on every append. That is a growth factor of only about 1.125, much milder than doubling.
 ```
 
-For nine required elements, the extra eighth rounds down to one, producing capacity sixteen. For seventeen, it rounds down to two: the provisional twenty-five slots round down to twenty-four. For incremental single-item growth, the source comments give the capacity sequence as 0, 4, 8, 16, 24, 32, 40, 52, 64, 76... For a fixed CPython build, sys.getsizeof on an ordinary list can reveal backing-capacity changes. For a large bulk extension, CPython can instead suppress most spare capacity when the requested growth exceeds the proposed spare room. The mild factor saves memory; a conventional GIL-enabled CPython build can use `realloc` to extend a block in place when the allocator permits. The free-threaded build’s resize path instead allocates replacement storage and copies references.
+The source comments give the capacity sequence for one-at-a-time appends as 0, 4, 8, 16, 24, 32, 40, 52, 64, 76... Two details are worth knowing, both specific to the CPython version you run (checked here against the 3.14 source):
+
+- A large bulk extension, where the requested growth is bigger than the proposed spare room, gets almost no spare capacity.
+- A conventional GIL-enabled build resizes with `realloc`, which can sometimes extend the block in place; the free-threaded build allocates new storage and copies the references across.
+
+The mild factor saves memory while still giving amortised O(1) append, as the previous unit showed for any factor above 1. `sys.getsizeof` on a list reveals backing-capacity jumps for your particular build.
 
 For a list of n elements:
 
@@ -36,24 +41,20 @@ For a list of n elements:
 
 ### Java `ArrayList`
 
-`ArrayList` wraps an `Object[]`. A default-constructed list allocates its 10-slot backing array lazily, on the first `add`, and uses roughly **1.5x** incremental growth in OpenJDK 21. A larger required minimum or an array-size limit can change that result. The source writes this as `old + (old >> 1)`; `>> 1` shifts the bits right by one place, which halves a whole number and drops any remainder:
+`ArrayList` wraps an `Object[]`. A default-constructed list allocates its 10-slot backing array lazily, on the first `add`. When it fills, OpenJDK 21 grows it by about **1.5x**: the source asks for the old capacity plus half of it, rounded down (written `old + (old >> 1)`, where `>> 1` shifts the bits right one place). From 10 slots that gives 15, then 22, then 33. A larger required minimum or the array-size limit can override that. `ensureCapacity(n)` or `new ArrayList<>(n)` pre-sizes it to hold n elements.
 
-```formula
-new = old + ⌊old / 2⌋
-where
-new: the capacity after growing, in elements
-old: the capacity before growing, in elements
-⌊ ⌋: floor: round down to a whole number
-In words: the new array is the old size plus half again, rounded down.
-```
+Because Java generics only hold objects, `ArrayList<Integer>` stores references to boxed `Integer` objects. An `int[]` of a million elements is about 4 MB; an `ArrayList<Integer>` of a million is several times that (the exact figure depends on the JVM's object layout), plus the pointer chasing.
 
-From the default 10 slots this gives 15, then 15 + 7 = 22, then 22 + 11 = 33. `ensureCapacity(n)` or `new ArrayList<>(n)` pre-sizes it to hold n elements.
-
-Because Java generics only hold objects, `ArrayList<Integer>` stores references to boxed `Integer` objects. An `int[]` of a million elements is about 4 MB; an `ArrayList<Integer>` of a million is several times that, plus the pointer chasing.
+> [!analogy] Real-world analogy: An address book versus a row of houses
+> An address book has equal-sized lines, each holding the address of a house somewhere in town. A terrace of identical houses, by contrast, *is* the row of homes.
+>
+> **How it maps:** A Python `list` or Java `ArrayList<Integer>` is the address book: its contiguous slots hold references, and each value lives in its own object elsewhere on the heap. A C++ `vector<int>`, Java `int[]` or NumPy array is the terrace: the values themselves sit side by side. Reading every value from the address book means a trip to each house, which is the extra indirection and cache cost.
+>
+> **Where it stops:** Several address-book lines can name the same house, just as several list slots can reference one object, and the reference model is what lets a Python list hold mixed types. Real memory cost also includes object headers and allocator overhead that the picture leaves out.
 
 ### C++ `std::vector`
 
-`vector` stores elements directly and contiguously. The standard requires amortised constant `push_back` but leaves the growth factor to the implementation: common libraries use factors such as 2 or 1.5 for ordinary incremental growth, but those are implementation details rather than portable guarantees.
+`vector` stores elements directly and contiguously. The standard requires amortised constant `push_back` but leaves the growth factor to the implementation: current library sources show libstdc++ and libc++ doubling the capacity and MSVC's library growing it by half for ordinary one-at-a-time growth, but those are implementation details rather than portable guarantees.
 
 `reserve(n)` ensures capacity is at least n without changing size; it does not shrink existing capacity. The crucial pitfall is **iterator invalidation**: a reallocation moves every element, so any pointer, reference or iterator into the vector becomes dangling.
 

@@ -33,30 +33,30 @@
     "id": "ip-routing-basics-q7",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Consider this deliberately incomplete lookup variant. Its `routes` list has already been rebuilt without the default and contains only 10/8, 10.1/16 and 10.1.2/24. What happens for `lookup(\"8.8.8.8\")`?\n\n```python\ndef lookup(addr):\n    a = ip.ip_address(addr)\n    hits = [(n.prefixlen, hop)\n            for n, hop in routes\n            if a in n]\n    # No guard for an empty match list.\n    return max(hits)[1]\n```",
+    "prompt": "A router's table contains only `10.0.0.0/8`, `10.1.0.0/16` and `10.1.2.0/24`: there is no default route. A packet for 8.8.8.8 arrives. What happens?",
     "options": [
       {
-        "text": "It returns `None`",
-        "explanation": "Nothing in the function returns None. `max` doesn't return a default for an empty list unless you pass `default=`."
+        "text": "It uses 10.0.0.0/8, the shortest and broadest route",
+        "explanation": "Longest-prefix match only considers entries that contain the destination. 8.8.8.8 is not inside 10.0.0.0/8, so that route is not a candidate."
       },
       {
-        "text": "It raises `ValueError` because `max()` gets an empty list",
-        "explanation": "Correct. No route matches, so max receives an empty list and raises ValueError. The corrected lesson version returns None for this case."
+        "text": "It discards the packet and normally sends ICMP Destination Unreachable (network unreachable) back to the source, subject to rate limits",
+        "explanation": "Correct. With no matching entry there is no next hop. RFC 1812 requires a router to discard such a packet and generate a Network Unreachable error, though rate limiting and suppression rules can stop the message being sent."
       },
       {
-        "text": "It returns `\"core\"`, the shortest remaining prefix",
-        "explanation": "LPM never falls back to an entry that doesn't contain the address. 8.8.8.8 isn't in 10.0.0.0/8."
+        "text": "It floods the packet out of every interface",
+        "explanation": "IP routers do not flood unicast packets they cannot route; flooding unknown destinations is switch behaviour for unknown MAC addresses."
       },
       {
-        "text": "It raises `IndexError` on `[1]`",
-        "explanation": "The error happens earlier: `max` fails before there's a tuple to index."
+        "text": "It holds the packet until a routing protocol learns a route",
+        "explanation": "Routers forward or drop each packet immediately; they do not queue packets waiting for future routes."
       }
     ],
     "answer": 1,
-    "workedExample": "The rebuilt routes contain no prefix matching 8.8.8.8, so hits is empty and max raises before indexing. The lesson's corrected function checks this case and returns None. Removing an entry from the original table alone would not change a separately constructed routes list. A router without a route generally discards the packet and may report ICMP subject to suppression and rate limits.",
+    "workedExample": "1. List the routes that contain 8.8.8.8: none of the three 10.x prefixes do.\n2. There is no 0.0.0.0/0 default to catch everything else.\n3. With no matching route there is no next hop, so the packet is discarded.\n4. The router normally reports ICMP Destination Unreachable, code 0 (network unreachable), to the source; rate limits can suppress it.\n5. On the sender, this often appears as an immediate 'network unreachable' error rather than a slow timeout.",
     "link": {
-      "title": "Python ipaddress module",
-      "url": "https://docs.python.org/3/library/ipaddress.html"
+      "title": "RFC 1812: Requirements for IPv4 Routers",
+      "url": "https://www.rfc-editor.org/rfc/rfc1812"
     }
   }
 ]

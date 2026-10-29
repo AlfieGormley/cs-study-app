@@ -13,6 +13,13 @@ Attackers can **live off the land**: using tools already present on the system (
 
 Defenders combine file indicators with **behaviour**: endpoint detection and response (EDR) can record process trees, so "Word spawned PowerShell, which made a network connection" can prompt investigation even if every binary is legitimate. Available telemetry and detection rules depend on deployment.
 
+> [!analogy] Real-world analogy: a burglar using the owner's ladder
+> A burglar who brings no tools and instead uses the homeowner's own ladder from the shed leaves nothing unusual to find: the ladder belongs there. What gives them away is behaviour, such as the ladder against an upstairs window at 3 a.m.
+>
+> **How it maps:** The owner's ladder is PowerShell, WMI or a cloud CLI: legitimate tools already present. Searching for burglary tools is like matching known-malware file hashes. Noticing the ladder in an odd place at an odd time is behavioural detection, such as an unusual process tree or login.
+>
+> **Where it stops:** Computers can record far more detail than a householder sees, but only where telemetry is collected and someone has written and tested rules for it. Legitimate administrators also do unusual things, so behavioural alerts need investigation rather than automatic conclusions.
+
 ### Privilege escalation and credential access
 
 A foothold may not provide the access required for the objective. Attackers look for ways to become an administrator: unpatched local vulnerabilities, misconfigured services, and exposed **credentials**, such as cached admin logins, passwords in scripts, and cloud keys in environment variables.

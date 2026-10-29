@@ -9,7 +9,12 @@ summary: LIFO uses the newest item first.
 
 A **stack** is a collection where you can only touch the top. You add to the top (**push**) and remove from the top (**pop**), so the last thing in is the first thing out: **LIFO**.
 
-Think of a pile of plates. You can't pull one from the middle without disturbing the rest; you take the one on top.
+> [!analogy] Real-world analogy: A pile of plates
+> In a pile of clean plates you put new plates on top and take plates from the top. The plate you washed last is the first one you use.
+>
+> **How it maps:** Putting a plate on is `push`, taking the top plate is `pop`, glancing at it is `peek`, and the plate at the bottom is the oldest item, which leaves last: LIFO.
+>
+> **Where it stops:** You could physically slide a plate out of the middle; a stack's interface forbids it. A dynamic-array stack also has a capacity that grows by copying, which a pile of plates never needs.
 
 That restriction sounds limiting, but it is exactly the shape of a huge number of problems: anything nested, anything you need to undo in reverse order, and anything where the most recent item is the one that matters.
 

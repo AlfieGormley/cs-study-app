@@ -3,27 +3,27 @@
     "id": "ip-ipv4-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A datagram with a 20-byte header and 1,980 bytes of data must cross a link with an MTU of 1,000 bytes. DF is clear. What are the **data size** and **offset field** of the *last* fragment? Use the largest possible eight-byte-aligned data payload in each non-final fragment, with a 20-byte header in every fragment.",
+    "prompt": "A home-made router splits a 2,000-byte IPv4 datagram (20-byte header, 1,980 bytes of data, DF clear) for a link with a 1,000-byte MTU. It sends fragments carrying 980, 980 and 20 bytes of data, each with a 20-byte header. Every destination rejects or misassembles the result. What is the design error?",
     "options": [
       {
-        "text": "20 bytes of data, offset 245",
-        "explanation": "This uses 980 bytes per fragment, but 980 isn't a multiple of 8. Fragment data (except the last) must be 8-byte aligned, so each carries 976."
+        "text": "It should have set DF so the datagram would not be fragmented",
+        "explanation": "DF tells routers not to fragment; it would make the router drop the datagram, not fix its fragment sizes. The question is why these fragments are invalid."
       },
       {
-        "text": "28 bytes of data, offset 244",
-        "explanation": "Correct. Each non-final fragment carries 976 bytes (the largest multiple of 8 ≤ 980). Two of them carry 1,952 bytes, leaving 28 at byte 1,952, which is offset 1,952 ÷ 8 = 244."
+        "text": "Non-final fragments must carry a multiple of 8 bytes: the second fragment would start at byte 980, which the 8-byte offset field cannot express, so they should carry 976",
+        "explanation": "Correct. 980 ÷ 8 is 122.5, which the offset field cannot hold. Using 976 bytes (the largest multiple of 8 that fits) puts every boundary on an 8-byte unit."
       },
       {
-        "text": "28 bytes of data, offset 1,952",
-        "explanation": "The size is right, but the offset field is in 8-byte units, not bytes: 1,952 ÷ 8 = 244."
+        "text": "The last fragment is too small; every fragment must be the same size",
+        "explanation": "Only non-final fragments are constrained. The last fragment carries whatever remains, however small."
       },
       {
-        "text": "980 bytes of data, offset 0",
-        "explanation": "That describes a (wrongly sized) first fragment, not the last."
+        "text": "Each fragment should carry the original header only once, in the first fragment",
+        "explanation": "Every fragment is a complete IP datagram with its own header; that is how routers can forward fragments independently."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Work out how much data fits in each non-final fragment, then where the last one starts:\n\n```formula\nD = ⌊(MTU − H) / 8⌋ × 8\nD = ⌊(1000 − 20) / 8⌋ × 8\nD = ⌊122.5⌋ × 8 = 976 B\nD_3 = 1980 − 2 × 976 = 28 B\nF_3 = 1952 / 8 = 244\nwhere\nD: the data in each non-final fragment, in bytes (B); it must be a multiple of 8\nMTU: the link's maximum transmission unit, 1,000 bytes\nH: the IP header in each fragment, 20 bytes\n⌊ ⌋: floor: round down to a whole number\nD_3: the data left for the third and last fragment, in bytes\nF_3: the last fragment's offset field: its starting byte, 1,952, in 8-byte units\nB: bytes; one byte is 8 bits\nIn words: 980 bytes of room rounds down to 976 per fragment; two such fragments leave 28 bytes, which start at byte 1,952, recorded as 244.\n```\n\n2. The full split:\n\n```\nfrag  data  byte off  field  MF\n1     976   0         0      1\n2     976   976       122    1\n3     28    1952      244    0\n```\n\n3. Check: 976 + 976 + 28 = 1,980.\n4. The last fragment is 48 bytes at the IP layer, before link framing (20 + 28), with offset 244 and MF clear (0).",
+    "workedExample": "1. The Fragment Offset field counts 8-byte units, so a fragment can only start at a byte position divisible by 8.\n2. With a 980-byte first fragment, the second would start at byte 980, which is not divisible by 8.\n3. The fix is to round the room after the header (980 bytes) down to 976 for every non-final fragment.\n4. That gives 976, 976 and 28 bytes of data, starting at bytes 0, 976 and 1,952 (offset values 0, 122 and 244), with MF clear only on the last.\n5. The last fragment is exempt from the multiple-of-8 rule because nothing follows it.",
     "link": {
       "title": "IP fragmentation — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/IP_fragmentation"

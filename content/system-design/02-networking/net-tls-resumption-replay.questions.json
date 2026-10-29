@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "Upgrade from TLS 1.2 to TLS 1.3",
-        "explanation": "Correct. That removes one round trip from every full handshake: 150 ms saved per new connection."
+        "explanation": "Correct. That removes one round trip from every full handshake, saving one 150 ms trip per new connection."
       },
       {
         "text": "Terminate TLS at CDN edges close to users",
@@ -32,7 +32,7 @@
       2,
       4
     ],
-    "workedExample": "Setup time is round trips times RTT:\n\n```formula\nT = (n_TCP + n_TLS) × RTT\nT_12 = (1 + 2) × 150 ms = 450 ms\nT_13 = (1 + 1) × 150 ms = 300 ms\nT_0rtt = (1 + 0) × 150 ms = 150 ms\nwhere\nT: the setup time before the request can be sent, in milliseconds (ms)\nn_TCP: the round trips for the TCP handshake, 1\nn_TLS: the round trips for TLS: 2 for a full TLS 1.2 handshake, 1 for TLS 1.3, 0 for TLS 1.3 resumption with 0-RTT early data\nRTT: the round-trip time to your region, 150 ms\nT_12: the baseline with TLS 1.2\nT_13: after upgrading to TLS 1.3\nT_0rtt: a resumed connection using 0-RTT\nms: millisecond, one thousandth of a second\nIn words: each round trip removed saves a full 150 ms.\n```\n\n- Baseline, new connection, TLS 1.2: **three round trips (450 ms)** before the request.\n- TLS 1.3 → two round trips (300 ms).\n- 0-RTT on resume → one TCP round trip (150 ms).\n- Edge at 10 ms RTT → about 20 ms of setup, plus one origin round trip over a warm connection.\n- Connection reuse → 0 ms setup for later requests.\n\nChanging to RSA-4096 does not remove a protocol round trip; its byte size and signing cost depend on the certificate chain and implementation.",
+    "workedExample": "Setup cost is the number of round trips multiplied by the round-trip time, so a measure helps if it removes trips or shortens them:\n\n- Baseline, new connection with TLS 1.2: three round trips (TCP plus two for TLS) before the request.\n- TLS 1.3 → two round trips: **fewer trips**.\n- 0-RTT on resumption, for replay-safe requests → only the TCP round trip remains: **fewer trips**.\n- Edge termination → the handshake trips go to a nearby edge, plus one origin trip over a warm connection: **shorter trips**.\n- Connection reuse → no setup at all for later requests.\n\nChanging to RSA-4096 removes no protocol round trip; it can enlarge the first flight, and its signing cost depends on the implementation.",
     "link": {
       "title": "Introducing 0-RTT (Cloudflare blog)",
       "url": "https://blog.cloudflare.com/introducing-0-rtt/"
@@ -72,27 +72,27 @@
     "id": "net-tls-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A returning client reconnects over TCP using TLS 1.3 session resumption with a valid ticket, but the server has early data (0-RTT) **disabled**. RTT is 50 ms. How long after starting does the client's HTTP request leave?",
+    "prompt": "A returning client reconnects over TCP using TLS 1.3 session resumption with a valid ticket, but the server has early data (0-RTT) **disabled**. Compared with a full TLS 1.3 handshake on a new TCP connection, when can the client send its HTTP request?",
     "options": [
       {
-        "text": "Immediately, because resumption is 0-RTT",
-        "explanation": "Resumption and 0-RTT are separate. Without early data, the client must still finish a 1-RTT handshake before sending application data."
+        "text": "Immediately, in the first packet, because resumption is 0-RTT",
+        "explanation": "Resumption and 0-RTT are separate. Without early data, the client must still finish a one-round-trip TLS handshake before sending application data, and TCP needs its own round trip first."
       },
       {
-        "text": "After about 50 ms",
-        "explanation": "That counts only the TCP handshake, as if TLS resumption needed no round trip. Without early data it still needs one."
+        "text": "One round trip earlier, because resumption skips the TLS handshake entirely",
+        "explanation": "Resumption shortens the handshake's content (no certificate exchange), not its round-trip count. The ClientHello and ServerHello exchange still happens."
       },
       {
-        "text": "After about 150 ms",
-        "explanation": "That's a full TLS 1.2 handshake over TCP (3 RTT). TLS 1.3, resumed or not, needs one TLS round trip."
+        "text": "Later, because resumption adds a ticket-validation round trip",
+        "explanation": "The server validates the ticket inside the normal handshake; there is no extra round trip."
       },
       {
-        "text": "After about 100 ms: one RTT for TCP and one for the resumed TLS handshake",
-        "explanation": "Correct. Resumption skips the certificate and its verification (saving CPU and bytes), but the round-trip count is the same as a full TLS 1.3 handshake: 2 RTT over TCP."
+        "text": "At the same point: one TCP round trip and one TLS round trip in both cases; resumption saves CPU and bytes, not round trips",
+        "explanation": "Correct. Resumption skips sending and verifying the certificate chain, but without early data the request still waits for the same two round trips over TCP."
       }
     ],
     "answer": 3,
-    "workedExample": "Count the round trips:\n\n| Step | RTT |\n|---|---|\n| TCP SYN / SYN-ACK | 1 |\n| ClientHello + PSK / ServerHello + Finished | 1 |\n| Then the request goes out | |\n\n```formula\nT = (n_TCP + n_TLS) × RTT\nT = (1 + 1) × 50 ms = 100 ms\nwhere\nT: the time before the HTTP request can leave the client, in milliseconds (ms)\nn_TCP: the round trips for the TCP handshake, 1\nn_TLS: the round trips for the resumed TLS 1.3 handshake without early data, 1\nRTT: the round-trip time, 50 ms\nms: millisecond, one thousandth of a second\nIn words: resumption without early data still needs a full TLS round trip after the TCP one.\n```\n\nSo **100 ms**.\n\nWith 0-RTT enabled, the request would ride with the ClientHello: 50 ms. With QUIC and 0-RTT: 0 ms of setup before the request leaves.",
+    "workedExample": "Count the round trips before the request can leave:\n\n| Step | Full TLS 1.3 | Resumed, no early data |\n|---|---|---|\n| TCP SYN / SYN-ACK | 1 | 1 |\n| TLS hello exchange | 1 (with certificate) | 1 (with PSK, no certificate) |\n\nBoth take two round trips. Resumption makes the second one lighter (no certificate to send or verify), which saves CPU and bytes.\n\nOnly early data changes the count: with 0-RTT the request rides with the ClientHello, after just the TCP round trip; with QUIC and 0-RTT it leaves in the very first flight. Early data needs a replay-safe request.",
     "link": {
       "title": "RFC 8446: TLS 1.3",
       "url": "https://www.rfc-editor.org/rfc/rfc8446"
@@ -122,7 +122,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. This implementation encrypts resumable state into a stateless ticket; other implementations can use opaque identifiers and server-side state.\n2. A returning client presents its ticket to a uniformly chosen node.\n3. Only the original node has the right key:\n\n```formula\nP = 1 / N = 1 / 20 = 0.05 = 5%\nwhere\nP: the probability that a returning client lands on the node that issued its ticket\nN: the number of TLS-terminating nodes, 20, each equally likely\n%: per cent\nIn words: with 20 nodes and 20 different keys, a returning client finds the right key only one time in twenty.\n```\n\nFix: share a securely distributed, rotated ticket-key set or use another compatible resumption design.\nNote that ticket-key compromise can enable impersonation and expose early data or PSK-only traffic; it does not automatically decrypt past post-handshake traffic protected by fresh (EC)DHE.",
+    "workedExample": "1. This implementation encrypts the resumable state into a stateless ticket using the issuing node's key; other implementations use opaque session IDs and shared server-side state.\n2. A returning client presents its ticket to whichever node it reaches, chosen uniformly from 20.\n3. Only the node that issued the ticket holds the right key, so resumption works only when the client happens to land there: about one time in twenty, which matches the observed 5%.\n4. Every other reconnection falls back to a full handshake.\n\nFix: share a securely distributed, rotated ticket-key set across the fleet, or use another resumption design that works across nodes.\nNote that ticket-key compromise can enable impersonation and expose early data or PSK-only traffic; it does not automatically decrypt past post-handshake traffic protected by fresh (EC)DHE.",
     "link": {
       "title": "High Performance Browser Networking: TLS",
       "url": "https://hpbn.co/transport-layer-security-tls/"

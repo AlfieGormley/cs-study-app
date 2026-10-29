@@ -7,7 +7,7 @@ sourceLesson: ip-bgp
 summary: Trace BGP’s TCP session and compare base iBGP mesh requirements with reflection.
 ---
 
-Trace BGP’s TCP session and compare base iBGP mesh requirements with reflection.
+BGP routers do not discover each other; operators configure each session. This lesson covers how a session stays alive, and why distributing routes inside one AS needs either a full mesh of sessions or route reflectors.
 
 ### Sessions
 
@@ -15,23 +15,12 @@ BGP routers ("speakers") form sessions over **TCP port 179**, using configured p
 
 | Message | Purpose |
 |---|---|
-| OPEN | Start session, exchange ASN and hold time |
+| OPEN | Start session, exchange ASN and proposed BGP hold time |
 | UPDATE | Announce or withdraw prefixes |
 | KEEPALIVE | Maintain liveness at a suggested interval of at most a third of the hold time |
 | NOTIFICATION | Error; close the session |
 
-Once established, the hold timer limits how long a router waits without an accepted KEEPALIVE or UPDATE before closing the session. RFC 4271 suggests a default hold time of 90 seconds and a reasonable maximum KEEPALIVE interval of one third of the hold time:
-
-```formula
-t_KA ≤ t_hold / 3
-t_KA ≤ 90 s / 3 = 30 s
-where
-t_KA: the interval between KEEPALIVE messages, in seconds (s)
-t_hold: the negotiated hold time, in seconds; RFC 4271 suggests 90 s, and zero turns the hold timer and KEEPALIVEs off
-≤: is at most
-s: seconds
-In words: the suggested interval schedules a KEEPALIVE at least three times per nonzero hold time when updates do not already maintain liveness. BGP uses TCP; packet loss, retransmission and delivery stalls affect when the next complete message reaches the receiver.
-```
+Once established, the hold timer limits how long a router waits without an accepted KEEPALIVE or UPDATE before closing the session. RFC 4271 suggests a default hold time of 90 seconds and a KEEPALIVE interval of at most one third of the hold time (so 30 seconds for 90), giving the peer several chances to hear from it before the timer expires. BGP runs over TCP, so loss and retransmission delay when a complete message actually arrives.
 
 After the initial permitted route exchange, normal updates are incremental. Route-refresh extensions can request re-advertisements. KEEPALIVE or UPDATE receipt can reset the hold timer; negotiated hold time zero disables this timer and KEEPALIVEs. Memory needs depend on prefixes, paths, attributes and implementation.
 
@@ -42,21 +31,22 @@ After the initial permitted route exchange, normal updates are incremental. Rout
 
 iBGP does not prepend the local ASN, so the AS_PATH cannot record internal router traversal. In base iBGP, an iBGP-learned route is not re-advertised to another internal peer, so every BGP router must have a session with every other one, a full mesh:
 
-```formula
+```formula reference
 S = n(n − 1) / 2
-S = 100 × 99 / 2 = 4,950
 where
 S: the number of iBGP sessions in a full mesh
-n: the number of BGP routers in the AS, here 100
-In words: each of the n routers needs a session with the n − 1 others, and dividing by 2 counts each shared session once. Doubling the routers roughly quadruples the sessions.
+n: the number of BGP routers in the AS
+In words: every router needs a session with every other, so the number of sessions grows roughly with the square of the number of routers. 100 routers need 4,950 sessions, and adding one more router means configuring a new session on every existing router.
 ```
 
-**Route reflectors** (RFC 4456) relax that restriction: selected client routes can be reflected to clients and non-clients, while non-client routes are reflected to clients. ORIGINATOR_ID and CLUSTER_LIST support reflection-loop detection. Confederations are another scaling approach.
+The reason for the full mesh is the rule itself: if R1 learns a route over eBGP and tells R2 over iBGP, R2 will not pass it on to R3. Unless R1 also has a session with R3, R3 never hears the route.
+
+**Route reflectors** (RFC 4456) relax that restriction: selected client routes can be reflected to clients and non-clients, while non-client routes are reflected to clients. ORIGINATOR_ID and CLUSTER_LIST support reflection-loop detection. With reflectors, each client needs sessions only to its reflectors. RFC 4456 notes that a cluster with a single reflector is a single point of failure, so clients usually peer with at least two. Confederations are another scaling approach.
 
 ## Key takeaways
 - Base BGP uses configured TCP peer sessions on port 179.
 - OPEN, UPDATE, KEEPALIVE and NOTIFICATION serve different purposes.
-- Hold-time zero disables the hold timer and KEEPALIVEs.
+- A negotiated hold time of zero disables the hold timer and KEEPALIVEs.
 - Route reflectors relax base iBGP redistribution restrictions and add loop-detection attributes.
 
 ## Further reading

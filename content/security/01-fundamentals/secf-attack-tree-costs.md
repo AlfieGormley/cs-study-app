@@ -26,44 +26,19 @@ Read another customer's invoice (OR)
    +- Decrypt backup               9
 ```
 
-The numbers are invented additive cost units for this exercise, not measured difficulty or ordinal 1-to-10 ratings. Assume costs do not overlap, all steps are feasible and attackers choose the cheapest route. Under those assumptions:
+The numbers are invented additive costs for this exercise, not measured difficulty or ordinal 1-to-10 ratings. Assume costs do not overlap, all steps are feasible and attackers choose the cheapest route. Under those assumptions:
 
 - **OR node**: the attacker picks the cheapest child, so take the **minimum**.
 - **AND node**: the attacker must do every child, so take the **sum**.
 
-For any non-leaf node with at least one child, the exercise uses these rules:
+> [!analogy] Real-world analogy: a burglar choosing a way in
+> A burglar can climb through an unlocked back window, or use the front door, which means both picking the lock and disabling the alarm.
+>
+> **How it maps:** "Window or front door" is an OR node: the burglar uses whichever is easier. "Pick the lock and disable the alarm" is an AND node: both are needed, so their difficulty adds up. Fitting a better front lock leaves the window as the cheapest way in.
+>
+> **Where it stops:** Real burglars do not have exact costs, may not know every route and can change plans part-way. Attack-tree numbers are likewise judgements under stated assumptions, not measurements.
 
-```formula
-C_OR = min(c_1, c_2, …, c_k)
-C_AND = c_1 + c_2 + … + c_k
-where
-C_OR: the cost of an OR node, in the exercise's invented cost units
-C_AND: the cost of an AND node, in the same units
-min: the minimum: the smallest of the values in the brackets
-c_1: the cost of the node's first child (a leaf's number, or a cost already worked out lower down)
-c_2: the cost of the second child
-c_k: the cost of the last child
-k: the number of children the node has
-…: "and so on" for every child in between
-In words: an attacker who may choose pays only for the cheapest option; an attacker who must do every step pays for all of them.
-```
-
-Work from the leaves up to the root:
-
-```formula
-C_phish = 2 + 4 = 6
-C_takeover = min(3, C_phish) = 3
-C_backup = 5 + 9 = 14
-C_root = min(2, C_takeover, C_backup)
-C_root = min(2, 3, 14) = 2
-where
-C_phish: cost of the AND node "Phish password AND OTP": phishing page (2) plus real-time OTP relay (4), in cost units
-C_takeover: cost of the OR node "Take over their account": the cheaper of credential stuffing (3) and the phishing route
-C_backup: cost of the AND node "Steal DB backup": find the public bucket (5) plus decrypt the backup (9)
-C_root: cost of the root goal, the cheapest of its three children: guessing the invoice URL (2), account takeover and backup theft
-min: the minimum: the smallest of the values in the brackets
-In words: the cheapest way to read another customer's invoice costs 2 units, by guessing the invoice URL (the IDOR).
-```
+Working from the leaves up: the phishing route is an AND, so it costs 2 plus 4, which is 6. Account takeover is an OR, so it costs the cheaper of credential stuffing (3) and phishing (6), which is 3. Backup theft is an AND costing 5 plus 9, which is 14. The root is an OR, so the attacker's cheapest route is the invoice-URL guess at 2.
 
 In this model, removing the IDOR path leaves the root at the cheaper of 3 and 14, so the minimum rises from 2 to 3. Strengthening a cost-14 path alone leaves that minimum unchanged. Real prioritisation also needs impact, likelihood, mitigation cost and interactions between paths; these invented numbers cannot rank a real deployment.
 

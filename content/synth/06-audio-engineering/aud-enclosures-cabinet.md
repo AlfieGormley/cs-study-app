@@ -9,7 +9,7 @@ sourceLesson: aud-enclosures
 
 ## Alignments, conceptually
 
-The driver plus box is a **high-pass filter**: second-order for sealed, fourth-order for ported. An **box alignment** is a choice of driver parameters, box volume and tuning that gives a particular filter shape, borrowed from electrical filter theory. Thiele (1961) and Small (1972–73) published tables of these; Butterworth (maximally flat), Chebyshev (some ripple, more extension) and quasi-Butterworth variants are common names. Modern practice is to simulate the response, excursion and port air speed in software, then measure.
+The driver plus box is a **high-pass filter**: second-order for sealed, fourth-order for ported. A **box alignment** is a choice of driver parameters, box volume and tuning that gives a particular filter shape, borrowed from electrical filter theory. Thiele (1961) and Small (1972–73) published tables of these; Butterworth (maximally flat), Chebyshev (some ripple, more extension) and quasi-Butterworth variants are common names. Modern practice is to simulate the response, excursion and port air speed in software, then measure.
 
 ## Cabinet resonance and bracing
 

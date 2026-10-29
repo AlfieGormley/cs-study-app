@@ -32,9 +32,16 @@ The client verifies:
 
 The server must send the leaf **and intermediates**. A missing intermediate is a classic bug: it works in desktop browsers (which may cache or fetch intermediates) but fails in mobile apps and `curl`.
 
+> [!analogy] Real-world analogy: A letter of introduction from someone you trust
+> A stranger shows you a letter saying "this is Sam", signed by a manager you've never heard of. Attached is a second letter, signed by a company director whose signature you already know, vouching for that manager. You trust Sam only because you can follow the signatures back to someone you already trusted.
+>
+> **How it maps:** Sam's letter is the leaf certificate binding a name to a key, the manager is the intermediate CA and the director you already know is a root in your trust store. Forgetting to attach the second letter is the classic missing-intermediate bug.
+>
+> **Where it stops:** a TLS client checks cryptographic signatures, names, validity dates and constraints mechanically rather than recognising handwriting. Holding a certificate proves nothing by itself: the server must also prove it has the matching private key during the handshake.
+
 ### Issuance and automation
 
-**Let's Encrypt** offers free certificates and automated issuance through ACME. As checked on 14 October 2026, its classic profile is scheduled to move from 90 to 64 days on 10 February 2027, then to 45 days on 16 February 2028; its tlsserver profile moved to 45 days in May 2026. The CA/Browser Forum maximum for newly issued publicly trusted TLS certificates became 200 days on 15 March 2026 and is scheduled to become 100 days on 15 March 2027 and 47 days on 15 March 2029. Automate renewal and monitor expiry to make these shorter cycles manageable. These public-trust requirements do not automatically govern a private PKI.
+**Let's Encrypt** offers free certificates and automated issuance through ACME. As checked on 29 October 2026, its default classic profile is scheduled to move from 90 to 64 days on 10 February 2027, then to 45 days on 16 February 2028; its optional tlsserver profile moved to 45 days in May 2026. Schedules like these can change, so check the CA’s current announcements. The CA/Browser Forum maximum for newly issued publicly trusted TLS certificates became 200 days on 15 March 2026 and is scheduled to become 100 days on 15 March 2027 and 47 days on 15 March 2029. Automate renewal and monitor expiry to make these shorter cycles manageable. These public-trust requirements do not automatically govern a private PKI.
 
 > [!note] Evidence gap
 > No comparative outage dataset or reproducible TLS performance benchmark accompanies this lesson. Claims that certificate expiry is a leading outage cause, and universal throughput or signature-speed estimates, are omitted; measure your deployment.

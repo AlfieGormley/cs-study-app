@@ -17,43 +17,28 @@ Condenser microphones are powered through the same balanced cable that carries t
 
 The equal DC on the signal wires is common-mode, so it does not appear across an ideal floating dynamic coil. A preamp still needs suitable DC blocking, voltage ratings and transient protection: common-mode rejection alone does not make an arbitrary balanced input safe at 48 V.
 
-The mic draws its current through both feed resistors at once. Two equal resistors side by side (in parallel) act like one of half the value, and the voltage lost across them follows Ohm's law:
+The microphone draws its current through both feed resistors at once, so they act like a single resistor of half the value (about 3.4 kΩ). Current through a resistance drops voltage across it, so **the more current a microphone draws, the less of the 48 V reaches it**:
 
-```formula
-R_feed = 6810 Ω / 2 = 3405 Ω
+| Microphone current | Approximate voltage at the mic |
+|---|---|
+| 0.8 mA (the U 87 Ai, per Neumann) | about 45 V |
+| 5 mA | about 31 V |
+| 10 mA (the standard's maximum) | about 14 V |
+
+```formula reference
 V_mic = V_s − I R_feed
-V_mic = 48 V − 0.010 A × 3405 Ω
-V_mic = 48 V − 34.05 V ≈ 14.0 V
 where
-R_feed: the combined resistance of the two 6.81 kΩ feed resistors in parallel, in ohms (Ω)
 V_mic: the DC voltage left at the microphone, in volts (V)
 V_s: the phantom supply voltage, 48 V for P48
-I: the current the microphone draws, in amperes (A); here 10 mA = 0.010 A, the maximum the standard allows
+I: the current the microphone draws, in amperes (A); P48 allows up to 10 mA (0.010 A)
+R_feed: the combined resistance of the two 6.81 kΩ feed resistors in parallel, about 3405 ohms (Ω)
 Ω: ohm, the unit of resistance
 V: volt
 A: ampere (amp), the unit of current
-≈: approximately equal to (the result is rounded)
-In words: the more current the mic draws, the more voltage is dropped in the feed resistors, so a hungry mic sees much less than 48 V.
+In words: The voltage at the microphone is the supply voltage minus the drop across the paralleled feed resistors, so a microphone that draws more current sees less than 48 volts.
 ```
 
-The same calculation for three currents, in Python:
-
-```python
-# Each matched leg carries half the current.
-R_feed = 6810 / 2     # two in parallel
-for i_ma in (0.8, 5, 10):
-    v = 48 - i_ma / 1000 * R_feed
-    print(f"{i_ma:>4} mA: "
-          f"{v:5.1f} V at mic")
-```
-
-```
- 0.8 mA:  45.3 V at mic
-   5 mA:  31.0 V at mic
-  10 mA:  14.0 V at mic
-```
-
-The feed resistors limit what the mic can draw: a low-current mic like the U 87 Ai (0.8 mA per Neumann) sees nearly the full 48 V; a hungry one sees much less. A supply that can't deliver enough current makes some mics distort earlier.
+So the feed resistors limit what the microphone can draw: a low-current mic sees nearly the full 48 V, while a hungry one sees much less. A supply or interface that can't deliver enough current makes some microphones distort earlier or lose headroom, so check the microphone's stated current against the interface's phantom specification.
 
 > [!warning] Phantom power and your synth
 > As module 5 said, keep phantom **off** on any channel your synth or other line-level gear is plugged into. Phantom is for microphones and DI boxes designed for it.

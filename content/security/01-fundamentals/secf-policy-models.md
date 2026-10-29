@@ -62,12 +62,19 @@ Rules then say "editors of a parent folder are editors of the document". Open-so
 | Model | Who sets rules | Based on |
 |---|---|---|
 | DAC | Object owner | Identity, ownership |
-| mandatory access control | Central policy | Labels, levels |
+| Mandatory access control | Central policy | Labels, levels |
 | RBAC | Administrators | Roles |
 | ABAC | Policy authors | Attributes |
 | ReBAC | Policy + users | Relationships |
 
 Real systems mix them: RBAC for coarse capability ("is this a support agent?"), plus ABAC or ReBAC for the object-level check ("is this ticket in their region?").
+
+> [!analogy] Real-world analogy: hospital access badges
+> In a hospital, a badge might open a door because you are a nurse, because you are on shift on Ward 7 tonight, or because you are assigned to this patient.
+>
+> **How it maps:** Opening staff areas for every nurse is RBAC: access follows the role. "Ward 7 staff, during their shift" is ABAC: a rule combines attributes of the person, the door and the time. "The nurse assigned to this patient may read this chart" is ReBAC: access follows a declared relationship.
+>
+> **Where it stops:** Hospital staff notice when something looks wrong; software applies only the rules it is given, so a missing ownership check simply lets the request through. Attributes and relationships must also come from trusted records, not from what the requester claims.
 
 ## Key takeaways
 - Roles group authority but still need appropriate object constraints.

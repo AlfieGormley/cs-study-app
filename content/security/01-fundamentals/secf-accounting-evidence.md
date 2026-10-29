@@ -21,6 +21,13 @@ The system records who did what, when and from where. Accounting serves:
 
 Good audit logs are themselves an integrity problem. Forward them promptly to a separately administered collector, ideally with append-only retention. This protects received records against production administrators, but a compromised source can still omit or forge events. Monitor collection failures and corroborate important events with other evidence.
 
+> [!analogy] Real-world analogy: a shop's CCTV recorder
+> A shop records its cameras onto a box in the back office. A burglar who reaches the office can take the box, so careful shops also send the footage to an off-site service.
+>
+> **How it maps:** The cameras are the systems producing log events. The back-office box is logs kept on the production servers, which an attacker with admin rights can delete. Off-site recording is forwarding to a separately administered, append-only collector.
+>
+> **Where it stops:** Off-site footage still shows only what the cameras saw. An attacker who controls a log source can omit or forge events before they are sent. A log line also names an account, not necessarily the person at the keyboard.
+
 ### Where AAA appears in practice
 
 The term comes from network access control. **RADIUS** (RFC 2865) and its accounting extension (RFC 2866) let a Wi-Fi access point or VPN concentrator hand the "who is this and are they allowed on?" question to a central server, and report session start and stop for accounting. **TACACS+** does the same job for administering routers and switches, with per-command authorisation. **Diameter** (RFC 6733) is another AAA protocol, designed to address limitations of RADIUS and support applications including network access and mobility. This does not mean RADIUS has disappeared.
@@ -43,7 +50,7 @@ In modern applications the same split shows up as:
 5. **Forgetting availability.** A security control that takes the service down (an aggressive lockout, a WAF rule blocking all traffic) is itself an incident.
 
 > [!note] Scope and evidence
-> These are illustrative threat models, not a universal ranking of risks. Legal assurance for signatures and production log completeness are not established here; those depend on the system, evidence and applicable process.
+> These are illustrative examples, not a universal ranking of risks. A log entry or signature supports attribution, but whether it is complete or carries legal weight depends on the system, the surrounding evidence and the applicable process.
 
 ## Key takeaways
 - Record attributable events without recording secrets.

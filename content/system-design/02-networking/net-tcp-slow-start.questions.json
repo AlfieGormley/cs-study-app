@@ -3,27 +3,27 @@
     "id": "net-transport-http-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "In a simplified round-based model, a fresh TCP/TLS 1.3 call has two setup RTTs, then a response window starting at 14 KB and doubling each RTT; ignore handshake bytes growing that window, loss, delayed ACKs and serialisation. RTT is 30 ms and the response is 60 KB. Compare with a warm connection able to send the whole response in one round.",
+    "prompt": "Service A calls service B for every user request, opening a **new** TCP + TLS 1.3 connection each time. Responses are about 60 KB, the RTT is 30 ms and the network is 10 Gbps. Profiling shows each call takes about five round trips. What explains this, and what is the best fix?",
     "options": [
       {
-        "text": "About 30 ms either way, because bandwidth is high",
-        "explanation": "High bandwidth doesn't help the handshakes or slow start; a new connection can't send 60 KB in one RTT because its window starts at ~14 KB."
+        "text": "The 10 Gbps link is saturated; upgrade to 25 Gbps",
+        "explanation": "Moving 60 KB takes well under a millisecond at 10 Gbps. The round-trip count, not bandwidth, is the cost, and a faster link does not reduce it."
       },
       {
-        "text": "About 60 ms fresh versus 30 ms warm",
-        "explanation": "This counts only one handshake RTT plus one data RTT. It misses TLS (another RTT) and the extra RTTs slow start needs for 60 KB."
+        "text": "B is slow to process requests; add more B instances",
+        "explanation": "Server time would not show up as a fixed number of network round trips. The pattern matches connection setup plus slow start."
       },
       {
-        "text": "About 300 ms fresh, because TLS needs 4 RTTs",
-        "explanation": "TLS 1.3 needs one round trip for a full handshake, not four. That overestimates the setup cost."
+        "text": "TLS 1.3 needs four round trips; downgrade to TLS 1.2",
+        "explanation": "A full TLS 1.3 handshake needs one round trip, and TLS 1.2 needs two, so downgrading would add a trip."
       },
       {
-        "text": "About 150 ms fresh (2 RTT handshakes + ~3 RTT of slow start), versus about 30 ms warm",
-        "explanation": "Correct. TCP and TLS setup take 60 ms. The 14, 28 and 56 KB windows cover 60 KB within three data rounds, another 90 ms. A warm connection with a large window does it in about one 30 ms round."
+        "text": "Two round trips go on the TCP and TLS handshakes, and a fresh connection's small window needs about three more rounds to deliver 60 KB; pool and reuse connections so most calls take about one round trip",
+        "explanation": "Correct. A new connection pays setup and starts with a window of about 14 KB that roughly doubles each round trip (14, then 28, then 56 KB). A warm pooled connection has no setup and a grown window, so it can send the whole response in about one round."
       }
     ],
     "answer": 3,
-    "workedExample": "Fresh connection:\n\n| Step | RTTs |\n|---|---|\n| TCP handshake | 1 |\n| TLS 1.3 | 1 |\n| Data: 14 KB | 1 |\n| Data: +28 KB (42) | 1 |\n| Data: +56 KB (98 ≥ 60) | 1 |\n\n```formula\nT_fresh = (n_setup + n_data) × RTT\nT_fresh = (2 + 3) × 30 ms = 150 ms\nT_warm = 1 × 30 ms = 30 ms\nT_fresh / T_warm = 150 / 30 = 5\nwhere\nT_fresh: the time on a brand-new connection, in milliseconds (ms)\nT_warm: the time on a warm connection whose window already fits the whole response\nn_setup: the handshake round trips, TCP plus TLS 1.3, so 2\nn_data: the slow-start rounds needed for 60 KB: 14, then 42, then 98 KB cumulative, so 3\nRTT: the round-trip time, 30 ms\nms: millisecond, one thousandth of a second\nIn words: five round trips fresh against one warm, a five-fold difference.\n```\n\nSo about **150 ms** fresh versus **30 ms** warm. (The request itself goes out with the first data round.) Connection pooling gives a 5× speed-up here.",
+    "workedExample": "Count where the round trips go on a fresh connection:\n\n| Step | Round trips |\n|---|---|\n| TCP handshake | 1 |\n| TLS 1.3 handshake | 1 |\n| Data: first 14 KB window | 1 |\n| Data: next 28 KB | 1 |\n| Data: next 56 KB (covers the rest) | 1 |\n\nThat is about five round trips, matching the profile. (The request itself goes out with the first data round.)\n\nNone of those trips gets shorter with more bandwidth. A pooled connection skips the two setup trips and already has a large window, so the same call takes roughly one round trip: about five times faster in this simplified, loss-free model.",
     "link": {
       "title": "High Performance Browser Networking: Building blocks of TCP",
       "url": "https://hpbn.co/building-blocks-of-tcp/"
@@ -33,27 +33,27 @@
     "id": "net-transport-http-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "In a simplified response-round model, RTT is 100 ms, the response window starts at 14 KB and doubles each round, and bandwidth is 1 Gbps. Count from sending the request, ignore setup and processing, and assume no loss or prior window growth. How many milliseconds for a 90 KB response?",
+    "prompt": "On a brand-new connection, a 90 KB response is delivered with a congestion window that starts at about 14 KB and doubles each round trip. The RTT is 100 ms and the link is 1 Gbps; there is no loss. The team proposes upgrading to 10 Gbps to speed this response up. Predict the effect.",
     "options": [
       {
-        "text": "About 1 ms, because 90 KB at 1 Gbps takes under a millisecond",
-        "explanation": "That's the serialisation time if the window were unlimited. Slow start caps how much can be in flight per round trip, so bandwidth isn't the limit on a new connection."
+        "text": "About 10 times faster, because the link is 10 times faster",
+        "explanation": "That assumes the wire is the bottleneck. At 1 Gbps the 90 KB already takes under a millisecond on the wire; the time goes on round trips while the window grows."
       },
       {
-        "text": "About 100 ms, one round trip",
-        "explanation": "One round trip delivers only the initial window of about 14 KB, not 90 KB."
+        "text": "About 10 times faster, because slow start doubles faster on a faster link",
+        "explanation": "The window grows per round trip, as acknowledgements come back, not per unit of bandwidth. A faster link does not shorten the round trip."
       },
       {
-        "text": "About 300 ms, three round trips of slow start",
-        "explanation": "Correct. The window grows 14 → 28 → 56 KB, so cumulative delivery is 14, 42 and 98 KB after one, two and three round trips. 90 KB needs three: about 300 ms."
+        "text": "Almost no change: delivery needs about three round trips of window growth (14, 42, then 98 KB delivered in total), roughly 300 ms, and the link speed barely affects that",
+        "explanation": "Correct. On a new connection the round-trip part dominates for a response this size. Reusing a warm connection, or a shorter RTT, would help; extra bandwidth would not."
       },
       {
-        "text": "About 900 ms, because each 10 KB needs its own round trip",
-        "explanation": "The window isn't fixed at 10 KB; it roughly doubles each round trip during slow start."
+        "text": "It becomes slower, because more bandwidth triggers more loss",
+        "explanation": "A faster link does not cause loss by itself. The change is simply irrelevant to the dominant cost."
       }
     ],
     "answer": 2,
-    "workedExample": "Track the congestion window round by round:\n\n| RTT | Window | Total |\n|---|---|---|\n| 1 | 14 KB | 14 KB |\n| 2 | 28 KB | 42 KB |\n| 3 | 56 KB | 98 KB |\n\n```formula\nS_k = IW × (2^k − 1)\nS_3 = 14 KB × (2^3 − 1) = 98 KB\nT = 3 × RTT = 3 × 100 ms = 300 ms\nt_wire = 8 × 90,000 B / 10^9 bit/s\nt_wire = 0.00072 s ≈ 0.7 ms\nwhere\nS_k: the total data delivered after k round trips of slow start, in kilobytes (KB)\nS_3: the total after 3 round trips\nIW: the initial window, 14 KB\nk: the number of round trips\nT: the transfer time limited by slow start, in milliseconds (ms)\nRTT: the round-trip time, 100 ms\nt_wire: the time the 1 Gbps link needs to clock out 90 KB if nothing held it back\n8: the number of bits in a byte\nB: bytes; 90 KB = 90,000 B\nKB: kilobytes, thousands of bytes\nbit/s: bits per second; 1 Gbps = 10^9 bit/s\ns: second\nms: millisecond, one thousandth of a second\n≈: approximately equal to\nIn words: two rounds deliver only 42 KB, so a third is needed; three 100 ms round trips take 300 ms, though the wire alone would need under a millisecond.\n```\n\n98 KB covers the 90 KB response after 3 RTTs, so **≈ 300 ms**. The link could clock out 90 KB in about 0.7 ms. On a new connection, latency, not bandwidth, sets the transfer time for small responses, which is why reused connections matter so much.",
+    "workedExample": "Track how much a fresh connection has delivered after each round trip in this idealised model:\n\n| Round trip | Window | Total delivered |\n|---|---|---|\n| 1 | 14 KB | 14 KB |\n| 2 | 28 KB | 42 KB |\n| 3 | 56 KB | 98 KB |\n\n1. Two rounds deliver only 42 KB, so a 90 KB response needs a third: about three 100 ms round trips.\n2. The wire time for 90 KB at 1 Gbps is already under a millisecond; at 10 Gbps it is even smaller, but it was never the bottleneck.\n3. Delivery time has a round-trip part and a wire part. Here the round-trip part is hundreds of times larger, so only fewer or shorter round trips help: a reused connection with a grown window, or a server closer to the user.",
     "link": {
       "title": "High Performance Browser Networking: Building blocks of TCP",
       "url": "https://hpbn.co/building-blocks-of-tcp/"

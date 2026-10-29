@@ -4,10 +4,10 @@ title: Path MTU and stalled transfers
 level: basic
 minutes: 4
 sourceLesson: ip-ipv4
-summary: Trace MTU feedback, recognise a possible black hole and calculate TCP payload room.
+summary: Trace MTU feedback, recognise a possible black hole and choose a TCP MSS clamp that fits a tunnel.
 ---
 
-Trace MTU feedback, recognise a possible black hole and calculate TCP payload room.
+Because fragmentation is fragile, modern senders try not to need it.
 
 ## Path MTU Discovery
 
@@ -30,6 +30,13 @@ Host        R1          R2        Server
 
 IPv6 does the same with ICMPv6 **Packet Too Big**.
 
+> [!analogy] Real-world analogy: A lorry and a low bridge
+> A haulier sends tall lorries along a route it has never driven. At a low bridge the lorry cannot pass, so the bridge keeper stops it there and sends a note to the depot: "maximum height 4 m on this road". The depot sends a fresh copy of that cargo in a lower lorry and uses lower lorries from then on.
+>
+> **How it maps:** The lorry height is the packet size, the low bridge is the smallest-MTU link, "stop, do not split the load" is the DF flag, and the note is the ICMP Fragmentation Needed or Packet Too Big message carrying the next-hop MTU. The stopped lorry is a dropped packet: nothing is sent back except the note, so any resending is done by the sender's transport, such as TCP, from its own copy.
+>
+> **Where it stops:** If the depot's post room bins the notes (a firewall blocking ICMP), the depot never learns and keeps sending tall lorries that silently disappear. Real networks can also recover without the note by probing with gradually larger packets, which has no tidy road equivalent.
+
 ### The PMTUD black hole
 
 Classic ICMP-based PMTUD depends on error feedback reaching the sender. If that feedback is blocked and no effective probing/fallback recovers, a **black hole** can result: the TCP handshake works (small packets), but as soon as full-size data packets are sent, they vanish silently. Users see web pages that start loading and then hang.
@@ -40,21 +47,9 @@ Common fixes:
 - **MSS clamping.** Routers on tunnels or PPPoE links rewrite the TCP **MSS** (maximum segment size) option in SYN packets to limit what the receiving peer sends. Bidirectional coverage requires handling MSS advertisements in both directions; MSS is not one jointly negotiated value. MSS does not constrain UDP; senders must also account for any options when forming packets (RFC 6691).
 - **Packetization Layer PMTUD** (RFC 4821, and RFC 8899 for datagram protocols like QUIC) probes with progressively larger packets and watches for loss, without relying on ICMP.
 
-The MSS counts only TCP data, so the right clamp value is the MTU minus both headers. For inner IPv4 with fixed 20-byte IP and TCP headers (no options):
+The MSS counts only TCP data, so the right clamp value is the MTU minus both the IP and TCP headers. For IPv4 and TCP without options that is 40 bytes: a 1,500-byte Ethernet MTU gives the familiar 1,460, and a 1,492-byte PPPoE link gives 1,452. A common mistake is to clamp to the link or tunnel MTU itself, which still lets full-size segments exceed it by 40 bytes.
 
-```formula
-MSS = MTU − H_IP − H_TCP
-MSS = 1492 − 20 − 20 = 1452 B
-where
-MSS: maximum segment size: the most TCP bytes of payload one segment may carry, in bytes (B)
-MTU: the IP MTU of the link or tunnel, in bytes; here 1,492 for PPPoE
-H_IP: the IPv4 header length, 20 bytes without options
-H_TCP: the TCP header length, 20 bytes without options
-B: bytes; one byte is 8 bits
-In words: subtract the IP and TCP headers from the MTU, and what is left is the most data a full-size TCP segment can carry without being too big for the link.
-```
-
-On ordinary 1,500-byte Ethernet the same sum gives the familiar 1,460. IP or TCP options reduce the payload a sender can place in a packet of that MTU. RFC 6691 says the advertised MSS is calculated using the fixed headers, excluding options; the sender separately reduces actual payload to allow for the options it sends. Do not confuse that per-packet adjustment with changing the peer’s MSS advertisement.
+IP or TCP options reduce the payload a sender can place in a packet of that MTU. RFC 6691 says the advertised MSS is calculated using the fixed headers, excluding options; the sender separately reduces actual payload to allow for the options it sends. Do not confuse that per-packet adjustment with changing the peer’s MSS advertisement.
 
 ## Key takeaways
 - Classic PMTUD relies on permitted MTU feedback; symptoms alone do not prove an MTU fault.
@@ -62,15 +57,8 @@ On ordinary 1,500-byte Ethernet the same sum gives the familiar 1,460. IP or TCP
 - Encapsulation consumes packet room; PLPMTUD provides probing rather than depending on ICMP alone.
 
 ## Further reading
-- [RFC 791: Internet Protocol](https://www.rfc-editor.org/rfc/rfc791)
-- [RFC 792: Internet Control Message Protocol](https://www.rfc-editor.org/rfc/rfc792)
 - [RFC 1191: Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc1191)
 - [RFC 4821: Packetization Layer Path MTU Discovery](https://www.rfc-editor.org/rfc/rfc4821)
-- [IP fragmentation — Wikipedia](https://en.wikipedia.org/wiki/IP_fragmentation)
-- [Traceroute — Wikipedia](https://en.wikipedia.org/wiki/Traceroute)
-
-- [RFC 8900: IP Fragmentation Considered Fragile](https://www.rfc-editor.org/rfc/rfc8900.html)
-- [RFC 6864: IPv4 Identification field](https://www.rfc-editor.org/rfc/rfc6864)
-- [RFC 4638: Larger PPPoE MTUs](https://www.rfc-editor.org/rfc/rfc4638.html)
 - [RFC 6691: TCP options and MSS](https://www.rfc-editor.org/rfc/rfc6691.html)
-- [RFC 1812: IPv4 router requirements](https://www.rfc-editor.org/rfc/rfc1812.html)
+- [RFC 4638: Larger PPPoE MTUs](https://www.rfc-editor.org/rfc/rfc4638.html)
+- [RFC 792: Internet Control Message Protocol](https://www.rfc-editor.org/rfc/rfc792)

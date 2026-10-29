@@ -38,21 +38,7 @@ For the conventional analogue all-pole low-pass and corresponding high-pass fami
 | 3rd | 18 dB/octave | 270° |
 | 4th | 24 dB/octave | 360° |
 
-The table follows one simple rule. Each order (each "pole" of the filter) adds 6 dB/octave of slope and 90° of phase rotation, so you can work out any row from the order alone:
-
-```formula
-slope = 6n dB/octave
-φ_total = 90°n
-slope = 4 × 6 dB/octave = 24 dB/octave
-φ_total = 4 × 90° = 360°
-where
-slope: how fast the output falls in the stopband, far from the corner, in decibels per octave
-n: the filter order (1, 2, 3, 4 ...); higher means steeper and more complex
-dB: decibel, a logarithmic measure of level ratio; −6 dB is about half the voltage
-octave: a doubling (or halving) of frequency, for example 1 kHz to 2 kHz
-φ_total: the total phase rotation the filter adds across the whole band, in degrees (°)
-In words: every extra order makes the filter fall another 6 dB per octave, and twists the phase another quarter turn.
-```
+The table follows one simple rule: each order (each "pole" of the filter) adds 6 dB/octave of slope and 90° of phase rotation, so you can work out any row from the order alone.
 
 Why 6 dB? Far above its corner, a first-order low-pass halves its output voltage every time the frequency doubles, and halving the voltage is −6 dB (20 dB per *decade*, a tenfold change in frequency, says the same thing). A fourth-order filter approaches another 24 dB of attenuation per octave far into its stopband. Its absolute level one octave from the corner depends on the filter family. These are asymptotes: near the corner the real curve is gentler.
 

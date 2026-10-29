@@ -33,27 +33,27 @@
     "id": "ip-ipv4-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "Your router runs a GRE tunnel over IPv4 across an Ethernet path (MTU 1,500). GRE adds a 20-byte outer IPv4 header and a 4-byte GRE header. To avoid fragmentation of TCP traffic inside the tunnel, what MSS should the router clamp SYNs to (assume no IP or TCP options)? Assume inner IPv4, this MTU in both directions, and clamping advertisements in both SYN directions.",
+    "prompt": "A GRE tunnel over IPv4 crosses an Ethernet path with a 1,500-byte MTU. GRE adds a 20-byte outer IPv4 header and a 4-byte GRE header, so the tunnel can carry inner IP packets of up to 1,476 bytes. An engineer clamps TCP MSS on SYNs in both directions to 1,476, but large transfers through the tunnel still stall while ICMP is blocked. Assume inner IPv4 and TCP without options. What is wrong with the clamp?",
     "options": [
       {
-        "text": "1,456",
-        "explanation": "This subtracts the tunnel overhead but only one 20-byte header for the inner packet. Both the inner IP and TCP headers count."
+        "text": "Nothing; the stall must be a congestion problem",
+        "explanation": "With a correct clamp, full-size segments would fit. This clamp lets them exceed the tunnel MTU, which matches a size-dependent stall with blocked ICMP."
       },
       {
-        "text": "1,460",
-        "explanation": "That's the normal MSS for a 1,500-byte link. It ignores the 24 bytes the tunnel adds."
+        "text": "MSS counts only TCP data, so 1,476 bytes of data plus 40 bytes of inner IP and TCP headers makes 1,516-byte inner packets, too big for the tunnel; the clamp should be 1,436",
+        "explanation": "Correct. Subtract the inner IP and TCP headers from the 1,476-byte tunnel MTU. Clamped at 1,436, the largest inner packet is exactly 1,476 bytes."
       },
       {
-        "text": "1,476",
-        "explanation": "That's the tunnel's MTU (1,500 − 24). The MSS counts only TCP payload, so you must also subtract the inner IP and TCP headers."
+        "text": "The clamp should be 1,460, the normal Ethernet value, because GRE overhead is added later",
+        "explanation": "1,460 ignores the 24 bytes of tunnel overhead, so full-size segments would still be too large for the tunnel."
       },
       {
-        "text": "1,436",
-        "explanation": "Correct. The tunnel MTU is 1,500 − 20 − 4 = 1,476 bytes. Each inner packet spends 20 bytes on IP and 20 on TCP, so the MSS is 1,476 − 40 = 1,436 bytes."
+        "text": "MSS clamping only works on UDP, so it has no effect here",
+        "explanation": "MSS is a TCP option; it does not apply to UDP at all. Here it applies, but with the wrong value."
       }
     ],
-    "answer": 3,
-    "workedExample": "1. Outer path MTU: 1,500 bytes. GRE overhead: 20 (outer IP) + 4 (GRE) = 24 bytes.\n2. Each inner packet: inner IP 20 + TCP 20 + payload.\n\n```formula\nMTU_t = 1500 − 20 − 4 = 1476 B\nMSS = MTU_t − H_IP − H_TCP\nMSS = 1476 − 20 − 20 = 1436 B\nwhere\nMTU_t: the tunnel's MTU: the largest inner IP packet that fits inside the 1,500-byte outer path, in bytes (B)\nMSS: maximum segment size: the most TCP data one segment may carry, in bytes\nH_IP: the inner IPv4 header, 20 bytes without options\nH_TCP: the TCP header, 20 bytes without options\nB: bytes; one byte is 8 bits\nIn words: take the outer and GRE headers off 1,500 to get the tunnel MTU, then take the inner IP and TCP headers off that to get the most data per segment.\n```\n\n```\n|outer IP 20|GRE 4|IP 20|TCP 20|data|\n <---------------- 1500 ----------->\n```\n\n3. Clamping the relevant MSS advertisements in both directions limits both peers under these header/path assumptions. A single SYN advertises only what its sender can receive; other packet types and later path changes need separate handling.",
+    "answer": 1,
+    "workedExample": "1. Separate the layers: outer path 1,500 bytes; GRE overhead 24 bytes; tunnel MTU 1,476 bytes for the inner IP packet.\n2. MSS limits TCP data only. Each inner packet also carries a 20-byte IP header and a 20-byte TCP header.\n3. A 1,476-byte MSS therefore produces 1,516-byte inner packets: 40 bytes too many.\n4. With ICMP blocked, the sender never learns of the drops, so large transfers stall while small exchanges work.\n5. Clamp to 1,476 − 40 = 1,436 in both directions, and still allow the necessary ICMP so PMTUD works for other traffic such as UDP.\n\n```\n|outer IP 20|GRE 4|IP 20|TCP 20|data|\n <---------------- 1500 ----------->\n```",
     "link": {
       "title": "Path MTU Discovery — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Path_MTU_Discovery"

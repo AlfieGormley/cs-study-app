@@ -9,14 +9,14 @@ summary: "Remove all power and discharge capacitors before resistance tests."
 
 Remove all power and discharge capacitors before resistance tests.
 
-### Resistance and continuity: only unpowered
+## Resistance and continuity: only unpowered
 Resistance mode works by passing a small test current from the meter's own battery and measuring the resulting voltage. So:
 
 - **The circuit must be unpowered.** External voltages corrupt the reading and can damage the meter.
-- **Measure parts out of circuit, or lift one leg.** In circuit, other paths in parallel lower the reading. Lesson 2's parallel rule explains why.
+- **Measure parts out of circuit, or lift one leg.** In circuit, other paths in parallel lower the reading. The series and parallel resistor lesson explains why.
 - **Continuity mode** beeps below a low resistance threshold. Use it to check wires, solder joints, breadboard rails and switch contacts, and to find shorts.
 - **Diode test mode** shows a diode's forward voltage (about 0.5–0.7 V for silicon) one way and open circuit the other. It often lights an LED faintly too, which is handy for identifying LED orientation.
-- Discharge large capacitors before measuring around them.
+- Follow the circuit or component’s documented discharge procedure and verify the voltage has fallen before resistance tests. Do not short charged capacitors with a tool.
 
 ## Key takeaways
 

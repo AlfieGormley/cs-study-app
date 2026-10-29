@@ -46,6 +46,13 @@ The module's `order_items` stores only a quantity, so an order's total is comput
 
 The fix is to copy the price at the moment of sale into the line item (`unit_pence`). This looks like duplication, but it's a different fact: "what this customer paid" rather than "what the product costs now". Many apparent duplicates in a well-designed schema are really **snapshots** like this.
 
+> [!analogy] Real-world analogy: the receipt and the shelf label
+> The shelf label shows today's price. Your receipt shows what you paid last month. When the shop changes the label, your receipt stays the same.
+>
+> **How it maps:** `products.price` is the shelf label: one current fact, updated in place. `order_items.unit_pence` is the receipt line: a copy taken at the moment of sale, which later price changes must not touch.
+>
+> **Where it stops:** A receipt is printed once and never edited. In a database the snapshot is ordinary data, so it stays correct only if the application fills it at checkout and nothing later overwrites it; the schema cannot tell which copy is meant to be historical.
+
 ## Key takeaways
 - Use a foreign key for one-to-many and a junction table for many-to-many.
 - A composite line key makes each order/product pair unique.

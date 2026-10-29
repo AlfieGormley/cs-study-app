@@ -15,7 +15,14 @@ The most important idea in this lesson is also the simplest: **MIDI note events 
 
 ## Events, not audio
 
-Think of MIDI as a pianist's instructions written down at the moment they happen, not a recording of the piano.
+MIDI describes *what was played and when*; audio is the sound itself. The table sets them side by side.
+
+> [!analogy] Real-world analogy: a player-piano roll
+> A player-piano roll is a strip of paper with holes punched where keys should go down. Feed the same roll into two different pianos and you hear two different instruments playing the same notes.
+>
+> **How it maps:** the holes are MIDI note events (which key, when it starts and stops), and the piano that reads the roll is your synth, which creates the actual sound. Swapping the synth patch is like swapping the piano: the events stay the same, the sound changes.
+>
+> **Where it stops:** a roll is read mechanically in one fixed order, whereas MIDI messages arrive live, carry extra values such as velocity and channel, and can include controllers, clock and SysEx data. A roll also produces no electrical signal, so it says nothing about the separate audio cable your synth still needs.
 
 | | MIDI | Audio |
 |---|---|---|
@@ -31,7 +38,9 @@ This has practical consequences for your build:
 - A complete MIDI 1.0 Note On uses three bytes before transport framing. Digital audio storage depends on duration, sample rate, channel count and sample representation; it is usually far larger than the event list.
 
 ## Key takeaways
-- Keep a distinct path for MIDI instructions and for the sound the synth creates.
+- MIDI note messages are short event descriptions (key, velocity, timing), not a sound waveform.
+- The receiving instrument decides what the events sound like, so a recorded MIDI part changes when the patch changes.
+- Keep a distinct path for MIDI instructions and for the sound the synth creates, and check each path separately when something is silent.
 
 ## Further reading
 - [MIDI 1.0 Detailed Specification 4.2.1 (archived copy at CCRMA)](https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf)

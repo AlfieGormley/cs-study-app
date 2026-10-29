@@ -47,6 +47,13 @@ SELECT COUNT(*) FROM products;
 COMMIT;
 ```
 
+> [!analogy] Real-world analogy: a quicksave in a video game
+> Before a risky jump you quicksave. If you fall, you reload that save and carry on from there, without restarting the whole level.
+>
+> **How it maps:** `SAVEPOINT` is the quicksave, the risky `INSERT` is the jump and `ROLLBACK TO SAVEPOINT` is reloading it. Work done before the save stays pending, and `COMMIT` at the end keeps the whole level's progress.
+>
+> **Where it stops:** In PostgreSQL, after a failure you cannot simply keep playing: every statement is refused until you reload a save or `ROLLBACK` the whole transaction. And reloading does not undo everything: values already taken from a PostgreSQL sequence stay used.
+
 In application code the error handler must actually send the rollback-to-savepoint command. Merely catching the driver exception does not repair PostgreSQL's transaction state. Do not commit earlier work by accident in SQLite either: choose whether the business operation should survive as a whole, and explicitly roll back the whole transaction if it should not.
 
 ## Key takeaways

@@ -9,45 +9,33 @@ summary: Pair the first 32 controller numbers with their fine controllers, and r
 
 ## 14-bit controllers
 
+128 steps are coarse for something like filter cutoff: you can hear each step as a zipper. The specification therefore pairs controllers: **CC 0–31 carry MIDI coarse parts and CC 32–63 carry the matching MIDI fine parts**, always 32 numbers apart. So CC 1 (modulation wheel) pairs with CC 33, and CC 7 (Channel Volume) with CC 39.
 
-128 steps are coarse for something like filter cutoff: you can hear each step as a zipper. The specification pairs controllers so that **CC 0–31 carry MIDI coarse parts and CC 32–63 carry the matching MIDI fine parts**. The MIDI LSB's controller number is always 32 more than the MIDI MSB's:
+Together the two 7-bit halves give 14 bits. The coarse byte counts in big steps of 128 and the fine byte fills in between:
 
-```formula
-c_LSB = c_MSB + 32
-c_LSB = 1 + 32 = 33
-where
-c_MSB: the controller number that carries the coarse (most significant) 7 bits, 0 to 31; here CC 1, the modulation wheel
-c_LSB: the controller number that carries the fine (least significant) 7 bits, 32 to 63
-In words: the fine half of any of the first 32 controllers lives 32 numbers higher, so CC 1 pairs with CC 33 and CC 7 with CC 39.
-```
-
-Together the two 7-bit halves give 14 bits, and the combined value is the MIDI MSB scaled up by 128 plus the MIDI LSB:
-
-```formula
+```formula essential
 v = 128 MSB + LSB
-v = 64 × 128 + 32
-v = 8224
-v_max = 127 × 128 + 127 = 16383
 where
 v: the combined 14-bit controller value, 0 to 16,383 (16,384 steps)
-MSB: the coarse seven-bit part, a dimensionless integer from zero to 127
-LSB: the fine seven-bit part, 0 to 127 (the fine part)
-v_max: the largest possible combined value
-In words: the coarse byte counts in steps of 128 and the fine byte fills in between, giving 128 × 128 = 16,384 steps instead of 128.
+MSB: the coarse seven-bit part, from the lower-numbered controller (0–31), a whole number from 0 to 127
+LSB: the fine seven-bit part, from the controller 32 higher (32–63), a whole number from 0 to 127
+In words: the coarse byte chooses one of 128 big steps and the fine byte chooses one of 128 small steps inside it, giving 16,384 steps instead of 128.
 ```
 
-Multiplying by 128 is the same as applying a bitwise left shift by 7 bits, which is how firmware usually writes it: `(msb << 7) | lsb`.
+Firmware usually writes the same thing as a bitwise left shift by 7 bits: `(msb << 7) | lsb`.
 
 Rules worth implementing exactly:
 
 - If 128 steps are enough, a transmitter can send only the MIDI MSB.
 - After both have been sent, a fine change may send just the MIDI LSB.
-- **When a MIDI MSB arrives, the receiver should reset its MIDI LSB to zero.**
+- **When a MIDI MSB arrives, the receiver should reset its MIDI LSB to zero.** A new coarse value therefore never inherits a stale fine value; the sender follows up with a fresh LSB if it wants one.
 
-So `B0 01 40` then `B0 21 20` means modulation is 8,224: MIDI MSB 0x40 (64) and MIDI LSB 0x20 (32), exactly the worked example above.
+So `B0 01 40` then `B0 21 20` means the modulation wheel's coarse part is 64 and its fine part 32, a 14-bit value of 8,224. If `B0 01 41` follows, the fine part resets and the value becomes 65 coarse steps with no fine part.
 
 ## Key takeaways
-- Pair the first 32 controller numbers with their fine controllers, and reset the remembered fine value on a new coarse value.
+- Controllers 0–31 can each be paired with a fine controller 32 numbers higher to give 14-bit resolution.
+- The coarse byte supplies big steps of 128 and the fine byte fills in between.
+- Reset the remembered fine value to zero whenever a new coarse value arrives, as the specification requires.
 
 ## Further reading
 - [MIDI 1.0 Control Change Messages — MIDI Association](https://midi.org/midi-1-0-control-change-messages)

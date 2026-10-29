@@ -7,61 +7,26 @@ minutes: 2
 summary: "A weighted total makes priorities explicit but inherits the quality of its inputs."
 ---
 
-## Step 5: score, then test the scoring
+## A score expresses priorities
 
-Apply must-haves as pass/fail first. Then score the survivors on each weighted criterion, with a sentence of evidence per score. Each option's total is its scores multiplied by the weights and added up:
+Apply must-haves as pass/fail before scoring. For each surviving option, give each criterion a score with a sentence of evidence. Weight it according to how much that criterion matters, then add the weighted scores. A spreadsheet can do the arithmetic; the important work is justifying the evidence and priorities.
 
-```formula
-T = Σ (w_c s_c)
-T_X = 3 × 4 + 2 × 4 + 1 × 3 = 23
-where
-T: an option's weighted total; higher is better
-Σ: sigma, "add up over every criterion"
-w_c: the weight you gave criterion c before scoring, for example 1 to 3
-s_c: the option's score on criterion c, for example 1 to 5
-c: one criterion, such as audio, debugging or documentation
-T_X: the total for placeholder option X below, with weights audio 3, debug 2, docs 1 and scores 4, 4, 3
-In words: multiply each score by how much that criterion matters, then add the products; the biggest total wins on paper.
-```
+Suppose placeholder option X has stronger audio and debugging support, while Y has stronger beginner documentation. These are invented scores to illustrate the method, not measurements of any board:
 
-Then check whether the result depends on your weights:
+| Weights (audio, debug, docs) | X total | Y total |
+|---|---|---|
+| 3, 2, 1: audio and debugging first | 23 | 18 |
+| 1, 1, 3: documentation first | 17 | 20 |
 
-```python
-# Placeholder scores (1-5), NOT real data.
-scores = {
-    "X": {"audio": 4, "debug": 4,
-          "docs": 3},
-    "Y": {"audio": 3, "debug": 2,
-          "docs": 5},
-}
+The placeholder scores out of five are X: audio 4, debugging 4, documentation 3; Y: audio 3, debugging 2, documentation 5.
 
-# Scores are placeholders, not hardware
-# data.
-def rank(weights):
-    total = {
-        name: sum(weights[c] * s[c]
-                  for c in weights)
-        for name, s in scores.items()
-    }
-    return sorted(total.items(),
-                  key=lambda kv: -kv[1])
+The same underlying scores can produce opposite winners when priorities change. A total is not a hardware benchmark, and a high score elsewhere cannot rescue a failed must-have.
 
-# Change priorities while keeping scores
-# fixed.
-print(rank({"audio": 3, "debug": 2,
-            "docs": 1}))
-# Change priorities while keeping scores
-# fixed.
-print(rank({"audio": 1, "debug": 1,
-            "docs": 3}))
-```
+## Test whether the result is robust
 
-```output
-[('X', 23), ('Y', 18)]
-[('Y', 20), ('X', 17)]
-```
+Try a small, defensible change to each weight. If the order reverses, identify the criterion driving the change. Gather evidence that could settle it: for example, try a minimal debugging workflow or measure a prototype voice on available hardware.
 
-Same scores, different weights, opposite winner. That is the point of the exercise: a weighted matrix makes your priorities explicit. If a small, defensible change of weights flips the result, the options are close, and the deciding factor should be a test, not arithmetic.
+Do not adjust weights merely to make your favourite board win. Record the original rationale, the sensitivity result and any experiment. A robust score is still only as reliable as its evidence; missing compatibility or timing measurements remain gaps.
 
 ## Key takeaways
 - A weighted total makes priorities explicit but inherits the quality of its inputs.

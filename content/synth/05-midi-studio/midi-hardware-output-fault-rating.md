@@ -8,34 +8,31 @@ summary: Normal loop current does not determine the worst resistor heating: chec
 ---
 
 ## Why RA is rated 0.5 W
-Why is RA rated 0.5 W? If a cable fault shorts pin 4 to ground, RA sits directly across the supply. The spec's worst case is the supply 5% high (3.465 V) and the resistor 5% low (31.35 Ω). Ohm's law gives the current, and the power the resistor must turn into heat follows from the voltage across it:
 
-```formula
-I = V / R
-I = 3.465 V / (31.35 Ω) ≈ 0.111 A
+In normal operation only a few milliamps flow, and the resistors barely warm. The rating is set by a *fault*. If a damaged cable or a wiring mistake shorts pin 4 to ground, RA sits directly across the 3.3 V supply with nothing else to limit the current. A small resistor across a whole supply carries a large current and turns it into heat, and the heat grows with the *square* of the voltage across it:
+
+```formula reference
 P = V^2 / R
-P = (3.465 V)^2 / (31.35 Ω)
-P ≈ 12.006 V^2 / (31.35 Ω)
-P ≈ 0.383 W
 where
-I: the fault current through RA, in amperes (A)
-V: the voltage across RA, which during the short is the whole supply, in volts (V); 3.465 V worst case
-R: RA's resistance, in ohms (Ω); 33 Ω nominal, 31.35 Ω at −5% tolerance
-P: the power dissipated in RA as heat, in watts (W)
-A: ampere, the unit of current
-Ω: ohm, the unit of resistance
+P: the power the resistor turns into heat, in watts (W)
+V: the voltage across the resistor, in volts (V); during the short, the whole supply
+R: the resistance, in ohms (Ω)
 W: watt, the unit of power
-≈: approximately equal to (rounded)
-In words: shorted straight across the supply, the small resistor carries about 111 mA and heats by about 0.38 W, which would overload a 0.25 W part.
+Ω: ohm, the unit of resistance
+In words: put the whole supply across a small resistor and it must dissipate the supply voltage squared divided by its resistance as heat.
 ```
 
-So the result is about **111 mA and 0.38 W**, below the nominal 0.5 W rating; actual component temperature and derating requirements still matter. The spec also assumes the buffer driving RC in 3.3 V designs is open-collector or open-drain, and warns not to exceed the driving buffer's short-circuit current rating.
+CA-033 works the worst case: the supply 5% high (3.465 V) and RA 5% low (31.35 Ω). That gives about **111 mA and 0.38 W**, well above a 0.25 W part's rating and below the 0.5 W specified. Actual component temperature and derating still matter; parallel resistors with the same total resistance and combined rating are an accepted alternative.
+
+The spec also assumes the buffer driving RC in 3.3 V designs is open-collector or open-drain, and warns not to exceed the driving buffer's short-circuit current rating. The normal loop current tells you nothing about either limit: always check the fault case.
 
 > [!tip] Use the published circuit
 > Copy CA-033's figures (or your board vendor's documented MIDI circuit) exactly, and note where each value came from. If you use a MIDI breakout or shield, check its schematic against CA-033 for the voltage your board runs at.
 
 ## Key takeaways
-- Normal loop current does not determine the worst resistor heating: check the specified electrical short case and driver limits.
+- Resistor and driver ratings are set by fault cases, not by the few milliamps of normal operation.
+- A short from pin 4 to ground puts the whole supply across RA: about 111 mA and 0.38 W worst case, so RA must be rated 0.5 W.
+- Also respect the driving buffer's short-circuit rating, and copy the published circuit for your supply voltage.
 
 ## Further reading
 - [MIDI 1.0 Electrical Specification Update CA-033 (2014) — MIDI Association](https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf)

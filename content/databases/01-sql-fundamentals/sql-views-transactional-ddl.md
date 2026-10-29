@@ -27,6 +27,13 @@ GROUP BY oi.order_id;
 
 `SELECT * FROM order_totals WHERE total > 60` returns 101 (62), 102 (80) and 104 (70). A view stores no data; it runs its query each time. PostgreSQL's `MATERIALIZED VIEW` stores the result and needs `REFRESH MATERIALIZED VIEW` to update it.
 
+> [!analogy] Real-world analogy: a saved search versus a printed list
+> A saved search in your email shows the matching messages each time you open it. A printed list of those messages is quicker to read, but goes out of date until you print it again.
+>
+> **How it maps:** An ordinary view is the saved search: it stores only the query and runs it each time. A materialised view is the printout: it stores the result, and `REFRESH MATERIALIZED VIEW` reprints it.
+>
+> **Where it stops:** A view is more flexible than a saved search: a query can join it to tables, filter it and aggregate it almost anywhere a table can be used. And a view's result is only as historically accurate as the facts it reads, as the next paragraph shows.
+
 The view inherits the price-history flaw discussed earlier: changing today's product price changes a total recomputed from `products.price`. On the redesigned schema, total the saved `qty * unit_pence` instead. Naming a query does not change which facts it reads or turn a live calculation into a historical snapshot.
 
 Transactional DDL lets you rehearse a small change and undo it. This complete example works in SQLite and PostgreSQL:

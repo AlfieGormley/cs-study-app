@@ -1,110 +1,49 @@
 ---
 id: emb-realtime-audio-block-budget
 sourceLesson: emb-realtime-audio
-title: "Calculate a block processing budget"
+title: "Understand the block processing budget"
 level: advanced
-minutes: 4
+minutes: 3
 summary: "Block duration is the deadline interval, not the complete path latency."
 ---
 
-## Block size and the processing budget
+## A deadline for every block
 
-The callback processes a fixed number of samples per channel per call (the **block size**). The hardware plays one block in the time those samples last, so a new block is due every block period. That period is your **processing budget**: all the work for one block must finish within it, every time.
+The **block size** is the number of samples per channel processed in one callback. Hardware consumes those samples at the sample rate. All work needed to prepare the next block must finish before its playback deadline, every time.
 
-```formula
+```formula essential
 T_block = N / f_s
-T_block = 48 / 48000 Hz = 0.001 s = 1 ms
 where
-T_block: the budget (block period), in seconds (s)
-N: the block size, samples per channel per callback; here 48, libDaisy's default
-f_s: the sample rate, in hertz (Hz); here 48 kHz = 48,000 Hz
-Hz: hertz, samples per second
-s: second
-ms: millisecond, one thousandth of a second
-In words: 48 samples at 48,000 samples a second last exactly 1 ms, so the callback must finish in under 1 ms every time.
+T_block: duration of one block, in seconds (s)
+N: samples per channel in one block, dimensionless count
+f_s: sample rate, in sample frames per second (Hz)
+s: second, the unit of time
+Hz: hertz, here sample frames per second
+In words: block duration is the number of samples per channel divided by how many sample frames play each second. More samples give a longer deadline interval; a higher sample rate shortens it.
 ```
 
-Double the block size and the budget doubles; double the sample rate and it halves.
+At 48 kHz, a 48-sample block lasts 1 ms. Double the block size at the same sample rate and the duration doubles. Double the sample rate without changing the block size and the duration halves.
 
-| Platform default | Block | fs | Budget |
+| Example configuration | Block | Sample rate | Duration |
 |---|---|---|---|
-| libDaisy (Seed) | 48 | 48 kHz | 1.000 ms |
-| Teensy Audio Library | 128 | 44.1 kHz | 2.902 ms |
-| Small block | 4 | 48 kHz | 0.083 ms |
-| Large block | 256 | 48 kHz | 5.333 ms |
+| libDaisy Seed default | 48 | 48 kHz | 1.00 ms |
+| Teensy Audio Library default | 128 | 44.1 kHz | About 2.90 ms |
+| Smaller block | 4 | 48 kHz | About 0.083 ms |
+| Larger block | 256 | 48 kHz | About 5.33 ms |
 
-The libDaisy and Teensy defaults are from their source code (`audio_config.blocksize = 48` at 48 kHz in `daisy_seed.cpp`; `AUDIO_BLOCK_SAMPLES 128` and 44,100 Hz in Teensy's `AudioStream.h`). Electro-Smith's audio guide says Daisy's block size "can be any number up to 256".
+Defaults describe the checked source versions, not permanent hardware requirements. Confirm supported sizes and rates in the chosen driver.
 
-```python
-# Compare deadlines, not end-to-end delay.
-for n, fs in [(48, 48000), (128, 44100),
-              (4, 48000), (256, 48000)]:
-    ms = n / fs * 1000
-    print(f"{n:>4} @ {fs}: {ms:.3f} ms")
-```
+## Share the budget and leave margin
 
-```output
-  48 @ 48000: 1.000 ms
- 128 @ 44100: 2.902 ms
-   4 @ 48000: 0.083 ms
- 256 @ 48000: 5.333 ms
-```
+CPU clock cycles give another way to measure the same interval, but a cycle is not an instruction count. A nominal 480 MHz CPU has 480,000 clock ticks during 1 ms. DSP, library format conversion, interrupt work and time lost to higher-priority activity all have to fit.
 
-### In CPU cycles
+If a meter reports a maximum observed load of 62.5%, the measured work used that fraction of the block interval. The remaining 37.5% is shared by anything the meter did not measure and your safety margin. That is **not a proof of safety**: check what the meter includes and what workloads it exercised.
 
-Time is easier to reason about as cycles: the number of CPU clock ticks that fit in the budget. Multiply the budget by the clock frequency:
+## Smaller blocks have a cost
 
-```formula
-C_block = (f_cpu N) / f_s
-C_block = 480000000 Hz × 48 / 48000 Hz
-C_block = 480000 cycles
-C_sample = f_cpu / f_s = 10000 cycles
-where
-C_block: CPU clock cycles available per block
-C_sample: CPU clock cycles available per sample frame
-f_cpu: the CPU clock frequency, in hertz (Hz); here 480 MHz for the Daisy Seed's Cortex-M7
-N: the block size, samples per channel; here 48
-f_s: the sample rate, in hertz (Hz); here 48 kHz
-Hz: hertz, cycles per second
-cycles: CPU clock ticks; instruction throughput and latency vary, so a cycle is not a guaranteed instruction count
-In words: a 480 MHz CPU gets 480,000 clock ticks for each 1 ms block, or 10,000 per stereo sample frame.
-```
+Smaller blocks shorten buffering delays but make callbacks more frequent. Fixed work such as interrupt entry and buffer bookkeeping happens more times per second. The same per-sample DSP can therefore use a higher percentage of the CPU after you shrink blocks.
 
-The same numbers in Python:
-
-```python
-# Nominal CPU clock; no instruction
-# guarantee.
-f_cpu = 480_000_000
-fs = 48_000
-n = 48
-per_block = f_cpu * n // fs
-per_sample = f_cpu // fs
-print(per_block, per_sample)
-```
-
-```output
-480000 10000
-```
-
-So 480,000 cycles per block, or 10,000 cycles per stereo sample frame. That sounds like a lot until you count a polyphonic synth: eight voices, each evaluating two oscillators, a filter, two envelopes and an LFO for every sample, plus shared effects. The budget is shared by *everything* in the callback, including the library's own format conversion.
-
-The share used by a measured block is its work divided by this cycle budget. For a hypothetical measured maximum of 300,000 cycles:
-
-```formula
-load = C_used / C_block
-load = 300000 / 480000 = 62.5 %
-where
-load: the fraction of this block budget used
-C_used: CPU cycles measured for the work, here 300,000
-C_block: CPU cycles available in a block, here 480,000
-%: percent, hundredths
-In words: this observed block uses 62.5 percent of the available cycles, before any overhead outside the measurement.
-```
-
-### Choosing a block size
-
-Smaller blocks mean the callback runs more often, with fixed per-callback dispatch overhead (interrupt entry, DMA bookkeeping, function calls) paid more times per second. Teensy's source comments say reducing the block size achieves lower latency "at the expense of higher interrupt and DMA setup overhead". Larger blocks are more efficient but delay everything by more.
+Choose block size by measuring the actual workload, overhead and latency path. A callback finishing early does not remove converter delays or downstream buffers; block duration is a processing interval, not complete end-to-end latency.
 
 ## Key takeaways
 - Block duration is the deadline interval, not the complete path latency.

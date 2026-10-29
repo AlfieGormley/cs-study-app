@@ -44,7 +44,7 @@ Work from least invasive to most:
 
 1. **Diagnose by elimination.** Disconnect cables one at a time and listen. Run the synth from a battery power bank to see whether the USB ground path is the culprit. Note whether the noise is a steady 50/100 Hz hum or a varying digital whine.
 2. **Plug all mains equipment into the same outlet or power strip,** so the earth paths are short and close together. This is common studio practice.
-3. **Use balanced connections** where both ends support them. Hum that appears equally on both conductors is rejected by a balanced input.
+3. **Use balanced connections** where both ends support them. Hum that appears equally on both conductors is largely rejected by a balanced input, within its common-mode limits.
 4. **Break the loop with a device made for it:** an audio isolation transformer (DI box or ground-loop isolator) in the audio line, or a USB isolator on the USB connection. Use only devices documented to suit the signal level, impedances, bandwidth and required isolation. A USB isolator must support the required USB speed and power arrangement; its data and power paths must actually break the unwanted ground route. An active DI box is not automatically transformer-isolated. Keep every protective earth intact.
 5. **Design it out:** in your own build, give the synth one clear ground reference and avoid creating extra ground paths.
 

@@ -19,22 +19,7 @@ In your code, samples are usually **floats from −1.0 to +1.0**. A library conv
 | 24-bit int | −8,388,608 … 8,388,607 | 8,388,608 |
 | float | −1.0 … +1.0 | 1.0 |
 
-For a two's-complement integer, the most negative code has the magnitude shown below. A nominal float-to-integer scale uses that magnitude; the actual conversion helper may use a different scale or saturation margin:
-
-```formula
-FS = 2^(B − 1)
-FS = 2^(24 − 1) = 8388608
-s_int ≈ x FS
-s_int = 0.5 × 8388608 = 4194304
-where
-FS: the integer full scale, the size of the most negative code, with no unit
-B: the bit depth of the integer format; here 24 (16 for the Teensy library)
-2^(B − 1): 2 raised to the power B − 1
-s_int: the integer sample code after rounding/truncation and endpoint saturation, with no unit; this simplified relationship describes scaling before those details
-x: the float sample from your code, from −1.0 to +1.0
-≈: approximately equal to; arbitrary float inputs need quantisation and positive-endpoint saturation
-In words: a 24-bit sample runs from −8,388,608 to 8,388,607, so a float of 0.5 becomes about 4.2 million. A float above 1.0 would need a code that does not exist.
-```
+The conversion scales the float to the integer range, quantises it and handles the endpoints. A float of 0.5 lands roughly halfway from zero to positive full scale in either format. More bits give finer steps between the same endpoints; they do not make full scale louder.
 
 The top positive code is one less than full scale (8,388,607), because zero takes one of the non-negative codes; an ideal endpoint-saturating converter would map +1.0 to that code rather than overflow. Implementations may deliberately leave more margin. In the libDaisy source fetched on 2026-10-16, the helper clamps its float input to approximately ±0.999985 before multiplying by 8,388,608; a compiled host check of the exact helper returns ±8,388,482 for input ±1.0. It does not reach the extreme 24-bit codes. The audio path also applies output adjustment before conversion; inspect the selected version and configuration. Values beyond full scale **clip** at the conversion, so keep your mix within ±1.0.
 

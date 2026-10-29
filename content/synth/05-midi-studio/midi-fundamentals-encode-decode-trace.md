@@ -2,7 +2,7 @@
 id: midi-fundamentals-encode-decode-trace
 title: Build and decode complete messages
 level: basic
-minutes: 5
+minutes: 4
 sourceLesson: midi-fundamentals
 summary: Trace status, channel, key and velocity separately, and check MIDI and audio paths independently.
 ---
@@ -40,22 +40,7 @@ print(note_off(16, 69).hex(" "))
 
 Read the first line: `0x90` is Note On, channel nibble 0 (channel 1); `0x3C` is 60, middle C; `0x64` is velocity 100.
 
-Decoding goes the other way. Shift the status byte right by four bits to get the message type, and mask off its top nibble to get the wire channel:
-
-```formula
-M = S >> 4
-ch = (S & 0x0F) + 1
-M = 0x93 >> 4 = 0x9
-ch = (0x93 & 0x0F) + 1 = 3 + 1 = 4
-where
-M: the message type, the status byte's top nibble, in hexadecimal: 8 = Note Off, 9 = Note On, B = Control Change
-S: the received status byte, here 0x93
-ch: the channel as people number it, 1 to 16
->>: bitwise right shift, moving every bit down by the given number of places and discarding the bits that fall off; shifting by 4 keeps just the top nibble
-&: bitwise AND, which keeps only the bits that are set in both values; AND with 0x0F (binary 0000 1111) keeps just the low nibble
-0x: prefix meaning hexadecimal (base 16)
-In words: the top four bits say what kind of message it is, and the bottom four bits plus one say which channel.
-```
+Decoding goes the other way. Shifting the status byte right by four bits (`status >> 4`) leaves just the top nibble, the message type: 8 for Note Off, 9 for Note On, B for Control Change. Masking with `0x0F` (`status & 0x0F`) keeps just the low nibble, the wire channel, and adding one gives the channel people see. So `0x93` decodes as a Note On on channel 4.
 
 Then fold velocity-0 note ons into note offs at the earliest point, so the rest of the synth only ever sees one kind of "off":
 

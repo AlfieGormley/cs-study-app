@@ -1,16 +1,13 @@
 ---
 id: elec-unloaded-divider
 sourceLesson: elec-dividers
-title: "Deriving an unloaded voltage divider"
+title: "Understanding an unloaded voltage divider"
 level: basic
 minutes: 2
 summary: "The output is the bottom resistor’s share of the input."
 ---
 
-The output is the bottom resistor’s share of the input.
-
-## The voltage divider
-Two resistors in series across a supply split the voltage in proportion to their resistances. The output is taken from the junction:
+A voltage divider uses two series resistors to make a fraction of a supply voltage. It is useful for a signal or reference feeding an input that draws very little current.
 
 ```diagram
  Vin ──┐
@@ -20,44 +17,31 @@ Two resistors in series across a supply split the voltage in proportion to their
  GND ──┘
 ```
 
-The formula comes straight from the two laws in the voltage and current units. The resistors are in series, so one current flows through both, set by their total. Ohm's law on R2 alone then gives the voltage across it:
+## The lower resistor sets the output’s share
+The same current flows through both resistors when the output is unloaded. The larger resistor therefore has the larger voltage drop. The output is measured from the junction to ground, so it is the voltage across the lower resistor.
 
-```formula
-I = Vin / (R1 + R2)
-Vout = I × R2
+Equal resistors divide the supply in half: two 10 kΩ parts across 3.3 V give 1.65 V unloaded. Making the upper resistor larger moves the junction towards ground; making the lower resistor larger moves it towards the supply.
+
+```formula reference
 Vout = Vin R2 / (R1 + R2)
 where
-I: the current flowing down through both resistors, in amperes (A)
-Vin: the input (supply) voltage across the whole divider, in volts (V)
-Vout: the output voltage, measured from the junction to ground, in volts
-R1: the top resistor, between Vin and the output, in ohms (Ω)
-R2: the bottom resistor, between the output and ground, in ohms
-In words: the output is the input voltage scaled by the bottom resistor's share of the total resistance. This holds only when nothing draws current from the output.
+Vout: unloaded junction voltage relative to ground, in volts (V)
+Vin: voltage across the whole divider, in volts
+R1: upper resistor from the supply to the junction, in ohms (Ω)
+R2: lower resistor from the junction to ground, in ohms
+In words: The output is the supply voltage multiplied by the lower resistor’s share of the total resistance. This assumes no current is drawn from the junction.
 ```
 
-Two examples:
+## Same ratio, different ability to drive a load
+A pair of 1 kΩ resistors and a pair of 100 kΩ resistors both halve the voltage when unloaded. The smaller pair draws more continuous current from the supply but is less disturbed by a load. The larger pair wastes less power but its voltage is easier to pull down.
 
-```formula
-Vout = 3.3 V × 10 kΩ / (10 kΩ + 10 kΩ)
-Vout = 3.3 V × 0.5 = 1.65 V
-Vout = 5 V × 10 kΩ / (20 kΩ + 10 kΩ)
-Vout = 5 V × 1/3 ≈ 1.67 V
-where
-Vout: the divider's unloaded output, in volts (V)
-V: volts, the unit of voltage
-kΩ: kilohms; 1 kΩ = 1000 ohms
-≈: approximately equal to (rounded)
-In words: two equal resistors halve the voltage. With 20 kΩ on top and 10 kΩ below, the bottom resistor is a third of the total, so you get a third of the 5 V.
-```
-
-The ratio sets the output, not the individual resistance values. 1 kΩ/1 kΩ and 100 kΩ/100 kΩ both halve the voltage when unloaded.
-
-The individual resistance values still matter in two ways. They set the divider standing current (and so the wasted power), and they determine how badly the output sags when something draws current from it.
+The ratio alone cannot tell you whether a real circuit will work. The next lesson adds the load; do not use an unloaded divider calculation as proof that it can power another board.
 
 ## Key takeaways
 
-- The output is the bottom resistor’s share of the input.
-- An unloaded ratio says nothing about how well a divider drives a load.
+- The output is the lower resistor’s share of the supply.
+- Changing both resistances by the same factor preserves the unloaded ratio.
+- Resistance scale still determines current consumption and loading error.
 
 ## Further reading
 

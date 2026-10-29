@@ -2,7 +2,7 @@
 id: midi-synth-handling-receive-audio-boundary
 title: Separate receiving from audio work
 level: intermediate
-minutes: 2
+minutes: 3
 sourceLesson: midi-synth-handling
 summary: Receive into bounded storage, count overflow, and keep parsing, waiting and logging outside the audio deadline.
 ---
@@ -31,6 +31,13 @@ audio callback: oscillators,
 - **Parsing and note logic** run outside the audio callback, in the main loop or a control task, draining the buffer.
 - **The audio callback** consumes a bounded number of queued note events in order, applies them to its voice state, and smooths latest-value control parameters. It must never wait on MIDI, allocate memory, or print logs.
 
+> [!analogy] Real-world analogy: a live radio studio
+> A live radio presenter must keep talking on schedule. Letters arrive at the post room at any time; a producer opens them, sorts them and hands the presenter a short stack of prepared cards between links.
+>
+> **How it maps:** the post-room pigeonhole is the receive ring buffer, filled by the UART interrupt without waiting. The producer is the control loop that parses bytes into events and decides what they mean. The presenter is the audio callback: it reads only the cards already prepared, a bounded number at a time, and never stops broadcasting to wait for the post.
+>
+> **Where it stops:** a real pigeonhole can overflow and silently lose bytes, so firmware counts overflows. The hand-over between producer and presenter also needs a mechanism that is safe when both run at once (such as a lock-free queue), which a stack of paper cards does not illustrate.
+
 How data crosses from the control code to the audio callback (atomics, a lock-free queue, or double buffering) depends on your platform, and is covered with embedded programming. The rule for now: the audio callback must never block.
 
 ```text
@@ -49,7 +56,9 @@ This is architectural pseudocode, not executable Python: buffer, parser and even
 Count overflows rather than ignoring them. A lost note-off byte is a future stuck note, and the counter tells you it happened.
 
 ## Key takeaways
-- Receive into bounded storage, count overflow, and keep parsing, waiting and logging outside the audio deadline.
+- Split the work: the receive interrupt only stores bytes, the control loop parses them, and the audio callback consumes ready events.
+- Receive into bounded storage and count overflows, because a lost note-off byte becomes a stuck note.
+- Keep parsing, waiting, allocation and logging outside the audio callback's deadline.
 
 ## Further reading
 - [Bounded audio-callback work — PortAudio](https://portaudio.com/docs/v19-doxydocs/writing_a_callback.html)

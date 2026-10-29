@@ -9,17 +9,7 @@ summary: "Shared select lines let two eight-channel muxes feed two ADC inputs."
 
 ## Multiplexing many knobs
 
-A synth with 16 knobs may have only 12 ADC pins (the Daisy Seed has 12; the Teensy 4.1 has 18). An **analogue multiplexer** (mux) such as the CD4051 is an 8-to-1 switch: three digital select lines choose which of eight inputs connects to one output. Each select line is one bit, so the number of inputs a mux can choose between doubles with each line:
-
-```formula
-channels = 2^s
-channels = 2^3 = 8
-where
-channels: how many inputs the select lines can address
-s: the number of digital select lines; here 3 on a CD4051
-2^s: 2 raised to the power s, s copies of 2 multiplied together
-In words: three select lines give eight combinations (000 to 111), one per input.
-```
+A synth with 16 knobs may have only 12 ADC pins (the Daisy Seed has 12; the Teensy 4.1 has 18). An **analogue multiplexer** (mux) such as the CD4051 is an 8-to-1 switch: three digital select lines choose which of eight inputs connects to one output. Three select lines provide eight binary patterns, from 000 to 111, one for each channel.
 
 Two CD4051s read 16 knobs on two ADC pins with three shared select lines.
 

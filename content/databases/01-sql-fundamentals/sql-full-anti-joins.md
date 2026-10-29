@@ -43,18 +43,7 @@ FULL JOIN orders o
 | Erin | NULL |
 | NULL | 106 |
 
-A full join adds the unmatched rows of both sides to the matching pairs:
-
-```formula
-n_full = m + u_L + u_R
-n_full = 5 + 1 + 1 = 7
-where
-n_full: the number of rows the FULL OUTER JOIN returns
-m: the number of matching pairs, the inner join's row count (5)
-u_L: left-table rows with no match, padded on the right with NULLs (1, Erin)
-u_R: right-table rows with no match, padded on the left with NULLs (1, order 106)
-In words: a full join is the inner join plus every leftover row from either side, each shown once with NULLs where its partner would be.
-```
+A full join is the inner join plus every leftover row from either side, each shown once with NULLs where its partner would be: 5 matching pairs, plus Erin, plus order 106, gives 7 rows.
 
 Full joins are rarer. They suit reconciliation jobs: "compare yesterday's export with today's and show rows missing from either side".
 

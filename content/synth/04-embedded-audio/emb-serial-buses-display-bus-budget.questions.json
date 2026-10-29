@@ -3,27 +3,27 @@
     "id": "emb-serial-buses-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Roughly how long does a full redraw of a 128×64 monochrome display (1,024 bytes) take over I2C at 400 kHz, ignoring protocol overhead?",
+    "prompt": "A 128×64 monochrome display frame is 1,024 bytes. A full redraw takes about 23 ms over 400 kHz I2C but about 1 ms over 8 MHz SPI, counting payload only. What mainly explains the difference?",
     "options": [
       {
-        "text": "2.6 ms",
-        "explanation": "That forgets that I2C sends 9 clocks per byte and treats 400 kHz as bytes per second scaled wrongly."
+        "text": "SPI compresses the pixel data",
+        "explanation": "Neither bus compresses data; both send the same 1,024 bytes."
       },
       {
-        "text": "92 ms",
-        "explanation": "That is the 100 kHz Standard-mode figure."
+        "text": "The SPI clock here is 20 times faster, and SPI does not spend a ninth acknowledgement clock on every byte",
+        "explanation": "Correct. I2C uses nine clocks per byte and SPI eight, and 8 MHz is twenty times 400 kHz. Together those give roughly 23 ms against roughly 1 ms."
       },
       {
-        "text": "23 ms",
-        "explanation": "Correct. 1,024 bytes × 9 clocks is 9,216 clocks, and 9,216 clocks at 400,000 per second take 23 ms."
+        "text": "I2C needs two bits for every pixel",
+        "explanation": "This display uses one bit per pixel on either bus. I2C's per-byte overhead is the acknowledgement clock."
       },
       {
-        "text": "1 ms",
-        "explanation": "That is the SPI figure at 8 MHz, which is much faster than I2C."
+        "text": "SPI transfers happen in the background, so their time does not count",
+        "explanation": "A blocking SPI call still takes about 1 ms. DMA can move the work off the CPU, but the transfer still takes time and needs scheduling."
       }
     ],
-    "answer": 2,
-    "workedExample": "```formula\nc = n × 9 = 1024 × 9 = 9216\nt = c / f_SCL\nt = 9216 / 400000 Hz ≈ 0.023 s\nt ≈ 23 ms\nwhere\nc: the total number of clock pulses\nn: bytes in the frame, here 1,024\n9: clocks per byte: 8 data bits plus ACK\nt: the transfer time, in seconds (s)\nf_SCL: the I2C clock rate, here 400 kHz\nHz: hertz, cycles per second\ns: second\nms: millisecond\n≈: approximately equal to\nIn words: 9,216 clock pulses at 400,000 a second take about 23 ms.\n```\n\nThe ninth clock per byte is the ACK. Real transfers add address and command bytes, so slightly longer.",
+    "answer": 1,
+    "workedExample": "1. Both buses send the same 1,024 payload bytes.\n2. I2C spends nine clocks per byte (eight data bits plus ACK/NACK); SPI spends eight.\n3. The example SPI clock is twenty times faster than 400 kHz I2C.\n4. Addresses, commands and driver behaviour add time, so measure the real driver. Either way, a full redraw is too long to block inside a 1 ms audio callback.",
     "link": {
       "title": "A Basic Guide to I2C — Texas Instruments",
       "url": "https://www.ti.com/lit/an/sbaa565/sbaa565.pdf"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "```formula\nt_late = t_draw − T_block\nt_late ≈ 23 ms − 1 ms = 22 ms\nwhere\nt_late: how far past its deadline the callback finishes\nt_draw: the blocking display redraw time, about 23 ms (lesson figure)\nT_block: the audio block period, the deadline, 1 ms\nms: millisecond\n≈: approximately equal to\nIn words: a 23 ms redraw inside a 1 ms callback overruns by about 22 ms.\n```\n\nAbout 22 blocks are missed each time: audible dropouts. Schedule display updates in the foreground at an appropriate supported rate. Budget the transfer and other foreground work. Interrupt masking, competition for memory bandwidth and driver behavior still require measurement.",
+    "workedExample": "1. A blocking call waits for the whole transfer: about 23 ms for a full redraw at 400 kHz I2C.\n2. The callback has 1 ms to produce each block, so each redraw makes it about 22 ms late and about 22 blocks are missed: audible dropouts.\n3. Schedule display updates in the foreground at a modest rate, or use a suitable asynchronous/DMA driver.\n4. Interrupt masking, memory-bus competition and driver behaviour still require measurement.",
     "link": {
       "title": "A Basic Guide to I2C — Texas Instruments",
       "url": "https://www.ti.com/lit/an/sbaa565/sbaa565.pdf"
@@ -87,7 +87,7 @@
       1,
       3
     ],
-    "workedExample": "Match each job to the bus's strengths:\n\n| Job | Bus |\n|---|---|\n| MIDI | UART |\n| Codec control | I2C |\n| Codec audio | I2S/SAI |\n| TFT | SPI |\n| LEDs | I2C/SPI driver |\n\nThe audio stream alone needs this many bits per second:\n\n```formula\nR = f_s × ch × B\nR = 48000 Hz × 2 × 24 bit\nR = 2304000 bit/s ≈ 2.3 Mbit/s\nwhere\nR: the audio payload rate, in bits per second\nf_s: the sample rate, 48 kHz\nch: the number of channels, 2 for stereo\nB: bits per sample, 24\nHz: hertz, samples per second\nbit: one binary digit\nMbit/s: megabits (millions of bits) per second\n≈: approximately equal to\nIn words: 48 kHz stereo 24-bit audio needs about 2.3 Mbit/s, beyond Fast-mode I2C's 400 kbit/s.\n```\n\nSo I2C could not carry the stream even if it were designed for audio, which it is not.",
+    "workedExample": "Match each job to the bus's strengths:\n\n| Job | Bus |\n|---|---|\n| MIDI | UART |\n| Codec control | I2C |\n| Codec audio | I2S/SAI |\n| TFT | SPI |\n| LEDs | I2C/SPI driver |\n\nThe audio stream alone is large: 48 kHz stereo 24-bit audio carries about 2.3 million payload bits per second, far beyond Fast-mode I2C's 400 kbit/s. So I2C could not carry the stream even if it were designed for audio, which it is not.",
     "link": {
       "title": "Serial Peripheral Interface — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Serial_Peripheral_Interface"

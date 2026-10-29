@@ -3,27 +3,27 @@
     "id": "emb-realtime-audio-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "An audio callback processes 64 samples per call at a 48 kHz sample rate. How much time does it have to finish each call?",
+    "prompt": "Your synth uses 48-sample blocks at 48 kHz, giving a 1 ms block period. You double the block size to 96 samples at the same sample rate. What changes?",
     "options": [
       {
-        "text": "0.75 ms",
-        "explanation": "That is 48,000 / 64,000. Divide block size by sample rate, not the other way round scaled."
+        "text": "Each callback gets about 2 ms and runs half as often, but each block of buffering now adds about twice as much delay",
+        "explanation": "Correct. Block duration is samples per channel divided by sample rate. Fixed per-callback overhead is paid less often, but delays that scale with block duration grow."
       },
       {
-        "text": "1.333 ms",
-        "explanation": "Correct. 64 / 48,000 = 0.001333 s."
+        "text": "The block period halves to 0.5 ms because there is twice as much work",
+        "explanation": "This inverts the relationship. More samples per block at the same rate take longer to play, giving a longer interval."
       },
       {
-        "text": "64 ms",
-        "explanation": "That treats each sample as 1 ms. At 48 kHz a sample lasts about 20.8 µs."
+        "text": "Nothing changes, because the sample rate alone sets the deadline",
+        "explanation": "The deadline depends on both the number of samples per block and the sample rate."
       },
       {
-        "text": "20.8 µs",
-        "explanation": "That is one sample period. The callback handles 64 of them at once."
+        "text": "Latency falls, because the CPU has more time",
+        "explanation": "Larger blocks lengthen the wait for a block boundary and the queued output, so latency rises."
       }
     ],
-    "answer": 1,
-    "workedExample": "```formula\nT_block = N / f_s\nT_block = 64 / 48000 Hz\nT_block ≈ 0.001333 s = 1.333 ms\nwhere\nT_block: the budget (block period), in seconds (s)\nN: the block size, here 64 samples\nf_s: the sample rate, here 48 kHz\nHz: hertz, samples per second\ns: second\nms: millisecond\n≈: approximately equal to\nIn words: 64 samples at 48,000 per second last 1.333 ms.\n```\n\nThe next block is due every 1.333 ms, so all work for this block must fit inside that.",
+    "answer": 0,
+    "workedExample": "1. Block duration is samples per channel divided by sample rate.\n2. Twice the samples at the same rate gives twice the duration: about 2 ms, so the callback runs 500 times a second instead of 1,000.\n3. Fixed per-callback overhead is paid less often, which helps efficiency.\n4. Waiting for a block boundary and queued output both scale with block duration, so latency rises.",
     "link": {
       "title": "Getting started: audio — Electro-Smith",
       "url": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
@@ -33,27 +33,27 @@
     "id": "emb-realtime-audio-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A Daisy Seed runs at 480 MHz with 48-sample blocks at 48 kHz. Your callback's measured maximum is 300,000 cycles. What fraction of the block budget does that largest observed callback use?",
+    "prompt": "On a Daisy Seed with 48-sample blocks at 48 kHz, a cycle-counter measurement reports a maximum observed callback load of 62.5% across a test session. What can you safely conclude?",
     "options": [
       {
-        "text": "62.5%",
-        "explanation": "Correct. The budget is 480 MHz × 1 ms, which is 480,000 cycles, and 300,000 out of 480,000 is 0.625."
+        "text": "The largest measured callback used 62.5% of its block interval under those test conditions; the remaining time must cover anything not measured plus your margin",
+        "explanation": "Correct. A measured maximum describes the tested workload and build, within the measurement's boundaries."
       },
       {
-        "text": "30%",
-        "explanation": "That divides by a million cycles, as if the budget were about 2 ms."
+        "text": "The callback is guaranteed never to exceed 62.5%",
+        "explanation": "A finite measurement does not prove worst-case timing. Untested voices, effects, code paths or builds can take longer."
       },
       {
-        "text": "160%",
-        "explanation": "That inverts the ratio (480,000 / 300,000)."
+        "text": "62.5% of the CPU sits idle",
+        "explanation": "This inverts the figure. The measured work used 62.5%; the remaining 37.5% may be used by unmeasured work."
       },
       {
-        "text": "3,000%",
-        "explanation": "That compares against the per-sample budget of 10,000 cycles, but the measurement covers a whole block."
+        "text": "The average load is 62.5%, so occasional peaks can be ignored",
+        "explanation": "The figure is a maximum, and occasional slow blocks are exactly what cause audible faults."
       }
     ],
     "answer": 0,
-    "workedExample": "```formula\nT_block = 48 / 48000 Hz = 1 ms\nC = f_cpu × T_block\nC = 480000000 Hz × 0.001 s\nC = 480000 cycles\nload = c_used / C\nload = 300000 / 480000 = 62.5 %\nwhere\nT_block: the block period (budget)\nC: CPU cycles available per block\nf_cpu: the CPU clock, 480 MHz\nc_used: cycles the callback used, 300,000\nload: the fraction of the budget used\ncycles: CPU clock ticks\nHz: hertz, cycles per second\ns: second\nms: millisecond\n%: percent\nIn words: the callback uses 62.5% of the cycles in each 1 ms block.\n```\n\nThat leaves about 37.5% headroom at the largest observed measurement, before any library overhead outside your measurement.",
+    "workedExample": "1. Load is measured work divided by the time available for one block: 1 ms here, or about 480,000 cycles at 480 MHz.\n2. A maximum of 62.5% describes the worst block seen under the voices, effects and build you tested.\n3. Work outside the measurement boundary, such as library format conversion or interrupt entry, also needs the remaining 37.5%.\n4. Record the conditions, keep a margin, and re-measure after significant changes.",
     "link": {
       "title": "Getting started: audio — Electro-Smith",
       "url": "https://docs.daisy.audio/tutorials/_a3_Getting-Started-Audio/"
@@ -63,27 +63,27 @@
     "id": "emb-realtime-audio-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "You are tempted to drop the block size from 48 to 8 samples at 48 kHz to cut latency. Your callback's fixed per-callback dispatch overhead is 15,000 cycles, and the per-sample DSP costs 6,000 cycles. The CPU runs at 480 MHz. Is the smaller block feasible?",
+    "prompt": "Your callback has a measurable fixed cost per call (interrupt entry, buffer bookkeeping) plus a steady cost per sample. You cut the block size from 48 to 8 samples at 48 kHz to reduce latency. What happens to CPU load?",
     "options": [
       {
-        "text": "Yes; load stays at 60% because per-sample cost is unchanged",
-        "explanation": "That ignores the fixed per-callback dispatch overhead, which is now paid six times as often."
+        "text": "It stays the same, because the per-sample work is unchanged",
+        "explanation": "The per-sample work is unchanged, but the fixed per-call cost is now paid six times as often."
       },
       {
-        "text": "No; any block under 32 samples is impossible on a Cortex-M7",
-        "explanation": "There is no such universal rule; feasibility depends on the overhead and per-sample costs."
-      },
-      {
-        "text": "Yes; load drops because each callback does less work",
+        "text": "It falls, because each callback does less work",
         "explanation": "Each call does less work, but there are six times as many calls per second."
       },
       {
-        "text": "Barely: load rises from about 63% to about 79%, because the fixed overhead is paid six times as often",
-        "explanation": "Correct. The per-sample work is constant, but the per-callback dispatch overhead now dominates more of each shorter budget."
+        "text": "Blocks under 32 samples are impossible on a Cortex-M7",
+        "explanation": "There is no such universal rule. Feasibility depends on measured overhead, per-sample cost and margin."
+      },
+      {
+        "text": "It rises, because the fixed per-call cost is paid six times as often; measure whether enough margin remains",
+        "explanation": "Correct. Smaller blocks shorten buffering delays but raise the share of time spent on per-callback overhead."
       }
     ],
     "answer": 3,
-    "workedExample": "Cost per callback is the fixed overhead plus the per-sample work; the budget in cycles is the clock times the block period:\n\n```formula\nW = O + Nc\nC = (f_cpu N) / f_s\nN = 48: W = 15000 + 48 × 6000\nW = 303000, C = 480000\nload ≈ 63 %\nN = 8: W = 15000 + 8 × 6000\nW = 63000, C = 80000\nload ≈ 79 %\nwhere\nW: cycles of work per callback\nO: fixed overhead per call, 15,000 cycles\nN: the block size, in samples\nc: DSP CPU clock cycles per audio frame, 6,000\nC: cycles available per block\nf_cpu: the CPU clock, 480 MHz\nf_s: the sample rate, 48 kHz\nload: W divided by C\n%: percent\n≈: approximately equal to\nIn words: the per-sample work fills the same share either way, but the fixed 15,000-cycle overhead takes 3% of a 48-sample budget and 19% of an 8-sample one.\n```\n\nIt still fits, but headroom shrinks from 37% to 21%. This is the trade-off Teensy's source comments describe: lower latency at the cost of more overhead.",
+    "workedExample": "1. The per-sample work per second is unchanged: the same samples are computed either way.\n2. The fixed cost is paid once per callback, and six times as many callbacks run each second.\n3. For example, with a 15,000-cycle fixed cost and 6,000 cycles per sample at 480 MHz, load rises from about 63% to about 79%.\n4. Teensy's source comments describe this trade-off: lower latency at the expense of higher interrupt and DMA setup overhead. Measure before committing.",
     "link": {
       "title": "Teensy 4 AudioStream.h (block size comments) — PJRC",
       "url": "https://github.com/PaulStoffregen/cores/blob/master/teensy4/AudioStream.h"

@@ -2,7 +2,7 @@
 id: midi-studio-integration-monitor-latency
 title: Estimate and measure monitoring latency
 level: advanced
-minutes: 4
+minutes: 3
 sourceLesson: midi-studio-integration
 summary: Block duration is a timing unit, not a complete measured latency; compare direct and software monitoring on the actual setup.
 ---
@@ -11,65 +11,33 @@ Product details in this unit refer to the original Digitakt OS 1.53 manual and D
 
 ## Monitoring and latency
 
-Latency adds up along the chain. Two simple formulas cover most of it. First, an audio buffer (or block) represents a duration given by its sample count divided by the sample rate. That duration is a useful timing budget; a particular buffering architecture determines how much latency it contributes:
+Latency adds up along the chain: MIDI transmission, your synth's processing, the interface's converters, and the computer's audio buffers if you monitor through Ableton. Two pieces are easy to reason about.
 
-```formula
+**Audio buffers.** Software processes audio in blocks (buffers). A block's duration is its sample count divided by the sample rate, so doubling the block size doubles the time it represents:
+
+```formula reference
 t_buf = N / f_s
-t_buf = 128 / (48000 Hz)
-t_buf ≈ 0.00267 s = 2.67 ms
 where
-t_buf: the time one buffer of audio represents, in seconds (s) or milliseconds (ms)
-N: the audio block size, in samples; 128 here
-f_s: the sample rate, in samples per second (hertz, Hz); 48,000 here
+t_buf: the time one buffer of audio represents, in seconds (s)
+N: the audio block size, in samples
+f_s: the sample rate, in samples per second (hertz, Hz)
 Hz: hertz, here samples per second
 s: seconds
-ms: milliseconds, thousandths of a second
-≈: approximately equal to (rounded)
-In words: 128 samples at 48 kHz is about 2.7 ms of audio, which gives a time unit for this simplified buffer model rather than a measurement of the full path.
+In words: a buffer lasts its number of samples divided by the sample rate; 128 samples at 48 kHz is about 2.7 ms.
 ```
 
-Second, DIN MIDI delays a message by the time its bytes take on the wire, 0.32 ms per byte:
+| Block at 48 kHz | Duration |
+|---|---|
+| 64 samples | about 1.3 ms |
+| 128 samples | about 2.7 ms |
+| 256 samples | about 5.3 ms |
+| 512 samples | about 10.7 ms |
 
-```formula
-t_MIDI = n t_byte
-t_MIDI = (1 + 4 × 2) × 0.32 ms
-t_MIDI = 9 × 0.32 ms = 2.88 ms
-where
-t_MIDI: the time to send the messages, in milliseconds (ms)
-n: the number of bytes sent; a four-note chord with running status is 1 status byte plus 2 data bytes per note, 9 bytes
-t_byte: the time per byte on DIN MIDI, 0.32 ms (10 bits at 31,250 bit/s)
-ms: milliseconds, thousandths of a second
-In words: a four-note chord with running status takes about 2.9 ms to send; without running status it is 12 bytes, about 3.8 ms.
-```
+That duration is a timing unit, not a measured latency. How many buffers sit in the path depends on the driver and software, and converters and drivers add their own delays.
 
-The DIN wire-time result is a minimum for back-to-back bytes. The buffer duration is a model input, not a universal lower bound on each implementation's latency: drivers and converters add their own delays, and other MIDI traffic (clock, CCs) queued ahead of a note delays it further. The same estimates in Python:
+**DIN MIDI.** Each byte takes 0.32 ms on the wire. A four-note chord sent with running status is 9 bytes (one status byte plus two data bytes per note), about 2.9 ms; without running status it is 12 bytes, about 3.8 ms. That is a minimum for back-to-back bytes: other traffic (clock, CCs) queued ahead of a note delays it further.
 
-```python
-def buffer_ms(samples, rate):
-    # Block duration, not measured
-    # path latency.
-    return samples / rate * 1000
-
-for n in (64, 128, 256, 512):
-    print(n, round(buffer_ms(n, 48000), 2))
-
-# DIN MIDI: 320 us per byte
-def din_ms(n_bytes):
-    return n_bytes * 0.32
-
-# 4-note chord: 1 status + 8 data bytes
-print("chord", round(din_ms(1 + 4 * 2), 2))
-print("chord, no RS", round(din_ms(12), 2))
-```
-
-```output
-64 1.33
-128 2.67
-256 5.33
-512 10.67
-chord 2.88
-chord, no RS 3.84
-```
+Putting it together:
 
 - **MIDI transmission**: about 1 ms per three-byte message on DIN.
 - **Your synth's audio block**: if it processes 48-sample blocks at 48 kHz, notes can wait up to 1 ms for the next block, plus the codec's own conversion delay (see your board's documentation).
@@ -82,7 +50,9 @@ Practical consequences:
 - Measure rather than guess: record a Digitakt sound and your synth triggered on the same step, and measure the offset in samples on the waveforms.
 
 ## Key takeaways
-- Block duration is a timing unit, not a complete measured latency; compare direct and software monitoring on the actual setup.
+- Latency is a sum of stages; buffer duration (samples divided by sample rate) and DIN wire time are the easy parts to estimate.
+- Monitoring through Ableton adds input and output buffering, so use the interface's direct monitoring when feel matters.
+- Treat estimates as a guide, and measure the real offset on recorded waveforms.
 
 ## Further reading
 - [Digitakt II user manual (OS 1.17) — Elektron](https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf)

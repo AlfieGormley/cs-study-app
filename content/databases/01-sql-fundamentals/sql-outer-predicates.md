@@ -54,6 +54,13 @@ Why the difference? The logical order is: build the join (using `ON`), *then* ap
 - In `ON`, the filter decides which right rows count as a **match**. Ben's only order is pending, so he has no match and is padded with NULLs, but he is kept.
 - In `WHERE`, the filter runs **after** the padding. Ben has status `pending`, Dev has `cancelled`, and only Erin is NULL-padded. None satisfies `status = 'shipped'`, so all three are removed. The LEFT JOIN has quietly become an INNER JOIN.
 
+> [!analogy] Real-world analogy: a class register of handed-in homework
+> A teacher prints a register listing every pupil, with the homework each handed in, leaving a blank where nothing arrived. Before printing, the teacher can decide that late homework does not count. After printing, the teacher can also cross out lines.
+>
+> **How it maps:** The LEFT JOIN is the register: every customer gets a line, blank (NULL) if nothing matched. A condition in `ON` is the rule about which homework counts: a pupil whose only homework was late still gets a line, just with a blank. A condition in `WHERE` is crossing out finished lines: "cross out every line without on-time homework" also removes the pupils with blanks.
+>
+> **Where it stops:** On paper a blank plainly means "nothing handed in". In SQL the blank is NULL, so a test on it is UNKNOWN rather than FALSE, and `WHERE` drops UNKNOWN rows too. Even a test that sounds as if it should keep blanks, such as `o.status <> 'pending'`, removes every padded row unless you add `OR o.id IS NULL`.
+
 The rule of thumb:
 
 - Conditions on the **optional** (right) table go in `ON` if you want to keep unmatched left rows.

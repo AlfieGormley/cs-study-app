@@ -68,6 +68,13 @@ JOIN orders o ON o.customer_id = c.id;
 
 Notice that Asha appears **twice**. A join produces one row per matching *pair*, not one per customer. Keep that in mind; it causes the biggest bug in this lesson.
 
+> [!analogy] Real-world analogy: matching exam scripts to candidates
+> An exam office has a list of candidates and a pile of scripts, each marked with a candidate number. It produces one line for every script that matches a candidate on the list.
+>
+> **How it maps:** The list of candidates is `customers`, the scripts are `orders`, and the candidate number is the join condition `o.customer_id = c.id`. A candidate who sat two papers appears twice (Asha). A candidate with no script (Erin) and a script with no candidate number (order 106) produce no line.
+>
+> **Where it stops:** A database does not literally compare every pair; it may use a database index or other strategies chosen by the query planner to find matches quickly. And unlike a clerk who might match two blank numbers, SQL never treats a NULL as matching anything, not even another NULL.
+
 The letters `c` and `o` are **table aliases**. Always qualify columns (`o.id`, not `id`) once more than one table is involved; both tables here have an `id` column, so a bare `id` would be ambiguous and rejected.
 
 > [!note] Row order

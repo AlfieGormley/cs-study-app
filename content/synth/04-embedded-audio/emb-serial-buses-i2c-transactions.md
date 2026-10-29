@@ -23,6 +23,13 @@ START | addr(7) R/W | ACK | reg | ACK
 
 The ninth clock after a byte is an acknowledgement slot. The receiver pulls SDA low for **ACK**, or leaves it high for **NACK**. During a read, the controller deliberately NACKs the final byte to end reception. A NACK on an ordinary target-address attempt means no target acknowledged; check address, power and wiring, but also device busy/not-ready behavior. Certain reserved protocol codes deliberately receive no ACK.
 
+> [!analogy] Real-world analogy: Taking a class register
+> A teacher calls out a name and waits for that pupil to answer "here". Silence means nobody with that name responded.
+>
+> **How it maps:** The controller sends an address, and the matching device acknowledges by pulling SDA low during the ninth clock. A NACK is the silence: the device may be absent, given the wrong address, unpowered, busy or miswired.
+>
+> **Where it stops:** In I2C the receiver also acknowledges each later byte, not only its address. And silence is just a line left high by its pull-up, so it does not tell you which cause applies.
+
 ### Open-drain and pull-ups
 
 In ordinary bidirectional Standard/Fast/Fast-mode Plus I2C, devices do not actively drive the lines high. They are **open-drain**: they either pull the line low or let go. **Pull-up resistors** to the supply raise the line when everyone has let go. This is what allows several devices to share one wire without fighting.
@@ -40,22 +47,7 @@ From TI's *A Basic Guide to I2C* (which also lists a write-only Ultra-Fast mode 
 | Fast-mode Plus | 1 Mbit/s |
 | High-speed mode | 3.4 Mbit/s |
 
-Each byte costs 9 clocks (8 bits plus ACK). The time a transfer spends clocking bits follows from the clock rate:
-
-```formula
-t = (9 n_bytes) / f_SCL
-t = (3 × 9) / 400000 Hz
-t = 27 / 400000 Hz = 0.0000675 s = 67.5 µs
-where
-t: the time spent clocking the bytes, in seconds (s)
-n_bytes: the number of bytes sent, including the address byte; here 3 (address, register, value)
-9: clock pulses per byte: 8 data bits plus the ACK bit
-f_SCL: the I2C clock frequency on the SCL line, in hertz (Hz); here 400 kHz, Fast-mode
-Hz: hertz, cycles per second
-s: second
-µs: microsecond, one millionth of a second
-In words: a three-byte register write needs 27 clock pulses, which at 400 kHz take 67.5 µs.
-```
+Each byte costs nine clocks: eight data bits plus the ACK/NACK slot.
 
 A three-byte register write (address, register, value) therefore uses 27 clock pulses: 67.5 µs at 400 kHz, plus START/STOP setup and hold times, any bus-free interval and clock stretching. START and STOP are bus conditions, not two extra clock pulses. That is suitable for foreground codec configuration. Whether an individual transfer fits a particular budget is a calculation, but blocking bus access and stretching belong outside the callback.
 

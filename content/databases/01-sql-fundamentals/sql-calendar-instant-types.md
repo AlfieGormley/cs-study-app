@@ -13,6 +13,13 @@ Choosing a column type also determines how dates, instants and text will compare
 
 PostgreSQL has real types. Use `date` for calendar dates and `timestamptz` (timestamp with time zone) for moments in time. `timestamptz` stores an absolute instant, internally in UTC, and converts to the session's time zone on display. Plain `timestamp` stores a wall-clock reading with no zone, which becomes ambiguous the moment two servers or users disagree on time zone or a daylight-saving clock change happens. PostgreSQL's own wiki says to prefer `timestamptz`.
 
+> [!analogy] Real-world analogy: "3 pm" on a sticky note versus a flight time
+> A sticky note saying "call at 3 pm" is clear to you, but a colleague in another country can't tell when to call. An airline ticket pins its times to a named airport's time zone, so everyone can work out the same moment.
+>
+> **How it maps:** Plain `timestamp` is the sticky note: a wall-clock reading with no zone attached. `timestamptz` is the ticket: it identifies one absolute instant, which PostgreSQL can display in whichever time zone the session uses.
+>
+> **Where it stops:** A ticket keeps showing the departure airport's zone, but `timestamptz` does not remember the zone it was entered in; it stores only the instant. If you need the original local zone, store it in a separate column.
+
 SQLite has no date type. Store ISO-8601 text (`'2026-03-09'`, or `'2026-03-09T14:30:00Z'` in UTC). It only sorts correctly if every value uses the same zero-padded format:
 
 ```sql

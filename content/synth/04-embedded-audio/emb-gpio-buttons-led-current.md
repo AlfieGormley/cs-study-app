@@ -7,63 +7,42 @@ minutes: 3
 summary: "The LED series resistor takes the remaining voltage; use worst-case limits for real parts."
 ---
 
-## Driving LEDs
+## Give the LED a controlled current
 
-An LED needs a series resistor to limit current. An LED has a curved current–voltage relationship: its **forward voltage** changes with current, temperature and the particular part. For a first nominal calculation use the datasheet voltage at the intended current, then check worst-case values. So the resistor takes up the rest of the supply voltage, and Ohm's law on the resistor alone gives the value you need:
+An indicator LED needs a **series resistor** or a suitable current-limiting driver. The LED's **forward voltage** is the voltage across it while conducting; it changes with current, temperature and the particular part. The resistor takes the remaining voltage and limits the current.
 
-```formula
+An LED is **not ohmic**. Its current rises very steeply over a narrow range of voltage, so a small change in voltage can mean a large change in current. There is no single fixed switch-on voltage: the forward voltage at a given current shifts with temperature and from part to part. That is why you cannot set an LED's current by choosing its voltage directly. The resistor is close to ohmic: its current is proportional to the voltage across it, so it turns the leftover voltage into a predictable current.
+
+Forward voltage also depends on colour and on the particular part. For example, Kingbright's 5 mm WP7113ID red LED lists 1.9 V typical and 2.3 V maximum at 10 mA, while its WP7113QBC/D blue LED lists 3.3 V typical and 4.0 V maximum at 20 mA (datasheets checked 2026-10-29). A blue or white LED on a 3.3 V pin leaves little or no voltage for the resistor, so it may be dim, inconsistent between parts or not light at all. Use the selected part's datasheet values at your intended current.
+
+For the same supply and LED, a smaller resistor normally means more current and brightness; a larger resistor reduces current. Do not connect an LED directly to a GPIO and rely on the pin's resistance to protect it.
+
+### Choose margin, not just a nominal answer
+
+PJRC recommends no more than 4 mA from a Teensy 4.1 output. With an assumed 3.3 V output and a red LED dropping 2.0 V, a 330 Ω resistor gives about 3.9 mA. That is close to the limit **only for those nominal values**. A higher supply voltage, lower LED forward voltage or lower actual resistance can increase current.
+
+A nominal 1 kΩ resistor gives about 1.3 mA in the same example and leaves more margin; confirm that your selected LED is bright enough there. Read its datasheet at the intended current and temperature. Also check the output pin's loaded high-voltage guarantee and resistor tolerance.
+
+This reference relationship helps select a starting resistance; it is not a complete worst-case design:
+
+```formula reference
 R = (V_supply − V_f) / I
 where
-R: the series resistor, in ohms (Ω)
-V_supply: the voltage the output pin drives when high, in volts (V); 3.3 V on Teensy and Daisy
-V_f: the LED's forward voltage, in volts (V): roughly 1.8–2.2 V for red, up to about 3 V for blue or white; take it from the LED's datasheet
-I: the current you want through the LED, in amperes (A); a few milliamperes (mA) for an indicator
+R: series resistance, in ohms (Ω)
+V_supply: output pin voltage under the intended load, in volts (V)
+V_f: LED forward voltage at the intended current and conditions, in volts (V)
+I: intended LED current, in amperes (A)
 Ω: ohm, the unit of resistance
 V: volt, the unit of voltage
 A: ampere, the unit of current
-In words: subtract the LED's own voltage from the supply, then divide what is left by the current you want. A smaller resistor gives more current and a brighter LED.
+In words: the resistor must absorb the voltage left after the LED's drop, while limiting current to the chosen value. Check worst-case voltages and component tolerances before using the result.
 ```
 
-PJRC gives a recommended maximum of 4 mA per Teensy 4.1 output. With a red LED at a forward voltage of about 2.0 V (check the LED's datasheet), the nominal resistance at that current is:
+### Many LEDs share a package limit
 
-```formula
-R_min = (V_supply − V_f) / I_max
-R_min = (3.3 V − 2.0 V) / 0.004 A
-R_min = 1.3 V / 0.004 A = 325 Ω
-where
-R_min: the nominal minimum series resistance for the assumed voltages and current, in ohms (Ω); real selection needs worst-case limits
-V_supply: the output pin's high voltage, in volts (V); here 3.3 V
-V_f: the red LED's forward voltage, in volts (V); here about 2.0 V
-I_max: the largest current allowed, in amperes (A); here PJRC's 4 mA = 0.004 A
-Ω: ohm, the unit of resistance
-V: volt, the unit of voltage
-A: ampere, the unit of current
-In words: 1.3 V is left for the resistor, and 1.3 V at 4 mA needs 325 Ω, so select the next larger standard resistor value, 330 Ω.
-```
+A row of 16 LEDs at 4 mA draws 64 mA when all are on. Every pin can be within its individual limit while the group exceeds a chip or port limit. Check both in the MCU datasheet; Daisy users must consult the STM32H750 limits rather than borrowing the Teensy recommendation.
 
-The same sum in Python, also checking two standard resistor values:
-
-```python
-# Nominal fixture; not a worst-case design.
-v_supply, v_f = 3.3, 2.0
-i_max = 0.004            # 4 mA
-r_min = (v_supply - v_f) / i_max
-print(f"R_min = {r_min:.0f} ohm")
-# Compare nominal current for each resistor.
-for r in (330, 1000):
-    i = (v_supply - v_f) / r * 1000
-    print(f"{r} ohm -> {i:.1f} mA")
-```
-
-```output
-R_min = 325 ohm
-330 ohm -> 3.9 mA
-1000 ohm -> 1.3 mA
-```
-
-330 Ω sits just inside the limit only at the nominal voltages used here. Check worst-case supply, LED forward voltage and resistor tolerances; 1 kΩ leaves more margin, but confirm brightness at that current from the selected LED datasheet or measurement. The Daisy Seed datasheet's LED example simply says the resistor value depends on the desired brightness and the LED part; for the current limit, consult ST's STM32H750 datasheet.
-
-Pins also have a **total** current limit for the whole chip. A row of 16 LEDs at 4 mA is 64 mA, which may exceed it. For many LEDs, use a transistor or suitable LED driver. A shift register can save MCU pins, but its own output and package current limits still apply; it is not automatically a safe high-current driver. PWM (rapid switching) on an output dims LEDs without changing the resistor.
+For many LEDs, use suitable transistors or an LED driver. A shift register saves pins but its own output and package current limits still apply. PWM dims an LED by switching it rapidly; the resistor must still limit the current during each on interval. Switching many outputs can couple supply and ground disturbances into audio.
 
 ## Key takeaways
 - The LED series resistor takes the remaining voltage; use worst-case limits for real parts.
@@ -78,3 +57,5 @@ Pins also have a **total** current limit for the whole chip. A row of 16 LEDs at
 - [Pull-up resistor — Wikipedia](https://en.wikipedia.org/wiki/Pull-up_resistor)
 - [Teensy 4 core: pinMode pad settings (digital.c) — PJRC](https://github.com/PaulStoffregen/cores/blob/master/teensy4/digital.c)
 - [LED characteristics at specified test conditions — Kingbright](https://www.kingbrightusa.com/images/catalog/SPEC/WP7113ID.pdf)
+- [Blue LED characteristics (WP7113QBC/D) — Kingbright](https://www.kingbrightusa.com/images/catalog/SPEC/WP7113QBC-D.pdf)
+- [Ohm's law (ohmic and non-ohmic devices) — Wikipedia](https://en.wikipedia.org/wiki/Ohm%27s_law)

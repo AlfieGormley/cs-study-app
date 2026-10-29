@@ -10,7 +10,7 @@ summary: "Prefix case matters: milli and mega differ by a billion."
 Prefix case matters: milli and mega differ by a billion.
 
 ## Units and prefixes
-Electronics spans huge ranges, so SI prefixes are everywhere. Get them wrong and you're off by a factor of a thousand.
+Electronics spans huge ranges, so SI prefixes are everywhere. A prefix mistake can change a part by orders of magnitude.
 
 | Prefix | Symbol | Factor |
 |---|---|---|
@@ -25,12 +25,14 @@ Tips:
 
 - Note the case: **m** (milli) and **M** (mega) differ by 10⁹.
 - Schematics often put the prefix where the decimal point would be (the RKM code, part of IEC 60062): `4k7` means 4.7 kΩ, `2R2` means 2.2 Ω, and `100n` means 100 nF.
-- A handy pairing: volts ÷ kilohms = milliamps. 3.3 V across 1 kΩ is 3.3 mA.
+- Match the value and unit when comparing a schematic with a parts list. `100n`, 100 nF and 0.1 µF describe the same capacitance; 100 µF is a thousand times larger.
+
+Matching capacitance alone does not establish an interchangeable part. Also check its voltage rating (allowed voltage), dielectric (insulating material) and tolerance (allowed value variation), as specified for the circuit.
 
 ## Key takeaways
 
 - Prefix case matters: milli and mega differ by a billion.
-- Read the unit before substituting a value into a calculation.
+- Check prefixes before fitting a part; a familiar-looking number may represent a very different value.
 
 ## Further reading
 

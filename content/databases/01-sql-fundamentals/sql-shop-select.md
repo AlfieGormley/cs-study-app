@@ -9,6 +9,13 @@ summary: Use the shop keys to identify customers, products, orders and their lin
 
 SQL queries are **declarative**: you describe the rows you want and the database works out how to fetch them. A SELECT does not require a loop in your application. That is why one short query can replace much procedural code, and also why small slips in a query can quietly give you the wrong answer.
 
+> [!analogy] Real-world analogy: ordering from a menu
+> In a restaurant you say what you want to eat, not which pan to heat or which shelf to open. The kitchen decides how to prepare it.
+>
+> **How it maps:** A SELECT is the order: it states which rows and columns you want. The database's query planner is the kitchen, choosing indexes, join methods and the order of work.
+>
+> **Where it stops:** A kitchen may interpret a vague order generously, but the database returns exactly the rows your query describes, mistakes included. It also promises no particular row order unless you ask for one with ORDER BY.
+
 Every lesson in this module uses the same small shop database. Learn its shape once and the examples will make sense straight away.
 
 ## The example schema

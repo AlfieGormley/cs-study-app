@@ -70,6 +70,13 @@ Asha has two orders with different dates. Which `ordered_on` should her row show
 - **PostgreSQL** refuses: `column "orders.ordered_on" must appear in the GROUP BY clause or be used in an aggregate function`.
 - **SQLite** accepts it and picks the value from some row in the group. Here it showed 2026-01-05, but nothing guarantees which one. (MySQL behaves the same unless `ONLY_FULL_GROUP_BY` is on, which it is by default since 5.7.5.)
 
+> [!analogy] Real-world analogy: receipts sorted into labelled trays
+> Divide a pile of receipts into trays, one tray per customer, then write a single summary card for each tray.
+>
+> **How it maps:** Each tray is a group and each card is an output row. The card can show the tray's label (a `GROUP BY` column) or a summary such as "2 receipts" or "latest date" (an aggregate). It cannot show "the date" when the tray holds two receipts with different dates; you must say which summary you mean, such as `MAX(ordered_on)`.
+>
+> **Where it stops:** A person might pick the top receipt and copy its date; SQLite's bare-column leniency does something similar, but without any promise about which row it uses. And SQL puts every receipt with a NULL label into one shared tray, even though elsewhere it will not say that two NULLs are equal.
+
 SQLite has one documented special case. If the query uses exactly one `MIN()` or `MAX()`, the bare columns come from the row that holds that minimum or maximum. `SELECT category, MAX(price), name ... GROUP BY category` returns Rug for home and Kettle for kitchen. It is convenient, but it is not portable. In PostgreSQL, the standard "row with the max per group" tool is `DISTINCT ON` or a window function (module 2).
 
 PostgreSQL does relax the rule in one sensible case. If you group by a table's **primary key**, you may select any other column from that table, because the key determines them:

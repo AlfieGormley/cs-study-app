@@ -9,38 +9,15 @@ summary: "A cycle counter or GPIO pulse measures the work included within its bo
 
 ## Measuring CPU load
 
-**CPU load** is the fraction of the budget the callback uses:
-
-```formula
-load = t_cb / T_block
-load = 0.6 ms / 1 ms = 0.6 = 60 %
-where
-load: the CPU load, a fraction (or percentage) of the budget; above 1 (100 %) the block is late
-t_cb: the time one callback takes to run, in milliseconds (ms); here 0.6 ms
-T_block: the block period, the budget, in milliseconds (ms); here 1 ms
-ms: millisecond
-%: percent, hundredths
-In words: a callback that takes 0.6 ms out of a 1 ms budget is a 60% load, leaving 40% headroom.
-```
+**CPU load** describes how much of a block interval the measured work occupies. A callback taking 0.6 ms of a 1 ms interval uses 60%, leaving 40% for other work or margin. Work exceeding the available interval is late.
 
 Measured in cycles instead, divide the cycles the callback used by the cycles per block; the ratio is the same. Measure observed maxima as well as averages; one slow block can be enough for an audible fault, and a finite run does not prove worst-case timing.
 
 ### Cycle counters
 
-Most Cortex-M3, M4 and M7 chips include a cycle counter (`CYCCNT`, in the DWT debug unit) that counts CPU clock cycles. It is optional in the Armv7-M architecture (the `NOCYCCNT` bit in `DWT_CTRL` says whether it exists), and Cortex-M0/M0+ parts do not have it, so confirm your part has it. It is also off after reset: firmware must set `TRCENA` in `DEMCR` and `CYCCNTENA` in `DWT_CTRL`. Teensy 4's start-up code does both, and its audio library reads the counter as `ARM_DWT_CYCCNT`; PJRC's page notes it counts at the CPU clock (600 MHz). The 32-bit counter wraps every few seconds at these clocks, which unsigned subtraction handles for short intervals:
+Most Cortex-M3, M4 and M7 chips include a cycle counter (`CYCCNT`, in the DWT debug unit) that counts CPU clock cycles. It is optional in the Armv7-M architecture (the `NOCYCCNT` bit in `DWT_CTRL` says whether it exists), and Cortex-M0/M0+ parts do not have it, so confirm your part has it. It is also off after reset: firmware must set `TRCENA` in `DEMCR` and `CYCCNTENA` in `DWT_CTRL`. Teensy 4's start-up code does both, and its audio library reads the counter as `ARM_DWT_CYCCNT`; PJRC's page notes it counts at the CPU clock (600 MHz).
 
-```formula
-t_wrap = 2^32 / f_cpu
-t_wrap = 4294967296 / 600000000 Hz ≈ 7.2 s
-where
-t_wrap: the time until the counter overflows back to 0, in seconds (s)
-2^32: 2 raised to the power 32, the number of values a 32-bit counter can hold, about 4.29 billion
-f_cpu: the CPU clock frequency, in hertz (Hz); here Teensy 4's 600 MHz (at 480 MHz it is about 8.9 s)
-Hz: hertz, cycles per second
-s: second
-≈: approximately equal to
-In words: at 600 MHz the cycle counter rolls over about every 7 seconds, far longer than any callback, so same-width unsigned subtraction gives the interval if fewer than one full wrap elapsed. A signed subtraction is not the intended operation.
-```
+The 32-bit counter wraps around every few seconds. At a nominal 600 MHz, the 32-bit counter wraps about every 7.2 seconds (about 8.9 seconds at 480 MHz). Use same-width unsigned subtraction for an interval shorter than one complete wrap; a signed subtraction is not the intended operation. This arithmetic does not detect intervals spanning a full wrap.
 
 Read it at the start and end of the callback:
 
@@ -74,7 +51,7 @@ pin  _|‾‾|________|‾‾‾|_______|‾‾|____
 ### Know the limits of your measurement
 
 - The callback's time varies with what the synth is doing. Measure with the worst realistic case: all voices sounding, every effect on, knobs moving.
-- Caches and memory location (lesson 1) change timing; code that is fast in one build may be slower after an unrelated change moves it.
+- Caches and memory location (see the microcontroller memory unit) change timing; code that is fast in one build may be slower after an unrelated change moves it.
 - Library code outside your callback (format conversion, interrupt entry) also uses the budget. Library meters may or may not include it; a GPIO toggle only measures what lies between the toggles.
 - Decide a margin, record the measured maximum and the conditions, and re-measure after significant changes.
 

@@ -26,20 +26,13 @@ Two consequences:
 - **The current return path is part of the circuit.** A signal that leaves your synth board on one wire must come back on another. In ordinary unbalanced audio wiring, the sleeve or shield is that return; balanced audio uses a pair of signal conductors.
 - **Current is the same everywhere in a single loop.** If 10 mA flows through the resistor, 10 mA flows through the LED. This is Kirchhoff's current law in its simplest form.
 
-Kirchhoff's voltage law is the other half: around any closed loop, the voltage rises equal the drops. It's how you work out what is left for the LED once the resistor has taken its share:
+Kirchhoff's voltage law is the other half: around any closed loop, the voltage rises equal the drops. It's how you work out what is left for the LED once the resistor has taken its share.
 
-```formula
-V_supply = V_R + V_LED
-5 V = 3.3 V + 1.7 V
-where
-V_supply: the voltage the supply raises, in volts (V)
-V_R: the voltage dropped across the resistor, in volts
-V_LED: the voltage dropped across the LED, in volts
-V: volts, the unit of voltage
-In words: going once round the loop, the voltage the supply provides is used up exactly by the parts in the loop. Nothing is left over and nothing is missing.
-```
+For example, a steady 5 V supply with 3.3 V across the resistor leaves 1.7 V across the LED. Voltage is shared; current is not used up by the first component.
 
 In this lumped, steady-DC model, include any significant wire resistance as another component. Kirchhoff’s laws do not require zero wire resistance. At high frequencies or with changing magnetic flux, the simple lumped model needs additional care.
+
+A bare LED connected to a voltage source has no dependable current control: its current rises steeply with forward voltage. Use a suitable series resistor or specified current driver, and respect both the LED and any GPIO pin’s current limits.
 
 ## Conventional current and electron flow
 Circuit diagrams and textbooks use **conventional current**: current flows from + to −. That convention predates the discovery of the electron. In a metal wire the charge carriers are actually electrons, which are negative and drift the opposite way, from − to +.

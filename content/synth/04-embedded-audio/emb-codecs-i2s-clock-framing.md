@@ -39,43 +39,9 @@ The **audio clock master** generates BCLK and LRCLK; the **audio clock follower*
 
 PJRC documents the SGTL5000 link: LRCLK 44.1 kHz, BCLK 2.82 MHz (64 bits per LRCLK cycle, of which the upper 16 bits of each 32-bit slot carry data), and MCLK 11.29 MHz. All three clocks come from the Teensy; the SGTL5000's clock pins are inputs.
 
-You can derive all three from the sample rate. LRCLK completes one cycle per frame, so it runs at the sample rate. BCLK must tick once for every bit in the frame, and MCLK is a fixed multiple the codec asks for:
+The **slot width**, not just the number of meaningful sample bits, determines the bit-clock requirement. Two 32-bit slots still need 64 bit clocks per stereo frame when only 16 bits in each slot carry sample data. At 44.1 kHz that is about 2.82 MHz. The documented master clock is about 11.29 MHz.
 
-```formula
-LRCLK = f_s = 44100 Hz
-BCLK = 2 × 32 × f_s = 64 × f_s
-BCLK = 64 × 44100 Hz ≈ 2.8224 MHz
-MCLK = 256 × f_s
-MCLK = 256 × 44100 Hz ≈ 11.2896 MHz
-where
-LRCLK: the left/right (word) clock frequency, in hertz (Hz)
-BCLK: the bit clock frequency, in hertz (Hz): one pulse per bit sent
-MCLK: the master clock frequency the codec uses internally, in hertz (Hz)
-f_s: the sample rate, samples per second per channel, in hertz (Hz); here 44.1 kHz
-Hz: hertz, cycles per second
-MHz: megahertz, one million hertz
-≈: approximately equal to
-In words: each frame has two 32-bit slots (left and right), so the bit clock runs 64 times faster than the sample rate; this codec's master clock runs 256 times faster.
-```
-
-The same numbers from Python:
-
-```python
-# One stereo frame per sample period.
-fs = 44_100
-bclk = fs * 2 * 32   # 2 slots of 32 bits
-# Ratio required by this documented link.
-mclk = fs * 256
-print(f"BCLK {bclk/1e6:.4f} MHz")
-print(f"MCLK {mclk/1e6:.4f} MHz")
-```
-
-```output
-BCLK 2.8224 MHz
-MCLK 11.2896 MHz
-```
-
-The figures match PJRC's rounded 2.82 MHz and 11.29 MHz. The multipliers depend on the format: a link that sends only 16 bits per slot needs a BCLK of 32 times the sample rate, and some codecs accept other MCLK ratios, so read them from the datasheet.
+A format with two 16-bit slots uses half as many bit clocks per frame. Changing sample precision without changing the slots does not change the bit clock. Read the permitted slot widths and master-clock ratios from the codec and peripheral documentation; they are not universal constants.
 
 ### Worked example: Daisy Seed Rev 7
 

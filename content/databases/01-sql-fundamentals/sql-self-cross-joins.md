@@ -44,21 +44,9 @@ CROSS JOIN products;
 -- 25
 ```
 
-A **cross join** (Cartesian product) pairs every row with every row, so its size is the product of the two tables' sizes:
+A **cross join** (Cartesian product) pairs every row with every row, so its size is the two tables' row counts multiplied together: 5 customers × 5 products = 25 rows.
 
-```formula
-n_cross = |A| × |B|
-n_cross = 5 × 5 = 25
-where
-n_cross: the number of rows the cross join returns
-A: the left table (here customers)
-B: the right table (here products)
-|A|: the number of rows in table A; vertical bars around a table name mean "how many rows it has", its cardinality
-|B|: the number of rows in table B
-In words: every row of A is paired once with every row of B, so the result has as many rows as the two row counts multiplied together.
-```
-
-The same product is the most an inner join can ever return: it keeps some of these pairs and drops the rest, so its row count can be zero or anything up to the cross join's count. A cross join is useful on purpose, for example to build a grid of every product for every store or date, which you then LEFT JOIN real sales onto so missing combinations show up as zero.
+That multiplied count is the most an inner join can ever return: it keeps some of these pairs and drops the rest, so its row count can be zero or anything up to the cross join's count. A cross join is useful on purpose, for example to build a grid of every product for every store or date, which you then LEFT JOIN real sales onto so missing combinations show up as zero.
 
 It is dangerous by accident. The old comma syntax `FROM customers c, orders o` is a cross join (5 × 6 = 30 rows here) until a `WHERE o.customer_id = c.id` turns it into an inner join. Forget the condition on two tables of a million rows each and you have asked for 1,000,000 × 1,000,000 = 1,000,000,000,000 rows: a trillion.
 

@@ -9,7 +9,7 @@ summary: "Compare worst-case output levels with guaranteed input thresholds."
 Compare worst-case output levels with guaranteed input thresholds.
 
 ## Logic levels and thresholds
-A digital input doesn't care about the exact voltage. It decides "high" or "low" using thresholds from its datasheet:
+A digital input interprets voltage as high or low. Its datasheet gives guaranteed input regions; the actual switching point may vary between devices and conditions. All inputs must also stay within their permitted voltage range.
 
 | Symbol | Meaning |
 |---|---|
@@ -20,35 +20,26 @@ A digital input doesn't care about the exact voltage. It decides "high" or "low"
 
 Between V_IL(max) and V_IH(min) is a forbidden zone where the input's behaviour isn't guaranteed.
 
-An output can drive an input reliably only if the worst-case output always lands inside the region the input is guaranteed to accept, in both states:
+An output can drive an input reliably only if the worst-case output always lands inside the region the input is guaranteed to accept, in both states.
 
-```formula
-V_{OH(min)} ≥ V_{IH(min)}
-V_{OL(max)} ≤ V_{IL(max)}
-where
-V_{OH(min)}: the lowest voltage the driving output guarantees when it outputs a high, in volts (V)
-V_{IH(min)}: the lowest voltage the receiving input is guaranteed to read as high, in volts
-V_{OL(max)}: the highest voltage the driving output guarantees when it outputs a low, in volts
-V_{IL(max)}: the highest voltage the receiving input is guaranteed to read as low, in volts
-≥: is greater than or equal to
-≤: is less than or equal to
-In words: the first line says the weakest high the output can produce is still high enough for the input; the second says the worst low is still low enough. Both must be true.
-```
+The weakest guaranteed high from the driver must reach at least the receiver’s high threshold. The highest guaranteed low from the driver must stay at or below the receiver’s low threshold. Check both states under the actual supply, load and temperature conditions.
 
 The gaps between the two sides are the **noise margins**: how much noise (or ground offset) the link can tolerate before a bit is misread:
 
-```formula
+```formula reference
 NM_H = V_{OH(min)} − V_{IH(min)}
 NM_L = V_{IL(max)} − V_{OL(max)}
 where
-NM_H: the high-state noise margin, in volts (V)
-NM_L: the low-state noise margin, in volts
-V_{OH(min)}: the output's guaranteed minimum high voltage
-V_{IH(min)}: the input's minimum voltage guaranteed to read as high
-V_{IL(max)}: the input's maximum voltage guaranteed to read as low
-V_{OL(max)}: the output's guaranteed maximum low voltage
-In words: each margin is how far the worst-case output sits inside the input's acceptance region. A positive static margin leaves that amount for noise and ground offset under the stated load, supply and temperature conditions. Timing, edge rate and voltage stress still need separate checks; a negative margin gives no guarantee of correct interpretation.
+NM_H: high-state static noise margin, in volts (V)
+NM_L: low-state static noise margin, in volts
+V_{OH(min)}: minimum guaranteed driver high voltage, in volts
+V_{IH(min)}: receiver’s minimum guaranteed high-input voltage, in volts
+V_{IL(max)}: receiver’s maximum guaranteed low-input voltage, in volts
+V_{OL(max)}: maximum guaranteed driver low voltage, in volts
+In words: Each margin is the distance inside a guaranteed input region. Positive margin allows some noise and ground offset; negative margin gives no guarantee. Timing and voltage stress must still be checked.
 ```
+
+A driver guaranteed high at 2.4 V or above has room above a receiver’s 2.0 V high threshold. A 0.4 V maximum low also fits below a 0.8 V low threshold. Each leaves 0.4 V static margin; a disturbance larger than that can leave the guaranteed region without necessarily causing a particular chip to switch.
 
 ## Key takeaways
 

@@ -18,19 +18,7 @@ A **potentiometer** (pot) is a resistive track with a wiper that slides along it
            pin 2 (wiper)
 ```
 
-Wire one end to the supply, the other to ground, and the wiper is a divider output. Turn the knob and you move the wiper position between the upper part of the track and the lower part. The total stays fixed:
-
-```formula
-R_top + R_bottom = R_pot
-V_wiper = Vin R_bottom / R_pot
-where
-R_top: the track resistance between the supply end and the wiper, in ohms (Ω)
-R_bottom: the track resistance between the wiper and the ground end, in ohms
-R_pot: the pot's total (end-to-end) resistance, in ohms, e.g. 10 kΩ
-V_wiper: the voltage on the wiper, measured to ground, in volts (V)
-Vin: the voltage across the whole track, in volts
-In words: the two parts of the track always add up to the pot's value, and the wiper voltage is the input scaled by the lower part's share.
-```
+Wire one end to the supply, the other to ground, and the wiper is a divider output. The wiper divides the fixed end-to-end track into an upper and a lower resistance; turning the knob changes their split, not their total. Moving towards the supply end increases the lower share and raises the unloaded output; moving towards ground lowers it.
 
 For an unloaded linear 10 kΩ pot across 3.3 V, a quarter-track setting leaves 2.5 kΩ below the wiper and gives about 0.83 V. This assumes the ground end is the bottom and the track is ideal.
 
@@ -51,22 +39,9 @@ Points to watch:
 
 ## Worst-case source resistance
 
-```formula
-R_bottom = x R_pot
-R_top = (1 − x)R_pot
-R_out = R_pot x(1 − x)
-R_out ≤ R_pot / 4
-R_out = 100 kΩ / 4 = 25 kΩ
-where
-R_bottom: track resistance from wiper to ground, in ohms (Ω)
-R_top: track resistance from supply to wiper, in ohms
-R_pot: total ideal linear-track resistance, in ohms; 100 kΩ in the last line
-x: fraction of the track below the wiper, between zero and one
-R_out: unloaded wiper source resistance, in ohms; the last line is at mid-track
-≤: less than or equal to
-kΩ: kilohms, one thousand ohms
-In words: The two track segments appear in parallel to a load. Their product is largest at mid-track, so a 100 kΩ pot can present 25 kΩ to the ADC. Do not assume that meets the ADC acquisition-time requirement.
-```
+The source resistance seen by an ADC is the two track segments in parallel, assuming a stiff supply. It is lowest near the ends and largest where the two segments have equal resistance: at mid-rotation for an ideal linear pot. The maximum is one quarter of the total track resistance: 25 kΩ for a 100 kΩ pot, or 2.5 kΩ for a 10 kΩ pot.
+
+A high source resistance can prevent the ADC’s sampling capacitor settling in time. Use a lower-value pot, a documented longer ADC acquisition time or a suitable buffer/filter arrangement as the ADC manufacturer recommends. A capacitor alone is not a universal fix.
 
 ## Key takeaways
 
@@ -78,3 +53,4 @@ In words: The two track segments appear in parallel to a load. Their product is 
 - [Bourns PDB181-GTR: circuit and taper charts](https://www.bourns.com/docs/product-datasheets/PDB181-GTR.pdf)
 - [SparkFun: voltage dividers](https://learn.sparkfun.com/tutorials/voltage-dividers/all)
 - [PJRC: Teensy 4.1 signal-voltage limits](https://www.pjrc.com/store/teensy41.html)
+- [Microchip: ADC acquisition time](https://developerhelp.microchip.com/xwiki/bin/view/products/data-converters/adc-specs/acquisition-time/)

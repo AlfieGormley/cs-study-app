@@ -21,6 +21,13 @@ How long? Jack Ganssle measured 18 different switches. Excluding two outliers, t
 
 If you count raw transitions, one press might register as five presses. For a synth, that means a menu skips items or a note retriggers.
 
+> [!analogy] Real-world analogy: A dropped ball settling
+> Drop a ball and it bounces a few times before coming to rest. If you want to know where it landed, you wait until it has stayed still for a moment rather than reporting the first touch.
+>
+> **How it maps:** The ball's bounces are the contact bounce. Waiting for an unbroken still period is the stable-for-N approach; the integrator is similar but tolerates the odd small hop, because it counts net evidence rather than restarting. Reporting the first touch and then ignoring the ball for a while is lockout: quick, but fooled if the first touch was something else.
+>
+> **Where it stops:** A ball's bounces shrink in a regular way. Switch bounce is irregular, can differ between press and release, and electrical interference can produce spikes that have nothing to do with the contacts moving.
+
 > [!warning] Don't wire raw switches to interrupts
 > Ganssle warns against connecting an undebounced switch to an interrupt input: very short glitches can fire an interrupt that ordinary polling would miss. Poll buttons on a regular tick (around 1 ms is common) instead.
 

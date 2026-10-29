@@ -12,6 +12,13 @@ Circuit ground is a chosen reference, distinct from protective earth.
 ## Ground is a reference
 **Circuit ground** (GND, 0 V) is the point you choose to measure every other voltage against. In a battery- or USB-powered synth it's usually the supply's negative terminal. It doesn't have to connect to the earth in the soil.
 
+> [!analogy] Real-world analogy: Heights measured from sea level
+> A hill's height is usually quoted above sea level, but you could measure it from the valley floor instead. The hill does not change; only the number you quote does.
+>
+> **How it maps:** Circuit ground is the chosen zero, like sea level. "This pin is at 3.3 V" is a difference between the pin and that reference. Two boards can only compare voltages meaningfully when they share a reference.
+>
+> **Where it stops:** A height datum is a fixed, agreed reference that nothing flows through. Real ground conductors carry current and can sit at slightly different voltages from point to point. Protective earth is also a separate safety connection, not just a choice of zero.
+
 Three meanings of "ground" get mixed up:
 
 - **Signal or circuit ground:** the 0 V reference and current return path inside your circuit. This is what "GND" on a microcontroller board means.

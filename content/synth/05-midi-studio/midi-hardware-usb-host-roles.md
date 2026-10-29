@@ -11,7 +11,14 @@ Product details in this unit refer to the original Digitakt OS 1.53 manual and D
 
 ## Host and device: why two USB gadgets can't talk
 
-USB is not peer-to-peer. Every USB connection has exactly one **host**, which schedules all transfers, and one or more **devices**, which only respond when the host polls them. Devices cannot talk to each other except via the host, and two hosts can't talk over USB directly. (USB On-The-Go and dual-role ports can switch roles, one end must provide a supported host role; the other can be an ordinary USB device.)
+USB is not peer-to-peer. Every USB connection has exactly one **host**, which schedules all transfers, and one or more **devices**, which only respond when the host polls them. Devices cannot talk to each other except via the host, and two hosts can't talk over USB directly. (USB On-The-Go and dual-role ports can switch roles, but at any moment one end must be acting as host; the other can be an ordinary USB device.)
+
+> [!analogy] Real-world analogy: a meeting run by a chair
+> In a formal meeting, nobody speaks unless the chair gives them the floor, and members don't talk to each other directly: everything goes through the chair. Put two members in a room with no chair and, under those rules, nobody ever speaks.
+>
+> **How it maps:** the USB host is the chair. It schedules every transfer and polls each device in turn; devices only answer when asked, and anything passing between two devices is relayed by the host. Two devices connected together are two members with no chair: the connection exists, but no transfer is ever scheduled.
+>
+> **Where it stops:** a USB host also powers and configures (enumerates) its devices, and dual-role ports can swap roles, which a meeting's fixed chair does not capture. The analogy is about who starts transfers, not about speed or wiring.
 
 What this means for your setup:
 

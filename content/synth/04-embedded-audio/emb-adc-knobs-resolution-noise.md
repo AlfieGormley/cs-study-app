@@ -3,70 +3,38 @@ id: emb-adc-knobs-resolution-noise
 sourceLesson: emb-adc-knobs
 title: "ADC codes and usable resolution"
 level: intermediate
-minutes: 4
+minutes: 3
 summary: "An ideal converter has a power-of-two number of codes and a defined voltage per code."
 ---
 
-A knob on a synth is a potentiometer wired as a voltage divider. Turning it changes a voltage between 0 V and 3.3 V. An **ADC** (analogue-to-digital converter) measures that voltage and hands the firmware a number. Everything between "the user turned the knob" and "the filter cutoff moved" happens in this lesson, and almost all of it is about dealing with imperfection: noise, jitter and the mismatch between how knobs turn and how ears hear.
+A knob is usually a potentiometer used as a voltage divider. An **ADC** samples its voltage and returns an integer **code**. That code is a measurement with finite resolution and noise, not a perfect statement of the knob position.
 
-## How an ADC works
+## More codes mean finer steps
 
-An ADC repeatedly samples a voltage and **quantises** it to an integer code. Three numbers describe it:
+**Resolution** is the number of bits in a reading. Each extra bit doubles the number of possible codes and halves the ideal voltage spacing over the same input range. A 12-bit ADC has 4,096 codes, numbered 0–4,095. With an ideal 0–3.3 V span, neighbouring code levels are about 0.81 mV apart. This spacing is one **LSB**, the least significant bit's voltage value.
 
-- **Resolution.** How many bits each reading has. More bits means more distinct codes. A 12-bit ADC gives 4,096 codes (0 to 4,095).
-- **Reference voltage.** The voltage that corresponds to full scale. On both the Daisy Seed and Teensy 4.1 the analogue input range is 0–3.3 V.
-- **Sample rate.** How often it converts. Audio ADCs use the supported audio sample rates, such as 44.1 or 48 kHz; 48 kHz is not a universal minimum. For knobs, a few hundred to a thousand readings per second is plenty, because hands move slowly.
+The **reference voltage** sets the conversion scale. Check the documented analogue input range independently of any digital pin's voltage tolerance: the Daisy Seed and Teensy 4.1 analogue inputs discussed here use 0–3.3 V.
 
-Each extra bit doubles the number of codes, because every existing pattern can now end in a 0 or a 1:
+This reference is useful when comparing a measured noise voltage with code spacing:
 
-```formula
-codes = 2^N
-codes = 2^12 = 4096
+```formula reference
+LSB = V_span / 2^N
 where
-codes: the number of distinct output values the ADC can produce (they run from 0 to codes − 1)
-N: the ADC's resolution, in bits; here 12
-2^N: 2 raised to the power N, that is, N copies of 2 multiplied together
-In words: every extra bit doubles the number of codes, so 10 bits give 1,024, 12 bits give 4,096 and 16 bits give 65,536.
-```
-
-The input range is divided evenly between those codes. The ideal spacing between neighbouring code levels is called one **LSB** (least significant bit), because it is what a change in the lowest bit of the code is worth:
-
-```formula
-LSB = V_ref / 2^N
-LSB = 3.3 V / 2^12
-LSB = 3.3 V / 4096 ≈ 0.000806 V ≈ 0.81 mV
-where
-LSB: the voltage step between two neighbouring codes, in volts (V)
-V_ref: the reference voltage, the input voltage that corresponds to full scale, in volts (V); here 3.3 V
-N: the resolution, in bits; here 12
-2^N: 2 raised to the power N, the number of codes
+LSB: ideal spacing between adjacent code levels, in volts (V)
+V_span: full input voltage span for the specified conversion range, in volts (V)
+N: ADC resolution, in bits
+2^N: two raised to the number of bits, giving the number of codes
 V: volt, the unit of voltage
-mV: millivolt, one thousandth of a volt
-≈: approximately equal to (the result is rounded)
-In words: split the 3.3 V range into 4,096 equal steps and each step is about 0.8 mV; every extra bit halves the step.
+In words: divide the input voltage span among all available codes. More bits give smaller ideal steps, but do not make the input or reference less noisy.
 ```
 
-The same sum for three common resolutions:
+## Resolution is not accuracy
 
-```python
-# Ideal full-scale span in volts.
-vref = 3.3
-for bits in (10, 12, 16):
-    # Divide span by the number of codes.
-    lsb = vref / 2**bits
-    print(f"{bits}-bit: {2**bits} codes, "
-          f"LSB {lsb*1e3:.4f} mV")
-```
+With the knob still, wiring pick-up, reference noise and converter noise can make the code wander. Increasing the configured bit count can expose smaller changes without making them useful measurements. Measure the real circuit before treating nominal resolution as accuracy or noise-free resolution.
 
-```output
-10-bit: 1024 codes, LSB 3.2227 mV
-12-bit: 4096 codes, LSB 0.8057 mV
-16-bit: 65536 codes, LSB 0.0504 mV
-```
+PJRC documents 10-bit default readings on Teensy 4.1, 12-bit hardware capability, and normally only up to 10 usable bits because of noise. Electro-Smith describes Daisy's ADC as up to 16 bits; its `GetFloat()` API scales the reading to 0–1. A float return type does not add analogue accuracy.
 
-At 16 bits, one code is about 50 µV. Supply noise, wiring pick-up, converter noise and reference quality can limit the usable bits; measure the actual circuit rather than assuming the nominal code width equals accuracy. Resolution is not the same as accuracy. PJRC says this plainly for Teensy 4.1: the default resolution is 10 bits, the hardware allows 12, "but in practice only up to 10 bits are normally usable due to noise". Electro-Smith describes the Daisy Seed's ADC as "up to 16-bits", returning a float from 0.0 to 1.0 via `GetFloat()`.
-
-For a knob, 7 bits (128 steps, like a MIDI CC) is coarse; 10 usable bits (1,024 steps) is usually smooth enough, especially once you smooth and map the value.
+**Sample rate** is how often a conversion happens, distinct from bit depth. A few hundred to a thousand readings per second is a common starting range for hand-operated knobs; measure responsiveness and processing cost. Audio converters instead use their supported audio rates, such as 44.1 or 48 kHz. Smooth and map control readings before using them; the next units explain why.
 
 ## Key takeaways
 - An ideal converter has a power-of-two number of codes and a defined voltage per code.

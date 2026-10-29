@@ -1,6 +1,6 @@
 # Concept-first library review
 
-Status: **in progress**. 15/60 modules and 254/1845 active lessons have current independent editorial reviews.
+Status: **in progress**. 19/60 modules and 421/1845 active lessons have current independent editorial reviews.
 
 This report counts only active lesson IDs from module.json. Retired subjects (os, architecture, theory, languages; see `content/retired-subjects.json`) are excluded. Pending modules have not been certified by keyword scans or by renderer tests.
 
@@ -14,7 +14,7 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 
 | Module | Status | Lessons | Questions | Lesson formula cards before → after | Essential / reference | Question cards before → after | Glossary terms | Review units | Corrections |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| databases / SQL Fundamentals | Pending review | 40 | — | — | — | — | — | — | — |
+| [databases / SQL Fundamentals](../content/databases/01-sql-fundamentals/verification.json) | Reviewed | 40 | 74 | 18 → 4 | 0 / 4 | 13 → 0 | 270 | 118 | 10 |
 | databases / Advanced SQL | Pending review | 41 | — | — | — | — | — | — | — |
 | databases / Relational Theory & Normalisation | Pending review | 35 | — | — | — | — | — | — | — |
 | databases / Query Processing & Optimisation | Pending review | 33 | — | — | — | — | — | — | — |
@@ -59,9 +59,9 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | software-engineering / Engineering Practices | Pending review | 24 | — | — | — | — | — | — | — |
 | [synth / Sound & Digital Audio](../content/synth/01-sound-sampling/verification.json) | Reviewed | 32 | 69 | 52 → 23 | 1 / 22 | 60 → 0 | 297 | 128 | 24 |
 | [synth / Synthesis & DSP](../content/synth/02-synthesis-dsp/verification.json) | Reviewed | 44 | 82 | 56 → 18 | 4 / 14 | 60 → 0 | 112 | 234 | 18 |
-| synth / Electronics for Synth Builders | Pending review | 39 | — | — | — | — | — | — | — |
-| synth / Embedded Audio & Interfaces | Pending review | 44 | — | — | — | — | — | — | — |
-| synth / MIDI & Studio Integration | Pending review | 44 | — | — | — | — | — | — | — |
+| [synth / Electronics for Synth Builders](../content/synth/03-electronics/verification.json) | Reviewed | 39 | 80 | 38 → 12 | 2 / 10 | 33 → 0 | 194 | 103 | 4 |
+| [synth / Embedded Audio & Interfaces](../content/synth/04-embedded-audio/verification.json) | Reviewed | 44 | 90 | 33 → 5 | 1 / 4 | 34 → 0 | 374 | 133 | 5 |
+| [synth / MIDI & Studio Integration](../content/synth/05-midi-studio/verification.json) | Reviewed | 44 | 74 | 30 → 15 | 6 / 9 | 34 → 1 | 173 | 149 | 3 |
 | synth / Audio Engineering | Pending review | 50 | — | — | — | — | — | — | — |
 | [system-design / Fundamentals](../content/system-design/01-fundamentals/verification.json) | Reviewed | 27 | 84 | 42 → 12 | 0 / 12 | 65 → 0 | 379 | 130 | 23 |
 | system-design / Networking & Traffic | Pending review | 34 | — | — | — | — | — | — | — |
@@ -76,6 +76,37 @@ Focused dictionary integration corrections and exact-definition equivalence revi
 | system-design / Case Studies II | Pending review | 42 | — | — | — | — | — | — | — |
 
 The report certifies editorial provenance only. Build, migration, rendering, offline and deployed-version evidence must be checked separately before publication.
+
+## databases / SQL Fundamentals
+
+14 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- sql-affinity-natural-keys: the author's analogy callout began mid-paragraph ('...updating them all. > [!analogy] ...'), so markdown.js rendered literal '> [!analogy]' text and a plain visible quote instead of a closed disclosure -> callout moved to its own block (render re-checked: 17 analogy disclosures, no stray markers).
+- sql-exact-money-types (+ sql-schema-ddl-q1 workedExample): author stated SQLite 3.52.0 and later display 0.1 + 0.2 as 0.30000000000000004 -> 3.52.0 was withdrawn (changes.html) and the 3.53.0 release notes make 17-digit rounding the default; now '3.53.0 and later show ... by default; earlier releases round to 15 significant digits'. Executed in 3.51.0 (0.3) and 3.53.0 (0.30000000000000004).
+- sql-alter-sqlite: 'adding and dropping named CHECK constraints' -> 'adding CHECK constraints and dropping a named constraint with DROP CONSTRAINT' (SQLite 3.53.0 executed: unnamed ADD CHECK accepted; DROP CONSTRAINT requires a name).
+- sql-generated-identifiers: 'Delete product 5 and the next insert gets id 5 again' was not reproducible on the shop fixture, whose enforced foreign keys refuse to delete the Mug -> example now uses a table holding ids 1 to 5, with a note about the shop's FK refusal (both executed).
+- sql-outer-predicates analogy limit: 'A teacher might treat a blank as no and keep it' contradicted the mapping -> limit now explains that a padded NULL makes tests UNKNOWN, so even o.status <> 'pending' drops padded rows unless OR o.id IS NULL is added (executed).
+- sql-group-single-value analogy: false contrast 'unlike a sorting clerk, SQL puts every NULL label into one shared tray' -> states the real surprise (NULLs pooled although NULL = NULL is not true elsewhere); 'Sort a pile' (opened query-processing Sort node) -> 'Divide a pile'.
+- sql-delete-transactions analogy limit: 'unlike an email, a committed change cannot be unsent' (emails cannot be unsent either) -> 'just as a sent email cannot be recalled, ROLLBACK cannot undo a committed change'.
+- sql-inner-join-pairs analogy: 'candidate list' linked to the security dictionary-attack glossary entry -> 'list of candidates'.
+- sql-statement-error-recovery analogy: 'sequence numbers' (opened an API-design sequence-number entry) and 'roll back' (deploy rollback sense) -> 'values already taken from a PostgreSQL sequence' and `ROLLBACK`.
+- Glossary integer-type: alias '32-bit' made every '32-bit' in the databases subject open the INTEGER column-type definition, including PostgreSQL 32-bit transaction-ID counters in 05-postgresql -> alias removed (kept '32-bit integer') and new generic entry thirty-two-bit added, mirroring the existing 64-bit entry.
+
+**Scope gaps and exclusions:**
+
+- Advanced SQL subqueries, CTEs, windows, upserts and recursive queries receive brief previews and remain assigned to the following module; this preserves the original module boundary.
+- Normalisation theory and physical query processing are signposted to their dedicated modules.
+- Native fixtures substantiate semantics and observed plans, not universal production throughput or latency guarantees.
+- No browser render at 390 px in this pass; renderer-level check only (markdown.js, renderer and diagram tests).
+- PostgreSQL claims executed on 18.6 only; version-gated statements (PostgreSQL 11 defaults, 12 SET NOT NULL skip, 15 NULLS NOT DISTINCT, 18 uuidv7 and nondeterministic LIKE) rely on the fetched docs for their starting versions.
+- Advanced SQL (subqueries, CTEs, windows, upserts) remains assigned to module 2.
+
+**Low-confidence areas, including preserved qualifications:**
+
+None recorded in this editorial review.
+
 
 ## dsa / Complexity Analysis
 
@@ -544,6 +575,147 @@ None recorded in this editorial review.
 - medium confidence, syn-harmonics-gibbs-timbre: Piano high harmonics decay faster than the fundamental; brass brightens as it gets louder. Standard acoustics illustrations, unchanged from earlier review; not re-checked against a fetched source in this pass.
 - medium confidence, syn-harmonics-fourier-patterns: Timbre descriptors (square 'hollow, woody, clarinet-like'; triangle 'close to a sine'). Perceptual descriptors; the spectral facts behind them were recomputed, the descriptors are conventional rather than measured.
 - medium confidence, syn-synthesis-overview-tables-models: Digitakt II is a stereo sampler; library revision facts (DaisySP 2c72eaf9eac5, PJRC Audio 3039be2773e8). Time-sensitive product/library facts; manufacturer page re-fetched 2026-10-29 and pinned sources read. Lessons already tell the learner to confirm the actual model and installed library.
+
+
+## synth / Electronics for Synth Builders
+
+48 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- elec-ground-reference analogy limit: 'Sea level is one agreed datum' (contrast unclear; sea level itself varies) → 'A height datum is a fixed, agreed reference that nothing flows through', contrasting it with current-carrying ground conductors.
+- elec-shared-ground-impedance analogy limit: added that the shower's shared pipe is a supply path whereas the lesson's shared section is usually a return, so the mapping is not read literally.
+- elec-studio-ground-loops: 'Hum that appears equally on both conductors is rejected by a balanced input' overstated rejection → 'largely rejected ... within its common-mode limits' (consistent with Rane note 110 and the module's own balanced-wiring lesson).
+- elec-ohms-law-q7 prompt omitted the 3.3 V supply that option 1 and the worked example rely on → prompt now states it.
+- Checked-on dates for re-fetched product/datasheet facts updated to 29 October 2026 (Teensy 4.1, SN74HC00/HCT00, Vishay diodes, OPA1612, Kingbright WP7113ID); figures themselves unchanged and confirmed.
+
+**Scope gaps and exclusions:**
+
+- No physical circuit was powered, wired, measured or safety-certified. Exact board revision and equipment/part limits govern any build.
+- Manufacturer documents describe specified parts and conditions; moving URLs may change. Generic diode/LED drops, shunt examples and resistor-load board models are explicitly illustrative.
+- Original14archives and prior verification are immutable evidence; archived inaccuracies are retained there while active teaching has independently corrected wording.
+- Original Keysight PDF URL returns an asset landing page to direct retrieval; official indexed primary excerpt corroborates output-capacitor transient current. ADI/CDC/C&K local fetch limitations were independently cross-checked with official web primary evidence.
+- No calculation code remains; the earlier calculator snippets were removed under the concept-first rule (stated results and links instead).
+- Worst-case tolerance design (LED resistor, divider) is prose-only; no worked worst-case numeric example remains.
+- Many split lessons have one question (counts preserved from the baseline split; no questions added or removed).
+- Render check at 390 px and offline check were not run by the verifier (no browser in this pass).
+- Glossary coverage: 97 active candidates remain unlinked by design (reference designators, document numbers, bold step headings, emphasis words, UK/US); reviewed and accepted.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, elec-breadboard-net-wiring: Physical execution/applicability Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- medium confidence, elec-first-power-checks: Physical execution/applicability Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- medium confidence, elec-meter-series-current: Physical execution/applicability Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- medium confidence, elec-scope-voltage-time: Physical execution/applicability Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- medium confidence, elec-solder-alloys-safety: Physical execution/applicability Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- medium confidence, elec-solder-joint-technique: Physical execution/applicability Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- medium confidence, elec-studio-ground-loops: Physical execution/applicability Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- medium confidence, elec-supply-noise-hunt: Physical execution/applicability Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- medium confidence, elec-unpowered-meter-tests: Physical execution/applicability Primary-backed practical procedure, but exact physical board, instrument, connection and operating conditions have not been exercised. Follow actual equipment limits and documentation.
+- medium confidence, elec-capacitor-types-ratings / elec-components-q11: Class 2 ceramics can sometimes lose well over half their capacitance near rated voltage Murata FAQ (fetched) confirms the effect only by chart; Knowles (manufacturer, 2023) states losses of up to 90 percent or more without giving the voltage. No part-specific numeric DC-bias curve could be retrieved (TDK/ADI pages blocked or timed out). The text is hedged ('sometimes') and tells readers to use the exact part's curve.
+- medium confidence, elec-scope-voltage-time / elec-measurement-soldering-q10: Two-pin laptop adapters usually leave the output floating; some three-pin adapters earth it Product-dependent; no manufacturer document fetched. A two-pin adapter has no protective-earth conductor by construction, and the guidance is conservative ('Don't rely on knowing which').
+- medium confidence, elec-diodes-and-polarity: Typical forward-drop ranges in the table (1N4148 ~0.6–0.75 V at a few mA; 1N400x ~0.7–1 V; Schottky ~0.2–0.4 V small current, ~0.45–0.6 V at 1 A) Read from typical curves and family maxima (1N5817/18/19: 0.45/0.55/0.60 V max at 1 A); the table is labelled approximate. The cited maxima and revision dates were re-fetched and are exact.
+- high confidence, elec-supply-versus-pin-limits, elec-pot-wiper-adc, elec-logic-levels-q2, elec-dividers-q11: Teensy 4.1 pins 0–3.3 V, not 5 V tolerant Re-fetched from PJRC 29 Oct 2026 ('not 5V tolerant. Do not drive any digital pin higher than 3.3V'; analogue range fixed at 0–3.3 V). Time-sensitive product page: re-check for future board revisions.
+- high confidence, elec-solder-alloys-safety: SparkFun 'good medium heat (325-375 degrees C)' Exact wording re-fetched from SparkFun's through-hole soldering tutorial on 29 Oct 2026; presented as a starting point subject to alloy/component instructions.
+- high confidence, elec-led-resistor-choice: LED reverse ratings are often only a few volts Five fetched Kingbright WP7113-series datasheets (ID, QBC/D, SGD, GD, YD) all list VR = 5 V; text instructs readers to use the exact part's rating.
+- medium confidence, all: Practical procedures (first power, current measurement, soldering, hum diagnosis) Preserved from the earlier record: procedures are primary-backed but were not physically exercised on real equipment in this pass.
+
+
+## synth / Embedded Audio & Interfaces
+
+31 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- emb-gpio-buttons-led-current: colour forward-voltage ranges came from a secondary Wikipedia table (blue 'roughly 2.5-3.7 V') -> replaced with fetched Kingbright datasheet values (WP7113ID red 1.9 V typ / 2.3 V max at 10 mA; WP7113QBC/D blue 3.3 V typ / 4.0 V max at 20 mA, checked 2026-10-29) and the Wikipedia link replaced by the blue datasheet.
+- emb-gpio-buttons-led-current + glossary ohmic-component: wording implied LEDs have a fixed forward-voltage threshold ('rises steeply once the voltage passes its forward voltage') -> current rises steeply and non-linearly over a narrow voltage range, and forward voltage at a given current shifts with temperature, colour and part (Kingbright VF tempco -1.9/-3.0 mV/degC, I-V curves; Wikipedia Ohm's law non-ohmic diode). Raised by the synth/03 verifier because bare 'ohmic' in synth/03 opens this entry.
+- glossary rc-filter: bare 'RC' alias opened a filter-only definition for synth/03 readers -> alias removed (unused bare in synth/04 lessons); bare 'RC' now resolves to synth/06 rc-circuit ('filter or timing network').
+- emb-serial-buses-uart-midi (lesson and q11): 'transmitter tolerance of +/-1%' -> CA-033 states the hardware interface operates at 31.25 (+/-1%) kbaud; reworded as the rate tolerance.
+- emb-gpio-buttons-debounce-methods analogy: mapped the integrator to 'waiting for a still period' -> integrator tolerates occasional opposite readings and counts net evidence; only stable-for-N needs an unbroken period.
+- emb-realtime-audio-q2: garbled correct-option explanation -> rewritten for clarity (no factual change).
+- Author report (not content): it said synth/06 owns the bare 'Omega' link. Replicating build.mjs shows synth/06's duplicate 'ohm' id is skipped and its spare aliases ('Ohm (Omega)', 'Omega') are donated to synth/04's ohm entry, so readers see synth/04's definition. scripts/glossary-links.mjs does not model donation.
+- 2026-10-29 follow-up by claude-opus-5-5/cf2-synth04-alias-verifier (independent verifier; release QA evidence/cf2-release/qa-5c52702adad4/dictionary.log): glossary time-constant listed the alias "RC time constant", which synth/03-electronics rc-time-constant owns in the compiled synth lookup, so the alias was dead and failed the release alias-ownership check. No active synth/04 lesson or question uses the phrase; all uses are in synth/03, where the RC definition is the right sense. Removed that alias only; id, term, definition, example, source and other aliases unchanged. Definition re-verified against https://en.wikipedia.org/wiki/Time_constant and https://en.wikipedia.org/wiki/Exponential_smoothing. This resolves the 'Unresolved' shadowed-alias note in integrationDependencies.
+
+**Scope gaps and exclusions:**
+
+- No target platform selected: no verified project-specific wiring/BOM, complete interface/USB-role compatibility or physical build is claimed.
+- No board cross-build/flash/recovery, oscilloscope/logic-analyser/ADC/button/audio-loopback measurements or proven target WCET; these remain practical exercises.
+- Host atomic/native wrappers and finite models do not establish MCU ISR support, instruction lowering, bounded exclusive-access retries or physical concurrency.
+- Display waveform-type requirement is included, but screen/model/bus/driver and measured update cost remain configuration choices.
+- Target linker/cache/DMA implementation, advanced RTOS/USB/codec drivers and C++ teaching remain beyond this foundation module; low-voltage work only.
+- No hardware bench measurements, project-specific wiring, BOM or measured latency (stated in the compare-gaps lesson).
+- 390 px browser render check not run by this verifier (not required by the task); build renderer checks and markdown/formula-fence checks pass.
+- Ohm's law has no dedicated lesson in this module; it is taught in context. Fundamentals live in synth/03-electronics.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, emb-codecs-i2s-control-registers: Manufacturer product/revision, platform configuration or hardware experiment specifics Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- medium confidence, emb-gpio-buttons-pin-limits: Manufacturer product/revision, platform configuration or hardware experiment specifics Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- medium confidence, emb-mcu-firmware-boot-recovery: Manufacturer product/revision, platform configuration or hardware experiment specifics Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- medium confidence, emb-mcu-firmware-chip-memory: Manufacturer product/revision, platform configuration or hardware experiment specifics Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- medium confidence, emb-platform-comparison-compare-gaps: Manufacturer product/revision, platform configuration or hardware experiment specifics Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- medium confidence, emb-platform-comparison-criteria-configurations: Manufacturer product/revision, platform configuration or hardware experiment specifics Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- medium confidence, emb-platform-comparison-experiment-record: Manufacturer product/revision, platform configuration or hardware experiment specifics Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- medium confidence, emb-platform-comparison-official-evidence: Manufacturer product/revision, platform configuration or hardware experiment specifics Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- medium confidence, emb-platform-comparison-score-sensitivity: Manufacturer product/revision, platform configuration or hardware experiment specifics Primary manufacturer/code snapshots independently checked and dated in the lesson. Product/SDK details can change; no selected physical board, flash/recovery or lab measurement is certified.
+- medium confidence, emb-control-to-audio-atomic-latest: Target atomic/interrupt timing and measured worst-case performance Language-level primary sources, exact host compiled helper and finite state/arithmetic models checked. Selected MCU compiler/ABI, ISR contracts, atomic retry/progress bounds, DMA/cache behavior and physical WCET still require target evidence; lesson explicitly requires those checks.
+- medium confidence, emb-control-to-audio-preset-ownership: Target atomic/interrupt timing and measured worst-case performance Language-level primary sources, exact host compiled helper and finite state/arithmetic models checked. Selected MCU compiler/ABI, ISR contracts, atomic retry/progress bounds, DMA/cache behavior and physical WCET still require target evidence; lesson explicitly requires those checks.
+- medium confidence, emb-control-to-audio-spsc-ring: Target atomic/interrupt timing and measured worst-case performance Language-level primary sources, exact host compiled helper and finite state/arithmetic models checked. Selected MCU compiler/ABI, ISR contracts, atomic retry/progress bounds, DMA/cache behavior and physical WCET still require target evidence; lesson explicitly requires those checks.
+- medium confidence, emb-realtime-audio-measure-load: Target atomic/interrupt timing and measured worst-case performance Language-level primary sources, exact host compiled helper and finite state/arithmetic models checked. Selected MCU compiler/ABI, ISR contracts, atomic retry/progress bounds, DMA/cache behavior and physical WCET still require target evidence; lesson explicitly requires those checks.
+- medium confidence, emb-codecs-i2s-converter-revisions: Codec fitted to board revision and SDK configuration Manufacturer revision snapshots and exact pinned source checked; recheck actual board and installed SDK before wiring/configuring.
+- medium confidence, emb-codecs-i2s-output-connections: q9 distractor explanation: 'Equipment normally has headroom above nominal' General engineering practice without a single primary source; it is hedged and immediately directs the reader to the manual's maximum input level.
+- medium confidence, emb-platform-comparison-official-evidence: Dated product facts for Daisy Seed Rev 7, Teensy 4.1/audio adaptor D2 and Raspberry Pi 5/DAC+ Re-checked against fetched manufacturer pages on 2026-10-29 but time-sensitive; the lesson keeps its 2026-10-16 check date and tells readers to re-verify before buying.
+- medium confidence, emb-codecs-i2s-converter-revisions: libDaisy distinguishes Rev 7 (PD5) and shares the Rev 4-compatible audio configuration Confirmed in fetched libDaisy master daisy_seed.cpp, but the Daisy datasheet v1.2.0 says libDaisy 'detects hardware as Rev 4'; source code can change between versions.
+- medium confidence, emb-gpio-buttons-led-current: Kingbright example forward voltages and 'a blue or white LED on 3.3 V may be dim or not light' Datasheet values are for specific parts at stated currents (10/20 mA); behaviour at a few mA on 3.3 V depends on the selected part, so the lesson hedges and directs readers to their own datasheet.
+
+
+## synth / MIDI & Studio Integration
+
+33 question objects changed. Every changed question has a specific independent-review reason in the linked record.
+
+**Corrections in this review:**
+
+- midi-synth-handling-controller-curves analogy: 'every key is the same width … equal physical steps' was inaccurate (white and black keys differ; a piano's semitone steps are not equal-width) → 'moving up one key, white or black, raises the pitch by the same semitone' and 'each step up is the same frequency ratio'.
+- midi-fundamentals-q6: timing 'first and last edge' of a Note On can span only 29 bit-times (about 0.93 ms) when the stop bit follows a 0, so it did not match the 30-bit explanation → prompt now times from the start of the first start bit to the end of the last stop bit.
+- Glossary diode: 'the LED never sees a damaging reverse voltage' was absolute → the reverse-connected diode holds the LED's reverse voltage to about one diode forward drop.
+- midi-hardware-q1 worked example: garbled 'along the socket rim around the socket' → 'do not run in numeric order around the socket rim' (editorial).
+- midi-studio-integration-q7 option 1: typo 'Choose a one tempo sender' → 'Choose one tempo sender' (editorial).
+- Hedged: midi-synth-handling-controller-curves: ratio perception of filter cutoffs and envelope times reframed as a widely used design rule of thumb, not an exact perceptual law (lesson text, takeaway and q7 worked example).
+- Hedged: midi-hardware-usb-event-packets: 'many event packets per millisecond' now gives the 12 Mbit/s full-speed figure and states that throughput depends on device, host scheduling and driver.
+- Hedged: midi-fundamentals-q12: USB chord spread now 'usually much less', timing depending on device, host and driver.
+- Hedged: midi-hardware-q5: the ≈5.3 mA prediction now states its model (nominal 3.3 V, exact resistors, fixed LED drop, cable/driver ignored) in the prompt; worked example notes real forward drop varies with current (CA-033).
+- Hedged: midi-messages-q8: recompute-on-range-change assumption made explicit in the prompt; worked example explains the alternative behaviour.
+
+**Scope gaps and exclusions:**
+
+- No physical MIDI receiver compliance/fault margin, measured complete-path latency, auditory threshold or device compatibility certification.
+- Final platform/interface/BOM/full firmware/patch-dump decoder and final integrated demonstration remain unselected/unimplemented planning tasks.
+- Manufacturer dBu peak convention is ambiguous; faithfully quoted, not converted to unspecified RMS/peak voltages.
+- Old foreign Audio XLR fallback field is excluded from approval; root publication requires DIFFERENT full Audio verifier closure.
+- No physical MIDI or audio hardware measurements: loop currents, levels and latencies are specification or model values.
+- Render check at 390 px and offline view were not performed in this pass (build, renderer, diagram, formula and glossary unit tests pass).
+- Glossary: diode (corrected) and full-speed-usb (added) were verified against sources; the other 171 entries were spot-checked for sense and alias capture, not re-verified exhaustively. Their earlier verification is inherited.
+- velocity-note-end, lengths-pressure, control-change-map, rpn-bank-program, sysex-mode, midi-two-scope, parser-state, stuck-note-defences, din-loop, trs-thru and several studio lessons still have one-line key-takeaway sections; acceptable but thin.
+
+**Low-confidence areas, including preserved qualifications:**
+
+- medium confidence, midi-fundamentals-note-frequency: Dated product/OS/driver or hardware-specific measurement convention Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- medium confidence, midi-studio-integration-connection-plan: Dated product/OS/driver or hardware-specific measurement convention Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- medium confidence, midi-studio-integration-digitakt-sequence: Dated product/OS/driver or hardware-specific measurement convention Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- medium confidence, midi-studio-integration-ableton-record-sync: Dated product/OS/driver or hardware-specific measurement convention Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- medium confidence, midi-studio-integration-monitor-latency: Dated product/OS/driver or hardware-specific measurement convention Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- medium confidence, midi-studio-integration-gain-chain: Dated product/OS/driver or hardware-specific measurement convention Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- medium confidence, midi-studio-integration-hum-test-session: Dated product/OS/driver or hardware-specific measurement convention Exact manufacturer/standard primary snapshots independently fetched 2026-10-16. Models/OS/driver support may change; no selected physical hardware test or unspecified dBu peak convention inferred.
+- medium confidence, midi-hardware-usb-host-roles: Dated manufacturer/platform or ambiguous maximum-level convention Primary snapshot checked on2026-10-16; product revisions/driver support can change. No physical compliance or unspecified dBu peak conversion inferred.
+- medium confidence, midi-hardware-usb-event-packets: Dated manufacturer/platform or ambiguous maximum-level convention Primary snapshot checked on2026-10-16; product revisions/driver support can change. No physical compliance or unspecified dBu peak conversion inferred.
+- medium confidence, midi-audio-levels-first-interface-check: Dated manufacturer/platform or ambiguous maximum-level convention Primary snapshot checked on2026-10-16; product revisions/driver support can change. No physical compliance or unspecified dBu peak conversion inferred.
+- medium confidence, midi-audio-levels-sine-headroom: Dated manufacturer/platform or ambiguous maximum-level convention Primary snapshot checked on2026-10-16; product revisions/driver support can change. No physical compliance or unspecified dBu peak conversion inferred.
+- medium confidence, midi-synth-handling-controller-curves: Filter cutoffs and envelope times are judged roughly by ratio, motivating exponential maps. Pitch-ratio perception is standard; extension to cutoff and times is a common design heuristic without a fetched psychoacoustic source. Now hedged in the text.
+- medium confidence, midi-hardware-output-loop-current: q5: a 1.9 V receiver LED drop gives roughly 5.3 mA from the 3.3 V CA-033 output. Recomputed correctly (1.4 V / 263 Ω = 5.32 mA) under stated model assumptions; real LED drop varies with current and driver low-state voltage is ignored. Not measured.
+- medium confidence, midi-hardware-usb-event-packets: USB MIDI carries many event packets per millisecond; a DIN chord is much less spread over USB (also midi-fundamentals-q12). 12 Mbit/s full speed is verified; actual USB MIDI throughput and timing depend on endpoint size, host polling and drivers and were not measured. Hedged.
+- medium confidence, midi-audio-levels-balanced-connectors: Analogy limit: impedance imbalance converts common-mode interference into a difference signal; rejection is finite. Supported by the IEC 60268-3 statement as cited on Wikipedia (secondary); the Jensen primary application note now returns 404.
+- medium confidence, midi-studio-integration-connection-plan: Digitakt / Digitakt II ports, ratings, menus and Ableton Live 12 behaviour (all studio-integration lessons, note-frequency, usb-host-roles, sine-headroom, load-bridging, dc-coupling). Re-fetched Digitakt OS 1.53 and Digitakt II OS 1.17 manuals and Live 12 manual pages on 2026-10-29 and confirmed the quoted facts, but product facts are time-sensitive and version-specific; lessons tell the reader to confirm their model and OS.
+- medium confidence, midi-hardware-trs-thru: RP-054 recommends 2.5 mm TRS, 2 m adapter limit, shielded twisted pair, protection circuitry. Verified from a copy of RP-054 hosted on Google Drive; the official MIDI Association download requires membership, so the copy's provenance is not first-party.
 
 
 ## system-design / Fundamentals

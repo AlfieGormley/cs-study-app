@@ -29,6 +29,8 @@ RETURNING name, price;
 
 The right-hand side of `SET` sees the **old** row values. `SET a = b, b = a` swaps two columns in standard SQL and in PostgreSQL and SQLite, because both expressions read the values from before the update.
 
+An `UPDATE` whose `WHERE` matches nothing is not an error. It succeeds and reports 0 rows affected. Application code that must distinguish "updated" from "not found" should check the affected-row count, or use `RETURNING` and see whether any row came back.
+
 `WHERE` can use a subquery:
 
 ```sql
@@ -38,19 +40,7 @@ WHERE price > (SELECT AVG(price)
                FROM products);
 ```
 
-The subquery's average is the ordinary mean of the five prices:
-
-```formula
-mean = (x_1 + x_2 + … + x_n) / n
-mean = (30 + 25 + 40 + 90 + 8) / 5
-mean = 193 / 5 = £38.6
-where
-mean: the arithmetic mean, which is what AVG(price) returns, in pounds (£)
-x_1, x_2, x_n: the prices being averaged, in pounds (£)
-…: "and so on": every price between x_2 and x_n is included too
-n: how many prices there are (5); AVG leaves NULLs out of both the sum and n
-In words: the average is the total of the prices divided by how many there are.
-```
+The subquery's average is the ordinary mean of the five prices: £193 shared across five products, £38.60.
 
 This uncorrelated average subquery has no reference to the outer product row. SQLite evaluates it once and reuses its result; PostgreSQL evaluates it against the statement's snapshot. Only Lamp (£40) and Rug (£90) exceed £38.6 and get doubled. The threshold stays fixed for this query. Do not generalise that to a correlated subquery reading the table being changed: SQLite can see changes made earlier by the same statement.
 

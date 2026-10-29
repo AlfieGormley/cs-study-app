@@ -3,99 +3,45 @@ id: emb-adc-knobs-control-smoother
 sourceLesson: emb-adc-knobs
 title: "Smooth knob readings"
 level: intermediate
-minutes: 4
+minutes: 3
 summary: "A moving average needs a history buffer and introduces delay."
 ---
 
-## Smoothing: moving average and one-pole
+## Smooth the noise without making the knob sluggish
 
-**Moving average.** Average the last few readings:
+A still knob produces slightly different ADC readings. Smoothing reduces rapid variation, at the cost of delaying genuine movement. It does not replace good wiring or remove every kind of interference.
 
-```formula
-y = (x_1 + x_2 + … + x_M) / M
-where
-y: the smoothed output
-x_1: the newest raw reading
-x_2: the reading before that
-x_M: the oldest reading still in the window
-M: how many readings are averaged, for example 4 or 8
-…: "and so on": every reading between x_2 and x_M is included in the sum
-In words: add up the last M readings and divide by M. Random noise partly cancels out; a real change shows up only gradually.
-```
+A **moving average** averages a short window of recent readings. Old readings gradually leave the window, so the result changes gradually. A longer window reduces uncorrelated, zero-mean noise more strongly but adds delay and needs more history storage. Correlated interference may remain. An eight-reading window has a group delay of 3.5 readings, or 3.5 ms at 1,000 readings per second.
 
-For uncorrelated zero-mean reading noise, averaging reduces noise variance; correlated interference may remain. Averaging M readings but the output lags the input by roughly half the window and you need a buffer holding the last M readings. Strictly, the lag is half of one less than the window: 3.5 readings for an 8-reading window, which at 1,000 readings a second is 3.5 ms.
+A **one-pole low-pass smoother** keeps just its previous output. On each update it moves a chosen fraction of the remaining gap towards the new input. A small fraction means a slow, smooth response; a fraction of one means an immediate jump with no smoothing. With a fixed target and a fraction above zero and no greater than one, it does not overshoot.
 
-**One-pole low-pass (exponential smoothing).** Keep one state value and move it a fixed fraction of the way towards each new reading:
+> [!analogy] Real-world analogy: Approaching a doorway
+> Imagine moving halfway from your current position to a doorway on every instruction.
+>
+> **How it maps:** A one-pole smoother closes a fixed fraction of the remaining gap on each update, so its early movements are larger than its later ones.
+>
+> **Where it stops:** Firmware works with discrete, finite-precision values and can round to a stop or to the target. The input can also move while the smoother follows it.
 
-```formula
-y_n = y_{n−1} + a(x_n − y_{n−1})
-where
-y_n: the smoothed value after reading n
-y_{n−1}: the smoothed value from the previous reading
-x_n: the new raw reading
-a: the dimensionless smoothing coefficient, greater than zero and at most one for this monotonic smoother; small values mean a slow response and one means no smoothing
-n: the reading number
-In words: each time a reading arrives, close the fraction a of the gap between the smoothed value and the reading. For a fixed input step and the stated coefficient range, the smoothed value approaches the target monotonically without overshooting.
-```
+## Specify the response in time
 
-In code this is one line, `y = y + a * (x - y)`. You can choose `a` from how quickly you want it to respond: an **exponential time constant**, the time the output takes to cover about 63% of a sudden step:
+An **exponential time constant** describes how quickly the gap closes: about 63.2% of a fixed step after one time constant and about 95% after three. It is not a time-to-arrival promise. In exact arithmetic a fraction strictly below one approaches the target without reaching it; finite precision changes the final numerical behaviour.
 
-```formula
+The per-update fraction depends on **both** the desired time constant and the update rate. Keeping the same fraction but doubling the update rate makes the response twice as fast in seconds. To keep the same response time at a higher rate, use a smaller fraction per update.
+
+```formula reference
 a = 1 − e^(−1 / (τr))
-a = 1 − e^(−1 / (0.010 s × 1000 /s))
-a = 1 − e^(−0.1) ≈ 1 − 0.9048 = 0.0952
 where
-a: the smoothing coefficient per reading, between 0 and 1, no unit
-e: Euler's number, about 2.71828, the base of natural exponential growth and decay
-τ: tau, the time constant you want, in seconds (s); here 10 ms = 0.010 s
-r: the update rate, how many readings per second the filter receives, in per second (/s); here 1,000
+a: fraction of the remaining gap closed per update, dimensionless
+τ: positive exponential time constant, in seconds (s)
+r: update rate, in updates per second
+e: Euler's number, about 2.71828
 s: second, the unit of time
-≈: approximately equal to (rounded)
-In words: work out how many readings fit in one time constant (here 10), and a is the fraction that makes the filter cover 63% of a step in that many readings. A longer time constant gives a smaller a.
+In words: choose the per-update movement from the desired response time and the update rate. Faster updates need smaller movements to preserve the same time constant.
 ```
 
-The same calculation, plus a check of how far the filter gets towards a step from 0 to 1:
+A 10 ms time constant at 1,000 readings per second uses a fraction of about 0.0952. With that exponential coefficient, updates sample the corresponding exponential response; a time constant need not land exactly on an update. Initialise the retained output deliberately, and recompute the coefficient when the rate changes.
 
-```python
-import math
-rate = 1000.0          # control reads/s
-tau = 0.010            # 10 ms
-# Select coefficient for a 10 ms response.
-a = 1 - math.exp(-1 / (tau * rate))
-print(f"a = {a:.4f}")
-y = 0.0
-# Retain y between readings of the unit
-# step.
-for n in range(1, 31):
-    y += a * (1.0 - y)  # step to 1.0
-    # Inspect one, two and three time
-    # constants.
-    if n in (10, 20, 30):
-        print(n, f"{y:.3f}")
-```
-
-```output
-a = 0.0952
-10 0.632
-20 0.865
-30 0.950
-```
-
-Why 63%? Each reading leaves a fraction (1 − a) of the remaining gap, so after k readings the fraction of a step covered is:
-
-```formula
-covered = 1 − (1 − a)^k
-covered = 1 − (1 − 0.0952)^10
-covered ≈ 1 − 0.368 ≈ 0.632
-where
-covered: the fraction of a sudden step the output has travelled, from 0 (none) to 1 (all of it)
-a: the smoothing coefficient, here 0.0952
-k: the number of readings since the step; here 10, one time constant at 1,000 readings per second
-≈: approximately equal to
-In words: after one time constant the filter has covered about 63% of any step, after two about 86%, after three about 95%. In exact arithmetic with a coefficient strictly between zero and one, it approaches the target asymptotically; floating-point rounding can eventually stop or finish the numerical change.
-```
-
-After one time constant (10 readings, which is 10 ms) the output has covered 63.2% of a step; after three, 95%. With the stated exponential coefficient the response matches those exponential sample times even for short time constants, but updates remain a discrete staircase and a non-integer time constant need not coincide with a reading. This is the same filter as the one-pole low-pass in DSP, running at control rate. The fetched libDaisy `AnalogControl` source also uses a one-state smoother and a default slew setting of 0.002 s. Its coefficient rule is different from the time-constant coefficient rule above; do not treat that slew setting as the exact time constant of this example.
+The libDaisy `AnalogControl` source uses a one-state smoother with a default slew setting of 0.002 s, but a different coefficient rule. Do not treat that library setting as this exact exponential time constant.
 
 ## Key takeaways
 - A moving average needs a history buffer and introduces delay.

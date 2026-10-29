@@ -29,18 +29,7 @@ FROM orders;
 |---|---|
 | 3 | 2 |
 
-The `CASE` form works because summing 1s and 0s is counting. Each row contributes 1 if it meets the condition and 0 if it doesn't:
-
-```formula
-n_s = Σ s_i
-n_s = 1 + 1 + 0 + 1 + 0 + 0 = 3
-where
-n_s: the number of shipped orders
-Σ: sigma, "the sum of": add up s_i over every row i
-i: one row of orders (101 to 106, in order)
-s_i: 1 if row i has status 'shipped', otherwise 0 (what the CASE expression returns)
-In words: adding a 1 for every row that passes the test and a 0 for every row that fails it gives the number of rows that pass.
-```
+The `CASE` form works because summing 1s and 0s is counting. Each row contributes 1 if it meets the condition and 0 if it doesn't, so orders 101 to 106 contribute 1, 1, 0, 1, 0 and 0: three shipped orders. `FILTER` says the same thing more directly: only rows passing its `WHERE` reach that aggregate.
 
 The CASE form works in both engines and is widely portable. FILTER is standard SQL; PostgreSQL has supported it since 9.4 and SQLite since 3.30. This one-pass "pivot" avoids issuing a separate query per status and can avoid repeated scans. Actual performance depends on the plan and available indexes.
 

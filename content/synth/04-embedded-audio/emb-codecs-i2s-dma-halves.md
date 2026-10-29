@@ -7,68 +7,31 @@ minutes: 3
 summary: "The CPU fills a released buffer half while DMA transfers the other."
 ---
 
-## DMA and double buffering
+## Give the CPU one block at a time
 
-At 48 kHz stereo, the codec needs a new sample pair every 20.8 µs:
+At 48 kHz stereo, the codec consumes a left/right sample pair about every 20.8 microseconds. A **DMA** controller transfers those samples between memory and the I2S/SAI peripheral, saving the CPU from copying each sample individually. The CPU still computes the samples and services block boundaries.
 
-```formula
-T_s = 1 / f_s
-T_s = 1 / 48000 Hz ≈ 0.0000208 s = 20.8 µs
-where
-T_s: the sample period, the time between one sample frame and the next, in seconds (s)
-f_s: the sample rate, in hertz (Hz); here 48 kHz = 48,000 Hz
-Hz: hertz, cycles (here samples) per second
-s: second
-µs: microsecond, one millionth of a second
-≈: approximately equal to
-In words: 48,000 stereo sample frames each second leaves only about 21 millionths of a second for each one.
+The usual pattern is a circular sample buffer split into two halves:
+
+```diagram
+DMA plays half A -> CPU prepares half B
+DMA plays half B -> CPU prepares half A
 ```
 
-Interrupting the CPU for every sample would waste much of its time on overhead. Instead, a **DMA** (direct memory access) controller copies samples between memory and the I2S/SAI peripheral without the CPU.
+A half-complete or complete interrupt identifies the half that DMA has just finished using. The callback fills that released half while the other plays. It must finish before DMA returns to the half: **one block period**, including conversion and interrupt overhead.
 
-The standard pattern is a **circular buffer split in two halves** (double buffering, sometimes called ping-pong):
+For 48 samples per channel at 48 kHz, each half lasts 1 ms. Missing that deadline can make DMA play stale or partially written samples. Double buffering separates ownership for a limited interval; it does not create spare time when computation overruns.
 
-```
-      buffer in memory
-+---------------+---------------+
-|    half A     |    half B     |
-+---------------+---------------+
- DMA reads A --> codec
- (CPU is filling B)
- "half complete" interrupt:
-   DMA moves on to B,
-   CPU now fills A
- "complete" interrupt:
-   DMA wraps to A, CPU fills B
-```
+> [!analogy] Real-world analogy: Two serving trays
+> While guests take food from one tray, a cook refills the other, then the trays swap roles.
+>
+> **How it maps:** DMA consumes one buffer half while the CPU prepares the released half. The swap determines when the refill must be ready.
+>
+> **Where it stops:** Audio hardware cannot politely wait for the cook. A late or conflicting write can corrupt playback, and memory placement and cache rules still require platform-specific handling.
 
-Each interrupt tells the CPU that one half has just finished playing and is free to refill. Your audio callback runs from that interrupt and must fill the half before the DMA comes back round to it: one block period. That is the processing deadline of the real-time audio units:
+The checked libDaisy source dispatches the callback from both DMA boundary notifications. Its stereo circular buffer contains two halves, each with a left and right value for every sample frame: a 48-frame half therefore gives 192 sample words across the whole buffer. The input side transfers in the opposite direction.
 
-```formula
-T_block = N / f_s
-T_block = 48 / 48000 Hz = 0.001 s = 1 ms
-where
-T_block: the block period, the time the DMA takes to play one half of the buffer, in seconds (s)
-N: the block size, samples per channel in each half; here 48, libDaisy's default
-f_s: the sample rate, in hertz (Hz); here 48 kHz
-Hz: hertz, samples per second
-s: second
-ms: millisecond, one thousandth of a second
-In words: a half holding 48 samples per channel plays for 1 ms, so the callback has 1 ms to refill the other half.
-```
-
-libDaisy follows this pattern exactly: the SAI's DMA runs in circular mode, the half-complete and complete DMA callbacks both dispatch your audio callback, and the circular audio-transfer buffer is `blocksize × 2 × 2` words:
-
-```formula
-W = N × 2 × 2
-W = 48 × 2 × 2 = 192
-where
-W: the length of the circular DMA buffer, in words (one word holds one sample)
-N: the block size (libDaisy's `blocksize`), samples per channel per half; here 48
-In words: two halves, each holding two channels of N samples, so 48-sample blocks need a 192-word buffer.
-```
-
-The input side runs the same way in the other direction.
+On real hardware, use memory accessible to that DMA engine and follow the library's cache and buffer-placement requirements. A host simulation of alternating halves does not verify those requirements.
 
 ## Key takeaways
 - The CPU fills a released buffer half while DMA transfers the other.

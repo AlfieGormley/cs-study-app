@@ -39,7 +39,6 @@ Connectors are where parts are most often wired wrong.
 
 ## Further reading
 
-
 - [SparkFun: reading schematics](https://learn.sparkfun.com/tutorials/how-to-read-a-schematic/all)
 - [SparkFun: breadboard connections](https://learn.sparkfun.com/tutorials/how-to-use-a-breadboard/all)
 - [RaneNote 110: system interconnection](https://www.ranecommercial.com/legacy/note110.html)

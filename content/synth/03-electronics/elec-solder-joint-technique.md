@@ -9,7 +9,7 @@ summary: "Heat both pad and lead and hold the joint still while it solidifies."
 
 Heat both pad and lead and hold the joint still while it solidifies.
 
-### Technique for a through-hole joint
+## Technique for a through-hole joint
 1. **Clean and tin the tip:** wipe on a damp sponge or brass wool, then melt a little solder on the tip. This helps heat transfer.
 2. **Heat both the pad and the lead together** with the side of the tip touching both.
 3. **Feed solder into the joint,** not onto the iron. It should flow around the lead and across the pad. Flux in the solder's core cleans oxide so the solder can wet the metal.
@@ -17,7 +17,7 @@ Heat both pad and lead and hold the joint still while it solidifies.
 5. **Don't move the joint** until it solidifies.
 6. Trim the lead above the joint.
 
-### Inspecting a joint
+## Inspecting a joint
 ```diagram
   good:   /‾\      concave cone, wets
          /   \     both pad and lead
@@ -28,7 +28,7 @@ Heat both pad and lead and hold the joint still while it solidifies.
 ```
 
 - **Good:** a smooth, concave "volcano" fillet that wets both the pad and the lead. Shiny with leaded solder, somewhat duller with lead-free.
-- **Cold joint:** dull, grainy or lumpy, often balled up. Either the pad or the lead wasn't hot enough. Reheat with a little fresh flux.
+- **Cold joint:** poor wetting, a balled shape or intermittent contact warrants rework. Insufficient heat, contamination, exhausted flux or movement may be involved. Dullness alone is not proof, especially with lead-free solder; follow a suitable rework procedure with power removed.
 - **Bridge** (solder bridge): solder joining adjacent pads. Remove it with desoldering braid or by dragging a clean tip.
 - **Insufficient:** the hole isn't filled or the pad isn't covered.
 - **Overheated:** burnt flux, discoloured board, or a **lifted pad** (the copper peeling off). Use less time and the right tip.

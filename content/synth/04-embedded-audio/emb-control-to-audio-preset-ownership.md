@@ -17,6 +17,13 @@ If a preset change sets ten parameters, atomics individually can let the callbac
 - **Double buffer with acknowledgement:** allow only one unacknowledged publication. Fill the inactive set, then release-store its index and preset generation together. The callback acquire-loads that publication, finishes all reads of the old set, and release-stores the adopted preset generation as its acknowledgement. Only after an acquire-load sees that exact acknowledgement may the producer reuse the old set. A counter increment at block start alone is insufficient: it can advance before the callback loads the new publication. The callback never waits.
 - On Teensy, PJRC's audio library offers `AudioNoInterrupts()` and `AudioInterrupts()` around a group of settings so they "all take effect at the same time". That briefly holds off the audio update from the foreground; keep the section short.
 
+> [!analogy] Real-world analogy: Swapping a printed menu
+> A restaurant changes its menu by handing diners a complete new card, not by crossing out dishes one at a time while people read. The old cards are reprinted only after they have been collected.
+>
+> **How it maps:** The complete parameter set is the menu card. Publishing one finished set stops the callback seeing half old and half new values. Waiting for the old card to come back is the acknowledgement before the producer reuses that buffer.
+>
+> **Where it stops:** The callback never waits for the producer. The publication and acknowledgement must use target-supported atomic operations with the correct ordering, which a handed-over card does not need.
+
 ## Key takeaways
 - Updating parameters individually does not publish a whole parameter set together.
 - An immutable queued message or acknowledged buffer ownership protects the full set.

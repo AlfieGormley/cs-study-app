@@ -28,47 +28,18 @@ idle  start  D0 D1 D2 D3 D4 D5 D6 D7  stop
 
 Because there is no clock, both ends' baud rates must match closely, typically within a few percent, or the receiver samples bits in the wrong place by the end of the frame.
 
+> [!analogy] Real-world analogy: Playing to a count-in without a conductor
+> Two musicians agree a tempo beforehand. One counts in, and both play the phrase from that moment by keeping time in their heads.
+>
+> **How it maps:** The agreed tempo is the baud rate and the count-in is the start bit's falling edge. The receiver times each later bit from that edge. A small tempo difference grows through the phrase, which is why errors from a mismatched baud rate appear in the last bits of a byte first.
+>
+> **Where it stops:** A UART restarts its timing at every byte's start bit and tolerates only a few percent of mismatch. Musicians can listen and adjust mid-phrase; a UART receiver cannot.
+
 ### MIDI is a UART
 
-The MIDI Association's CA-033 electrical update (2014) specifies 31,250 baud with a transmitter tolerance of ±1%, one start bit, eight data bits and one stop bit. That is ten bit periods, or 320 microseconds per byte.
+The MIDI Association's CA-033 electrical update (2014) specifies 31,250 baud with a rate tolerance of ±1%, one start bit, eight data bits and one stop bit. That is ten bit periods, or 320 microseconds per byte.
 
-So a 5-pin DIN MIDI port is an 8-N-1 UART at 31,250 baud. What it costs in time: each bit lasts one divided by the baud rate, and a byte is ten bits on the wire.
-
-```formula
-t_bit = 1 / R_baud
-t_bit = 1 / 31250 Bd = 0.000032 s = 32 µs
-t_byte = b × t_bit
-t_byte = 10 × 32 µs = 320 µs
-t_msg = 3 × t_byte = 960 µs
-where
-t_bit: the time one bit occupies on the wire, in seconds (s)
-R_baud: the baud rate, symbols (here bits) per second, in baud (Bd); MIDI uses 31,250
-Bd: baud, one symbol per second; on a UART one symbol is one bit
-t_byte: the time to send one byte, in seconds (s)
-b: bits on the wire per byte; 10 for 8-N-1 (start + 8 data + stop)
-t_msg: the time for a three-byte message such as a note-on
-s: second
-µs: microsecond, one millionth of a second
-In words: a MIDI bit lasts 32 µs, a byte 320 µs, and a three-byte note-on nearly a millisecond.
-```
-
-The same arithmetic in Python, with the byte rate:
-
-```python
-# DIN MIDI includes framing on every byte.
-baud = 31_250
-bits_per_byte = 10    # start + 8 + stop
-byte_us = bits_per_byte / baud * 1e6
-print(f"one byte: {byte_us:.0f} us")
-print(f"note-on: {3 * byte_us:.0f} us")
-print(f"bytes/s: {baud // bits_per_byte}")
-```
-
-```output
-one byte: 320 us
-note-on: 960 us
-bytes/s: 3125
-```
+DIN MIDI therefore requires an 8-N-1 UART configured for 31,250 baud. The start and stop bits occupy wire time even though they are not payload. That makes a byte longer than just its eight data bits.
 
 A three-byte note-on takes nearly a millisecond on the wire. A four-note chord is 12 bytes, so it takes about 3.8 ms to arrive in full (a little less if the sender uses MIDI's running-status shortcut, which omits repeated status bytes). That is a real, if small, timing smear, and it is part of the end-to-end latency budget in the real-time audio units.
 

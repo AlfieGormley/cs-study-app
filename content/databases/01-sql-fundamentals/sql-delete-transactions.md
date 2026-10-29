@@ -42,6 +42,13 @@ SELECT COUNT(*) FROM order_items;
 
 Until `COMMIT`, other sessions don't see your changes, and `ROLLBACK` undoes them. How the database keeps transactions isolated from each other is covered in System Design.
 
+> [!analogy] Real-world analogy: an email draft
+> While you write an email, nobody else can read it. You can check it, send it, or discard the whole draft.
+>
+> **How it maps:** `BEGIN` opens the draft, the `UPDATE` or `DELETE` is what you write, checking the affected row count is proofreading, `COMMIT` is sending and `ROLLBACK` is discarding. Other sessions see none of the changes until the commit.
+>
+> **Where it stops:** A draft affects nobody, but an open transaction can hold locks that make other sessions wait, so don't leave one open while you go for coffee. And, just as a sent email cannot be recalled, `ROLLBACK` cannot undo a committed change; only a backup or another statement can restore the data.
+
 Some tools add safeguards: MySQL's `--safe-updates` option restricts UPDATE and DELETE unless they use a key condition or a LIMIT; large queries can be restricted further. Many GUI clients warn about unfiltered writes. In PostgreSQL's `psql`, autocommit is on by default, so each statement commits immediately unless you type `BEGIN` first.
 
 ## Key takeaways

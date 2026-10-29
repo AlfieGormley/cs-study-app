@@ -14,7 +14,7 @@ Datasheets follow a predictable layout. In order of usefulness to a beginner:
 
 1. **Features and description:** what the part is, supply range, key specs.
 2. **Pin configuration:** pin numbers and names. Note which **view** (top view is standard for ICs) and the pin 1 marking.
-3. **Absolute maximum ratings:** what will damage it.
+3. **Absolute maximum ratings:** stress limits, not guaranteed operating conditions.
 4. **Recommended operating conditions:** where to design.
 5. **Electrical characteristics:** guaranteed min/max values under stated **test conditions**, such as V_OH at a given load current.
 6. **Typical characteristics (graphs):** how the part usually behaves. Not guaranteed.

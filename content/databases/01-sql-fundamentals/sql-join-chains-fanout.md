@@ -61,19 +61,7 @@ GROUP BY c.name;
 
 Asha has two orders, but joining to items gives three rows (order 101 has two items). `COUNT(o.id)` says 3.
 
-It gets worse when you join **two independent child tables** to the same parent. Asha has 2 orders and referred 2 customers. Neither child table says which order goes with which referral, so the join pairs every one with every other:
-
-```formula
-r = c_1 c_2
-r = 2 × 2 = 4
-where
-r: the number of joined rows produced for one parent row (here Asha)
-c_1: how many rows of the first child table match that parent (Asha's 2 orders)
-c_2: how many rows of the second child table match it (her 2 referrals)
-In words: joining two unrelated child tables to one parent multiplies their counts, so every aggregate over that parent sees each child row repeated once per row of the other child.
-```
-
-So both counts come out as 4. With three orders and four referrals it would be 12 rows. With an inner join, a parent with zero rows in either child gives 0 rows and disappears; with LEFT JOINs an unmatched child counts as one NULL-padded row instead.
+It gets worse when you join **two independent child tables** to the same parent. Asha has 2 orders and referred 2 customers. Neither child table says which order goes with which referral, so the join pairs every one with every other. Two orders paired with two referrals gives 2 × 2 = 4 rows for Asha, so counting her orders and counting her referrals over those rows both give 4. With three orders and four referrals it would be 12 rows. With an inner join, a parent with zero rows in either child gives 0 rows and disappears; with LEFT JOINs an unmatched child counts as one NULL-padded row instead.
 
 ```
 Asha x orders(101,102)
@@ -81,6 +69,13 @@ Asha x orders(101,102)
 = 4 rows: every order paired
   with every referral
 ```
+
+> [!analogy] Real-world analogy: counting outfits instead of shirts
+> Pack two shirts and two pairs of trousers and you can make four outfits. If you counted shirts by counting outfits, you would think you had packed four shirts.
+>
+> **How it maps:** Asha is the suitcase; her orders are the shirts and her referrals are the trousers. Joining both child tables to her row lists every outfit, so `COUNT(o.id)` sees each order once per referral.
+>
+> **Where it stops:** The multiplication happens only because nothing links a particular order to a particular referral. When a real join condition connects two tables, such as order items to their own order, each child row joins only to its own parent row instead of forming every combination.
 
 Fixes, in order of preference:
 

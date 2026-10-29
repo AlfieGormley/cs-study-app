@@ -66,7 +66,16 @@ WHERE (category = 'kitchen'
   AND price > 50;
 ```
 
-Now only Rug is returned. When a condition mixes `AND` and `OR`, always add brackets, even when you know the precedence. The next reader may not.
+Now only Rug is returned.
+
+> [!analogy] Real-world analogy: multiplication before addition
+> In everyday arithmetic, 2 + 3 × 4 is 14, not 20, because multiplication is done before addition unless brackets say otherwise.
+>
+> **How it maps:** In SQL, `AND` plays the part of multiplication and `OR` the part of addition. `a OR b AND c` is read as `a OR (b AND c)`, just as 2 + 3 × 4 is read as 2 + (3 × 4). Brackets override the default grouping in both.
+>
+> **Where it stops:** SQL conditions are not numbers. `OR` never produces a "bigger" truth value by adding, and with NULLs a condition can be UNKNOWN rather than true or false, which the NULL units cover.
+
+When a condition mixes `AND` and `OR`, always add brackets, even when you know the precedence. The next reader may not.
 
 ## Key takeaways
 - WHERE keeps only true conditions.

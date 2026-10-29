@@ -26,46 +26,37 @@ How it works:
 3. That output goes to your UART's RX pin. Current on gives a low (0), current off gives a high (1): the same low/high logic relationship the sender's UART produced.
 4. D1, wired across the LED in the reverse direction, stops a reversed or faulty connection from putting a damaging reverse voltage on the LED.
 
-Requirements from the spec: the receiver must need **less than 5 mA** to turn on, and rise and fall times should be under **2 µs**. To see why 2 µs is comfortable, compare it with the length of one bit:
-
-```formula
-t_bit = 1 / R
-t_bit = 1 bit / (31250 bit/s)
-t_bit = 0.000032 s = 32 µs
-where
-t_bit: the time one bit lasts on the wire, in seconds (s)
-R: the DIN MIDI bit rate, 31,250 bits per second (bit/s)
-bit: one binary digit
-s: seconds
-µs: microseconds, millionths of a second
-In words: each MIDI bit lasts 32 µs, so a 2 µs edge uses up only about a sixteenth of it.
-```
+Requirements from the spec: the receiver must need **less than 5 mA** to turn on, and rise and fall times should be under **2 µs**. Each MIDI bit lasts 32 µs (one bit at 31,250 bit/s), so a 2 µs edge uses only about a sixteenth of the bit. Slower optocouplers smear the edges, and the distortion accumulates along THRU chains.
 
 The spec names the Sharp PC900V and Hewlett-Packard 6N138 as acceptable and notes that other high-speed optocouplers may be. Its only recommended RD value is **280 Ω for the PC900V with a 5 V pull-up supply (VRX)**. The reference parts use output circuitry requiring an external pull-up (the 6N138's output pin is the bare collector of its output transistor), which is why the pull-up RD is needed. Acceptance in the older CA-033 example does not prove a part works at a 3.3 V output supply. For a 3.3 V receiver, pick an optocoupler whose actual manufacturer datasheet supports that supply and choose RD from that datasheet. Pull the output up to **your MCU's supply (3.3 V)**, never to 5 V on a pin that isn't 5 V tolerant.
 
-Optional additions in CA-033: ferrite beads on the signal pins, and a **0.1 µF capacitor** from MIDI IN pin 2 (or the jack shield) to ground. A capacitor's opposition to AC (its reactance) falls as frequency rises:
+Optional additions in CA-033: ferrite beads on the signal pins, and a **0.1 µF capacitor** from MIDI IN pin 2 (or the jack shield) to ground. Why doesn't that capacitor break the "no DC path to ground" rule? Because a capacitor blocks DC entirely, and its opposition to AC (its **reactance**) falls as frequency rises:
 
-```formula
+```formula reference
 X_C = 1 / (2πfC)
-X_C = 1 / (2 × π × 60 Hz × 0.0000001 F)
-X_C ≈ 26500 Ω = 26.5 kΩ
 where
 X_C: the capacitor's reactance, its opposition to alternating current, in ohms (Ω)
 π: pi, about 3.14159
-f: the frequency of the signal or interference, in hertz (Hz); 60 Hz here, a mains frequency
-C: the capacitance, in farads (F); 0.1 µF = 0.0000001 F
-Hz: hertz, cycles per second
-F: farad, the unit of capacitance
+f: the frequency of the signal or interference, in hertz (Hz)
+C: the capacitance, in farads (F); 0.1 µF is 0.0000001 F
 Ω: ohm, the unit of resistance and reactance
-kΩ: kilohm, 1,000 ohms
-≈: approximately equal to (rounded)
-In words: at mains frequencies the 0.1 µF capacitor looks like tens of thousands of ohms, nearly an open circuit.
+In words: the higher the frequency (or the bigger the capacitor), the lower the reactance, so a small capacitor nearly blocks low frequencies and nearly shorts radio frequencies.
 ```
 
-Repeat it at a radio frequency of 10 MHz (10,000,000 Hz) and the reactance is about 0.16 Ω, close to a short circuit. This is the ideal-capacitor approximation used in CA-033, not a complete RF model of a real part or cable. At 20 kHz the same ideal capacitor is about 79.6 Ω, so do not call it an open circuit throughout the audio band. The optional connection preserves DC isolation while giving RF interference a lower-impedance path, as the specification intends.
+For the ideal 0.1 µF capacitor that means:
+
+| Frequency | Reactance |
+|---|---|
+| 60 Hz (mains) | about 26.5 kΩ |
+| 20 kHz (top of audio) | about 80 Ω |
+| 10 MHz (radio) | about 0.16 Ω |
+
+So the shield stays effectively disconnected at DC and mains frequencies while radio-frequency interference gets a low-impedance path to ground, as the specification intends. Do not call it an open circuit throughout the audio band: at 20 kHz it is only about 80 Ω. These are ideal-capacitor figures, the approximation CA-033 itself uses, not a complete RF model of a real part or cable.
 
 ## Key takeaways
-- Check optocoupler supply, pull-up, speed and pin limits together; an optional shield capacitor preserves DC isolation but is not ideal at every frequency.
+- The reference input is a 220 Ω resistor, an optocoupler LED with a reverse-protection diode, and a pull-up on the output side.
+- Pick an optocoupler and pull-up that are specified for your supply (3.3 V or 5 V), switch in under 2 µs and never pull a pin above its limit.
+- An optional 0.1 µF shield capacitor keeps DC isolation while giving radio-frequency interference a path to ground; it is not an open circuit at every frequency.
 
 ## Further reading
 - [MIDI 1.0 Electrical Specification Update CA-033 (2014) — MIDI Association](https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf)

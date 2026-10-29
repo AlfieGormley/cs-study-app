@@ -21,12 +21,12 @@ Two supply voltages dominate hobby digital electronics:
 Many boards accept 5 V from USB and use an on-board **voltage regulator** to make 3.3 V for the chip. The board may expose both voltages on pins. **The fact that 5 V exists on the board says nothing about whether the chip's I/O pins tolerate 5 V.**
 
 > [!example] A real board's limits
-> PJRC’s Teensy 4.1 product documentation (checked 16 October 2026; this page does not identify a separate PCB revision) states that its digital pins accept 0 to 3.3 V signals and "are not 5V tolerant", and that the analogue range is fixed at 0 to 3.3 V. Other boards differ: some microcontrollers have individual 5 V-tolerant pins. Read the exact board and revision's documentation and the microcontroller datasheet, and record the date you checked.
+> PJRC’s Teensy 4.1 product documentation (checked 29 October 2026; this page does not identify a separate PCB revision) states that its digital pins accept 0 to 3.3 V signals and "are not 5V tolerant", and that the analogue range is fixed at 0 to 3.3 V. Other boards differ: some microcontrollers have individual 5 V-tolerant pins. Read the exact board and revision's documentation and the microcontroller datasheet, and record the date you checked.
 
 ## Absolute maximum ratings versus recommended operating conditions
 Every datasheet separates two very different tables.
 
-**Absolute Maximum Ratings** describe stress limits, not guaranteed operation. Exceeding them can cause permanent damage; extended operation at those limits can reduce reliability. TI’s SN74HC00 datasheet SCLS181H (revision H, August 2021; checked 16 October 2026) includes a supply maximum of 7 V and an input clamp current of ±20 mA.
+**Absolute Maximum Ratings** describe stress limits, not guaranteed operation. Exceeding them can cause permanent damage; extended operation at those limits can reduce reliability. TI’s SN74HC00 datasheet SCLS181H (revision H, August 2021; checked 29 October 2026) includes a supply maximum of 7 V and an input clamp current of ±20 mA.
 
 **Recommended Operating Conditions** are where the part is guaranteed to work as specified: for the SN74HC00, a supply (V_CC) from 2 V to 6 V, with inputs between 0 V and the supply voltage.
 

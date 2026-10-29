@@ -3,27 +3,27 @@
     "id": "midi-messages-q8",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Your synth maps pitch bend by dividing the raw offset from centre by 8,192 and multiplying by its ±2-semitone range. Which message bends up by exactly one semitone on channel 1?",
+    "prompt": "Your synth maps pitch bend by taking the raw offset from centre as a fraction of 8,192 and multiplying by its bend range, initially ±2 semitones. The wheel sits halfway between centre and the top (raw 12,288). What offset does this give, and what offset does the same mapping give, recomputed with the new range, once a sender sets RPN 0 to ±12 semitones with the wheel unmoved?",
     "options": [
       {
-        "text": "`E0 00 60`",
-        "explanation": "Correct. Coarse part 96 and fine part zero give raw value 12,288, one semitone up under the stated mapping."
+        "text": "Up one semitone; after the RPN change, up six semitones",
+        "explanation": "Correct. Halfway from centre to the top is half the range: half of 2 is 1 semitone, and half of 12 is 6. The raw value has not changed; only its meaning has."
       },
       {
-        "text": "`E0 60 00`",
-        "explanation": "Byte order is MIDI LSB first. This is value 96, nearly full downward bend."
+        "text": "Up one semitone both times, because the raw value has not changed",
+        "explanation": "The raw value is only a position. RPN 0 changes how many semitones that position means, so the same value now bends further."
       },
       {
-        "text": "`E0 7F 7F`",
-        "explanation": "That is full upward bend, +2 semitones (to within one step)."
+        "text": "Up two semitones; after the RPN change, up twelve",
+        "explanation": "That is full-scale bend. 12,288 is only halfway from centre (8,192) to the top (16,383)."
       },
       {
-        "text": "`E0 00 50`",
-        "explanation": "Coarse part 80 gives raw value 10,240, half a semitone up under the stated mapping."
+        "text": "Down one semitone, because 12,288 is below the 16,383 maximum",
+        "explanation": "Direction is measured from centre, not from the maximum. Anything above 8,192 bends up."
       }
     ],
     "answer": 0,
-    "workedExample": "1. One semitone is half of the +2 range, so you need 4,096 counts above centre under this mapping: 8,192 + 4,096 = 12,288.\n2. Split it:\n\n```formula\nLSB = v & 0x7F\nMSB = (v >> 7) & 0x7F\nLSB = 12288 & 0x7F = 0x00\nMSB = (12288 >> 7) & 0x7F\nMSB = 96 & 0x7F = 0x60\nwhere\nv: the 14-bit bend value, 0 to 16,383\nLSB: the first data byte, the low 7 bits\nMSB: the second data byte, the high 7 bits\n&: bitwise AND; with 0x7F (binary 0111 1111) it keeps only the low 7 bits\n>>: bitwise right shift by the given number of bits; a shift of 7 divides by 128 and drops the remainder\n0x: prefix meaning hexadecimal (base 16)\nIn words: 12,288 is exactly 96 × 128, so the fine seven-bit part is 0 and the coarse part is 96 (0x60).\n```\n\n3. Message: `E0 00 60`.\n4. Check the bend amount:\n\n```formula\ns = ((v − 8192) / 8192)r\ns = (12288 − 8192) / 8192 × 2\ns = 1.0\nwhere\ns: the pitch offset in semitones\nv: the 14-bit bend value; here 12,288\n8192: the centre value (no bend)\nr: the bend range in semitones; 2 here\nIn words: 12,288 is 4,096 counts above centre under the specified mapping, so it bends up half of the 2-semitone range: one semitone.\n```",
+    "workedExample": "1. Find the position relative to centre: 12,288 is 4,096 above 8,192, and the top is about 8,192 above centre, so the wheel is halfway up.\n2. With this mapping, halfway up means half the configured range.\n3. At ±2 semitones that is +1 semitone (A 440 Hz would become about 466 Hz).\n4. RPN 0 changes only the range. At ±12 semitones the same halfway position means +6 semitones.\n5. Design point: store the raw bend value and the range separately, and recompute the pitch offset whenever either changes. A synth that recomputed only when a new bend message arrived would keep playing +1 semitone until the wheel moved.",
     "link": {
       "title": "MIDI 1.0 Detailed Specification 4.2.1 (CCRMA copy)",
       "url": "https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf"

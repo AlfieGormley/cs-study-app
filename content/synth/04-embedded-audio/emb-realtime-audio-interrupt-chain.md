@@ -13,6 +13,13 @@ Every audio platform, from a Daisy to a laptop running Ableton, works the same w
 
 An **interrupt** is a hardware signal that makes the CPU pause what it is doing, save its place, run a short **interrupt service routine** (ISR), then resume. Interrupts have **priorities**: a higher-priority interrupt can preempt a lower-priority one, and an enabled, unmasked eligible interrupt can preempt the main loop.
 
+> [!analogy] Real-world analogy: An oven timer while you cook
+> You are chopping vegetables when the oven timer rings. You stop, take the tray out, then return to the chopping board where you left off. A smoke alarm would take priority over even the oven.
+>
+> **How it maps:** Chopping is the main loop, the timer is the DMA interrupt and taking the tray out is the short service routine. The smoke alarm is a higher-priority interrupt that can preempt a lower one.
+>
+> **Where it stops:** The CPU saves and restores its exact state automatically and resumes in microseconds. The audio timer also rings at strict, regular intervals, and being late corrupts the output rather than merely overcooking a tray.
+
 On an MCU audio platform, the chain is:
 
 ```flow

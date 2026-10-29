@@ -16,6 +16,13 @@ For **events** (note on, note off, a preset load), every message matters. Droppi
 - `tail`: the next slot to read. **Only the consumer writes it.**
 - Because each index has exactly one writer, no lock is needed: just atomic loads and stores with the right ordering.
 
+> [!analogy] Real-world analogy: Numbered pigeonholes between two clerks
+> A post clerk puts letters into a row of numbered pigeonholes and moves a "next to fill" marker. A second clerk collects them in order and moves a "next to collect" marker. When every hole is full, the post clerk keeps the letter back rather than stuffing a hole twice.
+>
+> **How it maps:** The pigeonholes are the fixed array, the two markers are `head` and `tail`, and each marker has only one clerk allowed to move it. The full rule is the refused push.
+>
+> **Where it stops:** The clerks see each other's actions in order. A processor or compiler may make a marker update visible before the letter itself, so the release/acquire ordering is essential, not optional.
+
 ```
 push(item):            # producer only
   h = head.load_relaxed()
@@ -35,21 +42,7 @@ pop():                 # consumer only
 
 Why the orderings: the producer must write the item *before* publishing the new `head` (release); the consumer must see that `head` *before* reading the item (acquire). The same pairing protects the slot being freed in the other direction.
 
-The mathematical model uses increasing counters and reduces them modulo capacity for array slots. Real fixed-width unsigned counters wrap: use the same unsigned width for subtraction, use a power-of-two capacity below the counter modulus, and prevent producers from advancing past capacity. The difference between them is how many items are waiting:
-
-```formula
-slot = h mod CAP
-used = h − t
-used = 7 − 5 = 2
-where
-slot: the array position the producer writes next (0 to CAP − 1)
-h: the head counter, the total number of items ever pushed
-t: the tail counter, the total number of items ever popped
-CAP: the capacity, how many slots the array has; best a power of two such as 64
-mod: modulo, the remainder after division; 7 mod 4 = 3
-used: how many items are in the queue now; 0 means empty, CAP means full
-In words: after 7 pushes and 5 pops, 2 items are waiting, and with 4 slots the next push goes into slot 7 mod 4 = 3.
-```
+The mathematical model uses increasing counters and reduces them modulo capacity for array slots. Real fixed-width unsigned counters wrap: use the same unsigned width for subtraction, use a power-of-two capacity below the counter modulus, and prevent producers from advancing past capacity. The unsigned difference between the producer and consumer counters is the number of waiting items. An empty queue has no waiting items; a full queue has as many as its capacity. Array positions wrap around while FIFO order follows the counters, so a low array index need not hold the oldest item.
 
 With a power-of-two capacity and unsigned integers, `h - t` stays correct even after the counters wrap around, and `h mod CAP` can be computed cheaply as `h & (CAP - 1)`, as the Python below does.
 

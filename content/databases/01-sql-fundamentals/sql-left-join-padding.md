@@ -32,17 +32,7 @@ A **LEFT (OUTER) JOIN** keeps every row of the left table. If a left row has no 
 
 This is the join for questions like "all customers, with their orders if any". It is by far the most common outer join.
 
-You can predict how many rows a LEFT JOIN returns from two counts: the matching pairs, which are exactly the rows the inner join gave, plus one padded row for each left row that matched nothing.
-
-```formula
-n_left = m + u_L
-n_left = 5 + 1 = 6
-where
-n_left: the number of rows the LEFT JOIN returns
-m: the number of matching pairs, the same as the row count of the INNER JOIN with the same ON condition (5 here)
-u_L: the number of left-table rows that match no right-table row; each appears once, padded with NULLs (here 1, Erin)
-In words: a LEFT JOIN returns every inner-join row plus one extra row for each unmatched left row, so it can never return fewer rows than the inner join.
-```
+You can predict how many rows a LEFT JOIN returns: every row the inner join gave, plus one padded row for each left row that matched nothing. Here that is the 5 matching pairs plus Erin's padded row, 6 rows. So a LEFT JOIN never returns fewer rows than the inner join with the same `ON` condition.
 
 Unmatched rows of the right table (guest order 106) add nothing, because a LEFT JOIN doesn't preserve them.
 

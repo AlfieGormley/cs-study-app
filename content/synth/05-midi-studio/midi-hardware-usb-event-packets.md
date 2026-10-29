@@ -15,20 +15,7 @@ USB MIDI carries the same MIDI messages over USB, defined by the USB-IF's **Devi
 - Data travels in fixed **32-bit USB-MIDI Event Packets**: a header byte with a 4-bit **cable number** (up to 16 virtual MIDI cables per endpoint) and a 4-bit **Code Index Number** (the message type), then three MIDI-byte positions, with unused positions filled with zero.
 - Each packet normally holds one complete message, status byte included, so running status isn't used. (The spec also has a single-byte mode, CIN 0xF, for passing an unparsed byte stream, but that is a special case.)
 
-The header byte puts the cable number in its top nibble and the Code Index Number in its bottom nibble:
-
-```formula
-H = (n_cable << 4) | CIN
-H = (0 << 4) | 0x9 = 0x09
-where
-H: the packet's header byte, in hexadecimal
-n_cable: the virtual cable number, 0 to 15
-CIN: the Code Index Number, 0x0 to 0xF; for channel messages it equals the status byte's top nibble (0x9 for Note On, 0xB for Control Change)
-<<: bitwise left shift by the given number of bits; a shift of 4 multiplies by 16, moving the cable number into the top nibble
-|: bitwise OR, combining the two nibbles
-0x: prefix meaning hexadecimal (base 16)
-In words: the header is the cable number times 16 plus the message's code index; cable 0 with a Note On gives 0x09.
-```
+The header byte puts the cable number in its top nibble and the Code Index Number in its bottom nibble. For channel messages the Code Index Number simply repeats the status byte's message type, so a Note On on cable 0 has header `09`:
 
 ```
 Note On, cable 0, ch 1, key 60, vel 100:
@@ -38,10 +25,12 @@ Note On, cable 0, ch 1, key 60, vel 100:
 
 A SysEx message can span multiple USB-MIDI Event Packets. Its packet codes distinguish the start/continuation and the final one, two or three bytes; do not assume a whole patch dump fits in one packet.
 
-USB is also much faster than 31,250 bit/s, which helps with dense data. (USB MIDI 2.0, a later class specification, carries MIDI 2.0's packets natively and can fall back to USB MIDI 1.0.)
+USB also has far more bandwidth than 31,250 bit/s DIN (full-speed USB alone signals at 12 Mbit/s), so many event packets can travel in each millisecond, which helps with dense data. Actual throughput and timing still depend on the device, the host's scheduling and the driver. (USB MIDI 2.0, a later class specification, carries MIDI 2.0's packets natively and can fall back to USB MIDI 1.0.)
 
 ## Key takeaways
-- USB MIDI 1.0 parsed event packets contain a cable/type header and complete MIDI bytes, rather than DIN framing.
+- USB MIDI 1.0 wraps each complete MIDI message in a 32-bit event packet: a header byte, then three MIDI byte positions.
+- The header's top nibble is the virtual cable number and its bottom nibble the Code Index Number (the message type).
+- Packets carry their status byte, so no running status; long SysEx spans several packets.
 
 ## Further reading
 - [MIDI 1.0 Electrical Specification Update CA-033 (2014) — MIDI Association](https://www.midi.org/wp-content/uploads/wpforo/default_attachments/1709416667-ca33-MIDI-10-Electrical-Specification-Update.pdf)

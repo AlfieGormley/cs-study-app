@@ -19,59 +19,36 @@ For the external analogue line connection here, the wanted changing audio signal
 
 That constant offset is **DC**. Sent into an interface, it can shift the input stage's operating point, eat headroom, cause thumps when plugging and unplugging, and push speaker cones off centre. So the output is normally **AC-coupled**: a series **coupling capacitor** passes the audio and blocks the DC.
 
-The capacitor and the next stage's input impedance form a **high-pass filter**. Its corner frequency, below which the bass starts to roll off, is:
+The capacitor and the next stage's input impedance form a **high-pass filter**: it passes audio but rolls off very low frequencies, and blocks DC completely. Its corner frequency, below which the bass starts to fall away, depends on the capacitor *and* on the input it drives:
 
-```formula
+```formula essential
 f_c = 1 / (2πR_in C)
-f_c = 1 / (2 × π × 10000 Ω × 0.00001 F)
-f_c = 1 / (0.628 s) ≈ 1.59 Hz
 where
 f_c: the corner (cut-off) frequency, in hertz (Hz): the frequency where the output has fallen to about 71% of the input (−3 dB); below it the response falls by about 6 dB per octave
 π: pi, about 3.14159
-R_in: the input resistance of the next stage, in ohms (Ω); 10 kΩ here
-C: the coupling capacitance, in farads (F); 10 µF = 0.00001 F here
-Ω: ohm, the unit of resistance
-F: farad, the unit of capacitance (ohms times farads gives seconds)
-s: seconds
+R_in: the input resistance of the next stage, in ohms (Ω)
+C: the coupling capacitance, in farads (F)
 Hz: hertz, cycles per second
-≈: approximately equal to (rounded)
-In words: the bigger the capacitor or the input resistance, the lower the corner; 10 µF into 10 kΩ only starts cutting at about 1.6 Hz, far below anything audible.
+Ω: ohm, the unit of resistance
+F: farad, the unit of capacitance
+In words: a bigger capacitor or a higher input resistance puts the corner lower; halve either one and the corner doubles.
 ```
 
-This approximation assumes the source's output resistance is much smaller than the input resistance. If it isn't, use the source's output resistance plus the input resistance in place of the input resistance. The same calculation in Python, for three cases:
+This assumes the source's output resistance is much smaller than the input resistance; if it isn't, add the two resistances together. Some typical results:
 
-```python
-import math
-
-# Ideal capacitor; source resistance
-# neglected.
-def hp_corner(c_farads, r_ohms):
-    return 1 / (2 * math.pi * r_ohms
-                * c_farads)
-
-# Output is the corner frequency in hertz.
-print(round(hp_corner(10e-6, 10_000), 2))
-print(round(hp_corner(1e-6, 10_000), 2))
-print(round(hp_corner(10e-6, 21_000), 2))
-```
-
-```output
-1.59
-15.92
-0.76
-```
-
-- 10 µF into a 10 kΩ input: corner about 1.6 Hz, well below the 20 Hz bottom of hearing.
+- 10 µF into a 10 kΩ input: corner about 1.6 Hz, far below the 20 Hz bottom of hearing.
 - 1 µF into 10 kΩ: about 16 Hz, which already starts to thin the lowest bass, especially as cascaded coupling stages add up.
 - 10 µF into the Digitakt II's 21 kΩ inputs: about 0.8 Hz.
 
-Choose C so that the corner sits comfortably below 20 Hz for the *lowest* input impedance you expect to drive. Account for capacitor tolerance, voltage rating and voltage coefficient, and if it is a polarised electrolytic, orient it for the DC across it (positive towards the side at the higher DC potential; check both ends under normal and transient conditions).
+The input you plug into is part of the filter. The same capacitor gives a higher corner into a lower-impedance input, so choose C for the *lowest* input impedance you expect to drive, with the corner comfortably below 20 Hz. Account for capacitor tolerance, voltage rating and voltage coefficient, and if it is a polarised electrolytic, orient it for the DC across it (positive towards the side at the higher DC potential; check both ends under normal and transient conditions).
 
 > [!note] Check what your board already does
 > Some audio codec boards already AC-couple and buffer their line outputs; others expose a raw DAC pin. Don't assume. Read the board's datasheet or schematic for the output's DC bias, maximum swing and output impedance before adding (or omitting) a coupling capacitor and buffer.
 
 ## Key takeaways
-- Check actual board bias and coupling, then size the capacitor for the lowest input impedance and its tolerance.
+- Many single-supply outputs sit at a DC bias; a series coupling capacitor blocks that DC and passes the audio.
+- The capacitor and the next input form a high-pass filter: a bigger capacitor or higher input impedance gives a lower corner.
+- Check what your board already does, then size the capacitor for the lowest input impedance you will drive, allowing for tolerance.
 
 ## Further reading
 - [Line level — Wikipedia](https://en.wikipedia.org/wiki/Line_level)

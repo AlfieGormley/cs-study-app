@@ -30,23 +30,16 @@ The fix is a **pull resistor** that sets a default level:
 
 With a pull-up, pressing the button connects the pin straight to ground and it reads 0. Released, the resistor pulls it to 1. This is **active-low**: pressed means 0. It is the most common button wiring, and the one PJRC's Bounce library documentation describes ("pushbuttons connect between a pin and ground, and the pin mode is set to INPUT_PULLUP").
 
-When pressed, current flows through the resistor. The pin end of the resistor is now at 0 V and the other end at 3.3 V, so the whole supply voltage sits across it. Ohm's law gives the current:
+When pressed, current flows from 3.3 V through the pull-up and the closed button to ground. The resistor limits that current: a nominal 10 kΩ pull-up draws about 0.33 mA while held. This assumes the switch has negligible resistance and that the resistor is **ohmic**, so its current is proportional to the voltage across it (**Ohm's law**). Ordinary resistors behave this way closely within their ratings. On the same supply, a 1 kΩ pull-up would therefore draw about ten times as much, about 3.3 mA.
 
-```formula
-I = V / R
-I = 3.3 V / 10000 Ω
-I = 0.00033 A = 0.33 mA
-where
-I: the current flowing through the pull-up resistor while the button is held, in amperes (A)
-V: the voltage across the resistor, in volts (V); here the full 3.3 V supply, because the pressed button holds the pin at 0 V
-R: the pull-up resistance, in ohms (Ω); here 10 kΩ = 10,000 Ω
-A: ampere, the unit of current
-mA: milliampere, one thousandth of an ampere
-Ω: ohm, the unit of resistance
-In words: a 10 kΩ pull-up wastes only a third of a milliampere while the button is held; a bigger resistor wastes even less.
-```
+A larger pull-up wastes less current, but holds the input less strongly against leakage and interference. A smaller one holds it more firmly but draws more current when pressed. Choose within the pin and switch limits, rather than making the resistance arbitrarily large or small.
 
-That is why pull-ups are "weak" (high value): to waste little current while the button is held. The formula assumes the button itself has almost no resistance; a worn or dirty contact adds a little, which only lowers the current.
+> [!analogy] Real-world analogy: A door closer
+> A spring-loaded door closer keeps a door shut until someone pushes it open. A stiffer spring resists draughts better, but takes more effort to hold open.
+>
+> **How it maps:** The pull-up holds the input at its default level, like the closer holding the door shut. Pressing the button overrides it. A lower resistance holds the line more firmly against interference but passes more current while the button is held.
+>
+> **Where it stops:** A spring stores energy and pushes back with a force that changes as the door moves. A resistor stores nothing: it passes a steady current for as long as the button stays closed, and that current is wasted as heat.
 
 ### Internal or external?
 
@@ -72,3 +65,4 @@ In firmware, "pressed" for an active-low button is `read() == 0`. Hide the inver
 - [Daisy Seed datasheet v1.2.0 — Electro-Smith](https://daisy.nyc3.cdn.digitaloceanspaces.com/products/seed/Daisy_Seed_datasheet.pdf)
 - [Pull-up resistor — Wikipedia](https://en.wikipedia.org/wiki/Pull-up_resistor)
 - [Teensy 4 core: pinMode pad settings (digital.c) — PJRC](https://github.com/PaulStoffregen/cores/blob/master/teensy4/digital.c)
+- [Ohm's law (ohmic and non-ohmic devices) — Wikipedia](https://en.wikipedia.org/wiki/Ohm%27s_law)

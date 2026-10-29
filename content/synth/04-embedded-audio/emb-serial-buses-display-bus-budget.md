@@ -9,57 +9,11 @@ summary: "Bulk pixel transfers are long beside an audio callback deadline."
 
 ## Which bus for which job?
 
-A worked comparison: a 128×64 monochrome OLED display holds one bit per pixel, so a full frame is 1,024 bytes. I2C spends 9 clocks per byte; SPI spends 8, because it has no ACK bit:
+A 128×64 monochrome display holds 1,024 payload bytes. A full redraw takes about 23 ms of payload/acknowledgement clocking over 400 kHz I2C, compared with about 1.02 ms of payload clocking over 8 MHz SPI. At 100 kHz I2C, it is about 92 ms. Addresses, commands, setup and stretching add time, so measure the actual driver.
 
-```formula
-n = (W × H) / 8
-n = (128 × 64) / 8 = 1024 bytes
-t_I2C = (n × 9) / f_I2C
-t_I2C = (1024 × 9) / 400000 Hz ≈ 23 ms
-t_SPI = (n × 8) / f_SPI
-t_SPI = (1024 × 8) / 8000000 Hz ≈ 1.02 ms
-where
-n: the number of bytes in one full frame
-W: the display width, in pixels; here 128
-H: the display height, in pixels; here 64
-8: bits per byte (each pixel is one bit)
-bytes: the unit of data size; one byte is 8 bits
-t_I2C: the time to send the frame over I2C, in seconds (s)
-f_I2C: the I2C clock frequency, in hertz (Hz); here 400 kHz
-t_SPI: the time to send the frame over SPI, in seconds (s)
-f_SPI: the SPI clock frequency, in hertz (Hz); here 8 MHz
-Hz: hertz, cycles per second
-s: second
-ms: millisecond, one thousandth of a second
-≈: approximately equal to
-In words: a full redraw of this small display takes about 23 ms over 400 kHz I2C but only about 1 ms over 8 MHz SPI.
-```
+Those times are long beside a 1 ms audio-block deadline. Faster SPI gives more display headroom, but even its nominal payload time does not fit inside that deadline. A blocking call waits for completion even when hardware generates the clocks.
 
-Python checks the arithmetic, including Standard-mode I2C:
-
-```python
-# One bit per pixel, eight bits per byte.
-frame = 128 * 64 // 8
-print("frame bytes:", frame)
-for hz in (100_000, 400_000):
-    # Include the ninth ACK/NACK clock.
-    ms = frame * 9 / hz * 1000
-    khz = hz // 1000
-    print(f"I2C {khz} kHz: {ms:.1f} ms")
-# SPI payload only; commands add more time.
-spi = 8_000_000
-ms = frame * 8 / spi * 1000
-print(f"SPI 8 MHz: {ms:.2f} ms")
-```
-
-```output
-frame bytes: 1024
-I2C 100 kHz: 92.2 ms
-I2C 400 kHz: 23.0 ms
-SPI 8 MHz: 1.02 ms
-```
-
-(These ignore protocol overhead such as addresses and commands, so real I2C times are a little longer.) At 400 kHz I2C, a full redraw takes 23 ms; at 8 MHz SPI, about 1 ms. Both are usable for a status display, but SPI leaves far more headroom for animation, and a blocking 23 ms transfer must never run where it could delay audio.
+Keep display updates in foreground work or use a suitable asynchronous/DMA driver. Check interrupt masking, memory-bus competition and completion-handler cost: moving the transfer out of the callback is necessary but does not itself prove audio timing.
 
 | Job in a synth | Usual bus | Why |
 |---|---|---|

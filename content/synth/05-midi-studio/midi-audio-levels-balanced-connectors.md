@@ -15,6 +15,13 @@ An **unbalanced connection** uses two conductors: signal and ground (which is al
 
 A **balanced connection** (a **balanced line**) uses three: two signal conductors (hot and cold) with **equal impedances to ground**, plus a shield. Interference couples almost equally onto hot and cold, so much of it appears as a **common-mode** voltage. A differential receiver responds primarily to the **difference** between the conductors. Rejection is finite and depends on impedance balance, cable construction and the receiver.
 
+> [!analogy] Real-world analogy: two people in a lift
+> Two people stand in a lift, one on a step a little higher than the other. As the lift rises and falls, both move together; the *difference* in their heights stays the same, so someone measuring only that difference never notices the lift moving.
+>
+> **How it maps:** hot and cold are the two people, the interference picked up equally on both is the lift's movement (the common-mode voltage), and the wanted audio is the difference between them, which the differential receiver measures.
+>
+> **Where it stops:** the trick only works if both conductors really move together. If their impedances to ground differ, interference couples unequally and part of it becomes a difference the receiver cannot reject. Real receivers also reject common-mode signals only partially, so some interference always gets through.
+
 Notes that save confusion:
 
 - Balancing is about **equal impedances**, not necessarily equal and opposite signals. An "impedance-balanced" output that drives only the hot leg, with the cold leg tied to ground through a matching impedance, can still provide common-mode rejection with a suitable balanced receiver. Elektron describes the Digitakt's main outputs as impedance balanced.
@@ -42,4 +49,3 @@ Mixing them: a TS plug in a balanced output usually shorts the cold leg to groun
 - [Single-Supply Op Amp Design Techniques (SLOA030) — Texas Instruments](https://www.ti.com/lit/an/sloa030a/sloa030a.pdf)
 - [PCM5102A data sheet (ground-centred 2.1 V RMS output) — Texas Instruments](https://www.ti.com/lit/ds/symlink/pcm5102a.pdf)
 - [Digitakt II user manual, technical information — Elektron](https://www.elektron.se/wp-content/uploads/2026/10/Digitakt-2-User-Manual_ENG_OS1.17_260930.pdf)
-- [Balanced and unbalanced equipment — Jensen AN-003](https://www.jensen-transformers.com/wp-content/uploads/2014/08/an003.pdf)

@@ -11,6 +11,13 @@ summary: "A dead band can reject bounded jitter that smoothing alone still passe
 
 Smoothing shrinks jitter but does not remove it. To make bounded jitter around a held reading produce a still accepted value, add **hysteresis** (a dead band): only accept a new value when it differs from the held one by more than a threshold.
 
+> [!analogy] Real-world analogy: A thermostat that does not chatter
+> A heating thermostat set to switch on below 19 °C and off above 21 °C does not click on and off every few seconds when the room hovers around 20 °C.
+>
+> **How it maps:** The gap between switching points is the dead band. The held knob value changes only when a reading moves beyond the band, so small jitter around the held value produces no new event.
+>
+> **Where it stops:** A thermostat has two fixed switching points around a setpoint. The knob's band is centred on the last accepted value and moves with it. Make the band too wide and small deliberate turns are ignored.
+
 ```python
 # Knob at rest; ADC codes jitter by +-2.
 reads = [2048, 2050, 2047, 2049, 2046,

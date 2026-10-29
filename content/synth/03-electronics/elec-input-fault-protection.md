@@ -24,33 +24,18 @@ Many CMOS inputs, including the SN74HC00, have internal **clamp diodes** from ea
         GND
 ```
 
-A **series resistor** limits the current that flows into those clamps during a fault. TI permits particular over-rail cases only when its specified pin-current limits are observed; that exception belongs to this exact device, not every microcontroller. During a fault the clamp holds the pin about one diode drop above the rail, so the resistor takes the rest of the fault voltage:
+A **series resistor** limits the current that flows into those clamps during a fault. TI permits particular over-rail cases only when its specified pin-current limits are observed; that exception belongs to this exact device, not every microcontroller. During a fault the clamp holds the pin about one diode drop above the rail, so the resistor takes the rest of the fault voltage.
 
-```formula
-I_clamp = (V_fault − V_CC − V_D) / R
-I_clamp ≈ (5 V − 3.3 V − 0.5 V) / 10 kΩ
-I_clamp ≈ 1.2 V / 10 kΩ ≈ 0.12 mA
-where
-I_clamp: the current pushed through the clamp diode into the supply rail, in milliamps (mA)
-V_fault: the wrong voltage applied to the input, here 5 volts (V)
-V_CC: the chip's supply rail, here 3.3 V
-V_D: the clamp diode's forward drop, assumed about 0.5 V
-R: the series resistor, here 10 kΩ
-V: volts
-kΩ: kilohms; 1 kΩ = 1000 ohms
-mA: milliamperes; 1 mA = 0.001 amperes
-≈: approximately equal to
-In words: a 5 V mistake on a 3.3 V input pushes only about 0.12 mA through the clamp when a 10 kΩ resistor is in the way.
-```
+A larger series resistance reduces fault current for the same voltage difference. But current diverted into a supply rail must go somewhere: a lightly loaded regulator may not absorb it, allowing the rail to rise. An unpowered chip can also be partly powered through this path.
 
-The 0.5 V clamp drop is an assumption: the real drop depends on the chip and the current, and like any silicon junction it is usually somewhat higher at milliamp currents. A lower actual drop would increase the current, so 0.5 V is only an illustrative assumption, not a guaranteed current bound. A real protection design needs the diode curve, resistor tolerance, rail behaviour and chip injection limits.
+A real protection design needs the diode’s voltage-current behaviour, resistor tolerance, rail behaviour and the exact chip’s voltage and injection-current limits. A small calculated current alone does not establish safety.
 
 Be conservative:
 
 - **Clamps are fault protection, not a level shifter.** Some manufacturers, such as PJRC for Teensy 4.1, say plainly not to drive pins above 3.3 V. Use proper level conversion for normal operation.
 - **Microcontrollers specify their own injected-current limits.** Check the chip's datasheet rather than borrowing a 74HC figure.
 - **Back-powering:** a signal driven into an unpowered chip can power it partly through the clamp diodes, causing strange behaviour or damage. Power boards up together, or make sure signals can't arrive before the supply.
-- **External Schottky clamps** (with a lower forward drop than the internal diodes) are often added on exposed inputs, so they conduct before the chip's internal diodes do.
+- **External Schottky clamps** may divert current before internal diodes, but only if their actual drop at the relevant current is low enough. Check leakage, capacitance, fault ratings and where the rail current goes.
 
 ## Key takeaways
 

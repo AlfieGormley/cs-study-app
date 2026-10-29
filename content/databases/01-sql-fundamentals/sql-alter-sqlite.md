@@ -15,7 +15,7 @@ Schemas change for as long as the application lives, through **migrations**: ver
 
 ### What SQLite can ALTER
 
-SQLite has long supported `RENAME TO`, `RENAME COLUMN` (3.25), `ADD COLUMN`, and `DROP COLUMN` (3.35). Version 3.53.0 (April 2026) added `ALTER COLUMN ... SET NOT NULL` and `DROP NOT NULL`, plus adding and dropping named CHECK constraints. Anything else, such as changing a type or adding a foreign key, still means the documented rebuild: create a new table, copy the rows across, drop the old table and rename the new one, all in one transaction.
+SQLite has long supported `RENAME TO`, `RENAME COLUMN` (3.25), `ADD COLUMN`, and `DROP COLUMN` (3.35). Version 3.53.0 (April 2026) added `ALTER COLUMN ... SET NOT NULL` and `DROP NOT NULL`, plus adding CHECK constraints and dropping a named constraint with `DROP CONSTRAINT`. Anything else, such as changing a type or adding a foreign key, still means the documented rebuild: create a new table, copy the rows across, drop the old table and rename the new one, all in one transaction.
 
 For a populated table, adding an ordinary `NOT NULL` column needs a non-NULL value for existing rows, commonly supplied by a default. PostgreSQL can add it without a default to an empty table; SQLite imposes its documented default restriction:
 

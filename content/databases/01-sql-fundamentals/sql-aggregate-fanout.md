@@ -54,17 +54,7 @@ GROUP BY c.id;
 | Ben | 1 | 1 |
 | Erin | 0 | 0 |
 
-(Chloe and Dev, with one order and no referrals, are left out to save space.) Asha has 2 orders and 2 referrals. The join produces 2 × 2 = 4 rows for her, so both counts say 4. `COUNT(DISTINCT ...)` would happen to fix counts here, but a `SUM` cannot be repaired that way. Every value from one child table is repeated once per matching row of the other, so the sum is multiplied:
-
-```formula
-S_shown = k S_true
-S_shown = 2 × 142 = £284
-where
-S_shown: the total the fanned-out query reports for one customer, in pounds (£)
-S_true: the customer's real total, in pounds (£); Asha's order lines add up to £142
-k: how many times each value is repeated, which is the number of matching rows in the other child table (Asha's 2 referrals)
-In words: joining a second child table copies every row of the first once per match, so a sum over the first comes out k times too big.
-```
+(Chloe and Dev, with one order and no referrals, are left out to save space.) Asha has 2 orders and 2 referrals. The join produces 2 × 2 = 4 rows for her, so both counts say 4. `COUNT(DISTINCT ...)` would happen to fix counts here, but a `SUM` cannot be repaired that way. Every value from one child table is repeated once per matching row of the other, so the sum is multiplied by that number of matches. Asha's order lines really total £142, but with her 2 referrals each line appears twice and her spend would show as £284.
 
 `SUM(DISTINCT ...)` is no fix either: it would merge two genuinely equal values, such as two different order lines that are each worth £30.
 

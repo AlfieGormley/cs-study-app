@@ -15,27 +15,9 @@ summary: Pitch bend sends its low seven bits first and centres at 8,192 rather t
 - **Centre (no bend): `00 40` = 0x2000 = 8,192.**
 - Maximum: `7F 7F` = 16,383.
 
-To send a bend value you split it into two 7-bit halves; to receive one you join them again. The splitting uses a mask and a shift:
+Why centre at 8,192 rather than zero? A bend wheel moves both ways, so "no bend" has to sit in the middle of the 0–16,383 range. Resetting bend to zero is a classic bug: it means *full downward* bend.
 
-```formula
-LSB = v & 0x7F
-MSB = (v >> 7) & 0x7F
-v = (MSB << 7) | LSB
-LSB = 8192 & 0x7F = 0x00
-MSB = (8192 >> 7) & 0x7F = 0x40
-where
-v: the 14-bit bend value, 0 to 16,383; centre 8,192
-LSB: the first data byte sent, holding the low 7 bits
-MSB: the second data byte sent, holding the high 7 bits
-&: bitwise AND, keeping only bits set in both values; AND with 0x7F (binary 0111 1111) keeps the low 7 bits
->>: bitwise right shift by the given number of bits (dividing by 128 for a shift of 7, discarding the remainder)
-<<: bitwise left shift by the given number of bits (multiplying by 128 for a shift of 7)
-|: bitwise OR, combining the bits of both values
-0x: prefix meaning hexadecimal (base 16); 0x7F is 127 and 0x40 is 64
-In words: the low seven bits go in the first byte and the next seven bits in the second; joining them back gives the original value.
-```
-
-The same in Python:
+To send a bend value you split it into two 7-bit halves; to receive one you join them again. Masking with `0x7F` keeps the low seven bits (the fine part, sent first); shifting right by seven bits and masking again gives the high seven bits (the coarse part, sent second). Joining reverses it: shift the coarse part left by seven and combine it with the fine part. Because 8,192 is exactly 64 steps of 128, its fine part is 0 and its coarse part is 64 (`0x40`), which is why the centre message is `En 00 40`.
 
 ```python
 def bend_bytes(value):
@@ -66,7 +48,9 @@ print(bend_value(0x00, 0x40))
 ```
 
 ## Key takeaways
-- Pitch bend sends its low seven bits first and centres at 8,192 rather than zero.
+- Pitch bend is a 14-bit value sent as two data bytes, fine (low seven bits) first, then coarse.
+- No bend is the centre value 8,192, sent as `En 00 40`; a raw 0 is full downward bend.
+- Unlike other controllers, pitch bend is always sent with both data bytes.
 
 ## Further reading
 - [MIDI 1.0 Control Change Messages — MIDI Association](https://midi.org/midi-1-0-control-change-messages)

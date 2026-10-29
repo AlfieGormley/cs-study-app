@@ -10,23 +10,18 @@ summary: "Separate noisy return currents from sensitive references."
 Separate noisy return currents from sensitive references.
 
 ## Shared impedance and star grounding
-Ground loops are one mechanism. The other, inside your own circuit, is **shared-impedance coupling**. Every ground wire or track has resistance (and inductance). If a noisy current, such as an LED being multiplexed, a processor, or a display, returns through the same piece of ground wire as an audio signal's reference, the voltage that current makes across the shared wire appears in the audio:
+Ground loops are one mechanism. The other, inside your own circuit, is **shared-impedance coupling**. Every ground wire or track has resistance (and inductance). If a noisy current, such as an LED being multiplexed, a processor, or a display, returns through the same piece of ground wire as an audio signal's reference, the voltage that current makes across the shared wire appears in the audio.
 
-```formula
-V_noise = I_noisy R_shared
-V_noise = 0.1 A × 0.05 Ω = 0.005 V = 5 mV
-where
-V_noise: the voltage added to the audio's ground reference, in volts (V)
-I_noisy: the noisy return current sharing the wire, here 100 mA = 0.1 amperes (A) of LED current
-R_shared: the resistance of the shared stretch of ground wire, here 0.05 ohms (Ω)
-V: volts
-A: amperes
-Ω: ohms
-mV: millivolts; 1 mV = 0.001 V
-In words: 100 mA of LED current through a twentieth of an ohm of shared wire shifts the audio's ground by 5 mV, in step with the LEDs. This is a 5 mV reference shift. If an unwanted variation is 5 mV RMS, its level is roughly 36 dB below a 0.316 V RMS signal; audibility depends on gain, spectrum and listening conditions. The LED-current magnitude alone does not specify its noise RMS level.
-```
+For scale, an illustrative 100 mA change through 0.05 Ω produces a 5 mV reference shift. When the LED current switches, this reference shift follows its pattern. This is not automatically a 5 mV RMS noise measurement; waveform, timing and the receiving circuit determine what is heard.
 
 The figures are illustrative; the fix is to stop the noisy current sharing the wire at all.
+
+> [!analogy] Real-world analogy: A shower on a shared pipe
+> In some houses the shower suddenly weakens when someone flushes the toilet, because both draw water through the same supply pipe.
+>
+> **How it maps:** The shared pipe is the shared ground wire. The toilet's sudden demand is the LED or processor return current, and the shower's change is the shift in the audio stage's reference voltage. Giving the shower its own pipe from the main corresponds to giving the audio its own return to the star point.
+>
+> **Where it stops:** The water comparison only covers a pressure drop along a shared restriction; here the pipe is a supply path, whereas the shared section in this lesson is usually a return. A ground wire also has inductance, so fast current changes matter more, and the shift only becomes noise when the sensitive circuit measures against that shared section.
 
 ```diagram
  BAD: daisy-chained ground

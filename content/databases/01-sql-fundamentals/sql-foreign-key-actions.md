@@ -16,6 +16,13 @@ The shop's orders.customer_id references customers.id, and order_items.order_id 
 - Inserting an order for customer 99 fails: there is no such customer.
 - Deleting customer 1 fails while orders 101 and 102 still point at her.
 
+> [!analogy] Real-world analogy: a library's loan records
+> A library will not record a loan for someone who isn't a member, and it will not close a member's account while they still have books out.
+>
+> **How it maps:** Members are the parent table (`customers`) and loans are the child table (`orders`). The membership check on each new loan is the foreign key check on insert; refusing to close an account with loans outstanding is the default `NO ACTION` on delete.
+>
+> **Where it stops:** A library can choose case by case, but a foreign key applies one declared rule to every row, such as `CASCADE` or `SET NULL`. And in SQLite the check only happens if foreign key enforcement is switched on for the connection, as explained below.
+
 What happens on delete is your choice:
 
 | `ON DELETE` | deleting the parent |

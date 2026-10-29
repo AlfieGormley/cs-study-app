@@ -3,69 +3,43 @@ id: emb-control-to-audio-receive-smoothing
 sourceLesson: emb-control-to-audio
 title: "Smooth on the audio side"
 level: advanced
-minutes: 4
+minutes: 3
 summary: "Audio-rate smoothing reduces abrupt parameter steps after a safe data transfer."
 ---
 
-## Pattern 4: smooth on the receiving side
+## Safe transfer can still sound abrupt
 
-The callback now receives correct values, but they arrive in steps: knob scans at around 1 kHz, MIDI CCs in 128 coarse steps. Jumping a gain or cutoff by a step at a block boundary makes **zipper noise**. Smooth again, at audio rate, inside the callback:
+An atomic or queue can deliver the correct control value while the sound still clicks. Knobs arrive at control rate, and ordinary 7-bit MIDI CC values have only 128 steps. Applying a new gain or cutoff in one jump can cause **zipper noise**.
 
-**Per-sample one-pole** towards the latest target. This is the same smoother as the knob-reading units', now updated once per audio sample instead of once per knob reading:
+Smooth the received target inside the callback at audio rate. This serves a different purpose from foreground smoothing: foreground smoothing reduces noisy readings; receiving-side smoothing spreads each delivered change across audio samples.
 
-```formula
-a = 1 − e^(−1 / (τ f_s))
-a = 1 − e^(−1 / (0.005 s × 48000 Hz))
-a = 1 − e^(−1 / 240) ≈ 0.004158
-c_n = c_{n−1} + a(g − c_{n−1})
-where
-a: the smoothing coefficient per sample, between 0 and 1, no unit
-e: Euler's number, about 2.71828
-τ: tau, the time constant, in seconds (s): the time to cover about 63% of a jump; here 5 ms = 0.005 s
-f_s: the sample rate, in hertz (Hz); here 48 kHz
-c_n: the smoothed parameter value used for sample n
-c_{n−1}: the smoothed value used for the previous sample
-g: the target, the latest value received from the foreground
-n: the sample number
-s: second
-Hz: hertz, samples per second
-≈: approximately equal to
-In words: a 5 ms time constant spans 240 samples at 48 kHz, so each sample closes about 0.42% of the gap to the target; a jump becomes a smooth curve lasting a few milliseconds.
-```
+## Two useful responses
 
-For a 20 ms time constant, the same formula gives a coefficient of about 0.001041. Compute `a` once at start-up, not per sample, because the exponential is expensive. In code:
+A **one-pole smoother** moves a fraction of the remaining gap on each sample. It starts quickly and slows as it approaches the target. An exponential time constant of 5 ms means about 63% of a fixed step is covered after 5 ms, not that the transition has finished. Choose and test the time constant for the parameter.
+
+Calculate the fraction from the actual sample rate and desired response at initialisation or when the rate changes. The earlier control-smoother reference provides that relationship with the update rate now set to audio rate. Keep the exponential calculation out of the per-sample path. Illustrative pseudocode:
 
 ```
-a = 1 - exp(-1 / (tau * fs))   # at init
+initialise current and coefficient
 per sample:
-  cur = cur + a * (target - cur)
+  current += coefficient * (target-current)
+  render using current
 ```
 
-**Linear ramp per block:** step from the old value to the new across the block, adding the same increment each sample:
+A **linear ramp** uses equal increments over a chosen number of samples and reaches a defined endpoint. It may span one block or several. Retain state between blocks; if the target changes mid-ramp, start the new transition from the current value rather than jumping back to the old start.
 
-```formula
-Δ = (v_new − v_old) / N
-Δ = (1000 Hz − 520 Hz) / 48 = 10 Hz
-where
-Δ: the amount added to the parameter on every sample of the block, in the parameter's own unit
-v_new: the value received for this block; here a cutoff of 1,000 Hz
-v_old: the value at the end of the previous block; here 520 Hz
-N: the block size, samples per channel; here 48
-Hz: hertz, the unit of this example parameter
-In words: spread the change evenly over the block, so a 480 Hz jump becomes 48 steps of 10 Hz.
-```
+For a one-block ramp, decide whether the increment is applied before or after each sample. Applying it before each of 48 samples reaches the target on the last sample in exact arithmetic. Set the exact target at completion to avoid accumulating floating-point endpoint error.
 
-In the mathematical version, apply the increment before each of the 48 output samples: the last parameter value reaches the target. Real code must choose that endpoint convention, retain state across blocks and account for rounding; assigning the exact target after the last step avoids cumulative endpoint error. Other ramp durations can span several blocks. Sample-rate steps can still be audible for large or sensitive changes, so listen and measure rather than promising silence.
+Neither method guarantees an inaudible change for every signal and parameter. Digital samples remain discrete. For frequency, choose whether the ramp should move in hertz or logarithmic frequency; equal hertz steps are not equal pitch steps. Listen and measure for large changes and retriggering.
 
-Why smooth here and not only in the foreground? The foreground can only deliver values as often as it runs. The receiving side knows the sample rate, so it is the only place that can reduce the size and spacing of parameter steps; digital samples remain discrete. The foreground smoothing from the knob-reading units is about rejecting knob noise; this smoothing is about removing steps.
-## Choosing a pattern
+## Choosing a transfer pattern
 
 | Data | Pattern |
 |---|---|
 | Single knob value | Atomic, smooth in callback |
-| Grouped parameter change | One message or double buffer |
+| Grouped parameter change | One message or acknowledged buffers |
 | Note on/off, program change | SPSC event queue |
-| Meters, clip flag (back) | Atomic or SPSC queue |
+| Meters, clip flag back to UI | Atomic or SPSC queue |
 | Debug logging | Queue to main loop |
 
 ## Key takeaways

@@ -9,29 +9,15 @@ summary: Verify DC and waveform swing with appropriate instruments, then connect
 
 ## A worked level check
 
+Before connecting anything, estimate where your output sits. Suppose (hypothetically) your synth's output stage swings a full-scale sine between 0 V and 3.3 V, centred on 1.65 V. Reason it through in steps:
 
-Suppose (hypothetically) your synth's output stage swings a full-scale sine between 0 V and 3.3 V, centred on 1.65 V. After AC coupling, that is a 1.65 V peak sine. Convert the peak to RMS, then express the RMS voltage relative to the dBu reference:
+1. **Remove the DC.** After AC coupling, the sine swings 1.65 V either side of zero: a 1.65 V *peak*.
+2. **Convert peak to RMS.** For a sine, divide the peak by about 1.414: about 1.17 V RMS.
+3. **Compare with the line levels.** That is a little below the professional +4 dBu nominal level (about 1.23 V RMS), roughly +3.6 dBu.
 
-```formula
-V_rms = V_peak / √2
-V_rms = 1.65 V / 1.414 ≈ 1.167 V
-L = 20 log_10(V_rms / 0.7746 V)
-L = 20 log_10(1.167 V / 0.7746 V)
-L = 20 log_10(1.506) ≈ +3.56 dBu
-where
-V_rms: the RMS (root mean square) voltage of the sine, in volts (V)
-V_peak: the sine's peak voltage after the DC is removed; half of the 3.3 V swing, 1.65 V
-√2: the square root of 2, about 1.414
-L: the output level in dBu (decibels relative to 0.7746 V RMS)
-log_10: the base-10 logarithm, the power of 10 that gives the number
-0.7746 V: the dBu level reference voltage
-V: volt
-dBu: decibels relative to 0.7746 V RMS
-≈: approximately equal to (rounded)
-In words: a 1.65 V-peak sine is about 1.17 V RMS, which is about 3.6 dB above the 0.7746 V dBu reference.
-```
+The common mistakes are treating 3.3 V or 1.65 V as an RMS value, which overstates the level by several decibels.
 
-That's close to pro nominal level at full scale, and well within a line input that accepts, say, +18 dBu. Set the interface gain low and verify actual peak voltage and transients; the ideal sine calculation alone does not prove the hardware cannot overload. For a smaller output, compare clean gain available in the synth and interface. The noise outcome depends on both stages; extra output gain is not automatically quieter.
+So the output is close to pro nominal level at full scale, and well within a line input that accepts, say, +18 dBu. Still set the interface gain low and verify the actual peak voltage and transients: the ideal sine calculation alone does not prove the hardware cannot overload. For a smaller output, compare the clean gain available in the synth and the interface; the noise outcome depends on both stages, and extra output gain is not automatically quieter.
 
 ## Connecting your synth to the interface safely
 
@@ -46,7 +32,9 @@ A checklist for the first connection:
 7. **Protect the output.** A suitable buffer and documented series resistance can improve fault tolerance, but do not guarantee survival of every short or load. Follow your board vendor's recommended output circuit.
 
 ## Key takeaways
-- Verify DC and waveform swing with appropriate instruments, then connect a documented line path with phantom power off and levels down.
+- Estimate the level first: a 0–3.3 V full-scale sine, once AC-coupled, is about 1.17 V RMS, close to +4 dBu nominal.
+- Measure DC offset and waveform swing with suitable instruments before connecting.
+- Connect to a line input with phantom power off, gain at minimum and monitors down, then raise the gain gradually.
 
 ## Further reading
 - [Line level — Wikipedia](https://en.wikipedia.org/wiki/Line_level)

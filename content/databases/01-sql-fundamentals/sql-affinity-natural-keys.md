@@ -43,7 +43,16 @@ INSERT INTO tight VALUES ('abc', 'x');
 
 A **natural key** is a real-world identifier: an email address, an ISBN, a vehicle registration. A **surrogate primary key** is a meaningless generated number or UUID.
 
-Natural keys look attractive, but real-world identifiers change (people change email; registrations are transferred) and are rarely as unique as promised. A primary key is copied into every referencing table, so changing it means updating them all. The common pattern is:
+Natural keys look attractive, but real-world identifiers change (people change email; registrations are transferred) and are rarely as unique as promised. A primary key is copied into every referencing table, so changing it means updating them all.
+
+> [!analogy] Real-world analogy: a membership number versus a phone number
+> A gym could file members under their phone numbers, but people change numbers, and every booking and payment record would then need correcting. Instead it gives each member a membership number that never changes, and keeps the phone number as contact detail.
+>
+> **How it maps:** The membership number is the surrogate primary key, copied into every referencing table. The phone number is the natural key: still a real rule ("no two members share a number" is a `UNIQUE` constraint), but free to change in one place.
+>
+> **Where it stops:** A generated number is only stable if nothing updates it; the database does not make it immutable by itself. And a surrogate primary key does not stop the same person registering twice with different details; only the natural-key constraints and good data checks do that.
+
+The common pattern is:
 
 - a surrogate primary key for identity and foreign keys, and
 - a `UNIQUE` constraint on the natural key to enforce the business rule.

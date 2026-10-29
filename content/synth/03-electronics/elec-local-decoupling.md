@@ -3,7 +3,7 @@ id: elec-local-decoupling
 sourceLesson: elec-logic-levels
 title: "Local decoupling and bulk supply storage"
 level: intermediate
-minutes: 1
+minutes: 2
 summary: "A local capacitor shortens the path for switching current pulses."
 ---
 
@@ -21,6 +21,13 @@ Practical rules:
 - **Follow the datasheet** where it gives specific values. Audio codecs and regulators often do.
 
 The noise and grounding units explain why this matters even more for audio.
+
+> [!analogy] Real-world analogy: A nearby water bottle
+> A nearby bottle can meet a brief need without waiting for a distant tap.
+>
+> **How it maps:** A local capacitor supplies a chip’s brief current demand through a short path, while the supply replenishes it.
+>
+> **Where it stops:** Capacitance, resistance and inductance determine the electrical response. A larger distant capacitor cannot automatically replace the required local layout.
 
 ## Key takeaways
 

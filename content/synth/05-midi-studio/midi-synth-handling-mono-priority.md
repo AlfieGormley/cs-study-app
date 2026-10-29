@@ -19,6 +19,13 @@ A mono synth has one voice, but a player (or the Digitakt's chord feature) can h
 
 Which to offer is a design decision; some mono synths let the player choose it as a setting.
 
+> [!analogy] Real-world analogy: one microphone on a panel
+> A discussion panel shares a single microphone. Several people may have their hands up, but only one can speak at a time. The chair keeps a list of raised hands and passes the microphone by a rule: the newest hand, the most junior speaker or the most senior.
+>
+> **How it maps:** held keys are the raised hands, the one voice is the microphone, and the note-priority rule is the chair's rule (last, low or high note). When the speaker lowers their hand, the microphone goes back to whoever the rule picks from the hands still raised, which is why the synth must remember every held key, not just the sounding one.
+>
+> **Where it stops:** a chair can wait politely for a sentence to finish, but a mono synth switches pitch the instant the target changes, and whether the envelope restarts (retrigger) or carries on (legato) is a separate design choice the analogy does not cover.
+
 The key data structure is a **note stack**: the list of held keys in press order. The rule is applied to the stack after every change.
 
 ```python

@@ -32,19 +32,7 @@ Guest order 106 has a NULL `customer_id`, so `COUNT(customer_id)` skips it. Asha
 
 ### Integer arithmetic
 
-`SUM` of integers is an integer, and dividing two integers truncates. `SUM(qty) / COUNT(*)` over `order_items` divides the 14 items by the 9 lines:
-
-```formula
-q = trunc(a / b)
-q = trunc(14 / 9) = trunc(1.555…) = 1
-where
-q: the result of dividing integer a by integer b in SQLite or PostgreSQL
-a: the dividend, here SUM(qty) = 14 items
-b: the divisor, here COUNT(*) = 9 order lines
-trunc: truncate: drop everything after the decimal point, moving towards zero, so trunc(1.9) = 1
-…: the digits carry on repeating (1.5555…)
-In words: when both sides are integers, the answer keeps only the whole-number part, so 14 / 9 gives 1, not 1.56.
-```
+`SUM` of integers is an integer, and dividing two integers truncates: the fraction is dropped rather than rounded. `SUM(qty) / COUNT(*)` over `order_items` divides the 14 items by the 9 lines and returns 1, not 1.56.
 
 `AVG(qty)` gives 1.555... instead. Use `AVG`, or multiply by `1.0` first (`SUM(qty) * 1.0 / COUNT(*)`), so the division is no longer between two integers.
 

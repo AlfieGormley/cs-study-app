@@ -13,18 +13,15 @@ Product details in this unit refer to the original Digitakt OS 1.53 manual and D
 
 MIDI 1.0 has **16 channels**. They let one cable address up to 16 independent instruments (or parts of a multitimbral instrument). Each receiver is set to listen on one channel (or all of them, "omni") and ignores channel messages for others.
 
-The channel is in the low nibble of the status byte, numbered 0–15 on the wire. People and manuals number them 1–16. To build a channel message's status byte, take the message type's base value (whose low nibble is 0) and put the wire channel number into that empty low nibble:
+The channel lives in the low nibble (the bottom four bits) of the status byte, numbered 0–15 on the wire. People and manuals number channels 1–16. To build a channel message's status byte, take the message type's base value, whose low nibble is zero, and drop the wire channel number into that empty nibble:
 
-```formula
+```formula essential
 S = T + (ch − 1)
-S = 0x90 + (10 − 1)
-S = 0x90 + 0x09 = 0x99
 where
 S: the status byte that goes on the wire, written in hexadecimal (0x…)
 T: the message type's base value, with its low nibble zero: 0x80 Note Off, 0x90 Note On, 0xB0 Control Change
 ch: the channel as people and manuals number it, 1 to 16; subtracting 1 gives the 0–15 wire number
-0x: prefix meaning the digits that follow are hexadecimal (base 16), so 0x99 is 153 in decimal
-In words: the status byte is the message type in the top nibble and the channel minus one in the bottom nibble; a Note On on channel 10 is 0x99.
+In words: the top nibble says what kind of message it is and the bottom nibble holds the channel minus one, so a Note On for channel 10 is 0x99, not 0x9A.
 ```
 
 This off-by-one causes real bugs:
@@ -39,7 +36,9 @@ user channel 16  -> nibble 0xF
 > When the Digitakt's MIDI track is set to CHAN 1, your synth will see status bytes with channel nibble 0 (for example `0x90` for a note on), not nibble 1 (`0x91`). Store channels internally as 0–15 and add 1 only when displaying them.
 
 ## Key takeaways
-- Convert displayed channels to a zero-based low nibble when sending, and add one when displaying received channels.
+- MIDI 1.0 has 16 channels, carried in the low nibble of each channel message's status byte.
+- The wire counts channels 0–15 while people count 1–16: subtract one when sending and add one only when displaying.
+- A receiver that "doesn't respond" is often listening on the wrong nibble; check the raw status byte in a MIDI monitor.
 
 ## Further reading
 - [MIDI 1.0 Detailed Specification 4.2.1 (archived copy at CCRMA)](https://ccrma.stanford.edu/~esteban/teaching/McGill_MUMT306/M1_v4-2-1_MIDI_1-0_Detailed_Specification_96-1-4.pdf)

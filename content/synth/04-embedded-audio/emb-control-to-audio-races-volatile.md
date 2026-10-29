@@ -38,6 +38,13 @@ For each arrow, ask: who writes, who reads, and can the reader interrupt the wri
 **Reordering.** The writer does "write data, then set ready flag". The compiler, and on some processors the hardware, may make the flag visible before the data. The reader sees "ready" and reads garbage.
 
 **Lost updates.** Both sides do read-modify-write on the same variable (`count = count + 1`). One side's update overwrites the other's.
+
+> [!analogy] Real-world analogy: Two people updating one tally
+> Two people keep a tally on a whiteboard. Each reads the number, works out the new value and writes it back. If both read 5 before either writes, one change disappears.
+>
+> **How it maps:** Each person is one side of the program doing a read-modify-write. Making both people re-read the board every time, which is roughly what `volatile` does for its accesses, still does not stop the overwrite.
+>
+> **Where it stops:** On a CPU the interleaving happens between instructions, in nanoseconds, and can also involve tearing and reordering, which a whiteboard does not show.
 ## Why `volatile` is not synchronisation
 
 C and C++ (and some other languages) have a `volatile` keyword. It tells the compiler that every access to that variable must really happen, in program order *relative to other volatile accesses*, because something outside the program (a hardware register, an interrupt) may change it. It preserves the defined volatile accesses, but it does not make an otherwise unsynchronised C++ thread-sharing program well-defined. Hardware interrupt semantics also depend on the compiler and target.

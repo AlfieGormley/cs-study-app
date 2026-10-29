@@ -3,90 +3,47 @@ id: elec-series-parallel-resistors
 sourceLesson: elec-dividers
 title: "Combining series and parallel resistors"
 level: basic
-minutes: 3
+minutes: 2
 summary: "Series resistances add; parallel branches share a voltage."
 ---
 
-A common analogue knob on a microcontroller synth uses a potentiometer as a voltage divider. The board reads its wiper voltage with an ADC and turns it into a number; encoders and other controls work differently. To wire knobs correctly, and to understand why some readings come out wrong, you need series and parallel resistance and the divider formula.
+How resistors connect matters as much as their values. Trace which terminals share a connection before predicting the current.
 
-## Series: one path, resistances add
-Components in **series** (a series circuit) share a single current path. The same current flows through each one, and their voltages add up to the total. Because the current has to push through every resistor in turn, their resistances simply add:
+## Series adds obstacles in one path
+Components in a series circuit share one current path. The same current passes through each component; it is not used up along the way. Their voltage drops add to the supply voltage in this simple DC loop.
 
-```formula
-R_total = R1 + R2 + R3 + ...
+For resistors, series resistance adds. A 1 kΩ resistor followed by 2.2 kΩ behaves like 3.2 kΩ in the ideal model. Across the same supply, adding a positive series resistance reduces current.
+
+## Parallel adds another path
+Components in a parallel circuit connect across the same two nodes, so they have the same voltage. Each branch carries its own current, and those currents add at the supply. Adding a positive resistive branch increases total current from an ideal fixed-voltage supply; it does not reduce the voltage across the existing branch.
+
+For positive finite resistors, the combined resistance is below the smallest branch. Two equal 10 kΩ resistors in parallel behave like 5 kΩ. A much larger parallel resistance has less effect: 1 MΩ across 10 kΩ gives about 9.9 kΩ because the added branch draws little extra current.
+
+Conductance means how easily a path passes current: it is the reciprocal of resistance. Conductances add in parallel. For two resistors the useful calculation is:
+
+```formula reference
+R_total = (R1 R2) / (R1 + R2)
 where
-R_total: the single resistance that behaves the same as the whole chain, in ohms (Ω)
-R1: the first resistor in the chain, in ohms
-R2: the second resistor, in ohms
-R3: the third resistor, in ohms
-...: and so on, for as many resistors as are in the chain
-Ω: ohms, the unit of resistance
-In words: resistors in series add up. The total is always larger than the largest one.
+R_total: equivalent resistance of the parallel pair, in ohms (Ω)
+R1: first positive branch resistance, in ohms
+R2: second positive branch resistance, in ohms
+In words: Two resistors connected across the same nodes provide more current paths, so their combined resistance is smaller than either one.
 ```
 
-For example, a 1 kΩ and a 2.2 kΩ in series:
+This reasoning assumes fixed, ohmic resistors and a supply that holds its voltage. A real supply can sag or enter current limit if the added branch demands too much current.
 
-```formula
-R_total = R1 + R2
-R_total = 1 kΩ + 2.2 kΩ = 3.2 kΩ
-where
-R_total: the combined resistance, in ohms (Ω)
-R1: the first resistor, here 1 kΩ
-R2: the second resistor, here 2.2 kΩ
-kΩ: kilohms; 1 kΩ = 1000 ohms (Ω)
-In words: the pair behaves exactly like one 3.2 kΩ resistor.
-```
-
-## Parallel: several paths, conductances add
-Components in **parallel** (a parallel circuit) connect across the same two connection points, so they all have the **same voltage**. The currents split between the branches and add up to the total. Each extra branch is another path for current, so the combination conducts *more* easily than any branch alone.
-
-The easy way to add them is by **conductance**, which is one divided by resistance (how easily current flows). Conductances in parallel add:
-
-```formula
-1 / R_total = 1 / R1 + 1 / R2 + ...
-where
-R_total: the single resistance that behaves the same as all the branches together, in ohms (Ω)
-R1: the first branch's resistance, in ohms
-R2: the second branch's resistance, in ohms
-...: and so on, one term per branch
-Ω: ohms, the unit of resistance
-In words: add up one-over-resistance for every branch, then take one over the answer. Each branch adds a path, so the total always comes out smaller than the smallest branch.
-```
-
-For exactly two resistors this rearranges into a handier "product over sum" form. The symbol ∥ is shorthand for "in parallel with":
-
-```formula
-R1 ∥ R2 = (R1 R2) / (R1 + R2)
-where
-R1 ∥ R2: the combined resistance of R1 and R2 in parallel, in ohms (Ω)
-∥: "in parallel with"
-R1: the first resistor, in ohms
-R2: the second resistor, in ohms
-Ω: ohms, the unit of resistance
-In words: for two resistors in parallel, multiply them, then divide by their sum.
-```
-
-Three facts are worth memorising:
-
-- Two equal positive resistors in parallel give half the value: two 10 kΩ parts combine to 5 kΩ.
-- The parallel total is always **smaller than the smallest** branch.
-- A much larger resistor in parallel barely changes anything:
-
-```formula
-10 kΩ ∥ 1 MΩ = (10 kΩ × 1000 kΩ) / 1010 kΩ
-10 kΩ ∥ 1 MΩ ≈ 9.9 kΩ
-where
-∥: "in parallel with"
-kΩ: kilohms; 1 kΩ = 1000 ohms (Ω)
-MΩ: megohms; 1 MΩ = 1000 kΩ = 1,000,000 Ω
-≈: approximately equal to (rounded)
-In words: putting a 1 MΩ resistor across a 10 kΩ one lowers it by only about 1%, because almost all the current takes the easier 10 kΩ path.
-```
+> [!analogy] Real-world analogy: One doorway or another route
+> People moving through two narrow doorways in a row face both restrictions. Opening a separate route lets more people pass overall.
+>
+> **How it maps:** Series resistors put restrictions along one path; a parallel branch provides an additional path for current.
+>
+> **Where it stops:** People can wait and choose routes. In this steady electrical model, branch currents follow the applied voltage and resistance, and charge does not accumulate at a junction.
 
 ## Key takeaways
 
-- Series resistances add; parallel branches share a voltage.
-- For positive finite resistances, a parallel total is below the smallest branch.
+- Series parts share current; parallel parts share voltage.
+- An extra series resistor reduces current from a fixed supply; an extra parallel branch increases total current.
+- Use the connection pattern to sanity-check a calculated resistance.
 
 ## Further reading
 

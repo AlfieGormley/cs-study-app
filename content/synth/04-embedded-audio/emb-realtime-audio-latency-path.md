@@ -9,62 +9,31 @@ summary: "Serial delivery, polling, queueing and converter delay are separate co
 
 ## Budget is not latency
 
-The budget answers "how long do I have to compute a block?". **End-to-end latency** answers "how long from a key press to sound coming out?". They are related but not equal, and the project roadmap asks you to keep them distinct.
+The block budget answers “how long can this computation take?”. **End-to-end latency** answers “how long from a key press to audible output?”. Faster computation can leave more headroom while the sound still waits in buffers.
 
-For an illustrative MIDI-triggered setup with 48-sample blocks at 48 kHz, assume the complete message is promptly parsed and handed over, the callback adopts events at its next boundary, and the filled output waits one block for playback. The following is an upper estimate within those assumptions, not a measured worst-case bound on Daisy or the complete instrument:
+> [!analogy] Real-world analogy: A parcel delivery
+> A parcel's delivery time is not just the time to pack it. It also waits for collection, travels, and sits at a depot before the final van.
+>
+> **How it maps:** Computing a block is the packing. Waiting for the next callback is waiting for collection, the output buffer is the depot and the converter filter is the last journey. Faster packing does not shorten the other stages.
+>
+> **Where it stops:** Audio stages repeat every block with largely fixed delays, so their contributions can be modelled and measured. The answer also depends on where you start the clock: the first MIDI byte or the physical key press.
 
-```formula
-L = t_MIDI + T_block + T_block + d_DAC
-d_DAC = 20 / f_s = 20 / 48000 Hz ≈ 0.42 ms
-L = (0.96 + 1.00 + 1.00 + 0.42) ms
-L ≈ 3.38 ms
-where
-L: the estimated upper delay within the stated model from the MIDI message starting to converter output, in milliseconds (ms); parsing stalls and additional buffering are excluded
-t_MIDI: the time to send a three-byte note-on over DIN MIDI, 0.96 ms (the serial-bus units)
-T_block: one block period, here 1 ms; it appears twice, once for waiting for the next callback and once for the double-buffer queue
-d_DAC: the codec DAC's digital-filter group delay; 20 sample periods for the PCM3060
-f_s: the sample rate, in hertz (Hz); here 48 kHz
-Hz: hertz, samples per second
-ms: millisecond
-≈: approximately equal to
-In words: the model gives about 3.4 ms for the synth path under its stated assumptions; the block size accounts for two of those milliseconds.
-```
+Trace each part of the path. This example assumes 48-sample blocks at 48 kHz, prompt parsing of a complete three-byte DIN MIDI note-on, adoption at the next callback boundary, and one block of output queueing:
 
-The same sum as a Python breakdown:
+| Contribution | Example delay |
+|---|---|
+| Three-byte DIN message | 0.96 ms |
+| Wait for next callback | Up to 1 ms |
+| Prepared output waiting to play | 1 ms |
+| PCM3060 DAC filter | About 0.42 ms |
 
-```python
-fs = 48_000
-block = 48
-blk_ms = block / fs * 1000
-# Conditional model, excluding parsing
-# stalls.
-parts = {
-    "MIDI note-on (3 bytes)": 0.96,
-    "wait for block (worst)": blk_ms,
-    "compute + queue (1 blk)": blk_ms,
-    "DAC filter (20/fs)": 20 / fs * 1000,
-}
-for name, ms in parts.items():
-    print(f"{name:<24}{ms:5.2f} ms")
-# Sum the same assumed path contributions.
-print(f"{'total':<24}"
-      f"{sum(parts.values()):5.2f} ms")
-```
+Together these give an upper estimate of about 3.4 ms **within this model**. It is not a measured worst-case bound for Daisy or a complete instrument. An event arriving just after adoption waits nearly a block; one arriving just before may wait much less.
 
-```output
-MIDI note-on (3 bytes)   0.96 ms
-wait for block (worst)   1.00 ms
-compute + queue (1 blk)  1.00 ms
-DAC filter (20/fs)       0.42 ms
-total                    3.38 ms
-```
+The PCM3060 DAC's documented digital-filter group delay is 20 sample periods. Its ADC adds 17.4 sample periods on an audio-input path. Those conversion delays differ from the callback's computation time.
 
-- **MIDI transmission:** 960 µs for a three-byte note-on (the serial-bus units).
-- **Waiting for the next block:** an event arriving just after a callback started is not seen until the next one, up to one block later.
-- **Queue:** with double buffering, a block computed now starts playing about one block later.
-- **Converter delay:** the PCM3060 datasheet gives a DAC digital-filter group delay of 20/fs (0.42 ms at 48 kHz). Codec ADCs add their own on the input path (17.4/fs for the PCM3060's ADC).
+Additional foreground parsing delays, a busy queue or another output-buffering arrangement change the model. An audio interface adds input conversion and driver buffers; monitoring through Ableton adds its own configured buffering. The keyboard's sensing delay also matters if your measurement starts at the physical key press rather than the first MIDI byte.
 
-This is an *estimate* for the synth's own part. If the main loop polls MIDI less often than every block, add that. Then the audio interface adds its ADC delay and its driver buffer, and Ableton adds its own buffer if you monitor through it. Measure the total with a loopback recording rather than trusting a sum.
+Measure the selected complete path with a suitable loopback recording. Record where the measurement starts and ends, the buffer configuration and whether host monitoring is included. Use the model to decide what to investigate, then compare it with the recording.
 
 ## Key takeaways
 - Serial delivery, polling, queueing and converter delay are separate contributions.

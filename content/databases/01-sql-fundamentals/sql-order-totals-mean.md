@@ -11,23 +11,20 @@ The examples continue the shop database introduced in the first unit. Customers 
 
 Most business questions are about totals, not individual rows. How many orders are pending? What has each customer spent? Which category earns the most? **Aggregate functions** collapse many rows into one value, and `GROUP BY` decides which rows get collapsed together.
 
-This lesson uses the same shop schema as the rest of the module. An order's total is worked out from its lines in `order_items`: multiply each line's quantity by its product's price, then add the lines up.
+This lesson uses the same shop schema as the rest of the module. An order's total is worked out from its lines in `order_items`: multiply each line's quantity by its product's price, then add the lines up. Order 101 is one £30 Kettle plus four £8 Mugs, so £30 + £32 = £62.
 
-```formula
-T = Σ (q_i p_i)
-T_101 = 1 × 30 + 4 × 8
-T_101 = 30 + 32 = £62
-where
-T: the total value of one order, in pounds (£)
-Σ: sigma, "the sum of": add up the bracketed value for every line i of the order
-i: one line of the order, a row of order_items
-q_i: the quantity on line i, a whole number of items
-p_i: the price of line i's product, in pounds (£)
-T_101: the total of order 101, which has 1 Kettle at £30 and 4 Mugs at £8
-In words: an order's value is each line's quantity times its price, added up over all the order's lines.
+```sql
+-- One total per order: quantity times
+-- price, added over the order's lines.
+SELECT oi.order_id,
+       SUM(oi.qty * p.price) AS total
+FROM order_items oi
+JOIN products p
+  ON p.id = oi.product_id
+GROUP BY oi.order_id;
 ```
 
-The same sum in SQL is `SUM(oi.qty * p.price)` grouped by order. The totals come out as 101 = £62, 102 = £80, 103 = £41, 104 = £70, 105 = £25 and 106 = £8.
+`GROUP BY oi.order_id` makes one result row per order; later units explain grouping in detail. The totals come out as 101 = £62, 102 = £80, 103 = £41, 104 = £70, 105 = £25 and 106 = £8. The multiplication happens inside `SUM`, once per line. Writing `SUM(p.price)` instead would add each product's price once and ignore the quantity, giving £38 for order 101.
 
 ## Aggregates over the whole table
 
@@ -45,19 +42,7 @@ FROM products;
 |---|---|---|---|
 | 193 | 8 | 90 | 38.6 |
 
-`SUM` adds the values, `MIN` and `MAX` pick the smallest and largest, and `AVG` is the ordinary mean: the sum divided by how many values there are.
-
-```formula
-mean = (x_1 + x_2 + … + x_n) / n
-mean = (30 + 25 + 40 + 90 + 8) / 5
-mean = 193 / 5 = £38.6
-where
-mean: the arithmetic mean, which is what AVG returns, in pounds (£) here
-x_1, x_2, x_n: the values being averaged, here the five prices in pounds (£)
-…: "and so on": every value between x_2 and x_n is included too
-n: how many values there are; NULLs are left out of both the sum and n (the NULL units)
-In words: the average is the total divided by the number of values, so £38.6 is what each product would cost if the £193 were shared out equally.
-```
+`SUM` adds the values, `MIN` and `MAX` pick the smallest and largest, and `AVG` is the ordinary mean: the sum divided by how many values there are. Here that is £193 shared across five products, £38.60 each. NULL inputs are left out of both the sum and the count, which the NULL units explore.
 
 ## Key takeaways
 - An order total adds each quantity times its product price.

@@ -18,41 +18,15 @@ Signal levels are often quoted as RMS voltage, the DC magnitude that would deliv
 | Consumer line, −10 dBV | 0.316 V |
 | Professional line, +4 dBu | 1.228 V |
 
-Those voltages come from the decibel definition: a level in dB is 20 times the base-10 logarithm of a voltage ratio, measured against a fixed reference voltage. Turned around, it gives the voltage for any level:
-
-```formula
-V_rms = V_0 10^(L / 20)
-V_rms = 1 V × 10^(−10 / 20) ≈ 0.316 V
-V_rms = 0.775 V × 10^(4 / 20) ≈ 1.228 V
-where
-V_rms: the RMS voltage of the signal, in volts (V)
-V_0: the reference voltage: 1 V for dBV, 0.775 V (√0.6, more exactly 0.7746 V) for dBu
-L: the level in decibels relative to that reference (dBV or dBu); here −10 and +4
-10^(L / 20): 10 raised to the power L / 20
-V: volt, the unit of voltage
-≈: approximately equal to
-In words: every 20 dB is a factor of 10 in voltage. Consumer line level is about a third of a volt, professional line level a little over 1.2 V.
-```
+These are nominal reference levels, not maximum safe input levels. Check the destination's maximum input separately.
 
 What the boards document (checked 2026-10-16):
 
-- **Daisy Seed:** line-level outputs, 0 dBFS at 1 V RMS, output impedance 100 Ω; inputs AC coupled, 3.6 V peak-to-peak, which the datasheet calls "approx. 1Vrms" (a sine of 3.6 V p-p is actually about 1.27 V RMS, so treat that figure as rough; see the conversion below).
+- **Daisy Seed:** line-level outputs, 0 dBFS at 1 V RMS, output impedance 100 Ω; inputs AC coupled, 3.6 V peak-to-peak, which the datasheet calls "approx. 1Vrms" (a sine of 3.6 V p-p is actually about 1.27 V RMS, so treat that figure as rough).
 - **Teensy audio adaptor:** stereo line out and a headphone output, plus line in or mic in.
 - **Raspberry Pi DAC+:** line out 0–2 V RMS on phono sockets, plus a headphone amplifier.
 
-For a sine wave, peak-to-peak and RMS voltages are related by a fixed factor, which is how the Daisy figure above was checked:
-
-```formula
-V_rms = V_pp / (2 × √2)
-V_rms = 3.6 V / (2 × 1.414) ≈ 1.27 V
-where
-V_rms: the RMS (root-mean-square) voltage of the sine, in volts (V)
-V_pp: the peak-to-peak voltage, from the lowest point of the wave to the highest, in volts (V); here 3.6 V
-√2: the square root of 2, about 1.414
-V: volt, the unit of voltage
-≈: approximately equal to
-In words: halve the peak-to-peak voltage to get the peak, then divide by about 1.414 to get the RMS value. This holds only for sine waves; other shapes have other ratios.
-```
+RMS and peak-to-peak describe different properties. For a sine wave, 3.6 V peak-to-peak is about 1.27 V RMS; other waveforms have different ratios. Do not use a sine RMS rating as the instantaneous peak limit for arbitrary audio.
 
 **Line, headphone and speaker outputs are not interchangeable.** A line output expects a high-impedance input (an audio interface's line input). A headphone output can drive tens of ohms. A speaker needs a power amplifier. Plugging a speaker into a line output does not work well and can stress the output stage.
 

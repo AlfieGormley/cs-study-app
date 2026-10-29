@@ -34,20 +34,15 @@ This is the **logical** order. The optimiser may physically do things differentl
 
 ## Arithmetic surprises
 
-`SELECT 7/2` returns `3`, not `3.5`, in both SQLite and PostgreSQL: dividing two integers gives an integer. The digits after the decimal point are dropped, and the `%` operator gives back what was left over:
+`SELECT 7/2` returns `3`, not `3.5`, in both SQLite and PostgreSQL: dividing two integers gives an integer. The digits after the decimal point are dropped, which moves the result towards zero, so `-7/2` is `-3`. The `%` operator gives back what was left over: `7 % 2` is `1`.
 
-```formula
-q = trunc(a / b)
-r = a − bq
-q = trunc(7 / 2) = trunc(3.5) = 3
-r = 7 − 2 × 3 = 1
-where
-q: the quotient, what a / b returns when a and b are both integers
-r: the remainder, what a % b returns
-a: the integer being divided (the dividend), here 7
-b: the integer you divide by (the divisor), here 2; it can't be 0
-trunc: truncate, meaning drop everything after the decimal point, which moves the number towards zero: trunc(3.5) = 3 and trunc(−3.5) = −3
-In words: integer division keeps only the whole number of times b fits into a, and the remainder is what is left over. For positive numbers the remainder is always between 0 and b − 1.
+```sql
+-- Integer division truncates; % is the
+-- remainder.
+SELECT 7/2, -7/2, 7 % 2, 7/2.0;
+-- SQLite: 3 | -3 | 1 | 3.5
+-- PostgreSQL shows the last value as
+-- numeric: 3.5000000000000000
 ```
 
 These small integer examples assume a nonzero divisor and a representable result. PostgreSQL raises an error on integer overflow; SQLite can promote overflowing arithmetic to floating point.

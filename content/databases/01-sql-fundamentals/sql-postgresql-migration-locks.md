@@ -18,6 +18,13 @@ Most `ALTER TABLE` forms take an `ACCESS EXCLUSIVE` lock, which blocks reads and
 
 Even a fast `ALTER` can cause an outage. If a long-running query holds a lock on the table, the `ALTER` waits for it, and every new query queues behind the `ALTER`. Set `lock_timeout` (for example `SET lock_timeout = '2s'`) so the migration fails fast and can be retried.
 
+> [!analogy] Real-world analogy: a queue at a shop door
+> A shop lets browsers share the floor, but a fitter who needs the shop empty waits at the door. Customers arriving after the fitter queue behind them, even though they could have browsed alongside the one customer still inside.
+>
+> **How it maps:** The long-running report is the customer inside, holding an `ACCESS SHARE` lock that lets other readers in. The `ALTER TABLE` is the fitter, waiting for an `ACCESS EXCLUSIVE` lock. New queries queue behind the waiting `ALTER`, so the table appears frozen. `lock_timeout` tells the fitter to give up and come back later rather than block the door.
+>
+> **Where it stops:** Once the fitter gets in, a metadata-only change may take milliseconds, far quicker than a real refit. The outage comes from the waiting, not the work, which is why the timeout matters even for "instant" changes.
+
 For slow changes, split the work so that the long validation phase permits ordinary reads and writes. The short catalogue changes still take locks:
 
 This migration assumes an existing nullable `customers.email` column whose older rows have already been populated. It upgrades that older schema to require email; the completed redesign in the earlier unit already makes email required.

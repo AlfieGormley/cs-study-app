@@ -14,7 +14,7 @@ A **shielded cable** surrounds the signal conductor(s) with a braid or foil conn
 
 - **Unbalanced (TS):** one conductor plus shield. The shield is also the signal return, so ground-loop current in it adds to the signal.
 - **Balanced wiring (often TRS or XLR):** two signal conductors plus shield. The shield is not the intended audio signal-return conductor, and interference common to both conductors cancels at a balanced input.
-- **Twisting** a signal wire with its return reduces magnetic pickup, because each twist reverses the induced voltage.
+- **Twisting** a signal wire with its return reduces magnetic pickup, because adjacent small loops have opposing orientation and similar pickup tends to cancel. Cancellation is incomplete in nonuniform fields or imperfect wiring.
 
 Inside the build:
 

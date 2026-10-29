@@ -18,6 +18,13 @@ running:  90 3C 64     40 64     43 64
 
 Nine bytes become seven. Combined with "note on, velocity 0 = note off", a whole melody can go out with a single `90` at the start.
 
+> [!analogy] Real-world analogy: ditto marks in a list
+> In a handwritten list, a ditto mark (〃) under a word means "same as the line above", which saves rewriting it.
+>
+> **How it maps:** the running status buffer is the line above. Data bytes with no new status byte are rows written with a ditto mark, so the receiver reuses the remembered channel status. A new channel status byte is a freshly written word that later ditto marks refer to.
+>
+> **Where it stops:** a reader of a list can always look back up the page, but a MIDI receiver remembers only one status byte, and the specification makes SysEx and System Common messages *erase* it. After those, a ditto mark has nothing to refer to, and the data bytes are ignored. Real-time bytes are like a note in the margin: they neither replace nor erase the remembered status.
+
 The receiver's rules, from the specification and its appendix:
 
 1. Remember the last channel status byte in a **running status buffer**.

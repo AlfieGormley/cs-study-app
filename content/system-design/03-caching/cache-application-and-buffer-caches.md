@@ -32,5 +32,5 @@ Databases cache too. PostgreSQL keeps recently used pages, normally 8 KiB (8,192
 
 ## Further reading
 - [PostgreSQL resource consumption (shared_buffers)](https://www.postgresql.org/docs/current/runtime-config-resource.html)
-- [InnoDB buffer-pool sizing — MySQL](https://dev.mysql.com/doc/refman/8.4/en/innodb-buffer-pool-resize.html)
+- [InnoDB buffer pool — MySQL](https://dev.mysql.com/doc/refman/8.4/en/innodb-buffer-pool.html)
 - [Caching overview — AWS](https://aws.amazon.com/caching/)

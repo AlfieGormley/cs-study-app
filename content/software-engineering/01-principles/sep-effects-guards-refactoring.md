@@ -7,26 +7,24 @@ summary: A query should not hide a state change.
 sourceLesson: sep-clean-code
 ---
 
-Readable functions expose intention, make calls unambiguous and preserve the behaviour callers already rely on.
+Making code clearer is only safe if callers see exactly the same behaviour afterwards. This lesson covers two clarity techniques and the trap each one hides.
 
 ### Command-query separation
 
 Bertrand Meyer's rule: a function should either **do something** (a command function, which changes state) or **answer something** (a query function, which returns data without side effects), not both.
 
 ```python
-# Checking also records a timestamp.
 # Surprising: a "check" that mutates
 def is_valid(order):
     order.validated_at = now()
     return order.total > 0
 ```
 
-A reader calling `if is_valid(order):` does not expect state to change. Hidden side effects are among the most expensive bugs to find, because nothing in the call site hints at them. (Some exceptions are idiomatic, like `stack.pop()`, which removes and returns.)
+A reader calling `if is_valid(order):` does not expect state to change. Hidden side effects are hard to find, because nothing in the call site hints at them. (Some exceptions are idiomatic, like `stack.pop()`, which removes and returns.)
 
 ### Prefer guard clauses to deep nesting
 
 ```python
-# Dispatch only when all three tests pass.
 # Before
 def ship(order):
     if order is not None:
@@ -36,8 +34,7 @@ def ship(order):
 ```
 
 ```python
-# Each return rejects the same cases.
-# After
+# After: same three rejections
 def ship(order):
     if order is None:
         return
@@ -53,7 +50,6 @@ Each guard deals with one special case and gets out of the way, leaving the "hap
 ## A worked refactor
 
 ```python
-# Indices encode an undocumented record.
 # Before
 def proc(l):
     r = []
@@ -66,8 +62,7 @@ def proc(l):
 Problems: meaningless names (`proc`, `l`, `r`, `x`), magic indices (`x[2]`), a magic number (`1` meaning "active"?), and the reader must decode the condition.
 
 ```python
-# Preserve > 18; do not fix it silently.
-# After
+# After: still > 18, deliberately
 from dataclasses import dataclass
 
 ADULT_AGE = 18
@@ -102,6 +97,6 @@ Note a subtle question this refactor surfaces: is an 18-year-old an adult? The o
 - Naming can expose a boundary bug; fix that separately from a behaviour-preserving refactor.
 
 ## Further reading
-- [CommandQuerySeparation](https://martinfowler.com/bliki/CommandQuerySeparation.html)
-- [refactoring.com](https://refactoring.com/)
-- [peps.python.org](https://peps.python.org/pep-0008/)
+- [Martin Fowler: Command Query Separation](https://martinfowler.com/bliki/CommandQuerySeparation.html)
+- [Refactoring catalogue](https://refactoring.com/)
+- [PEP 8: Style Guide for Python Code](https://peps.python.org/pep-0008/)

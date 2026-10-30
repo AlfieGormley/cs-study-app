@@ -4,10 +4,10 @@ title: CPython dictionaries: layout and probing
 level: intermediate
 minutes: 5
 sourceLesson: hash-resizing
-summary: These are CPython 3.14 implementation details for an ordinary combined table with general keys.
+summary: CPython's dict pairs a sparse index array with dense insertion-ordered entries, grows at two-thirds full and mixes high hash bits into its probes.
 ---
 
-These are CPython 3.14 implementation details for an ordinary combined table with general keys. The language promises dictionary behaviour and insertion order, while other Python implementations can choose different layouts.
+Python the language promises how a dict behaves, including insertion order. How CPython achieves that is an implementation detail, and it shows how the ideas in this module fit together in a real table. Everything below describes CPython 3.14's ordinary dict with general keys; other Python implementations, and other CPython layouts, can differ.
 
 ## How CPython's dict works
 
@@ -28,67 +28,58 @@ entries (dense, insertion order)
 
 Compared with the old design, which stored full entries in a sparse array (24 bytes per general entry on the illustrated 64-bit build), this saves a lot of memory, because only the cheap index array is sparse.
 
+> [!analogy] Real-world analogy: a visitors' book with a lookup card
+> A reception desk writes each visitor on the next free line of a visitors' book, in arrival order. To find someone quickly, it also keeps a small card of numbered boxes; each box holds just a line number in the book.
+>
+> **How it maps:** the book is the dense entries array, which is why iteration follows insertion order. The card is the sparse indices array: it can have many empty boxes cheaply, because each box holds only a small line number rather than a whole entry.
+>
+> **Where it stops:** a receptionist would cross out a departed visitor and never reuse the line. CPython also leaves a hole in the entries when you delete, but marks the box on the card as "dummy" so searches keep probing, and compacts the book only when the dict is rebuilt.
+
 Further details:
 
-- **Sizes** are powers of two, minimum 8, and a table holds at most about two-thirds of its size in entries (the formula below).
-- **Growth**: when full, the new size is the smallest power of two that is at least 3 × the number of live keys. Without deletions this doubles the table: in CPython 3.14, a dict built key by key resizes on the 6th, 11th, 22nd and 43rd inserts.
-- **Probing** uses a perturbed sequence, not linear steps. CPython first interprets a signed hash as an unsigned machine word for perturbation; otherwise a negative hash would not shift towards zero. Starting from `i = hash & mask`, each step is `perturb >>= 5` then `i = (5*i + perturb + 1) & mask`. The shifting `perturb` feeds the high bits of the hash into the sequence, so keys that share low bits soon diverge; once `perturb` reaches 0, `5*i + 1` alone visits every slot.
+- **Sizes** are powers of two, minimum 8. A table holds at most two-thirds of its size in entries (CPython's `USABLE_FRACTION`), so an 8-slot dict holds 5 keys.
+- **Growth**: when full, the new size is the smallest power of two that is at least three times the number of live keys. Without deletions this doubles the table: in CPython 3.14, a dict built key by key resizes on the 6th, 11th, 22nd and 43rd inserts. Deleting keys never shrinks it.
+- **Probing** uses a perturbed sequence, not linear steps, described below.
 - **Deletion** marks the index slot as a dummy (a tombstone) and the entry as empty. A rebuild compacts empty entries. In GIL-enabled builds a later insertion can reuse a dummy index slot; free-threaded builds avoid that reuse for lookup safety.
 
-The size rules, written out (CPython's `USABLE_FRACTION` and growth calculation):
-
-```formula
-U = floor(2 × m / 3)
-m_new = 2^⌈log_2(3 u)⌉
-U = floor(2 × 8 / 3) = floor(5.33) = 5
-m_new = 2^⌈log_2(15)⌉ = 2^⌈3.91⌉
-m_new = 2^4 = 16
+```formula reference
+U = floor(2m / 3)
+m_new = 2^⌈log_2(3u)⌉
 where
-U: the usable capacity: the most entries a table of size m can hold before it must grow
-m: the table size (number of index slots), a power of two; here 8
+U: the usable capacity: the most entries a table of m slots can hold before it must grow
+m: the table size (number of index slots), a power of two
 m_new: the size of the new table after growing
-u: the number of live keys when the table grows; here 5
+u: the number of live keys when the table grows
 floor: round down to a whole number
-log_2: logarithm to base 2, the power 2 must be raised to; log_2(16) = 4, log_2(15) ≈ 3.91
-⌈ ⌉: ceiling, round up to a whole number; ⌈3.91⌉ = 4
-^: "to the power of"; 2^4 = 16
-In words: a dict can fill two-thirds of its slots; when it is full it grows to the next power of two that is at least three times its live keys, so an 8-slot dict holds 5 keys and grows to 16 slots on the 6th insert.
+log_2: logarithm to base 2, the power 2 must be raised to
+⌈ ⌉: ceiling, round up to a whole number
+^: "to the power of"
+In words: a dict can fill two-thirds of its slots; when it is full it grows to the next power of two that is at least three times its live keys. An 8-slot dict holds 5 keys and grows to 16 slots on the 6th insert.
 ```
 
-And the probe sequence. Here `&` with `mask` (the table size minus 1) is the same as taking the remainder by the table size, and `perturb >>= 5` divides `perturb` by 32, rounding down:
+## The perturbed probe sequence
 
-```formula
-i_0 = H mod m
-q_new = floor(q / 32)
-i_next = (5 × i + q_new + 1) mod m
-where
-i_0: the first slot tried
-i: the slot just tried
-i_next: the next slot to try
-H: the key's full hash interpreted as a nonnegative unsigned machine word
-q: perturb, initially that unsigned word, which shrinks each step
-q_new: perturb after shifting right by 5 bits
-m: the table size, a power of two
-mod: "modulo", the remainder after division
-floor: round down to a whole number
-In words: each step multiplies the current slot by 5, adds 1 plus the remaining high bits of the hash, and wraps round the table; the high bits shrink away after a few steps, leaving a sequence that visits every slot.
+Linear probing in a power-of-two table would look only at the hash's low bits, and keys sharing those bits would form runs. CPython instead mixes the rest of the hash into the first few probes. It keeps a value called `perturb`, starting as the full hash (read as an unsigned 64-bit number), and shifts it right by 5 bits before each step:
+
+```python
+def probe_order(h, size, n):
+    # size is a power of two
+    mask = size - 1
+    perturb = h & (2**64 - 1)
+    i = h & mask
+    out = [i]
+    while len(out) < n:
+        perturb >>= 5
+        i = (5 * i + perturb + 1) & mask
+        out.append(i)
+    return out
+
+probe_order(1234, 8, 4)  # [2, 1, 7, 4]
 ```
 
-For a full hash of 1,234 and eight slots, the first four slot choices are two, one, seven and four. The perturb values after successive shifts are thirty-eight, one and zero.
+Here `& mask` keeps the low bits, which for a power-of-two size is the same as the remainder after dividing by the size. For a hash of 1,234 in an 8-slot table, the first slot is 2; `perturb` then shrinks to 38, 1 and 0, steering the next probes to 1, 7 and 4. Keys that share low bits but differ higher up therefore part company after a probe or two.
 
-```formula
-i_0 = 1234 mod 8 = 2
-i_1 = (5 × 2 + 38 + 1) mod 8 = 1
-i_2 = (5 × 1 + 1 + 1) mod 8 = 7
-i_3 = (5 × 7 + 0 + 1) mod 8 = 4
-where
-i_0: first probe slot, counting from zero
-i_1: second probe slot
-i_2: third probe slot
-i_3: fourth probe slot
-mod: nonnegative remainder after whole-number division
-In words: Shrinking perturb adds high-hash information to early probes; after it reaches zero, the fixed recurrence continues.
-```
+Once `perturb` reaches 0, the step is just `5*i + 1`, and in a power-of-two table that recurrence visits every slot before repeating, so a search always finds an empty slot eventually.
 
 ## Key takeaways
 - Ordinary combined dictionaries use sparse indices over insertion-ordered entries.

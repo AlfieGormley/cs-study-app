@@ -11,8 +11,6 @@ A shared bit does not identify which item set it. That is why deletion and resiz
 
 ## Limitations
 
-
-
 - **No deletion.** Clearing a bit might also "remove" other items that share it, creating false negatives. **Counting Bloom filters** replace each bit with a small counter (often 4 bits) at about 4 times the memory; cuckoo filters also support deletion. Deletion requires knowing the item was inserted; deleting a false positive can damage other members, and counting filters must avoid counter overflow.
 - **No listing.** You cannot get the items back out.
 - **Fixed size.** You cannot simply grow the bit array and redistribute positions without the original items; scalable filters instead add compatible layers.

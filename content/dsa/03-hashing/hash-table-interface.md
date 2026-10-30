@@ -13,11 +13,7 @@ Suppose you have a list of a million customer IDs and you need to check, for eac
 
 A **hash table** does better still: on average, each check takes a constant number of steps, no matter how many IDs you store. This makes hash maps and sets useful for many everyday lookup tasks.
 
-
-
 ## The idea in one picture
-
-The full hash in the drawing is illustrative, not a claim about Python’s process-dependent string hash. Its remainder after division by eight is one.
 
 A hash table is an array of **hash buckets** (or slots). To store a key, you run it through a **hash function** that turns it into an integer, then reduce that integer to an array index.
 
@@ -34,11 +30,18 @@ index 1
 [ ]  [alice]  [ ]   [bob]  [ ]
 ```
 
-To look the key up later, you hash it again, jump straight to the same index and check whether it is there. Collision handling can still scan candidates; expected constant work relies on well-distributed hashes, bounded load and constant-cost key operations.
+The full hash in the drawing is made up for illustration; Python's real string hash changes from run to run. What matters is the last step: its remainder after dividing by eight is one, so "alice" goes in bucket 1.
 
-Two different keys can land on the same index. That is a **hash collision**, and every hash table needs a strategy for it (Collision resolution). As long as collisions are rare, each bucket holds about one key and operations stay fast.
+To look the key up later, you hash it again, jump straight to the same index and check whether it is there. You never scan the whole array; at most you check the few keys that landed in the same place.
 
+Two different keys can land on the same index. That is a **hash collision**, and every hash table needs a strategy for it (Collision resolution). As long as collisions are rare, each bucket holds about one key and operations stay fast. The "constant on average" promise therefore rests on three assumptions: hashes spread keys evenly, the table is not allowed to get too full, and hashing or comparing one key takes bounded time.
 
+> [!analogy] Real-world analogy: a post room's mail slots
+> A post room sorts letters into wall-mounted slots using a fixed rule, say the first letter of the surname. To find someone's post you apply the rule and look in one slot, rather than searching every letter in the building.
+>
+> **How it maps:** the rule is the hash function plus the reduction to an index, each slot on the wall is a bucket, and two people whose surnames share a first letter are a collision: you check the names inside that one slot.
+>
+> **Where it stops:** first letters are a poor hash, because surnames bunch up under common letters. A real hash function spreads keys almost evenly, and a hash table adds slots automatically as it fills, which a post room cannot do.
 
 ## The interface
 
@@ -71,7 +74,7 @@ Other languages have the same pair: Java's `HashMap` / `HashSet`, C++'s `std::un
 > [!tip] Python dicts remember insertion order
 > Since Python 3.7, iterating over a dict returns keys in the order they were first inserted. This is a language guarantee, not an accident. Sets make no such promise: their iteration order depends on the hashes.
 
-The constructor dict.fromkeys makes each supplied value a key. Repeated values update an existing entry without moving its original insertion position. Converting the resulting dictionary to a list therefore gives the distinct values in first-appearance order; it does not sort them. This technique is useful when an API requires deduplication while preserving input order.
+A useful consequence: `dict.fromkeys(items)` makes each item a key. A repeated item updates the existing entry without moving it, so `list(dict.fromkeys(items))` gives the distinct items in first-appearance order. It removes duplicates while keeping the input order; it does not sort.
 
 ## Key takeaways
 - A map stores key–value pairs; a set stores membership.

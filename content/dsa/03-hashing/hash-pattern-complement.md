@@ -4,32 +4,18 @@ title: Two-sum and complement lookup
 level: intermediate
 minutes: 3
 sourceLesson: hash-patterns
-summary: Keep the map invariant explicit: it contains only earlier input positions.
+summary: For each number, look up the one partner that completes the target in a map of earlier values, turning a quadratic pair search into one pass.
 ---
 
-Keep the map invariant explicit: it contains only earlier input positions. That makes the one-pass lookup both fast and safe when the target can be twice the current value.
+Many problems that look like they need two nested loops have an O(n) solution (n being the length of the input) that walks the input once while a hash map remembers what it has seen. The trade is always the same: spend O(n) memory to turn "search everything I've seen so far" (O(n) each time) into "look it up" (O(1) on average).
 
-Many problems that look like they need two nested loops have an O(n) solution (n being the length of the input) that walks the input once while a hash map remembers what it has seen. The pattern is always the same trade: spend O(n) memory to turn "search everything I've seen so far" (O(n) each time) into "look it up" (O(1) on average).
-
-Complexity below assumes expected constant-time hash operations and bounded-cost arithmetic/equality; Python arbitrary-size integers can add bit costs. The next units cover the remaining recurring shapes. Recognising what the map remembers is more useful than memorising a particular loop.
-
-
+These bounds assume expected constant-time hash operations and bounded-cost arithmetic and equality. The units that follow cover the other recurring shapes; recognising *what the map remembers* matters more than memorising a particular loop.
 
 ## 1. Complement lookup: two-sum
 
 > Given `nums` and `target`, return the indices of two numbers that add up to `target`.
 
-A brute-force search checks every pair: O(n²) for an array of n numbers. The insight: for each number, the partner you need is fixed:
-
-```formula
-y = T − x
-y = 9 − 2 = 7
-where
-y: the complement, the value that would pair with x to reach the target
-T: the target sum (`target` in the code), here 9
-x: the current number (`x` in the code), here 2
-In words: if the target is 9 and you are looking at 2, the only number that can complete the pair is 7, so you need one lookup, not a search.
-```
+A brute-force search checks every pair: O(n²) for an array of n numbers. The insight: for each number, the partner you need is fixed. It is the target minus the current number, its complement. If the target is 9 and you are looking at 2, only a 7 can complete the pair, so you need one lookup, not a search.
 
 Instead of searching for the complement, ask a map whether you have already seen it.
 

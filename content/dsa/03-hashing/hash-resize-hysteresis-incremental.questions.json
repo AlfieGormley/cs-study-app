@@ -3,27 +3,27 @@
     "id": "hash-resizing-q5",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A table starts at 1,000 slots and grows by adding 1,000 slots whenever it is full. How many key copies happen while inserting 1,000,000 keys, and what is the amortised cost per insert?",
+    "prompt": "A hand-written table starts at 1,000 slots and grows by adding 1,000 slots whenever it is full. Loading 1,000,000 keys spends most of its time copying keys during resizes. You now need to load 2,000,000 keys. What happens to the copying cost *per insert*, and what is the fix?",
     "options": [
       {
-        "text": "About 1 million copies; O(1) amortised",
-        "explanation": "That is the doubling result. Growing by a fixed amount gives a sum of an arithmetic series, which is quadratic."
+        "text": "It stays about the same, because resizing is amortised O(1)",
+        "explanation": "Amortised O(1) needs growth by a constant *factor*. Growing by a fixed amount gives an arithmetic series of copies, whose total grows with the square of the key count."
       },
       {
-        "text": "About 499.5 million copies; O(n) amortised",
-        "explanation": "Correct. Resizes at 1,000, 2,000, …, 999,000 copy 1000 × (1 + 2 + … + 999) = 499,500,000 keys: about 500 copies per insert, growing linearly with n."
+        "text": "It roughly doubles, because each insert pays O(n) amortised; grow by a factor such as 2 instead",
+        "explanation": "Correct. With fixed +1,000 growth, a million keys cost about 500 copies per insert (499.5 million in total) and two million cost about 1,000 per insert. Doubling the capacity instead keeps it near one copy per insert."
       },
       {
-        "text": "About 1,000 copies; O(1) amortised",
-        "explanation": "1,000 is roughly the number of resizes, not copies. Each resize copies every key present."
+        "text": "It halves, because larger tables resize less often",
+        "explanation": "The resizes still come every 1,000 inserts, and each one copies more keys than the last, so per-insert cost rises."
       },
       {
-        "text": "About 1 trillion copies; O(n²) amortised",
-        "explanation": "The total is O(n²), but that is spread over n inserts, so the *amortised* cost is O(n), and the total is about 5 × 10⁸, not 10¹²."
+        "text": "It quadruples, and nothing can be done short of pre-sizing",
+        "explanation": "The *total* roughly quadruples, but that is spread over twice as many inserts, so per-insert cost doubles. Growing by a factor fixes it without knowing the final size in advance."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Resize when size = capacity: at 1,000, 2,000, …, 999,000 (999 resizes).\n2. Each copies `size` keys:\n\n```formula\nC = 1000 × (1 + 2 + … + 999)\nC = 1000 × 999 × 1000 / 2\nC = 499,500,000\nwhere\nC: the total keys copied by all resizes\n…: \"and so on\", each term 1 more than the last\nIn words: the resizes copy 1,000, then 2,000, then 3,000 keys and so on, an arithmetic series totalling about half a billion.\n```\n\n3. Per insert: 499.5 × 10⁶ / 10⁶ ≈ 500 copies.\n4. Double the number of keys and the per-insert cost doubles: O(n) amortised and O(n²) total for n keys. Growing by a constant *factor* is what makes resizing cheap.",
+    "workedExample": "1. With fixed growth, a resize happens every 1,000 inserts and copies every key present: 1,000, then 2,000, then 3,000, and so on.\n2. That is an arithmetic series. Its total grows with the square of the number of keys: about 499.5 million copies for a million keys, about 2 billion for two million.\n3. Per insert, that is about 500 copies at a million keys and about 1,000 at two million: double the keys, double the per-insert cost. That is O(n) amortised.\n4. Growing by a constant factor (doubling) makes the copies a geometric series whose total is less than twice the number of inserts, so per-insert copying stays constant however large the table grows.",
     "link": {
       "title": "Amortized analysis — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Amortized_analysis"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Track the load factor through the cycle:\n\n```formula\nα = n / m\nα = 8 / 16 = 0.5\nα = 7 / 16 = 0.4375 < 0.5\nα = 8 / 8 = 1\nwhere\nα: alpha, the load factor\nn: the number of keys\nm: the number of slots\n<: \"is less than\"\nIn words: just after doubling, 8 keys fill half of 16 slots; one delete drops below half, so the table halves to 8; one insert then fills all 8, so it doubles again.\n```\n\n2. Each of those resizes rehashes every key (7, then 8).\n3. Alternate insert and delete around the boundary and you pay O(n) for n keys on almost every operation: thrashing.\n4. Fix: a **hysteresis gap** between the grow and shrink points. Double when full, halve at a quarter full. After either resize the table is half full, so at least a quarter of its size in operations must happen before the next resize, which pays for it.\n5. Many production tables (including CPython's dict) never shrink on delete at all.",
+    "workedExample": "1. Track the load factor (keys ÷ slots) through one cycle, starting with 8 keys just after doubling into 16 slots: 8 ÷ 16 is exactly one half.\n2. One delete leaves 7 ÷ 16, below one half, so the table halves to 8 slots. Now 7 keys sit in 8 slots.\n3. One insert makes 8 ÷ 8, completely full, so the table doubles again to 16 slots. Each of these resizes rehashes every key.\n4. Alternate insert and delete around the boundary and you pay O(n) for n keys on almost every operation: thrashing.\n5. Fix: a **hysteresis gap** between the grow and shrink points. Double when full, halve at a quarter full. After either resize the table is half full, so at least a quarter of its size in operations must happen before the next resize, which pays for it.\n6. Many production tables (including CPython's dict) never shrink on delete at all.",
     "link": {
       "title": "Dynamic array — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Dynamic_array"

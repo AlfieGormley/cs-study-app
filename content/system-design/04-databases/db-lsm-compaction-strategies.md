@@ -22,23 +22,9 @@ An SSTable contains sorted key/value blocks (say 4–64 KB), a sparse **index** 
 - Low write amplification.
 - But a key may exist in many overlapping files (reads check more), and a merge temporarily needs as much free space as its inputs (up to 2× space).
 
-**Leveled** (RocksDB, LevelDB, Cassandra `LCS`): level L1 is, say, 256 MB, and each level is 10× larger. Within a level (other than L0), SSTables don't overlap, so a key is in at most one file per level.
+**Leveled** (RocksDB, LevelDB, Cassandra `LCS`): the first level below L0 is, say, 256 MB, and each level is 10× larger. Within a level (other than L0), SSTables don't overlap, so a key is in at most one file per level.
 
-The target size of each level grows geometrically:
-
-```formula
-S_L = S_1 × T^(L − 1)
-S_3 = 256 MB × 10^2 = 25,600 MB = 25.6 GB
-where
-S_L: the target size of level L, in megabytes (MB)
-L: the level number, counting L1 as 1
-S_1: the target size of level L1, here 256 MB
-S_3: the target size of level L3, worked out in the second line
-T: the size ratio between neighbouring levels, here 10
-MB: megabyte, 1,000,000 bytes (RocksDB actually uses 1,048,576-byte mebibytes)
-GB: gigabyte, 1,000 MB
-In words: each level is ten times bigger than the one above, so a few levels hold a huge amount and most data sits in the last level.
-```
+The target size of each level grows geometrically: with the first level below L0 at 256 MB and a ratio of 10, the second targets about 2.5 GB and the third about 25 GB.
 
 Because each level is ten times the previous one, the last level holds roughly 90% of the data, which is why leveled compaction keeps space overhead fairly low.
 

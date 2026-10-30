@@ -26,10 +26,19 @@ d[(1, 2)] = "ok"     # tuple: fine
 d[[1, 2]] = "no"     # TypeError: unhashable
 ```
 
+The second assignment deliberately fails: the tuple entry is stored, then the list key raises `TypeError` and execution stops unless the caller handles it.
+
 > [!warning] Equal keys collapse
 > Because `1 == 1.0 == True` in Python, they are the same dict key. `{1: "a", True: "b"}` gives `{1: "b"}`: the second assignment updates the value, keeping the first key object.
 
 If you define `__eq__` on your own class, Python sets `__hash__` to `None`, making instances unhashable, unless you also define `__hash__`. In Java, overriding `equals` without `hashCode` is a classic bug: two equal objects can have different hashes, causing lookup to miss even if bucket reduction happens to coincide.
+
+> [!analogy] Real-world analogy: filing by a name that can change
+> An office files each customer's paperwork in a drawer chosen by the first letter of their surname. A customer marries and changes surname, but nobody moves the paperwork.
+>
+> **How it maps:** the surname is a key's equality-relevant state and the drawer is its bucket. Searching under the new name opens the wrong drawer; searching under the old name finds paperwork whose name no longer matches. The paperwork is still in the cabinet but unreachable, just like a mutated key in a set.
+>
+> **Where it stops:** a clerk could notice and refile the paperwork. A hash table never notices a mutation, so you must remove the key before changing it and reinsert it afterwards, or use a stable key such as a customer ID.
 
 ## Designing a key safely
 
@@ -38,8 +47,6 @@ Separate an object’s identity from its current contents. A mutable customer re
 For a custom value object, choose the same fields for equality and hashing. Two points considered equal by their coordinates must hash from those coordinates as well. If coordinates can change, freeze the key object or remove it before changing the fields and reinsert it afterwards. Defining a hash from one field and equality from another does not satisfy the contract.
 
 A tuple is not automatically a safe key just because the outer container is immutable. Its elements must also be hashable; a tuple containing a list fails when hashed. A frozenset, unlike a set, is immutable and hashable. Neither object promises that a bad custom element implementation becomes sound merely by being wrapped.
-
-The two assignments in the example intentionally demonstrate an exception. They are not a successful programme that stores both entries: the tuple entry is inserted, then the list-key assignment raises TypeError and execution stops unless the caller handles it.
 
 ## Key takeaways
 - Equal keys must have equal hashes; unequal keys may collide.

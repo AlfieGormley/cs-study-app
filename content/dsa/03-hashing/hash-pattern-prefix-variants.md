@@ -4,7 +4,7 @@ title: Prefix-sum indices and remainder keys
 level: intermediate
 minutes: 3
 sourceLesson: hash-patterns
-summary: The previous unit counted earlier prefix totals.
+summary: Choose what the prefix map stores from the question: counts for counting, earliest indices for longest ranges, remainders for divisibility.
 ---
 
 The previous unit counted earlier prefix totals. For a longest range, store the earliest index instead; for divisibility, store a normalised remainder. Choose the map’s values and keys from the requested answer.
@@ -17,20 +17,18 @@ Variants:
 - **Subarray sum divisible by k**: for nonzero k, key on `p % k` (the remainder, written mod below); two prefixes with equal remainders bound a divisible subarray.
 - **Equal numbers of 0s and 1s**: map 0 to −1, then look for subarrays with sum 0.
 
-The divisible-by-k variant rests on one fact about remainders:
+The divisible-by-k variant rests on one fact about remainders: a difference is divisible by k exactly when the two numbers leave the same remainder. Prefix sums 13 and 3 both leave remainder 3 when divided by 5, so the stretch between them sums to 10, a multiple of 5.
 
-```formula
+```formula reference
 (P[j] − P[i]) mod k = 0
 ⇔ P[j] mod k = P[i] mod k
-(13 − 3) mod 5 = 10 mod 5 = 0
-13 mod 5 = 3 mod 5 = 3
 where
 P[j]: the prefix sum of the first j elements
 P[i]: an earlier prefix sum, i < j
-k: the positive divisor, here 5; normalise a negative input divisor to its magnitude
+k: the positive divisor (normalise a negative input divisor to its magnitude)
 mod: "modulo", the remainder after division, taken from 0 to k − 1
 ⇔: "exactly when", the statements on either side are both true or both false
-In words: a difference is divisible by k exactly when the two numbers leave the same remainder; prefix sums 13 and 3 both leave 3 when divided by 5, so the stretch between them sums to 10, a multiple of 5.
+In words: the stretch between two boundaries sums to a multiple of k exactly when the running totals at those boundaries leave the same remainder.
 ```
 
 So count, for each remainder, how many earlier prefixes had it. (Some languages return negative remainders for negative numbers, so normalise them first.)

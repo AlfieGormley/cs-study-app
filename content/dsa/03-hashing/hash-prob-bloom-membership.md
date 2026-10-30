@@ -4,7 +4,7 @@ title: Bloom filters: negative proof and maybe results
 level: advanced
 minutes: 3
 sourceLesson: hash-probabilistic
-summary: A Bloom filter is a prefilter, not a replacement for authoritative membership.
+summary: A Bloom filter answers "definitely not" or "maybe" from a few bits per item, never giving a false negative for items it was given.
 ---
 
 A Bloom filter is a prefilter, not a replacement for authoritative membership. The append-only contract is what makes a negative answer conclusive for the represented snapshot.
@@ -18,8 +18,6 @@ The three structures in this part of the module rely on the same idea: a good ha
 | Bloom filter | "is x in the set?" | false positives only |
 | Count-Min Sketch | "how many times x?" | overestimates with nonnegative updates and no overflow |
 | HyperLogLog | "how many distinct?" | ± a few % |
-
-
 
 ## Bloom filters
 
@@ -59,8 +57,9 @@ class Bloom:
 
     def _idx(self, item):
         d = sha256(item.encode()).digest()
-        h1 = int.from_bytes(d[:8])
-        h2 = int.from_bytes(d[8:16]) | 1
+        h1 = int.from_bytes(d[:8], "big")
+        h2 = int.from_bytes(d[8:16], "big")
+        h2 |= 1  # odd step
         for i in range(self.k):
             yield (h1 + i * h2) % self.m
 
@@ -76,8 +75,14 @@ class Bloom:
 
 Computing k separate hashes would be slow. The `h1 + i*h2` trick, due to Kirsch and Mitzenmacher, derives all k positions from two hashes with the same asymptotic false-positive probability under the paper's model; this does not promise identical finite-filter accuracy. The odd step is coprime to power-of-two m, but not to every composite m.
 
-> [!note] Evidence gap
-> The previously claimed measured 0.84% rate is omitted: no benchmark dataset, query sample or reproducible measurement accompanied it. The formulas below are modelled estimates, not measurements of this implementation.
+This toy filter is for reading, not benchmarking: it stores one Python boolean per bit, and its error rate has not been measured here. The next lesson models how the false-positive rate depends on the filter's size and number of hashes.
+
+> [!analogy] Real-world analogy: stamps on a shared card
+> A club gives every member a few squares on one big card to stamp when they visit, chosen by their name. To check whether someone has visited, look at their squares. If any is blank, they never came. If all are stamped, they probably did, but other visitors may have stamped those same squares.
+>
+> **How it maps:** the card is the bit array, a member's squares are the k hash positions, stamping is setting bits to 1, and "all stamped but never visited" is a false positive.
+>
+> **Where it stops:** you could ask the club for its visitor list; a Bloom filter keeps no list at all, only the stamps. And you cannot rub out one member's stamps without possibly erasing evidence of others who share those squares.
 
 ## Key takeaways
 - An append-only filter has no false negatives for its represented snapshot.

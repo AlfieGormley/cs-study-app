@@ -25,18 +25,7 @@ Place both nodes and keys on a ring of hash values (say 0 to 2⁶⁴). Each key 
   k1 → N2, k2 → N3, k3 → N1
 ```
 
-When a node joins, it takes over keys only from its clockwise neighbour; when one leaves, its keys move to the next node. Only about one node's share of keys moves:
-
-```formula
-F_move ≈ 1 / N
-where
-F_move: the fraction of all keys that change node when one node joins or leaves
-N: the number of nodes after the change (for a join) or before it (for a leave)
-≈: approximately equal to; exact only if every node owns an equal share of the ring
-In words: consistent hashing moves only the share of keys the new or departing node owns, which is the minimum any scheme that keeps every node an equal share can move.
-```
-
-Going from 10 to 11 nodes moves about 1/11 ≈ 9% of keys, against about 91% with plain modulo.
+When a node joins, it takes over keys only from its clockwise neighbour; when one leaves, its keys move to the next node. Only about one node's share of keys moves: going from 10 to 11 nodes moves about 1 key in 11 (about 9%), against about 91% with plain modulo. That is the minimum any scheme can move while keeping every node's share equal.
 
 Plain consistent hashing gives uneven ranges, and a newly added node only relieves one neighbour. The fix is **virtual nodes**: each physical node owns many small points on the ring (Cassandra historically used 256 per node, now 16 by default with a smarter allocation algorithm). Load evens out, and a new node can take small slices from many existing nodes, rather than necessarily every node.
 

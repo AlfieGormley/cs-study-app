@@ -26,6 +26,13 @@ Facebook's 2013 paper *Scaling Memcache at Facebook* introduced **leases** to fi
 
 The stale set in Race 2 simply fails. The paper compares this to load-link/store-conditional on a CPU: the write only succeeds if nothing touched the key in between.
 
+> [!analogy] Real-world analogy: the numbered restock slip
+> A shelf is empty. The shop manager gives one assistant a numbered restock slip and asks everyone else to wait a moment. If the product is recalled while the assistant is in the stockroom, the manager cancels that slip, and the assistant's old stock is refused at the shelf.
+>
+> **How it maps:** The shelf is the cache key, the slip is the lease token issued on a miss, the recall is the delete that follows a database write, and refusing the cancelled slip is the cache rejecting the stale `set`. Handing out one slip at a time while others wait is the thundering-herd half of leases.
+>
+> **Where it stops:** Shoppers can simply stand and wait; memcached clients are told to back off briefly and retry, so they poll. And the "manager" is the cache server itself, not the database: no database rows are locked while a token is outstanding.
+
 Leases also tame **thundering herds**. By default Facebook's servers handed out at most one token per key every 10 seconds. Other clients that missed were told to wait briefly and retry; the token holder usually set the value within a few milliseconds, so the retry tended to hit. Over a week of measurements on keys particularly prone to herds, the paper reports peak database query rates falling from 17K/s (17,000 queries per second) without leases to 1.3K/s with them, roughly a 13-fold cut.
 
 A refinement lets readers accept **stale values**: a deleted item is kept briefly in a side structure, and a miss can return it marked as stale. Applications that can tolerate slightly old data carry on without waiting.

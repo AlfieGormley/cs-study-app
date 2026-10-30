@@ -36,5 +36,5 @@ except psycopg.OperationalError as e:
 - Expose structured data and actionable messages rather than forcing callers to parse prose.
 
 ## Further reading
-- [peps.python.org](https://peps.python.org/pep-3134/)
-- [exceptions](https://docs.python.org/3/library/exceptions.html)
+- [PEP 3134: Exception Chaining and Embedded Tracebacks](https://peps.python.org/pep-3134/)
+- [Python docs: Built-in Exceptions](https://docs.python.org/3/library/exceptions.html)

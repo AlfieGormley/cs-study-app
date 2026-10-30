@@ -9,7 +9,7 @@ sourceLesson: sep-writing-for-others
 
 Code that only its author can use is a liability. The moment anyone else touches it (a teammate, a library user, you in a year) everything not written down has to be rediscovered by reading, guessing or breaking things.
 
-This lesson covers the layers through which code talks to other people, from the closest to the furthest away:
+This lesson and the four after it cover the layers through which code talks to other people, from the closest to the furthest away. This one starts with comments.
 
 ```
  inline comments   -> the next maintainer
@@ -38,14 +38,13 @@ if seen(event.id):
 ```
 
 ```python
-# Input is limited to 8 elements by the
-# caller contract; keep this loop simple.
+# Round to whole pence: the bank API
+# rejects more than 2 decimal places
+# (see PAY-311).
+amount = round(amount, 2)
 ```
 
-> [!note] Content gap
-> The previous claim of a measured threefold speedup was removed because no benchmark or reproducible setup was available. No performance result is asserted here.
-
-The webhook fragment only illustrates a comment. Production deduplication needs durable, atomic coordination with the effect. Stripe automatic retries last up to three days in live mode; manual CLI resends can occur up to 30 days later, so three days is not a universal deduplication-retention limit.
+Both comments record a fact from outside the code: a provider's behaviour and an external constraint. Without them, a maintainer could "simplify" the check or the rounding away. (The webhook fragment only illustrates a comment. Stripe does document that an endpoint can receive the same event more than once and recommends recording processed event IDs; a real implementation must store that record durably and update it atomically with the effect.)
 
 Useful kinds of comment:
 
@@ -78,8 +77,8 @@ if qualifies_for_free_shipping(u):
 ## Key takeaways
 - Comments should explain reasons, constraints, warnings or references that code does not convey.
 - A stale comment is conflicting documentation, so verify intent before changing either side.
-- A small deduplication sketch does not establish atomic, durable webhook processing.
+- Before writing a comment, check whether a clearer name or a small function would make it unnecessary.
 
 ## Further reading
-- [pyguide](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings)
-- [webhooks](https://docs.stripe.com/webhooks)
+- [Google Python Style Guide: comments and docstrings](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings)
+- [Stripe: receive webhook events (duplicate events)](https://docs.stripe.com/webhooks)

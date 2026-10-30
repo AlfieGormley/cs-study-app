@@ -19,6 +19,13 @@ LFU has its own problems:
 - **New items struggle.** A brand-new key starts at count 1 and is the first candidate for eviction, even if it is about to become hot.
 - **Cost.** Exact LFU needs a counter per key and a structure ordered by count. O(1) designs exist, but they are fiddlier than LRU.
 
+> [!analogy] Real-world analogy: the all-time bestseller window
+> A bookshop fills its window with its all-time bestsellers. A one-off browser cannot dislodge them, but last decade's hit sits there long after people stopped asking for it, and this week's surprise success is the first to be taken out again before its sales can build up.
+>
+> **How it maps:** The window is the cache, sales counts are LFU access counters, and evicting the lowest seller is LFU eviction. Its resistance to one-off browsers is LFU's resistance to scans; the stale hit is stale popularity, and the newcomer removed before it can build up sales is the new-item problem. Decaying the counts is like ranking on recent sales instead.
+>
+> **Where it stops:** A shop can see its exact sales figures. Large caches usually keep approximate, decaying counters and sample candidates rather than ranking every key exactly.
+
 ## TTL: time to live
 
 A **TTL** says how long an entry may be served before it is considered expired, regardless of memory pressure. It is a freshness rule, not a capacity rule, but it frees memory too.

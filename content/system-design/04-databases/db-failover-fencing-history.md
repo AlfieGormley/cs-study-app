@@ -21,7 +21,7 @@ Tools: Patroni (Postgres, using etcd or Consul for leader election), MySQL Group
 
 What goes wrong:
 
-- **Lost writes**: with async replication, unshipped writes from the old leader are discarded. A lagging promoted replica may reuse identifiers whose earlier values remain in caches or external systems, leading to incorrect associations. A specific historical incident attribution is omitted because this review did not establish its primary report.
+- **Lost writes**: with async replication, unshipped writes from the old leader are discarded. A lagging promoted replica may reuse identifiers whose earlier values remain in caches or external systems, leading to incorrect associations. GitHub's September 2012 availability report describes a related failure: after a cluster-manager partition, an out-of-date MySQL node was elected primary, the links between MySQL-generated IDs and the Redis data looked up by those IDs fell out of sync for records created in that window, and some events appeared on the wrong users' dashboards while some repositories were routed incorrectly.
 - **Split brain**: the old leader isn't dead, just partitioned, and keeps accepting writes. Two leaders now diverge. Enforced fencing prevents stale writes. Leases require reliable enforcement/watchdogs, and epoch tokens work only when every protected resource rejects stale epochs.
 - **Timeout tuning**: too short and you fail over during a GC pause or traffic spike (making things worse); too long and you're down for longer.
 
@@ -33,3 +33,4 @@ What goes wrong:
 ## Further reading
 - [www.postgresql.org: warm standby failover](https://www.postgresql.org/docs/current/warm-standby-failover.html)
 - [Patroni: Watchdog support](https://patroni.readthedocs.io/en/latest/watchdog.html)
+- [GitHub: GitHub availability this week (September 2012)](https://github.blog/news-insights/the-library/github-availability-this-week/)

@@ -4,30 +4,20 @@ title: Robin Hood probe distances
 level: intermediate
 minutes: 3
 sourceLesson: hash-collisions
-summary: Robin Hood insertion compares how far two keys have travelled.
+summary: Robin Hood insertion gives a contested slot to the key that has travelled further, shrinking the worst probe distances and letting misses stop early.
 ---
 
-Robin Hood insertion compares how far two keys have travelled. It changes which key keeps a contested slot, aiming to reduce variation in search lengths rather than eliminate collision costs.
+Robin Hood hashing keeps linear probing's layout but changes who gets a contested slot. Its aim is not fewer collisions but a fairer spread of search lengths.
 
 ## Robin Hood hashing
 
 Linear probing's average is fine, but its *variance* is the problem: some unlucky keys end up dozens of slots from home. Robin Hood hashing (Celis, Larson and Munro, 1985) evens this out by "taking from the rich and giving to the poor".
 
-The insertion fragment requires a nonempty table with a free slot and a key not already stored; a complete map must handle duplicate updates and grow before exhausting capacity. Each key's **probe distance** is how far it sits from its home slot, counting forward and wrapping round the end of the array:
-
-```formula
-d = (s − h) mod m
-d = (1 − 6) mod 8 = 3
-where
-d: the probe distance, a whole number of slots (0 means the key sits in its home slot)
-s: the slot the key actually occupies, here 1
-h: the key's home slot, here 6
-m: the number of slots, here 8
-mod: "modulo", the remainder after division, taken as a value from 0 to m − 1 (so −5 mod 8 = 3)
-In words: count how many steps forward the key had to travel from its home slot; a key homed at slot 6 that ended up in slot 1 of an 8-slot table travelled 6 → 7 → 0 → 1, a distance of 3.
-```
+Each key's **probe distance** is how far it sits from its home slot, counting forward and wrapping round the end of the array. A key homed at slot 6 that ended up in slot 1 of an 8-slot table travelled 6 → 7 → 0 → 1: distance 3. A key in its home slot has distance 0, so it is "rich"; a key far from home is "poor".
 
 While inserting, if the incoming key has travelled further than the resident of the current slot, they swap: the incoming key takes the slot and the displaced, "richer" key carries on probing.
+
+The fragment below assumes the table has a free slot and the key is not already stored; a complete map must also handle updates to existing keys and grow before it fills.
 
 ```python
 def rh_insert(slots, key, home):
@@ -60,7 +50,14 @@ C reaches slot 2 having travelled 2; D there has travelled 0, so C takes the slo
 
 It also speeds up misses. Probing for an absent key, you can stop as soon as you meet a resident whose distance is smaller than your current distance: had your key been present, it would have displaced that resident. Deletion usually uses backward shifting.
 
-Rust's standard `HashMap` used Robin Hood hashing until 2019 (Rust 1.36), when it switched to a Swiss table.
+> [!analogy] Real-world analogy: giving the seat to whoever has walked furthest
+> Passengers board a long train and walk forward looking for a seat. The rule: if you reach a seat whose occupant has walked a shorter distance from their boarding door than you, you take it, and they get up and continue forward. The rule creates no extra seats, so the total walking stays the same, but the longest walks get shorter.
+>
+> **How it maps:** a passenger's boarding door is the home slot, distance walked is probe distance, and the swap is the Robin Hood rule. The total probe distance is shared out differently rather than reduced (with linear probing the set of occupied slots, and so the total, does not depend on who wins each swap): the longest distances shrink.
+>
+> **Where it stops:** passengers can see down the carriage; the table compares only with the one resident in the current slot. And if every key shares one home slot, the run is still long: the worst case remains linear.
+
+Rust's standard `HashMap` used Robin Hood hashing until 2019 (Rust 1.36), when it switched to a Swiss-table design from the `hashbrown` crate.
 
 ## Key takeaways
 - A more displaced incoming key takes a slot from a less displaced resident.

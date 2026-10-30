@@ -23,7 +23,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Adding a key hashes it with each of the filter's hash functions and sets one bit per function. Checking a key tests the same bits.\n2. If any bit is 0, the key was never added: **definitely absent**.\n3. If all bits are 1, either the key was added, or other keys happened to set those bits: **possibly present**.\n4. At 10 bits per key with 7 hash functions, about 1% of absent keys look present:\n```formula\np ≈ (1 − e^(−k × n / m))^k\np ≈ (1 − e^(−7 / 10))^7 ≈ 0.008\nwhere\np: the false-positive rate for absent keys\nk: the number of hash functions, here 7\nn: the number of keys in the filter\nm: the number of bits in the filter, so m / n = 10 bits per key\ne: Euler's number, about 2.718\n≈: approximately equal to\nIn words: with 10 bits per key and 7 hash functions, just under 1% of absent keys are wrongly reported as possibly present.\n```\n5. A negative avoids further lookup in that candidate file; a positive requires further checks, not necessarily physical I/O.",
+    "workedExample": "1. Adding a key hashes it with each of the filter's hash functions and sets one bit per function. Checking a key tests the same bits.\n2. If any bit is 0, the key was never added: **definitely absent**.\n3. If all bits are 1, either the key was added, or other keys happened to set those bits: **possibly present**.\n4. At 10 bits per key with 7 hash functions, just under 1% of absent keys look present.\n5. A negative avoids further lookup in that candidate file; a positive requires further checks, not necessarily physical I/O.",
     "link": {
       "title": "Wikipedia: Bloom filter",
       "url": "https://en.wikipedia.org/wiki/Bloom_filter"
@@ -33,27 +33,27 @@
     "id": "db-storage-internals-q4",
     "level": "advanced",
     "type": "single",
-    "prompt": "For an absent key, suppose six SSTable Bloom filters are tested, each with false-positive probability p. What is the expected number of false-positive candidate-file checks at p=0.01 versus p=0.1?",
+    "prompt": "A RocksDB service sees mostly lookups for keys that do not exist, and each such lookup consults the Bloom filters of about six SSTables. To save memory, an engineer halves the filter size, from about 10 bits per key to about 5, which raises each filter's false-positive rate from about 1% to about 10%. What should they expect?",
     "options": [
       {
-        "text": "6 checks either way; Bloom filters cannot reject absent keys.",
-        "explanation": "Wrong. Negative filter results eliminate candidates."
+        "text": "Some lookups for absent keys will now wrongly return a value",
+        "explanation": "Wrong. A Bloom filter never gives false negatives, and a false positive only triggers a follow-up check of the file's index or data, which then finds the key absent. Answers stay correct; only the work changes."
       },
       {
-        "text": "0.06 versus 0.6 candidate-file checks per miss.",
-        "explanation": "Correct. Linearity of expectation gives 6p. These are potential follow-up checks, not guaranteed physical data reads; indexes and caches may avoid I/O."
+        "text": "Wasted follow-up checks per missing-key lookup rise about tenfold, from well under one in ten to more than one in two, adding index or block reads that may hit disk",
+        "explanation": "Correct. Across six filters, the expected false positives per miss go from about 0.06 to about 0.6. Each one costs a follow-up check that may be served from cache or may need I/O, so tail latency and disk load can rise."
       },
       {
-        "text": "0 at either setting because the filters are exact.",
-        "explanation": "Wrong. Bloom filters permit false positives."
+        "text": "Nothing changes, because filters are consulted only for keys that exist",
+        "explanation": "Wrong. Filters matter most for absent keys: a negative answer lets the read skip the file entirely. That is exactly the workload here."
       },
       {
-        "text": "1 versus 10 candidate-file checks per miss.",
-        "explanation": "Wrong. Multiply six candidate filters by the probability; a tenfold probability does not mean ten files."
+        "text": "Every lookup now opens all six files, because a 10% rate means the filters no longer work",
+        "explanation": "Wrong. Each filter still rejects about 90% of absent keys; the number of wasted checks rises, but most files are still skipped."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Each of six filters contributes false-positive probability p, so the expected count is 6p:\n```formula\nE = F × p\nE = 6 × 0.01 = 0.06\nE = 6 × 0.1 = 0.6\nwhere\nE: the expected number of false-positive candidate-file checks per lookup of an absent key\nF: the number of filters tested, here 6\np: the false-positive probability of each filter\nIn words: the expected number of wasted checks is the number of filters times each filter's false-positive rate.\n```\n2. Independence is not needed for this expectation (linearity of expectation: expected values add even for dependent events).\n3. At 7,000 misses/s, that is 7,000 × 0.06 = 420 versus 7,000 × 0.6 = 4,200 potential follow-up file checks per second.\n4. Actual disk reads depend on additional indexes, metadata and caching.\n5. The ideal Bloom-filter formula gives about 9.6 versus 4.8 bits/key; implementation allocation may differ:\n```formula\nb = log_2(1 / p) / ln(2)\nb = log_2(100) / 0.693 ≈ 9.6\nb = log_2(10) / 0.693 ≈ 4.8\nwhere\nb: bits per key (m / n) needed for false-positive rate p, using the best number of hash functions\np: the target false-positive rate, here 0.01 or 0.1\nlog_2: logarithm to base 2\nln: natural logarithm (base e ≈ 2.718); ln(2) ≈ 0.693\n≈: approximately equal to\nIn words: every tenfold cut in the false-positive rate costs about 4.8 more bits per key.\n```",
+    "workedExample": "1. A Bloom filter has no false negatives. A false positive just means \"go and check\", and the check finds the key absent, so correctness is unchanged.\n2. Expected wasted checks per missing-key lookup are the number of filters consulted times each filter's false-positive rate. Expected values add, so this holds even if the filters' errors are correlated.\n3. Six filters at about 1% give about 0.06 wasted checks per miss; at about 10% they give about 0.6, roughly ten times more.\n4. Each wasted check reads index or data blocks, which may be cached or may need I/O. At thousands of misses a second, that can add noticeable disk load and tail latency.\n5. Each tenfold cut in the false-positive rate costs about 4.8 bits per key, so halving the memory from about 10 to about 5 bits per key gives up roughly one factor of ten. Decide from measured memory and latency, not memory alone.",
     "link": {
       "title": "Wikipedia: Bloom filter",
       "url": "https://en.wikipedia.org/wiki/Bloom_filter"

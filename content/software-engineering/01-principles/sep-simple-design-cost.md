@@ -7,7 +7,7 @@ summary: Simple means fewer intertwined concepts, rather than fewer lines.
 sourceLesson: sep-dry-kiss-yagni
 ---
 
-DRY protects shared knowledge; KISS asks for simplicity; YAGNI challenges speculative features. Here the useful test is the cost of understanding and changing the design.
+What makes code simple? Not shortness, as this lesson shows with a one-liner that is both harder to read and dramatically slower than the plain loop it replaces.
 
 ## KISS: simple is not the same as easy
 
@@ -37,22 +37,9 @@ def flatten(xs):
     return out
 ```
 
-The clever version is shorter, but a reader must untangle `sum` over lists, a lambda and a conditional expression. It is also slow. `sum(..., [])` adds lists with `+`, and list `+` builds a brand-new list each time, copying both operands. On a flat list, step 1 copies 1 element reference, step 2 copies 2, and so on:
+The clever version is shorter, but a reader must untangle `sum` over lists, a lambda and a conditional expression. It is also slow. `sum(..., [])` adds lists with `+`, and list `+` builds a brand-new list each time, copying everything accumulated so far. Each step therefore copies one more element than the step before.
 
-```formula
-T(n) = 1 + 2 + … + n
-T(n) = n(n + 1) / 2
-T(n) = Θ(n^2)
-where
-T(n): the total number of element references copied while flattening, as a function of n
-n: the number of elements in the input list
-…: and so on: keep adding each whole number up to n
-Θ: Big-Theta: "grows in proportion to", ignoring constant factors and small inputs
-n^2: n multiplied by itself
-In words: the k-th step copies k references, so the total is the sum of 1 to n, which grows with the square of the list's length.
-```
-
-For a list of 1,000 elements that is 1,000 × 1,001 / 2 = 500,500 copies; for 100,000 elements it is about 5 billion. Doubling the list roughly quadruples the work. The simple version appends each element once, so its work grows only in proportion to n. Its recursive `extend` avoids that flat-list penalty, although deep nesting still adds repeated copying and recursion overhead. Both examples assume finite, acyclic nested lists; a list containing itself does not terminate normally, and sufficiently deep nesting can exceed Python’s recursion limit.
+That adds up quickly: the total copying grows with the *square* of the list's length, so doubling the list roughly quadruples the work. Counting each element reference that `+` copies (a model of the work, not a timing), a flat list of 1,000 elements needs about half a million copies and 100,000 elements need about 5 billion. The simple version appends each element once, so its work grows only in proportion to the length. Its recursive `extend` avoids that flat-list penalty, although deep nesting still adds repeated copying and recursion overhead. Both examples assume finite, acyclic nested lists; a list containing itself does not terminate normally, and sufficiently deep nesting can exceed Python’s recursion limit.
 
 Rich Hickey's talk *Simple Made Easy* draws a useful line:
 
@@ -74,10 +61,10 @@ Correctness comes first and minimising elements comes last. Formulations differ 
 
 ## Key takeaways
 - Simple means fewer intertwined concepts, rather than fewer lines.
-- Repeated list concatenation copies growing prefixes and is quadratic on the flat input considered here.
+- Repeated list concatenation copies a growing prefix each time, so its work grows with the square of the length.
 - Correctness and clear intent precede minimising the number of elements.
 
 ## Further reading
 - [Kelly Johnson — Lockheed Martin](https://www.lockheedmartin.com/en-us/news/features/history/johnson.html)
-- [www.infoq.com](https://www.infoq.com/presentations/Simple-Made-Easy/)
-- [BeckDesignRules](https://martinfowler.com/bliki/BeckDesignRules.html)
+- [Rich Hickey: Simple Made Easy (InfoQ)](https://www.infoq.com/presentations/Simple-Made-Easy/)
+- [Martin Fowler: Beck Design Rules](https://martinfowler.com/bliki/BeckDesignRules.html)

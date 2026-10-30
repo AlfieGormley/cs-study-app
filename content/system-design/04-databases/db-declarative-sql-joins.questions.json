@@ -3,27 +3,27 @@
     "id": "db-relational-acid-q3",
     "level": "intermediate",
     "type": "single",
-    "prompt": "An API endpoint lists 50 orders with each customer's email. Assume 50 distinct customers, no cache or batching, and lazy loading that issues a separate query per customer. The ORM code loads the orders, then accesses `order.user.email` in a loop. Database round-trip latency is 2 ms. Roughly how much time goes on round trips, and what's the fix?",
+    "prompt": "An endpoint lists 50 orders with each customer's email. It is fast on a developer laptop, where the database runs locally, but takes about 100 ms in production, where each database round trip takes about 2 ms. The query log shows 51 queries per request, each executing in well under a millisecond. What is the cause and the fix?",
     "options": [
       {
-        "text": "About 2 ms; ORMs batch these automatically",
-        "explanation": "Wrong under the explicit lazy-loading assumptions. Defaults and batching behavior vary by ORM; this example stipulates one query per association."
+        "text": "Each user lookup is slow; add an index on `users.email`",
+        "explanation": "Wrong. The lookups are by `users.id`, which is already the primary key, and the log shows each query executing quickly. The time goes on waiting for round trips, which an index cannot remove."
       },
       {
-        "text": "About 100 ms; nothing can be done short of caching",
-        "explanation": "Wrong on the fix. The latency estimate is close, but a join or an `IN` query removes the extra round trips without any cache."
+        "text": "N+1 loading: one query for the orders plus one per order for its user, each paying a full round trip; fetch the users with a join or one batched `IN` query",
+        "explanation": "Correct. Fifty-one sequential trips at about 2 ms each explain the 100 ms. A join, or loading all the users in one `WHERE id IN (...)` query, makes it one or two trips."
       },
       {
-        "text": "About 102 ms (51 queries); fix it with a join or eager loading (`WHERE id IN (...)`)",
-        "explanation": "Correct. One query for the orders plus 50 for users is 51 round trips at 2 ms. A join, or loading all users in one `IN` query, makes it 1–2 round trips (about 2–4 ms)."
+        "text": "The production database server is under-powered; move it to a bigger instance",
+        "explanation": "Wrong. Execution time is already tiny. A faster server does not shorten the network trip each of the 51 queries waits for."
       },
       {
-        "text": "About 102 ms; fix it by adding an index on `users.email`",
-        "explanation": "Wrong. The lookups are by `users.id` (already the primary key). The cost is the number of round trips, not slow lookups, so an index on email doesn't help."
+        "text": "Add a cache in front of the database; nothing else can reduce the round trips",
+        "explanation": "Wrong as the first fix. A cache adds a freshness problem and still costs a trip per lookup unless it is batched. A join or batched query removes the extra trips without a cache."
       }
     ],
-    "answer": 2,
-    "workedExample": "1. Count the queries: 1 query for 50 orders + 1 query per order for its user = 51.\n2. Multiply by round-trip time, before any query execution time:\n```formula\nQ = 1 + N = 1 + 50 = 51\nT = Q × t_RTT\nT = 51 × 2 ms = 102 ms\nwhere\nQ: the total number of queries sent\nN: the number of orders loaded, each of which triggers one extra query for its user\nT: the total time spent waiting on round trips, in milliseconds (ms)\nt_RTT: the round-trip time of one query between application and database, here 2 ms\nms: millisecond, one thousandth of a second\nIn words: one query for the list plus one per order, each waiting a full round trip, adds up to about a tenth of a second.\n```\n3. The lookups themselves are cheap primary-key reads; the cost is network latency.\n4. Fix by fetching users in bulk:\n```sql\n-- Fetch orders and their users\n-- together.\nSELECT o.id, u.email\nFROM orders o\nJOIN users u ON u.id = o.user_id\nWHERE o.id = ANY($1);\n```\n5. Now it's one round trip: about 2 ms plus execution. That reduces the round-trip component by 51×; total endpoint speedup also depends on query execution and other work.",
+    "answer": 1,
+    "workedExample": "1. Notice the clue: fast locally, slow over the network, with tiny execution times. That points at the number of trips, not the work per query.\n2. Count the trips: one query loads the 50 orders, then the loop issues one query per order for its user. That is 51 sequential round trips.\n3. At about 2 ms per trip, 51 trips is roughly 100 ms of waiting, which matches the measurement.\n4. Fix by fetching the users together with the orders:\n```sql\n-- Fetch orders and their users\n-- together.\nSELECT o.id, u.email\nFROM orders o\nJOIN users u ON u.id = o.user_id\nWHERE o.id = ANY($1);\n```\n5. Now it is one round trip plus execution. Many ORMs offer the same result as eager loading or prefetching, which issues one batched `IN` query for all the users.",
     "link": {
       "title": "PostgreSQL: Joins Between Tables",
       "url": "https://www.postgresql.org/docs/current/tutorial-join.html"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Large unsorted equality-join inputs favor considering a hash join when its build side fits memory.\n2. Build a hash table over projected users columns, then scan orders and probe it.\n3. Nested-loop index probes may be cached, so tree height is not an actual disk-read count. Hash joins may spill when memory estimates are wrong.\n4. Actual row width, statistics, caching and parallelism determine the chosen plan; inspect EXPLAIN rather than treating row count as a guarantee.\n5. Rough work counts show why the cross join is never chosen and the hash join is cheap:\n```formula\nC = N_o × N_u\nC = 50,000,000 × 2,000,000 = 10^14\nW ≈ N_u + N_o\nW ≈ 2,000,000 + 50,000,000\nW ≈ 52,000,000\nwhere\nC: the number of row pairs a cross join produces\nN_o: the number of rows in orders, 50 million\nN_u: the number of rows in users, 2 million\nW: the rough number of row operations for a hash join: insert each user once, then probe once per order\n≈: approximately equal to\nIn words: a cross join creates 100 trillion pairs, while a hash join touches each row about once, roughly 52 million operations.\n```",
+    "workedExample": "1. Large unsorted equality-join inputs favor considering a hash join when its build side fits memory.\n2. Build a hash table over projected users columns, then scan orders and probe it.\n3. Nested-loop index probes may be cached, so tree height is not an actual disk-read count. Hash joins may spill when memory estimates are wrong.\n4. Actual row width, statistics, caching and parallelism determine the chosen plan; inspect EXPLAIN rather than treating row count as a guarantee.\n5. A cross join of these tables would produce 100 trillion order-user pairs, which is why planners never pick it for an equality join. A hash join touches each row roughly once: about 2 million inserts into the hash table and 50 million probes.",
     "link": {
       "title": "PostgreSQL: Joins Between Tables",
       "url": "https://www.postgresql.org/docs/current/tutorial-join.html"

@@ -7,7 +7,7 @@
     "options": [
       {
         "text": "A key's bucket depends on table size, so some keys may need a different bucket",
-        "explanation": "Correct. A key with hash 13 sits at 13 mod 8 = 5, but lookups in the new table will look at 13 mod 16 = 13. Each key must be re-placed according to the new size."
+        "explanation": "Correct. A key with hash 13 sits in bucket 5 of an 8-bucket table (13 leaves remainder 5 when divided by 8), but lookups in the 16-bucket table will look in bucket 13. Each key must be re-placed according to the new size."
       },
       {
         "text": "Copying arrays is slower than re-inserting",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. The bucket comes from the hash and the table size:\n\n```formula\nb = H mod m\nb = 13 mod 8 = 5\nb = 13 mod 16 = 13\nwhere\nb: the bucket index\nH: the key's hash, 13 (unchanged by the resize)\nm: the number of buckets, 8 before and 16 after\nmod: \"modulo\", the remainder after division\nIn words: the same hash gives bucket 5 in the old table but bucket 13 in the new one.\n```\n\n2. If you simply copied, the key would stay at index 5, but `get` would compute 13 and miss it.\n3. So every key is rehashed (re-placed) into the new array: O(n) copying and visiting work for n keys, with expected linear placement under suitable collision assumptions. Storing each entry's full hash avoids recomputing it, but not the re-placement.",
+    "workedExample": "1. The bucket is the key's hash reduced by the table size: the remainder after dividing by the number of buckets (or, for a power-of-two size, the hash's low bits).\n2. Hash 13 gives bucket 5 in an 8-bucket table but bucket 13 in a 16-bucket table. The hash itself did not change; the divisor did.\n3. If you simply copied the old array into the first half of the new one, the key would stay at index 5, but `get` would compute 13 and miss it.\n4. So every key is rehashed (re-placed) into the new array: O(n) visiting and copying work for n keys, with expected linear placement under suitable collision assumptions. Storing each entry's full hash avoids recomputing it, but not the re-placement.",
     "link": {
       "title": "Hash table: dynamic resizing — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hash_table#Dynamic_resizing"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "Count n positive insertions from an empty table that starts with one slot and doubles when full. The copied capacities form a geometric series:\n\n```formula\nC < 2n\nT = C + n < 3n\nwhere\nC: total key-copy operations across all resizes\nn: positive number of inserted keys\nT: total copying plus one unit per initial placement\n<: strictly less than\nIn words: The whole sequence uses fewer than three units per insert on average, even though an individual resize visits every live key.\n```\n\nFor one thousand inserts, copying one, two and successive doubled capacities through five hundred and twelve totals one thousand and twenty-three copies. Collision work and key operations remain separate costs; pre-sizing or incremental migration does not alone guarantee real-time deadlines.",
+    "workedExample": "1. Amortised analysis looks at the total cost of a whole *sequence* of operations, then divides by the number of operations. No probability is involved.\n2. Start from one slot and double when full. The resizes copy 1, 2, 4, 8, … keys. Each copy is bigger than all earlier ones combined, so the total stays below twice the number of inserts.\n3. Add one unit per insert for placing the new key and the whole sequence costs fewer than three units per insert, even though one particular insert (the one that triggers the last resize) visits every live key.\n4. For example, 1,000 inserts trigger copies of 1, 2, 4, …, 512 keys: 1,023 copies in all.\n5. Collision work and key operations remain separate costs, and a single resize can still cause a noticeable pause; amortised O(1) is not a real-time guarantee.",
     "link": {
       "title": "Amortized analysis — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Amortized_analysis"
@@ -63,27 +63,27 @@
     "id": "hash-resizing-q4",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A table starts with capacity 1 and doubles whenever it is full. Roughly how many key copies (moves during resizes) happen while inserting 1,000,000 keys?",
+    "prompt": "A table starts with capacity 1 and doubles whenever it is full. You instrument it while inserting 1,000,000 keys and log every key moved during a resize. What will the log show?",
     "options": [
       {
-        "text": "About 1 million",
-        "explanation": "Correct. Resizes happen at sizes 1, 2, 4, …, 524,288. Their sum is 2²⁰ − 1 = 1,048,575 copies, about one per insert."
+        "text": "About as many moves as inserts in total, with the last few resizes accounting for most of them",
+        "explanation": "Correct. Resizes copy 1, 2, 4, …, 524,288 keys: 1,048,575 moves in all, about one per insert. The final resize alone moves about half of them."
       },
       {
-        "text": "About 20",
-        "explanation": "20 is the number of resizes (log₂ of a million), not the number of keys copied. Each resize copies every key present."
+        "text": "About 20 moves, one per resize",
+        "explanation": "About 20 is the number of resizes (the number of doublings from 1 to a million). Each resize moves every key present, not just one."
       },
       {
-        "text": "About 20 million",
-        "explanation": "This assumes every resize copies all 1,000,000 keys: 1,000,000 × 20 resizes. Early resizes copy very few keys, so the sum is a geometric series."
+        "text": "About 20 million moves, because every resize moves all million keys",
+        "explanation": "Early resizes happen when the table is tiny and move very few keys. The sizes form a doubling series, so the total stays close to the final size."
       },
       {
-        "text": "About 500 billion",
-        "explanation": "That is about 1,000,000² / 2, the cost of growing by one slot each time. Doubling avoids this."
+        "text": "About 500 billion moves, because each insert eventually moves every earlier key",
+        "explanation": "That quadratic total is what happens if the table grows by one slot at a time. Doubling avoids it."
       }
     ],
     "answer": 0,
-    "workedExample": "1. A resize happens when size equals capacity, copying `size` keys.\n2. Capacities: 1, 2, 4, …, 2¹⁹ = 524,288 (the next, 2²⁰ = 1,048,576, is enough for 10⁶ keys).\n3. Copies:\n\n```formula\nC = 1 + 2 + 4 + … + 2^19\nC = 2^20 − 1\nC = 1,048,575\nwhere\nC: the total keys copied by all resizes\n…: \"and so on\", each term double the last\n^: \"to the power of\"; 2^20 = 1,048,576\nIn words: a doubling series adds up to one less than the next power of two, about one copy per insert.\n```\n\n4. Plus 1,000,000 placements, about 2 million units of work for a million inserts: amortised about 2 per insert.",
+    "workedExample": "1. A resize happens when the table is full, and it moves every key present.\n2. The capacities at which resizes happen are 1, 2, 4, …, 524,288; after that the capacity of 1,048,576 is enough for a million keys.\n3. A doubling series adds up to just under twice its last term: 524,288 × 2 − 1 = 1,048,575 moves. That is about one move per insert, and the last resize alone is half the total.\n4. Adding the million initial placements gives about 2 units of work per insert: amortised O(1). The cost is concentrated in a few big pauses, which is the subject of the incremental-rehashing lesson.",
     "link": {
       "title": "Dynamic array — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Dynamic_array"

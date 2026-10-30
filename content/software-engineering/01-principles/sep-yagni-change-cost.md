@@ -7,14 +7,13 @@ summary: YAGNI defers speculative capabilities rather than tests and refactoring
 sourceLesson: sep-dry-kiss-yagni
 ---
 
-DRY protects shared knowledge; KISS asks for simplicity; YAGNI challenges speculative features. Here the useful test is the cost of understanding and changing the design.
+Building a feature before anyone needs it feels like saving time later. This lesson weighs what that actually costs, which decisions *do* deserve forethought, and how the design slogans pull against each other.
 
 ## YAGNI: build what you need now
 
-Popularised in Extreme Programming: **don't build a capability until you actually need it**.
+YAGNI ("you aren't gonna need it") comes from Extreme Programming. Fowler traces it to Kent Beck replying to Chet Hendrickson's list of capabilities a system would soon need. The rule: **don't build a capability until you actually need it**.
 
 ```python
-# The loop writes only the required format.
 # Requirement: export orders as CSV.
 
 # YAGNI violation
@@ -36,6 +35,13 @@ Martin Fowler breaks down what a presumptive feature costs. Even when the guess 
 - **Cost of delay**: the features you didn't ship because you were building this one.
 - **Cost of carry**: every reader, test and change must work around the extra code.
 - **Cost of repair**: even a feature that is needed was often built the wrong way, because you only learn what it should do later; reworking it is technical debt. A feature that is never needed must also be ripped out.
+
+> [!analogy] Real-world analogy: building the nursery early
+> A couple build a nursery extension "because we'll probably have children". Even if they do, they paid the builders years early, put off a holiday to afford it, and heated and cleaned an empty room in the meantime. If their plans change and they need a home office instead, the room has to be rebuilt.
+>
+> **How it maps:** Paying the builders is the cost of build; the postponed holiday is the cost of delay; heating and cleaning the unused room is the cost of carry; rebuilding it is the cost of repair.
+>
+> **Where it stops:** Some things are far cheaper to plan up front, such as foundations strong enough for a second storey. In software these are the costly-to-change decisions in the table below: public APIs, shared formats and security models.
 
 ### What YAGNI does not mean
 
@@ -64,5 +70,5 @@ They regularly pull against each other:
 - Public contracts and shared formats deserve forethought because later change requires coordination.
 
 ## Further reading
-- [Yagni](https://martinfowler.com/bliki/Yagni.html)
-- [BeckDesignRules](https://martinfowler.com/bliki/BeckDesignRules.html)
+- [Martin Fowler: Yagni](https://martinfowler.com/bliki/Yagni.html)
+- [Martin Fowler: Beck Design Rules](https://martinfowler.com/bliki/BeckDesignRules.html)

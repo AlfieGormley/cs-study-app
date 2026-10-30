@@ -21,6 +21,8 @@ A program that works but is hard to read is like a house with no labels on the f
 
 Clean code is a property of the reader's experience, so the test is simple: can a competent colleague who has never seen this code understand it quickly and change it safely?
 
+The naming advice below collects widely used conventions from style guides such as PEP 8 and books such as Robert C. Martin's *Clean Code*. Treat them as heuristics: an established team convention usually beats a rule applied in isolation.
+
 ## Naming
 
 A name is the smallest unit of documentation. It is read every time the code is read, and it never goes out of date as quietly as a comment does.
@@ -79,21 +81,19 @@ A loop index used for two lines can be `i`. A module-level constant used across 
 A bare literal forces readers to guess its meaning and makes changes error-prone.
 
 ```python
-# Keep the threshold and delay unchanged.
-# The duration converts days to seconds.
-# Before
+# Before: what do 5 and 86400 mean?
 if attempts > 5:
-    lock(account)
-time.sleep(86400)
+    lock(account, 86400)
 
-# After
+# After: names carry meaning and units
 MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT = timedelta(days=1)
 
 if attempts > MAX_LOGIN_ATTEMPTS:
-    lock(account)
-time.sleep(LOCKOUT.total_seconds())
+    lock(account, LOCKOUT)
 ```
+
+`lock` stands for whatever records the lockout. The rule is unchanged: the threshold is still 5 and the lockout still lasts one day (86,400 seconds), but the reader no longer has to work that out. In the "after" version `lock` receives a `timedelta` rather than a bare number of seconds, so the unit travels with the value.
 
 Not every literal is magic: `0`, `1`, and `len(x) - 1` are usually clear in context.
 
@@ -103,6 +103,6 @@ Not every literal is magic: `0`, `1`, and `len(x) - 1` are usually clear in cont
 - Give wider-scope identifiers enough context and replace unexplained literals.
 
 ## Further reading
-- [peps.python.org](https://peps.python.org/pep-0008/)
-- [science.nasa.gov](https://science.nasa.gov/mission/mars-climate-orbiter/)
-- [DesignStaminaHypothesis](https://martinfowler.com/bliki/DesignStaminaHypothesis.html)
+- [PEP 8: Style Guide for Python Code](https://peps.python.org/pep-0008/)
+- [NASA: Mars Climate Orbiter mission page](https://science.nasa.gov/mission/mars-climate-orbiter/)
+- [Martin Fowler: Design Stamina Hypothesis](https://martinfowler.com/bliki/DesignStaminaHypothesis.html)

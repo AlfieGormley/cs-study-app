@@ -11,7 +11,7 @@
       },
       {
         "text": "Add random TTL jitter to each key (for example 3600 + random(0–360) seconds)",
-        "explanation": "Correct. Jitter spreads expiry/reload opportunities rather than guaranteeing the resulting rate is small enough. Compare the remaining peak miss rate with origin capacity."
+        "explanation": "Correct. TTL jitter spreads expiry/reload opportunities rather than guaranteeing the resulting rate is small enough. Compare the remaining peak miss rate with origin capacity."
       },
       {
         "text": "Switch the eviction policy to LFU",
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. All 2M keys were set within minutes of 06:00 with the same TTL → all expire at ~07:00. That's an avalanche.\n2. With TTL jitter of up to 10%: expiries spread uniformly over 07:00–07:06 (360 s).\n3. Rate of expiries:\n\n```formula\nE = K / W\nE = 2,000,000 / 360 s ≈ 5,600 /s\nwhere\nE: expiries per second (/s)\nK: keys warmed together, 2 million\nW: the jitter window, 10% of 3,600 s = 360 s\ns: seconds\n≈: approximately equal to\nIn words: spreading 2 million expiries over 6 minutes gives about 5,600 a second instead of all at once.\n```\n\n   Only keys actually requested get reloaded, so the database sees roughly this rate at most (plus any duplicate rebuilds of the same key).\n4. One line of code: `ttl = 3600 + random.randint(0, 360)`.",
+    "workedExample": "1. All 2 million keys were set within minutes of 06:00 with the same TTL, so they all expire at about 07:00: an avalanche of misses.\n2. With up to 10% TTL jitter, expiries spread across roughly 07:00 to 07:06 instead of one instant: thousands a second rather than two million at once.\n3. Only keys that are actually requested get reloaded, so the database sees at most that spread-out rate (plus any duplicate rebuilds of the same key).\n4. One line of code: `ttl = 3600 + random.randint(0, 360)`.\n5. Then check the remaining peak reload rate against database capacity: TTL jitter spreads the work, it does not remove it.",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. The database sees the miss ratio times the total load:\n\n```formula\nR_db = (1 − h) × R\nR_db = (1 − 0.97) × 100,000 = 3,000\nR_db = (1 − 0.60) × 100,000 = 40,000\nwhere\nR_db: database reads per second\nh: hit ratio: 0.97 normally, 0.60 with only the local caches\nR: total reads per second, 100,000\nIn words: losing Redis takes the miss ratio from 3% to 40%, so database load jumps from 3,000 to 40,000 reads a second.\n```\n\n2. Normally 3,000/s is within the 6,000/s capacity. With Redis down, only the local caches remain.\n3. Overload: 40,000 / 6,000 ≈ 6.7×.\n4. So the local cache helps a lot (it turns 100k into 40k), but not enough.\n5. Next steps: a circuit breaker on the database path, serving degraded or default responses for non-critical reads, rate-limiting rebuilds per key, and restoring Redis (replicas across zones make this outage less likely in the first place).",
+    "workedExample": "1. The database sees the miss ratio times the total load.\n2. Normally the miss ratio is 3%, so about 3,000 of 100,000 reads a second reach the database: within its 6,000/s capacity.\n3. With Redis unreachable, only the in-process caches remain, answering about 60%. The other 40%, about 40,000 reads a second, fall to the database: several times what it can sustain.\n4. So the local cache helps a lot (it turns 100,000 into 40,000), but not enough.\n5. Next steps: a circuit breaker on the database path, serving degraded or default responses for non-critical reads, rate limits on rebuilds per key, and restoring Redis (replicas across zones make this outage less likely in the first place).",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"

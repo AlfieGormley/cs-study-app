@@ -23,7 +23,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Redis Cluster picks the slot like this:\n\n```formula\nslot = CRC16(key) mod 16384\nwhere\nslot: the hash slot, 0 to 16,383\nCRC16: a 16-bit checksum function that turns the key into a number from 0 to 65,535\nkey: the key, or only the {} part if it has a hash tag\nmod: modulo, the remainder after division\n16384: the fixed slot count, 2 to the power 14\nIn words: checksum the key and keep the remainder after dividing by 16,384.\n```\n\n   `user:42:profile` and `user:42:cart` are different strings, so (almost certainly) different slots, possibly on different nodes.\n2. Multi-key commands must run on one node atomically, so Redis rejects them: `CROSSSLOT`.\n3. With hash tags, `{user:42}:profile` → hashes `user:42`; `{user:42}:cart` → hashes `user:42`. Same slot.\n4. Caveat: don't over-tag. All of user 42's keys on one node is fine; all users under `{users}` would put everything on one node.",
+    "workedExample": "1. Redis Cluster puts each key in one of 16,384 slots by taking a CRC16 checksum of the key and keeping the remainder after dividing by 16,384. If the key contains `{...}`, only the text inside the braces is checksummed.\n2. `user:42:profile` and `user:42:cart` are different strings, so they almost certainly land in different slots, possibly on different nodes.\n3. Multi-key commands must run on one node atomically, so Redis rejects them: `CROSSSLOT`.\n4. With hash tags, `{user:42}:profile` and `{user:42}:cart` both checksum `user:42`, so they share a slot and `MGET` works.\n5. Caveat: don't over-tag. All of user 42's keys on one node is fine; all users under `{users}` would put everything on one node.",
     "link": {
       "title": "Redis Cluster specification",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"
@@ -83,7 +83,7 @@
       }
     ],
     "answer": 1,
-    "workedExample": "1. Slot for any Acme key:\n\n```formula\nslot = CRC16(\"tenant:acme\") mod 16384\nwhere\nslot: the hash slot, 0 to 16,383\nCRC16: a 16-bit checksum of the text inside {}\nmod: modulo, the remainder after division\n16384: the fixed number of slots\nIn words: every Acme key hashes the same text, so every Acme key gets the same slot.\n```\n\n   One number, so **one slot**, so **one primary**.\n2. With 10 primaries, a fair share is 10% of traffic. That node gets 40% plus its share of everyone else.\n3. Scaling out doesn't help: a slot can't be split across nodes.\n4. Fixes: tag at a finer grain (`{acme:user:42}`) so only keys that really need co-location share a slot; use replicas for Acme's reads; or give very large tenants their own cluster.",
+    "workedExample": "1. Every Acme key has the same hash tag, `tenant:acme`, and only that text is checksummed. Same text, same slot, so every Acme key lands in **one slot** on **one primary**.\n2. With 10 primaries, a fair share is 10% of traffic. That node gets Acme's 40% plus its share of everyone else.\n3. Scaling out doesn't help: a slot cannot be split across nodes.\n4. Fixes: tag at a finer grain (`{acme:user:42}`) so only keys that really need co-location share a slot; use replicas for Acme's reads; or give very large tenants their own cluster.",
     "link": {
       "title": "Redis Cluster specification",
       "url": "https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/"

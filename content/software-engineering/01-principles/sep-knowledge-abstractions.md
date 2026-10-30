@@ -7,7 +7,7 @@ summary: DRY targets knowledge that must change together, rather than identical 
 sourceLesson: sep-dry-kiss-yagni
 ---
 
-Three short slogans shape a huge amount of everyday design argument. Each is useful. Each is also routinely misquoted, and the misquoted versions cause as much damage as the problems they were meant to prevent.
+Three short slogans shape a huge amount of everyday design argument. Each is useful. Each is also routinely misquoted, and the misquoted versions can do real damage of their own. This lesson starts with DRY.
 
 | Slogan | Expands to | Warns against |
 |---|---|---|
@@ -26,7 +26,6 @@ Note the word **knowledge**. DRY is not "never have two similar-looking lines of
 ### Real duplication
 
 ```python
-# Two copies already disagree on policy.
 # signup.py
 if len(password) < 12:
     raise WeakPassword()
@@ -39,8 +38,7 @@ if len(password) < 10:
 There is one business rule ("minimum password length") with two representations, and they have already drifted apart. That is exactly what DRY targets:
 
 ```python
-# Both entry points can call one rule.
-# passwords.py
+# passwords.py: one home for the rule
 MIN_LENGTH = 12
 
 def check(password):
@@ -53,7 +51,6 @@ DRY applies well beyond code: a database schema and an ORM model, an API and its
 ### Accidental duplication
 
 ```python
-# Same arithmetic; different policy owners.
 def vat(price):
     return round(price * 0.2, 2)
 
@@ -76,7 +73,6 @@ Sandi Metz's widely cited post puts it bluntly: **duplication is far cheaper tha
 4. Nobody dares to touch it, because every caller depends on a different path.
 
 ```python
-# Flags select diverging caller policies.
 def export(rows, fmt, legacy=False,
            skip_header=False, eu=False,
            for_finance=False):
@@ -87,7 +83,7 @@ The fix she recommends is counter-intuitive: **inline the abstraction back into 
 
 ### The rule of three
 
-A practical heuristic from refactoring practice: the first time, just write it. The second time, wince but duplicate. The **third** time, refactor. By then you have three examples, which is usually enough to see what is truly common and what varies.
+A heuristic attributed to Don Roberts and popularised by Martin Fowler's *Refactoring*: the first time, just write it. The second time, wince but duplicate. The **third** time, refactor. By then you have three examples, which is usually enough to see what is truly common and what varies.
 
 ## Key takeaways
 - DRY targets knowledge that must change together, rather than identical text.
@@ -96,4 +92,5 @@ A practical heuristic from refactoring practice: the first time, just write it. 
 
 ## Further reading
 - [Hunt and Thomas: DRY](https://media.pragprog.com/titles/tpp20/dry.pdf)
-- [the wrong abstraction](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)
+- [Sandi Metz: The Wrong Abstraction](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction)
+- [Rule of three (computer programming)](https://en.wikipedia.org/wiki/Rule_of_three_(computer_programming))

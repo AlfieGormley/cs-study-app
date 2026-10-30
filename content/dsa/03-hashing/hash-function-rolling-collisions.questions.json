@@ -3,27 +3,27 @@
     "id": "hash-functions-q6",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A deduplication job identifies 1,000,000 documents by a 32-bit hash alone (no content comparison). About how many pairs of *different* documents would you expect to share a hash? Assume distinct documents with independent uniformly distributed hashes.",
+    "prompt": "A deduplication job treats two documents as identical whenever their 32-bit hashes match, with no content comparison. A colleague argues: \"There are only a million documents and over four billion possible hashes, so false merges can't happen.\" Assuming distinct documents with independent, uniformly distributed hashes, what should you expect?",
     "options": [
       {
-        "text": "About 116",
-        "explanation": "Correct. 1,000,000 × 999,999 / 2 pairs, each colliding with probability 1 in 2³², gives about 116 colliding pairs. The number of discarded documents is close to this when collisions are rare, but not identical when three or more share a hash."
+        "text": "Around a hundred pairs of different documents wrongly merged, because collisions grow with the number of pairs",
+        "explanation": "Correct. A million documents form about 500 billion pairs, and each pair matches with probability 1 in 2³² (about 4.3 billion): roughly 116 colliding pairs expected."
       },
       {
-        "text": "Essentially none: 1 million is tiny compared with 4.3 billion",
-        "explanation": "This is the birthday paradox trap. Collisions grow with the number of *pairs*, about 1,000,000² / 2 = 5 × 10¹¹, not with the number of documents."
+        "text": "Essentially none: a million is tiny compared with four billion",
+        "explanation": "This is the birthday-paradox trap. The comparison that matters is pairs (about a million squared over two) against the hash space, not documents against the hash space."
       },
       {
-        "text": "About 0.0002 (1,000,000 / 2³²)",
-        "explanation": "1,000,000 / 2³² approximates the chance that one fixed hash value is hit by at least one of the documents, when that ratio is small; it is not the number of colliding pairs."
+        "text": "About half the documents merged",
+        "explanation": "That would need a hash space comparable to the number of documents. With 2³² possible values the expected number of colliding pairs is in the low hundreds."
       },
       {
-        "text": "About 500,000",
-        "explanation": "That would require the hash space to be roughly as small as the number of documents. With 2³² possible hashes, the expected count is in the low hundreds."
+        "text": "It cannot be estimated without knowing the documents' contents",
+        "explanation": "Under the stated uniform-hash assumption the contents do not matter; only the number of documents and the hash width do. Real hashes on patterned data can do worse, which is a reason to compare contents anyway."
       }
     ],
     "answer": 0,
-    "workedExample": "1. Count the pairs, then multiply by the chance that one pair collides:\n\n```formula\nE = n(n − 1) / 2 × 1 / M\nE ≈ (10^6)^2 / 2 / 2^32\nE ≈ (5 × 10^11) / (4.29 × 10^9)\nE ≈ 116\nwhere\nE: the expected number of colliding pairs\nn: the number of documents, 1,000,000\nM: the number of possible hash values; 2^32 ≈ 4.29 × 10^9 for a 32-bit hash\n^: \"to the power of\"\n≈: approximately equal to\nIn words: a million documents form about 500 billion pairs, and each pair shares a 32-bit hash with probability 1 in 4.3 billion, so about 116 pairs collide.\n```\n\n2. So roughly 116 pairs of different documents look identical.\n3. Fixes: use a 64-bit or 128-bit hash (with 64 bits the expected number drops to about 3 × 10⁻⁸), or treat a hash match as a candidate and confirm with a full comparison.",
+    "workedExample": "1. Count pairs, not documents: n documents form about n²/2 pairs. For a million that is about 5 × 10¹¹ pairs.\n2. Each pair shares a 32-bit hash with probability 1 in 2³², about 1 in 4.3 billion.\n3. Expected colliding pairs ≈ 5 × 10¹¹ ÷ 4.3 × 10⁹ ≈ 116: some false merges are almost certain.\n4. Fixes: use a 64-bit or 128-bit hash (with 64 bits the expectation drops to about 3 × 10⁻⁸ pairs), or treat a hash match as a candidate and confirm with a full content comparison.",
     "link": {
       "title": "String hashing — cp-algorithms",
       "url": "https://cp-algorithms.com/string/string-hashing.html"
@@ -33,7 +33,7 @@
     "id": "hash-functions-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "A rolling polynomial hash over windows of 3 characters uses no modulus, for simplicity:\n\n```formula\nh = c_0 × 31^2 + c_1 × 31 + c_2\nwhere\nh: the hash of the 3-character window\nc_0: the code of the window's first character\nc_1: the code of its second character\nc_2: the code of its third character\n^: \"to the power of\"; 31^2 = 961\nIn words: the first character is weighted by 961, the second by 31 and the third by 1.\n```\n\nThe hash of abc is 96,354. Which expression gives `h(\"bcd\")` from it in O(1)? (the outgoing a has code ninety-seven; incoming d has code one hundred)",
+    "prompt": "A rolling polynomial hash over windows of 3 characters uses base 31 and, for simplicity, no modulus: the first character is weighted by 31² = 961, the second by 31 and the third by 1. The hash of `abc` is 96,354. Which expression gives `h(\"bcd\")` from it in O(1)? (`a` has code 97; `d` has code 100.)",
     "options": [
       {
         "text": "`96354 - 97 + 100`",
@@ -45,15 +45,15 @@
       },
       {
         "text": "`(96354 - 97*31**2) * 31 + 100`",
-        "explanation": "Correct. Remove the outgoing character's contribution (97 × 961), shift every remaining character up one power by multiplying by 31, then add the new character with weight 1. Result: 97,347."
+        "explanation": "Correct. Remove the outgoing character's contribution (97 × 961), shift every remaining character up one power by multiplying by 31, then add the new character with weight 1. Result: 97,347, the same as hashing `bcd` from scratch."
       },
       {
         "text": "`(96354 - 97) // 31 + 100 * 31**2`",
-        "explanation": "This rolls the wrong way: the new character goes at the end with the lowest weight, not the highest."
+        "explanation": "This rolls the wrong way: it gives the arriving character the heaviest weight (31²), but a character entering on the right takes the lowest weight, 1. It also subtracts only 97 instead of a's weighted contribution (97 × 961)."
       }
     ],
     "answer": 2,
-    "workedExample": "1. Write out both windows:\n\n```formula\nh(\"abc\") = a × 31^2 + b × 31 + c\nh(\"bcd\") = b × 31^2 + c × 31 + d\nwhere\nh: the window hash\na: the code of a, 97\nb: the code of b, 98\nc: the code of c, 99\nd: the code of d, 100\n^: \"to the power of\"; 31^2 = 961\nIn words: sliding one place drops a's term and moves b and c up one power.\n```\n\n2. Remove `a`, shift, then add `d`:\n\n```formula\nH_1 = 96354 − 97 × 961 = 3137\nH_2 = H_1 × 31 = 97247\nH_3 = H_2 + 100 = 97347\nwhere\nH_1: the hash with a's contribution removed (b × 31 + c)\nH_2: after multiplying by 31, so b × 31² + c × 31\nH_3: after adding d's code with weight 1, the hash of \"bcd\"\nIn words: subtract the leaving character times 961, multiply by 31, add the arriving character: 97,347.\n```\n\n3. Check directly: 98 × 961 + 99 × 31 + 100 = 94,178 + 3,069 + 100 = 97,347. ✓\n\nEach slide costs O(1), which is how Rabin–Karp compares a pattern with every window of a text of length n in O(n) expected time.",
+    "workedExample": "1. Compare the two windows' weights:\n\n```\nabc: a×961 + b×31 + c×1\nbcd: b×961 + c×31 + d×1\n```\n\n2. Sliding drops `a`'s term and moves `b` and `c` up one power. So: subtract `a`'s term (97 × 961), multiply what is left by 31, then add `d`'s code with weight 1.\n3. That is `(96354 - 97*31**2) * 31 + 100`, which gives 97,347; hashing `bcd` directly gives the same value.\n4. The other options either forget the outgoing weight (subtracting just 97), shift before removing (so `a`'s term grows instead of disappearing), or put the new character in the heaviest position.\n\nEach slide costs O(1), which is how Rabin–Karp compares a pattern with every window of a text of length n in O(n) expected time.",
     "link": {
       "title": "Rolling hash — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Rolling_hash"

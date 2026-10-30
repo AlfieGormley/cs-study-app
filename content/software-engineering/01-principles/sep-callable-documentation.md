@@ -11,7 +11,7 @@ Callers and maintainers need a reliable contract. State what they may rely on an
 
 ## Docstrings and type hints
 
-A **docstring** documents a module, class or function for its *callers*. [PEP 257](https://peps.python.org/pep-0257/) sets the basics: a one-line summary in the imperative mood ("Return...", not "Returns..."), then a blank line, then detail.
+A **docstring** documents a module, class or function for its *callers*. [PEP 257](https://peps.python.org/pep-0257/) sets the basics: a one-line summary in the imperative mood ("Return...", not "Returns..."), then a blank line, then detail. Conventions differ here: Google's Python style guide accepts either the imperative or the descriptive mood, as long as a file is consistent.
 
 The following is a documentation sketch, not an implemented retry helper:
 
@@ -39,18 +39,7 @@ def retry(fn, *, attempts=3,
     """
 ```
 
-The delay rule in that docstring is **exponential backoff**: each wait is twice the one before, so a struggling service gets more and more breathing room. Written as maths rather than Python:
-
-```formula
-t_n = b 2^n
-where
-t_n: the wait after failed attempt number n, in seconds (s)
-b: the base delay (the backoff argument), in seconds; 0.5 s by default here
-n: which failure this is, counting from 0 for the first failed attempt
-2^n: 2 raised to the power n, that is n twos multiplied together (2^0 = 1, 2^1 = 2, 2^2 = 4)
-s: seconds
-In words: the first wait is the base delay, and every later wait doubles it.
-```
+The delay rule in that docstring is **exponential backoff**: the first wait is the base delay, and each later wait is twice the one before, so a struggling service gets more and more breathing room.
 
 With the defaults (`attempts=3`, `backoff=0.5`), the waits are 0.5 s after the first failure and 1 s after the second. The third attempt is the last, so if it also fails there is no wait: the exception is raised. Real retry helpers usually also cap the delay and add random jitter, which this sketch leaves out.
 
@@ -74,6 +63,6 @@ The signature alone says the result may be absent, and a suitably configured che
 - Python type hints support configured analysis and do not validate values at runtime.
 
 ## Further reading
-- [peps.python.org](https://peps.python.org/pep-0257/)
-- [pyguide](https://google.github.io/styleguide/pyguide.html)
-- [typing](https://docs.python.org/3/library/typing.html)
+- [PEP 257: Docstring Conventions](https://peps.python.org/pep-0257/)
+- [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html)
+- [Python docs: typing](https://docs.python.org/3/library/typing.html)

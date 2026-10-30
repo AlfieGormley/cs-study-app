@@ -3,7 +3,7 @@
     "id": "cache-failure-modes-q2",
     "level": "advanced",
     "type": "single",
-    "prompt": "With probabilistic early expiration (XFetch), a request refreshes early if:\n\n```formula\nt + δ × β × (−ln(U)) ≥ t_exp\nwhere\nt: the current time, in seconds (s)\nδ: delta, how long a rebuild takes, in s\nβ: beta, a tuning knob (default 1)\nln: the natural logarithm (base e ≈ 2.718)\nU: a fresh random number above 0 and at most 1\nt_exp: when the value expires, in s\n≥: is greater than or equal to\ns: seconds\nIn words: each request adds a random head start to the clock and refreshes if that pushes it past expiry.\n```\n Why does this reduce stampede risk on hot keys **without** routinely wasting work on cold ones?",
+    "prompt": "With probabilistic early expiration (XFetch), each request adds a random head start to the current time (on average, the value's rebuild time multiplied by a tuning factor beta) and refreshes the value if that pretend time is already past expiry. Why does this reduce stampede risk on hot keys **without** routinely wasting work on cold ones?",
     "options": [
       {
         "text": "Each request has a small, rising chance of refreshing as expiry nears; a hot key gets so many requests that one refreshes just before expiry, while a cold key is rarely requested in that window so rarely refreshes early",
@@ -14,7 +14,7 @@
         "explanation": "XFetch needs no lock or coordination; each request decides independently."
       },
       {
-        "text": "It refreshes all keys at exactly δ (delta) seconds before expiry",
+        "text": "It refreshes every key at exactly one rebuild time before expiry",
         "explanation": "A fixed early time would make all requests in that instant refresh together, just shifting the stampede earlier. The randomness spreads it out."
       },
       {
@@ -23,7 +23,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. −ln(U) is exponentially distributed with mean 1, so the \"early\" offset averages δ × β (delta times beta).\n2. Let δ = 0.5 s and β = 1. A request 2 s before expiry refreshes only if its offset is at least 2 s:\n\n```formula\nP = e^(−Δ / (δ × β))\nP = e^(−2 s / (0.5 s × 1))\nP = e^(−4)\nP ≈ 0.018\nwhere\nP: chance this one request refreshes early\ne: Euler's number, about 2.718\nΔ: time left before expiry, 2 seconds (s)\nδ: delta, the rebuild time, 0.5 s\nβ: beta, the tuning knob, 1\n≈: approximately equal to\ns: seconds\nIn words: 2 s before expiry each request has about a 1.8% chance of refreshing; closer to expiry the chance rises.\n```\n3. Hot key at 1,000 req/s: in the last 2 s there are 2,000 rolls, so one almost surely succeeds; a refresh is likely to start before expiry, but it must also finish successfully; overlapping decisions may launch multiple refreshes.\n4. Cold key at 1 request/minute: probably zero requests in that 2 s window, so no wasted early refresh.\n5. Tune β (beta) above 1 to refresh earlier if rebuild times vary.",
+    "workedExample": "1. The random head start is usually small and occasionally large, so far from expiry almost no request refreshes, and close to expiry most would.\n2. Example: with a 0.5 s rebuild and beta 1, a request 2 s before expiry has under a 2% chance of refreshing; one 0.1 s before has over 80%.\n3. Hot key at 1,000 requests a second: the last 2 s before expiry bring about 2,000 chances, so one almost surely starts a refresh before expiry. It still has to finish successfully, and overlapping decisions may launch more than one refresh.\n4. Cold key at 1 request a minute: probably no request lands in that final window, so no wasted early refresh.\n5. Raise beta above 1 to refresh earlier if rebuild times vary.",
     "link": {
       "title": "Optimal Probabilistic Cache Stampede Prevention (VLDB 2015)",
       "url": "https://cseweb.ucsd.edu/~avattani/papers/cache_stampede.pdf"

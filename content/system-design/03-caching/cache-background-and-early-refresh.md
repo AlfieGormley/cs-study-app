@@ -17,7 +17,7 @@ Store the value with a **soft expiry** inside it and a longer **hard TTL** on th
 
 Instead of everyone noticing expiry at the same instant, each request independently decides to refresh **a little early**, with a probability that rises as expiry approaches. From Vattani, Chierichetti and Lowenstein (VLDB 2015), each request refreshes when:
 
-```formula
+```formula reference
 t + δ × β × (−ln(U)) ≥ t_exp
 where
 t: the current time, in seconds (s)
@@ -28,27 +28,12 @@ U: a random number drawn uniformly above 0 and at most 1, fresh for every reques
 t_exp: the time at which the cached value expires, in seconds
 ≥: is greater than or equal to
 s: seconds
-In words: each request pretends the clock is a random amount later than it really is, and refreshes if that pretend time is past expiry. The random amount averages δ × β, so slow-to-rebuild values refresh earlier.
+In words: each request pretends the clock is a random amount later than it really is, and refreshes if that pretend time is past expiry. The random amount averages the rebuild time multiplied by a tuning factor (beta, normally 1), so slow-to-rebuild values refresh earlier.
 ```
 
-Because −ln(U) follows an exponential distribution with mean 1, the chance that a single request refreshes early, with some time Δ still left before expiry, works out as:
+The chance that any one request refreshes early is tiny far from expiry and climbs towards certainty as expiry nears. For example, with a 0.5 s rebuild and the default beta, a request arriving 2 s before expiry has under a 2% chance of triggering a refresh; one arriving 0.1 s before has over an 80% chance.
 
-```formula
-P = e^(−Δ / (δ × β))
-P = e^(−2 s / (0.5 s × 1))
-P = e^(−4) ≈ 0.018
-where
-P: the probability that one request triggers an early refresh
-e: Euler's number, about 2.718, the base of the natural logarithm
-Δ: the time left before expiry, in seconds (s), here 2 s
-δ: the rebuild time, here 0.5 s
-β: the positive tuning knob, here 1
-s: seconds
-≈: approximately equal to
-In words: far from expiry the chance is tiny; it rises towards 1 as the time left shrinks towards zero.
-```
-
-So with a 0.5 s rebuild, each request 2 s before expiry has about a 1.8% chance of refreshing. In code (using 1 − random() so the logarithm never sees zero):
+In code (using 1 − random() so the logarithm never sees zero):
 
 ```python
 import math, random, time

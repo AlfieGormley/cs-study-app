@@ -46,11 +46,18 @@ except FileNotFoundError:
 
 The LBYL version has a **time-of-check to time-of-use** (TOCTOU) race: the file can disappear between `exists` and `open`. For this file-opening case, attempting `open` and handling its actual outcome avoids trusting a stale existence check. This is not a complete defence against malicious path replacement: security-sensitive code may also need directory-relative operations and appropriate symlink handling.
 
+> [!analogy] Real-world analogy: a parking space seen from the corner
+> You spot an empty parking space from the end of the street, drive round the block, and find someone has taken it. Seeing it free did not reserve it.
+>
+> **How it maps:** Spotting the space is the existence check (`os.path.exists`); parking is the use (`open`). In between, another driver (another process) changed the state, so the check was stale. The reliable approach is to try to park and deal with "taken" when it happens: attempt the operation and handle its failure.
+>
+> **Where it stops:** A driver can at least see the other car arrive; a program usually cannot see the change. And an attacker may swap a file on purpose, which needs the further defences mentioned above.
+
 ## Key takeaways
 - Catch only exceptions you understand at a scope where you can respond.
 - A broad try suite can mistake an unrelated lookup failure for the expected one.
 - Checking existence does not reserve a file; attempt the operation and handle its actual outcome.
 
 ## Further reading
-- [errors](https://docs.python.org/3/tutorial/errors.html)
-- [glossary](https://docs.python.org/3/glossary.html#term-EAFP)
+- [Python tutorial: Errors and Exceptions](https://docs.python.org/3/tutorial/errors.html)
+- [Python glossary: EAFP](https://docs.python.org/3/glossary.html#term-EAFP)

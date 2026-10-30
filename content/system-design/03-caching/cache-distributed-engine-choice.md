@@ -7,7 +7,7 @@ summary: Compare Redis, Valkey and Memcached by operations, threading, replicati
 sourceLesson: cache-distributed
 ---
 
-One cache server eventually runs out of memory, network bandwidth or CPU. Capacity depends on instance size, payload, commands and workload. A universal per-node capacity figure is absent because no representative benchmark is established here. If one instance cannot meet measured requirements, a cluster can partition the key space.
+One cache server eventually runs out of memory, network bandwidth or CPU. How much one node can handle depends on instance size, payload, commands and workload, so there is no single per-node figure worth memorising: benchmark your own traffic. If one instance cannot meet the measured requirements, a cluster can partition the key space.
 
 Distributing a cache raises three questions:
 
@@ -33,7 +33,7 @@ Both are in-memory key-value stores whose latency depends on payload, network, c
 **Redis** is a data structure server. Atomic operations like `INCR`, `ZADD` (leaderboards), `LPUSH` (queues), Lua scripts, pub/sub and streams make it useful far beyond caching. Command execution is single-threaded per instance (network I/O can be threaded since Redis 6), so you scale out by running more instances or shards, not by adding cores.
 
 > [!note] Valkey
-> In 2024 Redis moved from the BSD licence to source-available licences, and the Linux Foundation forked Redis 7.2 as **Valkey**, which AWS ElastiCache, Google Cloud Memorystore and others now offer. Redis 8 (2025) added the open-source AGPLv3 as a licence option. The two projects are starting to diverge in features, but shared ancestry does not guarantee identical versioned features, threading, durability or managed-service behaviour. Check the chosen engine and service version.
+> In March 2024 Redis moved new versions from the BSD licence to source-available licences, and a Linux Foundation project forked Redis 7.2 as **Valkey**, which AWS ElastiCache, Google Cloud Memorystore and others offer. Redis 8 (2025) added the open-source AGPLv3 as a licence option. This history is as of late 2026. The two projects are starting to diverge in features, but shared ancestry does not guarantee identical versioned features, threading, durability or managed-service behaviour. Check the chosen engine and service version.
 
 **Rule of thumb:** choose Memcached for a simple, large, multi-threaded look-aside cache of blobs. Choose Redis when you need data structures, atomic operations, replication or persistence.
 

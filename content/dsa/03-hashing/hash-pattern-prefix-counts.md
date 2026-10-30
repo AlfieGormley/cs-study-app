@@ -4,21 +4,20 @@ title: Counting subarrays with prefix sums
 level: intermediate
 minutes: 3
 sourceLesson: hash-patterns
-summary: A map can remember how many earlier running totals would complete the current range.
+summary: A subarray's sum is a difference of running totals, so a map of earlier totals counts matching subarrays in one pass, even with negative values.
 ---
 
-A map can remember how many earlier running totals would complete the current range. Counts are needed because several different earlier positions can have the same prefix sum.
+A map can remember how many earlier running totals would complete the current range. It must store counts, because several different earlier positions can share the same running total.
 
 ## 4. Prefix sum plus hash map
 
 > Count the subarrays of `nums` whose sum equals `k`. Values may be negative.
 
-A **prefix sum** is a running total: the sum of the first so-many elements. The sum of any subarray is then the difference of two prefix sums, so we want pairs with an earlier start boundary and a later end boundary satisfying
+A **prefix sum** is a running total: the sum of the first so-many elements. The sum of any subarray is then the difference of two prefix sums: the total up to its end minus the total before its start. So we want pairs of boundaries, an earlier start and a later end, whose running totals differ by exactly k:
 
-```formula
+```formula essential
 P[j] − P[i] = k
 ⇒ P[i] = P[j] − k
-P[2] − P[0] = 3 − 0 = 3
 where
 P[j]: the prefix sum, the total of the first j elements of nums (P[0] = 0, the empty prefix)
 P[i]: the prefix total at the earlier start boundary
@@ -26,8 +25,15 @@ i: the start index of the subarray, counting from 0
 j: one past the end index, so the subarray is nums[i] up to nums[j − 1]
 k: the target sum
 ⇒: "which means"; rearranging the first line gives the second
-In words: the subarray from i to j − 1 sums to k exactly when an earlier running total equals the current running total minus k; for nums = [1, 2, 1, −1, 2], P = [0, 1, 3, 4, 3, 5], and P[2] − P[0] = 3 is the subarray [1, 2].
+In words: a subarray sums to k exactly when an earlier running total equals the current running total minus k. For nums = [1, 2, 1, −1, 2], the running totals are 0, 1, 3, 4, 3, 5, and 3 − 0 = 3 picks out the subarray [1, 2].
 ```
+
+> [!analogy] Real-world analogy: milestones on a long walk
+> On a long walk you note the distance shown on your pedometer at every landmark. To know how far it is between any two landmarks, you subtract the two readings; you never re-measure the path.
+>
+> **How it maps:** the readings are prefix sums and a stretch between landmarks is a subarray. Asking "is there an earlier landmark exactly k kilometres back?" is the map lookup for the current total minus k.
+>
+> **Where it stops:** a pedometer only ever counts up. Prefix sums can go down when values are negative, so the same reading can recur at several landmarks, which is why the map stores how many times each total has appeared.
 
 That is two-sum again, on prefix sums. Walk once, keeping a count of each prefix sum seen so far:
 

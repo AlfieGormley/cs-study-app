@@ -3,27 +3,27 @@
     "id": "sep-solid-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "Which SOLID principle does this class most clearly violate?\n\n```python\nclass Invoice:\n    def total(self): ...\n    def to_pdf(self): ...\n    def save_to_db(self): ...\n```",
+    "prompt": "Three groups ask for changes to this class: finance owns the pricing rules in `total`, the design team owns the layout in `to_pdf`, and the database team owns `save_to_db`. Both `total` and `to_pdf` call a private helper, `_rounded_lines()`.\n\n```python\nclass Invoice:\n    def total(self): ...\n    def to_pdf(self): ...\n    def save_to_db(self): ...\n```\n\nFinance asks for a rounding change. What is the main design risk, and what addresses it?",
     "options": [
       {
-        "text": "Liskov substitution",
-        "explanation": "LSP concerns subtypes standing in for parents. There's no inheritance here."
+        "text": "There is no real risk: the class has only three methods, so it is already small",
+        "explanation": "Size is not the test. Three short methods can still answer to three different groups, and the shared helper is exactly where their changes collide."
       },
       {
-        "text": "Single responsibility",
-        "explanation": "Correct. Pricing rules (finance), PDF layout (design/marketing) and persistence (IT) change for different people's reasons, yet they all live in one class."
+        "text": "Editing `_rounded_lines()` for finance can silently change the PDF too. Move pricing, rendering and persistence into separate classes so each group's change has one home",
+        "explanation": "Correct. This is the single responsibility principle in Martin's sense: the class answers to three actors, and a shared helper couples finance's rules to the design team's output. Splitting by actor stops one group's change leaking into another's."
       },
       {
-        "text": "Interface segregation",
-        "explanation": "ISP is about clients being forced to depend on methods they don't use. It's related, but the root problem is one class answering to several actors."
+        "text": "Split it so that every class has exactly one method",
+        "explanation": "That reads SRP as 'one method per class'. The principle is about who asks for changes, not method count, and splitting by size can scatter one group's logic across many classes."
       },
       {
-        "text": "Open/closed",
-        "explanation": "OCP is about adding behaviour without editing existing code. Nothing here shows a type-switch or extension point."
+        "text": "Add an `IInvoice` interface so callers depend on an abstraction",
+        "explanation": "An interface changes what callers depend on, but the three groups' logic would still live in one implementation sharing one helper. The collision remains."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Ask \"who would ask for each method to change?\"\n   - `total`: finance (tax rules, discounts).\n   - `to_pdf`: whoever owns the invoice layout.\n   - `save_to_db`: whoever owns the schema.\n2. Three actors, one class: an SRP violation in Martin's \"one actor\" sense.\n3. Risk: a schema migration and a layout tweak land in the same file, conflict in review, and could break each other through shared helpers.\n4. Split into `Invoice` (data and pricing), `InvoicePdfRenderer` and `InvoiceRepository`.",
+    "workedExample": "1. Ask who requests changes to each method:\n   - `total`: finance (tax rules, rounding, discounts).\n   - `to_pdf`: the design team (layout).\n   - `save_to_db`: the database team (schema).\n2. Follow finance's change. The developer edits `_rounded_lines()`. Because `to_pdf` calls the same helper, the printed invoice changes too, though the design team asked for nothing.\n3. That is the risk SRP names: one class answering to several actors, so their changes interfere.\n4. Fix by actor, not by size: `Invoice` (data and pricing), `InvoicePdfRenderer`, `InvoiceRepository`. If rendering needs rounded lines, it gets its own rule or asks pricing for a documented value.\n5. Weigh the cost: more classes to find. It is worth paying here because three groups' changes demonstrably meet in one helper.",
     "link": {
       "title": "The Single Responsibility Principle — Robert C. Martin",
       "url": "https://blog.cleancoder.com/uncle-bob/2014/05/08/SingleReponsibilityPrinciple.html"

@@ -7,14 +7,15 @@ summary: An extension point protects a particular kind of change.
 sourceLesson: sep-solid
 ---
 
-SOLID examines responsibility, extension, subtyping, interfaces and dependency direction. This unit focuses on one of those questions; the earlier units establish the shared vocabulary.
+Some changes keep arriving in the same shape: a new payment method, a new file format, a new shape to draw. This lesson is about arranging code so that kind of change means adding code rather than editing it, and about the cost of guessing the wrong kind.
 
 ## O: Open/closed principle
 
-Bertrand Meyer’s open/closed principle says software entities should be **open for extension but closed for modification**. You should be able to add new behaviour by adding code, not by editing code that already works.
+Bertrand Meyer coined the open/closed principle in *Object-Oriented Software Construction* (1988): software entities should be **open for extension but closed for modification**. You should be able to add new behaviour by adding code, not by editing code that already works.
+
+Meyer's mechanism was implementation inheritance: a finished class stays closed, and new subclasses extend it. The version usually taught today is Robert C. Martin's 1996 reformulation, which uses abstract interfaces and polymorphism: callers depend on an interface, and new implementations plug in behind it.
 
 ```python
-# The dispatcher must learn each new kind.
 # Before: every new shape edits this
 def area(shape):
     if shape.kind == "circle":
@@ -28,7 +29,6 @@ def area(shape):
 The real cost isn't one `elif`. It's that the same `if kind ==` ladder tends to appear in many functions, so a new shape means finding and editing all of them.
 
 ```python
-# Each shape supplies its own calculation.
 # After: new shapes are new classes
 import math
 from dataclasses import dataclass
@@ -52,6 +52,13 @@ class Square:
 
 Adding `Triangle` touches no existing code. Plug-in architectures, middleware chains and strategy objects are all OCP in practice.
 
+> [!analogy] Real-world analogy: an electrical outlet
+> A house's outlets let you add a lamp, a kettle or a phone charger without rewiring anything. The outlet is a fixed standard, and each new appliance's plug just has to fit it.
+>
+> **How it maps:** The outlet is the stable interface (`Shape.area`). Each appliance is a new class that plugs in, and the house wiring is the existing code that stays closed to modification.
+>
+> **Where it stops:** The outlet only protects the kind of change it was designed for. New appliances are easy; changing what every appliance must do, such as running from a car battery, means changing every plug and outlet. That is the trade-off in the warning below.
+
 > [!warning] You can't be closed against everything
 > OCP protects you along the axis you predicted. Polymorphic shapes make adding a *shape* easy but adding an *operation* (say `volume`) harder, since every class changes. Choose the axis that actually varies. This trade-off is known as the **expression problem**.
 
@@ -61,7 +68,7 @@ Adding `Triangle` touches no existing code. Plug-in architectures, middleware ch
 - Avoid scattering the same type switch through many operations.
 
 ## Further reading
-- [Martin: principles and patterns](https://objectmentor.com/resources/articles/Principles_and_Patterns.pdf)
+- [Martin: Design Principles and Design Patterns (2000)](https://objectmentor.com/resources/articles/Principles_and_Patterns.pdf)
 - [Wadler: the expression problem](https://homepages.inf.ed.ac.uk/wadler/papers/expression/expression.txt)
-- [Open%E2%80%93closed_principle](https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle)
-- [peps.python.org](https://peps.python.org/pep-0544/)
+- [Open–closed principle (Meyer and Martin versions)](https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle)
+- [PEP 544: Protocols](https://peps.python.org/pep-0544/)

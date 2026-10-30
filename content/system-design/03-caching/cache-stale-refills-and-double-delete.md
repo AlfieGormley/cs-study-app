@@ -33,18 +33,7 @@ This interleaving is possible even without an exceptional pause; its frequency d
 - **Leases** (covered in the following units) reject fills whose token was revoked by an invalidation, when the cache enforces that protocol.
 - **Versioned writes** (covered in the following units) make stale sets lose.
 
-For the delayed double delete, the second delete only helps if it lands after the slow reader's `SET`. So the delay has to be longer than the slowest read you want to cover:
-
-```formula
-d > t_read
-where
-d: the delay between the first and the second delete, in milliseconds (ms)
-t_read: the time a reader takes from its database read to its cache SET, in ms; pick a high percentile such as p99.9, the time that 99.9% of reads finish within
-ms: milliseconds; 1 ms = 0.001 seconds
-In words: wait longer than nearly all slow readers take, then delete again to clean up any stale value they wrote.
-```
-
-For example, if 99.9% of miss-path reads finish within 400 ms, a 500 ms delay catches them. A reader stalled for 2 s (a long garbage-collection pause, say) still lands after both deletes, which is why this is only a heuristic.
+For the delayed double delete, the second delete only helps if it lands after the slow reader's `SET`. So the delay has to be longer than the slowest miss-path read you want to cover, measured from the reader's database read to its cache `SET`: pick a high percentile such as p99.9 (the time 99.9% of those reads finish within). For example, if 99.9% of miss-path reads finish within 400 ms, a 500 ms delay catches them. A reader stalled for 2 s (a long garbage-collection pause, say) still lands after both deletes, which is why this is only a heuristic.
 
 ## Key takeaways
 - A miss-path reader can load old data, pause, and set it after a writer commits and invalidates.

@@ -37,7 +37,7 @@ The database you can *run well* beats the theoretically better one you can't.
 
 ## Apply the estimate to a retained sensor stream
 
-Two million sensors sending once every ten seconds produce 200,000 readings per second. At 100 bytes per reading, ninety days means about 155.5 TB before compression, indexes, replicas and overhead. A store keyed by sensor and a bounded time bucket is a candidate; benchmark ingestion, expiry and range queries instead of inferring an absolute single-node limit from this count.
+Suppose two million sensors each send a reading every ten seconds: that is 200,000 readings per second, and at an assumed 100 bytes each, ninety days is about 155 TB before compression, indexes, replicas and overhead. Numbers like these change the question from "which product?" to "how do writes spread and how does old data leave?". A store keyed by sensor and a bounded time bucket, with expiry, is a candidate; benchmark ingestion, expiry and range queries rather than inferring an absolute single-node limit from the count.
 
 ## Key takeaways
 - Tune and measure a primary before introducing distribution for a hypothetical bottleneck.

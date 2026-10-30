@@ -11,16 +11,7 @@ An incoming cached value can carry the database revision it represents. Compare 
 
 ## Versioning
 
-Store a version with each cached value (a database-ordered row version or other strictly increasing per-record revision). Only allow a cache write if it is **newer** than what is there:
-
-```formula
-v_new > v_cur
-where
-v_new: the version number carried by the incoming cache write
-v_cur: the version number already stored in the cache for that key, if there is one
->: "is greater than"; the write is accepted only when this is true, otherwise it is rejected and the stored value stays
-In words: a cache write only lands if it carries a higher version than the one already cached. If nothing is cached, there is no stored version and the write is accepted.
-```
+Store a version with each cached value (a database-ordered row version or other strictly increasing per-record revision). Only allow a cache write if its version is **strictly greater** than the version already cached; otherwise reject it and keep the stored value. If nothing is cached, there is no stored version to beat, so the write is accepted.
 
 In the earlier concurrent-writer race, suppose B's write carries version 8 and A's late-arriving write carries version 7. When A's arrives, 7 is not greater than 8, so it is rejected. The check has to run atomically inside Redis, which is why it is a Lua script rather than a read followed by a write from the application:
 
@@ -44,7 +35,7 @@ return 1
 """
 ```
 
-The Lua example assumes non-negative integer versions no greater than 9,007,199,254,740,991 (two to the power 53, minus one: up to this limit a standard 64-bit floating-point number, which is what `tonumber` returns, holds every whole number exactly; above it, some whole numbers are skipped), so they compare exactly, and retained version metadata. With these assumptions, Race 1 is fixed: A's late write of version 7 is rejected because B already wrote version 8. Versioning alone does not fix Race 2 after a delete, because the key is empty and any version is "newer" than nothing. A tombstone can retain the new version floor, but its comparison metadata must survive until older fills are impossible or rejected by another authority. Expiry/eviction loses that protection. A tombstone-aware script must permit equal-version data to replace that tombstone; the simple strict-greater script shown above does not do so.
+The script assumes whole-number versions small enough to compare exactly (Lua's `tonumber` uses floating point, which is exact for whole numbers up to about 9 quadrillion) and version metadata that is still present when the late write arrives. With these assumptions, Race 1 is fixed: A's late write of version 7 is rejected because B already wrote version 8. Versioning alone does not fix Race 2 after a delete, because the key is empty and any version is "newer" than nothing. A tombstone can retain the new version floor, but its comparison metadata must survive until older fills are impossible or rejected by another authority. Expiry/eviction loses that protection. A tombstone-aware script must permit equal-version data to replace that tombstone; the simple strict-greater script shown above does not do so.
 
 A different form of versioning is **versioned keys**: include a version in the key name, such as `user:42:v8`. The writer bumps the version (stored somewhere cheap); readers build the key from the current version, and old keys simply age out via TTL. Fingerprinted asset URLs are the HTTP version of this.
 

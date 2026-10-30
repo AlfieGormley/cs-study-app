@@ -2,8 +2,8 @@
 id: db-range-hash-placement
 title: Range and hash partition placement
 level: advanced
-minutes: 5
-summary: Compare ordered-key locality with hash distribution and calculate why changing modulo placement moves most keys.
+minutes: 4
+summary: Compare ordered-key locality with hash distribution and predict why changing modulo placement moves most keys.
 sourceLesson: db-partitioning
 ---
 
@@ -44,7 +44,7 @@ Apply a hash function to the key and assign ranges of the *hash* to partitions. 
 
 The naive way to turn a hash into a partition number is to take the remainder after dividing by the number of partitions:
 
-```formula
+```formula reference
 p = hash(key) mod N
 where
 p: the partition (or node) number the key is sent to, from 0 to N − 1
@@ -55,39 +55,15 @@ N: the number of partitions or nodes
 In words: hash the key, divide by the number of partitions, and the remainder says where the key lives.
 ```
 
-For example, if `hash("user42")` came out as 1,000,003 and N = 10, the remainder is 3, so the key goes to partition 3. This spreads keys evenly, but it has a fatal flaw when N changes, described in the warning below.
+This spreads keys evenly, but it has a serious flaw when the number of partitions changes, described in the warning below.
 
 - **Pro**: even distribution, no clustering.
 - **Con**: range queries on the key are gone: adjacent keys are scattered. Cassandra's compromise is a *compound* key: hash the partition key, then keep rows sorted by the clustering columns within each partition.
 
 > [!warning] Never use hash mod N directly
-> Going from 10 to 11 nodes, a key stays put only if its hash leaves the same remainder when divided by 10 and by 11, which is true for about 1 in 11 keys. Adding one node moves ~91% of the data.
+> Going from 10 to 11 nodes, a key stays put only if its hash leaves the same remainder when divided by 10 and by 11, which is true for about 1 in 11 keys. Adding one node moves about 91% of the data, when ideally only the new node's share, about 9%, would move.
 
-The general rule, for hash values spread evenly, when you add one node to N:
-
-```formula
-F_stay = 1 / (N + 1)
-F_move = 1 − 1 / (N + 1)
-where
-F_stay: the fraction of keys whose partition number stays the same
-F_move: the fraction of keys that must move to a different node
-N: the number of nodes before you add one
-In words: with modulo placement, adding one node keeps only about one key in N + 1 where it was; almost everything moves.
-```
-
-For 10 nodes growing to 11:
-
-```formula
-F_stay = 1 / (10 + 1) ≈ 0.09
-F_move ≈ 1 − 0.09 = 0.91
-where
-F_stay: the fraction of keys that stay, about 9%
-F_move: the fraction of keys that move, about 91%
-≈: approximately equal to
-In words: adding an eleventh node moves about 91% of the data, when ideally it would move only the new node's share, about 9%.
-```
-
-Why 1 in N + 1: a key stays only when its two remainders match, and over every run of N × (N + 1) consecutive hash values that happens for exactly N of them (the values 0 to N − 1 and their repeats).
+The prediction generalises: when hash values are distributed evenly, adding one node to a modulo scheme keeps only a small share of keys in place (about one in 5 when growing to 5 nodes, one in 11 when growing to 11), so almost everything moves. For a cache, that means a burst of misses across most of the keyspace at the moment you scale out; for a database, it means streaming most of the data between nodes. Consistent hashing, in the next lesson, exists to avoid this.
 
 ## Key takeaways
 - Sharding spreads both data and load; replication supplies copies of each partition.

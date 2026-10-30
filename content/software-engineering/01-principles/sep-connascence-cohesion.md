@@ -7,11 +7,11 @@ summary: Connascence names the agreement that must stay in step, including names
 sourceLesson: sep-coupling-cohesion
 ---
 
-Coupling concerns dependencies across a boundary; cohesion concerns the responsibilities grouped inside it. Use both when considering a design change.
+The coupling scale says roughly how tight a dependency is. This lesson adds finer tools: a vocabulary for exactly *what* two pieces of code must agree on, and a scale for judging what belongs together inside a module.
 
 ## Connascence: a finer vocabulary
 
-**Connascence** ("born together") provides a more precise vocabulary for dependencies. Two pieces of code are connascent if changing one requires changing the other to keep the system correct.
+**Connascence** ("born together") is a term Meilir Page-Jones brought into software design in the early 1990s. It provides a more precise vocabulary for dependencies. Two pieces of code are connascent if changing one requires changing the other to keep the system correct.
 
 Static forms, from weakest to strongest:
 
@@ -28,7 +28,6 @@ Dynamic forms concern agreements during execution and are generally stronger: **
 Consider **connascence strength**, **connascence locality** and **connascence degree** together. Locality describes how close the components are; degree counts how many share the agreement. Strong connascence inside one function is fine; the same between two services owned by different teams is a hazard. The rule of thumb is to **convert strong forms into weaker ones**, especially across boundaries:
 
 ```python
-# Names remove dependence on argument order.
 # Connascence of position
 make_user("Ada", "Lovelace", 36, True)
 
@@ -38,7 +37,6 @@ make_user(first="Ada", last="Lovelace",
 ```
 
 ```python
-# Both checks still share the status rule.
 # Connascence of meaning
 if order.status == 3: ...
 
@@ -67,7 +65,6 @@ A `utils.py` holding `slugify`, `retry` and `parse_vat_number` is coincidentally
 A useful code smell to look for: **do methods use non-overlapping sets of fields?**
 
 ```python
-# Separate methods use separate field sets.
 class Customer:
     def __init__(self):
         self.name = ...
@@ -90,5 +87,5 @@ This suggests two concerns: contact details and a payment method. Metrics like L
 - Non-overlapping field use is a clue that one class serves unrelated concerns.
 
 ## Further reading
-- [connascence.io](https://connascence.io/)
-- [Cohesion_(computer_science)](https://en.wikipedia.org/wiki/Cohesion_(computer_science))
+- [Connascence.io: forms and properties](https://connascence.io/)
+- [Cohesion (computer science)](https://en.wikipedia.org/wiki/Cohesion_(computer_science))

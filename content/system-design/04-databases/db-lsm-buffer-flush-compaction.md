@@ -29,6 +29,13 @@ The **log-structured merge tree** takes the opposite approach: never update in p
 3. Background **compaction** merges SSTables, discarding overwritten values and deletion markers (*tombstones*).
 4. Reads check the memtable, then SSTables from newest to oldest. **Bloom filters** let a read skip files that definitely don't contain the key.
 
+> [!analogy] Real-world analogy: a notebook and a filing cabinet
+> An office clerk jots each new note in a notebook kept in alphabetical order, and keeps a carbon copy in a running diary. When the notebook is full, it is filed as a finished, sorted folder and a fresh notebook starts. Every so often the clerk merges several old folders into one, throwing away notes that later notes replaced.
+>
+> **How it maps:** The diary is the write-ahead log, the notebook is the memtable, each filed folder is an immutable SSTable, and merging folders is compaction. Looking something up means checking the notebook first, then the newest folders.
+>
+> **Where it stops:** Real compaction competes with live traffic for disk bandwidth, and an engine uses Bloom filters and per-file indexes to avoid opening most folders. A deletion is itself a note (a tombstone): lookups treat the old value as gone at once, but it is only physically removed when folders are merged.
+
 LSM trees power RocksDB, LevelDB, Cassandra, ScyllaDB, HBase, Bigtable, and the storage layers of CockroachDB, TiDB and YugabyteDB.
 
 | | B-tree | LSM tree |

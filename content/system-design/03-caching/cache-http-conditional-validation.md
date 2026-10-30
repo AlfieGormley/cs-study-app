@@ -32,7 +32,14 @@ The origin labels each version of a resource with an **ETag**, an opaque identif
 
 A `304 Not Modified` has no body, so it saves bandwidth and the cache updates the stored response headers and recomputes its age and freshness under RFC 9111. A 304 does not unconditionally grant a new fixed lifetime. If the resource has changed, the origin replies `200` with the new body and a new ETag.
 
-ETags can be **strong** (`"a1b2c3"`, byte-for-byte identical) or **weak** (`W/"a1b2c3"`, semantically equivalent, for example the same article with a different timestamp in the footer). Some servers, including the Nginx 1.26.3 gzip filter, turn a strong ETag into a weak one when they compress a response on the fly, because the bytes are no longer the ones the ETag described. Weak ETags are fine for `If-None-Match` but not for byte-range requests.
+> [!analogy] Real-world analogy: phoning to check the edition
+> You own the 3rd edition of a timetable booklet. Rather than buying a new copy every month, you phone the office and ask "is the 3rd edition still current?". Usually they say "yes, keep using it"; occasionally they post you the 4th.
+>
+> **How it maps:** The edition number is the ETag, your question is `If-None-Match`, "yes, keep using it" is a body-free `304 Not Modified`, and receiving the new booklet is a `200` with a new ETag. The call is short because nothing heavy is sent back.
+>
+> **Where it stops:** You still had to make the call and wait for an answer, which is the round trip validation cannot avoid. And an ETag is an opaque label chosen by the server, not necessarily a counting number you can compare for "newer".
+
+ETags can be **strong** (`"a1b2c3"`, byte-for-byte identical) or **weak** (`W/"a1b2c3"`, semantically equivalent, for example the same article with a different timestamp in the footer). Some servers turn a strong ETag into a weak one when they change a response on the fly, because the bytes are no longer the ones the ETag described. Nginx has done this since version 1.7.3, for example when its gzip module compresses a response. Weak ETags are fine for `If-None-Match` but not for byte-range requests.
 
 ### Last-Modified / If-Modified-Since
 

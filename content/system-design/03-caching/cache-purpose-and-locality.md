@@ -11,11 +11,18 @@ A **cache** is a small, fast store that keeps copies of data that lives somewher
 
 Caching helps when a workload has reuse or skew. Some workloads approximate a Zipf-like popularity pattern, but a fixed 80/20 split is not universal; measure the actual access distribution. In workloads with temporal locality, a value read once is likely to be read again soon. This is called **locality of reference**: temporal locality (the same item again) and spatial locality (nearby items).
 
+> [!analogy] Real-world analogy: the kitchen worktop
+> A cook keeps oil, spices and a favourite knife on the worktop and everything else in the cupboards or at the shop. The worktop is small, but most reaches land on it because the same few things are used again and again.
+>
+> **How it maps:** The worktop is the cache, the cupboards and shop are the slower source of truth, and "the same few things used again and again" is skew plus temporal locality. A small worktop works only because use is concentrated.
+>
+> **Where it stops:** The oil on the worktop is the real oil, not a copy. A cache holds copies, so the original can change while the copy stays the same (staleness), and wiping the cache should cost only speed, never data.
+
 ## What a cache buys you
 
 There are three separate benefits, and it helps to know which one you are after.
 
-- **Lower latency.** A local memory lookup can avoid network and backend work. Exact latency depends on hardware, software, payload and load; universal nanosecond/millisecond benchmarks are absent because no matched measurements are supplied.
+- **Lower latency.** Reading a nearby copy from memory skips the backend's own work (a query, a page render, a remote API call) and often a network trip too. How much time that saves depends on your hardware, payload and load, so measure it rather than trusting a generic latency table.
 - **Less load on the backend.** Every hit is a request your database never sees. A 95% hit ratio means the database handles 1 in 20 reads.
 - **Lower cost.** Serving bytes from a CDN edge or from RAM is often far cheaper than recomputing a page or paying for database capacity.
 

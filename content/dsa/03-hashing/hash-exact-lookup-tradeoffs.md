@@ -58,8 +58,6 @@ counts.most_common(1)  # [('the', 2)]
 
 `Counter` is a dict subclass. The hand-written version is `counts[w] = counts.get(w, 0) + 1`. A related tool, `defaultdict(list)`, groups items by key without checking whether the key exists first.
 
-
-
 ## When not to use one
 
 Hash tables are fast at exact-match lookups and nothing else. Reach for something different when:
@@ -75,8 +73,6 @@ Hash tables are fast at exact-match lookups and nothing else. Reach for somethin
 | Sorted order, range query | Balanced BST, B-tree |
 | Keys are 0..n | Plain array |
 | Min or max repeatedly | Heap |
-
-
 
 ## Key takeaways
 - Build a membership index once to avoid repeated list scans.

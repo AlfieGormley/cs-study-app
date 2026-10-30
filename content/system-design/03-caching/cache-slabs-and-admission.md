@@ -11,24 +11,16 @@ A cache can choose where an item fits and whether it deserves protected capacity
 
 ### Memcached: segmented LRU per slab class
 
-Memcached 1.6.39 defaults to 1 MiB (1,048,576-byte) **pages**, and assigns each page to a **slab class** that cuts it into fixed-size chunks (for example 96 B, 120 B, 152 B and so on, each class 1.25× the last by default). The chunk sizes grow geometrically:
+Memcached 1.6.39 defaults to 1 MiB (1,048,576-byte) **pages**, and assigns each page to a **slab class** that cuts it into fixed-size chunks. The chunk sizes step up by a fixed ratio: by default each class's chunks are about 1.25 times the size of the class below (set by Memcached's `-f` option), rounded up for alignment, giving classes such as 96 B, 120 B, 152 B and so on.
 
-```formula
-S_{k+1} ≈ S_k × g
-S_2 = 96 B × 1.25 = 120 B
-S_3 = 120 B × 1.25 = 150 B → 152 B
-where
-S_k: the chunk size of slab class number k, in bytes (B)
-S_{k+1}: the chunk size of the next class up
-S_2, S_3: the chunk sizes of the second and third classes; the illustrative first class, S_1, is 96 B; its actual size depends on item-header size and configuration
-g: the growth factor (Memcached's -f option), default 1.25
-→: "is rounded up to"; the usual 64-bit build aligns chunk sizes to a multiple of 8 bytes
-≈: approximately equal; alignment changes the exact next-class size
-B: bytes
-In words: each slab class's chunks are about 25% bigger than the class below, rounded up to a multiple of 8 bytes.
-```
+An item (key, value and a build-dependent header) goes into the smallest chunk that fits it, so part of each chunk is usually wasted. A smaller ratio wastes less space per item but needs more classes.
 
-An item (key, value and a build-dependent header, roughly 50 bytes in this illustrative sizing) goes into the smallest chunk that fits it, so part of each chunk is usually wasted. A smaller growth factor wastes less space per item but needs more classes.
+> [!analogy] Real-world analogy: a car park with fixed bay sizes
+> A car park paints sections of bays for motorbikes, cars or vans as each kind of vehicle arrives, until the whole car park is painted. Each vehicle takes the smallest bay it fits, so a small car in a van bay wastes space.
+>
+> **How it maps:** The car park is Memcached's memory, the painted sections are pages assigned to slab classes, bay sizes are chunk sizes, and parking in the smallest bay that fits is placing an item in the smallest chunk that holds it.
+>
+> **Where it stops:** If everyone switches to motorbikes, the motorbike section fills and turns people away while van bays sit empty. Memcached has the same problem (below), but its slab rebalancer can gradually repaint sections, and a cache evicts an old item rather than turning the new one away.
 
 Each class has its own LRU, split into **HOT, WARM and COLD** segments. New items enter HOT and flow down into COLD. Items that are hit again (while in HOT or COLD) move to WARM, where they are relatively protected. Items never hit again pass through COLD and out of the bottom, so a scan mostly churns COLD. A background "LRU crawler" also reclaims expired items.
 

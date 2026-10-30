@@ -2,7 +2,7 @@
 id: sep-api-compatible-evolution
 title: Evolve observable API behaviour deliberately
 level: advanced
-minutes: 3
+minutes: 4
 summary: Users can depend on observable behaviour beyond the written contract.
 sourceLesson: sep-writing-for-others
 ---
@@ -14,6 +14,13 @@ Callers and maintainers need a reliable contract. State what they may rely on an
 > With a sufficient number of users of an API, it does not matter what you promise in the contract: all observable behaviours of your system will be depended on by somebody.
 
 Hyrum Wright, at Google. If your function happens to return results sorted, someone relies on it. If an error message has a particular wording, someone parses it. Change it and you break them, contract or not.
+
+> [!analogy] Real-world analogy: the café that always opened early
+> A café's sign says it opens at 9:00, but for years the owner has unlocked the door at 8:45. Commuters now buy coffee at 8:50 before their train. A new manager opens at exactly 9:00, and the regulars are furious, though the sign never promised 8:45.
+>
+> **How it maps:** The sign is the documented contract, the 8:45 opening is observable behaviour, and the commuters are API users who came to depend on it. The change was allowed by the contract and still broke people.
+>
+> **Where it stops:** The café can see its regulars and warn them in person. An API provider often cannot see who depends on what, which is why the defences below try not to expose accidental behaviour in the first place.
 
 Defences:
 
@@ -63,7 +70,7 @@ Postel's robustness principle ("be conservative in what you send, liberal in wha
 - Deprecation warnings need useful attribution, and distributed changes need an expand–migrate–contract plan.
 
 ## Further reading
-- [www.hyrumslaw.com](https://www.hyrumslaw.com/)
-- [semver.org](https://semver.org/)
-- [rfc9413](https://www.rfc-editor.org/rfc/rfc9413.html)
-- [warnings](https://docs.python.org/3/library/warnings.html)
+- [Hyrum's Law](https://www.hyrumslaw.com/)
+- [Semantic Versioning 2.0.0](https://semver.org/)
+- [RFC 9413: Maintaining Robust Protocols](https://www.rfc-editor.org/rfc/rfc9413.html)
+- [Python docs: warnings](https://docs.python.org/3/library/warnings.html)

@@ -61,7 +61,7 @@
       1,
       3
     ],
-    "workedExample": "1. Java's string hash is a polynomial with base 31. For a 4-character string, split it into two pairs:\n\n```formula\nH = H_1 × 31^2 + H_2\nH(\"AaBB\") = 2112 × 961 + 2112\nH(\"AaBB\") = 2031744\nwhere\nH: the hash of the 4-character string\nH_1: the hash of its first two characters as a pair, c × 31 + c′\nH_2: the hash of its last two characters as a pair\n^: \"to the power of\"; 31^2 = 961\nIn words: the first pair's hash is multiplied by 961 and the second pair's hash is added, so two strings collide whenever their pairs hash the same.\n```\n\n2. Pair hashes (code of first character × 31, plus code of second):\n\n```formula\nH(\"Aa\") = 65 × 31 + 97 = 2112\nH(\"BB\") = 66 × 31 + 66 = 2112\nH(\"C#\") = 67 × 31 + 35 = 2112\nH(\"AB\") = 65 × 31 + 66 = 2081\nH(\"aA\") = 97 × 31 + 65 = 3072\nwhere\nH: the Java polynomial hash of the quoted two-character block, dimensionless\nIn words: Three different two-character blocks share the same hash, while AB and aA do not.\n```\n\n3. `AaAa`, `BBBB` and `C#BB` use only 2112-pairs: they collide. `ABBa` and `aABB` do not.\n4. With a fixed number of blocks, each position doubles the choices (or triples them when C# is also allowed): the raw material of the 2011 flooding attacks.",
+    "workedExample": "1. Java's string hash multiplies the running total by 31 and adds the next character. For a 4-character string, that means: hash of the first pair × 31², plus hash of the second pair. So two 4-character strings collide whenever their pairs have equal pair hashes.\n2. Pair hashes (first code × 31, plus second code):\n\n```\nAa: 65×31 + 97 = 2112\nBB: 66×31 + 66 = 2112\nC#: 67×31 + 35 = 2112\nAB: 65×31 + 66 = 2081\naA: 97×31 + 65 = 3072\n```\n\n3. `AaAa`, `BBBB` and `C#BB` are built only from 2112-pairs, so they all hash to 2112 × 961 + 2112 = 2,031,744, the same as `AaBB`. `ABBa` splits into `AB` and `Ba`, and `aABB` starts with `aA`: both differ.\n4. Each extra pair position doubles the number of colliding strings (or triples it when `C#` is also allowed). That cheap supply of collisions was the raw material of the 2011 flooding attacks.",
     "link": {
       "title": "Denial of Service via Algorithmic Complexity Attacks (USENIX 2003)",
       "url": "https://www.usenix.org/legacy/events/sec03/tech/full_papers/crosby/crosby.pdf"
@@ -71,27 +71,27 @@
     "id": "hash-functions-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "An API server parses JSON request bodies into a hash table using a fixed, public, unkeyed string hash with chaining. An attacker sends one 2 MB body containing 50,000 distinct keys with identical full hash values. Roughly how many key comparisons does parsing that one request cost, and what is the appropriate primary defence among these choices?",
+    "prompt": "An API server parses JSON request bodies into a hash table using a fixed, public, unkeyed string hash with chaining. An attacker sends one 2 MB body containing 50,000 distinct keys that all have identical full hash values. Which best describes the cost and the appropriate primary defence among these choices?",
     "options": [
       {
-        "text": "About 50,000; reject bodies over 1 MB",
-        "explanation": "50,000 is the cost with no collisions. Colliding keys make each insert scan the existing chain. A size limit helps, but a few thousand colliding keys still fit in a small body."
+        "text": "Linear cost, about one comparison per key; reject bodies over 1 MB",
+        "explanation": "Linear cost is what you get with no collisions. Colliding keys make each insert scan the existing chain. A size limit helps, but a few thousand colliding keys still fit in a small body."
       },
       {
-        "text": "About 1.25 billion; switch to a keyed hash with a secret random seed, such as SipHash",
-        "explanation": "Correct. Checking for duplicates on each chained insert costs 50,000 × 49,999 / 2 ≈ 1.25 billion comparisons. A secret keyed hash stops attackers predicting collisions; bound parsing resources as well."
+        "text": "Quadratic cost, over a billion comparisons for this one request; switch to a keyed hash with a secret random seed, such as SipHash",
+        "explanation": "Correct. Each insert compares the new key with every key already in the chain, roughly half of 50,000² in total: about 1.25 billion comparisons. A secret keyed hash stops attackers predicting collisions; bound parsing resources as well."
       },
       {
-        "text": "About 2.5 billion; use SHA-256 as the table hash",
-        "explanation": "The count is 50,000 × 49,999 / 2, not 50,000². And an unkeyed hash, even SHA-256, is public: the attacker only needs keys that share a *bucket* (the low bits of the hash), which they can brute-force offline. It is also much slower than a table hash."
+        "text": "Quadratic cost; use SHA-256 as the table hash",
+        "explanation": "An unkeyed hash, even SHA-256, is public: the attacker only needs keys that share a *bucket*, which depends on a few bits of the hash and can be brute-forced offline. It is also much slower than a table hash."
       },
       {
-        "text": "About 1.25 billion; increase the table's initial size",
+        "text": "Quadratic cost; increase the table's initial size",
         "explanation": "A larger table does not help: the keys collide on the full hash value, so they share a bucket at any table size."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Every key lands in the same chain, and each insert compares the new key with every key already there:\n\n```formula\nC = n(n − 1) / 2\nC = 50,000 × 49,999 / 2\nC = 1,249,975,000\nwhere\nC: the total key comparisons for the whole request\nn: the number of colliding keys, 50,000\nIn words: the k-th key is compared with the k − 1 keys before it, adding up to about 1.25 billion comparisons for one 2 MB request.\n```\n\n2. Equal full hashes remain equal after any bucket reduction, so enlarging the table does not separate them.\n3. Use a keyed, randomised hash, explicit JSON member and body limits, and resource budgets. Java tree bins give logarithmic lookup when hashes or a consistent comparable order distinguish keys. PHP's `max_input_vars` limits input parameters, not arbitrary decoded JSON members.\n\n> [!note] Evidence gap\n> The former comparisons-per-second estimate is omitted: no measured language, key length, CPU or benchmark supports it.",
+    "workedExample": "1. Every key lands in the same chain, and each insert compares the new key with every key already there to rule out a duplicate. The k-th key costs about k comparisons, so the total is about half of n² for n keys.\n2. For 50,000 keys that is about 1.25 billion comparisons from a single 2 MB request, which is why one request can tie up a server.\n3. Equal full hashes remain equal after any bucket reduction, so enlarging the table does not separate them.\n4. Use a keyed, randomised hash, explicit JSON member and body limits, and resource budgets. Java tree bins give logarithmic lookup when hashes or a consistent comparable order distinguish keys. PHP's `max_input_vars` limits input parameters, not arbitrary decoded JSON members.",
     "link": {
       "title": "Denial of Service via Algorithmic Complexity Attacks (USENIX 2003)",
       "url": "https://www.usenix.org/legacy/events/sec03/tech/full_papers/crosby/crosby.pdf"

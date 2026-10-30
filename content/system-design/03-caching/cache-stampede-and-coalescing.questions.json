@@ -3,27 +3,27 @@
     "id": "cache-failure-modes-q1",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A dashboard key gets 2,000 requests/s and takes 500 ms to rebuild. It expires and nothing protects it. Roughly how many requests start an identical rebuild before the first finishes?",
+    "prompt": "A dashboard key has no stampede protection. When it expires on a quiet day, a handful of duplicate rebuild queries appear. When it expires while the database is already under load, thousands appear and the database stalls. What best explains the difference?",
     "options": [
       {
-        "text": "1",
-        "explanation": "That's what request coalescing would achieve. Without protection, every request that misses rebuilds independently."
+        "text": "Under load the TTL is shorter, so the key expires more often",
+        "explanation": "The TTL does not change with load. The difference is in what happens during each expiry, not how often it occurs."
       },
       {
-        "text": "About 4,000",
-        "explanation": "This multiplies by 2 instead of 0.5. The window is half a second, so half a second's worth of requests miss."
+        "text": "Every request arriving before the first rebuild finishes starts its own rebuild, so duplicates scale with request rate times rebuild time; a loaded database makes rebuilds slower, which widens the window and adds still more queries",
+        "explanation": "Correct. Both factors grow at busy times: more requests per second, and slower rebuilds. Each extra query slows the database further, a feedback loop. Coalescing to one rebuild per key breaks it."
       },
       {
-        "text": "About 1,000",
-        "explanation": "Correct. All requests arriving during the 0.5 s rebuild window miss: 2,000/s × 0.5 s = 1,000 concurrent rebuilds, and more if the DB slows down under the load."
+        "text": "Redis evicts the key more aggressively when the database is busy",
+        "explanation": "Redis eviction depends on Redis memory pressure, not on database load. The key expired in both cases."
       },
       {
-        "text": "About 2,000",
-        "explanation": "That would be one full second of traffic. The rebuild only takes 0.5 s, so the first rebuild repopulates the key halfway through that second (ignoring the slowdown feedback)."
+        "text": "Only the first request rebuilds; the others are queued by the database, which then runs out of connections",
+        "explanation": "Without protection there is no \"first request only\" rule: every request that misses runs its own identical query. The connection exhaustion is a symptom of those duplicates."
       }
     ],
-    "answer": 2,
-    "workedExample": "1. Window of vulnerability = rebuild time = 0.5 s.\n2. Every request in that window misses:\n\n```formula\nn = r × t_rebuild\nn = 2,000 /s × 0.5 s = 1,000\nwhere\nn: requests that start their own rebuild\nr: the request rate, 2,000 per second (/s)\nt_rebuild: rebuild time, 0.5 seconds (s)\ns: seconds\nIn words: half a second of traffic at 2,000 a second is 1,000 duplicate rebuilds.\n```\n3. Each runs the same 500 ms query. The DB, sized for a trickle of misses, now has 1,000 heavy queries in flight.\n4. Queries slow to, say, 3 s, so the window grows to 3 s and 2,000 × 3 = 6,000 requests pile up: a feedback loop.\n5. With single-flight: 1 rebuild per key (or per server), everyone else waits or gets stale data.",
+    "answer": 1,
+    "workedExample": "1. Window of vulnerability = the time one rebuild takes. Every request that arrives during it misses and rebuilds too.\n2. So the number of duplicate rebuilds grows with both the request rate and the rebuild time. On a quiet day a fast rebuild and modest traffic give a handful.\n3. At peak, traffic is higher *and* the loaded database answers more slowly, so both factors grow.\n4. Each duplicate query adds load, which slows rebuilds further, which lets more requests pile in: a feedback loop.\n5. Fix: single-flight per server or a token-checked lock across servers, so one request rebuilds and the rest wait or get a stale copy.",
     "link": {
       "title": "Cache stampede — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_stampede"

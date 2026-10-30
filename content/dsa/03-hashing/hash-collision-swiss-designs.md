@@ -4,20 +4,25 @@ title: Swiss tables and collision trade-offs
 level: intermediate
 minutes: 3
 sourceLesson: hash-collisions
-summary: Metadata can make a table search cheap before it touches a key or value.
+summary: Swiss tables compare one-byte hash fingerprints for a whole group at once, touching full keys only for likely matches.
 ---
 
 Metadata can make a table search cheap before it touches a key or value. Swiss tables use short hash fingerprints to reject most slots in a group; a fingerprint match still requires checking the real key.
 
 ## Modern designs: Swiss tables
 
-Google's **Swiss tables** (Abseil `flat_hash_map`, presented in 2017) are open addressing with a twist. Alongside the slots is an array of one-byte **control bytes**, each holding "empty", "deleted" or 7 bits of the key's hash. On Abseil's x86 SSE2 path, a lookup loads 16 control bytes and uses SIMD instructions to compare all 16 against the key's 7 bits in a single step, only touching the slots that match. Tables run at up to 7/8 full while lookups stay fast.
+Google's **Swiss tables** (Abseil `flat_hash_map`, presented at CppCon in 2017 and open-sourced in Abseil in 2018) are open addressing with a twist. Alongside the slots is an array of one-byte **control bytes**, each holding "empty", "deleted" or 7 bits of the key's hash. On Abseil's x86 SSE2 path, a lookup loads 16 control bytes and uses SIMD instructions to compare all 16 against the key's 7 bits in a single step, only touching the slots that match. Tables run at up to 7/8 full while lookups stay fast.
 
 Rust (via the `hashbrown` crate) and, since Go 1.24, Go's built-in map use Swiss-table designs; Go uses eight-slot groups, so Swiss-table designs do not all probe 16 slots.
 
-Another option is **cuckoo hashing**, where each key has two possible slots and inserts evict residents to their alternative slot. The classic two-hash, single-slot, no-stash version checks at most two candidate slots; insertion can trigger rehashing. Bucketed or stashed variants have different lookup bounds.
+> [!analogy] Real-world analogy: scanning name-badge initials
+> Looking for "Priya Shah" among a row of sixteen people wearing badges, you first glance along the row for the initials P.S. and only read the full badge of the one or two people who match.
+>
+> **How it maps:** the initials are the 7-bit fingerprint in each control byte, the glance along the row is the single SIMD comparison over a group, and reading the full badge is the equality check on the real key.
+>
+> **Where it stops:** a person glances along the row one badge at a time, very quickly; the processor genuinely compares all sixteen control bytes in one instruction. And a matching pair of initials proves nothing, which is why the full key is always checked.
 
-
+Another option is **cuckoo hashing**, where each key has two possible slots and an insert pushes a resident out to that resident's alternative slot. The classic two-hash, single-slot, no-stash version checks at most two candidate slots; insertion can trigger rehashing. Bucketed or stashed variants have different lookup bounds.
 
 ## Choosing between them
 

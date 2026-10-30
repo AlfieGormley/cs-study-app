@@ -13,35 +13,9 @@ A partitioning rule maps each key to a cache server. Changes to that rule can tu
 
 ### The naive approach: hash mod N
 
-The simplest way to pick a node is to turn the key into a number and take the remainder after dividing by the number of nodes:
+The simplest way to pick a node is to turn the key into a number with a hash function and take the remainder after dividing by the number of nodes: `hash(key) % N` in code. A key whose hash is 1,000,003 goes to node 3 in a four-node cluster.
 
-```formula
-node = hash(key) mod N
-where
-node: the index of the node that holds the key, a whole number from 0 to N − 1
-hash: a hash function, which turns the key (a string) into a large, evenly spread whole number
-key: the cache key, such as user:42
-mod: modulo, the remainder after whole-number division; 17 mod 4 = 1; written % in most programming languages
-N: the number of cache nodes
-In words: hash the key and use the remainder after dividing by the node count as the node number.
-```
-
-In code this is `hash(key) % N`. For example, a key whose hash is 1,000,003 goes to node 1,000,003 mod 4 = 3 in a four-node cluster.
-
-This spreads keys evenly, but it falls apart when N changes. Going from 4 to 5 nodes, a key stays put only if its hash leaves the same remainder when divided by 4 as when divided by 5. The pair of remainders repeats every 20 numbers (20 is the smallest number divisible by both 4 and 5), and they match only for hashes that leave a remainder of 0, 1, 2 or 3 when divided by 20: 4 cases in 20. In general, growing from N to N + 1 nodes:
-
-```formula
-f_stay = 1 / (N + 1)
-f_move = N / (N + 1)
-f_move = 4 / (4 + 1) = 0.8
-where
-f_stay: the fraction of keys that keep their node
-f_move: the fraction of keys that move to a different node
-N: the number of nodes before adding one, here 4
-In words: adding one node to N under hash-mod-N moves all but one key in N + 1, so the bigger the cluster, the worse it gets.
-```
-
-So about **1 in 5** keys stay, and **80%** of keys suddenly live on a different node, all of them missing at once. For a cache, that is a self-inflicted stampede on the database.
+This spreads keys evenly, but it falls apart when N changes. Every key's node is recomputed from the new N, and a key stays put only if dividing its hash by the old and new node counts happens to leave the same remainder. Going from 4 to 5 nodes, that is true for only about 1 key in 5, so about **80%** of keys suddenly live on a different node, all of them missing at once. Bigger clusters are worse: growing from N to N + 1 nodes keeps only about 1 key in N + 1 in place. For a cache, that is a self-inflicted stampede on the database.
 
 ### Consistent hashing
 
@@ -60,19 +34,25 @@ Map both nodes and keys onto a ring (for example, a 32-bit hash space with 4,294
 - Add a node N4 between N3 and N1: only the keys between N3 and N4 move.
 - Remove N2: only N2's keys move, to the next node clockwise.
 
-When the points are evenly spread, the new node ends up with an equal share of the ring, and that share is all that moves:
+When ownership is balanced, a new node takes over just its fair share of the ring, and only those keys move: about 20% when going from 4 to 5 nodes, against about 80% for modulo hashing. Removing a node moves only that node's share.
 
-```formula
-f_move ≈ 1 / (N + 1)
-f_move ≈ 1 / (4 + 1) = 0.2
+```formula reference
+f_mod ≈ N / (N + 1)
+f_ring ≈ 1 / (N + 1)
 where
-f_move: the fraction of keys that move when one node is added
-N: the number of nodes before adding one, here 4
-≈: approximately equal to; exact only when every node owns an equal arc of the ring
-In words: adding a node takes over just its fair share of keys, about one in N + 1, instead of almost all of them.
+f_mod: the fraction of keys that change node under hash-modulo placement when one node is added, assuming evenly spread hashes
+f_ring: the fraction that change node under consistent hashing with balanced ownership
+N: the number of nodes before adding one
+≈: approximately equal to; exact only with evenly spread hashes and equal shares of the ring
+In words: adding one node moves almost every key under modulo placement, but only the new node's fair share under consistent hashing. For 4 to 5 nodes that is about 80% versus about 20%.
 ```
 
-Going from 4 to 5 nodes moves about 20% of keys, against 80% for hash mod N. Removing a node moves only that node's share, about 1 / N of the keys.
+> [!analogy] Real-world analogy: postal rounds on a ring road
+> Houses sit around a ring road, and each house is served by the next post office you reach driving clockwise. Opening a new post office takes over only the houses between it and the previous office. Under the "house number modulo number of offices" scheme, opening one more office reassigns almost every house.
+>
+> **How it maps:** Houses are keys, offices are cache nodes, and their positions on the road are hash values on the ring. The clockwise rule is consistent hashing's ownership rule; the modulo scheme is `hash(key) % N`. A house that changes office is a key that misses on its new node.
+>
+> **Where it stops:** Real offices are placed deliberately; hash positions are effectively random, so one node can get a long stretch of road. Virtual nodes (below) fix that by giving each office many small stretches.
 
 The problem with one point per node is uneven arcs: one node may own 40% of the ring. The fix is **virtual nodes**: each physical node is placed at many ring positions, perhaps 150 in an illustrative design; choose and measure the count for the implementation. Arc sizes average out, and when a node fails its load is spread across many survivors rather than dumped on one neighbour.
 

@@ -28,8 +28,6 @@ def longest_consecutive(nums):
 
 The `x - 1 not in s` test means each run is walked only from its start, so every element is visited a constant number of times.
 
-
-
 ## Recognising the pattern
 
 | Clue in the problem | Pattern |

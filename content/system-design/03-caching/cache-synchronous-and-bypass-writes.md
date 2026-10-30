@@ -40,6 +40,8 @@ Strictly, "update the DB then delete the key" in cache-aside is write-around plu
 
 ## Comparing them
 
+The table includes write-back, which the next unit covers in detail: it acknowledges a write once the cache has it and updates the database later.
+
 | Strategy | Write latency | Fresh after write | Risk |
 |---|---|---|---|
 | Write-through | High (2 writes) | With ordering | Concurrent writes / failures |

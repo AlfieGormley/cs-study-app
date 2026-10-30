@@ -23,7 +23,7 @@
       }
     ],
     "answer": 3,
-    "workedExample": "1. Negative caching only helps **repeated** misses. Random UUIDs never repeat: hit ratio ≈ 0.\n2. So all 30,000 req/s hit the DB.\n3. Bloom filter of 10 million product ids at a 1% false-positive rate (FPR):\n\n```formula\nM = n × b / 8\nM = 10,000,000 × 9.6 / 8\nM = 12,000,000 B = 12 MB\nwhere\nM: filter memory, in bytes (B)\nn: ids stored, 10 million\nb: bits per id for a 1% FPR, about 9.6\n8: bits per byte\nB: bytes\nMB: megabytes; 1 MB = 1,000,000 B\nIn words: 10 million ids at 9.6 bits each is 12 MB, small enough for every app server.\n```\n\n4. Random UUID → filter says \"definitely not\" 99% of the time → return 404 immediately.\n5. Only false positives get through:\n\n```formula\nR_db = R × p\nR_db = 30,000 /s × 0.01 = 300 /s\nwhere\nR_db: attack requests reaching the DB, per second (/s)\nR: attack requests, 30,000 per second\np: the false-positive rate, 0.01 (1%)\ns: seconds\nIn words: 1% of 30,000 random ids slip through as \"maybe\", so 300 a second still reach the database.\n```\n6. Add per-client rate limits on 404s to stop the traffic at the edge.\nCoordinate filter publication with creation so a newly visible product cannot be absent from the filter; during uncertainty fall back to an authoritative lookup rather than return a false 404. Rate limits reduce accepted attack traffic, not literally all attacker resource use.",
+    "workedExample": "1. Negative caching only helps **repeated** misses. Random UUIDs never repeat, so its hit ratio is about zero and all 30,000 requests a second reach the database.\n2. A Bloom filter of valid product ids answers \"definitely not\" for almost every random id, without touching the cache or database. At a 1% false-positive rate, 10 million ids need only about 12 MB, small enough for every app server.\n3. Only false positives get through: about 1 in 100, so roughly 300 attack requests a second still reach the database. Check that remainder against database capacity.\n4. Add per-client rate limits on 404s to cut the traffic at the edge.\n5. Coordinate filter updates with product creation so a newly visible product cannot be missing from the filter; while coverage is uncertain, fall back to an authoritative lookup rather than return a false 404.",
     "link": {
       "title": "Bloom filter — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Bloom_filter"
@@ -33,27 +33,27 @@
     "id": "cache-failure-modes-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "You want a Bloom filter in front of the cache to block penetration attacks on 50 million valid order ids, all already inserted in the filter, with a 1% false-positive rate. Roughly how much memory does it need, and what fraction of random invalid ids still reach the database?",
+    "prompt": "A Bloom filter of 50 million valid order ids, all inserted, runs at a 1% false-positive rate in front of the cache. It already uses the best number of hash functions for its size. Security asks you to cut the share of random invalid ids that reach the database tenfold, to 0.1%. What do you predict?",
     "options": [
       {
-        "text": "About 6 MB; 0% reach the database",
-        "explanation": "This is off by 10× on memory (it uses ~1 bit per element), and Bloom filters do have false positives, so some invalid ids get through."
+        "text": "The filter must grow about tenfold, because false positives fall in proportion to memory",
+        "explanation": "Bits per id grow with the logarithm of 1/p, not in proportion to it. A tenfold cut in false positives costs about 4.8 extra bits per id on top of about 9.6, roughly 50% more memory."
       },
       {
-        "text": "About 480 MB; 1% reach the database",
-        "explanation": "480 is the size in **megabits**. Divide by 8 to get megabytes."
+        "text": "The filter grows by roughly half (about 4.8 more bits per id), and about 1 in 1,000 invalid ids still reach the database; valid ids are never rejected",
+        "explanation": "Correct. Each tenfold cut in false positives costs about the same extra bits per id, so going from 1% to 0.1% takes roughly 9.6 to 14.4 bits. A correctly populated filter has no false negatives."
       },
       {
-        "text": "About 60 MB; about 1% reach the database",
-        "explanation": "Correct. 50 million × 9.6 bits = 480 megabits (Mbit) = 60 MB, and by design about 1% of ids that are not in the set are wrongly reported as \"maybe present\"."
+        "text": "The filter size stays the same; you only need more hash functions",
+        "explanation": "The filter already uses the best hash count (about 7 at roughly 9.6 bits per id), so 1% is the lowest rate this size can reach. More hash functions set more bits and raise the false-positive rate, so a lower rate needs more bits per id."
       },
       {
-        "text": "About 60 MB; about 1% of *valid* ids are wrongly rejected",
-        "explanation": "Bloom filters have **no false negatives**: every valid id always passes. The 1% error applies only to invalid ids."
+        "text": "The filter can shrink, because at 0.1% it starts rejecting 0.1% of valid ids instead",
+        "explanation": "Bloom filters do not trade false positives for false negatives. A properly populated filter always answers \"maybe\" for inserted ids."
       }
     ],
-    "answer": 2,
-    "workedExample": "1. Bits per element for false-positive rate p:\n\n```formula\nb = −ln(p) / (ln 2)^2\nb = −ln(0.01) / 0.4805 ≈ 9.6\nwhere\nb: bits per element, with the best number of hash functions\np: the false-positive rate, 0.01\nln: natural logarithm (base e ≈ 2.718)\n≈: approximately equal to\nIn words: a 1% false-positive rate needs about 9.6 bits per stored id.\n```\n\n2. Memory:\n\n```formula\nM = n × b / 8\nM = 50,000,000 × 9.6 / 8\nM = 60,000,000 B = 60 MB\nwhere\nM: filter memory, in bytes (B)\nn: ids stored, 50 million\nb: bits per id, 9.6\n8: bits per byte\nB: bytes\nMB: megabytes; 1 MB = 1,000,000 B\nIn words: 480 million bits is 60 million bytes, 60 MB.\n```\n\n3. An invalid id is wrongly reported as \"maybe\" 1% of the time, so 1% of attack traffic still reaches the cache and then the database.\n4. At 30,000 attack req/s, that is ~300 req/s, a remaining load that must be checked against measured database capacity.\n5. Reducing the error tenfold to 0.1% costs about 14.4 bits per element (−ln(0.001) / 0.4805 ≈ 14.4, so ~90 MB). Each 10× cut in false positives costs roughly 4.8 extra bits per element.",
+    "answer": 1,
+    "workedExample": "1. Bits per id depend only on the false-positive rate, and they grow with its logarithm: each tenfold cut costs roughly 4.8 more bits per id.\n2. At 1%, about 9.6 bits per id; at 0.1%, about 14.4. For 50 million ids that is roughly 60 MB growing to about 90 MB.\n3. The share of random invalid ids answered \"maybe\" falls from about 1 in 100 to about 1 in 1,000, so database traffic from such ids falls tenfold.\n4. Valid ids still always pass: the filter only ever errs towards \"maybe\".\n5. Remember the rate assumes random invalid inputs. An attacker who finds ids that collide can reuse them, so keep rate limits too.",
     "link": {
       "title": "Bloom filter — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Bloom_filter"

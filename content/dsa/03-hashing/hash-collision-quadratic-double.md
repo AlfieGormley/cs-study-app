@@ -4,83 +4,63 @@ title: Quadratic probing and double hashing
 level: intermediate
 minutes: 5
 sourceLesson: hash-collisions
-summary: A probe sequence must do more than spread collisions: it must reach a free slot.
+summary: Quadratic probing and double hashing break up clusters, but table size and step choice decide whether every slot can be reached.
 ---
 
-A probe sequence must do more than spread collisions: it must reach a free slot. The table size and the step sequence together determine coverage.
+Linear probing's clusters come from every colliding key taking the same one-slot steps. The fixes in this lesson change the step pattern. But a probe sequence must do more than spread collisions: it must be able to reach a free slot, and the table size and step pattern together decide whether it can.
 
 ## Quadratic probing
 
-Jump by growing amounts so runs do not merge so readily:
+Instead of stepping one slot at a time, jump by growing amounts: successive retries land 1, 4, 9, 16, … slots from home (the squares), wrapping round the array. Runs no longer merge so readily.
 
-```formula
+```formula reference
 h(k, i) = (h(k) + c_1 i + c_2 i^2) mod m
-h(k, 3) = (0 + 0 × 3 + 1 × 9) mod 7 = 2
 where
 h(k, i): the slot tried on attempt i for key k
-h(k): the key's home slot, here 0
+h(k): the key's home slot
 k: the key being placed or looked up
 i: the attempt number, counting from 0
-c_1: a fixed constant multiplying the attempt number, here 0
-c_2: a fixed non-zero constant multiplying the attempt number squared, here 1
-m: the number of slots, here 7
+c_1: a fixed constant multiplying the attempt number (0 in the plain "i squared" version)
+c_2: a fixed non-zero constant multiplying the attempt number squared (1 in the plain version)
+m: the number of slots
 mod: "modulo", the remainder after division, which wraps round the array
 ^: "to the power of"; i^2 = i × i
-In words: the step from home grows with the square of the attempt number; with c_1 = 0 and c_2 = 1 in a 7-slot table, a key homed at slot 0 tries slots 0, 1, 4, 2, …
+In words: the distance from home grows with the square of the attempt number, so successive retries spread further and further apart.
 ```
 
-This removes primary clustering but leaves **secondary clustering**: keys with the same home slot still follow the identical sequence. Quadratic probing also may not visit every slot. For squared-attempt offsets modulo an odd prime, the first half-rounded-up set of probes are distinct. If fewer slots are occupied than that number, one of those candidate slots is free. Arbitrary choices of the quadratic coefficients do not share this guarantee.
+This removes primary clustering but leaves **secondary clustering**: keys with the same home slot still follow the identical sequence.
 
-```formula
-R = (m + 1) / 2
-R = (7 + 1) / 2 = 4
-u < R
-where
-R: number of distinct first squared-attempt offsets, in slots
-m: an odd prime table size, here seven slots
-u: number of occupied slots, a nonnegative integer
-<: strictly less than
-In words: Four first probes have distinct offsets in the seven-slot example; fewer than four occupied slots guarantees a free candidate.
-```
+Quadratic probing also may not visit every slot. In a 7-slot table, a key homed at slot 0 tries 0, 1, 4, 2, 2, 4, 1, 0, … and never reaches slots 3, 5 or 6. There is a useful guarantee, though: when the number of slots is an odd prime, the first half (rounded up) of the squared-offset probes are all different. So if the table is less than half full, one of those probes must be free and the insert succeeds. Arbitrary choices of the constants have no such guarantee.
 
-A popular variant steps by **triangular numbers** (0, 1, 3, 6, 10, …), which visits every slot when m is a power of two:
-
-```formula
-h(k, i) = (h(k) + i (i + 1) / 2) mod m
-offsets: 0, 1, 3, 6, 10, 15, 21, 28
-mod 8:   0, 1, 3, 6, 2, 7, 5, 4
-where
-h(k, i): the slot tried on attempt i for key k
-h(k): the key's home slot, here 0
-k: the key being placed
-i: the attempt number, counting from 0
-m: the number of slots, a power of two; here 8
-mod: "modulo", the remainder after division
-offsets: the triangular numbers i × (i + 1) / 2 for i = 0 to 7, each one bigger than the last by i
-In words: add 1, then 2, then 3, … to the home slot; in an 8-slot table the first eight tries hit all eight slots exactly once.
-```
+A popular variant steps by **triangular numbers** (0, 1, 3, 6, 10, …, each one more step than the last), which visits every slot exactly once when the table size is a power of two. In an 8-slot table those offsets land on slots 0, 1, 3, 6, 2, 7, 5, 4: all eight.
 
 ### Double hashing
 
-Use a second hash to choose the step size:
+Use a second hash to choose each key's step size. Each retry moves one more step of that size from home, wrapping round:
 
-```formula
+```formula reference
 h(k, i) = (h_1(k) + i h_2(k)) mod m
-h(17, 1) = (3 + 1 × 3) mod 7 = 6
 where
 h(k, i): the slot tried on attempt i for key k
-h_1(k): the first hash, giving the home slot; here h_1(k) = k mod 7, so h_1(17) = 3
-h_2(k): the second hash, giving this key's step size; here h_2(k) = 5 − (k mod 5), so h_2(17) = 3
-k: the key, here 17
-i: the attempt number, counting from 0; here 1, the second try
-m: the number of slots, here 7
+h_1(k): the first hash, giving the home slot
+h_2(k): the second hash, giving this key's step size
+k: the key
+i: the attempt number, counting from 0
+m: the number of slots
 mod: "modulo", the remainder after division
-In words: start at the home slot and move by a key-specific step on each failed attempt; key 17 starts at slot 3 and its second try is slot 6.
+In words: start at the home slot and move by a key-specific step on each failed attempt, wrapping round the array.
 ```
 
-Keys with the same home slot now usually follow different sequences, reducing clustering when the two hashes distribute keys well; keys sharing both hashes still share a sequence. Two rules: the step h₂(k) must never be 0 (or you probe the same slot forever), and it must be **coprime** with m (share no factor with it other than 1) so the sequence can reach every slot. For prime m, any step that is not a multiple of m works; for power-of-two m, any odd step works.
+Keys with the same home slot now usually follow different sequences, reducing clustering when the two hashes distribute keys well; keys sharing both hashes still share a sequence. Two rules: the step must never be 0 (or you probe the same slot forever), and it must be **coprime** with the table size (share no factor with it other than 1) so the sequence can reach every slot. For a prime table size, any step that is not a multiple of it works; for a power-of-two size, any odd step works.
 
-For the same keys as the linear-probing example, use the second hash defined in the preceding formula: five minus the key’s remainder after division by five.
+> [!analogy] Real-world analogy: guests searching a hotel corridor for a free room
+> Hotel guests whose assigned room is taken all try the next door along, so they bunch up at the same few doors: that is linear probing. Double hashing gives each guest a personal jump length, say every third door or every fifth, so guests with the same first choice fan out.
+>
+> **How it maps:** the first-choice room is the home slot and the jump length is the second hash's step. A jump length that shares a factor with the number of doors, like every second door in a corridor of 16, only ever visits half the rooms, which is why the step must be coprime with the table size.
+>
+> **Where it stops:** a guest could simply read the vacancy board. A hash table has no board: the same jumps have to be retraced on every later lookup, so the step must be a fixed function of the key.
+
+For the same keys as the linear-probing example (10, 17, 24, 3, 5 into 7 slots, home slot `k % 7`), use the step `5 - k % 5`, which is always between 1 and 5:
 
 ```
 slot  0   1   2   3   4   5   6

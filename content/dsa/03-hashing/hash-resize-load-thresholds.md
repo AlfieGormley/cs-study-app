@@ -4,26 +4,12 @@ title: Load-factor limits and space trade-offs
 level: intermediate
 minutes: 3
 sourceLesson: hash-resizing
-summary: Load factor describes fullness, but a useful growth limit depends on collision resolution.
+summary: The maximum load factor trades empty slots against collision work, and the right limit depends on how the table resolves collisions.
 ---
 
-Load factor describes fullness, but a useful growth limit depends on collision resolution. A chaining table and a group-probing table need not share the same threshold.
+A hash table's speed depends on one ratio: its **load factor**, the number of stored keys divided by the number of buckets. Keep it low and buckets are mostly empty or hold a single key, so operations are fast. Let it creep up and chains lengthen or probe runs grow.
 
-A hash table's speed depends on one ratio: how full it is. The **load factor** is
-
-```formula
-α = n / m
-α = 12 / 16 = 0.75
-where
-α: alpha, the load factor: keys per bucket, a plain number with no unit
-n: the number of keys stored, here 12
-m: the number of buckets (slots) in the array, here 16
-In words: divide the number of keys by the number of buckets; 12 keys in 16 buckets is a load factor of 0.75, the default maximum load ratio for Java's HashMap; ordinary put grows only after the threshold is exceeded.
-```
-
-Keep α low and buckets are mostly empty or hold a single key, so operations are fast. Let α creep up and chains lengthen or probe runs grow. Many dynamically growing tables therefore watch α and, when it passes a **maximum load factor**, allocate a bigger array and move everything across. This lesson is about that move: what it costs, why it is still cheap on average, and how two widely used implementations do it.
-
-
+Many dynamically growing tables therefore watch the load factor and, when it passes a **maximum load factor**, allocate a bigger array and move everything across. This lesson is about choosing that limit; the following lessons cover the move itself. The key point: a useful limit depends on how the table resolves collisions, so a chaining table and a probing table need not share the same threshold.
 
 ## Choosing the maximum load factor
 
@@ -36,22 +22,11 @@ The threshold is a space–time trade-off. A low maximum wastes memory on empty 
 | Abseil Swiss table | 7/8 | open addressing + SIMD |
 | Redis dict | normally grows near 1; policy can defer growth | chaining |
 
-Chaining tolerates a higher load factor because a slightly longer chain is a mild slowdown. Open addressing is far more sensitive. Knuth's classical estimate for a linear-probing miss (Collision resolution) shows why:
+Chaining tolerates a higher load factor because a slightly longer chain is a mild slowdown: cost grows in a straight line with load. Open addressing is far more sensitive. In Knuth's model for linear probing (Linear probing and clustering), the expected cost of a miss depends on one over the *square* of the free fraction of slots. Going from 3/4 full to 7/8 full halves the free fraction, so it roughly quadruples the expected miss cost: from about 8.5 probes to about 32.5.
 
-```formula
-P_miss ≈ ½ × (1 + 1 / (1 − α)^2)
-α = 0.75:  P_miss ≈ ½ × (1 + 16) = 8.5
-α = 0.875: P_miss ≈ ½ × (1 + 64) = 32.5
-where
-P_miss: the expected number of slots examined by an unsuccessful lookup in a linear-probing table
-α: alpha, the load factor, the fraction of slots occupied; 0.875 is 7/8
-½: one half
-^: "to the power of"; (1 − α)^2 means (1 − α) × (1 − α)
-≈: approximately equal to
-In words: as the free fraction 1 − α shrinks, a miss costs about one over its square; going from 3/4 full to 7/8 full nearly quadruples the expected miss cost.
-```
+That model assumes random hashing, plain linear probing and no deletions; it is not the formula for every probing design. Swiss tables can run at 7/8 full because they probe whole groups of slots at once, comparing one-byte metadata entries first, so few probes ever touch the slots themselves.
 
-The formula assumes random hashing, plain linear probing and no deletions; it is not the formula for every probing design. Swiss tables can run at 7/8 full because they probe whole groups of slots at once, comparing one-byte metadata entries first, so few probes ever touch the slots themselves.
+In Java, the default maximum load factor of 0.75 with 16 buckets gives a threshold of 12 entries. Ordinary `put` grows the table only once the size goes *above* that threshold, so the 13th new key triggers the first doubling.
 
 ## Key takeaways
 - Growth limits trade empty capacity against collision work.

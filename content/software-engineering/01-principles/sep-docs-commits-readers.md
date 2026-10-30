@@ -11,7 +11,7 @@ Callers and maintainers need a reliable contract. State what they may rely on an
 
 ## The four kinds of documentation
 
-The [Diátaxis](https://diataxis.fr/) framework observes that docs fail when they mix purposes. There are four:
+Daniele Procida's [Diátaxis](https://diataxis.fr/) framework observes that docs fail when they mix purposes. There are four:
 
 | Type | Reader wants to | Example |
 |---|---|---|
@@ -22,11 +22,9 @@ The [Diátaxis](https://diataxis.fr/) framework observes that docs fail when the
 
 A tutorial that stops to explain design history loses beginners; a reference page padded with narrative is slow to scan. A good **README** is usually a mini-tutorial (what it is, install, a working example in under a minute) plus links to the rest.
 
-A useful change boundary is one reason to change: a retry fix, a rename and a dependency update may deserve separate commits. That helps a future debugger isolate or revert the dependency change without discarding the fix. This is a review heuristic; an inseparable migration may need to travel together.
-
 ## Commit messages: notes for future debuggers
 
-Months later, someone runs `git blame` on a strange line. The commit message is the only explanation they'll get. The widely used conventions:
+Months later, someone runs `git blame` on a strange line. The commit message is the only explanation they'll get. The widely used conventions, summarised in Chris Beams's often-cited guide:
 
 - A subject line of about **50 characters**, in the imperative ("Fix rounding in VAT total").
 - A blank line, then a body wrapped at about **72 characters** that explains **what and why**, not how. The diff already shows how.
@@ -42,11 +40,13 @@ minutes after reconnecting. Cap delay at
 30s; see INC-482.
 ```
 
+A useful change boundary is one reason to change: a retry fix, a rename and a dependency update may deserve separate commits. That helps a future debugger isolate or revert the dependency change without discarding the fix. This is a review heuristic; an inseparable migration may need to travel together.
+
 ## Key takeaways
 - Separate learning, task steps, reference facts and explanation.
 - Commit messages preserve the reason for a change for future debugging.
 - Small logical commits make review, diagnosis and reversal more precise.
 
 ## Further reading
-- [diataxis.fr](https://diataxis.fr/)
-- [cbea.ms](https://cbea.ms/git-commit/)
+- [Diátaxis: a systematic approach to technical documentation](https://diataxis.fr/)
+- [Chris Beams: How to Write a Git Commit Message](https://cbea.ms/git-commit/)

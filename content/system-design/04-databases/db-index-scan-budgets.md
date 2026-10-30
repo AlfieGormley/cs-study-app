@@ -1,9 +1,9 @@
 ---
 id: db-index-scan-budgets
-title: Estimate the cost of a table scan
-level: intermediate
+title: Full scans and index lookups
+level: basic
 minutes: 3
-summary: Calculate table pages and scan time, and compare the work with a selective indexed lookup.
+summary: Predict how a full table scan grows with table size and why a selective index lookup barely does.
 sourceLesson: db-indexing
 ---
 
@@ -11,48 +11,41 @@ Without a suitable access path, a database may need a full scan; partition pruni
 
 ## The cost of not having one
 
-Take a 100 million row `orders` table on 8 KB pages, about 100 rows per page: one million pages, or 8 GB. A full scan at 1 GB/s takes around 8 seconds. A B-tree lookup touches 3–4 pages: well under a millisecond if they're cached.
+A full scan reads every page of the table, however few rows match. Its cost therefore follows the size of the table, not the size of the answer: double the table and the scan reads twice as many pages.
 
-To estimate how long a full scan takes, work out how many pages the table fills, how many bytes that is, and divide by how fast the disk can stream them:
+For a sense of scale, take a 100-million-row `orders` table on 8 KB pages with about 100 rows per page. That is about a million pages, roughly 8 GB. If the storage streams it at an assumed 1 GB/s with nothing cached, one scan takes around 8 seconds, even if the query returns a single row. A B-tree lookup for one key touches 3–4 pages instead, well under a millisecond when they are cached.
 
-```formula
-P = N_rows / r
-S = P × B
-t_scan = S / v
+```formula reference
+t_scan ≈ S / v
 where
-P: the number of pages the table occupies
-N_rows: the number of rows in the table
-r: the number of rows that fit on one page; about 100 for rows of roughly 80 bytes on an 8 KB page
-S: the table's size on disk, in gigabytes (GB)
-B: the page size, in kilobytes (KB); 8 KB in Postgres
 t_scan: the time to read the whole table once, in seconds (s)
-v: the disk's sequential read speed, in gigabytes per second (GB/s)
-In words: a scan has to read every page, so its time grows in step with the table's size, however few rows you actually want.
+S: the table's size on disk, in gigabytes (GB)
+v: the storage's sustained sequential read speed, in gigabytes per second (GB/s)
+≈: approximately equal to; caching, concurrent load and parallel workers change the real figure
+In words: a full scan takes roughly the table's size divided by how fast the storage can stream it, so it grows in step with the table.
 ```
 
-With the numbers above:
+The estimate assumes the whole scan is sequential and nothing is cached; real scans can be faster if pages are in memory or several workers share the scan, and slower if the disk is busy.
 
-```formula
-P = 100,000,000 / 100 = 1,000,000
-S = 1,000,000 × 8 KB = 8 GB
-t_scan = 8 GB / (1 GB/s) = 8 s
-where
-P: the number of pages
-S: the table's size on disk
-t_scan: the time for one full scan
-KB: kilobyte, 1,000 bytes (here rounded; Postgres pages are 8,192 bytes)
-GB: gigabyte, 1,000,000,000 bytes
-GB/s: gigabytes per second, a read speed
-s: seconds
-In words: reading a 100-million-row table end to end takes about 8 seconds, against well under a millisecond for an index lookup.
-```
+> [!analogy] Real-world analogy: the index at the back of a book
+> To find every mention of "Leeds" in a book with no index, you read every page. A book twice as long takes twice as long. With an index at the back, you look up "Leeds" in an alphabetical list and turn straight to pages 41 and 207.
+>
+> **How it maps:** Reading every page is the full table scan. The book's index is the database index: sorted keys with pointers to where each row lives, so the lookup cost barely changes as the book grows.
+>
+> **Where it stops:** A database index must be updated on every insert, update and delete that touches its columns, which a printed index never is. And if you need most of the pages anyway, reading the book straight through beats flipping back and forth, which is why a planner sometimes chooses a scan over an index.
 
-This assumes the whole scan is sequential and nothing is cached; real scans can be faster if pages are in memory and slower if the disk is busy.
+## Predict the effect of growth
+
+- **Unindexed filter**: the query's time grows roughly in proportion to the table, so a report that takes one second today takes about two once the table has doubled.
+- **Selective indexed lookup**: a B-tree gains roughly one level each time the data grows by a factor of hundreds, so the lookup cost stays nearly flat (the next lesson explains why).
+- **Broad indexed query**: if the condition matches a large share of rows, the index no longer saves pages, and the planner may rightly prefer the scan (see the index maintenance lesson).
+
+`EXPLAIN` shows which path the planner chose: a `Seq Scan` node reads the whole table, while an `Index Scan`, `Index Only Scan` or bitmap scan uses the index.
 
 ## Key takeaways
 - Scan cost grows with the pages read rather than the few rows you hoped to return.
-- The worked eight-second estimate assumes uncached sequential reads at the stated speed.
-- Indexes trade a faster access path for extra storage and maintenance.
+- A selective index lookup stays cheap as the table grows; a scan does not.
+- Indexes trade a faster access path for extra storage and write maintenance.
 
 ## Further reading
 - [www.postgresql.org: indexes](https://www.postgresql.org/docs/current/indexes.html)

@@ -4,16 +4,12 @@ title: Separate chaining and load
 level: intermediate
 minutes: 4
 sourceLesson: hash-collisions
-summary: A collision is expected once enough keys are stored.
+summary: Chaining keeps a small list per bucket, so it tolerates load factors above one and slows down gradually.
 ---
-
-A collision is expected once enough keys are stored. Chaining treats it as an ordinary case: the bucket contains a collection and equality identifies the requested key inside that collection.
 
 However good the hash function, two keys will eventually want the same bucket. For independent uniform bucket choices, with 23 keys in 365 buckets the chance of at least one collision is already over 50% (the **birthday paradox**: 23 people in a room probably include two who share a birthday). So the real design question for a hash table is not *whether* collisions happen but *what to do* when they do.
 
 There are two families of answer. **Separate chaining** lets a bucket hold many keys. **Open addressing** keeps one key per slot and, on a collision, looks for another slot in the same array.
-
-
 
 ## Separate chaining
 
@@ -31,23 +27,19 @@ idx  bucket
 - **Look up**: hash, then scan that one list.
 - **Delete**: unlink the node. Nothing else in the table is affected.
 
-How long is a chain? Assume **simple uniform hashing** (every key is equally likely to land in any bucket, independently of the others) and that the key you look up is chosen at random. Then the average chain length equals the load factor, and the expected cost of a lookup is:
+How long is a chain? Assume **simple uniform hashing** (every key is equally likely to land in any bucket, independently of the others). Then the average chain length is just the load factor: keys divided by buckets. A lookup for an absent key reaches its bucket and scans that whole chain, so its expected cost is about one step plus the load factor. A lookup for a present key stops partway along its chain, so it costs a little less on average. The practical message: chaining's cost grows *linearly* with the load factor, with no cliff as the table fills.
 
-```formula
-α = n / m
+```formula reference
 S_miss ≈ 1 + α
 S_hit = 2 + (n − 1) / (2m)
-α = 12 / 16 = 0.75
-S_miss ≈ 1 + 0.75 = 1.75
-S_hit = 2 + 11 / 32 ≈ 2.344
 where
-α: alpha, the load factor: average keys per bucket, here 0.75
-n: the number of keys stored, here 12
-m: the number of buckets, here 16
-S_miss: the expected steps for an unsuccessful lookup (key absent): find the bucket, then scan its whole chain
-S_hit: expected unit steps for a uniformly selected stored key: one hash/bucket step, its matching comparison, and half the expected other colliders
+S_miss: the expected steps for an unsuccessful lookup (key absent): reach the bucket, then scan its whole chain
+S_hit: the expected steps for a lookup of a uniformly chosen stored key: reach the bucket, compare the matching key, plus on average half of the other keys sharing its bucket
+α: alpha, the load factor n / m, the average number of keys per bucket
+n: the number of keys stored
+m: the number of buckets
 ≈: approximately equal to
-In words: a miss scans an average of three-quarters of a key after reaching the bucket. A hit must also compare with its own key; twelve uniformly placed keys in sixteen buckets give about 2.344 steps, rather than fewer than two.
+In words: a miss costs about one step plus the average chain length; a hit costs about two steps plus half the other keys likely to share its bucket. Both grow in a straight line with the load.
 ```
 
 The "1" is the cost of computing the hash and reaching the bucket. These are averages: an unlucky or attacked table can still put many keys in one chain.

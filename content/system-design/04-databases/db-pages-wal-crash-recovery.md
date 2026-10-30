@@ -13,9 +13,7 @@ Underneath every database is a **storage engine**: the code that lays bytes out 
 
 Disks read and write in blocks, and random I/O is far slower than sequential: a good NVMe SSD manages hundreds of thousands of random 4 KB reads per second (high-end drives exceed a million) and several GB/s sequentially; a spinning disk manages only ~100–200 random I/Os per second.
 
-These indicative hardware figures vary by device, queue depth, cache and workload; they are not measurements from this review. Measure the selected storage under the actual workload.
-
-These indicative hardware figures vary by device, queue depth, cache and workload; they are not measurements from this review. Measure the selected storage under the actual workload.
+These are indicative figures that vary by device, queue depth, cache and workload, so measure the storage you will actually use. The gap between random and sequential reads and writes is what shapes everything below.
 
 So databases organise data into fixed-size **pages**: 8 KB in Postgres, 16 KB in InnoDB, 4 KB in SQLite by default. A page is the unit of I/O and of caching.
 
@@ -54,20 +52,7 @@ The WAL also feeds **replication** (followers replay it) and **change data captu
 > [!tip] Durability knobs
 > `synchronous_commit = off` (Postgres) or `innodb_flush_log_at_trx_commit = 2` (MySQL) skip the per-commit flush. Throughput rises, but a power loss or OS crash can lose recently acknowledged commits: up to about 3 × `wal_writer_delay` (around 600 ms by default) in Postgres, and about a second in MySQL at its default background flush interval. MySQL scheduling and configuration can widen that approximate loss window; it is not a hard one-second bound. Neither corrupts the database; turning off `fsync` entirely is what does that.
 
-The Postgres figure comes from how often the background WAL writer flushes. The PostgreSQL documentation gives the worst case as three of its cycles:
-
-```formula
-t_loss ≤ 3 × d_w
-t_loss ≤ 3 × 200 ms = 600 ms
-where
-t_loss: the longest window of acknowledged commits that a crash can lose, in milliseconds (ms)
-d_w: the WAL writer delay, the `wal_writer_delay` setting: how long the WAL writer sleeps between flushes, 200 ms by default
-≤: less than or equal to
-ms: millisecond, one thousandth of a second
-In words: with asynchronous commit, a crash can lose up to about three WAL-writer cycles of commits, roughly the last 0.6 seconds at the default setting.
-```
-
-Raising `wal_writer_delay` widens the window in proportion. Lost commits are lost cleanly: recovery still ends at a consistent point.
+The Postgres figure comes from how often the background WAL writer flushes: the documentation gives the worst case as three of its cycles, because the writer prefers to write whole pages during busy periods. Raising `wal_writer_delay` widens the window in proportion. Lost commits are lost cleanly: recovery still ends at a consistent point.
 
 ## Key takeaways
 - Pages are cached and modified in memory; WAL must reach durable storage before dependent data pages.

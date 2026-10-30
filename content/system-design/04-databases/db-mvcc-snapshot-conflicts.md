@@ -23,6 +23,13 @@ snapshot taken before tx 205
 committed → sees bal=100
 ```
 
+> [!analogy] Real-world analogy: printed timetable editions
+> A bus company never alters a printed timetable. It prints a new edition, and passengers already holding last week's edition keep reading a complete, consistent copy. Old editions go to recycling only once nobody is still holding one.
+>
+> **How it maps:** Each edition is a row version, printing a new one is an update creating a new version, and the edition a passenger picked up is their snapshot. Recycling old editions is `VACUUM` or InnoDB purge, and one passenger clinging to an ancient edition is the long-running transaction that causes bloat.
+>
+> **Where it stops:** Two writers trying to change the same row at once still conflict, which never happens with printed timetables. And a consistent edition does not stop two passengers making decisions that clash: snapshot isolation still permits write skew.
+
 Old versions are garbage-collected later: by `VACUUM` in Postgres, and purge of undo logs in InnoDB. An old retained snapshot or transaction-id horizon can delay cleanup and cause **bloat**; merely issuing BEGIN without acquiring such a horizon is not sufficient.
 
 - **Read Committed** takes a new snapshot per *statement*.

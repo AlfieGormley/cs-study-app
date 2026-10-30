@@ -13,7 +13,7 @@ Good error handling isn't about catching everything. It's about deciding, delibe
 
 ## Three kinds of failure
 
-Different failures need different responses. Mixing them up is the root of most bad error handling.
+Different failures need different responses. Mixing them up is behind much bad error handling.
 
 | Kind | Example | Right response |
 |---|---|---|
@@ -59,6 +59,6 @@ In Python, exceptions are the idiom. Use them, but make the expected ones explic
 - Java checked exceptions make some failures part of the compile-time contract.
 
 ## Further reading
-- [runtime](https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html)
-- [ch09 00 error handling](https://doc.rust-lang.org/book/ch09-00-error-handling.html)
-- [error handling and go](https://go.dev/blog/error-handling-and-go)
+- [Oracle Java tutorial: Unchecked Exceptions, the Controversy](https://docs.oracle.com/javase/tutorial/essential/exceptions/runtime.html)
+- [The Rust Book: Error Handling](https://doc.rust-lang.org/book/ch09-00-error-handling.html)
+- [The Go Blog: Error handling and Go](https://go.dev/blog/error-handling-and-go)

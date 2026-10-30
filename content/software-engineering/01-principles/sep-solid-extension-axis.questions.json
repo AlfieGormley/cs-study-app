@@ -3,27 +3,27 @@
     "id": "sep-solid-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "Every time the business adds a payment method, developers edit this function, plus similar `if` ladders in `refund()` and `fees()`. Which principle is being violated?\n\n```python\ndef charge(p, amount):\n    if p.kind == \"card\":\n        ...\n    elif p.kind == \"paypal\":\n        ...\n    elif p.kind == \"klarna\":\n        ...\n```",
+    "prompt": "Payment methods are added several times a year, and each one means editing this function plus similar `if` ladders in `refund()` and `fees()`. The operations themselves (charge, refund, fees) have not changed in years.\n\n```python\ndef charge(p, amount):\n    if p.kind == \"card\":\n        ...\n    elif p.kind == \"paypal\":\n        ...\n    elif p.kind == \"klarna\":\n        ...\n```\n\nWhich redesign best fits this pattern of change?",
     "options": [
       {
-        "text": "Open/closed: adding a payment method should mean adding code, not modifying existing functions",
-        "explanation": "Correct. Each new kind forces edits to working code in several places. Polymorphism (a `PaymentMethod` with `charge`, `refund`, `fees`) lets you add `ApplePay` as a new class."
+        "text": "Give each payment method a class with `charge`, `refund` and `fees` behind one interface, so a new method is a new class",
+        "explanation": "Correct. The axis that varies is the *kind* of payment. Polymorphism makes that axis cheap: `ApplePay` becomes one new class, and the existing classes and their tests stay untouched. This is the open/closed principle applied along the axis that actually changes."
       },
       {
-        "text": "Dependency inversion",
-        "explanation": "DIP is about high-level policy depending on abstractions rather than low-level details. That could come into a fix, but the symptom here is modification on every extension."
+        "text": "Move all three ladders into one module so they are easier to find",
+        "explanation": "That shortens the search, but every new payment method still edits three working functions. It treats the symptom, not the scattering of each method's rules."
       },
       {
-        "text": "Liskov substitution",
-        "explanation": "No subtype is breaking a parent's contract. There are no subtypes at all."
+        "text": "Add a boolean parameter to `charge` for each payment method",
+        "explanation": "Flags multiply the branches and make call sites unreadable. Each new method would still edit existing code, now in signatures as well."
       },
       {
-        "text": "Interface segregation",
-        "explanation": "No client is forced to depend on methods it doesn't use."
+        "text": "Write each operation as a separate visitor over the payment kinds, so new operations are cheap",
+        "explanation": "That optimises the wrong axis. Visitors make adding *operations* cheap and adding *kinds* expensive, but here kinds change and operations don't."
       }
     ],
     "answer": 0,
-    "workedExample": "1. The symptom: a new *kind* of thing means editing *existing* functions, and the same switch on `p.kind` is repeated in several places.\n2. That's what OCP targets: be open to extension (new payment methods) while closed to modification (old code untouched).\n3. Refactor:\n\n```python\nclass Card:\n    def charge(self, amount): ...\n    def refund(self, amount): ...\n\ndef charge(p, amount):\n    p.charge(amount)\n```\n\n4. Now `Klarna` and `ApplePay` are new classes. Old classes, and their tests, don't change.",
+    "workedExample": "1. Find the axis of change: new payment *kinds* arrive often; the *operations* are stable.\n2. Look at the current cost: each new kind edits `charge`, `refund` and `fees`, which are all working code with their own tests.\n3. Choose the design that makes the frequent change an addition:\n\n```python\nclass Card:\n    def charge(self, amount): ...\n    def refund(self, amount): ...\n    def fees(self, amount): ...\n\ndef charge(p, amount):\n    p.charge(amount)\n```\n\n4. Now `Klarna` and `ApplePay` are new classes, and old classes stay closed to modification.\n5. Check the opposite case: if operations were the thing growing, functions or visitors over a fixed set of kinds would fit better. OCP protects the axis you choose.",
     "link": {
       "title": "Open–closed principle — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Open%E2%80%93closed_principle"

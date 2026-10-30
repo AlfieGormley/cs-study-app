@@ -3,30 +3,30 @@
     "id": "db-index-scan-budgets-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "A table has 2 million rows, 100 rows per page and approximately 8 KB per page. Assume no caching or concurrent I/O, and a sequential read speed of 160 MB/s. About how long does reading all table pages take? Use decimal KB and MB for this rounded estimate.",
+    "prompt": "A nightly report filters a PostgreSQL table with `WHERE customer_email = $1`. There is no index on `customer_email`, and `EXPLAIN` shows a `Seq Scan`. The query returns one row and takes about 1 second today. Over the next year the table doubles in size. Assuming similar hardware and caching, what should you predict?",
     "options": [
       {
-        "text": "About 0.01 seconds",
-        "explanation": "This ignores most table pages. A full scan reads every page, not just an index path."
+        "text": "It stays at about 1 second, because it still returns only one row",
+        "explanation": "Wrong. A sequential scan reads every page whatever the result size, so its cost follows the table, not the answer."
       },
       {
-        "text": "About 1 second",
-        "explanation": "Correct. There are 20,000 pages, about 160 MB, taking one second at the stated 160 MB/s."
+        "text": "It grows to about 2 seconds; an index on `customer_email` would turn it into a few page reads that barely change as the table grows",
+        "explanation": "Correct. Scan time grows roughly in step with the pages read. A selective B-tree lookup reads a handful of pages and gains only about one level each time the table grows by a factor of hundreds."
       },
       {
-        "text": "About 100 seconds",
-        "explanation": "This treats each row as a full page. One page holds 100 rows in the stated model."
+        "text": "It grows to about 4 seconds, because scan cost grows with the square of the row count",
+        "explanation": "Wrong. A scan reads each page once, so its cost is roughly proportional to the table's size, not its square."
       },
       {
-        "text": "It is independent of the table size",
-        "explanation": "A selective lookup can avoid most pages; a full scan grows with the pages it must read."
+        "text": "It gets faster, because a bigger table is more likely to be cached",
+        "explanation": "Wrong. A bigger table is less likely to fit in memory, not more. Caching can help a scan but does not reverse the growth."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Divide rows by rows per page.\n2. Multiply pages by page size.\n3. Divide total bytes by sequential speed.\n```formula\nP = 2,000,000 / 100 = 20,000\nS = 20,000 × 8 KB = 160 MB\nt = 160 MB / (160 MB/s) = 1 s\nwhere\nP: the number of pages to read\nS: the rounded table size, in megabytes (MB)\nt: the scan time, in seconds (s)\nKB: kilobyte, 1,000 bytes for this estimate\nMB: megabyte, 1,000,000 bytes\nMB/s: megabytes read per second\ns: second, the unit of time\nIn words: twenty thousand eight-kilobyte pages contain about 160 MB, so the stated speed reads them in about one second.\n```\n4. This is a workload estimate under the supplied assumptions, not a database latency guarantee.",
+    "workedExample": "1. `Seq Scan` means PostgreSQL reads every page of the table to find the matching row.\n2. The work is set by the number of pages, not by how many rows come back. Double the table, double the pages, roughly double the time.\n3. An index on `customer_email` stores the emails in sorted order with pointers to the rows. A lookup walks a few levels of the B-tree and fetches one heap page.\n4. The tree's height grows only with the logarithm of the row count, so doubling the table rarely adds even one page read.\n5. Caveat: these are predictions under similar caching and hardware. Confirm with `EXPLAIN ANALYZE` after adding the index.",
     "link": {
-      "title": "PostgreSQL: Using EXPLAIN",
-      "url": "https://www.postgresql.org/docs/current/using-explain.html"
+      "title": "PostgreSQL: Indexes",
+      "url": "https://www.postgresql.org/docs/current/indexes.html"
     }
   }
 ]

@@ -32,22 +32,16 @@ Here `(sensor_id, day)` is the partition key, and `ts` sorts rows within it. "La
 - **Cheap**: huge write throughput (they're built on LSM trees, covered in the indexing lesson), horizontal growth when key distribution and workload permit it, multi-datacentre replication.
 - **Expensive**: queries that don't start with the partition key. No joins. You typically make one table *per query*, duplicating data across them.
 
-That's why the example puts `day` in the partition key. Keyed by `sensor_id` alone, a sensor reporting every second would add 86,400 rows a day to one partition, forever. The growth is simple multiplication:
-
-```formula
-R_day = f × 86,400 s
-R_day = 1/s × 86,400 s = 86,400
-where
-R_day: the number of rows one sensor adds to its partition each day
-f: how often the sensor reports, in readings per second; here once a second
-86,400 s: the number of seconds in a day (24 × 60 × 60)
-s: seconds
-In words: a once-a-second sensor writes 86,400 rows a day; without a time bucket in the key they all pile into one partition and it never stops growing.
-```
+That's why the example puts `day` in the partition key. Keyed by `sensor_id` alone, a sensor reporting every second would add 86,400 rows a day to one partition, and that partition would never stop growing.
 
 With `day` in the partition key, each partition holds at most one day of one sensor's readings and then stops growing. Huge partitions overload the replicas that own them and slow compaction and repair, so choose time buckets using measured serialized size, tombstones and query/repair behavior; a fixed size target is a rule of thumb, not a universal limit.
 
-Specific company deployment counts are omitted because this review did not establish a reliable dated primary-source basis for both claims.
+> [!analogy] Real-world analogy: one folder per sensor per day
+> Picture a filing room where each sensor gets one folder per day, and the pages inside are kept in time order, newest first. To read "sensor X today", you fetch one folder and read from the front.
+>
+> **How it maps:** The folder label is the partition key `(sensor_id, day)`, which decides where the data lives, and the page order inside is the clustering column `ts`. Starting a new folder each day is the time bucket that stops any one partition growing for ever.
+>
+> **Where it stops:** The folders are spread across machines by hashing their labels and copied to several replicas, so there is no shelf order between folders. A question that does not name the folder, such as "every reading above 50 last week", means opening every folder in the cluster.
 
 ## Key takeaways
 - Cassandra hashes partition keys and orders rows within them by clustering columns.

@@ -65,5 +65,5 @@ with open(path) as f, db.transaction():
 - A return from finally can discard a pending error; prefer explicit cleanup protocols.
 
 ## Further reading
-- [compound_stmts](https://docs.python.org/3/reference/compound_stmts.html#the-try-statement)
-- [peps.python.org](https://peps.python.org/pep-0765/)
+- [Python reference: the try statement](https://docs.python.org/3/reference/compound_stmts.html#the-try-statement)
+- [PEP 765: Disallow return/break/continue that exit a finally block](https://peps.python.org/pep-0765/)

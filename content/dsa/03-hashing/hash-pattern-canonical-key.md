@@ -44,22 +44,7 @@ Choosing the key is the whole problem:
 
 The key must be hashable, which is why it is `tuple(sorted(w))` rather than `sorted(w)` (a list).
 
-The cost depends on how you build the key. Sorting each word's letters costs more than counting them:
-
-```formula
-T_sort = O(n + n k log(k + 1))
-T_count = O(n (k + 1))
-where
-T_sort: the running time with sorted-letter keys
-T_count: the running time with 26-count keys (lowercase letters only)
-O(…): Big-O, the growth rate of the cost, ignoring constant factors
-n: the number of words
-k: the length of the longest word, in characters
-log: logarithm (any fixed base, since Big-O ignores the constant); log_2(9) ≈ 3.2
-In words: sorting a word of k letters costs about k × log k steps, while counting its letters costs about k; the "+ 1" terms only make the formulas correct for empty words.
-```
-
-For example, 1,000 words of 8 letters cost on the order of 1,000 × 8 × 3.2 ≈ 25,000 steps with sorting and 9,000 with counting. Big-O hides constant factors, so practical timings for short words require measurement; the asymptotic difference becomes more relevant for long strings.
+The cost depends on how you build the key. For n words of up to k letters, sorting each word's letters costs about k log k steps per word, while counting its letters into 26 slots costs about k. So the counting key is asymptotically cheaper: O(nk) rather than O(nk log k). Big-O hides constant factors, though, and for short words the sorted tuple is often just as fast in practice; the difference matters for long strings, and timings need measuring.
 
 ## Test the key against the grouping rule
 

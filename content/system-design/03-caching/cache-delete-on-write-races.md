@@ -49,6 +49,13 @@ The database says `Bea`, the cache says `Ann`, and it stays wrong until the TTL.
 
 **This is why deleting is preferred over updating.** Deletes are idempotent and commutative: two deletes in either order leave the same result (an empty key), and the next reader loads the true value.
 
+> [!analogy] Real-world analogy: the office whiteboard
+> A whiteboard in reception shows today's meeting room, copied from the booking system. Two people change the booking a minute apart and each walks over to rewrite the whiteboard. If the first person is held up on the way, their older room number is written last and stays up.
+>
+> **How it maps:** The booking system is the database, the whiteboard is the cache, and rewriting it is update-on-write. Whoever arrives last wins, not whoever booked last. If both people simply *wipe* the board instead, the order of arrival no longer matters: the next visitor finds it blank and checks the booking system, which is delete-on-write.
+>
+> **Where it stops:** A blank whiteboard is obvious to everyone. A cache miss is silent, and a reader who checked the booking system *before* the change can still write the old room on the blank board, which is the stale-refill race in the next unit.
+
 ## Delete vs update: summary
 
 | | Delete on write | Update on write |

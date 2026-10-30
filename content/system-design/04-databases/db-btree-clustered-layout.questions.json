@@ -3,27 +3,27 @@
     "id": "db-indexing-q1",
     "level": "basic",
     "type": "single",
-    "prompt": "A B-tree index has an illustrative B-tree fan-out of about 400 children per internal page and about 400 keys per leaf. Roughly how many page reads does a lookup need in a table of 60 million rows?",
+    "prompt": "A B-tree index on a 60-million-row table has a fan-out of about 400 children per page, and a lookup currently reads 3 index pages. The table grows tenfold to 600 million rows. Roughly how many index pages will a lookup read?",
     "options": [
       {
-        "text": "About 26, since log₂(60 million) ≈ 26",
-        "explanation": "Wrong. log₂ (logarithm to base 2) counts how many times you halve 60 million to reach 1, which is the depth of a binary tree with two children per node. B-trees pack hundreds of keys into each page, so the base of the logarithm is the B-tree fan-out, not 2."
+        "text": "About 30, because the table is ten times bigger",
+        "explanation": "Wrong. That treats lookup cost as linear in table size. Each level multiplies capacity by the fan-out, so tenfold growth adds levels only logarithmically."
       },
       {
-        "text": "About 3–4",
-        "explanation": "Correct. Three levels of 400-way branching reach 400 × 400 × 400 = 64 million keys, which covers 60 million. Add one for the leaf or row fetch, and the top levels are usually cached anyway."
+        "text": "About 4: at most one extra level",
+        "explanation": "Correct. Three levels of 400-way branching reach about 64 million keys, enough for 60 million but not 600 million. A fourth level multiplies capacity by another 400, far more than the tenfold growth needs."
       },
       {
-        "text": "About 60,000",
-        "explanation": "Wrong. That's closer to scanning a meaningful fraction of the table. The whole point of a tree index is logarithmic, not linear, cost."
+        "text": "About 6, because the height doubles when the table grows tenfold",
+        "explanation": "Wrong. Height grows with the logarithm of the row count, using the fan-out as the base. Tenfold growth is far less than one more factor of 400, so it adds at most one level, not three."
       },
       {
-        "text": "Exactly 1, like a hash table",
-        "explanation": "Wrong. B-trees need a root-to-leaf walk. Even hash indexes need at least a bucket read plus the row fetch."
+        "text": "Exactly 3, because B-tree depth never changes",
+        "explanation": "Wrong. Depth does grow as the tree fills; it just grows very slowly. Here the table has outgrown three levels of 400-way branching."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Each level multiplies the number of addressable keys by the B-tree fan-out (≈400).\n2. Level 1 (root): 400 keys. Level 2: 400² = 160,000. Level 3: 400³ = 64,000,000.\n3. 64 million ≥ 60 million, so three levels suffice. As a formula:\n```formula\nh = ⌈log_f(n)⌉\nh = ⌈log_400(60,000,000)⌉\nh = ⌈2.99⌉ = 3\nh_bin = ⌈log_2(60,000,000)⌉ = 26\nwhere\nh: the tree height, the number of page reads from root to leaf\nf: the B-tree fan-out, children per page, here 400\nn: the number of keys, here 60 million\nlog_f: logarithm to base f: how many copies of f must be multiplied together to reach n\nlog_400: logarithm to base 400\nlog_2: logarithm to base 2, the number of halvings\n⌈ ⌉: ceiling, round up to a whole number of levels\nh_bin: the height a binary tree (B-tree fan-out 2) would need\n≥: greater than or equal to\nIn words: with 400 children per page, 3 levels reach 60 million keys, whereas a binary tree would need 26 levels.\n```\n4. A lookup reads the root, an internal page and a leaf: 3 page reads, plus one heap fetch in Postgres.\n5. The root and internal levels are tiny (1 + 400 pages ≈ 3 MB at 8 KB), so they stay cached and often only the leaf hits disk.",
+    "workedExample": "1. Each level multiplies the number of reachable keys by the fan-out, about 400.\n2. Three levels reach about 400 × 400 × 400 = 64 million keys. That covers 60 million, which is why lookups read 3 pages today.\n3. At 600 million rows, three levels are no longer enough. A fourth level reaches about 25.6 billion keys, far more than needed.\n4. So the lookup reads about 4 index pages: tenfold growth cost one level.\n5. The root and upper levels are tiny and almost always cached, so in practice the extra level rarely means an extra disk read. A binary tree, by contrast, would need about 30 levels for 600 million keys.",
     "link": {
       "title": "Use The Index, Luke: concatenated indexes",
       "url": "https://use-the-index-luke.com/sql/where-clause/the-equals-operator/concatenated-keys"

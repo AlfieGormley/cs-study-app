@@ -19,6 +19,13 @@ The simplest model: a mapping from keys to values, whether embedded on one host 
 - **Cheap**: lookups by exact key. Actual latency depends on deployment, payload, consistency, load and network distance.
 - **Expensive**: anything else. "Find all users in Leeds" means scanning everything unless you build your own index.
 
+> [!analogy] Real-world analogy: a cloakroom ticket
+> At a theatre cloakroom you hand over a ticket and the attendant walks straight to the matching hook. Asking "please find every blue coat" would mean checking every hook by hand.
+>
+> **How it maps:** The ticket number is the key, the coat is the value and the hook position is where the store keeps it. `GET(key)` is handing over the ticket; a query on a property of the values is the blue-coat search, which needs a full scan unless you maintain a separate index.
+>
+> **Where it stops:** A distributed key-value store spreads its hooks across many machines and keeps copies, and products such as Redis and DynamoDB understand some value structure. The comparison also says nothing about durability: coats do not vanish in a power cut, but an in-memory store's data can.
+
 Check durability before treating an in-memory store as a system of record. Redis by default only snapshots to disk periodically (RDB), so a crash loses everything since the last snapshot. Its append-only file with `appendfsync everysec` narrows that to about a second of writes.
 
 DynamoDB extends the model a little. Each item has a **partition key** (PK, hashed to pick a partition) and an optional **sort key** (SK), and items with the same partition key are stored together, sorted by sort key. That lets you do range queries *within* one partition:
@@ -36,11 +43,11 @@ A `Query(PK = USER#42, SK begins_with ORDER#)` returns that user’s orders in n
 
 ## Expiry, ordering and another lookup
 
-Redis expires keys on access. DynamoDB TTL removes expired items asynchronously, typically within days, so check the session expiry timestamp in the application before accepting it. Cleanup timing is not an authentication deadline.
+Redis never returns an expired key: it deletes one when a client next touches it, and also samples keys in the background to remove expired ones nobody reads. DynamoDB TTL deletes expired items asynchronously, typically within a few days, and reads can still return them until then, so check the session expiry timestamp in the application before accepting it. Cleanup timing is not an authentication deadline.
 
 For newest-first DynamoDB orders, use one fixed-width timestamp format and timezone in the sort key, and Query with `ScanIndexForward=false`. A lookup by order id needs another key mapping, such as a global secondary index (GSI); its reads are eventually consistent. A GSI is an extra index with its own keys, not a way to scan the table cheaply.
 
-A strongly consistent read of an item up to 4 KB uses one read unit; an eventually consistent read uses half. For a single hot 1 KB item, the 3,000-unit partition ceiling therefore permits at most 3,000 strongly consistent reads per second or 6,000 eventual reads per second. A read cache can help when stale values are acceptable, but it changes the freshness guarantee.
+A strongly consistent read of an item up to 4 KB uses one read unit; an eventually consistent read uses half. So one hot small item can serve at most about 3,000 strongly consistent or 6,000 eventually consistent reads per second, whatever the table's total capacity or billing mode. A read cache can help when stale values are acceptable, but it changes the freshness guarantee.
 
 ## Key takeaways
 - Exact-key lookups suit sessions and other known access patterns.

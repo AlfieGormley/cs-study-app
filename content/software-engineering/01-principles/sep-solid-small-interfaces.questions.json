@@ -3,27 +3,27 @@
     "id": "sep-solid-q3",
     "level": "basic",
     "type": "single",
-    "prompt": "A team's `Storage` interface has `read`, `write`, `delete`, `list` and `presign_url`. A read-only cache client must implement all five, so four of them throw. Which principle best addresses this?",
+    "prompt": "A team's `Storage` interface has `read`, `write`, `delete`, `list` and `presign_url`. A read-only cache must implement all five, so four of them throw. Several services only ever read. Which change fixes this without breaking code that needs full storage?",
     "options": [
       {
-        "text": "Single responsibility",
-        "explanation": "SRP is about how many actors a module serves. The pain here is clients and implementers being forced to depend on methods they don't need."
+        "text": "Keep the interface and document that four methods may throw `NotSupported`",
+        "explanation": "Documenting the throws makes them 'optional operations', like Java's unmodifiable lists. Every caller holding a `Storage` must now guess whether `write` works, so the problem moves to the call sites."
       },
       {
-        "text": "Dependency inversion",
-        "explanation": "The code may well depend on an abstraction already; the problem is that the abstraction is too wide."
+        "text": "Make the cache inherit from the full storage class so it gets working versions of all five methods",
+        "explanation": "That gives a read-only cache real write and delete powers it should not have, and ties it to the full store's implementation. It removes the throws by breaking the cache's purpose."
       },
       {
-        "text": "Open/closed",
-        "explanation": "OCP is about extending behaviour without editing old code, not about the width of an interface."
+        "text": "Add a `mode` argument to each method so the cache can ignore calls it doesn't support",
+        "explanation": "That is control coupling: callers steer behaviour with a flag, and silently ignored writes are worse than exceptions because failures vanish."
       },
       {
-        "text": "Interface segregation: split it into small role interfaces such as `Reader` and `Writer`",
-        "explanation": "Correct. A fat interface forces the read-only client to implement methods it can't support. Smaller role interfaces let each implementer and client depend only on what it uses."
+        "text": "Split it into role interfaces such as `Reader` and `Writer`. Read-only code asks for a `Reader`; the full store implements both",
+        "explanation": "Correct. This is interface segregation: each client depends only on the capability it uses. The cache implements `Reader` honestly, and code needing full storage still gets an object that implements every role."
       }
     ],
     "answer": 3,
-    "workedExample": "1. The smell: implementations that throw \"not supported\" for most of the interface.\n2. ISP says clients shouldn't be forced to depend on methods they don't use, and implementers shouldn't be forced to fake them.\n3. Split by role:\n\n```python\nfrom typing import Protocol\n\nclass Reader(Protocol):\n    def read(self, key) -> bytes: ...\n\nclass Writer(Protocol):\n    def write(self, key, b): ...\n```\n\n4. A read-only client implements `Reader`. Code that only reads asks for a `Reader`, so it can be handed the cache or the full store.\n5. Bonus: the throwing methods violate Liskov substitution if the original contract promises successful support; ISP removes them.",
+    "workedExample": "1. The smell: an implementation that throws 'not supported' for most of an interface. Clients holding that interface can't tell what works.\n2. Ask what each client actually uses. Several services only read.\n3. Split by role:\n\n```python\nfrom typing import Protocol\n\nclass Reader(Protocol):\n    def read(self, key) -> bytes: ...\n\nclass Writer(Protocol):\n    def write(self, key, b): ...\n```\n\n4. The cache implements `Reader`. Read-only services ask for a `Reader`, so they accept the cache or the full store. Code that writes asks for a `Writer` (or both), and only the full store qualifies.\n5. Side effect: the throwing methods disappear, so a promise of working `write` can no longer be broken by a substitute, which also removes a Liskov substitution problem.",
     "link": {
       "title": "Interface segregation principle — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Interface_segregation_principle"

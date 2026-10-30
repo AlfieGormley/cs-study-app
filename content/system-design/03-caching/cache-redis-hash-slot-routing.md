@@ -11,9 +11,9 @@ Redis Cluster keeps a fixed slot space and assigns slots to primaries. Clients t
 
 ### Redis Cluster: hash slots
 
-Redis Cluster uses a fixed set of **16,384 hash slots**:
+Redis Cluster uses a fixed set of **16,384 hash slots**. Each key's slot comes from a checksum of the key (or of its hash tag, below), and the slot number never depends on how many nodes there are:
 
-```formula
+```formula reference
 slot = CRC16(key) mod 16384
 where
 slot: the hash slot number, from 0 to 16,383
@@ -21,7 +21,7 @@ CRC16: a 16-bit cyclic redundancy check, a fast checksum function that turns the
 key: the cache key, or only the part inside {} when the key contains a hash tag
 mod: modulo, the remainder after whole-number division; written % in code
 16384: the fixed number of slots, 2 to the power 14
-In words: checksum the key and take the remainder after dividing by 16,384 to get its slot.
+In words: checksum the key and take the remainder after dividing by 16,384 to get its slot. Adding nodes changes which node owns a slot, never which slot a key is in.
 ```
 
 Each primary owns a set of slots. Adding a node means **migrating some slots** to it, key by key, while the cluster keeps serving. Clients cache the slot map and send each command straight to the right node.

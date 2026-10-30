@@ -11,43 +11,25 @@ The number of registered records is usually less useful than the number of disti
 
 ## Sizing: how big should it be?
 
-You rarely need to cache everything. Because access is skewed, the required fraction of cached keys depends on the observed popularity distribution. The usual approach is:
+You rarely need to cache everything. Because access is skewed, the share of keys worth caching depends on the observed popularity distribution. The usual approach is:
 
-1. Estimate the **working set**: the distinct keys touched in a typical window (an hour or a day).
-2. Multiply by average value size plus overhead (measure key, value, allocator and metadata overhead with representative objects; no fixed per-key overhead applies universally).
-3. Measure the hit ratio at a few sizes. The curve of hit ratio against cache size flattens out; stop where extra memory stops buying meaningful hits.
+1. Estimate the **working set**: the distinct keys touched in a typical window (an hour or a day). For a user-profile cache that is today's active users, not everyone who ever registered.
+2. Multiply by the average size of one value plus the per-key overhead: the key itself, metadata and allocator waste. Measure that overhead with representative objects (Redis's `MEMORY USAGE` command reports a key's bytes); no fixed per-key overhead applies to every cache and data shape.
+3. Add headroom for what the payload estimate leaves out: allocator fragmentation, client and replication buffers, snapshot copy-on-write and growth.
+4. Measure the hit ratio at a few sizes. The curve of hit ratio against cache size flattens out; stop where extra memory stops buying meaningful hits.
 
-Steps 1 and 2 as a formula:
-
-```formula
+```formula reference
 M = K × (S_v + S_o)
 where
 M: the memory needed for the cached data, in bytes (B)
 K: the number of distinct keys in the working set
 S_v: the average size of one cached value, in bytes
 S_o: the average overhead per key (the key itself, metadata and allocator waste), in bytes; measure it for your cache and data
-B: bytes; 1 KB = 1,000 B, 1 MB = 1,000,000 B, 1 GB = 1,000,000,000 B
-In words: memory is the number of keys you need to hold times what each one costs, including its overhead.
+B: bytes; 1 GB = 1,000,000,000 B
+In words: payload memory is the number of active keys times what each one costs, value plus overhead. For example, 5 million active profiles of about 2 KB each, with about 100 bytes of measured overhead, need roughly 10.5 GB before any headroom.
 ```
 
-For example, 5 million active users with a 2 KB profile, under an illustrative 100-byte-overhead assumption:
-
-```formula
-M = K × (S_v + S_o)
-M = 5,000,000 × (2,000 B + 100 B)
-M = 10,500,000,000 B ≈ 10.5 GB
-where
-M: the memory needed, in bytes (B)
-K: the number of keys, here 5 million active users
-S_v: the value size, here 2 KB = 2,000 B
-S_o: the assumed overhead per key, here 100 B
-B: bytes
-GB: gigabytes; 1 GB = 1,000,000,000 B
-≈: approximately equal to
-In words: 5 million profiles of about 2 KB each need about 10 GB for the values plus about 0.5 GB of overhead.
-```
-
-This is payload sizing, not a node recommendation; add measured fragmentation, buffers, replication and snapshot headroom.
+The most common sizing mistakes are using all registered records instead of active ones (oversizing by the inactive majority), forgetting per-key overhead (which can rival the value for small items), and treating the payload total as the machine size.
 
 ## Key takeaways
 - Estimate distinct active keys over a realistic window instead of caching every possible record.

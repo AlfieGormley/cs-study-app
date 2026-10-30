@@ -11,21 +11,7 @@ Exact recency tracking consumes memory and updates metadata on reads. Redis appr
 
 ## What real systems do
 
-Exact LRU needs a linked list with two pointers per key and list updates on hits; shared concurrent implementations also need synchronisation. The pointers alone cost:
-
-```formula
-M_ptr = n × 2 × p
-M_ptr = 100,000,000 × 2 × 8 B
-M_ptr = 1,600,000,000 B = 1.6 GB
-where
-M_ptr: the memory used by the list pointers, in bytes (B)
-n: the number of keys in the cache, here 100 million
-2: two pointers per key, one to the previous entry and one to the next
-p: the size of one pointer, in bytes; 8 B on a 64-bit machine
-B: bytes; 1 GB = 1,000,000,000 B
-GB: gigabytes
-In words: each key carries 16 bytes of pointers, so 100 million keys spend 1.6 GB just on keeping the recency order.
-```
+Exact LRU needs a linked list with a previous and a next pointer for every key, and list updates on hits; shared concurrent implementations also need synchronisation. On a 64-bit machine those pointers take 16 bytes per key, so 100 million keys would spend about 1.6 GB on recency order alone, and every read would have to rewrite the list.
 
 At millions of keys and millions of reads per second, systems use **approximations**.
 
@@ -41,6 +27,13 @@ When memory exceeds `maxmemory`, Redis:
 
 Redis's documented comparison found five samples close to true LRU and ten closer, at extra CPU cost. Accuracy still depends on the access pattern; measure your workload.
 
+> [!analogy] Real-world analogy: clearing a crowded fridge
+> Nobody keeps a ranked list of every item in a shared office fridge. When it is full, someone grabs a handful of items at random and throws out the one that looks longest untouched, keeping a mental note of a few other suspects for next time.
+>
+> **How it maps:** The random handful is `maxmemory-samples`, "longest untouched" is Redis's per-key access clock or LFU counter, and the remembered suspects are the eviction pool kept across rounds. Grabbing a bigger handful finds the truly most neglected item more often, at more effort: the five-versus-ten-sample trade-off.
+>
+> **Where it stops:** The fridge-clearer judges by eye; Redis compares stored timestamps or counters, which are themselves approximate. And Redis never "throws out" something to make room for nothing: it evicts only while its accounted memory is over the limit.
+
 Redis eviction policies, set via `maxmemory-policy`:
 
 | Policy | Candidates | Rule |
@@ -53,7 +46,7 @@ Redis eviction policies, set via `maxmemory-policy`:
 | `volatile-ttl` | keys with TTL | Soonest expiry |
 | `*-random` | all / TTL | Random |
 
-Redis 8.6 added `allkeys-lrm` and `volatile-lrm` (*least recently modified*), which only update the timestamp on writes, so keys that are read a lot but never updated can still be evicted.
+Redis 8.6 added `allkeys-lrm` and `volatile-lrm` (*least recently modified*), which only update the timestamp on writes, so keys that are read a lot but never updated can still be evicted. Policy lists change between versions (this one is checked against the Redis documentation as of late 2026), and forks such as Valkey or managed services may differ, so check the engine and version you run.
 
 > [!warning] The default is `noeviction`
 > Out of the box, Redis does not evict. When its accounted memory is above the limit, memory-growing commands can fail with OOM while existing-key reads continue; maxmemory is not a strict RSS ceiling. For a pure cache you almost always want `allkeys-lru` or `allkeys-lfu`. The `volatile-*` policies evict nothing if no keys have a TTL.

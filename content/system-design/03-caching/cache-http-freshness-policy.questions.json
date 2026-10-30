@@ -63,27 +63,27 @@
     "id": "cache-http-q11",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A browser receives a response from a CDN with `Cache-Control: max-age=300` and `Age: 250`. For how much longer may the browser treat its copy as fresh?",
+    "prompt": "Your API sends `Cache-Control: max-age=300` and is served through a CDN. Browser logs show many users revalidating after only a few seconds or a minute, not five minutes. The CDN's responses carry large `Age` headers, such as `Age: 250`. What explains this?",
     "options": [
       {
-        "text": "300 seconds, because the browser's clock starts when it receives the response",
-        "explanation": "The `Age` header tells the browser the response has already spent 250 s in upstream caches. Ignoring it would make the total lifetime 550 s."
+        "text": "Browsers ignore max-age when a CDN is involved; switch to the older Expires header",
+        "explanation": "Browsers do honour max-age through CDNs. Expires would not help: it is an absolute date, and the lifetime is still measured against the response's age."
       },
       {
-        "text": "About 50 seconds",
-        "explanation": "Correct. Freshness is measured from when the origin generated the response. It is already 250 s old, so 300 − 250 = 50 s of freshness remain."
+        "text": "The Age header counts time the copy already spent in the CDN, and a browser's freshness is the lifetime minus that age, so a copy served late in the CDN's window has little freshness left",
+        "explanation": "Correct. Freshness is measured from when the origin generated or validated the response, not from when the browser received it. A copy that is already 250 s old has only about 50 s left of a 300 s lifetime. This is HTTP working as specified."
       },
       {
-        "text": "0 seconds: an `Age` header means the copy is already stale",
-        "explanation": "A non-zero `Age` only says the response came from a cache. It is stale only once its age reaches the freshness lifetime."
+        "text": "An Age header means the copy is already stale, so the browser must always revalidate",
+        "explanation": "A non-zero Age only says the response came through a cache. It is stale only once its age reaches the freshness lifetime."
       },
       {
-        "text": "550 seconds",
-        "explanation": "This adds the age to the lifetime instead of subtracting it."
+        "text": "The browser adds Age to max-age, so copies last longer than intended",
+        "explanation": "It is the other way round: age already used up reduces the freshness remaining. Adding them would give 550 s, longer than the origin allowed."
       }
     ],
     "answer": 1,
-    "workedExample": "1. Freshness lifetime = `max-age` = 300 s.\n2. Current age on arrival = `Age` header = 250 s (plus any transit time).\n3. Remaining freshness:\n\n```formula\nr = L − a\nr = 300 s − 250 s = 50 s\nwhere\nr: the freshness remaining, in seconds (s)\nL: the freshness lifetime, max-age = 300 s\na: the current age, from the Age header, 250 s\ns: seconds\nIn words: the response has already used 250 of its 300 seconds of freshness upstream, so the browser gets only 50.\n```\n\n4. After ~50 s the browser must revalidate.\n5. This is why a CDN copy fetched late in its life gives browsers only a short window, and why `s-maxage` and `max-age` are often set separately.",
+    "workedExample": "1. Freshness lifetime: `max-age=300` applies to every cache, CDN and browser alike.\n2. The CDN stored the response some time ago. When it serves it, `Age: 250` tells the browser 250 s of that lifetime are already used.\n3. So the browser treats its copy as fresh for only about 50 more seconds, then revalidates.\n4. Copies fetched early in the CDN's window last longer; ones fetched late last only seconds. That is the spread in the logs.\n5. What you can do: accept it and make revalidation cheap with an ETag (a 304 has no body), or raise `max-age` if longer staleness is acceptable. Note that `s-maxage` only changes how long the CDN keeps its copy; a longer CDN lifetime makes the `Age` browsers receive larger, not smaller.",
     "link": {
       "title": "HTTP caching — MDN",
       "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Caching"

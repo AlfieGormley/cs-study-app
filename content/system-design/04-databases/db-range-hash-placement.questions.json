@@ -33,27 +33,27 @@
     "id": "db-partitioning-q2",
     "level": "intermediate",
     "type": "single",
-    "prompt": "Assume uniformly distributed hash values. A cache cluster assigns keys with `hash(key) mod N`. It grows from N = 4 to N = 5 nodes. Roughly what fraction of keys now map to a different node?",
+    "prompt": "A cache cluster assigns keys with `hash(key) mod N`, where N is the number of nodes, and hash values are evenly spread. During a traffic peak the team adds a fifth node to the existing four. What should they expect immediately afterwards?",
     "options": [
       {
-        "text": "About 20%, the new node's share",
-        "explanation": "Wrong. That's the *ideal* (what consistent hashing achieves). With mod N, almost every key's remainder changes."
+        "text": "Only the new node's share of keys, about one in five, moves; the hit rate dips slightly",
+        "explanation": "Wrong. That is roughly what consistent hashing achieves. With modulo placement, changing N changes the remainder for most keys, not just the new node's share."
       },
       {
-        "text": "About 25%",
-        "explanation": "Wrong. There's no reason the moved fraction would equal one old node's share; the remainders change for most keys, not just one node's worth."
+        "text": "No keys move; the new node only receives keys written after it joined",
+        "explanation": "Wrong. Every lookup recomputes `hash(key) mod 5`, so existing keys are looked for wherever the new formula points, which for most of them is a different node."
       },
       {
-        "text": "None; existing keys stay where they are",
-        "explanation": "Wrong. Lookups recompute `hash mod 5`, so keys go wherever the new formula says, and most of them now land on a different node."
+        "text": "About a quarter of keys move, one old node's worth",
+        "explanation": "Wrong. There is no reason the moved fraction would equal one old node's share. Most remainders change when the divisor changes."
       },
       {
-        "text": "About 80%",
-        "explanation": "Correct. A key stays put only if its hash leaves the same remainder when divided by 4 and by 5, which happens for 4 out of every 20 consecutive hash values: 20%. So about 80% of keys move, and a cold replacement placement can cause many misses; the request fraction depends on key popularity."
+        "text": "Most keys, about four in five, now map to a different node, so the cache behaves as if mostly cold and the database behind it takes a surge of misses",
+        "explanation": "Correct. A key stays put only when its remainders modulo 4 and modulo 5 agree, which happens for about one key in five. The resulting miss storm at peak is a classic cause of scaling outages; consistent hashing avoids it."
       }
     ],
     "answer": 3,
-    "workedExample": "1. A key with hash value h moves unless its old and new node numbers match:\n```formula\nold = h mod 4\nnew = h mod 5\nwhere\nold: the node the key used to live on (0–3)\nnew: the node it maps to after growth (0–4)\nh: the key's hash value, a whole number\nmod: modulo, the remainder after whole-number division (7 mod 4 = 3)\nIn words: each key's node is the remainder of its hash; adding a node changes the divisor, so most remainders change.\n```\n2. The pair of remainders repeats every 20 values (the lowest common multiple of 4 and 5). Count h in 0–19 where they're equal: h = 0, 1, 2, 3 (both give h). That's 4 values.\n3. The fraction that stays:\n```formula\nF_stay = 4 / 20 = 1 / (N + 1)\nF_stay = 1 / (4 + 1) = 0.2\nF_move = 1 − 0.2 = 0.8\nwhere\nF_stay: the fraction of keys that stay on the same node\nF_move: the fraction that move\nN: the number of nodes before growth, here 4\nIn words: going from 4 to 5 nodes with modulo placement keeps only 1 key in 5 in place; 80% move.\n```\n4. For a cold cache with uniformly popular keys, about 80% of requests initially miss; skew and migration/warming change this: a classic cause of outages during scaling.\n5. Consistent hashing moves only about one key in five, 20% (just the new node's share), and virtual nodes can distribute those transfers across several old nodes, without guaranteeing equal transfers from every node.",
+    "workedExample": "1. Each key's node is the remainder of its hash divided by the node count.\n2. Changing the divisor from 4 to 5 changes the remainder for most hash values. A key stays only when both remainders agree: over any run of 20 consecutive hash values that happens for just 4 of them (0, 1, 2 and 3 and their repeats), so about one key in five stays.\n3. So about 80% of keys are now looked up on a node that does not hold them. For uniformly popular keys, about 80% of requests initially miss; skew and warming change the exact figure.\n4. All those misses fall on the database at the moment the team was trying to add capacity.\n5. Consistent hashing moves only about the new node's share (about one key in five here), and virtual nodes spread those transfers across several existing nodes.",
     "link": {
       "title": "Wikipedia: Consistent hashing",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"

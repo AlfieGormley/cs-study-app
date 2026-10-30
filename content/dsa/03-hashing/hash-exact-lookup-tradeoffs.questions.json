@@ -3,27 +3,27 @@
     "id": "hash-maps-sets-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "A script checks 100,000 incoming emails against a blocklist of 100,000 addresses:\n\n```python\n# Supplied functions and email fixtures.\n# Every membership test scans this list.\nblocked = load_list()  # a list\nfor e in emails:\n    if e in blocked:\n        reject(e)\n```\n\nRoughly how many comparisons can this make in the worst case, and what is the fix?",
+    "prompt": "A nightly job checks incoming emails against a blocklist:\n\n```python\n# Supplied functions and email fixtures.\n# Every membership test scans this list.\nblocked = load_list()  # a list\nfor e in emails:\n    if e in blocked:\n        reject(e)\n```\n\nWhen both the email batch and the blocklist were 10,000 long, it took about a second. Both have now grown to 100,000 and the job takes nearly two minutes. What explains the slowdown, and what is the fix?",
     "options": [
       {
-        "text": "About 200,000; it is already linear",
-        "explanation": "This treats `in` on a list as O(1). A list membership test scans element by element, so each check can cost up to 100,000 comparisons."
+        "text": "Ten times more data should mean ten times longer, so something else is wrong",
+        "explanation": "This treats `in` on a list as O(1). A list membership test scans element by element, so the work grows with emails × blocklist size, not with either alone."
       },
       {
-        "text": "About 10 billion; convert `blocked` to a set first",
-        "explanation": "The list can make 10¹⁰ (ten billion) comparisons. Building a set once and then querying it costs O(n + m) expected hash-table operations, where n is the number of emails and m the blocklist size, under ordinary hash assumptions; that is not a measured speed-up."
+        "text": "Each `in` scans the list, so work grows with emails × blocklist; build `set(blocked)` once and test against that",
+        "explanation": "Correct. Ten times more emails, each scanning a ten-times-longer list, is about a hundred times the comparisons. A set built once makes each check expected O(1), so the job grows linearly again under ordinary hashing assumptions."
       },
       {
-        "text": "About 1.7 million; sort the list and the `in` operator will binary search",
-        "explanation": "List membership does not switch to binary search when sorted. bisect can implement binary search, with different memory and comparison costs."
+        "text": "Sort the list, so `in` switches to binary search",
+        "explanation": "List membership never switches to binary search, sorted or not. The bisect module can binary search a sorted list, but that is a different design with logarithmic lookups."
       },
       {
-        "text": "About 10 billion; there is no faster approach",
-        "explanation": "There is: a hash set makes each lookup O(1) on average, which removes the quadratic factor."
+        "text": "Nothing can be done: checking 100,000 emails against 100,000 addresses is inherently quadratic",
+        "explanation": "Only the list representation makes it quadratic. A hash set answers each membership test in expected constant time, removing the multiplying factor."
       }
     ],
     "answer": 1,
-    "workedExample": "1. There are 100,000 membership tests, and each can scan the whole list:\n\n```formula\nC = n × m\nC = 100,000 × 100,000\nC = 10^10\nwhere\nC: the worst-case number of comparisons\nn: the number of emails checked, 100,000\nm: the number of blocklist entries, 100,000\n^: \"to the power of\"; 10^10 is 1 followed by 10 zeros\nIn words: every one of 100,000 emails can be compared with every one of 100,000 blocked addresses, which is ten billion comparisons.\n```\n\n2. Build the set once, then query it: O(n + m) expected hash-table operations, about 200,000 for these sizes.\n3. String hashing and equality, collisions, allocation and caching determine the actual time; Big-O does not imply exactly 200,000 primitive operations or a 50,000-times speed-up.",
+    "workedExample": "1. `e in blocked` on a list compares `e` with entries one at a time, up to the whole list.\n2. So the job does (number of emails) × (blocklist length) comparisons in the worst case. Growing both by 10× multiplies that by about 100: one second becomes on the order of a hundred seconds, matching the symptom.\n3. Fix: `blocked = set(load_list())` once, before the loop. Building the set is one pass over the blocklist, and each check is then an expected O(1) hash lookup.\n4. Total expected work becomes proportional to emails + blocklist size. Actual time still depends on string hashing and equality, memory and caching, so measure the result rather than assuming an exact speed-up.",
     "link": {
       "title": "Time complexity of Python operations — Python wiki",
       "url": "https://wiki.python.org/moin/TimeComplexity"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Identify the query type: a **range** query, not an exact lookup.\n2. A good hash function deliberately destroys ordering: `09:00:01` and `09:00:02` end up in unrelated buckets.\n3. A sorted structure keeps neighbours together. Search for the first key ≥ 09:00, then iterate in order. The search takes about:\n\n```formula\nS ≈ log_2(n)\nS ≈ log_2(5 × 10^7) ≈ 25.6\nwhere\nS: the number of halving steps a binary search (or balanced tree) needs to find a position\nn: the number of stored keys, here 50 million\nlog_2: logarithm to base 2, the number of times you can halve n before reaching 1; log_2(1024) = 10\n^: \"to the power of\"; 10^7 = 10 million\n≈: approximately equal to\nIn words: halving 50 million keys about 26 times narrows the search to a single position.\n```\n\n4. Cost: O(log n + k), where k is the number of orders returned. This is why databases use B-tree indexes for range predicates and hash indexes only for equality.",
+    "workedExample": "1. Identify the query type: a **range** query, not an exact lookup.\n2. A good hash function deliberately destroys ordering: `09:00:01` and `09:00:02` end up in unrelated buckets.\n3. A sorted structure keeps neighbours together. Search for the first key ≥ 09:00, then iterate in order. The search is logarithmic. Each step halves the remaining range, so about 26 halvings narrow 50 million keys to one position (2²⁶ is about 67 million).\n\n4. Cost: O(log n + k), where k is the number of orders returned. This is why databases use B-tree indexes for range predicates and hash indexes only for equality.",
     "link": {
       "title": "Hash table — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Hash_table"

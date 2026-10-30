@@ -3,27 +3,27 @@
     "id": "cache-distributed-q12",
     "level": "advanced",
     "type": "single",
-    "prompt": "2,000 app instances each keep a pool of 4 connections to every node of a 30-node cache cluster. The team considers putting a proxy tier (for example mcrouter or Envoy) in between, with 20 proxies each holding 4 connections per node. How many connections does each cache node handle before and after?",
+    "prompt": "Your app fleet has grown from 200 to 2,000 instances, each keeping a pool of 4 connections to every node of a 30-node cache cluster. The cache nodes now spend noticeable memory and CPU on connection handling and are close to the maximum number of clients they accept, although request volume per node is unchanged. Which change addresses the cause most directly, and what does it cost?",
     "options": [
       {
-        "text": "8,000 before; 80 after",
-        "explanation": "Correct. Before: 2,000 × 4 = 8,000 per node. After: only proxies connect to nodes, so 20 × 4 = 80 per node. App instances connect to the proxies instead."
+        "text": "Put a proxy tier (for example mcrouter or Envoy) between apps and nodes, so only a few proxies hold connections to each node; the cost is an extra hop and another tier to operate",
+        "explanation": "Correct. Per-node connections scale with the number of direct clients. Twenty proxies instead of 2,000 apps cut each node's connections about a hundredfold, at the price of added latency and a highly available tier to run."
       },
       {
-        "text": "240,000 before; 2,400 after",
-        "explanation": "These are cluster-wide totals (`× 30 nodes`), not per node. The question asks what one node handles."
+        "text": "Add more cache nodes, which spreads the connections out",
+        "explanation": "Every app instance still connects to every node, so each new node also receives a pool from all 2,000 instances. Per-node connection counts stay the same."
       },
       {
-        "text": "8,000 before; 8,000 after",
-        "explanation": "The proxy tier's whole point is to multiplex many client connections onto a few node connections."
+        "text": "Increase each app's pool size so connections are reused more",
+        "explanation": "A bigger pool per app multiplies the connections each node must hold. It makes the problem worse."
       },
       {
-        "text": "120 before; 80 after",
-        "explanation": "120 is `30 × 4`, the connections one app instance opens across the whole cluster, not what a node receives."
+        "text": "Switch the eviction policy to allkeys-lfu to reduce memory use",
+        "explanation": "Eviction decides which cached keys to drop. Connection buffers are not cache entries, so the policy does not reduce connection overhead."
       }
     ],
     "answer": 0,
-    "workedExample": "1. Per node, before and after:\n\n```formula\nC_node = I × P\nC_node = 2,000 × 4 = 8,000\nC_node = 20 × 4 = 80\nwhere\nC_node: connections one cache node holds\nI: clients connecting to each node: 2,000 apps before, 20 proxies after\nP: connections per client per node, 4\nIn words: each node holds one pool per directly connected client, so swapping 2,000 apps for 20 proxies cuts its connections a hundredfold.\n```\n\n2. Cluster-wide, before, that is 8,000 × 30 = 240,000 connections, each costing memory and file descriptors.\n3. Per node, after: 80.\n\n4. A 100× reduction, plus clients no longer need the topology: the proxy handles routing and failover.\n5. Cost: an extra network hop (measure its latency under the actual load) and a tier you must run and keep highly available.",
+    "workedExample": "1. Each node holds one pool per directly connected client, so its connection count is the number of clients times the pool size.\n2. Growing the fleet tenfold grew each node's connections tenfold (now about 8,000), even though the request rate per node did not change.\n3. Adding nodes does not help: every app still connects to every node.\n4. A proxy tier changes who connects. With 20 proxies each holding 4 connections per node, each node sees about 80 connections; the apps talk to the proxies.\n5. Cost: an extra network hop (measure its latency under real load) and a tier you must run and keep highly available. Proxies also take over routing and failover, so clients no longer need the topology.",
     "link": {
       "title": "Scaling Memcache at Facebook — full paper PDF",
       "url": "https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf"

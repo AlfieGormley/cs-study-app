@@ -3,27 +3,27 @@
     "id": "db-storage-internals-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "In a deliberately simplified calculation, assume each flushed 16 KiB InnoDB page contains exactly one 100-byte logical change, full doublewrite writes the page twice, and a measured LSM workload writes 20 host bytes per logical byte. Ignoring logs and storage-device internal amplification, what are the host write-amplification factors?",
+    "prompt": "A MySQL InnoDB table of 2 TB, with a 64 GB buffer pool, receives random single-row updates of about 100 bytes each, spread evenly across the table. Monitoring shows the SSDs writing hundreds of times more bytes per second than the logical size of the updates. Which explanation and response fit best?",
     "options": [
       {
-        "text": "About 164× before doublewrite, 328× with it, versus the assumed measured LSM factor of 20×.",
-        "explanation": "Correct under the explicit assumptions: 16,384/100=163.84 and twice that is 327.68. The LSM number is supplied, not inferred from its data structure."
+        "text": "Each update dirties a whole 16 KiB page that rarely collects another change before it is flushed, and doublewrite writes it twice; more memory, clustering hot rows, or an LSM engine for this pattern could reduce the amplification",
+        "explanation": "Correct. With updates spread over a table far larger than memory, most flushed pages carry one small change. Page-granularity writes plus doublewrite multiply the bytes, and anything that lets changes coalesce on cached pages lowers the factor."
       },
       {
-        "text": "Both about 1×, because each engine writes only the changed bytes",
-        "explanation": "Wrong. Neither writes just the changed bytes: a B-tree writes whole pages, and an LSM rewrites data during compaction."
+        "text": "The redo log is misconfigured; InnoDB should write only the changed 100 bytes to the data file",
+        "explanation": "Wrong. InnoDB writes data pages whole; that is how a page-based B-tree works. The redo log records changes compactly, but the data pages still have to be written eventually."
       },
       {
-        "text": "InnoDB about 10× and the LSM about 164×.",
-        "explanation": "Wrong. This reverses the supplied calculation and measured assumption."
+        "text": "The SSD's own internal garbage collection explains all of it; the database is writing only what it needs",
+        "explanation": "Wrong as the main explanation. Device-level amplification is real, but the monitored host writes already include whole-page flushes and doublewrite, which are the database's own amplification."
       },
       {
-        "text": "Both necessarily have the same write amplification because both buffer writes.",
-        "explanation": "Wrong. Buffering alone does not determine amplification; this example explicitly supplies different behavior."
+        "text": "Switching the updates to `INSERT`s would remove the amplification",
+        "explanation": "Wrong. Random inserts into a clustered B-tree also land on scattered pages and also flush whole pages; the access pattern, not the statement type, causes the amplification."
       }
     ],
     "answer": 0,
-    "workedExample": "1. Divide bytes written by bytes changed:\n```formula\nWA = 16,384 B / 100 B = 163.84\nWA_dw = 2 × 163.84 = 327.68\nwhere\nWA: host write amplification of one page flush\nWA_dw: the same with doublewrite writing each page twice\nB: bytes; a 16 KiB page is 16,384 bytes\nIn words: flushing a whole 16 KiB page for a 100-byte change writes about 164 times the change, or about 328 times with doublewrite.\n```\n2. Multiple changes coalesced on a page would lower this factor.\n3. Apply each factor to a logical change rate:\n```formula\nW = V × WA\nW = 2 MB/s × 327.68 = 655.36 MB/s\nW_LSM = 2 MB/s × 20 = 40 MB/s\nwhere\nW: bytes the host writes per second with doublewrite\nV: the rate of logical changes, 2 MB/s\nWA: the write-amplification factor applied\nW_LSM: bytes written per second for the assumed 20× LSM\nMB/s: megabytes per second\nIn words: in this toy model the B-tree writes about 16 times as many bytes as the LSM for the same changes.\n```\n4. Real compression, buffering, flushing, compaction and device behavior change these values.\n5. Universal InnoDB-versus-LSM amplification ranges are absent because no matched workload measurement is available.",
+    "workedExample": "1. Compare the sizes: the buffer pool holds about 3% of the table, and the updates are spread evenly, so a dirty page is usually flushed before another update hits it.\n2. Each flush writes a whole 16 KiB page to save a roughly 100-byte change: over 150 times the change.\n3. InnoDB's doublewrite buffer writes each page twice for torn-page protection, roughly doubling that again.\n4. Responses that let changes coalesce lower the factor: more buffer memory, keys that keep frequently updated rows together, or batching updates.\n5. If the workload is inherently random small writes, an LSM engine, which buffers and writes sorted runs, may suit it better; measure its compaction cost on the same workload before switching.",
     "link": {
       "title": "Mark Callaghan: Read, write and space amplification",
       "url": "https://smalldatum.blogspot.com/2015/11/read-write-space-amplification-pick-2_23.html"

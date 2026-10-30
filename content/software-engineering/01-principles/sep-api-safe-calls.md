@@ -37,6 +37,6 @@ resize(img, width=800, height=600,
 - Choose defaults explicitly: Requests does not supply a default timeout.
 
 ## Further reading
-- [requests.readthedocs.io](https://requests.readthedocs.io/en/latest/user/quickstart/#timeouts)
-- [peps.python.org](https://peps.python.org/pep-3102/)
-- [dataclasses](https://docs.python.org/3/library/dataclasses.html)
+- [Requests quickstart: timeouts](https://requests.readthedocs.io/en/latest/user/quickstart/#timeouts)
+- [PEP 3102: Keyword-Only Arguments](https://peps.python.org/pep-3102/)
+- [Python docs: dataclasses](https://docs.python.org/3/library/dataclasses.html)

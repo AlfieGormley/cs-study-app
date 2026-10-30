@@ -72,6 +72,13 @@ The data flow is the same as cache-aside; the difference is **where the code liv
 
 Read-through keeps application code simple, and a good library will **coalesce** concurrent misses for the same key into one database query. Note that an in-process library coalesces per process: with 20 app servers, a cold key can still cause up to 20 queries. The cost is coupling: the cache must know how to talk to your database.
 
+> [!analogy] Real-world analogy: the shop counter and the stockroom
+> In one shop, staff check the shelf and, if it is empty, walk to the stockroom themselves and restock the shelf on the way back. In another, staff only ever ask the counter assistant, who fetches from the stockroom when the shelf is empty.
+>
+> **How it maps:** The shelf is the cache and the stockroom is the database. Staff fetching for themselves is cache-aside: the application holds the loading logic. The counter assistant is read-through: the cache layer owns the loader, so every caller gets the same restocking rules, and one trip can serve everyone queuing for the same item (coalescing).
+>
+> **Where it stops:** Shelves hold the real goods; a cache holds copies that can go stale when the database changes. And one assistant per shop is like coalescing per process: several shops (servers) can still send several people to the stockroom for the same item.
+
 ## Key takeaways
 - Cache-aside keeps the database loader in application code; read-through puts it in the cache or library.
 - Load only requested keys and invalidate after database writes, while retaining a TTL and safe fallback capacity.

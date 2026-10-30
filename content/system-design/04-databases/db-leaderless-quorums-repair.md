@@ -3,11 +3,11 @@ id: db-leaderless-quorums-repair
 title: Leaderless quorums and replica repair
 level: intermediate
 minutes: 3
-summary: Calculate quorum overlap and failure tolerance, then restore replicas with hints, read repair and anti-entropy.
+summary: Predict quorum overlap and failure tolerance, then restore replicas with hints, read repair and anti-entropy.
 sourceLesson: db-replication
 ---
 
-A leaderless system asks several replicas to participate in each operation. Count the intersection and remaining replicas explicitly, then consider how missing writes are repaired.
+A leaderless system asks several replicas to take part in each operation. Whether a read sees the latest write depends on how the read and write groups overlap; whether the system keeps working depends on how many replicas remain. Missing writes then need repairing.
 
 ## Leaderless replication
 
@@ -15,32 +15,26 @@ Any replica accepts writes. The client (or a coordinator node) sends each write 
 
 For a fixed replica set, durable successful writes and no concurrent writes, the quorum condition guarantees that a later read reaches at least one replica that accepted the last successful write. Assume the reconciliation rule recognises that version; overlap alone is not a general latest-value guarantee:
 
-```formula
+```formula essential
 w + r > n
 overlap ≥ w + r − n
 where
 n: the replication factor, the number of replicas that store each key; often 3
 w: the write quorum, how many replicas must acknowledge a write before it counts as successful
 r: the read quorum, how many replicas a read asks before returning the newest value it sees
-overlap: the smallest possible number of replicas that are in both the write set and the read set
+overlap: the number of replicas that are in both the write set and the read set, whichever replicas the two operations happen to reach
 ≥: greater than or equal to
-In words: if the replicas you write to and the replicas you read from add up to more than the total, the two groups must share at least one replica, so the read sees the latest write.
+In words: if the replicas you write to and the replicas you read from add up to more than the total, the two groups must share at least one replica, so the read reaches a copy of the latest write.
 ```
 
-Worked example with three replicas:
+With three replicas, writing to two and reading from two always shares at least one replica, and both reads and writes still succeed with one replica down. Writing to two and reading from one is faster to read but can miss the write entirely.
 
-```formula
-n = 3, w = 2, r = 2
-w + r = 4 > 3
-overlap ≥ 2 + 2 − 3 = 1
-where
-n: the number of replicas per key
-w: the write quorum
-r: the read quorum
-overlap: the minimum number of replicas shared by any write set and any read set
-≥: greater than or equal to
-In words: with 3 replicas, writing to 2 and reading from 2 always shares at least one replica, and the cluster can still read and write with one replica down.
-```
+> [!analogy] Real-world analogy: three clerks and a dated notebook each
+> A club keeps its decisions in three clerks' notebooks. A decision counts as recorded once any two clerks have written it down, with the date. To check the latest decision, you ask any two clerks and believe the most recently dated entry. Whichever two you ask, at least one of them recorded it.
+>
+> **How it maps:** The clerks are the replicas, two recordings is the write quorum, asking two is the read quorum, and "most recently dated" is the version or timestamp the read uses to pick the newest value. Two plus two is more than three, so the groups must overlap.
+>
+> **Where it stops:** If two decisions are recorded at the same moment, or a substitute clerk takes the note while a regular is away (a sloppy quorum), overlap alone no longer guarantees you see the right one. Clerk clocks can also disagree, which is why real systems need careful version tracking.
 
 The cost of raising *w* or *r* is latency and availability: each request waits for more replicas and fails if too few are up. How quorums behave under failure, and why they're weaker than they look (sloppy quorums, concurrent writes, clock-based conflict resolution), is covered in the consensus module.
 

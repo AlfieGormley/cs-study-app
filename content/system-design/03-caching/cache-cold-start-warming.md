@@ -21,20 +21,7 @@ Warming strategies:
 4. **Persistence**: Redis RDB/AOF restores a node warm after restart.
 5. **Shadow traffic**: mirror reads to the new cache before it serves users.
 
-How big can each traffic step be? At each step, the new cache sends the database its share of the traffic times its current miss ratio (traffic not yet moved is still served as before):
-
-```formula
-R_db = s × (1 − h) × R
-R_db = 0.05 × (1 − 0.6) × R = 0.02 × R
-where
-R_db: the read load the new cache passes to the database, in reads per second
-s: the share of traffic routed to the new cache, here 0.05 (5%)
-h: the new cache's current hit ratio, here 0.6 (60%)
-R: the full production read rate, in reads per second
-In words: send only as much traffic to a cold cache as the database can absorb in misses; step up as the hit ratio climbs.
-```
-
-If spare database capacity is 2% of full traffic, the new cluster alone uses that allowance at 5% traffic and a 60% hit ratio. Include the old cluster’s misses, warming work and other queries when comparing total load with capacity. In practice, leave headroom rather than stepping exactly at capacity.
+How big can each traffic step be? At each step, the new cache passes the database its share of the traffic multiplied by its current miss ratio; traffic not yet moved is still served as before. So send only as much traffic to a cold cache as the database can absorb in misses, and step up as the hit ratio climbs. For example, if spare database capacity is 2% of full traffic, sending 5% of traffic to a new cache that is hitting 60% of the time (missing 40%) uses that whole allowance. Include the old cluster’s misses, warming work and other queries when comparing total load with capacity. In practice, leave headroom rather than stepping exactly at capacity.
 
 > [!warning] Deploys can flush caches
 > Changing the cache key format (say, adding a field to the serialised object and bumping `v2` to `v3` in every key) makes every existing entry unreachable. That is a full flush on deploy. Roll it out gradually or run both versions side by side.

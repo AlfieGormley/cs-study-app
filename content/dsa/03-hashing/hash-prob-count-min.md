@@ -4,7 +4,7 @@ title: Count-Min counters and stream-relative error
 level: advanced
 minutes: 5
 sourceLesson: hash-probabilistic
-summary: Count-Min estimates frequency rather than membership.
+summary: A Count-Min Sketch estimates how often an item appears, never undercounting, with an error measured against the whole stream rather than the item.
 ---
 
 Count-Min estimates frequency rather than membership. Its guarantee is an additive error relative to the total update weight, not a percentage of each item’s own count.
@@ -60,45 +60,45 @@ class CountMin:
 
 This fragment demonstrates the counter/minimum mechanism. Python hash((i, item)) is not an independently sampled universal family, so the formal error bound below is not established for this sample. It still never undercounts under its enforced nonnegative updates, provided keys retain stable hashes.
 
+> [!analogy] Real-world analogy: several shared tally sheets
+> A survey team keeps three tally sheets with only a few columns each, and every answer gets a mark in one column on each sheet, chosen by a different rule per sheet. Unrelated answers share columns, so every column over-counts. To estimate one answer, read its column on each sheet and trust the smallest.
+>
+> **How it maps:** the sheets are the sketch's rows, the columns are counters, each sheet's rule is that row's hash function, and taking the smallest reading is the minimum query.
+>
+> **Where it stops:** a tally sheet could list which answers share a column; a sketch keeps only the numbers, so it cannot name its frequent items. And the error bound comes from the rows' hash functions behaving independently, which tally-sheet rules need not.
+
 ### Error guarantee
 
-You size a Count-Min Sketch from two numbers: how big an error you accept, as a fraction of the whole stream, and how often you allow that limit to be broken. Assume a stream fixed independently of the hash choices, independent rows using suitable universal hashes (Hash flooding and runtime randomisation), nonnegative updates and counters that never overflow. Then choose:
+You size a Count-Min Sketch from two choices: how big an error you accept, as a fraction of the *whole stream's* total, and how often you allow that limit to be broken. Wider rows make collisions in each row rarer, so the error is smaller; more rows make it less likely that *every* row is badly polluted at once. The guarantee assumes a stream fixed independently of the hash choices, independent rows using suitable universal hashes (Universal hashing and adversary assumptions), nonnegative updates and counters that never overflow. With high probability the estimate is then at most the true count plus the chosen error fraction of the whole stream total:
 
-```formula
+```formula reference
+c_est ≤ c_true + εN
+where
+c_est: the count the sketch reports for the item
+c_true: the item's real count in the stream (the sketch never reports less than this)
+ε: epsilon, the allowed error as a fraction of the stream total, chosen when sizing the sketch
+N: the total of all counts in the stream
+≤: "is at most"; this upper bound holds with probability at least 1 − δ, where δ (delta) is the allowed failure probability chosen when sizing
+In words: the estimate never undercounts, and with high probability it overcounts by at most a fixed fraction of the *whole stream*, however many distinct items there are. With an error fraction of 0.1% and a 100-million-event stream, that is at most 100,000 too high.
+```
+
+```formula reference
 w = ⌈e / ε⌉
 d = ⌈ln(1 / δ)⌉
-w = ⌈e / 0.001⌉ = 2719
-d = ⌈ln(100)⌉ = ⌈4.61⌉ = 5
 where
 w: the width, the number of counters in each row
 d: the depth, the number of rows (and of hash functions)
-ε: epsilon, the allowed error as a fraction of the stream total, here 0.001 (0.1%)
-δ: delta, the allowed probability of exceeding that error, here 0.01 (1%)
+ε: epsilon, the allowed error as a fraction of the stream total
+δ: delta, the allowed probability of exceeding that error
 e: Euler's number, about 2.718
-ln: the natural logarithm (base e); ln(100) ≈ 4.61
+ln: the natural logarithm (base e)
 ⌈ ⌉: ceiling, round up to the next whole number
-In words: the width sets how big the error can be and the depth sets how rarely it is exceeded; for 0.1% error with 99% confidence you need 5 rows of 2,719 counters, about 13,600 counters in all.
+In words: the width grows in proportion to how small an error you want, while the depth grows only with the logarithm of how rarely you allow failure. For 0.1% error with 99% confidence: 5 rows of 2,719 counters, about 13,600 counters in all.
 ```
 
-With those sizes, the guarantee for any single item, fixed before the hash functions are chosen, is:
+The guarantee is for one item fixed before the hash functions are chosen. It is not a simultaneous guarantee for all items at once, nor for queries chosen after seeing the hash functions.
 
-```formula
-c_est ≤ c_true + ε N
-c_est ≤ c_true + 0.001 × 100,000,000
-c_est ≤ c_true + 100,000
-where
-c_est: the count the sketch reports for the item
-c_true: the item's real count in the stream
-ε: epsilon, the error fraction the sketch was sized for, here 0.001
-N: the total of all counts in the stream, here 100 million events
-δ: the allowed probability that the upper error bound fails, here 0.01
-≤: "is at most"; the bound holds with probability at least 1 − δ (here 99%)
-In words: the estimate never undercounts, and with 99% probability it overcounts by at most 0.1% of the whole stream: 100,000 for a 100-million-event stream, however many distinct items there are.
-```
-
-This is not a simultaneous guarantee for all items at once, nor for queries chosen after seeing the hash functions.
-
-That error is relative to the *total* N, not to the item's own count, so the sketch is accurate for **heavy hitters** (frequent items) and nearly useless for rare ones: an item seen 10 times may be reported as tens of thousands. Tracking top items also requires a candidate-tracking algorithm, since the sketch cannot enumerate keys; a heap can form part of that design.
+Because the error is relative to the stream total, not to the item's own count, the sketch is accurate for **heavy hitters** (frequent items) and nearly useless for rare ones: an item seen 10 times may be reported as tens of thousands. Tracking the top items also needs a separate way to remember candidate keys, since the sketch cannot list them; a heap can form part of that design.
 
 Count-Min Sketches appear in network monitoring (top talkers by IP), trending-topic detection, and caches: the Caffeine library's W-TinyLFU policy keeps approximate access frequencies in a Count-Min-style sketch of 4-bit counters to decide which items deserve a place in the cache.
 

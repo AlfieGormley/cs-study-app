@@ -26,6 +26,13 @@ Variants such as **CLOCK** and **SIEVE** build on cheap queues and reference bit
 
 Evict the item that has gone longest without being accessed. The bet is temporal locality: what was used recently will be used again.
 
+> [!analogy] Real-world analogy: the desk-side bookshelf
+> A small shelf by your desk holds a few books. Each time you use one you put it back at the left end; when a new book needs space, the one at the far right, untouched for longest, goes back to the library.
+>
+> **How it maps:** The shelf is the cache, putting a book back at the left is moving a key to the most-recently-used end on every hit, and returning the far-right book is evicting the least recently used key. FIFO would instead return whichever book arrived first, however often you use it.
+>
+> **Where it stops:** A shelf's order is visible at a glance; a cache needs extra bookkeeping (a map plus a linked list) to know the order quickly. And one afternoon of browsing many new books once each would push out your favourites, which is exactly LRU's scan problem below.
+
 The classic implementation combines a **hash map** (key to node) with a **doubly linked list** ordered by recency. Both get and put have expected/amortized O(1) cost with ordinary hash-table assumptions. O(1), read "order one" or constant time, means the work per operation does not grow with n, the number of keys in the cache: a cache of a million keys does a get as cheaply as a cache of ten.
 
 ```

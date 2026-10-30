@@ -3,27 +3,27 @@
     "id": "cache-fundamentals-q9",
     "level": "advanced",
     "type": "single",
-    "prompt": "You have 20 million registered users, of whom 4 million are active in a typical day. Each cached session object is about 1.5 KB, and assume measurements for this exact deployment show 80 bytes of overhead per key. Roughly how much memory should you plan for the daily working set?",
+    "prompt": "You have 20 million registered users, of whom about 4 million are active on a typical day. Each cached session object is about 1.5 KB. A teammate proposes buying a Redis node sized as \"20 million × 1.5 KB\". Which sizing plan is soundest?",
     "options": [
       {
-        "text": "About 6.3 GB",
-        "explanation": "Correct. Four million values and their measured overhead need about 6.3 GB. Size for the working set, then add measured headroom for fragmentation and growth."
+        "text": "Start from the 4 million daily active keys, add per-key overhead measured on representative objects, add headroom for fragmentation, buffers and snapshots, then compare hit ratios at a few sizes",
+        "explanation": "Correct. The working set is what is actually read in the window you want to cover. Overhead and headroom are real memory the payload estimate omits, and the hit-ratio curve tells you where extra memory stops paying."
       },
       {
-        "text": "About 31.6 GB",
-        "explanation": "This sizes for all 20 million registered users. Users who are not active today mostly won't be in the cache, and caching them buys few hits."
+        "text": "Size for all 20 million registered users so that every possible session is cached",
+        "explanation": "This pays for memory to hold sessions that are mostly not read today. Because access is skewed towards active users, those extra keys buy few hits."
       },
       {
-        "text": "About 6.0 GB",
-        "explanation": "This counts the values but forgets per-key overhead, which is about 5% here and much more for small values."
+        "text": "4 million × 1.5 KB exactly, since values are the only thing that uses memory",
+        "explanation": "Keys, metadata and allocator waste also use memory, and for small values that overhead can be a large fraction. The node also needs headroom beyond the payload."
       },
       {
-        "text": "About 320 MB",
-        "explanation": "This counts four million overhead allocations of 80 bytes each and leaves out the values themselves."
+        "text": "Cache 20% of registered users, because the 80/20 rule always holds",
+        "explanation": "Skew is common, but a fixed 80/20 split is not universal. Measure the actual active set and hit-ratio curve rather than assuming a ratio."
       }
     ],
     "answer": 0,
-    "workedExample": "1. The working set contains distinct keys touched during the window: **4 million** active users, rather than all 20 million registered.\n2. Each value uses 1,500 bytes and its measured overhead adds 80 bytes, for 1,580 bytes per key.\n3. Total:\n\n```formula\nM = K × (S_v + S_o)\nM = 4,000,000 × (1,500 B + 80 B)\nM = 6,320,000,000 B ≈ 6.3 GB\nwhere\nM: the memory needed, in bytes (B)\nK: the keys in the working set, 4 million\nS_v: the value size, 1.5 KB = 1,500 B\nS_o: the measured overhead per key, 80 B\nB: bytes\nGB: gigabytes; 1 GB = 1,000,000,000 B\n≈: approximately equal to\nIn words: 4 million keys at about 1.6 KB each, overhead included, need about 6.3 GB.\n```\n\n4. An illustrative extra 25–50% would bring the payload budget to about 8–10 GB. The actual node needs measured fragmentation, replication buffers, snapshot overhead and growth headroom; this percentage is not a deployment recommendation.\n5. Then measure the hit ratio at a few sizes: skew may mean a smaller cache gets almost the same hits.",
+    "workedExample": "1. Ask which keys will actually be read in the window: about 4 million active users today, not 20 million registered.\n2. Each key costs its value plus overhead. Measure the overhead (for example with Redis's `MEMORY USAGE`) instead of assuming a figure.\n3. The values alone come to about 6 GB (4 million × 1.5 KB); measured overhead adds to that. This payload total is the starting point, not the machine size.\n4. Add measured headroom for allocator fragmentation, client and replication buffers, and snapshot copy-on-write.\n5. Finally test a few sizes: if the hit-ratio curve has flattened, a smaller cache may give almost the same hits.",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"

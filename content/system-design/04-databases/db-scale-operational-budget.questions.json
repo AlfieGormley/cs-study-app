@@ -53,7 +53,7 @@
       }
     ],
     "answer": 0,
-    "workedExample": "1. Standard one-KiB writes require 3,000 write units/s; strong one-KiB reads require 12,000 read units/s.\n2. Daily demand:\n```formula\nD_w = 3,000/s × 86,400 s\nD_w = 259,200,000\nD_r = 12,000/s × 86,400 s\nD_r = 1,036,800,000\nwhere\nD_w: writes per day\nD_r: reads per day\n86,400 s: the number of seconds in a day\ns: seconds\nIn words: a steady 3,000 writes and 12,000 reads a second add up to about 259 million writes and just over a billion reads a day.\n```\n3. Compare that request bill with provisioned unit-hours at current regional rates, allowing headroom and any applicable commitment discounts.\n4. A fixed savings multiplier is absent because current pricing and utilization must be evaluated for this deployment.\n5. Change read consistency or caching only where product requirements permit it; include index costs.",
+    "workedExample": "1. Standard one-KiB writes require 3,000 write units/s; strong one-KiB reads require 12,000 read units/s.\n2. Daily demand: a steady load like this adds up to about 259 million writes and just over a billion strongly consistent reads a day, every day.\n3. Compare that request bill with provisioned unit-hours at current regional rates, allowing headroom and any applicable commitment discounts.\n4. Do not assume a fixed savings multiplier: prices change and differ by region, and the saving depends on how closely provisioned capacity can track this load.\n5. Change read consistency or caching only where product requirements permit it; include index costs.",
     "link": {
       "title": "DynamoDB: Capacity modes",
       "url": "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/capacity-mode.html"
@@ -101,27 +101,27 @@
     "id": "db-choosing-q11",
     "level": "advanced",
     "type": "single",
-    "prompt": "A fleet of 2 million sensors each sends a 100-byte reading every 10 seconds. Data is kept for 90 days, and queries are \"readings for sensor X between two times\". Which estimate and choice is right?",
+    "prompt": "A fleet of 2 million sensors each sends a 100-byte reading every 10 seconds: about 200,000 writes per second and roughly 155 TB of raw readings over a 90-day retention period, before compression and replication. Queries ask for \"readings for sensor X between two times\". Which design is the strongest candidate?",
     "options": [
       {
-        "text": "About 200,000 writes/s and roughly 150 TB over 90 days before compression; a horizontally scalable store partitioned by (sensor, time bucket) with TTL, such as Cassandra/ScyllaDB or a clustered time-series database",
-        "explanation": "Correct arithmetic and a reasonable candidate architecture for this large keyed workload. Benchmark ingestion, retention and queries rather than inferring an absolute single-node limit from event count alone."
+        "text": "A horizontally scalable store partitioned by (sensor, time bucket), with rows ordered by time and expiry after 90 days, such as Cassandra/ScyllaDB or a clustered time-series database",
+        "explanation": "Correct as a candidate. The key spreads writes across many partitions, keeps each partition bounded, serves the per-sensor time-range query from one or a few partitions, and lets expiry drop old data. Benchmark ingestion, retention and queries before committing."
       },
       {
-        "text": "About 20,000 writes/s and 15 TB; one Postgres primary handles it easily",
-        "explanation": "Wrong. 2 million ÷ 10 s is 200,000 writes/s, not 20,000, and the 90-day volume is about ten times larger than stated."
+        "text": "One Postgres primary with an index on `(sensor_id, ts)`",
+        "explanation": "Unlikely to be enough on its own. Sustained ingestion at this rate, index maintenance and 90-day expiry of over a hundred terabytes are far beyond a typical single primary; tests would need to show otherwise."
       },
       {
-        "text": "About 200,000 writes/s, but a single Redis node can hold it all in memory",
-        "explanation": "Wrong. The stated volume does not establish that one Redis node has enough usable RAM, ingestion capacity or acceptable recovery time. Persistence, compression and expiry must be validated; an in-memory label is not a sizing argument."
+        "text": "A distributed store partitioned by `day` alone, with sensors as rows inside each day",
+        "explanation": "Wrong. Every write for today lands in one partition, creating a hot spot, and that partition holds 17 billion rows a day."
       },
       {
-        "text": "About 2 million writes/s; only a custom storage engine can cope",
-        "explanation": "Wrong. Each sensor writes once every 10 seconds, so the rate is 2 million ÷ 10 = 200,000 per second, which is a candidate for existing distributed stores after workload-specific capacity and retention tests."
+        "text": "A single large Redis node holding everything in memory",
+        "explanation": "Wrong. Over a hundred terabytes of raw data does not fit in one node's RAM, and Redis's persistence and recovery time would also need validating for a system of record."
       }
     ],
     "answer": 0,
-    "workedExample": "1. Write rate: 2,000,000 ÷ 10 s = **200,000 writes/s**.\n2. The full chain of estimates:\n```formula\nR = S / Δt\nR = 2,000,000 / 10 s = 200,000/s\nV = R × b = 200,000/s × 100 B\nV = 20 MB/s\nD = V × 86,400 s ≈ 1.7 TB\nT = D × 90 ≈ 155 TB\nwhere\nR: the write rate, in writes per second (/s)\nS: the number of sensors, 2 million\nΔt: delta-t, the interval between one sensor's readings, 10 s\nV: the incoming data rate, in megabytes per second (MB/s)\nb: the size of one reading, 100 bytes (B)\nD: the raw data written per day, in terabytes (TB)\nT: the raw data kept over the 90-day retention period\ns: seconds\nB: bytes\nMB: megabyte, 1,000,000 bytes\nTB: terabyte, 1,000,000,000,000 bytes\n≈: approximately equal to\nIn words: 2 million sensors every 10 seconds is 200,000 writes a second, about 1.7 TB a day and about 155 TB over 90 days.\n```\n3. That is raw size before compression and replication (×3 replicas → ~465 TB of disk, minus compression).\n4. Pattern: append-only, read by sensor and time range, expire after 90 days.\n5. Fit: partition by `(sensor_id, day)`, cluster by timestamp, TTL 90 days (Cassandra/ScyllaDB), or a time-series database with compression and retention.\n6. Evaluate distributed storage or a suitably documented managed time-series service against measured requirements. TimescaleDB 2.13 was the last version supporting its multi-node feature; do not propose that sunset feature as a current deployment path.",
+    "workedExample": "1. Read the workload shape: append-only, very high sustained write rate, queried by sensor and time range, expired after 90 days.\n2. Writes must spread across many machines, so the partition key needs a high-cardinality component: the sensor id.\n3. A partition per sensor alone would grow for 90 days; adding a time bucket such as the day bounds each partition.\n4. Rows ordered by timestamp within each partition make \"sensor X between two times\" a short ordered read.\n5. Expiry (TTL or time-partitioned retention) drops whole old buckets cheaply.\n6. Partitioning by day alone fails the first test: all of today's writes land on one partition.\n7. Evaluate distributed storage or a suitably documented managed time-series service against measured requirements. TimescaleDB 2.13 was the last version supporting its multi-node feature; do not propose that sunset feature as a current deployment path.",
     "link": {
       "title": "Apache Cassandra: Data modeling",
       "url": "https://cassandra.apache.org/doc/latest/cassandra/developing/data-modeling/index.html"

@@ -23,22 +23,7 @@ Cache-Control: max-age=60,
 - From 60 s to 360 s: serve the stale copy **immediately**, and refresh it in the background.
 - If the origin is unreachable or returns `500`, `502`, `503` or `504`: serve the stale copy for up to a day (86,400 s) after it went stale.
 
-The window boundaries are sums of the directives:
-
-```formula
-t_swr = L + W_swr
-t_swr = 60 s + 300 s = 360 s
-t_sie = L + W_sie
-t_sie = 60 s + 86,400 s = 86,460 s
-where
-t_swr: the age, in seconds (s), up to which a stale copy may be served while it is refreshed in the background
-L: the freshness lifetime, here max-age = 60 s
-W_swr: the stale-while-revalidate value, here 300 s
-t_sie: the age up to which a stale copy may be served if the origin is failing
-W_sie: the stale-if-error value, here 86,400 s (one day)
-s: seconds
-In words: each stale window starts when freshness ends, so you add its length to the max-age.
-```
+Each stale window starts when freshness ends, not when the response was stored. So with these headers background refresh is allowed up to an age of 360 s (60 + 300), and error fallback up to a day after the copy went stale.
 
 ```
  age 0      60          360
@@ -54,7 +39,7 @@ In words: each stale window starts when freshness ends, so you add its length to
 > These directives are optional for caches: a cache that doesn't understand them simply ignores them. Browser versions and CDN products differ in which directives and failure cases they support. Use your deployed cache’s documentation and an integration check. Check your provider before relying on either.
 
 ## Key takeaways
-- Add a stale window to the freshness lifetime to calculate the permitted response age.
+- Stale windows begin when freshness ends, so each extends the permitted age beyond `max-age`.
 - Stale-while-revalidate can hide refresh waits; stale-if-error can preserve availability during eligible origin failures.
 - These extensions depend on cache support and do not themselves guarantee exactly one background refresh.
 

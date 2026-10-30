@@ -54,7 +54,7 @@ Common, sensible denormalisations:
 
 ## Why relational databases scale further than people think
 
-Single-node capacity depends on transaction shape, indexes, contention, hardware and recovery objectives. Measure these before introducing distribution. Universal throughput figures and company deployment anecdotes are absent because no matching benchmark or dated primary incident source is established here. The usual reasons to move beyond a single relational primary are write throughput beyond one machine, data volume beyond one machine, or very specific access patterns, all of which later lessons cover.
+Single-node capacity depends on transaction shape, indexes, contention, hardware and recovery objectives, so measure those for your workload before introducing distribution. Another company's published throughput figure rarely transfers, because its schema, hardware and access pattern differ from yours. The usual reasons to move beyond a single relational primary are write throughput beyond one machine, data volume beyond one machine, or very specific access patterns, all of which later lessons cover.
 
 ## Measure the read path before sharding
 

@@ -33,19 +33,14 @@ Many CPU caches, the operating system page cache and database buffer pools use w
 - The database is behind the cache, so anything reading the database directly (reports, other services) sees old data.
 - Ordering and failure handling of the flush are hard to get right.
 
-How much can a crash lose? Everything written since the last successful flush. With writes arriving at a steady rate and flushes on time, the worst case is:
+How much can a crash lose? Everything acknowledged since the last *successful* flush. With steady writes and on-time flushes, that is about one flush interval's worth of writes: the counter above, flushed every second, risks about a second of increments; flushed every 5 s, about five seconds' worth. Longer intervals coalesce more writes but widen the loss window. A late or failed flush makes the real window longer than the planned interval, so measure the time since the last successful flush rather than trusting the schedule.
 
-```formula
-L_max = r × t_flush
-where
-L_max: the most acknowledged writes a crash can lose, a count of writes
-r: the write rate, in writes per second (/s)
-t_flush: the time between flushes, in seconds (s)
-s: seconds
-In words: a crash loses up to one flush interval's worth of writes.
-```
-
-For the counter above, 1,000 increments per second flushed every second risks up to 1,000 × 1 = 1,000 increments. Flush every 5 s instead and the risk grows to 5,000. A late or failed flush makes the real window longer than the planned interval, so measure it.
+> [!analogy] Real-world analogy: the waiter's order pad
+> A busy waiter jots orders on a pad, tells each table "got it", and takes the pad to the kitchen every few minutes rather than walking back after every order.
+>
+> **How it maps:** The pad is the write-back cache, "got it" is the acknowledgement, and the trip to the kitchen is the batched flush to the database. Fewer trips means less walking (fewer database writes), and repeated changes to one table's order collapse into one line (coalescing).
+>
+> **Where it stops:** If the waiter loses the pad, the customers were already told "got it" and those orders are simply gone, which is the write-back loss window. Unlike a waiter, the cache cannot ask customers to repeat themselves, and the kitchen (database) cannot see anything still on the pad.
 
 > [!warning] Write-back changes your source of truth
 > With write-back, the cache temporarily *is* the source of truth for recent writes. You need the durability guarantees of a database from it. Use it only where its measured loss window (including delayed or failed flushes) is tolerable (view counters, analytics) or where the cache is genuinely durable.

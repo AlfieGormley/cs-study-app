@@ -7,7 +7,7 @@ sourceLesson: hash-functions
 summary: When a client chooses keys, collisions become a security and latency concern.
 ---
 
-When a client chooses keys, collisions become a security and latency concern. A public deterministic table hash offers different protection from a keyed hash or a randomly sampled universal family.
+When an untrusted client chooses the keys, collisions stop being bad luck and become an attack. This lesson shows how such attacks work and how language runtimes defend against them.
 
 ## Hash flooding attacks
 
@@ -33,31 +33,19 @@ Languages responded in several ways:
 | Cap request parameters | PHP `max_input_vars` |
 | Tree-shaped buckets | Java 8 `HashMap` |
 
-**SipHash** (Aumasson and Bernstein, 2012) is a fast keyed function designed for exactly this job: without the secret 128-bit key, predicting collisions without the secret key is intended to be computationally difficult. Python switched to it for `str` and `bytes` in 3.4 (PEP 456), and common CPython builds default to SipHash-1-3 from 3.11; inspect sys.hash_info.algorithm for the actual build. Rust's default `HashMap` hasher is also SipHash-1-3.
+**SipHash** (Aumasson and Bernstein, 2012) is a fast keyed function designed for exactly this job: it mixes a secret 128-bit key into every hash, so without that key an attacker should not be able to predict which inputs collide. Python switched to it for `str` and `bytes` in 3.4 (PEP 456, using SipHash-2-4), and from 3.11 common CPython builds default to the slightly faster SipHash-1-3; `sys.hash_info.algorithm` shows what your build uses. Rust's standard `HashMap` currently defaults to SipHash-1-3 too, though its documentation says that may change.
+
+> [!analogy] Real-world analogy: a sorting office with a public rule
+> A sorting office puts each parcel in a bin chosen by a published rule based on the address. A prankster who knows the rule can address ten thousand parcels so they all land in one bin, and that bin's clerk grinds to a halt. If the office changes to a secret rule each morning, the prankster can no longer aim.
+>
+> **How it maps:** the published rule is a fixed public hash such as Java's `String.hashCode`, the overloaded bin is one long chain, and the secret daily rule is a keyed hash like SipHash with a per-process random key.
+>
+> **Where it stops:** the secret only helps while it stays secret and the function resists analysis. It does nothing about a prankster who simply sends a huge number of parcels, so size limits are still needed, and some keys (such as Python integers) are not randomised at all.
 
 > [!note] Consequences of randomisation
 > In Python, `hash("abc")` differs between runs unless you set the `PYTHONHASHSEED` environment variable. Never store `hash()` results in files or send them between processes.
 
-Integers are not randomised. CPython hashes an integer by taking its remainder modulo a fixed prime, read from `sys.hash_info.modulus`:
-
-```formula
-hash(n) = n mod P          (n ≥ 0)
-hash(n) = −(|n| mod P)     (n < 0)
-P = 2^61 − 1
-hash(2^61) = 2^61 mod P = 1
-where
-hash(n): the value Python's built-in hash() returns for the integer n
-n: the integer being hashed
-P: the prime 2^61 − 1 = 2,305,843,009,213,693,951 on common 64-bit builds
-mod: "modulo", the remainder after whole-number division
-|n|: the absolute value of n, its size without the sign; |−5| = 5
-≥: "is greater than or equal to"
-<: "is less than"
-^: "to the power of"
-In words: a non-negative integer hashes to its remainder after dividing by a huge fixed prime, and a negative integer to minus the remainder of its size; so small integers hash to themselves, and 2^61 hashes to 1.
-```
-
-One special case: the result −1 is replaced by −2, because −1 signals an error inside CPython. So `hash(-1) == -2`, and `hash(-1) == hash(-2)`.
+Integers are not randomised. On common 64-bit CPython builds, a non-negative integer hashes to its remainder after dividing by the prime 2⁶¹ − 1 (`sys.hash_info.modulus`), and a negative integer to minus the hash of its magnitude. So small integers hash to themselves, and 2⁶¹ hashes to 1. One special case: CPython never returns −1 as a hash, because −1 signals an error inside the interpreter, so `hash(-1) == -2` and `hash(-1) == hash(-2)`. Hash randomisation therefore does nothing for integer keys an attacker controls; other defences, such as limits on input size, still matter.
 
 ## Key takeaways
 - Public deterministic hashes can let attackers construct expensive collision chains.

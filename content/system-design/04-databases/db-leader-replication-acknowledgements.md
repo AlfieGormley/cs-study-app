@@ -50,6 +50,13 @@ What gets shipped varies:
 | Write latency | Waits for required remote acknowledgement | No required replica acknowledgement |
 | Follower down | Stalls if too few required acknowledgements remain | Can continue subject to resources and policy |
 
+> [!analogy] Real-world analogy: filing a signed contract
+> A solicitor receives a signed contract. In one office, the clerk files it, tells the client "done", and posts a copy to the branch office later that day. In another, the clerk waits for the branch office to phone and confirm it has filed its copy before telling the client.
+>
+> **How it maps:** The main office is the leader, the branch office is a follower, and "done" is the commit acknowledgement. The first office is asynchronous replication: if it burns down before the post goes, the client was told "done" but the only copy is lost. The second is synchronous: slower, but a confirmed copy exists elsewhere.
+>
+> **Where it stops:** Real replication streams changes continuously rather than in a daily post, and "confirmed" has degrees (received, flushed to disk, or applied and visible). After a fire, safety also depends on promoting the branch that actually holds the copy.
+
 Fully synchronous to *every* follower is fragile: any slow replica stalls all writes. PostgreSQL supports quorum synchronous replication, for example `ANY 1 (s1, s2)`. MySQL semi-sync is a separate protocol with its own acknowledgement and timeout/fallback behavior. Aurora’s six-copy storage design uses a four-copy write quorum and three-copy recovery quorum; this does not mean every ordinary SQL read waits for three storage nodes.
 
 "Synchronous" also has degrees. Postgres's `synchronous_commit` decides what the leader waits for:

@@ -42,7 +42,14 @@ Each layer sits closer to the user than the one below it. Caching closer to the 
 
 ### Browser cache
 
-The browser stores responses keyed by URL and obeys `Cache-Control`, `ETag` and friends. It is local to a browser profile, not necessarily one application account. A long freshness lifetime permits reuse; it does not guarantee retention. Supporting browsers can honor Clear-Site-Data on a later response, but there is no universal immediate remote purge of every browser. That is why static assets use **fingerprinted file names** such as `app.3f9a1c.js`. A new version is a new URL, so the old cached copy simply stops being requested.
+The browser stores responses keyed by URL and obeys `Cache-Control`, `ETag` and friends. It is local to a browser profile, not necessarily one application account. A long freshness lifetime permits reuse; it does not guarantee retention. Supporting browsers can honour a `Clear-Site-Data` header on a later response, but there is no universal, immediate way to remotely empty every browser's cache. That is why static assets use **fingerprinted file names** such as `app.3f9a1c.js`. A new version is a new URL, so the old cached copy simply stops being requested.
+
+> [!analogy] Real-world analogy: notices pinned around town
+> A club pins a timetable on its own door, in the library and on dozens of noticeboards. Changing the copy on its own door is easy; tracking down every other copy is not. So instead the club prints next season's timetable under a new title and updates the one index board everyone checks first.
+>
+> **How it maps:** The noticeboards are caches at different distances from the origin. The further out a copy sits (CDN, then browsers), the less direct control you have over removing it. The new title is the fingerprinted URL, and the index board is the HTML page, which is revalidated and points at the new asset.
+>
+> **Where it stops:** Old notices stay up until someone removes them, whereas cached responses also expire or get evicted on their own. And unlike a public noticeboard, a shared cache must never show one person's private page to someone else.
 
 ### CDN edge
 

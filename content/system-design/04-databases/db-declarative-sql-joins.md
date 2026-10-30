@@ -49,40 +49,23 @@ Under the hood the planner picks one of three algorithms:
 > `users u LEFT JOIN orders o ON o.user_id = u.id WHERE o.status = 'paid'` silently drops users with no orders: their `o.status` is NULL, and the `WHERE` filters NULL out. To keep them, put the condition in the join: `ON o.user_id = u.id AND o.status = 'paid'`.
 
 > [!warning] The N+1 query problem
-> An ORM loop that loads 100 orders and then runs one query per order to fetch its user makes 101 round trips. At 1 ms each that is 101 ms of round-trip latency before execution. A join can make one trip; fetching orders then users in bulk usually makes two.
+> An ORM loop that loads 100 orders and then runs one query per order to fetch its user makes 101 round trips. At 1 ms each that is about a tenth of a second spent waiting on the network before any query does real work.
 
-The name comes from the count: one query for the list, plus one more for each of the N rows in it. Because every query waits for a full network round trip, the time grows with the length of the list even when each query is fast:
+The name comes from the count: one query for the list, plus one more for every row in it. Each query waits for a full network round trip, so the waiting grows in step with the length of the list even when every individual query is fast. That is why the problem hides in development, where the database sits on the same machine, and appears in production, where every trip crosses a network.
 
-```formula
-Q = 1 + N
-T = Q × t_RTT
-where
-Q: the total number of queries sent to the database
-N: the number of rows in the first result (here, orders), each of which triggers one extra query
-T: the total time spent waiting on round trips, in milliseconds (ms), before any query execution time
-t_RTT: the round-trip time of one query between the application and the database, in milliseconds (ms); it depends on network distance, and the example below assumes 1 ms
-ms: millisecond, one thousandth of a second
-In words: every extra row in the list costs one more round trip, so the waiting time grows in step with the length of the list.
-```
+A join removes the per-row queries entirely; batching (one `WHERE id IN (...)` query for all the users) leaves two. Some ORMs batch or prefetch associations for you and some load them lazily, one at a time, so check the queries yours actually sends: most can log them.
 
-For the 100 orders above at 1 ms per round trip:
-
-```formula
-Q = 1 + 100 = 101
-T = 101 × 1 ms = 101 ms
-where
-Q: the total number of queries
-T: the total round-trip waiting time, in milliseconds (ms)
-ms: millisecond, one thousandth of a second
-In words: 101 queries at 1 ms each spend about a tenth of a second just waiting on the network.
-```
-
-A join replaces the N extra queries with none, so Q falls to 1. The formula assumes the queries run one after another; an ORM that batches or runs them in parallel changes the count, which is why you should check what your ORM actually sends.
+> [!analogy] Real-world analogy: one shopping trip per ingredient
+> Imagine cooking from a recipe by driving to the shop, buying one ingredient, driving home, reading the next line, and driving back again. Each trip is quick, but twenty ingredients means twenty journeys. Taking the whole list on one trip is far faster even though the shopping itself takes as long.
+>
+> **How it maps:** Each drive is a network round trip to the database, each ingredient is one row's lookup, and the shopping list is a join or a batched `IN` query that fetches everything in one request.
+>
+> **Where it stops:** The database still has to do the work for every row in a batched query, so a huge batch is not free. Sending the per-row queries concurrently shortens the wait but still multiplies the number of queries the database must handle.
 
 ## Key takeaways
 - The planner chooses indexes and join algorithms from the query and data.
 - Move a right-side filter into ON when a LEFT JOIN must retain unmatched left rows.
-- N+1 loading makes one list query plus one query per row; joins or batching reduce round trips.
+- N+1 loading pays one round trip per row; joins or batching collapse them into one or two requests.
 
 ## Further reading
 - [PostgreSQL: Joins Between Tables](https://www.postgresql.org/docs/current/tutorial-join.html)

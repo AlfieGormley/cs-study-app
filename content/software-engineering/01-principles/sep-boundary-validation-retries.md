@@ -31,8 +31,6 @@ class Quantity:
                 f"{self.value}")
 ```
 
-The simple email check illustrates collecting independent messages; an at-sign alone is not a complete check of email-address syntax.
-
 A failure close to its cause is generally easier to diagnose. A `None` that travels through five functions before blowing up is not.
 
 ### Collecting errors instead of stopping at the first
@@ -49,6 +47,8 @@ def validate(form):
         errors.append("postcode: required")
     return errors
 ```
+
+The email check here only illustrates collecting independent messages; an at-sign alone is not a complete check of email-address syntax.
 
 Python 3.11 introduced `ExceptionGroup` and `except*` for grouping and handling exceptions, including failures collected by an `asyncio.TaskGroup`. That is a different mechanism from a validation notification: an ordinary task failure cancels the remaining tasks, and `KeyboardInterrupt` and `SystemExit` receive special treatment. It does not guarantee that every possible validation problem is collected.
 
@@ -67,6 +67,6 @@ Python 3.11 introduced `ExceptionGroup` and `except*` for grouping and handling 
 - A timeout leaves an ambiguous outcome; safe retries need idempotency, limits and backoff.
 
 ## Further reading
-- [replaceThrowWithNotification](https://martinfowler.com/articles/replaceThrowWithNotification.html)
-- [asyncio task](https://docs.python.org/3/library/asyncio-task.html#task-groups)
-- [idempotent_requests](https://docs.stripe.com/api/idempotent_requests)
+- [Martin Fowler: Replacing Throwing Exceptions with Notification in Validations](https://martinfowler.com/articles/replaceThrowWithNotification.html)
+- [Python docs: asyncio task groups](https://docs.python.org/3/library/asyncio-task.html#task-groups)
+- [Stripe API: idempotent requests](https://docs.stripe.com/api/idempotent_requests)

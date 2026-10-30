@@ -3,27 +3,27 @@
     "id": "cache-distributed-q1",
     "level": "intermediate",
     "type": "single",
-    "prompt": "A Memcached fleet picks each key's server with `server = hash(key) % N`: hash the key to a number and take the remainder (`%`) after dividing by N, the number of servers. You scale from 4 to 5 servers during peak traffic. Roughly what fraction of keys now map to a different server?",
+    "prompt": "A Memcached fleet picks each key's server with `hash(key) % N`, where N is the number of servers. During a traffic peak you add a fifth server to the four existing ones. Within seconds the database is overwhelmed, although no data was lost and every server is healthy. What happened, and what should the fleet have used?",
     "options": [
       {
-        "text": "About 80%",
-        "explanation": "Correct. With modulo hashing, changing N reshuffles almost everything: only ~1 in 5 keys keep their server, so ~80% become misses at once."
+        "text": "Changing N changed the remainder for most keys, so roughly four in five keys now map to a server that does not hold them and miss at once; consistent hashing would move only the new server's share",
+        "explanation": "Correct. Clients recompute each key's server from the new N, and only keys whose hash leaves the same remainder for 4 and 5 stay put, about 1 in 5. Consistent hashing moves only about a fifth of keys when going from 4 to 5 nodes."
       },
       {
-        "text": "About 20%",
-        "explanation": "This is roughly what *stays* in place. A key keeps its server only when its hash leaves the same remainder divided by 4 as divided by 5, which happens for about 1 in 5 keys."
+        "text": "Only the new server's share of keys moved, so the overload must come from the new server being cold",
+        "explanation": "That is how consistent hashing behaves. Modulo placement recomputes every key's server from N, so far more than the new server's share moves."
       },
       {
-        "text": "About 25%",
-        "explanation": "The new server’s equal share after growing from four to five is one fifth, not one quarter. Modulo remapping moves about four fifths of uniformly hashed keys."
+        "text": "The existing servers deleted their contents when the fifth server joined",
+        "explanation": "Nothing was deleted: the old servers still hold their values. Clients simply stopped asking them for most keys, because the formula now points elsewhere."
       },
       {
-        "text": "0%, because existing keys stay where they are",
-        "explanation": "Clients compute the server from the formula on every request. Change N and the formula points most keys somewhere new, where they are not cached."
+        "text": "Memcached rebalances data between servers when N changes, and the copying traffic overloaded the database",
+        "explanation": "Memcached servers do not copy data between themselves; each client calculates placement itself. The load came from cache misses going to the database."
       }
     ],
     "answer": 0,
-    "workedExample": "1. A key stays put only if both remainders agree:\n\n```formula\nh mod 4 = h mod 5\nwhere\nh: the key's hash, a large whole number\nmod: modulo, the remainder after whole-number division; 13 mod 4 = 1\nIn words: the key keeps its server only if dividing its hash by 4 and by 5 leaves the same remainder.\n```\n\n2. The pair of remainders repeats every 20 numbers (20 is the smallest number that both 4 and 5 divide into exactly). Check hashes 0 to 19: they match only for 0, 1, 2 and 3, where both remainders equal the hash itself.\n3. In general, growing from N to N + 1 servers:\n\n```formula\nf_stay = 1 / (N + 1)\nf_stay = 1 / (4 + 1) = 0.2\nf_move = 1 − 0.2 = 0.8\nwhere\nf_stay: fraction of keys that keep their server\nf_move: fraction of keys that move\nN: servers before scaling, here 4\nIn words: only 1 key in 5 stays put, so 80% of keys move and miss.\n```\n\nSo **20% stay**, and **80% move**.\n4. Those 80% miss on the new server and fall through to the DB, a self-inflicted stampede at peak.\n5. With consistent hashing, adding the 5th node moves only about 1/5 = 20% of keys.",
+    "workedExample": "1. With modulo placement, the server for a key is recomputed on every request from the current N.\n2. A key stays on the same server only if its hash divided by 4 and by 5 leaves the same remainder. For evenly spread hashes that is about 1 key in 5.\n3. So about 80% of keys are now looked up on a server that never stored them: a burst of misses all falling through to the database during peak traffic.\n4. With consistent hashing, a new node takes over only its fair share of the ring, about a fifth of keys here, and the rest stay where they are.\n5. Bigger clusters make modulo worse: adding one node to N moves all but about 1 key in N + 1.",
     "link": {
       "title": "Consistent hashing — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. One point per server: each server owns one arc. Arcs are random, so some servers may own 2–3× the average.\n2. Server S5 fails. All of its arc's keys go to the next server clockwise, S6.\n3. S6 now carries its own load plus S5's: often 2× or more, possibly enough to fail it too (a cascade).\n4. With 150 virtual nodes per server, S5's 150 small arcs are each followed by different servers, so its load is split ~9 ways.\n5. Each survivor's extra load:\n\n```formula\ne = (1 / N) / (N − 1)\ng = e / (1 / N) = 1 / (N − 1)\ng = 1 / 9 ≈ 0.11\nwhere\ne: the extra load each survivor picks up, as a fraction of the cluster's total load\ng: each survivor's load increase, as a fraction of its own normal load (1 / N of the total)\nN: the number of servers before the failure, 10\n≈: approximately equal to\nIn words: the failed server's share, split evenly over the 9 survivors, adds about 11% to each one's normal load.\n```",
+    "workedExample": "1. One point per server: each server owns one arc. Arcs are random, so some servers may own 2–3× the average.\n2. Server S5 fails. All of its arc's keys go to the next server clockwise, S6.\n3. S6 now carries its own load plus S5's: often 2× or more, possibly enough to fail it too (a cascade).\n4. With 150 virtual nodes per server, S5's 150 small arcs are each followed by different servers, so its load is split across nearly all nine survivors.\n5. Each survivor then picks up only about a ninth of S5's share, roughly an 11% rise on its own normal load, instead of one neighbour doubling.",
     "link": {
       "title": "Consistent hashing — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"
@@ -78,12 +78,12 @@
         "explanation": "Servers give up only a small share: just enough to give the new server an equal slice."
       },
       {
-        "text": "About 9% (1/11), taken in small pieces from many existing servers.",
-        "explanation": "Correct in expectation for balanced uniformly placed virtual nodes and uniformly hashed keys. Exact contributors and shares vary; one hot key can still dominate request load."
+        "text": "About one key in 11 (roughly 9%), taken in small pieces from many existing servers",
+        "explanation": "Correct in expectation for balanced virtual nodes and evenly hashed keys. Exact contributors and shares vary, and one hot key can still dominate request load."
       }
     ],
     "answer": 3,
-    "workedExample": "1. After the change, each of 11 servers owns an equal share of the ring:\n\n```formula\nf_move ≈ 1 / (N + 1)\nf_move ≈ 1 / (10 + 1) ≈ 0.091\nwhere\nf_move: fraction of keys that move to the new server\nN: servers before the change, 10\n≈: approximately equal to; exact only with perfectly even arcs\nIn words: the new server takes about one-eleventh of the ring, 9.1%, and only those keys move.\n```\n2. The new server's share has to come from somewhere, so about **9.1% of keys move**, and nothing else does.\n3. Virtual nodes: the new server's 150 points land at random spots, each taking over a small arc from whichever server followed it.\n4. In a balanced illustrative case those arcs are distributed across the 10 old servers roughly equally:\n\n```\n9.1% / 10 ≈ 0.9% each\n```\n\n5. Each old server loses about 9% of its own keys (its share of the ring falls from 10% to about 9.1%). The miss-load change depends on key popularity, warming and origin capacity; moving 9% of keys is not a guarantee of a gentle request-load change.",
+    "workedExample": "1. After the change, each of 11 servers should own about an equal share of the ring, so the new server takes about one-eleventh of it, and only those keys move.\n2. Virtual nodes: the new server's 150 points land at random spots, each taking over a small arc from whichever server followed it.\n3. So the moved keys come in small pieces from roughly all ten old servers, each losing a little under a tenth of its own keys.\n4. The miss-load change depends on key popularity, warming and origin capacity: moving 9% of keys is not a guarantee of a gentle request-load change if a hot key moves.",
     "link": {
       "title": "Consistent hashing — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Consistent_hashing"

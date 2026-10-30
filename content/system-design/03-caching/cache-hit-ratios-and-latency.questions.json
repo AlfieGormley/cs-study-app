@@ -3,27 +3,27 @@
     "id": "cache-fundamentals-q2",
     "level": "basic",
     "type": "single",
-    "prompt": "Redis responds in 1 ms and your database in 20 ms. On a miss, the app checks Redis first, then queries the database. What is the average read latency at an 85% hit ratio?",
+    "prompt": "Your service uses look-aside caching: every read checks Redis first and only misses go on to the database. The hit ratio is a steady 85%. After a network change, the Redis round trip rises from 1 ms to 3 ms; the database is unchanged. Which reads get slower?",
     "options": [
       {
-        "text": "1 ms",
-        "explanation": "That would only be true at a 100% hit ratio. 15% of requests still go to the database."
+        "text": "Only the 15% of reads that miss, because hits never touch the network",
+        "explanation": "A Redis hit still crosses the network to Redis. Only an in-process cache avoids that round trip; this design checks a remote cache on every read."
       },
       {
-        "text": "4 ms",
-        "explanation": "Correct. Every request pays the 1 ms cache lookup, and the 15% that miss also pay 20 ms: `1 + 0.15 × 20 = 4 ms`."
+        "text": "Every read, hits and misses alike, by about the extra 2 ms",
+        "explanation": "Correct. In look-aside caching every read pays the cache lookup first, and misses pay it before going on to the database. A slower cache therefore adds its extra time to all reads, while the miss share stays the same."
       },
       {
-        "text": "3.85 ms",
-        "explanation": "Close, but this uses `0.85 × 1 + 0.15 × 20 = 3.85`, which forgets that misses also pay the 1 ms cache lookup before going to the database."
+        "text": "No reads, because an 85% hit ratio hides cache latency",
+        "explanation": "The hit ratio decides how many reads also pay the database, not whether reads pay the cache. Every read still waits for the lookup."
       },
       {
-        "text": "17 ms",
-        "explanation": "This is `0.85 × 20`, which weights the database by the hit ratio instead of the miss ratio. Hits are the requests that avoid the database."
+        "text": "Only the 85% of reads that hit, because misses skip the cache once they are detected",
+        "explanation": "A miss can only be detected by doing the lookup, so misses pay the slower round trip too before going on to the database."
       }
     ],
     "answer": 1,
-    "workedExample": "Use the average-access-time formula:\n\n```formula\nT_avg = T_cache + (1 − h) × T_backend\nT_avg = 1 ms + (1 − 0.85) × 20 ms\nT_avg = 1 ms + 0.15 × 20 ms\nT_avg = 1 ms + 3 ms = 4 ms\nwhere\nT_avg: the average read time, in milliseconds (ms)\nT_cache: the Redis lookup time, 1 ms, paid by every request\nh: the hit ratio, 0.85 (85%)\nT_backend: the database time, 20 ms, paid only by misses\nms: milliseconds; 1 ms = 0.001 seconds\nIn words: every read pays the 1 ms lookup, and the 15% that miss also pay 20 ms, which averages out at 4 ms.\n```\n\n1. The 1 ms cache lookup is paid on **every** request, hit or miss, because you always look in the cache first.\n2. The remaining 15% of reads miss.\n3. Those database reads contribute 3 ms to the average.\n4. Add the 1 ms lookup to that contribution: the average is 4 ms.\n\nCompare with no cache: 20 ms. The cache gives a 5× speed-up and cuts database reads by 85%.",
+    "workedExample": "1. Ask what each kind of read waits for. A hit waits for the Redis lookup. A miss waits for the Redis lookup *and then* the database.\n2. The network change made the Redis lookup 2 ms slower, so it adds about 2 ms to both kinds of read.\n3. The database time and the 15% miss share are unchanged, so the misses' extra database cost is the same as before.\n4. So the average read gets about 2 ms slower, and so does every individual read.\n5. Design lesson: the cache's own latency is paid by 100% of reads. Measure it, keep the cache close to the application, and remember that a very fast backend can make a remote cache pointless for latency (the next unit's break-even idea).",
     "link": {
       "title": "Cache (computing) — Wikipedia",
       "url": "https://en.wikipedia.org/wiki/Cache_(computing)"
@@ -37,15 +37,15 @@
     "options": [
       {
         "text": "Nothing significant: a 0.9 percentage point gain is noise",
-        "explanation": "This judges the change by the hit ratio, but the backend experiences the miss ratio, which has fallen from 1% to 0.1%, a 10× change."
+        "explanation": "This judges the change by the hit ratio, but the backend experiences the miss ratio, which has fallen from 1% to 0.1%: a tenfold change."
       },
       {
         "text": "Average latency falls by 10×",
-        "explanation": "Average latency is dominated by the cache lookup once the hit ratio is high. With 1 ms cache and 20 ms DB, it goes from 1.2 ms to 1.02 ms, about 15%, not 10×."
+        "explanation": "Once the hit ratio is high, the average is dominated by the cache lookup that every read pays. The few remaining database reads were already a small part of the average, so removing most of them changes it only slightly."
       },
       {
         "text": "Database read load falls by roughly 10×",
-        "explanation": "Correct. Misses fall from 1 in 100 to 1 in 1,000 requests. At 100k req/s, database reads drop from 1,000/s to 100/s, which frees capacity and reduces tail latency under load."
+        "explanation": "Correct. Misses fall from 1 in 100 reads to 1 in 1,000, so the database receives about a tenth of the reads it did. That frees capacity and reduces database queueing under load, even though the mean latency chart hardly moves."
       },
       {
         "text": "The cache now needs less memory per key",
@@ -53,7 +53,7 @@
       }
     ],
     "answer": 2,
-    "workedExample": "1. Assume 100,000 reads/s, cache 1 ms, DB 20 ms.\n2. The database sees only the misses:\n\n```formula\nR_db = (1 − h) × R\nR_db = (1 − 0.99) × 100,000 = 1,000\nR_db = (1 − 0.999) × 100,000 = 100\nwhere\nR_db: database reads per second\nh: the hit ratio, 0.99 before and 0.999 after\nR: total reads per second, here 100,000\nIn words: the database load is the miss ratio times the total load, so cutting misses from 1% to 0.1% cuts it tenfold.\n```\n\n3. Calculate mean latency using the same sequential lookup model:\n\n```formula\nT_avg = T_cache + (1 − h) × T_backend\nT_avg = 1 ms + 0.01 × 20 ms = 1.2 ms\nT_avg = 1 ms + 0.001 × 20 ms = 1.02 ms\nwhere\nT_avg: mean read time, in milliseconds (ms)\nT_cache: cache lookup time, here 1 ms\nh: hit ratio, 0.99 before and 0.999 after\nT_backend: backend read time, here 20 ms\nms: milliseconds, one thousandth of a second\nIn words: changing the miss ratio barely changes the mean because every request still pays the cache lookup.\n```\n4. Latency improved ~15%. **Database load improved 10×.**\n5. Lesson: once hit ratios are high, think in miss ratios. That is the number that decides how big your database must be.",
+    "workedExample": "1. Separate the two effects of the change: what each read waits for, and what the database receives.\n2. **Latency.** Every read still pays the cache lookup. At a 99% hit ratio the database part of the average was already small (1 read in 100), so cutting it further barely changes the mean. With a 1 ms cache and a 20 ms database, the mean moves from about 1.2 ms to about 1.02 ms.\n3. **Database load.** The database receives only misses. 1 miss in 100 becomes 1 in 1,000, so database reads fall about tenfold.\n4. Conclusion: once hit ratios are high, think in miss ratios. The miss ratio is what decides how big the database must be.",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"
@@ -79,11 +79,11 @@
       },
       {
         "text": "The database load jumps from about 4,000/s to nearly 200,000/s, 40× its capacity, so it falls over unless traffic is shed or the cache refills quickly",
-        "explanation": "Correct. Normal misses are `2% × 200,000 = 4,000/s`, within capacity. With an empty cache, nearly all 200,000/s miss. The database was only ever sized for the miss traffic, so the cache is effectively a load-bearing part of the system."
+        "explanation": "Correct. Normally only about 2% of reads miss, roughly 4,000 a second, which fits within the 5,000/s capacity. With an empty cache almost every read misses, so the database is offered close to the full 200,000/s: dozens of times its capacity. The cache was carrying load the database was never sized for."
       }
     ],
     "answer": 3,
-    "workedExample": "1. The database sees the miss ratio times the total read rate:\n\n```formula\nR_db = (1 − h) × R\nR_db = (1 − 0.98) × 200,000 = 4,000\nR_db = (1 − 0) × 200,000 = 200,000\nwhere\nR_db: database reads per second\nh: the hit ratio: 0.98 normally, about 0 after the flush\nR: total reads per second, here 200,000\nIn words: at a 98% hit ratio the database sees 2% of reads; with an empty cache it sees all of them.\n```\n\n2. Normal load, 4,000 reads/s, is under the 5,000/s limit.\n3. After the flush, 200,000 / 5,000 = 40× overload. Queries queue, latency soars, connections are exhausted, and the cache cannot refill because the database is too slow to answer.\n4. Capacity-planning lesson: if the backend cannot survive the cache disappearing, the cache is **critical infrastructure**. Plan for it with replicas, warming, request coalescing, rate-limiting misses, and load shedding (covered in the later failure-mode units).",
+    "workedExample": "1. The database sees the miss ratio times the total read rate.\n2. Normally the miss ratio is 2%, so the database gets about 4,000 of the 200,000 reads a second: under its 5,000/s limit.\n3. Right after the flush the cache is empty and the hit ratio is near zero, so the database is offered nearly all 200,000 reads a second, around 40 times what it can sustain.\n4. Queries queue, latency soars and connections run out. The cache refills slowly because the database is too busy to answer the misses that would refill it.\n5. Capacity-planning lesson: if the backend cannot survive the cache disappearing, the cache is **critical infrastructure**. Plan for it with replicas, warming, request coalescing, rate limits on misses and load shedding (covered in the later failure-mode units).",
     "link": {
       "title": "Caching best practices — AWS",
       "url": "https://aws.amazon.com/caching/best-practices/"

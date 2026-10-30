@@ -22,19 +22,18 @@ Memcached is ordinarily a volatile cache; optional warm restart preserves data o
 
 **RDB** snapshots are compact and fast to load, but the `fork()` uses copy-on-write: under heavy writes, memory usage can nearly double while the snapshot runs. Every memory page the parent changes during the snapshot gets copied, so:
 
-```formula
+```formula reference
 M_peak ≈ M × (1 + f)
-M_peak ≈ 26 GB × (1 + 0.3) = 33.8 GB
 where
 M_peak: the peak memory used during the snapshot, in gigabytes (GB)
-M: the memory the dataset uses normally, here 26 GB
-f: the fraction of memory pages written to while the snapshot runs, between 0 and 1; here 0.3 (30%)
+M: the memory the dataset uses normally, in GB
+f: the fraction of memory pages written to while the snapshot runs, between 0 and 1
 GB: gigabytes; 1 GB = 1,000,000,000 bytes
 ≈: approximately equal to
-In words: the snapshot costs extra memory equal to the share of pages modified while it runs; if every page is touched, memory doubles.
+In words: the snapshot costs extra memory roughly equal to the share of pages modified while it runs; if every page is touched, memory doubles.
 ```
 
-This first-order estimate excludes non-dataset allocations, buffers, allocator fragmentation, page-size effects and other process overhead. A 26 GB dataset on a 32 GB machine may fit normally, but with 30% of pages rewritten during the snapshot it needs about 33.8 GB and can be killed for running out of memory. Leave headroom (do not run Redis at 95% of RAM with RDB enabled).
+This first-order estimate excludes non-dataset allocations, buffers, allocator fragmentation, page-size effects and other process overhead. A 26 GB dataset on a 32 GB machine may fit normally, but if 30% of its pages are rewritten during the snapshot it needs about 34 GB and can be killed for running out of memory. The danger grows with write rate and snapshot duration, not just dataset size. Leave headroom (do not run Redis at 95% of RAM with RDB enabled).
 
 **AOF** (append-only file) logs every write command, and is periodically rewritten to stay compact. Many deployments use both: AOF for durability, RDB for backups and fast restarts.
 

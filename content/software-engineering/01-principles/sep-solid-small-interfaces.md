@@ -7,11 +7,11 @@ summary: Narrow interfaces keep clients independent of capabilities they do not 
 sourceLesson: sep-solid
 ---
 
-SOLID examines responsibility, extension, subtyping, interfaces and dependency direction. This unit focuses on one of those questions; the earlier units establish the shared vocabulary.
+An interface that tries to serve every client ends up forcing each one to know about methods it never calls. This lesson is about sizing interfaces to the clients that use them.
 
 ## I: Interface segregation principle
 
-**Clients should not be forced to depend on methods they do not use.** Big "fat" interfaces couple every client to every method.
+**Clients should not be forced to depend on methods they do not use.** Robert C. Martin set it out in a 1996 article. Its origin is usually traced to his consulting work for Xerox, where, as the story is told, one "fat" job class used by nearly every printer task meant even small changes rippled through the system. Big interfaces couple every client to every method.
 
 ```java
 // Unsupported roles become throwing stubs.
@@ -68,5 +68,6 @@ def checksum(src: SupportsRead) -> int:
 - Annotations describe a contract; they do not enforce it at runtime.
 
 ## Further reading
-- [peps.python.org](https://peps.python.org/pep-0544/)
-- [RoleInterface](https://martinfowler.com/bliki/RoleInterface.html)
+- [PEP 544: Protocols (structural subtyping)](https://peps.python.org/pep-0544/)
+- [Martin Fowler: Role Interface](https://martinfowler.com/bliki/RoleInterface.html)
+- [Interface segregation principle (origin at Xerox)](https://en.wikipedia.org/wiki/Interface_segregation_principle)
